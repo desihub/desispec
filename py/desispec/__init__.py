@@ -7,11 +7,13 @@ desispec
 
 Tools for DESI spectroscopic processing.
 
+.. _desispec: https://github.com/desihub/desispec
 .. _DESI: http://desi.lbl.gov
 .. _Python: http://python.org
 """
-#
-from __future__ import absolute_import, division, print_function, unicode_literals
-# The line above will help with 2to3 support.
 
+# help with 2to3 support.
+from __future__ import absolute_import, division, print_function, unicode_literals
+
+from _version import __version__
 
