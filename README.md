@@ -1,4 +1,0 @@
-desispec
-========
-
-DESI spectral pipeline
