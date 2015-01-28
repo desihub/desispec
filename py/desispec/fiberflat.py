@@ -18,6 +18,18 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     input data are expected to be on the same wavelenght grid, with uncorrelated noise.
     they however do not have exactly the same resolution.
+    
+    args:
+        wave : 1D wavelength grid in Angstroms
+        flux : 2D flux[nspec, nwave] density
+        ivar : 2D inverse variance of flux
+        resolution_data : 3D[nspec, ndiag, nwave] ...
+        nsig_clipping : [optional] sigma clipping value for outlier rejection
+        
+    returns tuple (fiberflat, ivar, meanspec):
+        fiberflat : 2D[nwave, nflux] fiberflat (divide or multiply?)
+        ivar : inverse variance of that fiberflat
+        meanspec : deconvolved mean spectrum
 
     - we first iteratively :
        - compute a deconvolved mean spectrum
