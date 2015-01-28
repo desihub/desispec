@@ -42,7 +42,7 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
     """
     performs a spline fit 
     """
-    if input_ivar != None :
+    if input_ivar is not None :
         selection=np.where(input_ivar>0)[0]
         if selection.size < 2 :
             print "cannot do spline fit because only",selection.size,"values with ivar>0"
