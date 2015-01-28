@@ -19,25 +19,43 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     input data are expected to be on the same wavelenght grid, with uncorrelated noise.
     they however do not have exactly the same resolution.
 
-    we first iteratively :
+    - we first iteratively :
        - compute a deconvolved mean spectrum
        - compute a fiber flat using the resolution convolved mean spectrum for each fiber
        - smooth the fiber flat along wavelength 
        - clip outliers
 
-    and then we compute an fiberflat at the native fiber resolution (not smoothed)
+    - then we compute a fiberflat at the native fiber resolution (not smoothed)
     
-    the routine returns the fiberflat, its inverse variance , and the deconvolved mean spectrum
+    - the routine returns the fiberflat, its inverse variance , and the deconvolved mean spectrum
 
+
+    NOTE THAT THIS CODE HAS NOT BEEN TESTED WITH ACTUAL FIBER TRANSMISSION VARIATIONS,
+    OUTLIER PIXELS, DEAD COLUMNS ...
+    
     """
-
+    #
     # chi2 = sum_(fiber f) sum_(wavelenght i) w_fi ( D_fi - F_fi (R_f M)_i )
+    #
+    # where
+    # w = inverse variance
+    # D = flux data (at the resolution of the fiber)
+    # F = smooth fiber flat
+    # R = resolution data
+    # M = mean deconvolved spectrum
+    #
+    # M = A^{-1} B
+    # with
     # A_kl = sum_(fiber f) sum_(wavelenght i) w_fi F_fi^2 (R_fki R_fli)
     # B_k = sum_(fiber f) sum_(wavelenght i) w_fi D_fi F_fi R_fki
-    
-    # A = sum_(fiber f) sum_(wavelenght i) w_fi F_fi^2 (R_fi R_fi^T)
-    # B = sum_(fiber f) sum_(wavelenght i) w_fi D_fi F_fi R_fi
-    
+    # 
+    # defining R'_fi = sqrt(w_fi) F_fi R_fi
+    # and      D'_fi = sqrt(w_fi) D_fi
+    # 
+    # A = sum_(fiber f) R'_f R'_f^T
+    # B = sum_(fiber f) R'_f D'_f
+    # (it's faster that way, and we try to use sparse matrices as much as possible)
+    #
     
     
     nwave=wave.size
@@ -109,7 +127,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             # only remove worst outlier per wave
             # apply rejection iteratively, only one entry per wave among fibers
             # find waves with outlier (fastest way)
-            nout_per_wave=np.sum((chi2>0)*(chi2>nsig_clipping**2),axis=0)
+            nout_per_wave=np.sum(chi2>nsig_clipping**2,axis=0)
             selection=np.where(nout_per_wave>0)[0]
             for i in selection :
                 worst_entry=np.argmax(chi2[:,i])
@@ -136,7 +154,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         print "iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter)
 
         # normalize to get a mean fiberflat=1
-        mean=np.mean(smooth_fiberflat)
+        mean=np.mean(smooth_fiberflat,axis=0)
         smooth_fiberflat = smooth_fiberflat/mean
         mean_spectrum    = mean_spectrum*mean
         
