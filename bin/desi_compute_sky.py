@@ -77,9 +77,9 @@ fiberflat,ffivar,ffmask,ffmeanspec,ffwave = read_fiberflat(args.fiberflat)
 apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
 
 # compute sky model
-skyflux,skyivar,skymask = compute_sky(wave,flux[selection],ivar[selection],resol[selection])
+skyflux,skyivar,skymask,cskyflux,cskyivar = compute_sky(wave,flux[selection],ivar[selection],resol[selection])
 
 # write result
-write_sky(args.outfile,head,skyflux,skyivar,skymask,wave)
+write_sky(args.outfile,head,skyflux,skyivar,skymask,cskyflux,cskyivar,wave)
 
 print "successfully wrote",args.outfile
