@@ -22,15 +22,49 @@ def read_frame(filename) :
     
     return flux,ivar,wave,resolution_data
 
+def write_frame(filename,head,flux,ivar,wave,resolution_data) :
+    """
+    write a frame fits file
+    """
+    hdr = head
+    hdr['EXTNAME'] = ('FLUX', 'no dimension')
+    fits.writeto(filename,flux,header=hdr, clobber=True)
+    
+    hdr['EXTNAME'] = ('IVAR', 'no dimension')
+    hdu = fits.ImageHDU(ivar, header=hdr)
+    fits.append(filename, hdu.data, header=hdu.header)
+    
+    hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
+    hdu = fits.ImageHDU(wave, header=hdr)
+    fits.append(filename, hdu.data, header=hdu.header)
+    
+    hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
+    hdu = fits.ImageHDU(resolution_data, header=hdr)
+    fits.append(filename, hdu.data, header=hdu.header)
+    
 
 def resolution_data_to_sparse_matrix(resolution_data,fiber) :
     """
     convert the resolution data for a given fiber into a sparse matrix
     use function M.todense() or M.toarray() to convert output sparse matrix M to a dense matrix or numpy array
     """
-    nfibers=resolution_data.shape[0]
-    d=resolution_data.shape[1]/2
-    nwave=resolution_data.shape[2]
-    offsets = range(d,-d-1,-1)
-    return scipy.sparse.dia_matrix((resolution_data[fiber],offsets),(nwave,nwave))
-
+    
+    if len(resolution_data.shape)==3 :
+        nfibers=resolution_data.shape[0]
+        d=resolution_data.shape[1]/2
+        nwave=resolution_data.shape[2]
+        offsets = range(d,-d-1,-1)
+        return scipy.sparse.dia_matrix((resolution_data[fiber],offsets),(nwave,nwave))
+    elif len(resolution_data.shape)==2 :
+        if fiber>0 :
+            print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape," and requested fiber=",fiber
+            sys.exit(12)
+        nfibers=1
+        d=resolution_data.shape[0]/2
+        nwave=resolution_data.shape[1]
+        offsets = range(d,-d-1,-1)
+        return scipy.sparse.dia_matrix((resolution_data,offsets),(nwave,nwave))
+    else :
+        print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape
+        sys.exit(12)
+    
