@@ -1,7 +1,25 @@
 import unittest
 import numpy as np
+import scipy.sparse
 
 from desispec.fiberflat import compute_fiberflat
+
+def _get_data():
+    """
+    Return basic test data:
+      - 1D wave[nwave]
+      - 2D flux[nspec, nwave]
+      - 2D ivar[nspec, nwave]
+    """
+    nspec = 10
+    nwave = 100
+    wave = np.linspace(0, np.pi, nwave)
+    y = np.sin(wave)
+    flux = np.tile(y, nspec).reshape(nspec, nwave)
+    ivar = np.ones(flux.shape)
+    
+    return wave, flux, ivar
+    
 
 class TestFiberFlat(unittest.TestCase):
 
@@ -15,14 +33,8 @@ class TestFiberFlat(unittest.TestCase):
         Basic test that interface works and identical inputs result in
         identical outputs
         """
-        nspec = 10
-        nwave = 100
-        
-        #- Input wave, flux, ivar
-        wave = np.linspace(0, np.pi, nwave)
-        y = np.sin(wave)
-        flux = np.tile(y, nspec).reshape(nspec, nwave)
-        ivar = np.ones(flux.shape)
+        wave, flux, ivar = _get_data()
+        nspec, nwave = flux.shape
         
         #- Setup data for a Resolution matrix
         sigma = 4.0
@@ -49,13 +61,40 @@ class TestFiberFlat(unittest.TestCase):
             self.assertTrue(np.all(ffivar[i] == ffivar[0]))
         
     #- Tests to implement.  Remove the "expectedFailure" line when ready.
-    @unittest.expectedFailure
     def test_resolution(self):
         """
         Test that identical spectra convolved with different resolutions
         results in identical fiberflats
         """
-        raise NotImplementedError
+        wave, flux, ivar = _get_data()
+        nspec, nwave = flux.shape
+        
+        #- Setup a Resolution matrix that varies with fiber and wavelength
+        #- Note: this is actually the transpose of the resolution matrix
+        #- I wish I was creating, but as long as we self-consistently
+        #- use it for convolving and solving, that shouldn't matter.
+        sigma = np.linspace(2, 10, nwave*nspec)
+        ndiag = 20
+        xx = np.linspace(-ndiag, +ndiag, 2*ndiag+1)
+        R = np.zeros( (nspec, len(xx), nwave) )
+        for i in range(nspec):
+            for j in range(nwave):
+                kernel = np.exp(-xx**2/(2*sigma[i*nwave+j]**2))
+                kernel /= sum(kernel)
+                R[i,:,j] = kernel
+
+        #- Convolve the data with the resolution matrix
+        offsets = range(ndiag, -ndiag-1, -1)
+        convflux = np.empty_like(flux)
+        for i in range(nspec):
+            D = scipy.sparse.dia_matrix( (R[i], offsets), (nwave,nwave) )
+            convflux[i] = D.dot(flux[i])
+
+        #- Run the code
+        fiberflat, ffivar, meanspec = compute_fiberflat(wave,convflux,ivar,R)
+
+        #- These fiber flats should all be ~1
+        self.assertTrue( np.all(np.abs(fiberflat-1) < 0.001) )
 
     @unittest.expectedFailure
     def test_throughput(self):
