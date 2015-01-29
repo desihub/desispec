@@ -88,7 +88,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
 
     # test
-    #nfibers=20
+    # nfibers=20
     nout_tot=0
     for iteration in range(20) :
 
@@ -107,11 +107,11 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             
             # diagonal sparse matrix with content = sqrt(ivar)*flat
             SD.setdiag(sqrtwflat[fiber])
+                        
+            sqrtwflatR = SD*R # each row r of R is multiplied by sqrtwflat[r] 
             
-            sqrtwflatR = R*SD # each col c of R is multiplied by sqrtwflat[c]
-                       
-            A = A+(sqrtwflatR*sqrtwflatR.T).tocsr()
-            B += sqrtwflatR*sqrtwflux[fiber]
+            A = A+(sqrtwflatR.T*sqrtwflatR).tocsr()
+            B += sqrtwflatR.T*sqrtwflux[fiber]
         
         print "solving"
         mean_spectrum=cholesky_solve(A.todense(),B)
