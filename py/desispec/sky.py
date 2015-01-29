@@ -1,0 +1,122 @@
+"""
+Utility functions to compute a sky model and subtract it
+"""
+
+
+import numpy as np
+from desispec.io.frame import resolution_data_to_sparse_matrix
+from desispec.linalg import cholesky_solve
+from desispec.linalg import cholesky_solve_and_invert
+from desispec.linalg import spline_fit
+import scipy,scipy.sparse
+import sys
+
+def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
+    """
+    input has to correspond to sky fibers only.
+    input flux are expected to be flatfielded !
+    we don't check this in this routine
+    args:
+        wave : 1D wavelength grid in Angstroms
+        flux : 2D flux[nspec, nwave] density (only sky fibers)
+        ivar : 2D inverse variance of flux (only sky fibers)
+        resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
+        nsig_clipping : [optional] sigma clipping value for outlier rejection
+    
+    returns tuple (skyflux, ivar, mask):
+        skyflux : 1D[nwave] deconvolved skyflux
+        ivar : inverse variance of that skyflux
+        mask : 0=ok >0 if problems
+    """
+
+    nwave=wave.size
+    nfibers=flux.shape[0]
+    current_ivar=ivar.copy()
+    
+    sqrtw=np.sqrt(current_ivar)
+    sqrtwflux=sqrtw*flux
+    
+    chi2=np.zeros(flux.shape)
+
+    nout_tot=0
+    for iteration in range(20) :
+        
+        A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
+        B=np.zeros((nwave))
+        # diagonal sparse matrix with content = sqrt(ivar)*flat of a given fiber
+        SD=scipy.sparse.lil_matrix((nwave,nwave))
+        # loop on fiber to handle resolution
+        for fiber in range(nfibers) :
+            if fiber%10==0 :
+                print "fiber",fiber
+            R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            
+            # diagonal sparse matrix with content = sqrt(ivar)
+            SD.setdiag(sqrtw[fiber])
+                        
+            sqrtwR = SD*R # each row r of R is multiplied by sqrtw[r] 
+            
+            A = A+(sqrtwR.T*sqrtwR).tocsr()
+            B += sqrtwR.T*sqrtwflux[fiber]
+        
+        print "solving"
+        skyflux=cholesky_solve(A.todense(),B)
+        
+        print "compute chi2"
+
+        for fiber in range(nfibers) :
+            if fiber%10==0 :
+                print "fiber",fiber
+            R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            S = R.dot(skyflux)
+            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-S)**2
+        
+        print "rejecting"
+        
+        nout_iter=0
+        if iteration<1 :
+            # only remove worst outlier per wave
+            # apply rejection iteratively, only one entry per wave among fibers
+            # find waves with outlier (fastest way)
+            nout_per_wave=np.sum(chi2>nsig_clipping**2,axis=0)
+            selection=np.where(nout_per_wave>0)[0]
+            for i in selection :
+                worst_entry=np.argmax(chi2[:,i])
+                current_ivar[worst_entry,i]=0
+                sqrtw[worst_entry,i]=0
+                sqrtwflux[worst_entry,i]=0
+                nout_iter += 1
+                
+        else :
+            # remove all of them at once
+            bad=(chi2>nsig_clipping**2)
+            current_ivar *= (bad==0)
+            sqrtw *= (bad==0)
+            sqrtwflux *= (bad==0)
+            nout_iter += np.sum(bad)
+        
+        nout_tot += nout_iter
+        
+        sum_chi2=float(np.sum(chi2))
+        ndf=int(np.sum(chi2>0)-nwave)
+        chi2pdf=0.
+        if ndf>0 :
+            chi2pdf=sum_chi2/ndf
+        print "iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter)
+
+        if nout_iter == 0 :
+            break
+    
+    print "nout tot=",nout_tot
+
+
+    # solve once again to get sky variance
+    skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+    
+    skyvar=np.diagonal(skycovar)
+    skyivar=(skyvar>0)/(skyvar+(skyvar==0))
+    
+    # need to do better here 
+    mask=(skyvar>0).astype(long)  # SOMEONE CHECK THIS !
+    
+    return skyflux, skyivar, mask
