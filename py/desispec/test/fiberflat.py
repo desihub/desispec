@@ -48,11 +48,12 @@ class TestFiberFlat(unittest.TestCase):
                 R[i,:,j] = kernel
 
         #- Run the code
-        fiberflat, ffivar, meanspec = compute_fiberflat(wave,flux,ivar,R)
+        fiberflat, ffivar, fmask, meanspec = compute_fiberflat(wave,flux,ivar,R)
             
         #- Check shape of outputs
         self.assertEqual(fiberflat.shape, flux.shape)
         self.assertEqual(ffivar.shape, flux.shape)
+        self.assertEqual(fmask.shape, flux.shape)
         self.assertEqual(len(meanspec), nwave)
         
         #- Identical inputs should result in identical ouputs
@@ -91,7 +92,7 @@ class TestFiberFlat(unittest.TestCase):
             convflux[i] = D.dot(flux[i])
 
         #- Run the code
-        fiberflat, ffivar, meanspec = compute_fiberflat(wave,convflux,ivar,R)
+        fiberflat, ffivar, fmask, meanspec = compute_fiberflat(wave,convflux,ivar,R)
 
         #- These fiber flats should all be ~1
         self.assertTrue( np.all(np.abs(fiberflat-1) < 0.001) )

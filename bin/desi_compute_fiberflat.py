@@ -41,7 +41,7 @@ if args.outfile is None:
 
 head = fits.getheader(args.infile)
 flux,ivar,wave,resol = read_frame(args.infile)
-fiberflat,fiberflat_ivar,mean_spectrum = compute_fiberflat(wave,flux,ivar,resol)
-write_fiberflat(args.outfile,head,fiberflat,fiberflat_ivar,mean_spectrum,wave)
+fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum = compute_fiberflat(wave,flux,ivar,resol)
+write_fiberflat(args.outfile,head,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave)
 
 print "successfully wrote",args.outfile

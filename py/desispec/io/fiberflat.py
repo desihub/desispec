@@ -6,7 +6,7 @@ import os
 from astropy.io import fits
 
 
-def write_fiberflat(outfile,head,fiberflat,fiberflat_ivar,mean_spectrum,wave) :
+def write_fiberflat(outfile,head,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave) :
     """
     write fiberflat
     """
@@ -16,6 +16,10 @@ def write_fiberflat(outfile,head,fiberflat,fiberflat_ivar,mean_spectrum,wave) :
     
     hdr['EXTNAME'] = ('IVAR', 'no dimension')
     hdu = fits.ImageHDU(fiberflat_ivar, header=hdr)
+    fits.append(outfile, hdu.data, header=hdu.header)
+    
+    hdr['EXTNAME'] = ('MASK', 'no dimension')
+    hdu = fits.ImageHDU(fiberflat_mask, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
     
     hdr['EXTNAME'] = ('MEANSPEC', 'electrons')

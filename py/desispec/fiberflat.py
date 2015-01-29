@@ -39,8 +39,9 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
     - then we compute a fiberflat at the native fiber resolution (not smoothed)
     
-    - the routine returns the fiberflat, its inverse variance , and the deconvolved mean spectrum
+    - the routine returns the fiberflat, its inverse variance , mask, and the deconvolved mean spectrum
 
+    - the fiberflat is the ratio data/mean , so this flat should be divided to the data
 
     NOTE THAT THIS CODE HAS NOT BEEN TESTED WITH ACTUAL FIBER TRANSMISSION VARIATIONS,
     OUTLIER PIXELS, DEAD COLUMNS ...
@@ -182,14 +183,23 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     
     fiberflat=np.ones((flux.shape))
     fiberflat_ivar=np.zeros((flux.shape))
+    mask=np.zeros((flux.shape)).astype(long)
+    
+    fiberflat_mask=12 # place holder for actual mask bit when defined
+    
+    nsig_for_mask=4 # only mask out 4 sigma outliers
     
     for fiber in range(nfibers) :
         R = resolution_data_to_sparse_matrix(resolution_data,fiber)
         M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
-        fiberflat[fiber] = (M!=0)*flux[fiber]/(M+(M==0)) + (M==0)
+        fiberflat[fiber] = (M!=0)*flux[fiber]/(M+(M==0)) + (M==0)        
         fiberflat_ivar[fiber] = ivar[fiber]*M**2
+        smooth_fiberflat=spline_fit(wave,wave,fiberflat[fiber],smoothing_res,current_ivar[fiber]*M**2*(M!=0))
+        bad=np.where(fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2>nsig_for_mask**2)[0]
+        if bad.size>0 :
+            mask[fiber,bad] += fiberflat_mask
 
-    return fiberflat,fiberflat_ivar,mean_spectrum
+    return fiberflat,fiberflat_ivar,mask,mean_spectrum
 
     
 
