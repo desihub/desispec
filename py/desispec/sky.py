@@ -39,7 +39,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     chi2=np.zeros(flux.shape)
 
     #debug
-    nfibers=min(nfibers,2)
+    #nfibers=min(nfibers,2)
 
     nout_tot=0
     for iteration in range(20) :
