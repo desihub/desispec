@@ -38,6 +38,9 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     
     chi2=np.zeros(flux.shape)
 
+    #debug
+    nfibers=min(nfibers,2)
+
     nout_tot=0
     for iteration in range(20) :
         
@@ -110,13 +113,56 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     print "nout tot=",nout_tot
 
 
-    # solve once again to get sky variance
+    # solve once again to get deconvolved sky variance
     skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
     
     skyvar=np.diagonal(skycovar)
     skyivar=(skyvar>0)/(skyvar+(skyvar==0))
     
+    # we also want to save the convolved sky and sky variance
+    # this might be handy
+    
+    # first compute average resolution
+    mean_res_data=np.mean(resolution_data,axis=0)
+    R = resolution_data_to_sparse_matrix(mean_res_data,0)
+    # compute convolved sky and ivar
+    cskyflux=R.dot(skyflux)
+    cskycovar=R.dot(skycovar).dot(R.T.todense())
+    cskyvar=np.diagonal(cskycovar)
+    cskyivar=(cskyvar>0)/(cskyvar+(cskyvar==0))
+    
+    
+
     # need to do better here 
     mask=(skyvar>0).astype(long)  # SOMEONE CHECK THIS !
     
-    return skyflux, skyivar, mask
+    return skyflux, skyivar, mask, cskyflux, cskyivar
+
+
+
+
+def subtract_sky(flux,ivar,resolution_data,wave,skyflux,convolved_skyivar,skymask,skywave) :
+    
+    # check same wavelength, die if not the case
+    mval=np.max(np.abs(wave-skywave))
+    if mval > 0.00001 :
+        print "error in subtract_sky, not same wavelength (should raise an error instead)"
+        sys.exit(12)
+    
+    nwave=wave.size
+    nfibers=flux.shape[0]
+
+    for fiber in range(nfibers) :
+        if fiber%10==0 :
+            print "fiber",fiber
+        R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+        S = R.dot(skyflux)
+        flux[fiber] -= S
+        
+        # deal with variance
+        selection=np.where((ivar[fiber]>0)&(convolved_skyivar>0))[0]
+        if selection.size==0 :
+            continue
+        
+        ivar[fiber,selection]=1./(1./ivar[fiber,selection]+1./convolved_skyivar[selection])
+        
