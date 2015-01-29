@@ -26,9 +26,10 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         resolution_data : 3D[nspec, ndiag, nwave] ...
         nsig_clipping : [optional] sigma clipping value for outlier rejection
         
-    returns tuple (fiberflat, ivar, meanspec):
-        fiberflat : 2D[nwave, nflux] fiberflat (divide or multiply?)
+    returns tuple (fiberflat, ivar, mask, meanspec):
+        fiberflat : 2D[nwave, nflux] fiberflat (data have to be divided by this to be flatfielded)
         ivar : inverse variance of that fiberflat
+        mask : 0=ok >0 if problems
         meanspec : deconvolved mean spectrum
 
     - we first iteratively :
@@ -183,7 +184,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     
     fiberflat=np.ones((flux.shape))
     fiberflat_ivar=np.zeros((flux.shape))
-    mask=np.zeros((flux.shape)).astype(long)
+    mask=np.zeros((flux.shape)).astype(long)  # SOMEONE CHECK THIS !
     
     fiberflat_mask=12 # place holder for actual mask bit when defined
     
@@ -203,4 +204,14 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
     
 
+def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave) :
+    
+    # check same wavelength, die if not the case
+    mval=np.max(np.abs(wave-ffwave))
+    if mval > 0.00001 :
+        print "error in apply_fiberflat, not same wavelength (should raise an error instead)"
+        sys.exit(12)
+    
+    flux=flux*(fiberflat>0)/(fiberflat+(fiberflat==0))
+    ivar=ivar*(fiberflat>0)*fiberflat**2
 
