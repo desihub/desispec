@@ -2,19 +2,49 @@
 io routines for frame
 
 """
-import os
+import os.path
 from astropy.io import fits
 import scipy,scipy.sparse
+from desispec.io.meta import specprod_root
 
-def read_frame(filename) :
+def frame_filename(night, expid, camera):
+    """
+    Return the full path to the frame file
+    
+    Args:
+        night : string YEARMMDD
+        expid : integer exposure ID
+        camera : e.g. b0, r1, .. z9
+    """
+    filename = '{dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits'.format(
+        dir=specprod_root(), night=str(night), expid=expid, camera=camera.lower())
+    return os.path.normpath(filename)
+
+def read_frame(night='', expid=0, camera='', filename=None) :
     """
     reads a frame fits file and returns its data
+    
+    Args:
+        night : string YEARMMDD
+        expid : integer exposure ID
+        camera : e.g. b0, r1, .. z9
+        filename : if given, overrides (night, expid, camera) to read
+            a specific file instead
+        
+    returns tuple of:
+        phot[nspec, nwave] : uncalibrated photons per bin
+        ivar[nspec, nwave] : inverse variance of phot
+        wave[nwave] : vacuum wavelengths [Angstrom]
+        resolution[nspec, ndiag, nwave] : DOCUMENT THIS FORMAT
     """
+    
+    if filename is None:
+        filename = frame_filename(night, expid, camera)
     
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
     
-     #hdr = fits.getheader(filename)
+    #hdr = fits.getheader(filename)
     flux = fits.getdata(filename, 0).astype('float64') # import on edison.nersc.edu
     ivar = fits.getdata(filename, "IVAR").astype('float64') 
     wave = fits.getdata(filename, "WAVELENGTH").astype('float64')
@@ -22,7 +52,9 @@ def read_frame(filename) :
     
     return flux,ivar,wave,resolution_data
 
-def write_frame(filename,head,flux,ivar,wave,resolution_data) :
+# def write_frame(night, expid, camera, flux,ivar,wave,resolution_data, header=None) :
+
+def write_frame(filename, flux,ivar,wave,resolution_data, header=None) :
     """
     write a frame fits file
     """
