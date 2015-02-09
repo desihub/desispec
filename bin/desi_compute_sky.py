@@ -14,6 +14,7 @@ from desispec.io.fiberflat import read_fiberflat
 from desispec.io.sky import write_sky
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
+from desispec.log import get_logger
 import argparse
 import os
 import os.path
@@ -56,6 +57,10 @@ if args.outfile is None:
     parser.print_help()
     sys.exit(12)
 
+log=get_logger()
+
+log.info("starting")
+
 # read exposure to load data and get range of spectra
 head = fits.getheader(args.infile)
 specmin=head["SPECMIN"]
@@ -67,7 +72,7 @@ flux,ivar,wave,resol = read_frame(args.infile)
 table=read_fibermap(args.fibermap)
 selection=np.where((table["OBJTYPE"]=="SKY")&(table["FIBER"]>=specmin)&(table["FIBER"]<=specmax))[0]
 if selection.size == 0 :
-    print("Error, no sky fiber !")
+    log.error("no sky fiber in fibermap %s"%args.fibermap)
     sys.exit(12)
 
 # read fiberflat
@@ -82,4 +87,6 @@ skyflux,skyivar,skymask,cskyflux,cskyivar = compute_sky(wave,flux[selection],iva
 # write result
 write_sky(args.outfile,head,skyflux,skyivar,skymask,cskyflux,cskyivar,wave)
 
-print "successfully wrote",args.outfile
+log.info("successfully wrote %s"%args.outfile)
+
+

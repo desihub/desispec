@@ -8,6 +8,8 @@ from desispec.io.frame import resolution_data_to_sparse_matrix
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
+from desispec.log import get_logger
+
 import scipy,scipy.sparse
 import sys
 
@@ -28,6 +30,9 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         ivar : inverse variance of that skyflux
         mask : 0=ok >0 if problems
     """
+
+    log=get_logger()
+    log.info("starting")
 
     nwave=wave.size
     nfibers=flux.shape[0]
@@ -51,7 +56,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         # loop on fiber to handle resolution
         for fiber in range(nfibers) :
             if fiber%10==0 :
-                print "fiber",fiber
+                log.info("iter %d fiber %d"%(iteration,fiber))
             R = resolution_data_to_sparse_matrix(resolution_data,fiber)
             
             # diagonal sparse matrix with content = sqrt(ivar)
@@ -62,19 +67,19 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             A = A+(sqrtwR.T*sqrtwR).tocsr()
             B += sqrtwR.T*sqrtwflux[fiber]
         
-        print "solving"
+        log.info("iter %d solving"%iteration)
+        
         skyflux=cholesky_solve(A.todense(),B)
         
-        print "compute chi2"
+        log.info("iter %d compute chi2"%iteration)
 
         for fiber in range(nfibers) :
-            if fiber%10==0 :
-                print "fiber",fiber
+            
             R = resolution_data_to_sparse_matrix(resolution_data,fiber)
             S = R.dot(skyflux)
             chi2[fiber]=current_ivar[fiber]*(flux[fiber]-S)**2
         
-        print "rejecting"
+        log.info("rejecting")
         
         nout_iter=0
         if iteration<1 :
@@ -105,12 +110,12 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         chi2pdf=0.
         if ndf>0 :
             chi2pdf=sum_chi2/ndf
-        print "iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter)
+        log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter))
 
         if nout_iter == 0 :
             break
     
-    print "nout tot=",nout_tot
+    log.info("nout tot=%d"%nout_tot)
 
 
     # solve once again to get deconvolved sky variance
@@ -143,18 +148,20 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
 def subtract_sky(flux,ivar,resolution_data,wave,skyflux,convolved_skyivar,skymask,skywave) :
     
+    log=get_logger()
+    log.info("starting")
+
     # check same wavelength, die if not the case
     mval=np.max(np.abs(wave-skywave))
     if mval > 0.00001 :
-        print "error in subtract_sky, not same wavelength (should raise an error instead)"
+        log.error("not same wavelength (should raise an error instead)")
         sys.exit(12)
     
     nwave=wave.size
     nfibers=flux.shape[0]
 
     for fiber in range(nfibers) :
-        if fiber%10==0 :
-            print "fiber",fiber
+        
         R = resolution_data_to_sparse_matrix(resolution_data,fiber)
         S = R.dot(skyflux)
         flux[fiber] -= S
