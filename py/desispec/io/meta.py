@@ -35,9 +35,10 @@ def findfile(filetype, night, expid, camera=None, specprod=None):
     filepath = location[filetype].format(data=data_root(), specprod=specprod,
         night=night, expid=expid, camera=camera)
     
-    return filepath
+    #- normpath to remove extraneous double slashes /a/b//c/d
+    return os.path.normpath(filepath)
 
-def data_root ():
+def data_root():
     dir = os.environ[ 'DESI_SPECTRO_DATA' ]
     if dir == None:
         raise RuntimeError('DESI_SPECTRO_DATA environment variable not set')

@@ -5,12 +5,18 @@ io routines for sky
 import os
 from astropy.io import fits
 
+from desispec.io import findfile
+from desispec.io.util import fitsheader, native_endian, makepath
 
-def write_sky(outfile,head,skyflux,skyivar,skymask,cskyflux,cskyivar,wave) :
+def write_sky(outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,wave, header=None) :
     """
     write fiberflat
     """
-    hdr = head
+    makepath(outfile, 'sky')
+    
+    #- Convert header to fits.Header if needed
+    hdr = fitsheader(header)
+    
     hdr['EXTNAME'] = ('SKY', 'no dimension')
     fits.writeto(outfile,skyflux,header=hdr, clobber=True)
     
@@ -21,7 +27,6 @@ def write_sky(outfile,head,skyflux,skyivar,skymask,cskyflux,cskyivar,wave) :
     hdr['EXTNAME'] = ('MASK', 'no dimension')
     hdu = fits.ImageHDU(skymask, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
-    
     
     hdr['EXTNAME'] = ('CSKY', 'convolved sky at average resolution')
     hdu = fits.ImageHDU(cskyflux, header=hdr)
@@ -35,17 +40,24 @@ def write_sky(outfile,head,skyflux,skyivar,skymask,cskyflux,cskyivar,wave) :
     hdu = fits.ImageHDU(wave, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
     
+    return outfile
+    
 def read_sky(filename) :
-
     """
     read sky
     """
-    skyflux=fits.getdata(filename, 0).astype('float64')
-    ivar=fits.getdata(filename, "IVAR").astype('float64')
-    mask=fits.getdata(filename, "MASK").astype('int') # ??? SOMEONE CHECK THIS ???
-    cskyflux=fits.getdata(filename, "CSKY").astype('float64')
-    civar=fits.getdata(filename, "CIVAR").astype('float64')
-    wave=fits.getdata(filename, "WAVELENGTH").astype('float64')
+    #- check if filename is (night, expid, camera) tuple instead
+    if not isinstance(filename, (str, unicode)):
+        night, expid, camera = filename
+        filename = findfile('sky', night, expid, camera)
     
-    return skyflux,ivar,mask,cskyflux,civar,wave
+    hdr = fits.getheader(filename, 0)
+    skyflux = native_endian(fits.getdata(filename, 0))
+    ivar = native_endian(fits.getdata(filename, "IVAR"))
+    mask = native_endian(fits.getdata(filename, "MASK"))
+    cskyflux = native_endian(fits.getdata(filename, "CSKY"))
+    civar = native_endian(fits.getdata(filename, "CIVAR"))
+    wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
+    
+    return skyflux,ivar,mask,cskyflux,civar,wave,hdr
 

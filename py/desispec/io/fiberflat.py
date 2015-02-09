@@ -5,12 +5,16 @@ io routines for fiberflat
 import os
 from astropy.io import fits
 
+from desispec.io import findfile
+from desispec.io.util import fitsheader, native_endian, makepath
 
-def write_fiberflat(outfile,head,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave) :
+def write_fiberflat(outfile,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave, header=None) :
     """
     write fiberflat
     """
-    hdr = head
+    makepath(outfile, 'fiberflat')
+    
+    hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FIBERFLAT', 'no dimension')
     fits.writeto(outfile,fiberflat,header=hdr, clobber=True)
     
@@ -35,11 +39,17 @@ def read_fiberflat(filename) :
     """
     read fiberflat
     """
-    fiberflat=fits.getdata(filename, 0).astype('float64')
-    ivar=fits.getdata(filename, "IVAR").astype('float64')
-    mask=fits.getdata(filename, "MASK").astype('int') # ??? SOMEONE CHECK THIS ???
-    meanspec=fits.getdata(filename, "MEANSPEC").astype('float64')
-    wave=fits.getdata(filename, "WAVELENGTH").astype('float64')
+    #- check if outfile is (night, expid, camera) tuple instead
+    if not isinstance(outfile, (str, unicode)):
+        night, expid, camera = outfile
+        outfile = findfile('fiberflat', night, expid, camera)
     
-    return fiberflat,ivar,mask,meanspec,wave
+    header = fits.getheader(filename, 0)
+    fiberflat = native_endian(fits.getdata(filename, 0))
+    ivar = native_endian(fits.getdata(filename, "IVAR"))
+    mask = native_endian(fits.getdata(filename, "MASK"))
+    meanspec = native_endian(fits.getdata(filename, "MEANSPEC"))
+    wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
+    
+    return fiberflat,ivar,mask,meanspec,wave, header
     
