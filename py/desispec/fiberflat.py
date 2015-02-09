@@ -11,7 +11,7 @@ from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 import scipy,scipy.sparse
 import sys
-from desispec.log import desi_logger
+from desispec.log import get_logger
 
 
 def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
@@ -51,7 +51,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     
     """
 
-    log=desi_logger()
+    log=get_logger()
     log.info("starting")
     
     #

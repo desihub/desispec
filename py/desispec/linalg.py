@@ -1,13 +1,13 @@
 import numpy as np
 import scipy,scipy.linalg,scipy.interpolate
-from desispec.log import desi_logger
+from desispec.log import get_logger
 
 def cholesky_solve(A,B,overwrite=False,lower=False) :
     posv, = scipy.linalg.get_lapack_funcs(('posv',), (A,))
     L,X,status=posv(A,B,lower=lower,overwrite_a=overwrite)
     
     if status :
-        desi_logger().error("dposv status=%d"%status)
+        get_logger().error("dposv status=%d"%status)
         raise Exception("cholesky_solve_and_invert error dposv status=%d"%status)
     
     return X
@@ -17,14 +17,14 @@ def cholesky_solve_and_invert(A,B,overwrite=False,lower=False) :
     L,X,status=posv(A,B,lower=lower,overwrite_a=overwrite)
     
     if status :
-        desi_logger().error("dposv status=%d"%status)
+        get_logger().error("dposv status=%d"%status)
         raise Exception("cholesky_solve_and_invert error dposv status=%d"%status)
     
     potri, = scipy.linalg.get_lapack_funcs(('potri',), (L,))
     inv,status=potri(L,lower=(not lower)) # 'not lower' is not a mistake, there is a BUG in scipy!!!!   
         
     if status :
-        desi_logger().error("dpotri status=%d"%status)
+        get_logger().error("dpotri status=%d"%status)
         raise Exception("cholesky_solve_and_invert error dpotri status=%d"%status)
 
     #symmetrize Ai
@@ -45,7 +45,7 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
     if input_ivar is not None :
         selection=np.where(input_ivar>0)[0]
         if selection.size < 2 :
-            log=desi_logger()
+            log=get_logger()
             log.error("cannot do spline fit because only %d values with ivar>0"%selection.size)
             raise Error 
         w1=input_wave[selection[0]]

@@ -8,7 +8,7 @@ from desispec.io.frame import resolution_data_to_sparse_matrix
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
-from desispec.log import desi_logger
+from desispec.log import get_logger
 
 import scipy,scipy.sparse
 import sys
@@ -31,7 +31,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         mask : 0=ok >0 if problems
     """
 
-    log=desi_logger()
+    log=get_logger()
     log.info("starting")
 
     nwave=wave.size
@@ -148,7 +148,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
 def subtract_sky(flux,ivar,resolution_data,wave,skyflux,convolved_skyivar,skymask,skywave) :
     
-    log=desi_logger()
+    log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case

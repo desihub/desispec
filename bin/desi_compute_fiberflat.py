@@ -11,13 +11,15 @@ This script computes the fiber flat field correction from a DESI continuum lamp 
 from desispec.io.frame import read_frame
 from desispec.io.fiberflat import write_fiberflat
 from desispec.fiberflat import compute_fiberflat
-from desispec.log import desi_logger
+from desispec.log import get_logger
 import argparse
 import os
 import os.path
 import numpy as np
 import sys
 from astropy.io import fits
+
+
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -40,7 +42,7 @@ if args.outfile is None:
     parser.print_help()
     sys.exit(12)
 
-log=desi_logger()
+log=get_logger()
 log.info("starting with args=%s"%str(args))
 
 head = fits.getheader(args.infile)
