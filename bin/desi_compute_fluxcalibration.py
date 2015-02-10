@@ -13,6 +13,7 @@ from desispec.io.fibermap import read_fibermap
 from desispec.io.fiberflat import read_fiberflat
 from desispec.io.sky import read_sky
 from desispec.io.fluxcalibration import read_stellar_models
+from desispec.io.fluxcalibration import write_flux_calibration
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.fluxcalibration import compute_flux_calibration
@@ -95,6 +96,10 @@ if bad.size > 0 :
         log.error("inconsistency with fiber %d, OBJTYPE='%' in fibermap"%(fiber,table["OBJTYPE"][fiber]))
     sys.exit(12)
 
-compute_flux_calibration(wave,flux[fibers],ivar[fibers],resol[fibers],model_wave,model_flux)
+calibration, calibivar, mask, ccalibration, ccalibivar = compute_flux_calibration(wave,flux[fibers],ivar[fibers],resol[fibers],model_wave,model_flux)
+
+# write result
+write_flux_calibration(args.outfile,head,calibration, calibivar, mask, ccalibration, ccalibivar,wave)
+
 
 log.info("successfully wrote %s"%args.outfile)
