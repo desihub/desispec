@@ -8,9 +8,9 @@
 This script processes an exposure by applying fiberflat, sky subtraction, spectro-photometric calibration depending on input.
 """
 
-from desispec.io.frame import read_frame,write_frame
-from desispec.io.fiberflat import read_fiberflat
-from desispec.io.sky import read_sky
+from desispec.io import read_frame, write_frame
+from desispec.io import read_fiberflat
+from desispec.io import read_sky
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 
@@ -19,7 +19,6 @@ import os
 import os.path
 import numpy as np
 import sys
-from astropy.io import fits
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -52,8 +51,7 @@ if args.outfile is None:
     sys.exit(12)
 
 
-head = fits.getheader(args.infile)
-flux,ivar,wave,resol = read_frame(args.infile)
+flux,ivar,wave,resol,head = read_frame(args.infile)
 
 if args.fiberflat!=None :
     print "apply fiberflat"
@@ -73,6 +71,6 @@ if args.sky!=None :
   
 
 # save output
-write_frame(args.outfile,head,flux,ivar,wave,resol)
+write_frame(args.outfile,flux,ivar,wave,resol,head)
 
 print "successfully wrote",args.outfile

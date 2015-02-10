@@ -12,7 +12,7 @@ def write_sky(outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,wave, header=Non
     """
     write fiberflat
     """
-    makepath(outfile, 'sky')
+    outfile = makepath(outfile, 'sky')
     
     #- Convert header to fits.Header if needed
     hdr = fitsheader(header)

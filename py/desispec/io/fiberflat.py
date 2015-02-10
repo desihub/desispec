@@ -12,7 +12,7 @@ def write_fiberflat(outfile,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectru
     """
     write fiberflat
     """
-    makepath(outfile, 'fiberflat')
+    outfile = makepath(outfile, 'fiberflat')
     
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FIBERFLAT', 'no dimension')
@@ -40,9 +40,9 @@ def read_fiberflat(filename) :
     read fiberflat
     """
     #- check if outfile is (night, expid, camera) tuple instead
-    if not isinstance(outfile, (str, unicode)):
-        night, expid, camera = outfile
-        outfile = findfile('fiberflat', night, expid, camera)
+    if not isinstance(filename, (str, unicode)):
+        night, expid, camera = filename
+        filename = findfile('fiberflat', night, expid, camera)
     
     header = fits.getheader(filename, 0)
     fiberflat = native_endian(fits.getdata(filename, 0))

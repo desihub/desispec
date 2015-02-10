@@ -15,7 +15,7 @@ def write_frame(outfile, flux,ivar,wave,resolution_data, header=None) :
     Args:
         TODO
     """
-    makepath(outfile, 'frame')
+    outfile = makepath(outfile, 'frame')
 
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FLUX', 'no dimension')

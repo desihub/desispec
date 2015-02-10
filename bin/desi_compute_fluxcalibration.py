@@ -8,10 +8,10 @@
 This script computes the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.
 """
 
-from desispec.io.frame import read_frame
-from desispec.io.fibermap import read_fibermap
-from desispec.io.fiberflat import read_fiberflat
-from desispec.io.sky import read_sky
+from desispec.io import read_frame
+from desispec.io import read_fibermap
+from desispec.io import read_fiberflat
+from desispec.io import read_sky
 from desispec.io.fluxcalibration import read_stellar_models
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -23,9 +23,6 @@ import os
 import os.path
 import numpy as np
 import sys
-from astropy.io import fits
-
-
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -55,8 +52,7 @@ log=get_logger()
 
 log.info("read frame")
 # read frame
-head = fits.getheader(args.infile)
-flux,ivar,wave,resol = read_frame(args.infile)
+flux,ivar,wave,resol,head = read_frame(args.infile)
 
 
 log.info("apply fiberflat")
@@ -88,7 +84,7 @@ if selec.size == 0 :
 fibers=model_fibers[selec]-head["SPECMIN"]
 log.info("star fibers= %s"%str(fibers))
 
-table=read_fibermap(args.fibermap)
+table, fmhdr = read_fibermap(args.fibermap)
 bad=np.where(table["OBJTYPE"][fibers]!="STD")[0]
 if bad.size > 0 :
     for fiber in fibers[bad] :

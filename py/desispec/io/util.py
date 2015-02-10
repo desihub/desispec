@@ -72,3 +72,43 @@ def makepath(outfile, filetype=None):
         os.makedirs(path)
 
     return outfile
+    
+def write_bintable(filename, data, header=None, comments=None, units=None,
+                   extname=None, clobber=False):
+    """
+    Utility function to write a fits binary table complete with comments
+    and units in the FITS header too.
+    """
+        
+    #- Write the data and header
+    hdu = astropy.io.fits.BinTableHDU(data, header=header, name=extname)
+    if clobber:
+        astropy.io.fits.writeto(filename, hdu.data, hdu.header, clobber=True)
+    else:
+        astropy.io.fits.append(filename, hdu.data, hdu.header)
+
+    #- Allow comments and units to be None
+    if comments is None:
+        comments = dict()
+    if units is None:
+        units = dict()
+
+    #- Reopen the file to add the comments and units
+    fx = astropy.io.fits.open(filename, mode='update')
+    hdu = fx[extname]
+    for i in xrange(1,999):
+        key = 'TTYPE'+str(i)
+        if key not in hdu.header:
+            break
+        else:
+            value = hdu.header[key]
+            if value in comments:
+                hdu.header[key] = (value, comments[value])
+            if value in units:
+                hdu.header['TUNIT'+str(i)] = (units[value], value+' units')
+    
+    #- Write updated header and close file
+    fx.flush()
+    fx.close()
+
+
