@@ -223,6 +223,15 @@ def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave) :
         log.critical("error in apply_fiberflat, not same wavelength (should raise an error instead)")
         sys.exit(12)
     
+    """
+     F'=F/C
+     Var(F') = Var(F)/C**2 + F**2*(  d(1/C)/dC )**2*Var(C)
+             = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
+             = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
+             = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
+    """
+    
     flux=flux*(fiberflat>0)/(fiberflat+(fiberflat==0))
-    ivar=ivar*(fiberflat>0)*fiberflat**2
+    ivar=(ivar>0)*(ffivar>0)*(fiberflat>0)/(   1./((ivar+(ivar==0))*(fiberflat**2+(fiberflat==0))) + flux**2/(ffivar*fiberflat**4+(ffivar*fiberflat==0))   )
+    
 

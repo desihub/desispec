@@ -64,7 +64,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
     current_ivar=ivar.copy()
     
     
-    smooth_fiberflat=np.ones((flux.shape))
+    smooth_fiber_correction=np.ones((flux.shape))
     chi2=np.zeros((flux.shape))
     
 
@@ -96,10 +96,13 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
             sqrtwmodelR = SD*R # each row r of R is multiplied by sqrtwmodel[r] 
             
             A = A+(sqrtwmodelR.T*sqrtwmodelR).tocsr()
-            B += sqrtwmodelR.T*sqrtwmodel[fiber]
+            B += sqrtwmodelR.T*sqrtwflux[fiber]
         
         log.info("iter %d solving"%iteration)
         calibration=cholesky_solve(A.todense(),B)
+        #pylab.plot(wave,calibration)
+        #pylab.show()
+        #sys.exit(12)
         
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2
@@ -121,11 +124,12 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
             #continue
         
             F = flux[fiber]/(M+(M==0))
-            smooth_fiberflat[fiber]=spline_fit(wave,wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
-            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-smooth_fiberflat[fiber]*M)**2
-        
+            smooth_fiber_correction[fiber]=spline_fit(wave,wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
+            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-smooth_fiber_correction[fiber]*M)**2
+            
             #pylab.plot(wave,F)
-            #pylab.plot(wave,smooth_fiberflat[fiber])
+            #pylab.plot(wave,smooth_fiber_correction[fiber])
+        
         
         #pylab.show()
         #sys.exit(12)
@@ -162,12 +166,13 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
         chi2pdf=0.
         if ndf>0 :
             chi2pdf=sum_chi2/ndf
-        log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter))
         
         # normalize to get a mean fiberflat=1
-        mean=np.mean(smooth_fiberflat,axis=0)
-        smooth_fiberflat = smooth_fiberflat/mean
-        mean_spectrum    = mean_spectrum*mean
+        mean=np.mean(smooth_fiber_correction,axis=0)
+        smooth_fiber_correction = smooth_fiber_correction/mean
+        calibration *= mean
+        
+        log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d mean=%f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,np.mean(mean)))
         
 
 
@@ -176,39 +181,67 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
     
     log.info("nout tot=%d"%nout_tot)
     
-    # now use mean spectrum to compute flat field correction without any smoothing
-    # because sharp feature can arise if dead columns
-    
-    fiberflat=np.ones((flux.shape))
-    fiberflat_ivar=np.zeros((flux.shape))
-    mask=np.zeros((flux.shape)).astype(long)  # SOMEONE CHECK THIS !
-    
-    fiberflat_mask=12 # place holder for actual mask bit when defined
-    
-    nsig_for_mask=4 # only mask out 4 sigma outliers
-    
-    for fiber in range(nfibers) :
-        R = resolution_data_to_sparse_matrix(resolution_data,fiber)
-        M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
-        fiberflat[fiber] = (M!=0)*flux[fiber]/(M+(M==0)) + (M==0)        
-        fiberflat_ivar[fiber] = ivar[fiber]*M**2
-        smooth_fiberflat=spline_fit(wave,wave,fiberflat[fiber],smoothing_res,current_ivar[fiber]*M**2*(M!=0))
-        bad=np.where(fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2>nsig_for_mask**2)[0]
-        if bad.size>0 :
-            mask[fiber,bad] += fiberflat_mask
-
-    return fiberflat,fiberflat_ivar,mask,mean_spectrum
+    # solve once again to get deconvolved variance
+    #calibration,calibcovar=cholesky_solve_and_invert(A.todense(),B)
+    calibcovar=np.linalg.inv(A.todense())
+    calibvar=np.diagonal(calibcovar)
+    print "mean(var)=",np.mean(calibvar)
 
     
-
-def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave) :
     
+    calibvar=np.array(np.diagonal(calibcovar))
+    # apply the mean (as in the iterative loop)
+    calibvar *= mean**2
+    calibivar=(calibvar>0)/(calibvar+(calibvar==0))
+    
+    # we also want to save the convolved calibration and calibration variance
+    # first compute average resolution
+    mean_res_data=np.mean(resolution_data,axis=0)
+    R = resolution_data_to_sparse_matrix(mean_res_data,0)
+    # compute convolved calib and ivar
+    ccalibration=R.dot(calibration)
+    ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
+    ccalibvar=np.array(np.diagonal(ccalibcovar))
+    # apply the mean (as in the iterative loop)
+    ccalibvar *= mean**2
+    ccalibivar=(ccalibvar>0)/(ccalibvar+(ccalibvar==0))
+    
+    
+
+    # need to do better here 
+    mask=(calibvar>0).astype(long)  # SOMEONE CHECK THIS !
+    
+    return calibration, calibivar, mask, ccalibration, ccalibivar
+
+def apply_flux_calibration(flux,ivar,resolution_data=resol,wave,calibration,civar,cmask,cwave) :
+    
+    log=get_logger()
+    log.info("starting")
+
     # check same wavelength, die if not the case
-    mval=np.max(np.abs(wave-ffwave))
+    mval=np.max(np.abs(wave-skywave))
     if mval > 0.00001 :
-        get_logger().error("not same wavelength (should raise an error instead)")
+        log.error("not same wavelength (should raise an error instead)")
         sys.exit(12)
     
-    flux=flux*(fiberflat>0)/(fiberflat+(fiberflat==0))
-    ivar=ivar*(fiberflat>0)*fiberflat**2
+    nwave=wave.size
+    nfibers=flux.shape[0]
+
+    for fiber in range(nfibers) :
+
+        R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+        C = R.dot(calibration)
+    
+        """
+        F'=F/C
+        Var(F') = Var(F)/C**2 + F**2*(  d(1/C)/dC )**2*Var(C)
+        = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
+        = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
+        = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
+        """
+        
+        flux=flux*(C>0)/(C+(C==0))
+        ivar=(ivar>0)*(civar>0)*(C>0)/(   1./((ivar+(ivar==0))*(C**2+(C==0))) + flux**2/(civar*C**4+(civar*C==0))   )
+    
+    
 
