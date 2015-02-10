@@ -213,13 +213,13 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
     
     return calibration, calibivar, mask, ccalibration, ccalibivar
 
-def apply_flux_calibration(flux,ivar,resolution_data=resol,wave,calibration,civar,cmask,cwave) :
+def apply_flux_calibration(flux,ivar,resolution_data,wave,calibration,civar,cmask,cwave) :
     
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    mval=np.max(np.abs(wave-skywave))
+    mval=np.max(np.abs(wave-cwave))
     if mval > 0.00001 :
         log.error("not same wavelength (should raise an error instead)")
         sys.exit(12)
@@ -240,8 +240,8 @@ def apply_flux_calibration(flux,ivar,resolution_data=resol,wave,calibration,civa
         = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
         """
         
-        flux=flux*(C>0)/(C+(C==0))
-        ivar=(ivar>0)*(civar>0)*(C>0)/(   1./((ivar+(ivar==0))*(C**2+(C==0))) + flux**2/(civar*C**4+(civar*C==0))   )
+        flux[fiber]=flux[fiber]*(C>0)/(C+(C==0))
+        ivar[fiber]=(ivar[fiber]>0)*(civar[fiber]>0)*(C>0)/(   1./((ivar[fiber]+(ivar[fiber]==0))*(C**2+(C==0))) + flux[fiber]**2/(civar[fiber]*C**4+(civar[fiber]*(C==0)))   )
     
     
 
