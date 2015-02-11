@@ -85,7 +85,7 @@ class Bricks(object):
         if np.isscalar(inra):
             return names[0]
         else:
-            return names
+            return np.array(names)
         
     def brick_radec(self, ra, dec):
         """
