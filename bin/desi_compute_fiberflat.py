@@ -17,34 +17,38 @@ import os
 import os.path
 import numpy as np
 import sys
+def main() :
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument('--infile', type = str, default = None,
+                        help = 'path of DESI frame fits file corresponding to a continuum lamp exposure')
+    parser.add_argument('--outfile', type = str, default = None,
+                        help = 'path of DESI fiberflat fits file')
 
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    args = parser.parse_args()
 
-parser.add_argument('--infile', type = str, default = None,
-                    help = 'path of DESI frame fits file corresponding to a continuum lamp exposure')
-parser.add_argument('--outfile', type = str, default = None,
-                    help = 'path of DESI fiberflat fits file')
+    if args.infile is None:
+        print('Missing input')
+        parser.print_help()
+        sys.exit(12)
+
+    if args.outfile is None:
+        print('Missing output')
+        parser.print_help()
+        sys.exit(12)
+
+    log=get_logger()
+    log.info("starting")
+
+    head = fits.getheader(args.infile)
+    flux,ivar,wave,resol,head = read_frame(args.infile)
+    fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum = compute_fiberflat(wave,flux,ivar,resol)
+    write_fiberflat(args.outfile,head,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave)
+
+    log.info("successfully wrote %s"%args.outfile)
 
 
-args = parser.parse_args()
-
-if args.infile is None:
-    print('Missing input')
-    parser.print_help()
-    sys.exit(12)
-    
-if args.outfile is None:
-    print('Missing output')
-    parser.print_help()
-    sys.exit(12)
-
-log=get_logger()
-log.info("starting with args=%s"%str(args))
-
-flux,ivar,wave,resol,head = read_frame(args.infile)
-fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum = compute_fiberflat(wave,flux,ivar,resol)
-write_fiberflat(args.outfile,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave,head)
-
-log.info("successfully wrote %s"%args.outfile)
-
+if __name__ == '__main__':
+    main()

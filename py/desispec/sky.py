@@ -162,6 +162,9 @@ def subtract_sky(flux,ivar,resolution_data,wave,skyflux,convolved_skyivar,skymas
 
     for fiber in range(nfibers) :
         
+        #if fiber%10==0 :
+        #    log.info("fiber %d"%fiber)
+
         R = resolution_data_to_sparse_matrix(resolution_data,fiber)
         S = R.dot(skyflux)
         flux[fiber] -= S
@@ -173,3 +176,4 @@ def subtract_sky(flux,ivar,resolution_data,wave,skyflux,convolved_skyivar,skymas
         
         ivar[fiber,selection]=1./(1./ivar[fiber,selection]+1./convolved_skyivar[selection])
         
+    log.info("done")

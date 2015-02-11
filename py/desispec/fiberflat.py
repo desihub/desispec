@@ -216,6 +216,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     
 
 def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave) :
+    log=get_logger()
+    log.info("starting")
     
     # check same wavelength, die if not the case
     mval=np.max(np.abs(wave-ffwave))
@@ -235,3 +237,4 @@ def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave) :
     ivar=(ivar>0)*(ffivar>0)*(fiberflat>0)/(   1./((ivar+(ivar==0))*(fiberflat**2+(fiberflat==0))) + flux**2/(ffivar*fiberflat**4+(ffivar*fiberflat==0))   )
     
 
+    log.info("done")
