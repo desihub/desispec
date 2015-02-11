@@ -50,6 +50,7 @@ def read_frame(filename):
         ivar[nspec, nwave] : inverse variance of phot
         wave[nwave] : vacuum wavelengths [Angstrom]
         resolution[nspec, ndiag, nwave] : TODO DOCUMENT THIS FORMAT
+        header : fits.Header from HDU 0
     """
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, (str, unicode)):

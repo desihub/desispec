@@ -10,7 +10,17 @@ from desispec.io.util import fitsheader, native_endian, makepath
 
 def write_sky(outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,wave, header=None) :
     """
-    write fiberflat
+    write sky model
+    
+    Args:
+      - outfile : filename or (night, expid, camera) tuple
+      - skyflux : 1D unconvolved sky flux
+      - skyivar : inverse variance of skyflux
+      - skymask : mask for skyflux
+      - cskyflux : 1D skyflux convolved with the mean resolution across all fibers
+      - cskyivar : inverse variance of cskyflux
+      - wave : 1D wavelength in vacuum Angstroms
+      - header : optional fits header data (fits.Header, dict, or list)
     """
     outfile = makepath(outfile, 'sky')
     
@@ -44,7 +54,13 @@ def write_sky(outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,wave, header=Non
     
 def read_sky(filename) :
     """
-    read sky
+    Read sky model and return tuple of
+    (skyflux, ivar, mask, cskyflux, civar, wave, header)
+    
+    These are 1D unconvolved arrays that need to be convolved with the
+    per fiber resolution matrix to get the sky model for each fiber.
+    
+    cskyflux & civar are the convolved quanities at mean resolution
     """
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, (str, unicode)):
@@ -52,7 +68,7 @@ def read_sky(filename) :
         filename = findfile('sky', night, expid, camera)
     
     hdr = fits.getheader(filename, 0)
-    skyflux = native_endian(fits.getdata(filename, 0))
+    skyflux = native_endian(fits.getdata(filename, "SKY"))
     ivar = native_endian(fits.getdata(filename, "IVAR"))
     mask = native_endian(fits.getdata(filename, "MASK"))
     cskyflux = native_endian(fits.getdata(filename, "CSKY"))

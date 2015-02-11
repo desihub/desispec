@@ -11,6 +11,9 @@ from desispec.io.util import fitsheader, native_endian, makepath
 def write_fiberflat(outfile,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave, header=None) :
     """
     write fiberflat
+    
+    Args:
+      - TODO
     """
     outfile = makepath(outfile, 'fiberflat')
     
@@ -38,6 +41,11 @@ def write_fiberflat(outfile,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectru
 def read_fiberflat(filename) :
     """
     read fiberflat
+    
+    Returns fiberflat, ivar, mask, meanspec, wave, header
+    
+    fiberflat, ivar, mask are 2D [nspec, nwave]
+    meanspec and wave are 1D [nwave]
     """
     #- check if outfile is (night, expid, camera) tuple instead
     if not isinstance(filename, (str, unicode)):
