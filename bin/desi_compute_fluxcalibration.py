@@ -8,10 +8,10 @@
 This script computes the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.
 """
 
-from desispec.io.frame import read_frame
-from desispec.io.fibermap import read_fibermap
-from desispec.io.fiberflat import read_fiberflat
-from desispec.io.sky import read_sky
+from desispec.io import read_frame
+from desispec.io import read_fibermap
+from desispec.io import read_fiberflat
+from desispec.io import read_sky
 from desispec.io.fluxcalibration import read_stellar_models
 from desispec.io.fluxcalibration import write_flux_calibration
 from desispec.fiberflat import apply_fiberflat
@@ -24,11 +24,8 @@ import os
 import os.path
 import numpy as np
 import sys
-from astropy.io import fits
-
 
 def main() :
-
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -57,20 +54,18 @@ def main() :
 
     log.info("read frame")
     # read frame
-    head = fits.getheader(args.infile)
-    flux,ivar,wave,resol = read_frame(args.infile)
-
+    flux,ivar,wave,resol,head = read_frame(args.infile)
 
     log.info("apply fiberflat")
     # read fiberflat
-    fiberflat,ffivar,ffmask,ffmeanspec,ffwave = read_fiberflat(args.fiberflat)
+    fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
 
     # apply fiberflat
     apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
 
     log.info("subtract sky")
     # read sky
-    skyflux,sivar,smask,cskyflux,csivar,swave=read_sky(args.sky)
+    skyflux,sivar,smask,cskyflux,csivar,swave,skyhdr=read_sky(args.sky)
 
     # subtract sky
     subtract_sky(flux=flux,ivar=ivar,resolution_data=resol,wave=wave,skyflux=skyflux,convolved_skyivar=csivar,skymask=smask,skywave=swave)
@@ -90,7 +85,7 @@ def main() :
     fibers=model_fibers[selec]-head["SPECMIN"]
     log.info("star fibers= %s"%str(fibers))
 
-    table=read_fibermap(args.fibermap)
+    table, fmhdr = read_fibermap(args.fibermap)
     bad=np.where(table["OBJTYPE"][fibers]!="STD")[0]
     if bad.size > 0 :
         for fiber in fibers[bad] :
@@ -100,7 +95,7 @@ def main() :
     calibration, calibivar, mask, ccalibration, ccalibivar = compute_flux_calibration(wave,flux[fibers],ivar[fibers],resol[fibers],model_wave,model_flux)
 
     # write result
-    write_flux_calibration(args.outfile,head,calibration, calibivar, mask, ccalibration, ccalibivar,wave)
+    write_flux_calibration(args.outfile,calibration, calibivar, mask, ccalibration, ccalibivar,wave, head)
 
 
     log.info("successfully wrote %s"%args.outfile)

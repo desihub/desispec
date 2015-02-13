@@ -8,10 +8,10 @@
 This script computes the fiber flat field correction from a DESI continuum lamp frame.
 """
 
-from desispec.io.frame import read_frame
-from desispec.io.fibermap import read_fibermap
-from desispec.io.fiberflat import read_fiberflat
-from desispec.io.sky import write_sky
+from desispec.io import read_frame
+from desispec.io import read_fibermap
+from desispec.io import read_fiberflat
+from desispec.io import write_sky
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.log import get_logger
@@ -20,8 +20,6 @@ import os
 import os.path
 import numpy as np
 import sys
-from astropy.io import fits
-
 
 def main() :
 
@@ -64,21 +62,19 @@ def main() :
     log.info("starting")
 
     # read exposure to load data and get range of spectra
-    head = fits.getheader(args.infile)
+    flux,ivar,wave,resol,head = read_frame(args.infile)
     specmin=head["SPECMIN"]
     specmax=head["SPECMAX"]
 
-    flux,ivar,wave,resol = read_frame(args.infile)
-
     # read fibermap to locate sky fibers
-    table=read_fibermap(args.fibermap)
+    table,fmheader=read_fibermap(args.fibermap)
     selection=np.where((table["OBJTYPE"]=="SKY")&(table["FIBER"]>=specmin)&(table["FIBER"]<=specmax))[0]
     if selection.size == 0 :
         log.error("no sky fiber in fibermap %s"%args.fibermap)
         sys.exit(12)
 
     # read fiberflat
-    fiberflat,ffivar,ffmask,ffmeanspec,ffwave = read_fiberflat(args.fiberflat)
+    fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
 
     # apply fiberflat to sky fibers
     apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
@@ -87,7 +83,7 @@ def main() :
     skyflux,skyivar,skymask,cskyflux,cskyivar = compute_sky(wave,flux[selection],ivar[selection],resol[selection])
 
     # write result
-    write_sky(args.outfile,head,skyflux,skyivar,skymask,cskyflux,cskyivar,wave)
+    write_sky(args.outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,wave,head)
 
     log.info("successfully wrote %s"%args.outfile)
 
