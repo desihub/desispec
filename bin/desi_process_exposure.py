@@ -64,7 +64,7 @@ def main() :
     if args.fiberflat!=None :
         log.info("apply fiberflat")
         # read fiberflat
-        fiberflat,ffivar,ffmask,ffmeanspec,ffwave = read_fiberflat(args.fiberflat)
+        fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
 
         # apply fiberflat to sky fibers
         apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
@@ -72,7 +72,7 @@ def main() :
     if args.sky!=None :
         log.info("subtract sky")
         # read sky
-        skyflux,sivar,smask,cskyflux,csivar,swave=read_sky(args.sky)
+        skyflux,sivar,smask,cskyflux,csivar,swave,skyhdr=read_sky(args.sky)
         # subtract sky
         subtract_sky(flux=flux,ivar=ivar,resolution_data=resol,wave=wave,skyflux=skyflux,convolved_skyivar=csivar,skymask=smask,skywave=swave)
 

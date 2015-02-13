@@ -67,14 +67,14 @@ def main() :
     specmax=head["SPECMAX"]
 
     # read fibermap to locate sky fibers
-    table=read_fibermap(args.fibermap)
+    table,fmheader=read_fibermap(args.fibermap)
     selection=np.where((table["OBJTYPE"]=="SKY")&(table["FIBER"]>=specmin)&(table["FIBER"]<=specmax))[0]
     if selection.size == 0 :
         log.error("no sky fiber in fibermap %s"%args.fibermap)
         sys.exit(12)
 
     # read fiberflat
-    fiberflat,ffivar,ffmask,ffmeanspec,ffwave = read_fiberflat(args.fiberflat)
+    fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
 
     # apply fiberflat to sky fibers
     apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)

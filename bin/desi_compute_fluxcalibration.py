@@ -58,14 +58,14 @@ def main() :
 
     log.info("apply fiberflat")
     # read fiberflat
-    fiberflat,ffivar,ffmask,ffmeanspec,ffwave = read_fiberflat(args.fiberflat)
+    fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
 
     # apply fiberflat
     apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
 
     log.info("subtract sky")
     # read sky
-    skyflux,sivar,smask,cskyflux,csivar,swave=read_sky(args.sky)
+    skyflux,sivar,smask,cskyflux,csivar,swave,skyhdr=read_sky(args.sky)
 
     # subtract sky
     subtract_sky(flux=flux,ivar=ivar,resolution_data=resol,wave=wave,skyflux=skyflux,convolved_skyivar=csivar,skymask=smask,skywave=swave)
@@ -95,7 +95,7 @@ def main() :
     calibration, calibivar, mask, ccalibration, ccalibivar = compute_flux_calibration(wave,flux[fibers],ivar[fibers],resol[fibers],model_wave,model_flux)
 
     # write result
-    write_flux_calibration(args.outfile,head,calibration, calibivar, mask, ccalibration, ccalibivar,wave)
+    write_flux_calibration(args.outfile,calibration, calibivar, mask, ccalibration, ccalibivar,wave, head)
 
 
     log.info("successfully wrote %s"%args.outfile)

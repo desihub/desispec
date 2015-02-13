@@ -4,7 +4,7 @@ io routines for flux calibration
 """
 import os
 from astropy.io import fits
-from desispec.io.util import native_endian
+from desispec.io.util import fitsheader, native_endian, makepath
 
 # this is really temporary
 # the idea is to have a datamodel for calibration stars spectra
@@ -20,11 +20,11 @@ def read_stellar_models(filename) :
     return flux,wave,fibers
 
 
-def write_flux_calibration(outfile,head,calibration, calibration_ivar, mask, convolved_calibration, convolved_calibration_ivar,wave) :
+def write_flux_calibration(outfile,calibration, calibration_ivar, mask, convolved_calibration, convolved_calibration_ivar,wave,header=None):
     """
     writes  flux calibration 
     """
-    hdr = head
+    hdr = fitsheader(header)
     hdr['EXTNAME'] = ('CALIB', 'CHECK UNIT')
     fits.writeto(outfile,calibration,header=hdr, clobber=True)
     
@@ -54,11 +54,11 @@ def read_flux_calibration(filename) :
     """
     read flux calibration
     """
-    calibration=fits.getdata(filename, 0).astype('float64')
-    calib_ivar=fits.getdata(filename, "IVAR").astype('float64')
-    mask=fits.getdata(filename, "MASK").astype('int') # ??? SOMEONE CHECK THIS ???
-    convolved_calibration=fits.getdata(filename, "CCALIB").astype('float64')
-    convolved_calib_ivar=fits.getdata(filename, "CIVAR").astype('float64')
-    wave=fits.getdata(filename, "WAVELENGTH").astype('float64')
+    calibration=native_endian(fits.getdata(filename, 0))
+    calib_ivar=native_endian(fits.getdata(filename, "IVAR"))
+    mask=native_endian(fits.getdata(filename, "MASK"))
+    convolved_calibration=native_endian(fits.getdata(filename, "CCALIB"))
+    convolved_calib_ivar=native_endian(fits.getdata(filename, "CIVAR"))
+    wave=native_endian(fits.getdata(filename, "WAVELENGTH"))
     
     return calibration,calib_ivar,mask,convolved_calibration,convolved_calib_ivar,wave

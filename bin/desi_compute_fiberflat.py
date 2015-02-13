@@ -42,10 +42,9 @@ def main() :
     log=get_logger()
     log.info("starting")
 
-    head = fits.getheader(args.infile)
     flux,ivar,wave,resol,head = read_frame(args.infile)
     fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum = compute_fiberflat(wave,flux,ivar,resol)
-    write_fiberflat(args.outfile,head,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave)
+    write_fiberflat(args.outfile,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave,head)
 
     log.info("successfully wrote %s"%args.outfile)
 
