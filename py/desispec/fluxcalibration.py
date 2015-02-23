@@ -17,6 +17,43 @@ import sys
 #debug
 import pylab
 
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
+    """
+    For each input spectrum, identify which standard star template is the
+    closest match, factoring out broadband throughput/calibration differences
+    
+    Args:
+        wave : 1D array of vacuum wavelengths [Angstroms]
+        flux : 2D[nspec, nwave] observed flux
+        ivar : 2D[nspec, nwave] inverse variance of flux
+        stdwave : 1D standard star template wavelengths [Angstroms]
+        stdflux : 2D[nstd, nwave] template flux
+        
+    Returns:
+        stdflux[nspec, nwave] : standard star flux sampled at input wave
+        stdindices[nspec] : indices of input standards for each match
+
+    Notes:
+      - wave and stdwave can be on different grids that don't
+        necessarily overlap
+      - wave does not have to be uniform or monotonic.  Multiple cameras
+        can be supported by concatenating their wave and flux arrays
+    """
+    raise NotImplementedError
+    
+def normalize_templates(stdwave, stdflux, mags, filters):
+    """
+    Returns spectra normalized to input magnitudes
+    
+    Args:
+        stdwave : 1D array of standard star wavelengths [Angstroms]
+        stdflux : 2D[nstd, nwave] flux normalized to 10pc
+        mags : 1D array of observed AB magnitudes
+        filters : list of filter names for mags,
+                  e.g. ['SDSS_r', 'DECAM_g', ...]
+    """
+    raise NotImplementedError
+
 def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,input_model_flux,nsig_clipping=4.) :
     
     """ 
