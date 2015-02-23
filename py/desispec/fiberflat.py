@@ -11,6 +11,8 @@ from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 import scipy,scipy.sparse
 import sys
+from desispec.log import get_logger
+
 
 def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     
@@ -48,6 +50,10 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     OUTLIER PIXELS, DEAD COLUMNS ...
     
     """
+
+    log=get_logger()
+    log.info("starting")
+    
     #
     # chi2 = sum_(fiber f) sum_(wavelenght i) w_fi ( D_fi - F_fi (R_f M)_i )
     #
@@ -90,7 +96,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
 
     # test
-    # nfibers=20
+    #nfibers=20
     nout_tot=0
     for iteration in range(20) :
 
@@ -104,7 +110,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         # loop on fiber to handle resolution
         for fiber in range(nfibers) :
             if fiber%10==0 :
-                print "fiber",fiber
+                log.info("iter %d fiber %d"%(iteration,fiber))
+            
             R = resolution_data_to_sparse_matrix(resolution_data,fiber)
             
             # diagonal sparse matrix with content = sqrt(ivar)*flat
@@ -115,16 +122,20 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             A = A+(sqrtwflatR.T*sqrtwflatR).tocsr()
             B += sqrtwflatR.T*sqrtwflux[fiber]
         
-        print "solving"
+        log.info("iter %d solving"%iteration)
+        
         mean_spectrum=cholesky_solve(A.todense(),B)
         
-        print "smoothing"
+        log.info("iter %d smoothing"%iteration)
+        
         # fit smooth fiberflat and compute chi2
         smoothing_res=100. #A
         
         for fiber in range(nfibers) :
-            if fiber%10==0 :
-                print "fiber",fiber
+            
+            #if fiber%10==0 :
+            #    log.info("iter %d fiber %d (smoothing)"%(iteration,fiber))
+            
             R = resolution_data_to_sparse_matrix(resolution_data,fiber)
             
             #M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
@@ -134,7 +145,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             smooth_fiberflat[fiber]=spline_fit(wave,wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
             chi2[fiber]=current_ivar[fiber]*(flux[fiber]-smooth_fiberflat[fiber]*M)**2
         
-        print "rejecting"
+        log.info("rejecting")
         
         nout_iter=0
         if iteration<1 :
@@ -165,7 +176,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         chi2pdf=0.
         if ndf>0 :
             chi2pdf=sum_chi2/ndf
-        print "iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter)
+        log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter))
 
         # normalize to get a mean fiberflat=1
         mean=np.mean(smooth_fiberflat,axis=0)
@@ -177,7 +188,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         if nout_iter == 0 :
             break
     
-    print "nout tot=",nout_tot
+    log.info("nout tot=%d"%nout_tot)
 
     # now use mean spectrum to compute flat field correction without any smoothing
     # because sharp feature can arise if dead columns
@@ -205,13 +216,25 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     
 
 def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave) :
+    log=get_logger()
+    log.info("starting")
     
     # check same wavelength, die if not the case
     mval=np.max(np.abs(wave-ffwave))
     if mval > 0.00001 :
-        print "error in apply_fiberflat, not same wavelength (should raise an error instead)"
+        log.critical("error in apply_fiberflat, not same wavelength (should raise an error instead)")
         sys.exit(12)
     
+    """
+     F'=F/C
+     Var(F') = Var(F)/C**2 + F**2*(  d(1/C)/dC )**2*Var(C)
+             = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
+             = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
+             = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
+    """
+    
     flux=flux*(fiberflat>0)/(fiberflat+(fiberflat==0))
-    ivar=ivar*(fiberflat>0)*fiberflat**2
+    ivar=(ivar>0)*(ffivar>0)*(fiberflat>0)/(   1./((ivar+(ivar==0))*(fiberflat**2+(fiberflat==0))) + flux**2/(ffivar*fiberflat**4+(ffivar*fiberflat==0))   )
+    
 
+    log.info("done")

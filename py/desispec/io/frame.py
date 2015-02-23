@@ -2,46 +2,71 @@
 io routines for frame
 
 """
-import os
+import os.path
 from astropy.io import fits
 import scipy,scipy.sparse
+from desispec.io import findfile
+from desispec.io.util import fitsheader, native_endian, makepath
 
-def read_frame(filename) :
+def write_frame(outfile, flux,ivar,wave,resolution_data, header=None) :
+    """
+    Write a frame fits file and returns path to file written
+    
+    Args:
+        TODO
+    """
+    outfile = makepath(outfile, 'frame')
+
+    hdr = fitsheader(header)
+    hdr['EXTNAME'] = ('FLUX', 'no dimension')
+    fits.writeto(outfile,flux,header=hdr, clobber=True)
+    
+    hdr['EXTNAME'] = ('IVAR', 'no dimension')
+    hdu = fits.ImageHDU(ivar, header=hdr)
+    fits.append(outfile, hdu.data, header=hdu.header)
+    
+    hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
+    hdu = fits.ImageHDU(wave, header=hdr)
+    fits.append(outfile, hdu.data, header=hdu.header)
+    
+    hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
+    hdu = fits.ImageHDU(resolution_data, header=hdr)
+    fits.append(outfile, hdu.data, header=hdu.header)
+    
+    return outfile
+    
+def read_frame(filename):
     """
     reads a frame fits file and returns its data
+    
+    Args:
+        filename: path to a file, or (night, expid, camera) tuple where
+            night = string YEARMMDD
+            expid = integer exposure ID
+            camera = b0, r1, .. z9
+        
+    returns tuple of:
+        phot[nspec, nwave] : uncalibrated photons per bin
+        ivar[nspec, nwave] : inverse variance of phot
+        wave[nwave] : vacuum wavelengths [Angstrom]
+        resolution[nspec, ndiag, nwave] : TODO DOCUMENT THIS FORMAT
+        header : fits.Header from HDU 0
     """
+    #- check if filename is (night, expid, camera) tuple instead
+    if not isinstance(filename, (str, unicode)):
+        night, expid, camera = filename
+        filename = findfile('frame', night, expid, camera)
     
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
     
-     #hdr = fits.getheader(filename)
-    flux = fits.getdata(filename, 0).astype('float64') # import on edison.nersc.edu
-    ivar = fits.getdata(filename, "IVAR").astype('float64') 
-    wave = fits.getdata(filename, "WAVELENGTH").astype('float64')
-    resolution_data = fits.getdata(filename, "RESOLUTION").astype('float64')
+    hdr = fits.getheader(filename)
+    flux = native_endian(fits.getdata(filename, 0))
+    ivar = native_endian(fits.getdata(filename, "IVAR")) 
+    wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
+    resolution_data = native_endian(fits.getdata(filename, "RESOLUTION"))
     
-    return flux,ivar,wave,resolution_data
-
-def write_frame(filename,head,flux,ivar,wave,resolution_data) :
-    """
-    write a frame fits file
-    """
-    hdr = head
-    hdr['EXTNAME'] = ('FLUX', 'no dimension')
-    fits.writeto(filename,flux,header=hdr, clobber=True)
-    
-    hdr['EXTNAME'] = ('IVAR', 'no dimension')
-    hdu = fits.ImageHDU(ivar, header=hdr)
-    fits.append(filename, hdu.data, header=hdu.header)
-    
-    hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
-    hdu = fits.ImageHDU(wave, header=hdr)
-    fits.append(filename, hdu.data, header=hdu.header)
-    
-    hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
-    hdu = fits.ImageHDU(resolution_data, header=hdr)
-    fits.append(filename, hdu.data, header=hdu.header)
-    
+    return flux,ivar,wave,resolution_data, hdr
 
 def resolution_data_to_sparse_matrix(resolution_data,fiber) :
     """
