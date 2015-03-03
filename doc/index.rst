@@ -8,6 +8,7 @@ Contents:
    :maxdepth: 2
 
    intro.rst
+   coadd.rst
 
 
 Indices and tables

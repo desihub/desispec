@@ -1,0 +1,38 @@
+Coaddition Notes
+================
+
+DESI Environment
+----------------
+
+Ssh to edison.nersc.gov (remember to use `ssh -A` to propagate your keys for github access) and::
+
+	source /project/projectdirs/desi/software/modules/desi_environment.sh
+
+Installation
+------------
+
+Clone the git package and select the development branch::
+
+	git clone git@github.com:desihub/desispec.git
+	cd desispec
+	git checkout \#3
+
+Per-Login Setup
+---------------
+
+Manually set paths for using this installation (assuming `bash`)::
+
+	export PATH=$PWD/bin:$PATH
+	export PYTHONPATH=$PWD/py:$PYTHONPATH
+
+Set pipeline paths::
+
+	export DESI_SPECTRO_REDUX=$DESI_ROOT/spectro/redux
+	export PRODNAME=sjb/cedar2a
+
+Tests
+-----
+
+Try this::
+
+	desi_make_bricks.py --night 20150211 --verbose
