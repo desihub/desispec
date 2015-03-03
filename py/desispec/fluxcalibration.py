@@ -58,13 +58,13 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
       - wave does not have to be uniform or monotonic.  Multiple cameras
         can be supported by concatenating their wave and flux arrays
     """
-    # I am treating the input arguments from frame files as dictionary. For example
+    # I am treating the input arguments from three frame files as dictionary. For example
     # wave{"r":rwave,"b":bwave,"z":zwave}
-    # Each spectrum is 1D. i.e each data is compared to every model. So to compare every stars,
-    # this piece will be looped over each star in the calling routine.     
-
-    # normalize data first, flux should be already flat fielded and sky subtracted.
+    # Each data(3 channels) is compared to every model.     
     
+    # flux should be already flat fielded and sky subtracted.
+    # First normalize both data and model by dividing by median filter.
+
     def applySmoothingFilter(flux):
         return scipy.ndimage.filters.median_filter(flux,200) # bin range has to be optimized
 
@@ -111,7 +111,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     nstdwave=stdwave.shape[0]
     maxDelta=1e100
     bestId=-1
-    red_Chisq=-1
+    red_Chisq=-1.
     
     for i in range(nstd):
            
@@ -134,7 +134,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
                 dof=len(wave["b"])+len(wave["r"])+len(wave["z"])
                 red_Chisq=maxDelta/dof
                 
-    print bestId,red_Chisq
     return bestId,stdwave,stdflux[bestId],red_Chisq
     #Should we skip those stars with very bad Chisq?
 
@@ -147,10 +146,11 @@ def normalize_templates(stdwave, stdflux, mags, filters,basepath):
     
     Args:
         stdwave : 1D array of standard star wavelengths [Angstroms]
-        stdflux : 2D[nstd, nwave] flux normalized to 10pc
+        stdflux : 1D observed flux 
         mags : 1D array of observed AB magnitudes
         filters : list of filter names for mags,
                   e.g. ['SDSS_r', 'DECAM_g', ...]
+    Only SDSS_r band is assumed to be used for normalization for now.
     """
 
     def ergs2photons(flux,wave):
@@ -172,19 +172,20 @@ def normalize_templates(stdwave, stdflux, mags, filters,basepath):
            appMag=-2.5*np.log10(flux_filt_integrated/ab_spectrum_filt_integrated)
         return appMag
     
-
-    normflux={}
+    nstdwave=stdwave.size
+    normflux=np.array(nstdwave)
 
     
     for i,v in enumerate(filters):
-        refmag=mags[i]
-        filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
-        rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
-        apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
-        print 'scaling mag',refmag,'to',apMag
-        scalefac=10**((apMag-refmag)/2.5)
-        normflux[v]=stdflux/scalefac
-        
+        #Normalizing using only SDSS_R band magnitude
+        if v=='SDSS_R':
+            refmag=mags[i]
+            filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
+            rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
+            apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
+            print 'scaling SDSS_r mag',refmag,'to',apMag
+            scalefac=10**((apMag-refmag)/2.5)
+            normflux=stdflux/scalefac 
   
     return stdwave,normflux
     raise NotImplementedError
@@ -197,31 +198,11 @@ def convolveFlux(wave,resolution,flux):
     nwave=len(wave)
     nspec=500
     convolved=np.zeros((nspec,nwave))
-    print 'resolution',resolution[1].shape
     for i in range(nspec):
        R=spdiags(resolution[i],diags,nwave,nwave)
        convolved[i]=R.dot(flux)
        
     return convolved
-
-
-def get_calibVector(wave,flux,ivar,resolution,model_wave,norm_model_flux):
-    """
-    Resolution should correspond to only that fiber assigned for a standard stars
-    flux and ivar are the standard star input spectrum, ie. photons
-    norm_model_flux is the normalized best model.
-    
-    """
-    # first rebin the normalized model to data wave bins
-    calib_model_flux=rebinSpectra(norm_model_flux,model_wave,wave)
-    #now convolve with resolution.
-    diags=np.arange(10,-11,-1)
-    nwave=len(wave)
-    R=spdiags(resolution,diags,nwave,nwave)
-    convolveModel=R.dot(calib_model_flux)
-    calibVector=flux/convolveModel
-    # need to propagate resolution to ivar also
-    return calibVector
 
 
 def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,input_model_flux,nsig_clipping=4.) :

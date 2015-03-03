@@ -81,12 +81,7 @@ def loadStellarModels(stellarmodelfile):
     paramData=phdu[1].data
     templateid=paramData["TEMPLATEID"]
     fluxData=phdu[0].data
-    #modelFlux=ergs2photons(fluxData,wavebins)# Not required, will be normalized anyway while comparison
-    modelData=[]
-    nspec=fluxData.shape[0]
-    for i in range(nspec):
-        modelData.append((i,fluxData[i],templateid[i]))
-    models={"WAVEBINS":wavebins,"FLUX":modelData}
+    
     phdu.close()
     
     return wavebins,fluxData,templateid
@@ -100,10 +95,36 @@ def read_filter_response(given_filter,basepath):
         filterNameMap=given_filter.lower()+"0.txt"
     else: #if breakfilt[0]=='DECAM':
         filterNameMap=given_filter.lower()+".txt"
-    print filterNameMap
     filter_response={}
     fileName=basepath+filterNameMap
     filt=numpy.loadtxt(fileName,unpack=True)
     tck=scipy.interpolate.splrep(filt[0],filt[1],s=0)
     filter_response=(filt[0],filt[1],tck)
     return filter_response
+
+def write_normalized_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
+    """ 
+    writes the normalized flux for the best model
+    """
+    hdr = fitsheader(header)
+    hdr['EXTNAME'] = ('FLUX', 'ergs/cm2/s')
+    hdu1=fits.PrimaryHDU(normalizedFlux,header=hdr)
+    #fits.writeto(norm_modelfile,normalizedFlux,header=hdr, clobber=True)
+    
+    hdr['EXTNAME'] = ('WAVE', '[Angstroms]')
+    hdu2 = fits.ImageHDU(wave, header=hdr)
+
+    hdr['EXTNAME'] = ('FIBERS', 'no dimension')
+    hdu3 = fits.ImageHDU(fibers, header=hdr)
+
+    hdr['EXTNAME'] = ('METADATA', 'no dimension')
+    from astropy.io.fits import Column
+    BESTMODELINDEX=Column(name='BESTMODELINDEX',format='K',array=data['BESTMODEL'])
+    TEMPLATEID=Column(name='TEMPLATEID',format='K',array=data['TEMPLATEID'])
+    CHI2DOF=Column(name='CHI2DOF',format='D',array=data['CHI2DOF'])
+    cols=fits.ColDefs([BESTMODELINDEX,TEMPLATEID,CHI2DOF])
+    tbhdu=fits.BinTableHDU.from_columns(cols,header=hdr)
+    hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
+    hdulist.writeto(norm_modelfile,clobber=True)
+    #fits.append(norm_modelfile,cols,header=tbhdu.header)
+    
