@@ -8,6 +8,7 @@ import os
 import os.path
 import datetime
 import glob
+import re
 
 def findfile(filetype, night, expid, camera=None, specprod=None):
     """
@@ -40,6 +41,35 @@ def findfile(filetype, night, expid, camera=None, specprod=None):
 
     #- normpath to remove extraneous double slashes /a/b//c/d
     return os.path.normpath(filepath)
+
+def get_files(filetype,night,expid,specprod = None):
+    """
+    Get files for a specified exposure.
+
+    Uses :func:`findfile` to determine the valid file names for the specified type.
+    Any camera identifiers not matching the regular expression [brz][0-9] will be
+    silently ignored.
+
+    Args:
+        filetype(str): Type of files to get. Valid choices are 'frame','cframe','psf'.
+        night(str): Date string for the requested night in the format YYYYMMDD.
+        expid(int): Exposure number to get files for.
+        specprod(str): Path containing the exposures/ directory to use. If the value
+            is None, then the value of :func:`specprod_root` is used instead. Ignored
+            when raw is True.
+
+    Returns:
+        dict: Dictionary of found file names using camera id strings as keys, which are
+            guaranteed to match the regular expression [brz][0-9].
+    """
+    glob_pattern = findfile(filetype,night,expid,camera = '*',specprod = specprod)
+    literals = map(re.escape,glob_pattern.split('*'))
+    re_pattern = re.compile('([brz][0-9])'.join(literals))
+    files = { }
+    for entry in glob.glob(glob_pattern):
+        found = re_pattern.match(entry)
+        files[found.group(1)] = entry
+    return files
 
 def validate_night(night):
     """
