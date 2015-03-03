@@ -29,6 +29,8 @@ Set pipeline paths::
 
 	export DESI_SPECTRO_REDUX=$DESI_ROOT/spectro/redux
 	export PRODNAME=sjb/cedar2a
+	export DESI_SPECTRO_SIM=$DESI_ROOT/spectro/sim
+	export DESI_SPECTRO_DATA=$DESI_SPECTRO_SIM/alpha-5
 
 Tests
 -----

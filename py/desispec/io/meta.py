@@ -29,7 +29,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None, specpr
         frame = '{specprod}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
         cframe = '{specprod}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
         psf = '{specprod}/calib2d/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
-        fibermap = '{specprod}/exposures/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        fibermap = '{data}/{night}/fibermap-{expid:08d}.fits',
         brick = '{specprod}/bricks/{brickid}/brick-{brickid}.fits',
     )
     location['desi'] = location['raw']
