@@ -28,7 +28,7 @@ def findfile(filetype, night, expid, camera=None, specprod=None):
         frame = '{specprod}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
         cframe = '{specprod}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
         psf = '{specprod}/calib2d/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
-        fibermap = '{data}/{night}/fibermap-{expid:08d}.fits',
+        fibermap = '{specprod}/exposures/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
     )
     location['desi'] = location['raw']
     
