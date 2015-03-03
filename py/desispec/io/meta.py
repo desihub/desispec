@@ -6,6 +6,7 @@
 
 import os
 import os.path
+import datetime
 import glob
 
 def findfile(filetype, night, expid, camera=None, specprod=None):
@@ -36,9 +37,27 @@ def findfile(filetype, night, expid, camera=None, specprod=None):
         
     filepath = location[filetype].format(data=data_root(), specprod=specprod,
         night=night, expid=expid, camera=camera)
-    
+
     #- normpath to remove extraneous double slashes /a/b//c/d
     return os.path.normpath(filepath)
+
+def validate_night(night):
+    """
+    Validates a night string and converts to a date.
+
+    Args:
+        night(str): Date string for the requested night in the format YYYYMMDD.
+
+    Returns:
+        datetime.date: Date object representing this night.
+
+    Raises:
+        RuntimeError: Badly formatted night string.
+    """
+    try:
+        return datetime.datetime.strptime(night,'%Y%m%d').date()
+    except ValueError:
+        raise RuntimeError('Badly formatted night %s' % night)
 
 def get_exposures(night,raw = False,specprod = None):
     """
@@ -63,6 +82,8 @@ def get_exposures(night,raw = False,specprod = None):
     Raises:
         RuntimeError: Badly formatted night date string or non-existent night.
     """
+    date = validate_night(night)
+
     if raw:
         night_path = os.path.join(data_root(),'exposures',night)
     else:
@@ -70,8 +91,11 @@ def get_exposures(night,raw = False,specprod = None):
             specprod = specprod_root()
         night_path = os.path.join(specprod,'exposures',night)
 
+    if not os.path.exists(night_path):
+        raise RuntimeError('Non-existent night %s' % night)
+
     exposures = [ ]
-    for entry in glob.glob(night_path):
+    for entry in glob.glob(os.path.join(night_path,'*')):
         head,tail = os.path.split(entry)
         try:
             exposure = int(tail)
