@@ -10,7 +10,7 @@ import datetime
 import glob
 import re
 
-def findfile(filetype, night, expid, camera=None, specprod=None):
+def findfile(filetype, night=None, expid=None, camera=None, brickid=None, specprod=None):
     """
     Returns location where file should be
     
@@ -30,6 +30,7 @@ def findfile(filetype, night, expid, camera=None, specprod=None):
         cframe = '{specprod}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
         psf = '{specprod}/calib2d/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
         fibermap = '{specprod}/exposures/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
+        brick = '{specprod}/bricks/{brickid}/brick-{brickid}.fits',
     )
     location['desi'] = location['raw']
     
@@ -37,7 +38,7 @@ def findfile(filetype, night, expid, camera=None, specprod=None):
         specprod = specprod_root()
         
     filepath = location[filetype].format(data=data_root(), specprod=specprod,
-        night=night, expid=expid, camera=camera)
+        night=night, expid=expid, camera=camera, brickid = brickid)
 
     #- normpath to remove extraneous double slashes /a/b//c/d
     return os.path.normpath(filepath)

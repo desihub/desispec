@@ -25,6 +25,8 @@ def main():
         print 'Missing required night argument.'
         return -1
 
+    # Initialize a dictionary of paths to brick files indexed by brick id strings.
+    brick_path = { }
     try:
         # Loop over exposures available for this night.
         for exposure in desispec.io.get_exposures(args.night,specprod = args.specprod):
@@ -38,13 +40,17 @@ def main():
             # Open the fibermap.
             fibermap_data,fibermap_hdr = desispec.io.read_fibermap(fibermap_path)
             # Get the set of bricknames used in this fibermap.
-            bricknames = set(fibermap_data['BRICKNAME'])
+            brick_ids = set(fibermap_data['BRICKNAME'])
+            # Add new brick paths if necessary.
+            for brick_id in brick_ids:
+                if brick_id not in brick_path:
+                    brick_path[brick_id] = desispec.io.findfile('brick',brickid = brick_id)
             # Get the list of per-camera cframes available for this exposure.
             cframes = desispec.io.get_files(filetype = 'cframe',night = args.night,
                 expid = exposure,specprod = args.specprod)
             if args.verbose:
                 print 'Exposure %08d: %d bricks, cframes: %s' % (
-                    exposure,len(bricknames),' '.join(cframes.keys()))
+                    exposure,len(brick_ids),' '.join(cframes.keys()))
 
     except RuntimeError,e:
         print str(e)
