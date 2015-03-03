@@ -5,6 +5,8 @@
 
 
 import os
+import os.path
+import glob
 
 def findfile(filetype, night, expid, camera=None, specprod=None):
     """
@@ -37,6 +39,49 @@ def findfile(filetype, night, expid, camera=None, specprod=None):
     
     #- normpath to remove extraneous double slashes /a/b//c/d
     return os.path.normpath(filepath)
+
+def get_exposures(night,raw = False,specprod = None):
+    """
+    Get a list of available exposures for the specified night.
+
+    Exposures are identified as correctly formatted subdirectory names within the
+    night directory, but no checks for valid contents of these exposure subdirectories
+    are performed.
+
+    Args:
+        night(str): Date string for the requested night in the format YYYYMMDD.
+        raw(bool): Returns raw exposures if set, otherwise returns processed exposures.
+        specprod(str): Path containing the exposures/ directory to use. If the value
+            is None, then the value of :func:`specprod_root` is used instead. Ignored
+            when raw is True.
+
+    Returns:
+        list: List of integer exposure numbers available for the specified night. The
+            list will be empty if no the night directory exists but does not contain
+            any exposures.
+
+    Raises:
+        RuntimeError: Badly formatted night date string or non-existent night.
+    """
+    if raw:
+        night_path = os.path.join(data_root(),'exposures',night)
+    else:
+        if specprod is None:
+            specprod = specprod_root()
+        night_path = os.path.join(specprod,'exposures',night)
+
+    exposures = [ ]
+    for entry in glob.glob(night_path):
+        head,tail = os.path.split(entry)
+        try:
+            exposure = int(tail)
+            assert tail == ('%08d' % exposure)
+            exposures.append(exposure)
+        except (ValueError,AssertionError):
+            # Silently ignore entries that are not exposure subdirectories.
+            pass
+
+    return exposures
 
 def data_root():
     dir = os.environ[ 'DESI_SPECTRO_DATA' ]
