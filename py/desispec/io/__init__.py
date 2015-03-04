@@ -18,6 +18,7 @@ from desispec.io.frame import read_frame, write_frame
 from desispec.io.sky import read_sky, write_sky
 from desispec.io.fiberflat import read_fiberflat, write_fiberflat
 from desispec.io.fibermap import read_fibermap, write_fibermap
+from desispec.io.brick import Brick
 from desispec.io import util
 
 
