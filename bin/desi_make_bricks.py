@@ -25,8 +25,8 @@ def main():
         print 'Missing required night argument.'
         return -1
 
-    # Initialize a dictionary of paths to brick files indexed by brick id strings.
-    brick_path = { }
+    # Initialize a dictionary of Brick objects indexed by '<band>_<brick-id>' strings.
+    bricks = { }
     try:
         # Loop over exposures available for this night.
         for exposure in desispec.io.get_exposures(args.night,specprod = args.specprod):
@@ -39,18 +39,35 @@ def main():
                 continue
             # Open the fibermap.
             fibermap_data,fibermap_hdr = desispec.io.read_fibermap(fibermap_path)
-            # Get the set of bricknames used in this fibermap.
             brick_ids = set(fibermap_data['BRICKNAME'])
-            # Add new brick paths if necessary.
-            for brick_id in brick_ids:
-                if brick_id not in brick_path:
-                    brick_path[brick_id] = desispec.io.findfile('brick',brickid = brick_id)
-            # Get the list of per-camera cframes available for this exposure.
+            # Loop over per-camera cframes available for this exposure.
             cframes = desispec.io.get_files(filetype = 'cframe',night = args.night,
                 expid = exposure,specprod = args.specprod)
-            if args.verbose:
-                print 'Exposure %08d: %d bricks, cframes: %s' % (
-                    exposure,len(brick_ids),' '.join(cframes.keys()))
+            for camera,cframe_path in cframes.iteritems():
+                band,spectro_id = camera[0],int(camera[1:])
+                this_camera = (fibermap_data['SPECTROID'] == spectro_id)
+                # Read this cframe file.
+                flux,ivar,wave,resolution,hdr = desispec.io.read_frame(cframe_path)
+                # Loop over bricks.
+                for brick_id in brick_ids:
+                    # Lookup the fibers belong to this brick.
+                    this_brick = (fibermap_data['BRICKNAME'] == brick_id)
+                    brick_data = fibermap_data[this_camera & this_brick]
+                    fibers = brick_data['FIBER']
+                    print brick_id,fibers
+                    if len(fibers) == 0:
+                        continue
+                    brick_key = '%s_%s' % (band,brick_id)
+                    # Open the brick file if this is the first time we are using it.
+                    if brick_key not in bricks:
+                        brick_path = desispec.io.findfile('brick',brickid = brick_id,band = band)
+                        bricks[brick_key] = desispec.io.brick.Brick(brick_path,mode = 'update')
+                    # Add these fibers to the brick file.
+                    bricks[brick_key].add_objects(flux[fibers],ivar[fibers],
+                        wave[fibers],resolution[fibers],brick_data)
+        # Close all brick files.
+        for brick in bricks.itervalues():
+            brick.close()
 
     except RuntimeError,e:
         print str(e)
