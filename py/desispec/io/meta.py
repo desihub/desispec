@@ -10,15 +10,17 @@ import datetime
 import glob
 import re
 
-def findfile(filetype, night=None, expid=None, camera=None, brickid=None, specprod=None):
+def findfile(filetype, night=None, expid=None, camera=None, brickid=None, band=None, specprod=None):
     """
     Returns location where file should be
     
     Args:
         filetype : file type, typically the prefix, e.g. "frame" or "psf"
-        night : YEARMMDD string
-        expid : integer exposure id
+        night : [optional] YEARMMDD string
+        expid : [optional] integer exposure id
         camera : [optional] 'b0' 'r1' .. 'z9'
+        brickid : [optional] brick ID string
+        band : [optional] one of 'b','r','z' identifying the camera band
         specprod : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
         fetch : [optional, not yet implemented]
             if not found locally, try to fetch remotely
@@ -30,7 +32,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None, specpr
         cframe = '{specprod}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
         psf = '{specprod}/calib2d/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
         fibermap = '{data}/{night}/fibermap-{expid:08d}.fits',
-        brick = '{specprod}/bricks/{brickid}/brick-{brickid}.fits',
+        brick = '{specprod}/bricks/{brickid}/brick-{band}-{brickid}.fits',
     )
     location['desi'] = location['raw']
     
@@ -38,7 +40,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None, specpr
         specprod = specprod_root()
         
     filepath = location[filetype].format(data=data_root(), specprod=specprod,
-        night=night, expid=expid, camera=camera, brickid = brickid)
+        night=night, expid=expid, camera=camera, brickid = brickid, band = band)
 
     #- normpath to remove extraneous double slashes /a/b//c/d
     return os.path.normpath(filepath)
