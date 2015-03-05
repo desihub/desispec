@@ -8,6 +8,8 @@ import argparse
 import os.path
 import glob
 
+import numpy as np
+
 import desispec.io
 
 def main():
@@ -53,8 +55,7 @@ def main():
                     # Lookup the fibers belong to this brick.
                     this_brick = (fibermap_data['BRICKNAME'] == brick_id)
                     brick_data = fibermap_data[this_camera & this_brick]
-                    fibers = brick_data['FIBER']
-                    print brick_id,fibers
+                    fibers = np.mod(brick_data['FIBER'],500)
                     if len(fibers) == 0:
                         continue
                     brick_key = '%s_%s' % (band,brick_id)
@@ -64,7 +65,7 @@ def main():
                         bricks[brick_key] = desispec.io.brick.Brick(brick_path,mode = 'update')
                     # Add these fibers to the brick file.
                     bricks[brick_key].add_objects(flux[fibers],ivar[fibers],
-                        wave[fibers],resolution[fibers],brick_data)
+                        wave[fibers],resolution[fibers],brick_data,int(args.night),exposure)
         # Close all brick files.
         for brick in bricks.itervalues():
             brick.close()

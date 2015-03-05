@@ -55,24 +55,62 @@ class Brick(object):
 			hdu2 = astropy.io.fits.ImageHDU(header = hdr)
 			hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
 			hdu3 = astropy.io.fits.ImageHDU(header = hdr)
-			self.hdu_list = astropy.io.fits.HDUList([hdu0,hdu1,hdu2,hdu3])
+			hdr['EXTNAME'] = ('FIBERMAP', 'no dimension')
+			# Use the columns from fibermap with a few extras added.
+			columns = desispec.io.fibermap.fibermap_columns[:]
+			columns.extend([
+				('NIGHT','i4'),
+				('EXPID','i4'),
+				])
+			data = np.empty(shape = (0,),dtype = columns)
+			hdu4 = astropy.io.fits.BinTableHDU(data = data,header = hdr)
+			# Add comments for fibermap columns.
+			num_fibermap_columns = len(desispec.io.fibermap.fibermap_comments)
+			for i in range(1,1+num_fibermap_columns):
+				key = 'TTYPE%d' % i
+				name = hdu4.header[key]
+				comment = desispec.io.fibermap.fibermap_comments[name]
+				hdu4.header[key] = (name,comment)
+			# Add comments for our additional columns.
+			hdu4.header['TTYPE%d' % (1+num_fibermap_columns)] = ('NIGHT','Night of exposure YYYYMMDD')
+			hdu4.header['TTYPE%d' % (2+num_fibermap_columns)] = ('EXPID','Exposure ID')
+			self.hdu_list = astropy.io.fits.HDUList([hdu0,hdu1,hdu2,hdu3,hdu4])
 		else:
 			self.hdu_list = astropy.io.fits.open(path,mode = self.mode)
-			if len(self.hdu_list) != 4:
+			if len(self.hdu_list) != 5:
 				raise RuntimeError('Unexpected number of HDUs (%d) in %s' % (
 					len(self.hdu_list),self.path))
 
-	def add_objects(self,flux,ivar,wave,resolution,object_data):
+	def add_objects(self,flux,ivar,wave,resolution,object_data,night,exposure):
 		"""
 		Add a list of objects.
 		"""
 		if self.mode != 'update':
 			raise RuntimeError('Can only add objects in update mode.')
-		if len(self.hdu_list[0].data) > 0:
-			print self.hdu_list[0].data.shape,flux.shape
+		# Augment object_data with constant NIGHT and EXPID columns.
+		augmented_data = np.empty(shape = object_data.shape,dtype = self.hdu_list[4].data.dtype)
+		for column_def in desispec.io.fibermap.fibermap_columns:
+			name = column_def[0]
+			if name == 'FILTER' and augmented_data[name].shape != object_data[name].shape:
+				for i,filters in enumerate(object_data[name]):
+					augmented_data[name][i] = ','.join(filters)
+			else:
+				augmented_data[name] = object_data[name]
+		augmented_data['NIGHT'] = night
+		augmented_data['EXPID'] = exposure
+		# Concatenate the new image HDU data or use it to initialize the HDU.
+		if self.hdu_list[0].data is not None:
 			self.hdu_list[0].data = np.concatenate((self.hdu_list[0].data,flux,))
+			self.hdu_list[1].data = np.concatenate((self.hdu_list[1].data,ivar,))
+			self.hdu_list[2].data = np.concatenate((self.hdu_list[2].data,wave,))
+			self.hdu_list[3].data = np.concatenate((self.hdu_list[3].data,resolution,))
 		else:
 			self.hdu_list[0].data = flux
+			self.hdu_list[1].data = ivar
+			self.hdu_list[2].data = wave
+			self.hdu_list[3].data = resolution
+		# Always concatenate our table since a new file will be created with a zero-length table.
+		self.hdu_list[4].data = np.concatenate((self.hdu_list[4].data,augmented_data,))
 
 	def close(self):
 		"""

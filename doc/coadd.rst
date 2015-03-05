@@ -22,6 +22,7 @@ Per-Login Setup
 
 Manually set paths for using this installation (assuming `bash`)::
 
+	cd desispec
 	export PATH=$PWD/bin:$PATH
 	export PYTHONPATH=$PWD/py:$PYTHONPATH
 
@@ -35,6 +36,9 @@ Set pipeline paths::
 Tests
 -----
 
-Try this::
+Convert mocks using::
 
+	rm -rf $DESI_SPECTRO_REDUX/bricks
 	desi_make_bricks.py --night 20150211 --verbose
+
+Note that the code is not yet smart enough to do the right thing for exposures that have already been added to brick files, hence the `rm` command above.
