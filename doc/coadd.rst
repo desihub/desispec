@@ -11,7 +11,7 @@ Ssh to edison.nersc.gov (remember to use `ssh -A` to propagate your keys for git
 Installation
 ------------
 
-Clone the git package and select the development branch::
+Clone the git package and select the co-add development branch::
 
 	git clone git@github.com:desihub/desispec.git
 	cd desispec
@@ -36,9 +36,19 @@ Set pipeline paths::
 Tests
 -----
 
-Convert mocks using::
+Convert mocks cframes and fibermaps into brick files using::
 
 	rm -rf $DESI_SPECTRO_REDUX/bricks
 	desi_make_bricks.py --night 20150211 --verbose
 
 Note that the code is not yet smart enough to do the right thing for exposures that have already been added to brick files, hence the `rm` command above.
+
+Inspect a brick file in iPython using, e.g.::
+
+	import os,os.path
+	import astropy.io.fits as fits
+	from astropy.table import Table
+	brick = fits.open(os.path.join(os.getenv('DESI_SPECTRO_REDUX'),'bricks','3582m005','brick-r-3582m005.fits'))
+	info = Table.read(brick,hdu=4)
+	print info
+	plt.errorbar(x=brick[2].data,y=brick[0].data[0],yerr=brick[1].data[0]**-0.5)

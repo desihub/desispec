@@ -3,6 +3,9 @@
 # See top-level LICENSE file for Copyright information
 #
 # -*- coding: utf-8 -*-
+"""
+Read fibermap and cframe files for all exposures of a single night and update or create brick files.
+"""
 
 import argparse
 import os.path
@@ -63,9 +66,10 @@ def main():
                     if brick_key not in bricks:
                         brick_path = desispec.io.findfile('brick',brickid = brick_id,band = band)
                         bricks[brick_key] = desispec.io.brick.Brick(brick_path,mode = 'update')
-                    # Add these fibers to the brick file.
+                    # Add these fibers to the brick file. Note that the wavelength array is
+                    # not per-fiber, so we do not slice it before passing it to add_objects().
                     bricks[brick_key].add_objects(flux[fibers],ivar[fibers],
-                        wave[fibers],resolution[fibers],brick_data,int(args.night),exposure)
+                        wave,resolution[fibers],brick_data,args.night,exposure)
         # Close all brick files.
         for brick in bricks.itervalues():
             brick.close()

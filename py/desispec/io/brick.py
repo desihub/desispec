@@ -81,9 +81,23 @@ class Brick(object):
 				raise RuntimeError('Unexpected number of HDUs (%d) in %s' % (
 					len(self.hdu_list),self.path))
 
-	def add_objects(self,flux,ivar,wave,resolution,object_data,night,exposure):
+	def add_objects(self,flux,ivar,wave,resolution,object_data,night,expid):
 		"""
-		Add a list of objects.
+		Add a list of objects to this brick file from the same night and exposure.
+
+		Args:
+			flux(numpy.ndarray): Array of (nobj,nwave) flux values for nobj objects tabulated
+				at nwave wavelengths.
+			ivar(numpy.ndarray): Array of (nobj,nwave) inverse-variance values.
+			wave(numpy.ndarray): Array of (nwave,) wavelength values in Angstroms. All objects
+				are assumed to use the same wavelength grid.
+			resolution(numpy.ndarray): Array of (nobj,nres,nwave) resolution matrix elements.
+			object_data(numpy.ndarray): Record array of fibermap rows for the objects to add.
+			night(str): Date string for the night these objects were observed in the format YYYYMMDD.
+			expid(int): Exposure number for these objects.
+
+		Raises:
+			RuntimeError: Cn only add objects in update mode.
 		"""
 		if self.mode != 'update':
 			raise RuntimeError('Can only add objects in update mode.')
@@ -96,13 +110,14 @@ class Brick(object):
 					augmented_data[name][i] = ','.join(filters)
 			else:
 				augmented_data[name] = object_data[name]
-		augmented_data['NIGHT'] = night
-		augmented_data['EXPID'] = exposure
-		# Concatenate the new image HDU data or use it to initialize the HDU.
+		augmented_data['NIGHT'] = int(night)
+		augmented_data['EXPID'] = expid
+		# Concatenate the new per-object image HDU data or use it to initialize the HDU.
+		# HDU2 contains the wavelength grid shared by all objects so we only add it once.
 		if self.hdu_list[0].data is not None:
 			self.hdu_list[0].data = np.concatenate((self.hdu_list[0].data,flux,))
 			self.hdu_list[1].data = np.concatenate((self.hdu_list[1].data,ivar,))
-			self.hdu_list[2].data = np.concatenate((self.hdu_list[2].data,wave,))
+			assert np.array_equal(self.hdu_list[2].data,wave),'Wavelength arrays do not match.'
 			self.hdu_list[3].data = np.concatenate((self.hdu_list[3].data,resolution,))
 		else:
 			self.hdu_list[0].data = flux
