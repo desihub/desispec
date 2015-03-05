@@ -48,6 +48,9 @@ def main():
             # Loop over per-camera cframes available for this exposure.
             cframes = desispec.io.get_files(filetype = 'cframe',night = args.night,
                 expid = exposure,specprod = args.specprod)
+            if args.verbose:
+                print 'Exposure %08d covers %d bricks and has cframes for %s.' % (
+                    exposure,len(brick_ids),','.join(cframes.keys()))
             for camera,cframe_path in cframes.iteritems():
                 band,spectro_id = camera[0],int(camera[1:])
                 this_camera = (fibermap_data['SPECTROID'] == spectro_id)
@@ -72,6 +75,8 @@ def main():
                         wave,resolution[fibers],brick_data,args.night,exposure)
         # Close all brick files.
         for brick in bricks.itervalues():
+            if args.verbose:
+                print 'Brick %s now contains %d objects.' % (brick.path,brick.get_num_objects())
             brick.close()
 
     except RuntimeError,e:

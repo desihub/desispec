@@ -127,6 +127,15 @@ class Brick(object):
 		# Always concatenate our table since a new file will be created with a zero-length table.
 		self.hdu_list[4].data = np.concatenate((self.hdu_list[4].data,augmented_data,))
 
+	def get_num_objects(self):
+		"""
+		Get the number of objects contained in this brick file.
+
+		Returns:
+			int: Number of objects contained in this brick file.
+		"""
+		return len(self.hdu_list[0].data)
+
 	def close(self):
 		"""
 		Write any updates and close the brick file.
