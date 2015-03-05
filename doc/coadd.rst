@@ -52,3 +52,13 @@ Inspect a brick file in iPython using, e.g.::
 	info = Table.read(brick,hdu=4)
 	print info
 	plt.errorbar(x=brick[2].data,y=brick[0].data[0],yerr=brick[1].data[0]**-0.5)
+
+Notes
+-----
+
+* The brick filenames have the format `brick-{band}-{expid}.fits`, where `band` is one of [rbz], which differs from the current data model (which is missing the `{band}`).
+* Bricks contain a single wavelength grid in HDU2, the same as current CFRAMES, but different from the CFRAME data model (where HDU2 is a per-object mask).
+* The order of objects appearing in brick HDUs 0-3 (which are copied from the corresponding CFRAMEs) matches the order of rows in HDU4 (which are copied from the corresponding FIBERMAP).
+* HDU4 adds NIGHT and EXPID columns, to distinguish repeat observations of the same object.
+* The NIGHT column in HDU4 has type i4, not string. Is this a problem?
+* The 5*S10 FILTER values in the FIBERMAP are combined into a single comma-separated list stored as a single S50 FILTER value in HDU4 of the brick file.  This is a workaround until we sort out issues with astropy.io.fits and cfitsio handling of 5*S10 arrays.
