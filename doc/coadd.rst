@@ -53,6 +53,17 @@ Inspect a brick file in iPython using, e.g.::
     print info
     plt.errorbar(x=brick[2].data,y=brick[0].data[0],yerr=brick[1].data[0]**-0.5)
 
+Log-Lambda Grid
+---------------
+
+===== ======= ======= ======= ==========
+Band  Min(A)  Max(A)  Nbins   BinSize(A)
+===== ======= ======= ======= ==========
+b     3579.0  5938.8  3934    0.60
+r     5635.0  7730.8  3494    0.60
+z     7445.0  9824.0  3966    0.60
+===== ======= ======= ======= ==========
+
 Notes
 -----
 
