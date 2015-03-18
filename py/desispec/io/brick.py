@@ -15,7 +15,7 @@ import desispec.io.util
 
 class Brick(object):
     """
-    Represents objects in a single band (b,r,z) and brick.
+    Represents objects in a single brick and possibly also a single band b,r,z.
 
     The constructor will open an existing file and create a new file and parent
     directory if necessary.  The :meth:`close` method must be called for any updates
@@ -97,7 +97,7 @@ class Brick(object):
             expid(int): Exposure number for these objects.
 
         Raises:
-            RuntimeError: Cn only add objects in update mode.
+            RuntimeError: Can only add objects in update mode.
         """
         if self.mode != 'update':
             raise RuntimeError('Can only add objects in update mode.')

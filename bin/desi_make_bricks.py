@@ -9,7 +9,6 @@ Read fibermap and cframe files for all exposures of a single night and update or
 
 import argparse
 import os.path
-import glob
 
 import numpy as np
 
