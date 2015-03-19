@@ -35,7 +35,7 @@ class Spectrum(object):
         self.Cinv = self.resolution.T.dot(icov.dot(self.resolution))
         self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
 
-    def _finalize(self,sparse_cutoff = 10):
+    def finalize(self,sparse_cutoff = 10):
         # Recalculate the deconvolved solution and resolution.
         self.ivar,R = decorrelate(self.Cinv)
         R_it = scipy.linalg.inv(R.T)

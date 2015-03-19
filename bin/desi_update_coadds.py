@@ -34,9 +34,8 @@ def main():
     coadd_all_path = desispec.io.meta.findfile('coadd_all',brickid = args.brick,specprod = args.specprod)
     coadd_all_file = desispec.io.brick.CoAddedBrick(coadd_all_path,mode = 'update')
 
-    # Initialize dictionaries of co-added spectra and their associated info for each band.
+    # Initialize dictionaries of co-added spectra for each band and object ID.
     coadded_spectra = dict(b = { },r = { },z = { })
-    coadded_info = dict(b = { },r = { },z = { })
 
     # Loop over bands for this brick.
     for band in 'brz':
@@ -47,35 +46,62 @@ def main():
             continue
         brick_file = desispec.io.brick.Brick(brick_path,mode = 'readonly')
         num_objects = brick_file.get_num_objects()
-        flux,ivar,wlen,resolution = (brick_file.hdu_list[0].data,brick_file.hdu_list[1].data,
+        flux_in,ivar_in,wlen,resolution_in = (brick_file.hdu_list[0].data,brick_file.hdu_list[1].data,
             brick_file.hdu_list[2].data,brick_file.hdu_list[3].data)
         if args.verbose:
             print 'Processing %s with %d objects...' % (brick_path,num_objects)
         # Open this band's coadd file for updating.
         coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,band = band,specprod = args.specprod)
         coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'update')
-        # Get the list of exposures that have already been co-added.
-        coadd_info = coadd_file.hdu_list[4].data
-        # Loop over objects in the brick file.
+        # Copy the input fibermap info for each exposure into memory.
+        coadd_info = np.copy(brick_file.hdu_list[4].data)
+
+        # Loop over objects in the input brick file.
+        next_coadd_index = 0
         for index,info in enumerate(brick_file.hdu_list[4].data):
             assert index == info['INDEX'],'Index mismatch: %d != %d' % (index,info['INDEX'])
-            resolution_matrix = desispec.io.frame.resolution_data_to_sparse_matrix(resolution[index])
-            spectrum = desispec.coaddition.Spectrum(wlen,flux[index],ivar[index],resolution_matrix)
+            # Have we already added this exposure?
+            resolution_matrix = desispec.io.frame.resolution_data_to_sparse_matrix(resolution_in[index])
+            spectrum = desispec.coaddition.Spectrum(wlen,flux_in[index],ivar_in[index],resolution_matrix)
             target_id = info['TARGETID']
-            target_info = dict(TARGETID = target_id,OBJTYPE = info['OBJTYPE'],
-                RA_TARGET = info['RA_TARGET'],DEC_TARGET = info['DEC_TARGET'])
-            # Add this new observation to our coadd of this target.
-            if target_id in coadded_spectra[band]:
-                coadded_spectra[band][target_id] += spectrum
-                coadded_info[band][target_id].append(target_info)
-            else:
+            # Add this observation to our coadd of this target.
+            if target_id not in coadded_spectra[band]:
                 coadded_spectra[band][target_id] = spectrum
-                coadded_info[band][target_id] = [ target_info ]
+                coadd_info['INDEX'][index] = next_coadd_index
+                next_coadd_index += 1
+            else:
+                coadded_spectra[band][target_id] += spectrum
+
+        # Allocate arrays for the coadded results to be saved in the output FITS file.
+        target_set = set(coadd_info['TARGETID'])
+        num_targets = len(target_set)
+        assert num_targets == next_coadd_index,'Coadd indexing error: %d != %d' % (num_targets,next_coadd_index)
+        nbins = len(wlen)
+        flux_out = np.empty((num_targets,nbins))
+        ivar_out = np.empty_like(flux_out)
+        print resolution_in.shape
+        ndiag = resolution_in.shape[1]
+        resolution_out = np.empty((num_targets,ndiag,nbins))
+
         # Save the coadded spectra for this band.
         for target_id in coadded_spectra[band]:
-            info = coadded_info[band][target_id]
-            print 'Coadded %d observations for target ID %d' % (len(info),target_id)
-            coadded_spectra[band][target_id]._finalize()
+            exposures = (coadd_info['TARGETID'] == target_id)
+            index = coadd_info['INDEX'][exposures][0]
+            print 'Saving coadd of %d exposures for target ID %d to index %d' % (
+                len(exposures),target_id,index)
+            spectrum = coadded_spectra[band][target_id]
+            spectrum.finalize(sparse_cutoff = ndiag//2)
+            flux_out[index] = spectrum.flux
+            ivar_out[index] = spectrum.ivar
+            # Convert the DIA-format sparse matrix data into the canonical decreasing offset format
+            # used in our FITS file.
+            row_order = np.argsort(spectrum.resolution.offsets)[::-1]
+            resolution_out[index] = spectrum.resolution.data[row_order]
+        coadd_file.add_objects(flux_out,ivar_out,wlen,resolution_out)
+
+        # Save the coadd info to the output file.
+        coadd_file.hdu_list[4].data = coadd_info
+
         # Close files for this band.
         coadd_file.close()
         brick_file.close()

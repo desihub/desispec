@@ -171,7 +171,6 @@ class Brick(BrickBase):
         augmented_data['EXPID'] = expid
         begin_index = len(self.hdu_list[4].data)
         end_index = begin_index + len(flux)
-        print 'Adding indices',begin_index,end_index
         augmented_data['INDEX'] = np.arange(begin_index,end_index,dtype=int)
         # Always concatenate to our table since a new file will be created with a zero-length table.
         self.hdu_list[4].data = np.concatenate((self.hdu_list[4].data,augmented_data,))
