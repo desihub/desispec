@@ -7,6 +7,7 @@ from __future__ import division, absolute_import
 import numpy as np
 import scipy.sparse
 import scipy.linalg
+import scipy.sparse.linalg
 
 class Spectrum(object):
     """
@@ -34,12 +35,17 @@ class Spectrum(object):
         self.Cinv = self.resolution.T.dot(icov.dot(self.resolution))
         self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
 
-    def _finalize(self):
+    def _finalize(self,sparse_cutoff = 10):
         # Recalculate the deconvolved solution and resolution.
-        self.ivar,R = decorrelate(self.Cinv.todense())
+        self.ivar,R = decorrelate(self.Cinv)
         R_it = scipy.linalg.inv(R.T)
         self.flux = R_it.dot(self.Cinv_f)/self.ivar
-        self.resolution = scipy.sparse.dia_matrix(R)
+        # Convert R from a dense matrix to a sparse one.
+        n = len(self.ivar)
+        k = int(sparse_cutoff)
+        assert k >= 0,'Expected sparse_cutoff >= 0.'
+        mask = np.tri(n,n,k) - np.tri(n,n,-k-1)
+        self.resolution = scipy.sparse.dia_matrix(R*mask)
 
     def __iadd__(self,other):
         """
@@ -66,30 +72,28 @@ def decorrelate(Cinv):
     Hamilton & Tegmark 2000 http://arxiv.org/abs/astro-ph/9905192.
 
     Args:
-        Cinv(numpy.ndarray): Square array of inverse covariance matrix elements. The algorithm
-            uses dense matrix operations so a sparse Cinv should be converted todense(). The matrix
-            is assumed to be positive definite but we do not check this.
+        Cinv(numpy.ndarray): Square array of inverse covariance matrix elements. The input can
+            either be a scipy.sparse format or else a regular (dense) numpy array.
 
     Returns:
         tuple: Tuple ivar,R of uncorrelated flux inverse variances and the corresponding
             resolution matrix. These have shapes (nflux,) and (nflux,nflux) respectively.
             The rows of R give the resolution-convolved responses to unit flux for each
-            wavelength bin. Note that R is returned in dense format but can be converted
-            to an efficient sparse format using scipy.sparse.dia_matrix(R).
+            wavelength bin. Note that R is returned as a regular (dense) numpy array but
+            will normally have non-zero values concentrated near the diagonal.
     """
-    # Calculate the matrix square root of Cinv to diagonalize the flux errors.
-    L,X = scipy.linalg.eigh((Cinv+Cinv.T)/2.)
+    # Calculate the eigenvalue decomposition of Cinv. Use a sparse algorithm if possible,
+    # but the resulting matrix of eigenvectors X is always dense.
+    if scipy.sparse.issparse(Cinv):
+        L,X = scipy.sparse.linalg.eigsh(Cinv)
+    else:
+        L,X = scipy.linalg.eigh(Cinv)
     # Check that all eigenvalues are positive.
     assert np.all(L > 0), 'Found some negative Cinv eigenvalues.'
-    # Check that the eigenvectors are orthonormal so that Xt.X = 1
-    assert np.allclose(np.identity(len(L)),X.T.dot(X))
+    # Calculate the matrix square root Q such that Cinv = Q.Q
     Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))
-    # Check BS eqn.10
-    assert np.allclose(Cinv,Q.dot(Q))
-    # Calculate the corresponding resolution matrix and diagonal flux errors.
+    # Calculate and return the corresponding resolution matrix and diagonal flux errors.
     s = np.sum(Q,axis=1)
     R = Q/s[:,np.newaxis]
     ivar = s**2
-    # Check BS eqn.14
-    assert np.allclose(Cinv,R.T.dot(np.diag(ivar).dot(R)))
     return ivar,R
