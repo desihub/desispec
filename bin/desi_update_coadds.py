@@ -34,8 +34,9 @@ def main():
     coadd_all_path = desispec.io.meta.findfile('coadd_all',brickid = args.brick,specprod = args.specprod)
     coadd_all_file = desispec.io.brick.CoAddedBrick(coadd_all_path,mode = 'update')
 
-    # Initialize a dictionary of objects we have processed for each band.
-    objects = dict(b = { },r = { },z = { })
+    # Initialize dictionaries of co-added spectra and their associated info for each band.
+    coadded_spectra = dict(b = { },r = { },z = { })
+    coadded_info = dict(b = { },r = { },z = { })
 
     # Loop over bands for this brick.
     for band in 'brz':
@@ -53,19 +54,28 @@ def main():
         # Open this band's coadd file for updating.
         coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,band = band,specprod = args.specprod)
         coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'update')
+        # Get the list of exposures that have already been co-added.
+        coadd_info = coadd_file[4].data
         # Loop over objects in the brick file.
         for index,info in enumerate(brick_file.hdu_list[4].data):
+            assert index == info['INDEX'],'Index mismatch: %d != %d' % (index,info['INDEX'])
             resolution_matrix = desispec.io.frame.resolution_data_to_sparse_matrix(resolution[index])
             spectrum = desispec.coaddition.Spectrum(wlen,flux[index],ivar[index],resolution_matrix)
             target_id = info['TARGETID']
-            if target_id in objects[band]:
-                objects[band][target_id] += spectrum
+            target_info = dict(TARGETID = target_id,OBJTYPE = info['OBJTYPE'],
+                RA_TARGET = info['RA_TARGET'],DEC_TARGET = info['DEC_TARGET'])
+            # Add this new observation to our coadd of this target.
+            if target_id in coadded_spectra[band]:
+                coadded_spectra[band][target_id] += spectrum
+                coadded_info[band][target_id].append(target_info)
             else:
-                objects[band][target_id] = spectrum
+                coadded_spectra[band][target_id] = spectrum
+                coadded_info[band][target_id] = [ target_info ]
         # Save the coadded spectra for this band.
-        for target_id in objects[band]:
-            print 'Coadded target ID',target_id
-            #objects[band][target_id]._finalize()
+        for target_id in coadded_spectra[band]:
+            info = coadded_info[band][target_id]
+            print 'Coadded %d observations for target ID %d' % (len(info),target_id)
+            coadded_spectra[band][target_id]._finalize()
         # Close files for this band.
         coadd_file.close()
         brick_file.close()
