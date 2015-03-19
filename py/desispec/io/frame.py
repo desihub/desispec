@@ -8,6 +8,8 @@ import scipy,scipy.sparse
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
 
+import numpy as np
+
 def write_frame(outfile, flux,ivar,wave,resolution_data, header=None) :
     """
     Write a frame fits file and returns path to file written
@@ -68,7 +70,7 @@ def read_frame(filename):
     
     return flux,ivar,wave,resolution_data, hdr
 
-def resolution_data_to_sparse_matrix(resolution_data,fiber) :
+def resolution_data_to_sparse_matrix(resolution_data,fiber = None):
     """
     convert the resolution data for a given fiber into a sparse matrix
     use function M.todense() or M.toarray() to convert output sparse matrix M to a dense matrix or numpy array
@@ -81,13 +83,12 @@ def resolution_data_to_sparse_matrix(resolution_data,fiber) :
         offsets = range(d,-d-1,-1)
         return scipy.sparse.dia_matrix((resolution_data[fiber],offsets),(nwave,nwave))
     elif len(resolution_data.shape)==2 :
-        if fiber>0 :
+        if fiber is not None:
             print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape," and requested fiber=",fiber
             sys.exit(12)
-        nfibers=1
         d=resolution_data.shape[0]/2
         nwave=resolution_data.shape[1]
-        offsets = range(d,-d-1,-1)
+        offsets = np.arange(d,-d-1,-1)
         return scipy.sparse.dia_matrix((resolution_data,offsets),(nwave,nwave))
     else :
         print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape
