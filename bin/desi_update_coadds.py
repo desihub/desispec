@@ -55,7 +55,7 @@ def main():
         coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,band = band,specprod = args.specprod)
         coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'update')
         # Get the list of exposures that have already been co-added.
-        coadd_info = coadd_file[4].data
+        coadd_info = coadd_file.hdu_list[4].data
         # Loop over objects in the brick file.
         for index,info in enumerate(brick_file.hdu_list[4].data):
             assert index == info['INDEX'],'Index mismatch: %d != %d' % (index,info['INDEX'])
