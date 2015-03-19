@@ -51,7 +51,7 @@ class Spectrum(object):
         if not np.array_equal(self.wlen,other.wlen):
             raise RuntimeError('Cannot coadd different wavelength grids.')
         # Accumulate weighted deconvolved fluxes.
-        self.Cinv += other.Cinv
+        self.Cinv = self.Cinv + other.Cinv # sparse matrices do not support +=
         self.Cinv_f += other.Cinv_f
         return self
 
