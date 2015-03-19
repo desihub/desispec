@@ -56,12 +56,30 @@ class BrickBase(object):
             hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
             hdu3 = astropy.io.fits.ImageHDU(header = hdr)
             hdr['EXTNAME'] = ('FIBERMAP', 'no dimension')
-            self.hdu_list = astropy.io.fits.HDUList([hdu0,hdu1,hdu2,hdu3,])
+            # Create an HDU4 using the columns from fibermap with a few extras added.
+            columns = desispec.io.fibermap.fibermap_columns[:]
+            columns.extend([
+                ('NIGHT','i4'),
+                ('EXPID','i4'),
+                ('INDEX','i4'),
+                ])
+            data = np.empty(shape = (0,),dtype = columns)
+            hdr = desispec.io.util.fitsheader(header)
+            hdu4 = astropy.io.fits.BinTableHDU(data = data,header = hdr)
+            # Add comments for fibermap columns.
+            num_fibermap_columns = len(desispec.io.fibermap.fibermap_comments)
+            for i in range(1,1+num_fibermap_columns):
+                key = 'TTYPE%d' % i
+                name = hdu4.header[key]
+                comment = desispec.io.fibermap.fibermap_comments[name]
+                hdu4.header[key] = (name,comment)
+            # Add comments for our additional columns.
+            hdu4.header['TTYPE%d' % (1+num_fibermap_columns)] = ('NIGHT','Night of exposure YYYYMMDD')
+            hdu4.header['TTYPE%d' % (2+num_fibermap_columns)] = ('EXPID','Exposure ID')
+            hdu4.header['TTYPE%d' % (3+num_fibermap_columns)] = ('INDEX','Index of this object in HDUs 0-3')
+            self.hdu_list = astropy.io.fits.HDUList([hdu0,hdu1,hdu2,hdu3,hdu4])
         else:
             self.hdu_list = astropy.io.fits.open(path,mode = self.mode)
-
-    def create_table(self):
-        pass
 
     def add_objects(self,flux,ivar,wave,resolution):
         """
@@ -118,27 +136,6 @@ class Brick(BrickBase):
     """
     def __init__(self,path,mode = 'readonly',header = None):
         BrickBase.__init__(self,path,mode,header)
-        if self.mode == 'update' and not os.path.exists(self.path):
-            # Create an HDU4 using the columns from fibermap with a few extras added.
-            columns = desispec.io.fibermap.fibermap_columns[:]
-            columns.extend([
-                ('NIGHT','i4'),
-                ('EXPID','i4'),
-                ])
-            data = np.empty(shape = (0,),dtype = columns)
-            hdr = desispec.io.util.fitsheader(header)
-            hdu4 = astropy.io.fits.BinTableHDU(data = data,header = hdr)
-            # Add comments for fibermap columns.
-            num_fibermap_columns = len(desispec.io.fibermap.fibermap_comments)
-            for i in range(1,1+num_fibermap_columns):
-                key = 'TTYPE%d' % i
-                name = hdu4.header[key]
-                comment = desispec.io.fibermap.fibermap_comments[name]
-                hdu4.header[key] = (name,comment)
-            # Add comments for our additional columns.
-            hdu4.header['TTYPE%d' % (1+num_fibermap_columns)] = ('NIGHT','Night of exposure YYYYMMDD')
-            hdu4.header['TTYPE%d' % (2+num_fibermap_columns)] = ('EXPID','Exposure ID')
-            self.hdu_list.append(hdu4)
 
     def add_objects(self,flux,ivar,wave,resolution,object_data,night,expid):
         """
@@ -163,6 +160,8 @@ class Brick(BrickBase):
         augmented_data = np.empty(shape = object_data.shape,dtype = self.hdu_list[4].data.dtype)
         for column_def in desispec.io.fibermap.fibermap_columns:
             name = column_def[0]
+            # Special handling for the fibermap FILTER array, which is not output correctly
+            # by astropy.io.fits so we convert it to a comma-separated list.
             if name == 'FILTER' and augmented_data[name].shape != object_data[name].shape:
                 for i,filters in enumerate(object_data[name]):
                     augmented_data[name][i] = ','.join(filters)
@@ -170,7 +169,11 @@ class Brick(BrickBase):
                 augmented_data[name] = object_data[name]
         augmented_data['NIGHT'] = int(night)
         augmented_data['EXPID'] = expid
-        # Always concatenate our table since a new file will be created with a zero-length table.
+        begin_index = len(self.hdu_list[4].data)
+        end_index = begin_index + len(flux)
+        print 'Adding indices',begin_index,end_index
+        augmented_data['INDEX'] = np.arange(begin_index,end_index,dtype=int)
+        # Always concatenate to our table since a new file will be created with a zero-length table.
         self.hdu_list[4].data = np.concatenate((self.hdu_list[4].data,augmented_data,))
 
 class CoAddedBrick(BrickBase):
@@ -179,30 +182,5 @@ class CoAddedBrick(BrickBase):
 
     See :class:`BrickBase` for constructor info.
     """
-    _columns = [
-        ('TARGETID', 'i8'),
-        ('OBJTYPE', 'S10'),
-        ('RA_TARGET', 'f8'),
-        ('DEC_TARGET', 'f8'),
-    ]
-    _comments = dict(
-        TARGETID     = "Unique target ID",
-        OBJTYPE      = "Target type [ELG, LRG, QSO, STD, STAR, SKY]",
-        RA_TARGET    = "Target right ascension [degrees]",
-        DEC_TARGET   = "Target declination [degrees]",
-    )
-
     def __init__(self,path,mode = 'readonly',header = None):
         BrickBase.__init__(self,path,mode,header)
-        if self.mode == 'update' and not os.path.exists(self.path):
-            # Define our columns for HDU4.
-            data = np.empty(shape = (0,),dtype = self._columns)
-            hdr = desispec.io.util.fitsheader(header)
-            hdu4 = astropy.io.fits.BinTableHDU(data = data,header = hdr)
-            # Add comments for fibermap columns.
-            num_fibermap_columns = len(desispec.io.fibermap.fibermap_comments)
-            for i in range(1,1+len(self._columns)):
-                key = 'TTYPE%d' % i
-                name = hdu4.header[key]
-                hdu4.header[key] = (name,self._comments[name])
-            self.hdu_list.append(hdu4)
