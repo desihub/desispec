@@ -134,8 +134,6 @@ class BrickBase(object):
         """
         exposures = (self.hdu_list[4].data['TARGETID'] == target_id)
         index_list = np.unique(self.hdu_list[4].data['INDEX'][exposures])
-        print self.hdu_list[4].data['INDEX'][exposures]
-        print index_list
         return (self.hdu_list[0].data[index_list],self.hdu_list[1].data[index_list],
             self.hdu_list[3].data[index_list],self.hdu_list[4].data[exposures])
 

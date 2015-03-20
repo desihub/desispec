@@ -37,6 +37,9 @@ def main():
     # Initialize dictionaries of co-added spectra for each band and object ID.
     coadded_spectra = dict(b = { },r = { },z = { })
 
+    # Keep track of the index we assign to each target.
+    target_index = { }
+
     # Loop over bands for this brick.
     for band in 'brz':
         # Open this band's brick file for reading.
@@ -67,10 +70,11 @@ def main():
             # Add this observation to our coadd of this target.
             if target_id not in coadded_spectra[band]:
                 coadded_spectra[band][target_id] = spectrum
-                coadd_info['INDEX'][index] = next_coadd_index
+                target_index[target_id] = next_coadd_index
                 next_coadd_index += 1
             else:
                 coadded_spectra[band][target_id] += spectrum
+            coadd_info['INDEX'][index] = target_index[target_id]
 
         # Allocate arrays for the coadded results to be saved in the output FITS file.
         target_set = set(coadd_info['TARGETID'])
