@@ -83,7 +83,7 @@ def main():
         coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'readonly')
         wlen = brick_file.get_wavelength_grid()
         coadd_flux,coadd_ivar,coadd_resolution,coadd_info = brick_file.get_target(args.id)
-        assert len(coadd_flux) == 1,'Got more than one coadd!'
+        assert len(coadd_flux) == 1,'Got more than one coadd: shape is %r' % coadd_flux.shape
         if not np.array_equal(coadd_info,exp_info):
             print 'Coadd is missing %d exposure(s).' % (len(exp_info)-len(coadd_info))
 
