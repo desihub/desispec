@@ -12,16 +12,8 @@ from desispec.io.fiberflat import read_fiberflat
 from desispec.io.fluxcalibration import read_filter_response,loadStellarModels,write_normalized_model
 from desispec.fluxcalibration import match_templates,normalize_templates,convolveFlux,rebinSpectra
 import argparse
-import astropy.io.fits as pyfits
-import json,pylab,string,numpy,os,scipy,scipy.sparse,scipy.linalg
-import scipy.constants as const
-import scipy.ndimage
-from pylab import *
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
+import numpy as np
 import os,sys
-from scipy.sparse import spdiags
-from astropy.io import fits
 
 def main() :
     """ finds the best models of all standard stars in the frame
@@ -31,8 +23,8 @@ def main() :
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--fibermap', type = str, default = None,help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--models', type = str, default = None,help = 'path of spetro-photometric stellar spectra fits') 
-    parser.add_argument('--spectrograph', type = str, default = None,help = 'spectrograph number, can go 0-9') 
+    parser.add_argument('--models', type = str, default = None,help = 'path of spectro-photometric stellar spectra fits') 
+    parser.add_argument('--spectrograph', type = str, default = 0, help = 'spectrograph number, can go 0-9') 
     parser.add_argument('--outfile', type = str, default = None,help = 'path of output file. This is file for normalized model output') 
     
     args = parser.parse_args()
@@ -57,7 +49,7 @@ def main() :
     # returns the Fiber id, filter names and mags for the standard stars
 
     fiber_tbdata,fiber_header=read_fibermap(args.fibermap)
-    refStarIdx=numpy.where(fiber_tbdata["OBJTYPE"]=="STD")
+    refStarIdx=np.where(fiber_tbdata["OBJTYPE"]=="STD")
     refFibers=fiber_tbdata["FIBER"][refStarIdx]
     refFilters=fiber_tbdata["FILTER"][refStarIdx]
     refMags=fiber_tbdata["MAG"]
@@ -67,13 +59,12 @@ def main() :
 
     fibers={"FIBER":refFibers,"FILTER":refFilters,"MAG":refMags}
     
-    fiber_hdulist=pyfits.open(args.fibermap)
-    NIGHT=fiber_hdulist[1].header['NIGHT']
-    EXPID=fiber_hdulist[1].header['EXPID']
+    NIGHT=fiber_header['NIGHT']
+    EXPID=fiber_header['EXPID']
     filters=fibers["FILTER"]
     if 'DESISIM' not in os.environ:
         raise RuntimeError('Set environment DESISIM. Can not find filter response files')
-    basepath=DESISIM+"data/"
+    basepath=DESISIM+"/data/"
 
     #now load all the skyfiles, framefiles, fiberflatfiles etc
     # all three channels files are simultaneously treated for model fitting
@@ -123,6 +114,7 @@ def main() :
 
     stars=[]
     ivars=[]
+    #- Should this be "for i in fibers["FIBER"]%500:" instead?
     for i in [ x for x in fibers["FIBER"] if x < 500]:
         #flat and sky should have same wavelength binning as data, otherwise should be rebinned.
 
@@ -133,6 +125,13 @@ def main() :
 
 
     stdwave,stdflux,templateid=loadStellarModels(args.models)
+
+    #- Trim standard star wavelengths to just the range we need
+    minwave = min[min(w) for w in frameWave.values()]
+    maxwave = max[max(w) for w in frameWave.values()]
+    ii = (minwave-10 < stdwave) & (stdwave < maxmax+10)
+    stdwave = stdwave[ii]
+    stdflux = stdflux[ii]
 
     print 'No. of Standard Stars in this frame:',len(stars)
 
@@ -174,7 +173,7 @@ def main() :
 
     # Now write the normalized flux for all best models to a file
     normflux=np.array(normflux)
-    p=np.where(fibers["FIBER"]<500)
+    p=np.where(fibers["FIBER"]<500)   #- TODO: Fix
     stdfibers=fibers["FIBER"][p]
     data={}
     data['BESTMODEL']=bestModelIndex
@@ -183,6 +182,6 @@ def main() :
     norm_model_file=args.outfile
     write_normalized_model(norm_model_file,normflux,stdwave,stdfibers,data)
  
-if "__main__" in __name__:
+if "__main__" == __name__:
     main()
     

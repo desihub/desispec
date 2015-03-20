@@ -12,11 +12,11 @@ from desispec.linalg import spline_fit
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
 from desispec.io.fluxcalibration import read_filter_response
-import scipy,scipy.sparse
+import scipy,scipy.sparse, scipy.ndimage
 import sys
 from scipy.sparse import spdiags
 #debug
-import pylab
+#import pylab
 
 #rebin spectra into new wavebins. This should be equivalent to desispec.interpolation.resample_flux. So may not be needed here
 #But should move from here anyway.
@@ -138,8 +138,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     #Should we skip those stars with very bad Chisq?
 
     
-    raise NotImplementedError
-    
 def normalize_templates(stdwave, stdflux, mags, filters,basepath):
     """
     Returns spectra normalized to input magnitudes
@@ -175,7 +173,6 @@ def normalize_templates(stdwave, stdflux, mags, filters,basepath):
     nstdwave=stdwave.size
     normflux=np.array(nstdwave)
 
-    
     for i,v in enumerate(filters):
         #Normalizing using only SDSS_R band magnitude
         if v=='SDSS_R':
@@ -183,12 +180,11 @@ def normalize_templates(stdwave, stdflux, mags, filters,basepath):
             filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
             rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
             apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
-            print 'scaling SDSS_r mag',refmag,'to',apMag
+            print 'scaling SDSS_r mag',apMag,'to',refmag
             scalefac=10**((apMag-refmag)/2.5)
-            normflux=stdflux/scalefac 
+            normflux=stdflux*scalefac 
   
     return stdwave,normflux
-    raise NotImplementedError
 
 def convolveFlux(wave,resolution,flux):
     """

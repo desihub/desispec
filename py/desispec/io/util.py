@@ -1,5 +1,20 @@
 import os
 import astropy.io
+import numpy as np
+
+def header2wave(header):
+    """
+    Converts header keywords into a wavelength grid
+
+    returns wave = CRVAL1 + range(NAXIS1)*CDELT1
+
+    if LOGLAM keyword is present and true/non-zero, returns 10**wave
+    """
+    w = header['CRVAL1'] + np.arange(header['NAXIS1'])*header['CDELT1']
+    if 'LOGLAM' in header and header['LOGLAM']:
+        w = 10**w
+
+    return w
 
 def fitsheader(header):
     """
