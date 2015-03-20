@@ -79,7 +79,6 @@ def main():
         nbins = len(wlen)
         flux_out = np.empty((num_targets,nbins))
         ivar_out = np.empty_like(flux_out)
-        print resolution_in.shape
         ndiag = resolution_in.shape[1]
         resolution_out = np.empty((num_targets,ndiag,nbins))
 
@@ -87,8 +86,9 @@ def main():
         for target_id in coadded_spectra[band]:
             exposures = (coadd_info['TARGETID'] == target_id)
             index = coadd_info['INDEX'][exposures][0]
-            print 'Saving coadd of %d exposures for target ID %d to index %d' % (
-                len(exposures),target_id,index)
+            if args.verbose:
+                print 'Saving coadd of %d exposures for target ID %d to index %d' % (
+                    np.count_nonzero(exposures),target_id,index)
             spectrum = coadded_spectra[band][target_id]
             spectrum.finalize(sparse_cutoff = ndiag//2)
             flux_out[index] = spectrum.flux
