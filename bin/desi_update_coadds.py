@@ -101,6 +101,7 @@ def main():
             # used in our FITS file.
             row_order = np.argsort(spectrum.resolution.offsets)[::-1]
             resolution_out[index] = spectrum.resolution.data[row_order]
+        print flux_out[3]
         coadd_file.add_objects(flux_out,ivar_out,wlen,resolution_out)
 
         # Save the coadd info to the output file.

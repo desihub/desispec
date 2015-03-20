@@ -36,6 +36,8 @@ def main():
         help = 'Stride to use for displaying the resolution.')
     parser.add_argument('--resolution-zoom', type = int, default = 100,
         help = 'Wavelength zoom to use for displaying the resolution.')
+    parser.add_argument('--bands', type = str, default = 'brz',
+        help = 'String listing the bands to include.')
     args = parser.parse_args()
 
     figure = plt.figure(figsize=(12,8))
@@ -43,18 +45,19 @@ def main():
     figure.set_facecolor('white')
     plt.xlabel('Wavelength (Angstrom)')
     left_axis.set_ylabel('Flux (1e-17 erg/s/cm**2)')
+    left_axis.set_ylim(-5,5)
     right_axis = left_axis.twinx()
     right_axis.set_ylabel('Resolution')
     right_axis.set_ylim(-0.02,1)
 
     colors = dict(b = 'blue', r = 'red', z = 'green')
 
-    #for band in 'brz':
-    for band in 'br':
+    for band in args.bands:
 
         color = colors[band]
 
-        brick_path = desispec.io.meta.findfile('brick',brickid = args.brick,band = band,specprod = args.specprod)
+        brick_path = desispec.io.meta.findfile('brick',brickid = args.brick,
+            band = band,specprod = args.specprod)
         if not os.path.exists(brick_path):
             print 'Target has not been bricked yet for %d-band' % band
             return -1
@@ -74,20 +77,22 @@ def main():
             for index in range(0,len(R),args.resolution_stride):
                 bins = slice(index-ndiag,index+ndiag+1)
                 wlen_zoom = wlen[index] + args.resolution_zoom*(wlen[bins] - wlen[index])
-                right_axis.plot(wlen_zoom,R[index,bins],color = color,ls = '-',alpha = 0.5)
+                right_axis.fill_between(wlen_zoom,R[index,bins],color = color,alpha = 0.1)
 
-        coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,band = band,specprod = args.specprod)
-        if not os.path.exists(brick_path):
+        coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,
+            band = band,specprod = args.specprod)
+        if not os.path.exists(coadd_path):
             print 'Target brick has not been coadded yet.'
             continue
         coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'readonly')
-        wlen = brick_file.get_wavelength_grid()
-        coadd_flux,coadd_ivar,coadd_resolution,coadd_info = brick_file.get_target(args.id)
+        wlen = coadd_file.get_wavelength_grid()
+        coadd_flux,coadd_ivar,coadd_resolution,coadd_info = coadd_file.get_target(args.id)
         assert len(coadd_flux) == 1,'Got more than one coadd!'
-        if not np.array_equal(coadd_info,exp_info):
+        if len(coadd_info) != len(exp_info):
             print 'Coadd is missing %d exposure(s).' % (len(exp_info)-len(coadd_info))
 
-        left_axis.scatter(wlen[::args.stride],coadd_flux[0,::args.stride],color = color,s = 2.,alpha = 0.5)
+        left_axis.scatter(wlen[::args.stride],coadd_flux[0,::args.stride],color = color,
+            marker = 'x',alpha = 0.5)
 
     plt.show()
     plt.close()
