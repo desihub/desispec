@@ -76,7 +76,7 @@ class BrickBase(object):
             # Add comments for our additional columns.
             hdu4.header['TTYPE%d' % (1+num_fibermap_columns)] = ('NIGHT','Night of exposure YYYYMMDD')
             hdu4.header['TTYPE%d' % (2+num_fibermap_columns)] = ('EXPID','Exposure ID')
-            hdu4.header['TTYPE%d' % (3+num_fibermap_columns)] = ('INDEX','Index of this object in HDUs 0-3')
+            hdu4.header['TTYPE%d' % (3+num_fibermap_columns)] = ('INDEX','Index of this object in other HDUs')
             self.hdu_list = astropy.io.fits.HDUList([hdu0,hdu1,hdu2,hdu3,hdu4])
         else:
             self.hdu_list = astropy.io.fits.open(path,mode = self.mode)
@@ -110,6 +110,32 @@ class BrickBase(object):
             self.hdu_list[1].data = ivar
             self.hdu_list[2].data = wave
             self.hdu_list[3].data = resolution
+
+    def get_wavelength_grid(self):
+        """
+        Return the wavelength grid used in this brick file.
+        """
+        return self.hdu_list[2].data
+
+    def get_target(self,target_id):
+        """
+        Get the spectra and info for one target ID.
+
+        Args:
+            target_id(int): Target ID number to lookup.
+
+        Returns:
+            tuple: Tuple of numpy arrays (flux,ivar,resolution,info) of data associated
+                with this target ID. The flux,ivar,resolution arrays will have one entry
+                for each spectrum and the info array will have one entry per exposure.
+                The returned arrays are slices into the FITS file HDU data arrays, so this
+                call is relatively cheap (and any changes will be saved to the file if it
+                was opened in update mode.)
+        """
+        exposures = (self.hdu_list[4].data['TARGETID'] == target_id)
+        index_list = np.unique(self.hdu_list[4].data['INDEX'][exposures])
+        return (self.hdu_list[0].data[index_list],self.hdu_list[1].data[index_list],
+            self.hdu_list[3].data[index_list],self.hdu_list[4].data[exposures])
 
     def get_num_objects(self):
         """
