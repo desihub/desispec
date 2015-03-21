@@ -127,11 +127,11 @@ def main() :
     stdwave,stdflux,templateid=loadStellarModels(args.models)
 
     #- Trim standard star wavelengths to just the range we need
-    minwave = min[min(w) for w in frameWave.values()]
-    maxwave = max[max(w) for w in frameWave.values()]
-    ii = (minwave-10 < stdwave) & (stdwave < maxmax+10)
+    minwave = min([min(w) for w in frameWave.values()])
+    maxwave = max([max(w) for w in frameWave.values()])
+    ii = (minwave-10 < stdwave) & (stdwave < maxwave+10)
     stdwave = stdwave[ii]
-    stdflux = stdflux[ii]
+    stdflux = stdflux[:, ii]
 
     print 'No. of Standard Stars in this frame:',len(stars)
 

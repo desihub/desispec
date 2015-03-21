@@ -107,11 +107,13 @@ def write_normalized_model(norm_modelfile,normalizedFlux,wave,fibers,data,header
     writes the normalized flux for the best model
     """
     hdr = fitsheader(header)
-    hdr['EXTNAME'] = ('FLUX', 'ergs/cm2/s')
+    hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
+    hdr['BUNIT'] = ('erg/s/cm2/A', 'Flux units')
     hdu1=fits.PrimaryHDU(normalizedFlux,header=hdr)
     #fits.writeto(norm_modelfile,normalizedFlux,header=hdr, clobber=True)
     
     hdr['EXTNAME'] = ('WAVE', '[Angstroms]')
+    hdr['BUNIT'] = ('Angstrom', 'Wavelength units')
     hdu2 = fits.ImageHDU(wave, header=hdr)
 
     hdr['EXTNAME'] = ('FIBERS', 'no dimension')
@@ -124,6 +126,7 @@ def write_normalized_model(norm_modelfile,normalizedFlux,wave,fibers,data,header
     CHI2DOF=Column(name='CHI2DOF',format='D',array=data['CHI2DOF'])
     cols=fits.ColDefs([BESTMODELINDEX,TEMPLATEID,CHI2DOF])
     tbhdu=fits.BinTableHDU.from_columns(cols,header=hdr)
+    
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
     hdulist.writeto(norm_modelfile,clobber=True)
     #fits.append(norm_modelfile,cols,header=tbhdu.header)
