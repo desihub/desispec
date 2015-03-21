@@ -9,6 +9,8 @@ import scipy.sparse
 import scipy.linalg
 import scipy.sparse.linalg
 
+import desispec.resolution
+
 class Spectrum(object):
     """
     A reduced flux spectrum with an associated diagonal inverse covariance and resolution matrix.
@@ -32,17 +34,19 @@ class Spectrum(object):
         self.Cinv = self.resolution.T.dot(diag_ivar.dot(self.resolution))
         self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
 
-    def finalize(self,sparse_cutoff = 10):
+    def finalize(self):
+        """
+        Calculates the flux, inverse variance and resolution for this spectrum.
+
+        Uses the accumulated data from all += operations so far but does not prevent
+        further accumulation.
+        """
         # Recalculate the deconvolved solution and resolution.
         self.ivar,R = decorrelate(self.Cinv)
         R_it = scipy.linalg.inv(R.T)
         self.flux = R_it.dot(self.Cinv_f)/self.ivar
         # Convert R from a dense matrix to a sparse one.
-        n = len(self.ivar)
-        k = int(sparse_cutoff)
-        assert k >= 0,'Expected sparse_cutoff >= 0.'
-        mask = np.tri(n,n,k) - np.tri(n,n,-k-1)
-        self.resolution = scipy.sparse.dia_matrix(R*mask)
+        self.resolution = desispec.resolution.Resolution(R)
 
     def __iadd__(self,other):
         """
@@ -87,17 +91,8 @@ def combine(*spectra):
     flux = np.zeros_like(global_wavelength_grid)
     R_it = scipy.linalg.inv(resolution[keep_t,keep].T)
     flux[mask] = R_it.dot(Cinv_f[mask])/ivar[mask]
-    # Convert R from a dense matrix to a sparse one (ndiag = 21 hardcoded for now).
-    ndiag = 21
-    max_offset = ndiag//2
-    offsets = np.arange(max_offset,-max_offset-1,-1)
-    data = np.zeros((ndiag,num_global))
-    for index,offset in enumerate(offsets):
-        if offset >= 0:
-            data[index,offset:] = np.diag(resolution,offset)
-        else:
-            data[index,:offset] = np.diag(resolution,offset)
-    resolution = scipy.sparse.dia_matrix((data,offsets),resolution.shape)
+    # Convert R from a dense matrix to a sparse one.
+    resolution = desispec.resolution.Resolution(resolution)
     return flux,ivar,resolution
 
 def get_resampling_matrix(global_grid,local_grid):

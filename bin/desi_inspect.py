@@ -80,9 +80,9 @@ def main():
                 for flux in exp_flux:
                     plt.scatter(wlen[::args.stride],flux[::args.stride],color = color,s = 1.,alpha = 0.5)
 
-                for resolution in exp_resolution:
-                    ndiag = len(resolution)//2
-                    R = desispec.io.frame.resolution_data_to_sparse_matrix(resolution).toarray()
+                for resolution_data in exp_resolution:
+                    R = desispec.resolution.Resolution(resolution_data).toarray()
+                    ndiag = desispec.resolution.num_diagonals//2
                     for index in range(0,len(R),args.resolution_stride):
                         bins = slice(index-ndiag,index+ndiag+1)
                         wlen_zoom = wlen[index] + args.resolution_zoom*(wlen[bins] - wlen[index])

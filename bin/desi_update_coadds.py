@@ -14,6 +14,7 @@ import numpy as np
 
 import desispec.io
 import desispec.coaddition
+import desispec.resolution
 
 def main():
 
@@ -22,8 +23,6 @@ def main():
         help = 'Provide verbose reporting of progress.')
     parser.add_argument('--brick', type = str, default = None, metavar = 'NAME',
         help = 'Name of brick to process')
-    parser.add_argument('--ndiag', type = int, default = 21,
-        help = 'Number of diagonals to save in the sparse resolution matrix.')
     parser.add_argument('--bands', type = str, default = 'brz',
         help = 'String listing the bands to include.')
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
@@ -32,10 +31,6 @@ def main():
 
     if args.brick is None:
         print 'Missing required brick argument.'
-        return -1
-
-    if args.ndiag <= 0 or args.ndiag%2 == 0:
-        print 'Invalid ndiag = %d should be odd and positive.' % args.ndiag
         return -1
 
     # Open the combined coadd file for this brick, for updating.
@@ -65,9 +60,11 @@ def main():
             brick_file.hdu_list[2].data,brick_file.hdu_list[3].data)
         if args.verbose:
             print 'Processing %s with %d objects...' % (brick_path,num_objects)
-        if resolution_in.shape[1] != args.ndiag:
-            print 'WARNING: input ndiag (%d) does not match output diag (%d).' % (
-                resolution_in.shape[1],args.ndiag)
+        if resolution_in.shape[1] != desispec.resolution.num_diagonals:
+            print 'ERROR: resolution has unexpected shape (ndiag=%d != %d). Skipping this file.' % (
+                resolution_in.shape[1],desispec.resolution.num_diagonals)
+            brick_file.close()
+            continue
         # Open this band's coadd file for updating.
         coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,band = band,specprod = args.specprod)
         coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'update')
@@ -81,7 +78,7 @@ def main():
         # Loop over objects in the input brick file.
         for index,info in enumerate(brick_file.hdu_list[4].data):
             assert index == info['INDEX'],'Index mismatch: %d != %d' % (index,info['INDEX'])
-            resolution_matrix = desispec.io.frame.resolution_data_to_sparse_matrix(resolution_in[index])
+            resolution_matrix = desispec.resolution.Resolution(resolution_in[index])
             spectrum = desispec.coaddition.Spectrum(wlen,flux_in[index],ivar_in[index],resolution_matrix)
             target_id = info['TARGETID']
 
@@ -117,7 +114,7 @@ def main():
         nbins = len(wlen)
         flux_out = np.zeros((num_targets,nbins))
         ivar_out = np.zeros_like(flux_out)
-        resolution_out = np.zeros((num_targets,args.ndiag,nbins))
+        resolution_out = np.zeros((num_targets,desispec.resolution.num_diagonals,nbins))
 
         # Save the coadded spectra for this band.
         for target_id in coadded_spectra:
@@ -129,13 +126,10 @@ def main():
                 print 'Saving coadd of %d exposures for target ID %d to index %d.' % (
                     np.count_nonzero(exposures),target_id,index)
             spectrum = coadded_spectra[target_id][band]
-            spectrum.finalize(sparse_cutoff = args.ndiag//2)
+            spectrum.finalize()
             flux_out[index] = spectrum.flux
             ivar_out[index] = spectrum.ivar
-            # Convert the DIA-format sparse matrix data into the canonical decreasing offset format
-            # used in our FITS file.
-            row_order = np.argsort(spectrum.resolution.offsets)[::-1]
-            resolution_out[index] = spectrum.resolution.data[row_order]
+            resolution_out[index] = spectrum.resolution.to_fits_array()
 
         # Save the coadds for this band.
         coadd_file.add_objects(flux_out,ivar_out,wlen,resolution_out)
@@ -150,7 +144,7 @@ def main():
     nbins = len(desispec.coaddition.global_wavelength_grid)
     flux_all = np.empty((num_targets,nbins))
     ivar_all = np.empty_like(flux_all)
-    resolution_all = np.empty((num_targets,args.ndiag,nbins))
+    resolution_all = np.empty((num_targets,desispec.resolution.num_diagonals,nbins))
 
     # Coadd the bands for each target ID.
     all_bands = ','.join(sorted(args.bands))
@@ -162,10 +156,7 @@ def main():
         if bands != all_bands:
             print 'WARNING: target %d has partial band coverage: %s' % (target_id,bands)
         flux_all[index],ivar_all[index],R = desispec.coaddition.combine(*coadded_spectra[target_id].values())
-        # Convert the DIA-format sparse matrix data into the canonical decreasing offset format
-        # used in our FITS file.
-        row_order = np.argsort(R.offsets)[::-1]
-        resolution_all[index] = R.data[row_order]
+        resolution_all[index] = R.to_fits_array()
 
     # Save the global coadds.
     coadd_all_file.add_objects(flux_all,ivar_all,desispec.coaddition.global_wavelength_grid,resolution_all)

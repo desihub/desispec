@@ -62,6 +62,10 @@ Inspect a brick file in iPython using, e.g.::
     print info
     plt.errorbar(x=brick[2].data,y=brick[0].data[0],yerr=brick[1].data[0]**-0.5)
 
+Run unit tests::
+
+    python -m desispec.resolution
+
 Wavelength Grids
 ----------------
 

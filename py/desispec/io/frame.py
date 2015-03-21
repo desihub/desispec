@@ -75,7 +75,10 @@ def resolution_data_to_sparse_matrix(resolution_data,fiber = None):
     convert the resolution data for a given fiber into a sparse matrix
     use function M.todense() or M.toarray() to convert output sparse matrix M to a dense matrix or numpy array
     """
-    
+
+    print ('Function desispec.io.frame.resolution_data_to_sparse_matrix is deprecated. ' +
+        'Use desispec.resolution instead.')
+
     if len(resolution_data.shape)==3 :
         nfibers=resolution_data.shape[0]
         d=resolution_data.shape[1]/2
