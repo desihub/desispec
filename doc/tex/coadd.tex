@@ -46,15 +46,24 @@ with a flux inverse covariance given by
 \begin{equation}
 C^{-1} = A^T N^{-1} A \; .
 \end{equation}
-The least-square solution effectively deconvolves the instrumental PSF and inevitably leads to large oscillations on scales $\Delta\lambda$ smaller than the resolution that are unconstrained by $\pv$. One approach to this problem is to add a regularization term to \eqn{leastsq} that imposes a smoothness prior on $f$.  The spectro-perfectionism approach is instead to find a diagonal basis for the flux inverse covariance
+The least-square solution effectively deconvolves the instrumental PSF and inevitably leads to large oscillations on scales $\Delta\lambda$ smaller than the resolution that are unconstrained by $\pv$. One approach to this problem is to add a regularization term to \eqn{leastsq} that imposes a smoothness prior on $f$.  The spectro-perfectionism approach is instead to find a diagonal basis for the flux inverse covariance,
 \begin{equation}
-C^{-1} = R^T \tilde{C}^{-1} R
+C^{-1} = R^T \tilde{C}^{-1} R \; ,
+\label{eqn:decorrelated}
 \end{equation}
-in which the transformed flux components
+in which th transform flux components
 \begin{equation}
 \tilde{f} \equiv R f
 \end{equation}
-are uncorrelated, i.e., $\tilde{C}^{-1}$ is diagonal.  There are infinite number of ways to accomplish this decorrelation step since, given one $R$, a rotated $R$ is also a solution. However, some natural choices for $R$ are the matrix of eigenvalues, the Cholesky decomposition, and the matrix square root. As explained in reference~\cite{2010PASP..122..248B} (and earlier demonstrated in reference~\cite{2000MNRAS.312..285H} in a different context), the matrix square root is a good choice since the resulting $R$ generally has the properties of a resolution matrix when suitably normalized: each component is $f$ is transformed to a narrow range of nearby wavelengths.
+are uncorrelated, i.e., $\tilde{C}^{-1}$ is diagonal. Any real-valued square matrix (not necessarily orthogonal) that satisfies \eqn{decorrelated} is a valid decorrelation of $C^{-1}$. Furthermore, there are an infinite number of ways to accomplish this since, given one $R$, we can always find another solution
+\begin{equation}
+R^T \tilde{C}^{-1} R = S^T \tilde{D}^{-1} S \; ,
+\end{equation}
+where
+\begin{equation}
+S = \tilde{D}^{+1/2} O \tilde{C}^{-1/2} R
+\end{equation}
+for an arbitrary orthogonal matrix $O$ and positive diagonal matrix $\tilde{D}$. However, some natural choices for $R$ are the matrix of eigenvalues, the Cholesky decomposition, and the matrix square root. As explained in reference~\cite{2010PASP..122..248B} (and earlier demonstrated in reference~\cite{2000MNRAS.312..285H} in a different context), the matrix square root is a good choice since the resulting $R$ generally has the properties of a resolution matrix when suitably normalized: each component is $f$ is transformed to a narrow range of nearby wavelengths.
 
 For the co-addition tests described below, we construct toy response matrices $A_i$ for a three-fiber spectrograph with rather extreme PSF variations along each trace, as illustrated in \fig{detector} below. Responses are simulated using the GalSim package~\cite{2014arXiv1407.7676R}. Note that each fiber $i$ has its response matrix that reflects the range of pixels it illuminates above some threshold, as illustrated by the upper plot of~\fig{detector}.  There is inevitably some cross talk between fibers that can either be handled by assigning overlap pixels to more than one $A_i$ and then propagating correlated uncertainties, or else by uniquely assigning each pixel to its most relevant fiber and then accepting some corresponding systematic error due to un-modeled leakage. Note that pixels with very small relative responses (shown in gray) must be eliminated from the response matrix to improve the numerical stability of the resulting least-squares problem.
 
