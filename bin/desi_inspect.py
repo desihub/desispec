@@ -68,7 +68,9 @@ def main():
             wlen = brick_file.get_wavelength_grid()
             wlen_min,wlen_max = min(wlen_min,np.min(wlen)),max(wlen_max,np.max(wlen))
             exp_flux,exp_ivar,exp_resolution,exp_info = brick_file.get_target(args.id)
-            print 'Found %d %s-band exposures: %s' % (len(exp_flux),band,exp_info['EXPID'])
+            if args.verbose:
+                print 'Found %d %s-band exposures covering %.1f-%.1fA: %s' % (
+                    len(exp_flux),band,np.min(wlen),np.max(wlen),','.join(map(str,exp_info['EXPID'])))
 
             if len(exp_flux) > 0:
                 if args.info:

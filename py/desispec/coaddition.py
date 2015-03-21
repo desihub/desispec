@@ -58,7 +58,9 @@ class Spectrum(object):
         self.Cinv_f += other.Cinv_f
         return self
 
-global_wavelength_grid = np.arange(3579.0,9825.0,1.0)
+# The nominal brz grids cover 3579.0 - 9824.0 A but the FITs grids have some roundoff error
+# so we add an extra bin to the end of the global wavelength grid.
+global_wavelength_grid = np.arange(3579.0,9826.0,1.0)
 
 def combine(*spectra):
     """
