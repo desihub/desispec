@@ -28,8 +28,8 @@ def main():
         help = 'Target ID number to inspect')
     parser.add_argument('--brick', type = str, default = None, metavar = 'NAME',
         help = 'Name of brick containing the requested target ID.')
-    parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
-        help = 'Override default path ($DESI_SPECTRO_REDUX/$PRODNAME) to processed data.')
+    parser.add_argument('--info', action = 'store_true',
+        help = 'Print tabular information from each file inspected.')
     parser.add_argument('--stride', type = int, default = 5,
         help = 'Stride to use for subsampling the spectrum data arrays.')
     parser.add_argument('--resolution-stride', type = int, default = 500,
@@ -38,6 +38,8 @@ def main():
         help = 'Wavelength zoom to use for displaying the resolution.')
     parser.add_argument('--bands', type = str, default = 'brz',
         help = 'String listing the bands to include.')
+    parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
+        help = 'Override default path ($DESI_SPECTRO_REDUX/$PRODNAME) to processed data.')
     args = parser.parse_args()
 
     figure = plt.figure(figsize=(12,8))
@@ -55,44 +57,89 @@ def main():
     for band in args.bands:
 
         color = colors[band]
+        wlen_min,wlen_max = 1e8,0.
 
         brick_path = desispec.io.meta.findfile('brick',brickid = args.brick,
             band = band,specprod = args.specprod)
         if not os.path.exists(brick_path):
-            print 'Target has not been bricked yet for %d-band' % band
-            return -1
-        brick_file = desispec.io.brick.Brick(brick_path,mode = 'readonly')
-        wlen = brick_file.get_wavelength_grid()
-        exp_flux,exp_ivar,exp_resolution,exp_info = brick_file.get_target(args.id)
-        print 'Found %d exposures: %s' % (len(exp_flux),exp_info['EXPID'])
-        exp_info = astropy.table.Table(exp_info)
-        print exp_info
+            print 'No %s-band brick file found for brick %s.' % (band,args.brick)
+        else:
+            brick_file = desispec.io.brick.Brick(brick_path,mode = 'readonly')
+            wlen = brick_file.get_wavelength_grid()
+            wlen_min,wlen_max = min(wlen_min,np.min(wlen)),max(wlen_max,np.max(wlen))
+            exp_flux,exp_ivar,exp_resolution,exp_info = brick_file.get_target(args.id)
+            print 'Found %d %s-band exposures: %s' % (len(exp_flux),band,exp_info['EXPID'])
 
-        for flux in exp_flux:
-            plt.scatter(wlen[::args.stride],flux[::args.stride],color = color,s = 1.,alpha = 0.5)
+            if len(exp_flux) > 0:
+                if args.info:
+                    exp_info = astropy.table.Table(exp_info)
+                    print exp_info
 
-        for resolution in exp_resolution:
-            ndiag = len(resolution)//2
-            R = desispec.io.frame.resolution_data_to_sparse_matrix(resolution).toarray()
-            for index in range(0,len(R),args.resolution_stride):
-                bins = slice(index-ndiag,index+ndiag+1)
-                wlen_zoom = wlen[index] + args.resolution_zoom*(wlen[bins] - wlen[index])
-                right_axis.fill_between(wlen_zoom,R[index,bins],color = color,alpha = 0.1)
+                for flux in exp_flux:
+                    plt.scatter(wlen[::args.stride],flux[::args.stride],color = color,s = 1.,alpha = 0.5)
+
+                for resolution in exp_resolution:
+                    ndiag = len(resolution)//2
+                    R = desispec.io.frame.resolution_data_to_sparse_matrix(resolution).toarray()
+                    for index in range(0,len(R),args.resolution_stride):
+                        bins = slice(index-ndiag,index+ndiag+1)
+                        wlen_zoom = wlen[index] + args.resolution_zoom*(wlen[bins] - wlen[index])
+                        right_axis.fill_between(wlen_zoom,R[index,bins],color = color,alpha = 0.1)
+            else:
+                print 'No %s-band exposures recorded for target %d in brick %s' % (band,args.id,args.brick)
+
+            brick_file.close()
 
         coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,
             band = band,specprod = args.specprod)
         if not os.path.exists(coadd_path):
-            print 'Target brick has not been coadded yet.'
-            continue
-        coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'readonly')
-        wlen = coadd_file.get_wavelength_grid()
-        coadd_flux,coadd_ivar,coadd_resolution,coadd_info = coadd_file.get_target(args.id)
-        assert len(coadd_flux) == 1,'Got more than one coadd!'
-        if len(coadd_info) != len(exp_info):
-            print 'Coadd is missing %d exposure(s).' % (len(exp_info)-len(coadd_info))
+            print 'No %s-band coadd file found for brick %s.' % (band,args.brick)
+        else:
+            coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'readonly')
+            wlen = coadd_file.get_wavelength_grid()
+            wlen_min,wlen_max = min(wlen_min,np.min(wlen)),max(wlen_max,np.max(wlen))
+            coadd_flux,coadd_ivar,coadd_resolution,coadd_info = coadd_file.get_target(args.id)
 
-        left_axis.scatter(wlen[::args.stride],coadd_flux[0,::args.stride],color = color,
-            marker = 'x',alpha = 0.5)
+            if len(coadd_flux) == 1:
+                if args.info:
+                    coadd_info = astropy.table.Table(coadd_info)
+                    print coadd_info
+
+                left_axis.scatter(wlen[::args.stride],coadd_flux[0,::args.stride],color = color,
+                    marker = 'x',alpha = 0.5)
+            elif len(coadd_flux) == 0:
+                print 'No %s-band coadd available for target %d.' % (band,args.id)
+            else:
+                print 'ERROR: found %d (>1) coadded %d-band fluxes for target %d' % (
+                    len(coadd_flux),band,args.id)
+
+            coadd_file.close()
+
+    coadd_all_path = desispec.io.meta.findfile('coadd_all',brickid = args.brick,specprod = args.specprod)
+    if not os.path.exists(coadd_all_path):
+        print 'No global coadd available for brick %s.' % (args.brick)
+    else:
+        coadd_all_file = desispec.io.brick.CoAddedBrick(coadd_all_path,mode = 'readonly')
+        wlen = coadd_all_file.get_wavelength_grid()
+        wlen_min,wlen_max = min(wlen_min,np.min(wlen)),max(wlen_max,np.max(wlen))
+        coadd_flux,coadd_ivar,coadd_resolution,coadd_info = coadd_all_file.get_target(args.id)
+
+        if len(coadd_flux) == 1:
+            if args.info:
+                coadd_info = astropy.table.Table(coadd_info)
+                print coadd_info
+            mask = (coadd_ivar[0] > 0)
+            flux_error = np.zeros_like(coadd_flux[0])
+            flux_error[mask] = coadd_ivar[0,mask]**-0.5
+            left_axis.fill_between(wlen,coadd_flux[0]-flux_error,coadd_flux[0]+flux_error,
+                color='black',alpha=0.2)
+        elif len(coadd_flux) == 0:
+            print 'No global coadd available for target %d.' % (args.id)
+        else:
+            print 'ERROR: found %d (>1) global coadded fluxes for target %d' % (len(coadd_flux),args.id)
+
+        plt.xlim(wlen_min,wlen_max)
+        coadd_all_file.close()
 
     plt.show()
     plt.close()

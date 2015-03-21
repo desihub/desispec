@@ -58,31 +58,77 @@ class Spectrum(object):
         self.Cinv_f += other.Cinv_f
         return self
 
-def combine(global_grid,*spectra):
+global_wavelength_grid = np.arange(3579.0,9825.0,1.0)
+
+def combine(*spectra):
     """
-    Combine a list of spectra using a global wavelength grid.
+    Combine a list of spectra using the global wavelength grid.
     """
-    num_global = len(global_grid)
+    num_global = len(global_wavelength_grid)
     # Step 1: accumulated weighted sums of deconvolved flux estimates.
     Cinv = np.zeros((num_global,num_global))
-    Cinv_f = np.zeros_like(global_grid)
-    Cinv_t = np.zeros_like(global_grid)
+    Cinv_f = np.zeros_like(global_wavelength_grid)
+    Cinv_t = np.zeros_like(global_wavelength_grid)
     for spectrum in spectra:
-        resampler = get_resampling_matrix(global_grid,spectrum.wlen)
+        resampler = get_resampling_matrix(global_wavelength_grid,spectrum.wlen)
         Cinv += resampler.T.dot(spectrum.Cinv.dot(resampler))
         Cinv_f += resampler.T.dot(spectrum.Cinv_f)
     # Step 2: check for global wavelength bins with no information available.
     mask = (np.diag(Cinv) > 0)
     keep = np.arange(num_global)[mask]
+    keep_t = keep[:,np.newaxis]
     # Step 3: find decorrelated basis.
-    ivar = np.zeros_like(global_grid)
+    ivar = np.zeros_like(global_wavelength_grid)
     resolution = np.zeros_like(Cinv)
     ivar[mask],resolution[keep_t,keep] = decorrelate(Cinv[keep_t,keep])
     # Step 4: calculate decorrelated flux vectors.
-    flux = np.zeros_like(global_grid)
+    flux = np.zeros_like(global_wavelength_grid)
     R_it = scipy.linalg.inv(resolution[keep_t,keep].T)
     flux[mask] = R_it.dot(Cinv_f[mask])/ivar[mask]
+    # Convert R from a dense matrix to a sparse one (ndiag = 21 hardcoded for now).
+    ndiag = 21
+    max_offset = ndiag//2
+    offsets = np.arange(max_offset,-max_offset-1,-1)
+    data = np.zeros((ndiag,num_global))
+    for index,offset in enumerate(offsets):
+        if offset >= 0:
+            data[index,offset:] = np.diag(resolution,offset)
+        else:
+            data[index,:offset] = np.diag(resolution,offset)
+    resolution = scipy.sparse.dia_matrix((data,offsets),resolution.shape)
     return flux,ivar,resolution
+
+def get_resampling_matrix(global_grid,local_grid):
+    """
+    Build the rectangular matrix that linearly resamples from the global grid to a local grid.
+    
+    The local grid range must be contained within the global grid range.
+    
+    Args:
+        global_grid(numpy.ndarray): Sorted array of n global grid wavelengths.
+        local_grid(numpy.ndarray): Sorted array of m local grid wavelengths.
+
+    Returns:
+        numpy.ndarray: Array of (m,n) matrix elements that perform the linear resampling.
+    """
+    assert np.all(np.diff(global_grid) > 0),'Global grid is not strictly increasing.'
+    assert np.all(np.diff(local_grid) > 0),'Local grid is not strictly increasing.'
+    # Locate each local wavelength in the global grid.
+    global_index = np.searchsorted(global_grid,local_grid)
+    assert local_grid[0] >= global_grid[0],'Local grid extends below global grid.'
+    assert local_grid[-1] <= global_grid[-1],'Local grid extends above global grid.'
+    # Lookup the global-grid bracketing interval (xlo,xhi) for each local grid point.
+    # Note that this gives xlo = global_grid[-1] if local_grid[0] == global_grid[0]
+    # but this is fine since the coefficient of xlo will be zero.
+    global_xhi = global_grid[global_index]
+    global_xlo = global_grid[global_index-1]
+    # Create the rectangular interpolation matrix to return.
+    alpha = (local_grid - global_xlo)/(global_xhi - global_xlo)
+    local_index = np.arange(len(local_grid),dtype=int)
+    matrix = np.zeros((len(local_grid),len(global_grid)))
+    matrix[local_index,global_index] = alpha
+    matrix[local_index,global_index-1] = 1 - alpha
+    return matrix
 
 def decorrelate(Cinv):
     """
@@ -112,21 +158,15 @@ def decorrelate(Cinv):
     # Convert to a dense matrix if necessary.
     if scipy.sparse.issparse(Cinv):
         Cinv = Cinv.todense()
-    # Calculate the matrix square root.
-    Q = scipy.linalg.sqrtm(Cinv)
-    # The code below should be equivalent for finding Q.
-    '''
+    # Calculate the matrix square root. Note that we do not use scipy.linalg.sqrtm since
+    # the method below is about 2x faster for a positive definite matrix.
     L,X = scipy.linalg.eigh(Cinv)
     # Check that all eigenvalues are positive.
     assert np.all(L > 0), 'Found some negative Cinv eigenvalues.'
-    assert np.allclose(np.identity(len(L)),X.T.dot(X)),'Xt.X != 1'
     # Calculate the matrix square root Q such that Cinv = Q.Q
     Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))
-    assert np.allclose(Cinv,Q.dot(Q)),'Cinv != Q.Q'
-    '''
     # Calculate and return the corresponding resolution matrix and diagonal flux errors.
     s = np.sum(Q,axis=1)
     R = Q/s[:,np.newaxis]
     ivar = s**2
-    #assert np.allclose(Cinv,R.T.dot(np.diag(ivar).dot(R))),'Cinv != RT.ivar.R'
     return ivar,R
