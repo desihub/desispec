@@ -1,5 +1,101 @@
-Coaddition Notes
-================
+=======================================
+Coaddition of Spectroperfect Reductions
+=======================================
+
+This document covers coadd implementation details and mock-data tests. For details on the coadd dataflow and algorithms used for combining spectra, refer to `DESI-doc-???<https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=???>`_.
+
+Implementation
+==============
+
+Files
+-----
+
+All spectra are grouped by brick. There are three types of brick file under `$DESI_SPECTRO_REDUX/$PRODNAME//bricks/{brickid}/`:
+ * The brick files contains all exposures of every target that has been observed in the brick, by band.
+ * The band coadd files contain the coadd of all exposures for each target, by band.
+ * The global coadd files contain the coadd of band coadds for each target.
+
+All files have the same structure with 4 HDUs:
+ * HDU0: Flux vectors for each spectrum.
+ * HDU1: Ivar vectors for each spectrum.
+ * HDU2: The common wavelength grid used for all spectra.
+ * HDU4: Binary table of metadata.
+See the relevant `data model descriptions<https://desi.lbl.gov/trac/browser/code/desiDataModel/trunk/doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID>`_ for details (these are not in synch with the mock data challenge files as of 23-Mar-2015).
+
+Wavelength Grids
+----------------
+
+All brick files have their wavelength grid in HDU2, as summarized in the table below. Note that we do not use a log-lambda grid for the global coadd across bands, since this would not be a good match to the wavelength resolution at the red ends of r and z cameras. See the note for details.
+
+===== ======= ======= ======= ======= ================== 
+Band  Min(A)  Max(A)  Nbins   Size(A) Files
+===== ======= ======= ======= ======= ==================
+b     3579.0  5938.8  3934    0.6     brick, band coadd 
+r     5635.0  7730.8  3494    0.6     brick, band coadd
+z     7445.0  9824.0  3966    0.6     brick, band coadd
+all   3579.0  9825.0  6247    1.0     global coadd
+===== ======= ======= ======= ======= ==================
+
+Metadata
+--------
+
+The brick file and two co-add files all have a table with the same format in HDU4, with one entry per exposure of each object observed in the brick. Most of its columns are copied directly from the exposure fibermaps, except for the last three columns which identify the exposure and offset of the object's spectrum in the other HDUs.  The table columns are listed below.
+
+============ ======================================================
+Name         Description
+============ ======================================================
+FIBER        Fiber ID [0-4999]
+POSITIONER   Positioner ID [0-4999]
+SPECTROID    Spectrograph ID [0-9]
+TARGETID     Unique target ID
+TARGETCAT    Name/version of the target catalog
+OBJTYPE      Target type [ELG, LRG, QSO, STD, STAR, SKY]
+LAMBDAREF    Reference wavelength at which to align fiber
+TARGET_MASK0 Targeting bit mask
+RA_TARGET    Target right ascension [degrees]
+DEC_TARGET   Target declination [degrees]
+X_TARGET     X on focal plane derived from (RA,DEC)_TARGET
+Y_TARGET     Y on focal plane derived from (RA,DEC)_TARGET
+X_FVCOBS     X location observed by Fiber View Cam [mm]
+Y_FVCOBS     Y location observed by Fiber View Cam [mm]
+X_FVCERR     X location uncertainty from Fiber View Cam [mm]
+Y_FVCERR     Y location uncertainty from Fiber View Cam [mm]
+RA_OBS       RA of obs from (X,Y)_FVCOBS and optics [deg]
+DEC_OBS      dec of obs from (X,Y)_FVCOBS and optics [deg]
+MAG          magitude
+FILTER       SDSS_R, DECAM_Z, WISE1, etc.
+NIGHT        Date string for the night of observation YYYYMMDD
+EXPID        Integer exposure number
+INDEX        Index of this object in other HDUs
+============ ======================================================
+
+Programs
+--------
+
+The following programs are used to implement the coadd part of the pipeline:
+ * `desi_make_bricks`: Create brick files from all exposures taken in one night. Reads exposures from cframe files and adds metadata from the exposure fibermap.
+ * `desi_update_coadds`: Update the coadds for a single brick. Reads exposures from brick files and writes the corresonding band coadd and global coadd files.
+
+Benchmarks
+----------
+
+The rate-limiting step for performing coadds is the final conversion from `Cinv` and `Cinv_f` to `flux`, `ivar` and `resolution` in :meth:`desispec.coaddition.Spectrum.finalize`.  The computation time is dominated by two operations:
+ * Solve the eigenvalue program for a large symmetric real-valued matrix using :func:`scipy.linalg.eigh`.
+ * Invert a real-valued resolution matrix using :func:`scipy.linalg.inv`.
+
+Notes
+-----
+
+* The brick filenames have the format `brick-{band}-{expid}.fits`, where `band` is one of [rbz], which differs from the current data model (which is missing the `{band}`).
+* Bricks contain a single wavelength grid in HDU2, the same as current CFRAMES, but different from the CFRAME data model (where HDU2 is a per-object mask).
+* The NIGHT column in HDU4 has type i4, not string. Is this a problem?
+* The 5*S10 FILTER values in the FIBERMAP are combined into a single comma-separated list stored as a single S50 FILTER value in HDU4 of the brick file.  This is a workaround until we sort out issues with astropy.io.fits and cfitsio handling of 5*S10 arrays.
+* The mock resolution matrices do not have np.sum(R,axis=1) == 1 for all rows and go slightly negative in the tails.
+* The wlen values in HDU2 have some roundoff errors, e.g., z-band wlen[-1] = 9824.0000000014425
+* Masking via ivar=0 is implemented but not well tested yet
+
+Mock Data Tests
+===============
 
 DESI Environment
 ----------------
@@ -33,8 +129,8 @@ Set pipeline paths::
     export DESI_SPECTRO_SIM=$DESI_ROOT/spectro/sim
     export DESI_SPECTRO_DATA=$DESI_SPECTRO_SIM/alpha-5
 
-Tests
------
+Run Tests
+---------
 
 Convert mocks cframes and fibermaps into brick files using::
 
@@ -77,63 +173,3 @@ Inspect a brick file in iPython using, e.g.::
 Run unit tests::
 
     python -m desispec.resolution
-
-Wavelength Grids
-----------------
-
-All brick files have their wavelength grid in HDU2, as summarized in the table below. Note that we do not use a log-lambda grid for the global coadd across bands, since this would not be a good match to the wavelength resolution at the red ends of r and z cameras. See the note for details.
-
-===== ======= ======= ======= =======
-Band  Min(A)  Max(A)  Nbins   Size(A)
-===== ======= ======= ======= =======
-b     3579.0  5938.8  3934    0.6
-r     5635.0  7730.8  3494    0.6
-z     7445.0  9824.0  3966    0.6
-all   3579.0  9825.0  6247    1.0
-===== ======= ======= ======= =======
-
-Co-Add Table
-------------
-
-The brick file and two co-add files all have a table with the same format in HDU4, with one entry per exposure of each object observed in the brick. Most of its columns are copied directly from the exposure fibermaps, except for the last three columns which identify the exposure and offset of the object's spectrum in the other HDUs.  The table columns are listed below.
-
-============ ======================================================
-Name         Description
-============ ======================================================
-FIBER        Fiber ID [0-4999]
-POSITIONER   Positioner ID [0-4999]
-SPECTROID    Spectrograph ID [0-9]
-TARGETID     Unique target ID
-TARGETCAT    Name/version of the target catalog
-OBJTYPE      Target type [ELG, LRG, QSO, STD, STAR, SKY]
-LAMBDAREF    Reference wavelength at which to align fiber
-TARGET_MASK0 Targeting bit mask
-RA_TARGET    Target right ascension [degrees]
-DEC_TARGET   Target declination [degrees]
-X_TARGET     X on focal plane derived from (RA,DEC)_TARGET
-Y_TARGET     Y on focal plane derived from (RA,DEC)_TARGET
-X_FVCOBS     X location observed by Fiber View Cam [mm]
-Y_FVCOBS     Y location observed by Fiber View Cam [mm]
-X_FVCERR     X location uncertainty from Fiber View Cam [mm]
-Y_FVCERR     Y location uncertainty from Fiber View Cam [mm]
-RA_OBS       RA of obs from (X,Y)_FVCOBS and optics [deg]
-DEC_OBS      dec of obs from (X,Y)_FVCOBS and optics [deg]
-MAG          magitude
-FILTER       SDSS_R, DECAM_Z, WISE1, etc.
-NIGHT        Date string for the night of observation YYYYMMDD
-EXPID        Integer exposure number
-INDEX        Index of this object in other HDUs
-============ ======================================================
-
-Notes
------
-
-* The brick filenames have the format `brick-{band}-{expid}.fits`, where `band` is one of [rbz], which differs from the current data model (which is missing the `{band}`).
-* Bricks contain a single wavelength grid in HDU2, the same as current CFRAMES, but different from the CFRAME data model (where HDU2 is a per-object mask).
-* The order of objects appearing in brick HDUs 0-3 (which are copied from the corresponding CFRAMEs) matches the order of rows in HDU4 (which are copied from the corresponding FIBERMAP).
-* HDU4 adds NIGHT and EXPID columns, to distinguish repeat observations of the same object.
-* The NIGHT column in HDU4 has type i4, not string. Is this a problem?
-* The 5*S10 FILTER values in the FIBERMAP are combined into a single comma-separated list stored as a single S50 FILTER value in HDU4 of the brick file.  This is a workaround until we sort out issues with astropy.io.fits and cfitsio handling of 5*S10 arrays.
-* The mock resolution matrices do not have np.sum(R,axis=1) == 1 for all rows and go slightly negative in the tails.
-* The wlen values in HDU2 have some roundoff errors, e.g., z-band wlen[-1] = 9824.0000000014425
-* Masking via ivar=0 is implemented but not well tested yet
