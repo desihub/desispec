@@ -15,24 +15,31 @@ class Spectrum(object):
     """
     A reduced flux spectrum with an associated diagonal inverse covariance and resolution matrix.
 
-    Objects of this type provide the inputs and outputs of co-addition.
+    Objects of this type provide the inputs and outputs of co-addition. When only a wavelength grid
+    is passed to the constructor, the new object will represent a zero-flux spectrum. Use the +=
+    operator to co-add spectra.
 
     Args:
         wlen(numpy.ndarray): Array of shape (n,) wavelengths in Angstroms where the flux is tabulated.
         flux(numpy.ndarray): Array of shape (n,) flux densities in 1e-17 erg/s/cm**2 at each wavelength.
         ivar(numpy.ndarray): Array of shape (n,) inverse variances of flux at each wavelength.
-        resolution(scipy.sparse.dia_matrix): Sparse array of shape(n,n) whose rows give the resolution at
-            each wavelength. Uses the dia_matrix sparse format.
+        resolution(desimodel.resolution.Resolution): Sparse matrix of wavelength resolutions.
     """
-    def __init__(self,wlen,flux,ivar,resolution):
+    def __init__(self,wlen,flux=None,ivar=None,resolution=None):
         self.wlen = wlen
         self.flux = flux
         self.ivar = ivar
         self.resolution = resolution
         # Initialize the quantities we will accumulate during co-addition.
-        diag_ivar = scipy.sparse.dia_matrix((self.ivar[np.newaxis,:],[0]),self.resolution.shape)
-        self.Cinv = self.resolution.T.dot(diag_ivar.dot(self.resolution))
-        self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
+        if ivar is None:
+            n = len(wlen)
+            self.Cinv = np.zeros((n,n))
+            self.Cinv_f = np.zeros((n,))
+        else:
+            assert flux is not None and resolution is not None,'Missing flux and/or resolution.'
+            diag_ivar = scipy.sparse.dia_matrix((self.ivar[np.newaxis,:],[0]),self.resolution.shape)
+            self.Cinv = self.resolution.T.dot(diag_ivar.dot(self.resolution))
+            self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
 
     def finalize(self):
         """

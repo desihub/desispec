@@ -91,11 +91,11 @@ def main():
                 next_coadd_index += 1
             # Save the coadd index to our output table.
             coadd_info['INDEX'][index] = target_index[target_id]
-            # Add this observation to our coadd for this band.
+            # Initialize the coadd for this band and target if necessary.
             if band not in coadded_spectra[target_id]:
-                coadded_spectra[target_id][band] = spectrum
-            else:
-                coadded_spectra[target_id][band] += spectrum
+                coadded_spectra[target_id][band] = desispec.coaddition.Spectrum(wlen)
+            # Do the coaddition.
+            coadded_spectra[target_id][band] += spectrum
 
             # Is this exposure of this target already in our global coadd table?
             exposure = info['EXPID']
