@@ -125,11 +125,11 @@ def main():
             if args.verbose:
                 print 'Saving coadd of %d exposures for target ID %d to index %d.' % (
                     np.count_nonzero(exposures),target_id,index)
-            spectrum = coadded_spectra[target_id][band]
-            spectrum.finalize()
-            flux_out[index] = spectrum.flux
-            ivar_out[index] = spectrum.ivar
-            resolution_out[index] = spectrum.resolution.to_fits_array()
+            coadd = coadded_spectra[target_id][band]
+            coadd.finalize()
+            flux_out[index] = coadd.flux
+            ivar_out[index] = coadd.ivar
+            resolution_out[index] = coadd.resolution.to_fits_array()
 
         # Save the coadds for this band.
         coadd_file.add_objects(flux_out,ivar_out,wlen,resolution_out)
@@ -155,8 +155,13 @@ def main():
             print 'Combining %s bands for target %d at index %d.' % (bands,target_id,index)
         if bands != all_bands:
             print 'WARNING: target %d has partial band coverage: %s' % (target_id,bands)
-        flux_all[index],ivar_all[index],R = desispec.coaddition.combine(*coadded_spectra[target_id].values())
-        resolution_all[index] = R.to_fits_array()
+        coadd_all = desispec.coaddition.Spectrum(desispec.coaddition.global_wavelength_grid)
+        for coadd_band in coadded_spectra[target_id].itervalues():
+            coadd_all += coadd_band
+        coadd_all.finalize()
+        flux_all[index] = coadd_all.flux
+        ivar_all[index] = coadd_all.ivar
+        resolution_all[index] = coadd_all.resolution.to_fits_array()
 
     # Save the global coadds.
     coadd_all_file.add_objects(flux_all,ivar_all,desispec.coaddition.global_wavelength_grid,resolution_all)

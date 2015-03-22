@@ -30,14 +30,15 @@ class Spectrum(object):
         self.flux = flux
         self.ivar = ivar
         self.resolution = resolution
-        # Initialize the quantities we will accumulate during co-addition.
+        # Initialize the quantities we will accumulate during co-addition. Note that our
+        # internal Cinv is a dense matrix.
         if ivar is None:
             n = len(wlen)
             self.Cinv = np.zeros((n,n))
             self.Cinv_f = np.zeros((n,))
         else:
             assert flux is not None and resolution is not None,'Missing flux and/or resolution.'
-            diag_ivar = scipy.sparse.dia_matrix((self.ivar[np.newaxis,:],[0]),self.resolution.shape)
+            diag_ivar = scipy.sparse.dia_matrix((ivar[np.newaxis,:],[0]),resolution.shape)
             self.Cinv = self.resolution.T.dot(diag_ivar.dot(self.resolution))
             self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
 
@@ -67,16 +68,19 @@ class Spectrum(object):
 
     def __iadd__(self,other):
         """
-        Coadd this spectrum with another spectrum of the same object that uses the same wavelength grid.
+        Coadd this spectrum with another spectrum.
 
         Raises:
-            RuntimeError: Cannot coadd different wavelength grids.
+            AssertionError: The other spectrum's wavelength grid is not compatible with ours.
         """
-        if not np.array_equal(self.wlen,other.wlen):
-            raise RuntimeError('Cannot coadd different wavelength grids.')
         # Accumulate weighted deconvolved fluxes.
-        self.Cinv = self.Cinv + other.Cinv # sparse matrices do not support +=
-        self.Cinv_f += other.Cinv_f
+        if np.array_equal(self.wlen,other.wlen):
+            self.Cinv += other.Cinv
+            self.Cinv_f += other.Cinv_f
+        else:
+            resampler = get_resampling_matrix(self.wlen,other.wlen)
+            self.Cinv += resampler.T.dot(other.Cinv.dot(resampler))
+            self.Cinv_f += resampler.T.dot(other.Cinv_f)
         # Make sure we don't forget to call finalize.
         self.flux = None
         self.ivar = None
@@ -87,35 +91,6 @@ class Spectrum(object):
 # The nominal brz grids cover 3579.0 - 9824.0 A but the FITs grids have some roundoff error
 # so we add an extra bin to the end of the global wavelength grid to fully contain the bands.
 global_wavelength_grid = np.arange(3579.0,9826.0,1.0)
-
-def combine(*spectra):
-    """
-    Combine a list of spectra using the global wavelength grid.
-    """
-    num_global = len(global_wavelength_grid)
-    # Step 1: accumulated weighted sums of deconvolved flux estimates.
-    Cinv = np.zeros((num_global,num_global))
-    Cinv_f = np.zeros_like(global_wavelength_grid)
-    Cinv_t = np.zeros_like(global_wavelength_grid)
-    for spectrum in spectra:
-        resampler = get_resampling_matrix(global_wavelength_grid,spectrum.wlen)
-        Cinv += resampler.T.dot(spectrum.Cinv.dot(resampler))
-        Cinv_f += resampler.T.dot(spectrum.Cinv_f)
-    # Step 2: check for global wavelength bins with no information available.
-    mask = (np.diag(Cinv) > 0)
-    keep = np.arange(num_global)[mask]
-    keep_t = keep[:,np.newaxis]
-    # Step 3: find decorrelated basis.
-    ivar = np.zeros_like(global_wavelength_grid)
-    resolution = np.zeros_like(Cinv)
-    ivar[mask],resolution[keep_t,keep] = decorrelate(Cinv[keep_t,keep])
-    # Step 4: calculate decorrelated flux vectors.
-    flux = np.zeros_like(global_wavelength_grid)
-    R_it = scipy.linalg.inv(resolution[keep_t,keep].T)
-    flux[mask] = R_it.dot(Cinv_f[mask])/ivar[mask]
-    # Convert R from a dense matrix to a sparse one.
-    resolution = desispec.resolution.Resolution(resolution)
-    return flux,ivar,resolution
 
 def get_resampling_matrix(global_grid,local_grid):
     """
