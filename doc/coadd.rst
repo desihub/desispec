@@ -45,19 +45,31 @@ Note that the code is not yet smart enough to do the right thing for exposures t
 
 Update coadds for a single brick::
 
-    rm -rf $DESI_SPECTRO_REDUX/$PRODNAME/bricks/3582p000/coadd*
-    desi_update_coadds.py --brick 3582p000 --verbose
+    rm -rf $DESI_SPECTRO_REDUX/$PRODNAME/bricks/3587m010/coadd*
+    desi_update_coadds.py --brick 3587m010 --verbose
 
-Look at a single target in this brick::
+Look at a single target in this brick (this is a spectrophotometric standard star)::
 
-    desi_inspect.py --brick 3582p000 --id 7374379192747158494 --verbose
+    desi_inspect.py --brick 3587m010 --id 5975044458097644294 --verbose
+
+Some other targets to try in the same brick are listed below:
+
+=================== ===== ==========
+Target ID           Type  Exposures
+=================== ===== ==========
+5975044458097644294 STD   2,3
+1216096232558014533 SKY   4
+714037709241345926  ELG   2,3
+1211155416744781187 LRG   2,3
+205388073288898416  QSO   2,3
+=================== ===== ==========
 
 Inspect a brick file in iPython using, e.g.::
 
     import os,os.path
     import astropy.io.fits as fits
     from astropy.table import Table
-    brick = fits.open(os.path.join(os.getenv('DESI_SPECTRO_REDUX'),os.getenv('PRODNAME'),'bricks','3582p000','brick-r-3582p000.fits'))
+    brick = fits.open(os.path.join(os.getenv('DESI_SPECTRO_REDUX'),os.getenv('PRODNAME'),'bricks','3587m010','brick-r-3587m010.fits'))
     info = Table.read(brick,hdu=4)
     print info
     plt.errorbar(x=brick[2].data,y=brick[0].data[0],yerr=brick[1].data[0]**-0.5)
@@ -124,3 +136,4 @@ Notes
 * The 5*S10 FILTER values in the FIBERMAP are combined into a single comma-separated list stored as a single S50 FILTER value in HDU4 of the brick file.  This is a workaround until we sort out issues with astropy.io.fits and cfitsio handling of 5*S10 arrays.
 * The mock resolution matrices do not have np.sum(R,axis=1) == 1 for all rows and go slightly negative in the tails.
 * The wlen values in HDU2 have some roundoff errors, e.g., z-band wlen[-1] = 9824.0000000014425
+* Masking via ivar=0 is implemented but not well tested yet

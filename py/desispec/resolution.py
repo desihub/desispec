@@ -39,7 +39,7 @@ class Resolution(scipy.sparse.dia_matrix):
             diag_order = np.argsort(data.offsets)[::-1]
             scipy.sparse.dia_matrix.__init__(self,(data.data[diag_order],self.offsets),data.shape)
 
-        elif type(data) is np.ndarray and len(data.shape) == 2:
+        elif isinstance(data,np.ndarray) and len(data.shape) == 2:
             n1,n2 = data.shape
             if n1 == num_diagonals and n2 > n1:
                 scipy.sparse.dia_matrix.__init__(self,(data,self.offsets),(n2,n2))

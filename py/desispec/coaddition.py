@@ -46,12 +46,22 @@ class Spectrum(object):
         Calculates the flux, inverse variance and resolution for this spectrum.
 
         Uses the accumulated data from all += operations so far but does not prevent
-        further accumulation.
+        further accumulation.  This is the expensive step in coaddition so we make
+        it something that you have to call explicitly.  If you forget to do this,
+        the flux,ivar,resolution attributes will be None.
         """
-        # Recalculate the deconvolved solution and resolution.
-        self.ivar,R = decorrelate(self.Cinv)
-        R_it = scipy.linalg.inv(R.T)
-        self.flux = R_it.dot(self.Cinv_f)/self.ivar
+        # What pixels are we using?
+        mask = (np.diag(self.Cinv) > 0)
+        keep = np.arange(len(self.Cinv_f))[mask]
+        keep_t = keep[:,np.newaxis]
+        # Initialize the results to zero.
+        self.flux = np.zeros_like(self.Cinv_f)
+        self.ivar = np.zeros_like(self.Cinv_f)
+        R = np.zeros_like(self.Cinv)
+        # Calculate the deconvolved flux,ivar and resolution for ivar > 0 pixels.
+        self.ivar[mask],R[keep_t,keep] = decorrelate(self.Cinv[keep_t,keep])
+        R_it = scipy.linalg.inv(R[keep_t,keep].T)
+        self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
         # Convert R from a dense matrix to a sparse one.
         self.resolution = desispec.resolution.Resolution(R)
 
@@ -67,10 +77,15 @@ class Spectrum(object):
         # Accumulate weighted deconvolved fluxes.
         self.Cinv = self.Cinv + other.Cinv # sparse matrices do not support +=
         self.Cinv_f += other.Cinv_f
+        # Make sure we don't forget to call finalize.
+        self.flux = None
+        self.ivar = None
+        self.resolution = None
+
         return self
 
 # The nominal brz grids cover 3579.0 - 9824.0 A but the FITs grids have some roundoff error
-# so we add an extra bin to the end of the global wavelength grid.
+# so we add an extra bin to the end of the global wavelength grid to fully contain the bands.
 global_wavelength_grid = np.arange(3579.0,9826.0,1.0)
 
 def combine(*spectra):
