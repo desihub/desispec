@@ -74,7 +74,7 @@ class Spectrum(object):
         try:
             R_it = scipy.linalg.inv(R[keep_t,keep].T)
             self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
-        except numpy.linalg.linalg.LinAlgError:
+        except np.linalg.linalg.LinAlgError:
             print 'WARNING: resolution matrix is singular so no coadded fluxes available.'
         # Convert R from a dense matrix to a sparse one.
         self.resolution = desispec.resolution.Resolution(R)

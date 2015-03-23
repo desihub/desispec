@@ -24,12 +24,16 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--verbose', action = 'store_true',
         help = 'Provide verbose reporting of progress.')
-    parser.add_argument('--id', type = int, default = None, metavar = 'ID',
+    parser.add_argument('--target', type = int, default = None, metavar = 'ID',
         help = 'Target ID number to inspect')
     parser.add_argument('--brick', type = str, default = None, metavar = 'NAME',
         help = 'Name of brick containing the requested target ID.')
     parser.add_argument('--info', action = 'store_true',
         help = 'Print tabular information from each file inspected.')
+    parser.add_argument('--save-plot', type = str, default = None, metavar = 'FILE',
+        help = 'File name to save the generated plot to.')
+    parser.add_argument('--no-display', action = 'store_true',
+        help = 'Do not display the image on screen (useful for batch processing).')
     parser.add_argument('--stride', type = int, default = 5,
         help = 'Stride to use for subsampling the spectrum data arrays.')
     parser.add_argument('--resolution-stride', type = int, default = 500,
@@ -67,7 +71,7 @@ def main():
             brick_file = desispec.io.brick.Brick(brick_path,mode = 'readonly')
             wlen = brick_file.get_wavelength_grid()
             wlen_min,wlen_max = min(wlen_min,np.min(wlen)),max(wlen_max,np.max(wlen))
-            exp_flux,exp_ivar,exp_resolution,exp_info = brick_file.get_target(args.id)
+            exp_flux,exp_ivar,exp_resolution,exp_info = brick_file.get_target(args.target)
             if args.verbose:
                 print 'Found %d %s-band exposures covering %.1f-%.1fA: %s' % (
                     len(exp_flux),band,np.min(wlen),np.max(wlen),','.join(map(str,exp_info['EXPID'])))
@@ -81,7 +85,8 @@ def main():
                     plt.scatter(wlen[::args.stride],flux[::args.stride],color = color,s = 1.,alpha = 0.5)
 
             else:
-                print 'No %s-band exposures recorded for target %d in brick %s' % (band,args.id,args.brick)
+                print 'No %s-band exposures recorded for target %d in brick %s' % (
+                    band,args.target,args.brick)
 
             brick_file.close()
 
@@ -93,7 +98,7 @@ def main():
             coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'readonly')
             wlen = coadd_file.get_wavelength_grid()
             wlen_min,wlen_max = min(wlen_min,np.min(wlen)),max(wlen_max,np.max(wlen))
-            coadd_flux,coadd_ivar,coadd_resolution,coadd_info = coadd_file.get_target(args.id)
+            coadd_flux,coadd_ivar,coadd_resolution,coadd_info = coadd_file.get_target(args.target)
 
             if len(coadd_flux) == 1:
                 if args.info:
@@ -111,10 +116,10 @@ def main():
                     right_axis.fill_between(wlen_zoom,R[index,bins],color = color,alpha = 0.1)
 
             elif len(coadd_flux) == 0:
-                print 'No %s-band coadd available for target %d.' % (band,args.id)
+                print 'No %s-band coadd available for target %d.' % (band,args.target)
             else:
                 print 'ERROR: found %d (>1) coadded %d-band fluxes for target %d' % (
-                    len(coadd_flux),band,args.id)
+                    len(coadd_flux),band,args.target)
 
             coadd_file.close()
 
@@ -125,7 +130,7 @@ def main():
         coadd_all_file = desispec.io.brick.CoAddedBrick(coadd_all_path,mode = 'readonly')
         wlen = coadd_all_file.get_wavelength_grid()
         wlen_min,wlen_max = min(wlen_min,np.min(wlen)),max(wlen_max,np.max(wlen))
-        coadd_flux,coadd_ivar,coadd_resolution,coadd_info = coadd_all_file.get_target(args.id)
+        coadd_flux,coadd_ivar,coadd_resolution,coadd_info = coadd_all_file.get_target(args.target)
 
         if len(coadd_flux) == 1:
             if args.info:
@@ -137,14 +142,18 @@ def main():
             left_axis.fill_between(wlen,coadd_flux[0]-flux_error,coadd_flux[0]+flux_error,
                 color='black',alpha=0.2)
         elif len(coadd_flux) == 0:
-            print 'No global coadd available for target %d.' % (args.id)
+            print 'No global coadd available for target %d.' % (args.target)
         else:
-            print 'ERROR: found %d (>1) global coadded fluxes for target %d' % (len(coadd_flux),args.id)
+            print 'ERROR: found %d (>1) global coadded fluxes for target %d' % (
+                len(coadd_flux),args.target)
 
         plt.xlim(wlen_min,wlen_max)
         coadd_all_file.close()
 
-    plt.show()
+    if args.save_plot:
+        figure.savefig(args.save_plot)
+    if not args.no_display:
+        plt.show()
     plt.close()
 
 if __name__ == '__main__':
