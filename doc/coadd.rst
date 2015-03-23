@@ -12,16 +12,16 @@ Files
 
 All spectra are grouped by brick. There are three types of brick file under `$DESI_SPECTRO_REDUX/$PRODNAME//bricks/{brickid}/`:
 
- * The brick files contains all exposures of every target that has been observed in the brick, by band.
- * The band coadd files contain the coadd of all exposures for each target, by band.
- * The global coadd files contain the coadd of band coadds for each target.
+* The brick files contains all exposures of every target that has been observed in the brick, by band.
+* The band coadd files contain the coadd of all exposures for each target, by band.
+* The global coadd files contain the coadd of band coadds for each target.
 
 All files have the same structure with 4 HDUs:
 
- * HDU0: Flux vectors for each spectrum.
- * HDU1: Ivar vectors for each spectrum.
- * HDU2: The common wavelength grid used for all spectra.
- * HDU4: Binary table of metadata.
+* HDU0: Flux vectors for each spectrum.
+* HDU1: Ivar vectors for each spectrum.
+* HDU2: The common wavelength grid used for all spectra.
+* HDU4: Binary table of metadata.
 
 See the relevant `data model descriptions
 <https://desi.lbl.gov/trac/browser/code/desiDataModel/trunk/doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID>`_ for details (these are not in synch with the mock data challenge files as of 23-Mar-2015).
@@ -78,8 +78,8 @@ Programs
 
 The following programs are used to implement the coadd part of the pipeline:
 
- * `desi_make_bricks`: Create brick files from all exposures taken in one night. Reads exposures from cframe files and adds metadata from the exposure fibermap.
- * `desi_update_coadds`: Update the coadds for a single brick. Reads exposures from brick files and writes the corresonding band coadd and global coadd files.
+* `desi_make_bricks`: Create brick files from all exposures taken in one night. Reads exposures from cframe files and adds metadata from the exposure fibermap.
+* `desi_update_coadds`: Update the coadds for a single brick. Reads exposures from brick files and writes the corresonding band coadd and global coadd files.
 
 An additional program `desi_inspect` displays the information and creates a plot summarizing the coadd results for a single target.
 
@@ -157,7 +157,7 @@ Update coadds for a single brick::
 
 Look at a single target in this brick (this is a spectrophotometric standard star)::
 
-    desi_inspect.py --brick 3587m010 --id 5975044458097644294 --verbose
+    desi_inspect.py --brick 3587m010 --target 5975044458097644294 --verbose
 
 Some other targets to try in the same brick are listed below:
 
