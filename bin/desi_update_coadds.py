@@ -89,7 +89,7 @@ def main():
             spectrum = desispec.coaddition.Spectrum(wlen,flux_in[index],ivar_in[index],resolution_matrix)
             target_id = info['TARGETID']
             # Are we only processing specified targets?
-            if args.target is not None and target_id not in args.target:
+            if len(args.target) > 0 and target_id not in args.target:
                 continue
             # Have we seen this target before?
             if target_id not in coadded_spectra:
