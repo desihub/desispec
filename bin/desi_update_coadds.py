@@ -5,6 +5,11 @@
 # -*- coding: utf-8 -*-
 """
 Update co-adds for a single brick.
+
+Reads the b,r,z files containing all observed spectra for a single brick and performs two steps
+of coaddition: (1) create b,r,z coadd files containing the coadditions of every target observed
+in each band, using the native band wavelength grid; and (2) combine the b,r,z coadds for each
+object into a global coadd using linear resampling to the global wavelength grid.
 """
 
 import argparse
@@ -23,6 +28,8 @@ def main():
         help = 'Provide verbose reporting of progress.')
     parser.add_argument('--brick', type = str, default = None, metavar = 'NAME',
         help = 'Name of brick to process')
+    parser.add_argument('--target', type = int, action = 'append', metavar = 'ID', default = [ ],
+        help = 'Only perform coaddition for the specified target ID (may be repeated).')
     parser.add_argument('--bands', type = str, default = 'brz',
         help = 'String listing the bands to include.')
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
@@ -81,9 +88,9 @@ def main():
             resolution_matrix = desispec.resolution.Resolution(resolution_in[index])
             spectrum = desispec.coaddition.Spectrum(wlen,flux_in[index],ivar_in[index],resolution_matrix)
             target_id = info['TARGETID']
-
-            if target_id != 7374379192747158494: continue
-
+            # Are we only processing specified targets?
+            if args.target is not None and target_id not in args.target:
+                continue
             # Have we seen this target before?
             if target_id not in coadded_spectra:
                 coadded_spectra[target_id] = { }
