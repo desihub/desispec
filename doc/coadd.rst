@@ -86,19 +86,11 @@ An additional program `desi_inspect` displays the information and creates a plot
 Benchmarks
 ----------
 
-The rate-limiting step for performing coadds is the final conversion from `Cinv` and `Cinv_f` to `flux`, `ivar` and `resolution` in :meth:`desispec.coaddition.Spectrum.finalize`.  The computation time is dominated by two operations:
+The rate-limiting step for performing coadds is the final conversion from `Cinv` and `Cinv_f` to `flux`, `ivar` and `resolution` in :meth:`desispec.coaddition.Spectrum.finalize`.  The computation time is dominated by one operation: solving the eigenvalue program for a large symmetric real-valued matrix using :func:`scipy.linalg.eigh`. The computation also involves inverting a real-valued resolution matrix using :func:`scipy.linalg.inv`, but this is relatively fast.
 
- * Solve the eigenvalue program for a large symmetric real-valued matrix using :func:`scipy.linalg.eigh`.
- * Invert a real-valued resolution matrix using :func:`scipy.linalg.inv`.
+For a typical r-band coadd on a 2014 MacBook Pro, the total time for a single target is about 12 seconds, dominated by `eigh` (10.6s) and `inv` (1.0s). The time for a global coadd will be longer because of the larger matrices involved.
 
-For a typical r-band coadd on a 2014 MacBook Pro, the total time for a single target is about 12 seconds, dominated by `eigh` (10.6s) and `inv` (1.0s).  The time for a global coadd will be longer because of the larger matrices involved.
-
-Timing info for the processing the mock data challenge simulated exposures are summarized below (running interactively on edison@nersc):
-
- * Convert cframes to brick files for the simulated night of 20150211: 1m22s.
- * Convert b,r,z-brick files into band and global coadds for the relatively small brick 3587m010 (15 exposures of 10 targets): 24 minutes.
-
-Note that the coadd step can be parallelized across bricks and that this will require non-negligible resources.
+Interactive tests run on edison@nesrc indicate that it takes about 20s for each single-band coadd and 90s for the global coadd, for a total of about 150s per target.  Note that the coadd step can be parallelized across bricks to reduce the wall-clock time required to process an exposure.  The biggest speed improvement would likely come from using a sparse matrix eigensolver, or adjusting the algorithm to be able to use an incomplete set of eigenmodes (the :func:`scipy.sparse.linalg.eigsh` function can not calculate the full spectrum of eigenmodes).
 
 Notes
 -----
@@ -111,6 +103,7 @@ Notes
 * The wlen values in HDU2 have some roundoff errors, e.g., z-band wlen[-1] = 9824.0000000014425
 * Masking via ivar=0 is implemented but not well tested yet.
 * We need a way to programmatically determine the brick name given a target ID, in order to locate the relevant files. Otherwise, target ID is not a useful way to define a sample (a la plate-mjd-fiber or ThingID) and an alternative is needed for downstream science users.
+* The global coadd sometimes find negative eigenvalues for Cinv or a singular R.T. These cases need to be investigated.
 
 Mock Data Tests
 ===============

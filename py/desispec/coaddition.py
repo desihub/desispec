@@ -53,6 +53,10 @@ class Spectrum(object):
         further accumulation.  This is the expensive step in coaddition so we make
         it something that you have to call explicitly.  If you forget to do this,
         the flux,ivar,resolution attributes will be None.
+
+        If the coadded resolution matrix is not invertible, a warning message is
+        printed and the returned flux vector is zero (but ivar and resolution are
+        still valid).
         """
         # Convert to a dense matrix if necessary.
         if scipy.sparse.issparse(self.Cinv):
@@ -67,8 +71,11 @@ class Spectrum(object):
         R = np.zeros_like(self.Cinv)
         # Calculate the deconvolved flux,ivar and resolution for ivar > 0 pixels.
         self.ivar[mask],R[keep_t,keep] = decorrelate(self.Cinv[keep_t,keep])
-        R_it = scipy.linalg.inv(R[keep_t,keep].T)
-        self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
+        try:
+            R_it = scipy.linalg.inv(R[keep_t,keep].T)
+            self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
+        except numpy.linalg.linalg.LinAlgError:
+            print 'WARNING: resolution matrix is singular so no coadded fluxes available.'
         # Convert R from a dense matrix to a sparse one.
         self.resolution = desispec.resolution.Resolution(R)
 

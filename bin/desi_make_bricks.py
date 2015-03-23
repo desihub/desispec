@@ -75,7 +75,8 @@ def main():
         # Close all brick files.
         for brick in bricks.itervalues():
             if args.verbose:
-                print 'Brick %s now contains %d objects.' % (brick.path,brick.get_num_objects())
+                print 'Brick %s now contains %d spectra for %d targets.' % (
+                    brick.path,brick.get_num_spectra(),brick.get_num_targets())
             brick.close()
 
     except RuntimeError,e:
