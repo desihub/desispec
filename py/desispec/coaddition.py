@@ -1,8 +1,8 @@
 """
 Algorithms for co-addition of independent observations of the same object.
 
-See :doc:`coadd` and DESI-Doc-??? for general information about the coaddition
-dataflow and algorithms.
+See :doc:`coadd` and `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_
+for general information about the coaddition dataflow and algorithms.
 """
 
 from __future__ import division, absolute_import

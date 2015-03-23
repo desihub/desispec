@@ -2,7 +2,7 @@
 Coaddition of Spectroperfect Reductions
 =======================================
 
-This document covers coadd implementation details and mock-data tests. For details on the coadd dataflow and algorithms used for combining spectra, refer to `DESI-doc-??? <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=???>`_.
+This document covers coadd implementation details and mock-data tests. For details on the coadd dataflow and algorithms used for combining spectra, refer to `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_.
 
 Implementation
 ==============
@@ -118,11 +118,11 @@ Ssh to edison.nersc.gov (remember to use `ssh -A` to propagate your keys for git
 Installation
 ------------
 
-Clone the git package and select the co-add development branch::
+Clone the git package and select the co-add development branch (which should soon be merged into the master branch, making the last command unecessary)::
 
     git clone git@github.com:desihub/desispec.git
     cd desispec
-    git checkout \#3
+    git checkout \#6
 
 Per-Login Setup
 ---------------
