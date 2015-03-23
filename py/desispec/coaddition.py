@@ -51,6 +51,9 @@ class Spectrum(object):
         it something that you have to call explicitly.  If you forget to do this,
         the flux,ivar,resolution attributes will be None.
         """
+        # Convert to a dense matrix if necessary.
+        if scipy.sparse.issparse(self.Cinv):
+            self.Cinv = self.Cinv.todense()
         # What pixels are we using?
         mask = (np.diag(self.Cinv) > 0)
         keep = np.arange(len(self.Cinv_f))[mask]
@@ -70,6 +73,9 @@ class Spectrum(object):
         """
         Coadd this spectrum with another spectrum.
 
+        The calling object is updated to the combined result. Linear interpolation will be
+        used if the other spectrum uses a different wavelength grid. 
+
         Raises:
             AssertionError: The other spectrum's wavelength grid is not compatible with ours.
         """
@@ -88,8 +94,14 @@ class Spectrum(object):
 
         return self
 
-# The nominal brz grids cover 3579.0 - 9824.0 A but the FITs grids have some roundoff error
-# so we add an extra bin to the end of the global wavelength grid to fully contain the bands.
+"""
+Nominal global wavelength grid for spectra that are coadded across camera bands.
+
+The nominal brz grids cover 3579.0 - 9824.0 A but the FITs grids have some roundoff error
+so we add an extra bin to the end of the global wavelength grid to fully contain the bands.
+Note that we use a linear grid (rather than a log-lambda grid, for example) so that
+co-added spectra have a roughly constant FWHM/BINSIZE.
+"""
 global_wavelength_grid = np.arange(3579.0,9826.0,1.0)
 
 def get_resampling_matrix(global_grid,local_grid):
