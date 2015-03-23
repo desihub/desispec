@@ -167,8 +167,11 @@ def decorrelate(Cinv):
     # Calculate the matrix square root. Note that we do not use scipy.linalg.sqrtm since
     # the method below is about 2x faster for a positive definite matrix.
     L,X = scipy.linalg.eigh(Cinv)
-    # Check that all eigenvalues are positive.
-    assert np.all(L > 0), 'Found some negative Cinv eigenvalues.'
+    # Check for negative eigenvalues.
+    nbad = np.count_nonzero(L < 0)
+    if nbad > 0:
+        print 'WARNING: zeroing %d negative eigenvalues.' % nbad
+        L[L < 0] = 0.
     # Calculate the matrix square root Q such that Cinv = Q.Q
     Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))
     # Calculate and return the corresponding resolution matrix and diagonal flux errors.
