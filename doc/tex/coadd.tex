@@ -23,9 +23,19 @@ Reductions for DESI}
 
 In this note, we describe the method used to combine individual exposures of the same object that have been reduced using the spectro-perfectionism algorithm~\cite{2010PASP..122..248B}. We start with an overview of the data flow from individual DESI exposures to final co-added spectra. We next review the spectroperfectionism algorithm and our assumptions about the inputs to be co-added. Finally, we describe the two phases of our co-addition algorithm: combining the exposures from a single camera (b,r,z) and then combining per-camera co-adds to obtain the final spectrum.
 
-This documented is maintained in the {\tt desispec} package\footnote{Maintained in the public github repository at \url{https://github.com/desihub/desispec}} under {\tt doc/tex/} and the code for the plots and toy studies described below are maintained in an iPython notebook under {\tt doc/nb/}\footnote{Viewable online at \url{http://nbviewer.ipython.org/github/desihub/desispec/tree/master/doc/nb/...}}.
+This documented is maintained in the {\tt desispec} package\footnote{Maintained in the public github repository at \url{https://github.com/desihub/desispec}} under {\tt doc/tex/} and the code for the plots and toy studies described below are maintained in an iPython notebook under {\tt doc/nb/}\footnote{Viewable online at \url{http://nbviewer.ipython.org/github/desihub/desispec/tree/master/doc/nb/SpectroPerfectCoadds}}.
 
 \section{Dataflow Overview}
+
+\fig{dataflow} summarizes the basic flow of spectra from the nightly observations to the global coadds. The primary temporal key is the dataflow is the exposure ID, a global integer counter that increments over the course of the survey. The primary spatial key is the object identifier, a 64-bit integer assigned during the targeting phase. For convenience, these are currently chunked into ``nights'' and ``bricks'', respectively, although the current design does not provide efficient means to determine either of these from the primary keys.
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=5in]{fig/dataflow}
+\caption{...}
+\label{fig:dataflow}
+\end{center}
+\end{figure}
 
 \section{Spectro-Perfect Reductions}
 
@@ -51,7 +61,7 @@ The least-square solution effectively deconvolves the instrumental PSF and inevi
 C^{-1} = R^T \tilde{C}^{-1} R \; ,
 \label{eqn:decorrelated}
 \end{equation}
-in which th transform flux components
+in which the transformed flux components
 \begin{equation}
 \tilde{f} \equiv R f
 \end{equation}
@@ -144,11 +154,30 @@ This second step of co-addition places some constraints on the choice of global 
 \end{center}
 \end{figure}
 
+We adopt a uniformly spaced wavelength grid for the final DESI coadds with 1.0 \AA\ per bin. This is a compromise between spectrum size (otherwise, we could go down to the 0.6 \AA\ spacing of the idividual bands) and a desire to maintain a roughly constant ratio between the wavelength PSF size and the bin size. \fig{grids} shows that an alternative global grid that is equally spaced in in $\log\lambda$ is not a good match to the PSF size, especially at the red ends of the r-band and z-band.
+
 \begin{figure}[htb]
 \begin{center}
 \includegraphics[width=5in]{fig/grids}
-\caption{Comparison of different wavelength grids. The horizontal row at $\Delta\lambda = 0.6$ \AA\ shows the local grids used in the DESI b,r,z cameras (with one point per 200 bins) while the solid curves show the corresponding wavelength PSF FWHM values. The two rising lines show grids that are equally spaced in $\log\lambda$: crosses show a possible global binning for DESI that starts at $\Delta\lambda = 0.6$ \AA\ and the dashed line shows the coadd grid used by BOSS.}
+\caption{Comparison of different wavelength grids. The horizontal row at $\Delta\lambda = 0.6$ \AA\ shows the local grids used in the DESI b,r,z cameras (with one point per 200 bins) while the solid curves show the corresponding wavelength PSF FWHM values. The two rising lines show global grids that are equally spaced in $\log\lambda$: crosses show a possible global binning for DESI that starts at $\Delta\lambda = 0.6$ \AA\ and the dashed line shows the coadd grid used by BOSS. The horizontal row at $\Delta\lambda = 1.0$ \AA\ shows the global DESI coadd grid.}
 \label{fig:grids}
+\end{center}
+\end{figure}
+
+As a final note, we remind readers that the decomposition of a spectro-perfect reduction into separate flux, inverse variance, and resolution components is somewhat arbitrary since these quantities are highly correlated. In principle, the matrix square-root prescription provides a unique decomposition. However, in practice the presence of round off errors in operations on matrices with $~4000^2$ elements (or $~6000^2$ for the global coadd) leads to percent-level uncertainties in the decomposition results.  This is illustrated in~\fig{roundtrip}, where we plot the shifts in flux, inverse variance, and resolution values under a single decorrelation round trip via
+\begin{equation}
+R^T \tilde{C}^{-1} R \rightarrow C^{-1} \rightarrow R^T \tilde{C}^{-1} R
+\end{equation}
+and
+\begin{equation}
+f \rightarrow \tilde{C} (R^T)^{-1} \left( R^T \tilde{C}^{-1} f \right) \rightarrow f \; .
+\end{equation}
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=5in]{fig/roundtrip}
+\caption{Shifts in flux (top), inverse variance (middle) and resolution matrix values (bottom) from a decorrelation round trip. Dashed blue lines represent fractional shifts of $\pm 1$\%. The different colored clusters in the bottom plot are for resolution matrix elements on different off-diagonals.}
+\label{fig:roundtrip}
 \end{center}
 \end{figure}
 
