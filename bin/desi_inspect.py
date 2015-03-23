@@ -80,13 +80,6 @@ def main():
                 for flux in exp_flux:
                     plt.scatter(wlen[::args.stride],flux[::args.stride],color = color,s = 1.,alpha = 0.5)
 
-                for resolution_data in exp_resolution:
-                    R = desispec.resolution.Resolution(resolution_data).toarray()
-                    ndiag = desispec.resolution.num_diagonals//2
-                    for index in range(0,len(R),args.resolution_stride):
-                        bins = slice(index-ndiag,index+ndiag+1)
-                        wlen_zoom = wlen[index] + args.resolution_zoom*(wlen[bins] - wlen[index])
-                        right_axis.fill_between(wlen_zoom,R[index,bins],color = color,alpha = 0.1)
             else:
                 print 'No %s-band exposures recorded for target %d in brick %s' % (band,args.id,args.brick)
 
@@ -109,6 +102,14 @@ def main():
 
                 left_axis.scatter(wlen[::args.stride],coadd_flux[0,::args.stride],color = color,
                     marker = 'x',alpha = 0.5)
+
+                R = desispec.resolution.Resolution(coadd_resolution[0]).toarray()
+                ndiag = desispec.resolution.num_diagonals//2
+                for index in range(0,len(R),args.resolution_stride):
+                    bins = slice(index-ndiag,index+ndiag+1)
+                    wlen_zoom = wlen[index] + args.resolution_zoom*(wlen[bins] - wlen[index])
+                    right_axis.fill_between(wlen_zoom,R[index,bins],color = color,alpha = 0.1)
+
             elif len(coadd_flux) == 0:
                 print 'No %s-band coadd available for target %d.' % (band,args.id)
             else:
