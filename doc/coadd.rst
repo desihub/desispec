@@ -155,21 +155,9 @@ Update coadds for a single brick::
     rm -rf $DESI_SPECTRO_REDUX/$PRODNAME/bricks/3587m010/coadd*
     desi_update_coadds.py --brick 3587m010 --verbose
 
-Look at a single target in this brick (this is a spectrophotometric standard star)::
+Look at a single target in this brick (this is an LRG)::
 
-    desi_inspect.py --brick 3587m010 --target 5975044458097644294 --verbose
-
-Some other targets to try in the same brick are listed below:
-
-=================== ===== ==========
-Target ID           Type  Exposures
-=================== ===== ==========
-5975044458097644294 STD   2,3
-1216096232558014533 SKY   4
-714037709241345926  ELG   2,3
-1211155416744781187 LRG   2,3
-205388073288898416  QSO   2,3
-=================== ===== ==========
+    desi_inspect.py --brick 3587m010 --target 3640213155238558158 --verbose
 
 Inspect a brick file in iPython using, e.g.::
 
