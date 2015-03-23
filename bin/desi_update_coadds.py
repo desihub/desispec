@@ -62,11 +62,11 @@ def main():
             print 'Skipping non-existent brick file',brick_path
             continue
         brick_file = desispec.io.brick.Brick(brick_path,mode = 'readonly')
-        num_objects = brick_file.get_num_objects()
         flux_in,ivar_in,wlen,resolution_in = (brick_file.hdu_list[0].data,brick_file.hdu_list[1].data,
             brick_file.hdu_list[2].data,brick_file.hdu_list[3].data)
         if args.verbose:
-            print 'Processing %s with %d objects...' % (brick_path,num_objects)
+            print 'Processing %s with %d exposures of %d targets...' % (
+                brick_path,brick_file.get_num_spectra(),brick_file.get_num_targets())
         if resolution_in.shape[1] != desispec.resolution.num_diagonals:
             print 'ERROR: resolution has unexpected shape (ndiag=%d != %d). Skipping this file.' % (
                 resolution_in.shape[1],desispec.resolution.num_diagonals)

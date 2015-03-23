@@ -1,5 +1,8 @@
 """
 Algorithms for co-addition of independent observations of the same object.
+
+See :doc:`coadd` and DESI-Doc-??? for general information about the coaddition
+dataflow and algorithms.
 """
 
 from __future__ import division, absolute_import
@@ -170,7 +173,7 @@ def decorrelate(Cinv):
     # Check for negative eigenvalues.
     nbad = np.count_nonzero(L < 0)
     if nbad > 0:
-        print 'WARNING: zeroing %d negative eigenvalues.' % nbad
+        print 'WARNING: zeroing %d negative eigenvalue(s).' % nbad
         L[L < 0] = 0.
     # Calculate the matrix square root Q such that Cinv = Q.Q
     Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))

@@ -3,6 +3,7 @@
 \usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage{hyperref}
+\usepackage[margin=1.2in]{geometry}
 
 \providecommand{\eqn}[1]{eqn.~(\ref{eqn:#1})}
 \providecommand{\tab}[1]{Table~\ref{tab:#1}}
@@ -13,7 +14,8 @@
 \providecommand{\deltav}{\vecsymbol{\delta}}
 
 \title{Co-Addition of Spectro-perfect\\
-Reductions for DESI}
+Reductions for DESI\\
+\vspace{5mm}{\large\bf DESI-doc-????}}
 \author{David Kirkby}
 
 \begin{document}
@@ -21,21 +23,23 @@ Reductions for DESI}
 
 \section{Introduction}
 
-In this note, we describe the method used to combine individual exposures of the same object that have been reduced using the spectro-perfectionism algorithm~\cite{2010PASP..122..248B}. We start with an overview of the data flow from individual DESI exposures to final co-added spectra. We next review the spectroperfectionism algorithm and our assumptions about the inputs to be co-added. Finally, we describe the two phases of our co-addition algorithm: combining the exposures from a single camera (b,r,z) and then combining per-camera co-adds to obtain the final spectrum.
+In this note, ~\cite{2010PASP..122..248B}. We start with an overview of the data flow from individual DESI exposures to final co-added spectra. We next review the spectroperfectionism algorithm and our assumptions about the inputs to be co-added. Finally, we describe the two phases of our co-addition algorithm: combining the exposures from a single camera (b,r,z) and then combining per-camera co-adds to obtain the final spectrum.
 
-This documented is maintained in the {\tt desispec} package\footnote{Maintained in the public github repository at \url{https://github.com/desihub/desispec}} under {\tt doc/tex/} and the code for the plots and toy studies described below are maintained in an iPython notebook under {\tt doc/nb/}\footnote{Viewable online at \url{http://nbviewer.ipython.org/github/desihub/desispec/tree/master/doc/nb/SpectroPerfectCoadds}}.
+This document is maintained in the {\tt desispec} package\footnote{Maintained in the public github repository at \url{https://github.com/desihub/desispec}} under {\tt doc/tex/} and the code for the plots and toy studies described below are maintained in an iPython notebook under {\tt doc/nb/}\footnote{Viewable online at \url{http://nbviewer.ipython.org/github/desihub/desispec/tree/master/doc/nb/SpectroPerfectCoadds}}.
 
 \section{Dataflow Overview}
 
-\fig{dataflow} summarizes the basic flow of spectra from the nightly observations to the global coadds. The primary temporal key is the dataflow is the exposure ID, a global integer counter that increments over the course of the survey. The primary spatial key is the object identifier, a 64-bit integer assigned during the targeting phase. For convenience, these are currently chunked into ``nights'' and ``bricks'', respectively, although the current design does not provide efficient means to determine either of these from the primary keys.
+\fig{dataflow} summarizes the basic flow of spectra from the nightly observations to the global coadds. The primary temporal key is the dataflow is the exposure ID, a global integer counter that increments over the course of the survey. The primary spatial key is the object identifier, a 64-bit integer assigned during the targeting phase. For convenience, these are currently chunked into ``nights'' and ``bricks'', respectively, although the current design does not provide efficient means to determine either of these from the primary keys. An additional element of the data flow not shown explicitly in \fig{dataflow} is the targeting metadata contained within per-exposure fibermap files. The per-exposure meta data associated with each target follows an identical flow to its associated reduced spectrum (represented by estimates of the object's flux, inverse variance, and resolution).
 
 \begin{figure}[htb]
 \begin{center}
 \includegraphics[width=5in]{fig/dataflow}
-\caption{...}
+\caption{Schematic representation of the coaddition dataflow. Nightly exposures are reduced to cframes (horizontal gray boxes) each covering multiple bricks (colored boxes). The {\tt desi-make-bricks} program repackages the cframe spectra into brick files (vertical gray boxes) containing all of the spectra observed for targets within a single brick. Finally, the {\tt desi-update-coadds} program reads spectra from a single brick file and generates the per-band and global coadd files (gray boxes at the bottom of the diagram).}
 \label{fig:dataflow}
 \end{center}
 \end{figure}
+
+Note that there is a certain amount of duplication of information in this data flow, by design. For example, single-exposure spectra and their associated metadata are duplicated in cframe and brick files, but with different groupings. Also, the fibermap metadata is duplicated at each stage of the processing so that, for example, end users of global coadds can work with a single data product and do not need to retrace the processing steps to determine provenance.
 
 \section{Spectro-Perfect Reductions}
 
@@ -79,7 +83,7 @@ For the co-addition tests described below, we construct toy response matrices $A
 
 \begin{figure}[htb]
 \begin{center}
-\includegraphics[width=5in]{fig/detector}
+\includegraphics[width=5.5in]{fig/detector}
 \caption{Simulated detector response for a three-fiber spectrograph. The upper plot shows the map between CCD pixels and fibers used to construct the three response matrices, with grey pixels not assigned to any fiber. The three fiber traces are superimposed as black lines. The lower plot shows representative PSF spots along each trace, exhibiting large variations in size and shape for the purposes of demonstration.}
 \label{fig:detector}
 \end{center}
@@ -104,7 +108,7 @@ Note that the final right-hand expressions in the equations above are all calcul
 
 \begin{figure}[htb]
 \begin{center}
-\includegraphics[width=5in]{fig/repeats}
+\includegraphics[width=5.5in]{fig/repeats}
 \caption{Co-addition of four simulated repeat exposures. The upper plot shows one simulated exposure and the lower plot shows the four reductions for each fiber. The simulation uses the same source SED shape for each fiber but with different normalizations, as shown with the green curves.  The shaded red bands show the resolution-convolved true fluxes $R_1 f$ for the first exposure ($i=1$), with a width corresponding to the diagonal errors $\tilde{C_1}^{1/2}$. Error bars on the top and bottom spectra show the four-exposure co-adds, while blue points show the scatter of the single-exposure reductions.}
 \label{fig:repeats}
 \end{center}
@@ -114,7 +118,7 @@ We next test co-adds where the detector configuration and integration time vary 
 
 \begin{figure}[htb]
 \begin{center}
-\includegraphics[width=5in]{fig/stacked}
+\includegraphics[width=5.5in]{fig/stacked}
 \caption{Co-addition of two simulated exposures with different detector configurations and integration times. The upper plot shows the calculated error bands for each exposure, centered on the true resolution-convolved flux, with the true-resolution convolved co-added flux shown as a solid black curve and the decorrelated coadded fluxes superimposed with their diagonal inverse-covariance errors. The lower plot shows the calculated error band for the coadd, centered on the true resolution-convolved flux, with the individual exposure decorrelated fluxes superimposed with their diagonal inverse-covariance errors.}
 \label{fig:stacked}
 \end{center}
@@ -148,13 +152,13 @@ This second step of co-addition places some constraints on the choice of global 
 
 \begin{figure}[htb]
 \begin{center}
-\includegraphics[width=5in]{fig/global}
+\includegraphics[width=5.5in]{fig/global}
 \caption{Co-addition of reductions for three overlapping cameras, indicated using blue, red, and green. This plot uses the same format as~\fig{stacked} except that there are now three spectra being coadded, and the individual exposures and the coadd all have different wavelength grids. Vertical dotted red lines show regions where red-camera pixels have been masked out to demonstrate how this impacts the coadded result.}
 \label{fig:global}
 \end{center}
 \end{figure}
 
-We adopt a uniformly spaced wavelength grid for the final DESI coadds with 1.0 \AA\ per bin. This is a compromise between spectrum size (otherwise, we could go down to the 0.6 \AA\ spacing of the idividual bands) and a desire to maintain a roughly constant ratio between the wavelength PSF size and the bin size. \fig{grids} shows that an alternative global grid that is equally spaced in in $\log\lambda$ is not a good match to the PSF size, especially at the red ends of the r-band and z-band.
+We adopt a uniformly spaced wavelength grid for the final DESI coadds with 1.0 \AA\ per bin. This is a compromise between spectrum size (otherwise, we could go down to the 0.6 \AA\ spacing of the idividual bands) and a desire to maintain a roughly constant ratio between the wavelength PSF size and the bin size. \fig{grids} shows that an alternative global grid that is equally spaced in in $\log\lambda$ is not a good match to the PSF size, especially at the red ends of the r-band and z-band. This means that a redshift estimator that requires $\log\lambda$ spacing will need to resample as a preprocessing step.
 
 \begin{figure}[htb]
 \begin{center}

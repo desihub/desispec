@@ -3,6 +3,9 @@ I/O routines for working with per-brick files.
 
 See doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID/*-BRICKID.rst in desiDataModel
 for a description of the relevant data models.
+
+See :doc:`coadd` and DESI-Doc-??? for general information about the coaddition
+dataflow and algorithms.
 """
 
 import os
@@ -137,14 +140,23 @@ class BrickBase(object):
         return (self.hdu_list[0].data[index_list],self.hdu_list[1].data[index_list],
             self.hdu_list[3].data[index_list],self.hdu_list[4].data[exposures])
 
-    def get_num_objects(self):
+    def get_num_spectra(self):
         """
-        Get the number of objects contained in this brick file.
+        Get the number of spectra contained in this brick file.
 
         Returns:
             int: Number of objects contained in this brick file.
         """
         return len(self.hdu_list[0].data)
+
+    def get_num_targets(self):
+        """
+        Get the number of distinct targets with at least one spectrum in this brick file.
+
+        Returns:
+            int: Number of unique targets represented with spectra in this brick file.
+        """
+        return len(np.unique(self.hdu_list[4].data['TARGETID']))
 
     def close(self):
         """

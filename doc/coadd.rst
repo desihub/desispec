@@ -2,7 +2,7 @@
 Coaddition of Spectroperfect Reductions
 =======================================
 
-This document covers coadd implementation details and mock-data tests. For details on the coadd dataflow and algorithms used for combining spectra, refer to `DESI-doc-???<https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=???>`_.
+This document covers coadd implementation details and mock-data tests. For details on the coadd dataflow and algorithms used for combining spectra, refer to `DESI-doc-??? <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=???>`_.
 
 Implementation
 ==============
@@ -11,16 +11,20 @@ Files
 -----
 
 All spectra are grouped by brick. There are three types of brick file under `$DESI_SPECTRO_REDUX/$PRODNAME//bricks/{brickid}/`:
+
  * The brick files contains all exposures of every target that has been observed in the brick, by band.
  * The band coadd files contain the coadd of all exposures for each target, by band.
  * The global coadd files contain the coadd of band coadds for each target.
 
 All files have the same structure with 4 HDUs:
+
  * HDU0: Flux vectors for each spectrum.
  * HDU1: Ivar vectors for each spectrum.
  * HDU2: The common wavelength grid used for all spectra.
  * HDU4: Binary table of metadata.
-See the relevant `data model descriptions<https://desi.lbl.gov/trac/browser/code/desiDataModel/trunk/doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID>`_ for details (these are not in synch with the mock data challenge files as of 23-Mar-2015).
+
+See the relevant `data model descriptions
+<https://desi.lbl.gov/trac/browser/code/desiDataModel/trunk/doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID>`_ for details (these are not in synch with the mock data challenge files as of 23-Mar-2015).
 
 Wavelength Grids
 ----------------
@@ -73,15 +77,28 @@ Programs
 --------
 
 The following programs are used to implement the coadd part of the pipeline:
+
  * `desi_make_bricks`: Create brick files from all exposures taken in one night. Reads exposures from cframe files and adds metadata from the exposure fibermap.
  * `desi_update_coadds`: Update the coadds for a single brick. Reads exposures from brick files and writes the corresonding band coadd and global coadd files.
+
+An additional program `desi_inspect` displays the information and creates a plot summarizing the coadd results for a single target.
 
 Benchmarks
 ----------
 
 The rate-limiting step for performing coadds is the final conversion from `Cinv` and `Cinv_f` to `flux`, `ivar` and `resolution` in :meth:`desispec.coaddition.Spectrum.finalize`.  The computation time is dominated by two operations:
+
  * Solve the eigenvalue program for a large symmetric real-valued matrix using :func:`scipy.linalg.eigh`.
  * Invert a real-valued resolution matrix using :func:`scipy.linalg.inv`.
+
+For a typical r-band coadd on a 2014 MacBook Pro, the total time for a single target is about 12 seconds, dominated by `eigh` (10.6s) and `inv` (1.0s).  The time for a global coadd will be longer because of the larger matrices involved.
+
+Timing info for the processing the mock data challenge simulated exposures are summarized below (running interactively on edison@nersc):
+
+ * Convert cframes to brick files for the simulated night of 20150211: 1m22s.
+ * Convert b,r,z-brick files into band and global coadds for the relatively small brick 3587m010 (15 exposures of 10 targets): 24 minutes.
+
+Note that the coadd step can be parallelized across bricks and that this will require non-negligible resources.
 
 Notes
 -----
@@ -92,7 +109,8 @@ Notes
 * The 5*S10 FILTER values in the FIBERMAP are combined into a single comma-separated list stored as a single S50 FILTER value in HDU4 of the brick file.  This is a workaround until we sort out issues with astropy.io.fits and cfitsio handling of 5*S10 arrays.
 * The mock resolution matrices do not have np.sum(R,axis=1) == 1 for all rows and go slightly negative in the tails.
 * The wlen values in HDU2 have some roundoff errors, e.g., z-band wlen[-1] = 9824.0000000014425
-* Masking via ivar=0 is implemented but not well tested yet
+* Masking via ivar=0 is implemented but not well tested yet.
+* We need a way to programmatically determine the brick name given a target ID, in order to locate the relevant files. Otherwise, target ID is not a useful way to define a sample (a la plate-mjd-fiber or ThingID) and an alternative is needed for downstream science users.
 
 Mock Data Tests
 ===============
