@@ -11,11 +11,195 @@ from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
-
-import scipy,scipy.sparse
+from desispec.io.fluxcalibration import read_filter_response
+import scipy,scipy.sparse, scipy.ndimage
 import sys
+from scipy.sparse import spdiags
 #debug
-import pylab
+#import pylab
+
+#rebin spectra into new wavebins. This should be equivalent to desispec.interpolation.resample_flux. So may not be needed here
+#But should move from here anyway.
+
+def rebinSpectra(spectra,oldWaveBins,newWaveBins):
+        tck=scipy.interpolate.splrep(oldWaveBins,spectra,s=0,k=5)
+        specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
+        return specnew
+
+#import some global constants
+import scipy.constants as const
+h=const.h
+pi=const.pi
+e=const.e
+c=const.c
+erg=const.erg
+hc= h/erg*c*1.e10 #(in units of ergsA)
+ 
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
+    """
+    For each input spectrum, identify which standard star template is the
+    closest match, factoring out broadband throughput/calibration differences
+    
+    Args:
+        wave : A dictionary of 1D array of vacuum wavelengths [Angstroms]. Example below.
+        flux : A dictionary of 1D observed flux for the star
+        ivar : A dictionary 1D inverse variance of flux
+        resolution_data: resolution corresponding to the star's fiber
+        stdwave : 1D standard star template wavelengths [Angstroms]
+        stdflux : 2D[nstd, nwave] template flux
+        
+    Returns:
+        stdflux[nspec, nwave] : standard star flux sampled at input wave
+        stdindices[nspec] : indices of input standards for each match
+
+    Notes:
+      - wave and stdwave can be on different grids that don't
+        necessarily overlap
+      - wave does not have to be uniform or monotonic.  Multiple cameras
+        can be supported by concatenating their wave and flux arrays
+    """
+    # I am treating the input arguments from three frame files as dictionary. For example
+    # wave{"r":rwave,"b":bwave,"z":zwave}
+    # Each data(3 channels) is compared to every model.     
+    
+    # flux should be already flat fielded and sky subtracted.
+    # First normalize both data and model by dividing by median filter.
+
+    def applySmoothingFilter(flux):
+        return scipy.ndimage.filters.median_filter(flux,200) # bin range has to be optimized
+
+
+    rnorm=flux["r"]/applySmoothingFilter(flux["r"])
+    bnorm=flux["b"]/applySmoothingFilter(flux["b"])
+    znorm=flux["z"]/applySmoothingFilter(flux["z"])
+    
+
+   # propagate this normalization to ivar
+   
+    bivar=ivar["b"]*(applySmoothingFilter(flux["b"]))**2
+    rivar=ivar["r"]*(applySmoothingFilter(flux["r"]))**2
+    zivar=ivar["z"]*(applySmoothingFilter(flux["z"]))**2
+
+    Chisq=1e100
+    bestId=-1
+    bchisq=0
+    rchisq=0
+    zchisq=0
+    
+    bmodels={}
+    rmodels={}
+    zmodels={}
+    for i,v in enumerate(stdflux):
+        bmodels[i]=rebinSpectra(v,stdwave,wave["b"])
+        rmodels[i]=rebinSpectra(v,stdwave,wave["r"])
+        zmodels[i]=rebinSpectra(v,stdwave,wave["z"])
+        
+    Models={"b":bmodels,"r":rmodels,"z":zmodels}
+   
+    def convolveModel(wave,resolution,flux):   
+
+        diags=np.arange(10,-11,-1)
+        nwave=len(wave)
+        convolved=np.zeros(nwave)
+        #print 'resolution',resolution[1].shape
+        R=spdiags(resolution,diags,nwave,nwave)
+        convolved=R.dot(flux)
+       
+        return convolved
+    
+    nstd=stdflux.shape[0]
+    nstdwave=stdwave.shape[0]
+    maxDelta=1e100
+    bestId=-1
+    red_Chisq=-1.
+    
+    for i in range(nstd):
+           
+        bconvolveFlux=convolveModel(wave["b"],resolution_data["b"],Models["b"][i])
+        rconvolveFlux=convolveModel(wave["r"],resolution_data["r"],Models["r"][i])
+        zconvolveFlux=convolveModel(wave["z"],resolution_data["z"],Models["z"][i])
+
+        b_models=bconvolveFlux/applySmoothingFilter(bconvolveFlux)
+        r_models=rconvolveFlux/applySmoothingFilter(rconvolveFlux)
+        z_models=zconvolveFlux/applySmoothingFilter(zconvolveFlux)
+        
+        rdelta=np.sum(((r_models-rnorm)**2)*rivar)
+        bdelta=np.sum(((b_models-bnorm)**2)*bivar)
+        zdelta=np.sum(((z_models-znorm)**2)*zivar)
+        #print i, (rdelta+bdelta+zdelta)/(len(bwave)+len(rwave)+len(zwave))
+        if (rdelta+bdelta+zdelta)<maxDelta:
+                bestmodel={"r":r_models,"b":b_models,"z":z_models}
+                bestId=i
+                maxDelta=(rdelta+bdelta+zdelta)
+                dof=len(wave["b"])+len(wave["r"])+len(wave["z"])
+                red_Chisq=maxDelta/dof
+                
+    return bestId,stdwave,stdflux[bestId],red_Chisq
+    #Should we skip those stars with very bad Chisq?
+
+    
+def normalize_templates(stdwave, stdflux, mags, filters, basepath):
+    """
+    Returns spectra normalized to input magnitudes
+    
+    Args:
+        stdwave : 1D array of standard star wavelengths [Angstroms]
+        stdflux : 1D observed flux 
+        mags : 1D array of observed AB magnitudes
+        filters : list of filter names for mags,
+                  e.g. ['SDSS_r', 'DECAM_g', ...]
+    Only SDSS_r band is assumed to be used for normalization for now.
+    """
+
+    def ergs2photons(flux,wave):
+        return flux*wave/hc
+
+    def findappMag(flux,wave,filt):
+
+
+        flux_in_photons=ergs2photons(flux,wave)
+        flux_filt_integrated=np.dot(flux_in_photons,filt)
+
+        ab_spectrum = 2.99792458 * 10**(18-48.6/2.5)/hc/wave #in photons/cm^2/s/A, taken from specex_flux_calibration.py)
+        # Does this relation hold for all SDSS filters or there is some relative zero point adjustment? What about other filters?
+        ab_spectrum_filt_integrated=np.dot(ab_spectrum,filt)
+
+        if flux_filt_integrated <=0:
+           appMag=99.
+        else:
+           appMag=-2.5*np.log10(flux_filt_integrated/ab_spectrum_filt_integrated)
+        return appMag
+    
+    nstdwave=stdwave.size
+    normflux=np.array(nstdwave)
+
+    for i,v in enumerate(filters):
+        #Normalizing using only SDSS_R band magnitude
+        if v=='SDSS_R':
+            refmag=mags[i]
+            filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
+            rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
+            apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
+            print 'scaling SDSS_r mag',apMag,'to',refmag
+            scalefac=10**((apMag-refmag)/2.5)
+            normflux=stdflux*scalefac 
+  
+    return stdwave,normflux
+
+def convolveFlux(wave,resolution,flux):
+    """
+    I am writing this full convolution only for sky subtraction. It will be applied to sky model
+    """
+    diags=np.arange(10,-11,-1)
+    nwave=len(wave)
+    nspec=500
+    convolved=np.zeros((nspec,nwave))
+    for i in range(nspec):
+       R=spdiags(resolution[i],diags,nwave,nwave)
+       convolved[i]=R.dot(flux)
+       
+    return convolved
+
 
 def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,input_model_flux,nsig_clipping=4.) :
     
@@ -55,10 +239,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
         
         # debug
         # pylab.plot(wave,model_flux[fiber],c="r")
-        # pylab.show()
-    
-
-    
+        # pylab.show()  
 
     # iterative fitting and clipping to get precise mean spectrum
     current_ivar=ivar.copy()

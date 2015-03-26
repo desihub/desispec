@@ -20,5 +20,8 @@ from desispec.io.fiberflat import read_fiberflat, write_fiberflat
 from desispec.io.fibermap import read_fibermap, write_fibermap
 from desispec.io.brick import Brick
 from desispec.io import util
+from desispec.io.fluxcalibration import (
+    read_stdstar_templates, read_filter_response, write_stdstar_model,
+    read_flux_calibration, write_flux_calibration)
 
 
