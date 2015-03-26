@@ -65,7 +65,7 @@ def read_flux_calibration(filename) :
     return calibration,calib_ivar,mask,convolved_calibration,convolved_calib_ivar,wave
 
 
-def loadStellarModels(stellarmodelfile):
+def read_stdstar_templates(stellarmodelfile):
 
     phdu=fits.open(stellarmodelfile)
     hdr0=phdu[0].header
@@ -102,7 +102,7 @@ def read_filter_response(given_filter,basepath):
     filter_response=(filt[0],filt[1],tck)
     return filter_response
 
-def write_normalized_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
+def write_stdstar_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
     """ 
     writes the normalized flux for the best model
     """

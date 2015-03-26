@@ -3,14 +3,17 @@
 """
 Get the normalized best template to do flux calibration.
 
+desi_fit_stdstars.py
+    --indir INDIR
+    --fiberflat FILENAME
+    --models STDSTAR_MODELS
+    --fibermapdir FMDIR
+    --spectrograph N
+    --outfile X
 """
 
-from desispec.io.fibermap import read_fibermap
-from desispec.io.frame import read_frame
-from desispec.io.sky import read_sky
-from desispec.io.fiberflat import read_fiberflat
-from desispec.io.fluxcalibration import read_filter_response,loadStellarModels,write_normalized_model
-from desispec.fluxcalibration import match_templates,normalize_templates,convolveFlux,rebinSpectra
+from desispec import io
+from desispec.fluxcalibration import match_templates,normalize_templates,convolveFlux
 import argparse
 import numpy as np
 import os,sys
@@ -22,10 +25,11 @@ def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--fibermap', type = str, default = None,help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--models', type = str, default = None,help = 'path of spectro-photometric stellar spectra fits') 
-    parser.add_argument('--spectrograph', type = str, default = 0, help = 'spectrograph number, can go 0-9') 
-    parser.add_argument('--outfile', type = str, default = None,help = 'path of output file. This is file for normalized model output') 
+    parser.add_argument('--fiberflatexpid', type = int, help = 'fiberflat exposure ID')
+    parser.add_argument('--fibermap', type = str, help = 'path of fibermap file')
+    parser.add_argument('--models', type = str, help = 'path of spectro-photometric stellar spectra fits') 
+    parser.add_argument('--spectrograph', type = int, default = 0, help = 'spectrograph number, can go 0-9') 
+    parser.add_argument('--outfile', type = str, help = 'output file for normalized stdstar model flux') 
     
     args = parser.parse_args()
 
@@ -40,22 +44,28 @@ def main() :
 
     DESISIM=os.environ['DESISIM']   # to read the filter transmission files
 
-    if args.fibermap is None or args.models is None or args.spectrograph is None or args.outfile is None:
-        print('Missing something')
+    if args.fibermap is None or args.models is None or \
+       args.spectrograph is None or args.outfile is None or \
+       args.fiberflatexpid is None:
+        print('Missing a required argument')
         parser.print_help()
         sys.exit(12)
 
     # read Standard Stars from the fibermap file
     # returns the Fiber id, filter names and mags for the standard stars
 
-    fiber_tbdata,fiber_header=read_fibermap(args.fibermap)
+    fiber_tbdata,fiber_header=io.read_fibermap(args.fibermap)
+    
+    #- Trim to just fibers on this spectrograph
+    ii =  (500*args.spectrograph <= fiber_tbdata["FIBER"])
+    ii &= (fiber_tbdata["FIBER"] < 500*(args.spectrograph+1))
+    fiber_tbdata = fiber_tbdata[ii]
+
+    #- Get info for the standard stars
     refStarIdx=np.where(fiber_tbdata["OBJTYPE"]=="STD")
     refFibers=fiber_tbdata["FIBER"][refStarIdx]
     refFilters=fiber_tbdata["FILTER"][refStarIdx]
     refMags=fiber_tbdata["MAG"]
-    FIBER=refFibers
-    FILTERS=refFilters
-    MAGS=refMags
 
     fibers={"FIBER":refFibers,"FILTER":refFilters,"MAG":refMags}
     
@@ -72,9 +82,10 @@ def main() :
     framefile={}
     fiberflatfile={}
     for i in ["b","r","z"]:
-        skyfile[i]=DESI_SPECTRO_REDUX+'/'+PRODNAME+'/exposures/%s/%08d/'%(NIGHT,EXPID)+"sky-%s%s-%08d.fits"%(i,args.spectrograph,EXPID) # or give full absolute path in the arguments ???
-        framefile[i]=DESI_SPECTRO_REDUX+'/'+PRODNAME+'/exposures/%s/%08d/'%(NIGHT,EXPID)+"frame-%s%s-%08d.fits"%(i,args.spectrograph,EXPID)
-        fiberflatfile[i]=DESI_SPECTRO_REDUX+'/'+PRODNAME+'/calib2d/%s/'%(NIGHT)+"fiberflat-%s%s-%08d.fits"%(i,args.spectrograph,1)
+        camera = i+str(args.spectrograph)
+        skyfile[i] = io.findfile('sky', NIGHT, EXPID, camera)
+        framefile[i] = io.findfile('frame', NIGHT, EXPID, camera)
+        fiberflatfile[i] = io.findfile('fiberflat', NIGHT, args.fiberflatexpid, camera)
 
     #Read Frames, Flats and Sky files 
     frameFlux={}
@@ -98,13 +109,9 @@ def main() :
 
     for i in ["b","r","z"]:
        #arg=(night,expid,'%s%s'%(i,spectrograph))
-       
-       frameFlux[i],frameIvar[i],frameWave[i],frameResolution[i],framehdr[i]=read_frame(framefile[i])
-       
-       fiberFlat[i],ivarFlat[i],maskFlat[i],meanspecFlat[i],waveFlat[i],headerFlat[i]=read_fiberflat(fiberflatfile[i])
-
-       sky[i],skyivar[i],skymask[i],cskyflux[i],civar[i],skywave[i],skyhdr[i]=read_sky(skyfile[i])
-
+       frameFlux[i],frameIvar[i],frameWave[i],frameResolution[i],framehdr[i]=io.read_frame(framefile[i])       
+       fiberFlat[i],ivarFlat[i],maskFlat[i],meanspecFlat[i],waveFlat[i],headerFlat[i]=io.read_fiberflat(fiberflatfile[i])
+       sky[i],skyivar[i],skymask[i],cskyflux[i],civar[i],skywave[i],skyhdr[i]=io.read_sky(skyfile[i])
 
     # Convolve Sky with Detector Resolution, so as to subtract from data. Convolve for all 500 specs. Subtracting sky this way should be equivalent to sky_subtract
 
@@ -114,8 +121,7 @@ def main() :
 
     stars=[]
     ivars=[]
-    #- Should this be "for i in fibers["FIBER"]%500:" instead?
-    for i in [ x for x in fibers["FIBER"] if x < 500]:
+    for i in fibers["FIBER"]:
         #flat and sky should have same wavelength binning as data, otherwise should be rebinned.
 
         stars.append((i,{"b":[frameFlux["b"][i]/fiberFlat["b"][i]-convolvedsky["b"][i],frameWave["b"]],
@@ -124,7 +130,7 @@ def main() :
         ivars.append((i,{"b":[frameIvar["b"][i]],"r":[frameIvar["r"][i,:]],"z":[frameIvar["z"][i,:]]}))
 
 
-    stdwave,stdflux,templateid=loadStellarModels(args.models)
+    stdwave,stdflux,templateid=io.read_stdstar_templates(args.models)
 
     #- Trim standard star wavelengths to just the range we need
     minwave = min([min(w) for w in frameWave.values()])
@@ -142,6 +148,7 @@ def main() :
     templateID=np.arange(len(stars))
     chi2dof=np.zeros(len(stars))
 
+    #- TODO: don't use 'l' as a variable name.  Can look like a '1'
     for k,l in enumerate(stars):
         print "checking best model for star", l[0]
         
@@ -173,14 +180,13 @@ def main() :
 
     # Now write the normalized flux for all best models to a file
     normflux=np.array(normflux)
-    p=np.where(fibers["FIBER"]<500)   #- TODO: Fix
-    stdfibers=fibers["FIBER"][p]
+    stdfibers=fibers["FIBER"]
     data={}
     data['BESTMODEL']=bestModelIndex
     data['CHI2DOF']=chi2dof
     data['TEMPLATEID']=templateid[bestModelIndex]
     norm_model_file=args.outfile
-    write_normalized_model(norm_model_file,normflux,stdwave,stdfibers,data)
+    io.write_stdstar_model(norm_model_file,normflux,stdwave,stdfibers,data)
  
 if "__main__" == __name__:
     main()

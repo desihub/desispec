@@ -138,7 +138,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     #Should we skip those stars with very bad Chisq?
 
     
-def normalize_templates(stdwave, stdflux, mags, filters,basepath):
+def normalize_templates(stdwave, stdflux, mags, filters, basepath):
     """
     Returns spectra normalized to input magnitudes
     
