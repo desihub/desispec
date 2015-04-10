@@ -38,6 +38,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None, band=N
         brick = '{specprod}/bricks/{brickid}/brick-{band}-{brickid}.fits',
         coadd = '{specprod}/bricks/{brickid}/coadd-{band}-{brickid}.fits',
         coadd_all = '{specprod}/bricks/{brickid}/coadd-{brickid}.fits',
+        zbest = '{specprod}/bricks/{brickid}/zbest-{brickid}.fits',
     )
     location['desi'] = location['raw']
     

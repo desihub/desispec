@@ -140,6 +140,10 @@ class BrickBase(object):
         return (self.hdu_list[0].data[index_list],self.hdu_list[1].data[index_list],
             self.hdu_list[3].data[index_list],self.hdu_list[4].data[exposures])
 
+    def get_target_ids(self):
+        """Return set of unique target IDs in this brick"""
+        return list(set(self.hdu_list[4].data['TARGETID']))
+
     def get_num_spectra(self):
         """
         Get the number of spectra contained in this brick file.

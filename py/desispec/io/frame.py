@@ -37,7 +37,7 @@ def write_frame(outfile, flux,ivar,wave,resolution_data, header=None) :
     
     return outfile
     
-def read_frame(filename):
+def read_frame(filename, nspec=None):
     """
     reads a frame fits file and returns its data
     
@@ -67,6 +67,11 @@ def read_frame(filename):
     ivar = native_endian(fits.getdata(filename, "IVAR")) 
     wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
     resolution_data = native_endian(fits.getdata(filename, "RESOLUTION"))
+
+    if nspec is not None:
+        flux = flux[0:nspec]
+        ivar = ivar[0:nspec]
+        resolution_data = resolution_data[0:nspec]
     
     return flux,ivar,wave,resolution_data, hdr
 
