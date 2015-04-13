@@ -19,7 +19,7 @@ from desispec.io.sky import read_sky, write_sky
 from desispec.io.fiberflat import read_fiberflat, write_fiberflat
 from desispec.io.fibermap import read_fibermap, write_fibermap
 from desispec.io.brick import Brick
-from desispec.io.zfind import write_zbest
+from desispec.io.zfind import read_zbest, write_zbest
 from desispec.io import util
 from desispec.io.fluxcalibration import (
     read_stdstar_templates, read_filter_response, write_stdstar_model,

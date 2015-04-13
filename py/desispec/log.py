@@ -7,13 +7,12 @@ import sys
 import logging
 
 
-""" 
-provides default desi logger 
-"""
-
 desi_logger = None
 
 def get_logger(level=logging.DEBUG) :
+    """ 
+    returns a default desi logger 
+    """
 
     global desi_logger
     
