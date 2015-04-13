@@ -5,7 +5,8 @@ We try to keep all the (fits) io separated.
 
 
 import numpy as np
-from desispec.io.frame import resolution_data_to_sparse_matrix
+# from desispec.io.frame import resolution_data_to_sparse_matrix
+from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
@@ -112,7 +113,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
             
-            R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            R = Resolution(resolution_data[fiber])
             
             # diagonal sparse matrix with content = sqrt(ivar)*flat
             SD.setdiag(sqrtwflat[fiber])
@@ -136,7 +138,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             #if fiber%10==0 :
             #    log.info("iter %d fiber %d (smoothing)"%(iteration,fiber))
             
-            R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            R = Resolution(resolution_data[fiber])
             
             #M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
             M = R.dot(mean_spectrum)
@@ -202,7 +205,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     nsig_for_mask=4 # only mask out 4 sigma outliers
     
     for fiber in range(nfibers) :
-        R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+        ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+        R = Resolution(resolution_data[fiber])
         M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
         fiberflat[fiber] = (M!=0)*flux[fiber]/(M+(M==0)) + (M==0)        
         fiberflat_ivar[fiber] = ivar[fiber]*M**2
