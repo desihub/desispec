@@ -38,12 +38,18 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None, band=N
         brick = '{specprod}/bricks/{brickid}/brick-{band}-{brickid}.fits',
         coadd = '{specprod}/bricks/{brickid}/coadd-{band}-{brickid}.fits',
         coadd_all = '{specprod}/bricks/{brickid}/coadd-{brickid}.fits',
+        zbest = '{specprod}/bricks/{brickid}/zbest-{brickid}.fits',
+        zspec = '{specprod}/bricks/{brickid}/zspec-{brickid}.fits',
     )
     location['desi'] = location['raw']
+
+    #- Do we know about this kind of file?
+    if filetype not in location:
+        raise IOError("Unknown filetype "+filetype)
     
     if specprod is None:
         specprod = specprod_root()
-        
+
     filepath = location[filetype].format(data=data_root(), specprod=specprod,
         night=night, expid=expid, camera=camera, brickid = brickid, band = band)
 

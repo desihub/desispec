@@ -3,19 +3,27 @@ io routines for frame
 
 """
 import os.path
-from astropy.io import fits
-import scipy,scipy.sparse
-from desispec.io import findfile
-from desispec.io.util import fitsheader, native_endian, makepath
 
 import numpy as np
+import scipy,scipy.sparse
+from astropy.io import fits
 
-def write_frame(outfile, flux,ivar,wave,resolution_data, header=None) :
+from desispec.io import findfile
+from desispec.io.util import fitsheader, native_endian, makepath
+from desispec.log import get_logger
+
+log = get_logger()
+
+def write_frame(outfile, flux, ivar, wave, resolution_data, header=None) :
     """
     Write a frame fits file and returns path to file written
     
     Args:
-        TODO
+        outfile: full path to output file, or tuple (night, expid, channel)
+        flux[nspec, nwave] : 2D object flux array
+        ivar[nspec, nwave] : 2D inverse variance of flux
+        wave[nwave] : 1D wavelength array in Angstroms
+        resolution_data[nspec, ndiag, nwave] : optional 3D resolution matrix data
     """
     outfile = makepath(outfile, 'frame')
 
@@ -37,7 +45,7 @@ def write_frame(outfile, flux,ivar,wave,resolution_data, header=None) :
     
     return outfile
     
-def read_frame(filename):
+def read_frame(filename, nspec=None):
     """
     reads a frame fits file and returns its data
     
@@ -67,6 +75,11 @@ def read_frame(filename):
     ivar = native_endian(fits.getdata(filename, "IVAR")) 
     wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
     resolution_data = native_endian(fits.getdata(filename, "RESOLUTION"))
+
+    if nspec is not None:
+        flux = flux[0:nspec]
+        ivar = ivar[0:nspec]
+        resolution_data = resolution_data[0:nspec]
     
     return flux,ivar,wave,resolution_data, hdr
 

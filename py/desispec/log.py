@@ -7,13 +7,12 @@ import sys
 import logging
 
 
-""" 
-provides default desi logger 
-"""
-
 desi_logger = None
 
 def get_logger(level=logging.DEBUG) :
+    """ 
+    returns a default desi logger 
+    """
 
     global desi_logger
     
@@ -22,7 +21,7 @@ def get_logger(level=logging.DEBUG) :
     
     desi_logger = logging.getLogger("DESI")
     
-    desi_logger.setLevel(logging.DEBUG)
+    desi_logger.setLevel(level)
     
     while len(desi_logger.handlers) > 0:
         h = desi_logger.handlers[0]

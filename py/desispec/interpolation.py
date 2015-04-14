@@ -23,7 +23,49 @@ def bin_bounds(x) :
     del tx
     return x_minus,x_plus
 
-def resample_flux(output_x,input_x,input_flux_density,left=0.,right=0.) :
+def resample_flux(xout, x, flux, ivar=None, left=0.0, right=0.0):
+    """
+    Returns a flux conserving resampling of an input flux density.
+     
+    Args:   
+        xout: output SORTED vector, not necessarily linearly spaced
+        x: input SORTED vector, not necessarily linearly spaced
+        flux: input flux density dflux/dx sampled at x
+        
+    both x and xout must represent the same quantity with the same unit
+
+    Options:
+        ivar: weights for flux; default is unweighted resampling
+        left: value for expolation to the left, if None, use input_flux_density[0], default=0
+        right: value for expolation to the right, if None, use input_flux_density[-1], default=0
+
+    Returns:
+        if ivar is None, returns outflux
+        if ivar is not None, returns outflux, outivar
+    
+    This interpolation conserves flux such that, on average,
+    output_flux_density = input_flux_density 
+    
+    This interpolation scheme is a simple average in an x interval
+    for which boundaries are placed at the mid-distance between
+    consecutive x points.  The advantage with respect to other
+    methods is that the weights are all positive or null, such
+    that there is no anti-correlation in the output
+    (only positive correlation)
+    """
+    if ivar is None:
+        return _unweighted_resample(xout, x, flux, left=left, right=right)
+    else:
+        a = _unweighted_resample(xout, x, flux*ivar)
+        b = _unweighted_resample(xout, x, ivar)
+        outflux = a / b
+        dx = np.gradient(x)
+        dxout = np.gradient(xout)
+        outivar = _unweighted_resample(xout, x, ivar/dx)*dxout
+    
+        return outflux, outivar
+    
+def _unweighted_resample(output_x,input_x,input_flux_density,left=0.,right=0.) :
     """
     Returns a flux conserving resampling of an input flux density.
      

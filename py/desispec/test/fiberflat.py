@@ -3,6 +3,11 @@ import numpy as np
 import scipy.sparse
 
 from desispec.fiberflat import compute_fiberflat
+from desispec.log import get_logger
+
+#- Create a DESI logger at level WARNING to quiet down the fiberflat calc
+import logging
+log = get_logger(logging.WARNING)
 
 def _get_data():
     """
@@ -75,8 +80,8 @@ class TestFiberFlat(unittest.TestCase):
         #- I wish I was creating, but as long as we self-consistently
         #- use it for convolving and solving, that shouldn't matter.
         sigma = np.linspace(2, 10, nwave*nspec)
-        ndiag = 20
-        xx = np.linspace(-ndiag, +ndiag, 2*ndiag+1)
+        ndiag = 21
+        xx = np.linspace(-ndiag/2.0, +ndiag/2.0, ndiag)
         R = np.zeros( (nspec, len(xx), nwave) )
         for i in range(nspec):
             for j in range(nwave):
@@ -85,7 +90,7 @@ class TestFiberFlat(unittest.TestCase):
                 R[i,:,j] = kernel
 
         #- Convolve the data with the resolution matrix
-        offsets = range(ndiag, -ndiag-1, -1)
+        offsets = range(ndiag//2, -ndiag//2, -1)
         convflux = np.empty_like(flux)
         for i in range(nspec):
             D = scipy.sparse.dia_matrix( (R[i], offsets), (nwave,nwave) )
