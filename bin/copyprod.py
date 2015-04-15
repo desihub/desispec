@@ -28,6 +28,7 @@ if not os.path.exists(outroot):
 #- Copy exposures
 for indir, subdirs, filenames in os.walk(inroot+'/exposures'):
     outdir = indir.replace(inroot, outroot)
+    print outdir
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
