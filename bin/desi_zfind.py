@@ -11,7 +11,7 @@ import numpy as np
 from desispec import io
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
-from desispec.zfind import RedMonsterZfind
+from desispec.zfind.redmonster import RedMonsterZfind
 
 import optparse
 
