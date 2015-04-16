@@ -19,7 +19,7 @@ parser = optparse.OptionParser(usage = "%prog [options]")
 parser.add_option("-b", "--brick", type=str,  help="input brickname")
 parser.add_option("-n", "--nspec", type=int,  help="number of spectra to fit [default: all]")
 parser.add_option("-o", "--outfile", type=str,  help="output file name")
-parser.add_option("--zspec",   help="Write a zspec file with resampled spectra used for zfind", action="store_true")
+parser.add_option("--zspec",   help="also include spectra in output file", action="store_true")
 
 opts, args = parser.parse_args()
 

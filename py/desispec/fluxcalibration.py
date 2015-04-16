@@ -5,7 +5,7 @@ We try to keep all the (fits) io separated.
 
 
 import numpy as np
-from desispec.io.frame import resolution_data_to_sparse_matrix
+from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
@@ -234,7 +234,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
         # pylab.plot(input_model_wave,input_model_flux[fiber])
         # pylab.plot(wave,model_flux[fiber],c="g")
 
-        R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+        R = Resolution(resolution_data[fiber])
         model_flux[fiber]=R.dot(model_flux[fiber])
         
         # debug
@@ -269,7 +269,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
         for fiber in range(nfibers) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
-            R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            R = Resolution(resolution_data[fiber])
             
             # diagonal sparse matrix with content = sqrt(ivar)*flat
             SD.setdiag(sqrtwmodel[fiber])
@@ -293,7 +293,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
             if fiber%10==0 :
                 log.info("iter %d fiber %d(smooth)"%(iteration,fiber))
             
-            R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            R = Resolution(resolution_data[fiber])
             
             #M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
             M = R.dot(calibration)*model_flux[fiber]
@@ -378,7 +378,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
     # we also want to save the convolved calibration and calibration variance
     # first compute average resolution
     mean_res_data=np.mean(resolution_data,axis=0)
-    R = resolution_data_to_sparse_matrix(mean_res_data,0)
+    R = Resolution(mean_res_data)
     # compute convolved calib and ivar
     ccalibration=R.dot(calibration)
     ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
@@ -410,7 +410,7 @@ def apply_flux_calibration(flux,ivar,resolution_data,wave,calibration,civar,cmas
 
     for fiber in range(nfibers) :
 
-        R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+        R = Resolution(resolution_data[fiber])
         C = R.dot(calibration)
     
         """

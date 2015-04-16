@@ -4,7 +4,7 @@ Utility functions to compute a sky model and subtract it
 
 
 import numpy as np
-from desispec.io.frame import resolution_data_to_sparse_matrix
+from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
@@ -57,7 +57,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         for fiber in range(nfibers) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
-            R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            R = Resolution(resolution_data[fiber])
             
             # diagonal sparse matrix with content = sqrt(ivar)
             SD.setdiag(sqrtw[fiber])
@@ -75,7 +75,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
         for fiber in range(nfibers) :
             
-            R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+            R = Resolution(resolution_data[fiber])
             S = R.dot(skyflux)
             chi2[fiber]=current_ivar[fiber]*(flux[fiber]-S)**2
         
@@ -129,7 +129,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     
     # first compute average resolution
     mean_res_data=np.mean(resolution_data,axis=0)
-    R = resolution_data_to_sparse_matrix(mean_res_data,0)
+    R = Resolution(mean_res_data)
     # compute convolved sky and ivar
     cskyflux=R.dot(skyflux)
     cskycovar=R.dot(skycovar).dot(R.T.todense())
@@ -165,7 +165,7 @@ def subtract_sky(flux,ivar,resolution_data,wave,skyflux,convolved_skyivar,skymas
         #if fiber%10==0 :
         #    log.info("fiber %d"%fiber)
 
-        R = resolution_data_to_sparse_matrix(resolution_data,fiber)
+        R = Resolution(resolution_data[fiber])
         S = R.dot(skyflux)
         flux[fiber] -= S
         
