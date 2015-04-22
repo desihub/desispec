@@ -66,7 +66,6 @@ class TestFiberFlat(unittest.TestCase):
             self.assertTrue(np.all(fiberflat[i] == fiberflat[0]))
             self.assertTrue(np.all(ffivar[i] == ffivar[0]))
         
-    #- Tests to implement.  Remove the "expectedFailure" line when ready.
     def test_resolution(self):
         """
         Test that identical spectra convolved with different resolutions
@@ -102,11 +101,20 @@ class TestFiberFlat(unittest.TestCase):
         #- These fiber flats should all be ~1
         self.assertTrue( np.all(np.abs(fiberflat-1) < 0.001) )
 
+    #- Tests to implement.  Remove the "expectedFailure" line when ready.
     @unittest.expectedFailure
     def test_throughput(self):
         """
         Test that spectra with different throughputs but the same resolution
         result in the expected variations in fiberflat.
+        """
+        raise NotImplementedError
+
+    @unittest.expectedFailure
+    def test_throughput_resolution(self):
+        """
+        Test that spectra with different throughputs and different resolutions
+        result in fiberflat variations that are only due to throughput.
         """
         raise NotImplementedError
         
