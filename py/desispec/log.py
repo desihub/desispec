@@ -6,6 +6,7 @@ We can have something specific for DESI in the future but for now we use the sta
 import sys
 import logging
 import os
+import string
 
 desi_logger = None
 
@@ -31,28 +32,30 @@ def get_logger(level=None) :
     If level=None, will look for environment variable DESI_LOGLEVEL, accepting only values DEBUG,INFO,WARNING,ERROR.
     If DESI_LOGLEVEL is not set, default level is INFO.    
     """
-
-    if level is None :
-        desi_level=os.getenv("DESI_LOGLEVEL")
-        if desi_level is None : 
-            level=INFO
-        else :
-            dico={"DEBUG":DEBUG,"INFO":INFO,"WARNING":WARNING,"ERROR":ERROR}
-            if dico.has_key(desi_level) :
-                level=dico[desi_level]
-            else :
-                # amusingly I need the logger to dump a warning here
-                logger=get_logger(level=WARNING)
-                message="ignore DESI_LOGLEVEL=%s (only recognize"%desi_level
-                for k in dico :
-                    message+=" %s"%k
-                message+=")"
-                logger.warning(message)
-                level=INFO
-            
-                
+    
     global desi_logger
     
+    
+
+    desi_level=os.getenv("DESI_LOGLEVEL")
+    if desi_level is not None and (desi_level != "" ) :
+        # forcing the level to the value of DESI_LOGLEVEL, ignoring the requested logging level.
+        desi_level=string.upper(desi_level)
+        dico={"DEBUG":DEBUG,"INFO":INFO,"WARNING":WARNING,"ERROR":ERROR}
+        if dico.has_key(desi_level) :
+            level=dico[desi_level]
+        else :
+            # amusingly I would need the logger to dump a warning here
+            # but this recursion can be problematic
+            message="ignore DESI_LOGLEVEL='%s' (only recognize"%desi_level
+            for k in dico :
+                message+=" %s"%k
+            message+=")"
+            print message
+            
+    if level is None :
+        level=INFO
+                    
     if desi_logger is not None :
         if level is not None :
             desi_logger.setLevel(level)
