@@ -5,7 +5,7 @@ Utility functions for interpolation of spectra over different wavelength grid
 import numpy as np
 import sys
 from desispec.log import get_logger
-
+import pylab
 #import time # for debugging
 
 def bin_bounds(x) :
@@ -23,10 +23,65 @@ def bin_bounds(x) :
     del tx
     return x_minus,x_plus
 
-def resample_flux(xout, x, flux, ivar=None, left=0.0, right=0.0):
+
+
+
+"""
+This is a comment, not a code documentation
+
+A rigorous resampling requires using the resolution matrix, solving
+a linear system, and redetermining the new resolution matrix.
+This is implemented in the co-addition but the following routine
+is intended to be fast.
+
+Another approach, which is also time consuming is the following :
+
+    - input and output are interpreted as with a basis of functions,
+    where xin(out) are the barycenter of each function and play the role
+    of indices, and yin(out) the amplitudes
+    - y(x) = sum_i y_i * f_i(x)
+    for a simple binning :
+    - f_i(x) =  (x_{i-1}+x_{i})/2<x<=(x_{i}+x_{i+1})/2
+    for higher orders, their exists an equivalent f_i(x)
+    - the uncertainties on the y_i are given by ivar
+    - it is not a spline fit because the input is not necessarily 
+    dense with respect to the output, so we need this approach
+
+    calling f_i(x) the input basis, a_i, the input node values, 
+    and g_j(x) the output basis and b_j the output node values,
+    a change of b, db, results in a change of a continuous function y(x) :
+    dy(x) = g.db = sum_i db_i g_i(x) 
+    defining the scalar product f.g_{ij} = integral_x f_i(x)*g_j(x) dx
+    the induced change of a is
+    da = (f.f)^{-1} (f.g) db 
+    calling H the matrix (f.f)^{-1} (f.g)
+    we can write a chi2 on the 'a' coefficents,
+    chi2 = sum_i ivar_i ( a_i - sum_j H_ij b_j )**2
+    the best fit b is given by the linear system
+    A b = B
+    where A_kl = sum_i ivar_i H_ik H_il
+    and   B_k  = sum_i ivar_i a_i H_ik
+    
+    This is the general solution. It is more or less complex depending
+    on the basis f and g.
+    
+    In many case, a minimal regularization would be needed.
+    For instance if we rebin to a finer grid than the
+    original.
+    
+    We consider a practical approach in the following.
+    
+"""
+
+
+
+def resample_flux(xout, x, flux, ivar=None):
     """
+    
+    
     Returns a flux conserving resampling of an input flux density.
-     
+    The total integrated flux is conserved.
+    
     Args:   
         xout: output SORTED vector, not necessarily linearly spaced
         x: input SORTED vector, not necessarily linearly spaced
@@ -46,15 +101,25 @@ def resample_flux(xout, x, flux, ivar=None, left=0.0, right=0.0):
     This interpolation conserves flux such that, on average,
     output_flux_density = input_flux_density 
     
-    This interpolation scheme is a simple average in an x interval
-    for which boundaries are placed at the mid-distance between
-    consecutive x points.  The advantage with respect to other
-    methods is that the weights are all positive or null, such
-    that there is no anti-correlation in the output
-    (only positive correlation)
+    The input flux density outside of the range defined by the edges of the first
+    and last bins is considered null. The bin size of bin 'i' is given by (x[i+1]-x[i-1])/2
+    except for the first and last bin where it is (x[1]-x[0]) and (x[-1]-x[-2])
+    so flux density is zero for x<x[0]-(x[1]-x[0])/2 and x>x[-1]-(x[-1]-x[-2])/2
+    
+    The input is interpreted as the nodes positions and node values of 
+    a piece-wise linear function. 
+    y(x) = sum_i y_i * f_i(x)
+    with
+    f_i(x) =    (x_{i-1}<x<=x_{i})*(x-x_{i-1})/(x_{i}-x_{i-1})
+              + (x_{i}<x<=x_{i+1})*(x-x_{i+1})/(x_{i}-x_{i+1})
+    
+    the output value is the average flux density in a bin
+    flux_out(j) = int_{x>(x_{j-1}+x_j)/2}^{x<(x_j+x_{j+1})/2} y(x) dx /  0.5*(x_{j+1}+x_{j-1})
+    
     """
+    
     if ivar is None:
-        return _unweighted_resample(xout, x, flux, left=left, right=right)
+        return _unweighted_resample(xout, x, flux)
     else:
         a = _unweighted_resample(xout, x, flux*ivar)
         b = _unweighted_resample(xout, x, ivar)
@@ -65,90 +130,87 @@ def resample_flux(xout, x, flux, ivar=None, left=0.0, right=0.0):
     
         return outflux, outivar
     
-def _unweighted_resample(output_x,input_x,input_flux_density,left=0.,right=0.) :
+def _unweighted_resample(output_x,input_x,input_flux_density) :
     """
     Returns a flux conserving resampling of an input flux density.
+    The total integrated flux is conserved.
      
-    Inputs:   
-    input_x is a SORTED vector, not necessarily linearly spaced
-    output_x is a SORTED vector, not necessarily linearly spaced
+    Args:   
+       input_x: SORTED vector, not necessarily linearly spaced
+       output_x: SORTED vector, not necessarily linearly spaced
+       input_flux_density: input flux density dflux/dx sampled at x
+
     both must represent the same quantity with the same unit
     input_flux_density =  dflux/dx sampled at input_x
+    
+    Options:
+        left: value for expolation to the left, if None, use input_flux_density[0], default=0
+        right: value for expolation to the right, if None, use input_flux_density[-1], default=0
+    Returns:
+        returns output_flux
     
     This interpolation conserves flux such that, on average,
     output_flux_density = input_flux_density 
     
-    This interpolation scheme is a simple average in an x interval
-    for which boundaries are placed at the mid-distance between
-    consecutive x points.  The advantage with respect to other
-    methods is that the weights are all positive or null, such
-    that there is no anti-correlation in the output
-    (only positive correlation)
+    The input flux density outside of the range defined by the edges of the first
+    and last bins is considered null. The bin size of bin 'i' is given by (x[i+1]-x[i-1])/2
+    except for the first and last bin where it is (x[1]-x[0]) and (x[-1]-x[-2])
+    so flux density is zero for x<x[0]-(x[1]-x[0])/2 and x>x[-1]+(x[-1]-x[-2])/2
     
-    Options: 
-    left=value for expolation to the left, if None, use input_flux_density[0], default=0
-    right=value for expolation to the right, if None, use input_flux_density[-1], default=0
+    The input is interpreted as the nodes positions and node values of 
+    a piece-wise linear function. 
+    y(x) = sum_i y_i * f_i(x)
+    with
+    f_i(x) =    (x_{i-1}<x<=x_{i})*(x-x_{i-1})/(x_{i}-x_{i-1})
+              + (x_{i}<x<=x_{i+1})*(x-x_{i+1})/(x_{i}-x_{i+1})
+    
+    the output value is the average flux density in a bin
+    flux_out(j) = int_{x>(x_{j-1}+x_j)/2}^{x<(x_j+x_{j+1})/2} y(x) dx /  0.5*(x_{j+1}+x_{j-1})
+       
     """
     
     # shorter names
-    ow=output_x
-    iw=input_x
-    iflux=input_flux_density
+    ix=input_x
+    iy=input_flux_density
+    ox=output_x
     
     # boundary of output bins
-    owm,owp=bin_bounds(ow)
-    # interpolated fluxes at boundaries
-    ofm=np.interp(owm,iw,iflux,left=left,right=right)
-    ofp=np.interp(owp,iw,iflux,left=left,right=right)
-        
-    # make arrays of x and flux that contain all x points.
-    # bounds appear twice as a trick to compute easily the weights at edge of output bins
-    eps=0.0000001*(owp-owm) # anything better ?
-    k=np.where((iw>owm[0])&(iw<owp[-1]))[0]
-    tw=iw[k]
-    tw=np.append(tw,owm+eps)
-    tw=np.append(tw,owp-eps)
-    tf=iflux[k]
-    tf=np.append(tf,ofm)
-    tf=np.append(tf,ofp)
+    oxm,oxp=bin_bounds(ox)
+    # make a temporary node array including input nodes and output bin bounds
+    # first the boundaries of output bins
+    tx=np.append(oxm,oxp[-1])
+    # add the edges of the first and last input bins
+    # to the temporary node array
+    ixmin=1.5*ix[0]-0.5*ix[1]  # = ix[0]-(ix[1]-ix[0])/2
+    ixmax=1.5*ix[-1]-0.5*ix[-2] # = ix[-1]+(ix[-1]-ix[-2])/2
+    tx=np.append(tx,ixmin)
+    tx=np.append(tx,ixmax)
+    # interpolation of input on temporary nodes
+    ty=np.interp(tx,ix,iy)
     
+    # then add input nodes to array
+    k=np.where((ix>=tx[0])&(ix<=tx[-1]))[0]
+    if k.size :
+        tx=np.append(tx,ix)
+        ty=np.append(ty,iy)
     # sort this array
-    p = tw.argsort()
-    tw=tw[p]
-    tf=tf[p]
-    del p
+    p = tx.argsort()
+    tx=tx[p]
+    ty=ty[p]
     
-    # compute bounds to associate a weight to each flux density
-    twm,twp=bin_bounds(tw)
-    weight=(twp-twm) # because of the fact we have duplicate the output bin bounds location, they are given the correct weight
+    # now we do a simple integration in each bin of the piece-wise
+    # linear function of the temporary nodes
     
-    # set weight to zero ouside input if no extrapolation
-    if not left==None :
-        # no interpolation
-        weight=weight*(twm>=iw[0])
-    if not right==None :
-        # no interpolation
-        weight=weight*(twp<=iw[-1])
-
-    del twm
-    del twp
+    # integral of individual trapezes
+    # (last entry, which is not used, is wrong, because of the np.roll) 
+    trapeze_integrals=(np.roll(ty,-1)+ty)*(np.roll(tx,-1)-tx)/2.
     
-    # compute output flux as weighted mean
-    bins=np.append(owm,owp[-1])
-    output_flux,bin_edges=np.histogram(tw,bins,weights=weight*tf)
-    sw,bin_edges=np.histogram(tw,bins,weights=weight)
-    output_flux=output_flux/(sw+(sw==0))
+    # output flux
+    of=np.zeros((ox.size))
+    for i in range(ox.size) :
+        # for each bin, we sum the trapeze_integrals that belong to that bin
+        # IGNORING those that are outside of the range [ixmin,ixmax]
+        # and we divide by the full output bin size (even if outside of [ixmin,ixmax])
+        of[i] = np.sum(trapeze_integrals[(tx>=max(oxm[i],ixmin))&(tx<min(oxp[i],ixmax))])/(oxp[i]-oxm[i])
             
-    del tw
-    del tf
-    del ofm
-    del ofp
-    del weight
-    
-    # set flux to given value ouside input if no extrapolation
-    if not left==None :
-        output_flux=output_flux*(ow>=iw[0])+left*(ow<iw[0])
-    if not right==None :
-        output_flux=output_flux*(ow<=iw[-1])+right*(ow>iw[-1])
-        
-    return output_flux
+    return of
