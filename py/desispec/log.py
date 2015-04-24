@@ -29,8 +29,9 @@ def get_logger(level=None) :
     Args:
        level: debugging level.
     
-    If level=None, will look for environment variable DESI_LOGLEVEL, accepting only values DEBUG,INFO,WARNING,ERROR.
-    If DESI_LOGLEVEL is not set, default level is INFO.    
+    If environment variable DESI_LOGLEVEL exists and has value  DEBUG,INFO,WARNING or ERROR (upper or lower case),
+    it overules the level argument.
+    If DESI_LOGLEVEL is not set and level=None, the default level is set to INFO.    
     """
     
     global desi_logger
