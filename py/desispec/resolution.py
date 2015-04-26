@@ -40,7 +40,10 @@ class Resolution(scipy.sparse.dia_matrix):
             # We just need to put the diagonals in the correct order.
             diag_order = np.argsort(data.offsets)[::-1]
             ndiag = len(data.offsets)
+            assert ndiag%2 == 1, "Number of diagonals ({}) should be odd".format(ndiag)
             self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
+            if not np.array_equal(data.offsets[diag_order], self.offsets):
+                raise ValueError('Offsets of input matrix are non-contiguous or non-symmetric')
             scipy.sparse.dia_matrix.__init__(self,(data.data[diag_order],self.offsets),data.shape)
 
         elif isinstance(data,np.ndarray) and len(data.shape) == 2:
@@ -118,6 +121,15 @@ def run_unit_tests(n = 100):
         raise ValueError('an even number of diagonals is not supposed to be allowed')
     except ValueError, err:
         #- it correctly raised an error, so pass
+        pass
+        
+    #- Test creation with asymetric diagonals (should fail)
+    R1.offsets += 1
+    try:
+        R8 = Resolution(R1)
+        raise RuntimeError('Incorrectly created Resolution with non-symmetric input')
+    except ValueError:
+        #- correctly raised an error, so pass
         pass
         
 
