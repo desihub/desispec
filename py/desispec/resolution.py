@@ -110,6 +110,16 @@ def run_unit_tests(n = 100):
     for ndiag in [3,5,11]:
         R6 = Resolution(np.ones((ndiag, n)))
         assert len(R6.offsets) == ndiag, 'Constructor broken for ndiag={}'.format(ndiag)
+        
+    #- An even number if diagonals is not allowed
+    try:
+        ndiag = 10
+        R7 = Resolution(np.ones((ndiag, n)))
+        raise ValueError('an even number of diagonals is not supposed to be allowed')
+    except ValueError, err:
+        #- it correctly raised an error, so pass
+        pass
+        
 
 if __name__ == '__main__':
     run_unit_tests()
