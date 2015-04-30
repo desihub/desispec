@@ -139,7 +139,10 @@ def main() :
     stdwave = stdwave[ii]
     stdflux = stdflux[:, ii]
 
-    print 'No. of Standard Stars in this frame:',len(stars)
+    print 'Number of Standard Stars in this frame:',len(stars)
+    if len(stars) == 0:
+        print "FATAL: No standard stars!  Exiting"
+        sys.exit(1)
 
     # Now for each star, find the best model and normalize.
     

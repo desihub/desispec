@@ -1,8 +1,6 @@
 """
-Utility functions to compute a fiber flat correction and apply it
-We try to keep all the (fits) io separated.
+Flux calibration routines
 """
-
 
 import numpy as np
 from desispec.resolution import Resolution
@@ -12,9 +10,9 @@ from desispec.linalg import spline_fit
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
 from desispec.io.fluxcalibration import read_filter_response
+from desispec.resolution import Resolution
 import scipy,scipy.sparse, scipy.ndimage
 import sys
-from scipy.sparse import spdiags
 #debug
 #import pylab
 
@@ -102,7 +100,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
         nwave=len(wave)
         convolved=np.zeros(nwave)
         #print 'resolution',resolution[1].shape
-        R=spdiags(resolution,diags,nwave,nwave)
+        R=Resolution(resolution)
         convolved=R.dot(flux)
        
         return convolved
@@ -192,10 +190,10 @@ def convolveFlux(wave,resolution,flux):
     """
     diags=np.arange(10,-11,-1)
     nwave=len(wave)
-    nspec=500
+    nspec=resolution.shape[0]
     convolved=np.zeros((nspec,nwave))
     for i in range(nspec):
-       R=spdiags(resolution[i],diags,nwave,nwave)
+       R=Resolution(resolution[i])
        convolved[i]=R.dot(flux)
        
     return convolved
@@ -228,7 +226,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
     # resample model to data grid and convolve by resolution
     model_flux=np.zeros(flux.shape)
     for fiber in range(model_flux.shape[0]) :
-        model_flux[fiber]=resample_flux(wave,input_model_wave,input_model_flux[fiber],left=0.,right=0.)
+        model_flux[fiber]=resample_flux(wave,input_model_wave,input_model_flux[fiber])
         
         # debug
         # pylab.plot(input_model_wave,input_model_flux[fiber])

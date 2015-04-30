@@ -12,7 +12,7 @@ from desispec.io import read_frame
 from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
-from desispec.io.fluxcalibration import read_stellar_models
+from desispec.io.fluxcalibration import read_stdstar_models
 from desispec.io.fluxcalibration import write_flux_calibration
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
@@ -73,7 +73,7 @@ def main() :
     log.info("compute flux calibration")
 
     # read models
-    model_flux,model_wave,model_fibers=read_stellar_models(args.models)
+    model_flux,model_wave,model_fibers=read_stdstar_models(args.models)
 
     # select fibers
     SPECMIN=head["SPECMIN"]
@@ -89,7 +89,7 @@ def main() :
     bad=np.where(table["OBJTYPE"][fibers]!="STD")[0]
     if bad.size > 0 :
         for fiber in fibers[bad] :
-            log.error("inconsistency with fiber %d, OBJTYPE='%' in fibermap"%(fiber,table["OBJTYPE"][fiber]))
+            log.error("inconsistency with fiber %d, OBJTYPE='%s' in fibermap"%(fiber,table["OBJTYPE"][fiber]))
         sys.exit(12)
 
     calibration, calibivar, mask, ccalibration, ccalibivar = compute_flux_calibration(wave,flux[fibers],ivar[fibers],resol[fibers],model_wave,model_flux)

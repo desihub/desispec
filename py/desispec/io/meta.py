@@ -10,7 +10,8 @@ import datetime
 import glob
 import re
 
-def findfile(filetype, night=None, expid=None, camera=None, brickid=None, band=None, specprod=None):
+def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
+    band=None, spectrograph=None, specprod=None):
     """
     Returns location where file should be
     
@@ -21,17 +22,21 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None, band=N
         camera : [optional] 'b0' 'r1' .. 'z9'
         brickid : [optional] brick ID string
         band : [optional] one of 'b','r','z' identifying the camera band
+        spectrograph : [optional] spectrograph number, 0-9
         specprod : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
         fetch : [optional, not yet implemented]
             if not found locally, try to fetch remotely
     """
     location = dict(
-        raw = '{data}/exposures/{night}/{expid:08d}/desi-{expid:08d}.fits',
+        raw = '{data}/{night}/desi-{expid:08d}.fits',
+        pix = '{data}/{night}/pix-{camera}-{expid:08d}.fits',
         ### fiberflat = '{specprod}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits',
         frame = '{specprod}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
         cframe = '{specprod}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
         sky = '{specprod}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
+        stdstars = '{specprod}/exposures/{night}/{expid:08d}/stdstars-sp{spectrograph:d}-{expid:08d}.fits',
+        calib = '{specprod}/exposures/{night}/{expid:08d}/stdstars-{camera}-{expid:08d}.fits',
         ### psf = '{specprod}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
         psf = '{specprod}/calib2d/{night}/psf-{camera}-{expid:08d}.fits',
         fibermap = '{data}/{night}/fibermap-{expid:08d}.fits',
@@ -45,13 +50,14 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None, band=N
 
     #- Do we know about this kind of file?
     if filetype not in location:
-        raise IOError("Unknown filetype "+filetype)
+        raise IOError("Unknown filetype {}; known types are {}".format(filetype, location.keys()))
     
     if specprod is None:
         specprod = specprod_root()
 
     filepath = location[filetype].format(data=data_root(), specprod=specprod,
-        night=night, expid=expid, camera=camera, brickid = brickid, band = band)
+        night=night, expid=expid, camera=camera, brickid = brickid, band = band,
+        spectrograph=spectrograph)
 
     #- normpath to remove extraneous double slashes /a/b//c/d
     return os.path.normpath(filepath)
