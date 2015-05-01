@@ -17,20 +17,23 @@ class Resolution(scipy.sparse.dia_matrix):
     """
     Canonical representation of a resolution matrix.
 
-    Inherits all of the method of scipy.sparse.dia_matrix, including todense() for converting
-    to a dense 2D numpy array of matrix elements, most of which will be zero (so you generally
-    want to avoid this).
+    Inherits all of the method of scipy.sparse.dia_matrix, including todense()
+    for converting to a dense 2D numpy array of matrix elements, most of which
+    will be zero (so you generally want to avoid this).
 
     Args:
-        data: Must be in one of the following formats: (1) a scipy.sparse matrix in DIA format
-            with the required diagonals (but not necessarily in the canoncial order); (2) a
-            2D square numpy arrray (i.e., a dense matrix) whose non-zero values beyond
-            default_ndiag will be silently dropped; or (3) a 2D numpy array[ndiag, nwave]
-            that encodes the sparse diagonal values.
-            The last format is the one used to store resolution matrices in FITS files.
+        data: Must be in one of the following formats:
+          (1) a scipy.sparse matrix in DIA format with the required diagonals
+              (but not necessarily in the canoncial order);
+          (2) a 2D square numpy arrray (i.e., a dense matrix) whose non-zero
+              values beyond default_ndiag will be silently dropped; or
+          (3) a 2D numpy array[ndiag, nwave] that encodes the sparse diagonal
+              values in the same format as scipy.sparse.dia_matrix.data .
+              
+    The last format is the one used to store resolution matrices in FITS files.
 
     Raises:
-        RuntimeError: Invalid input data for initializing a sparse resolution matrix.
+        ValueError: Invalid input for initializing a sparse resolution matrix.
     """
     def __init__(self,data):
 
@@ -40,7 +43,8 @@ class Resolution(scipy.sparse.dia_matrix):
             # We just need to put the diagonals in the correct order.
             diag_order = np.argsort(data.offsets)[::-1]
             ndiag = len(data.offsets)
-            assert ndiag%2 == 1, "Number of diagonals ({}) should be odd".format(ndiag)
+            if ndiag%2 == 0:
+                raise ValueError("Number of diagonals ({}) should be odd".format(ndiag))
             self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
             if not np.array_equal(data.offsets[diag_order], self.offsets):
                 raise ValueError('Offsets of input matrix are non-contiguous or non-symmetric')
@@ -49,7 +53,9 @@ class Resolution(scipy.sparse.dia_matrix):
         elif isinstance(data,np.ndarray) and len(data.shape) == 2:
             n1,n2 = data.shape
             if n2 > n1:
-                ndiag = data.shape[0]
+                ndiag = n1  #- rename for clarity
+                if ndiag%2 == 0:
+                    raise ValueError("Number of diagonals ({}) should be odd".format(ndiag))
                 self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
                 scipy.sparse.dia_matrix.__init__(self,(data,self.offsets),(n2,n2))
             elif n1 == n2:
@@ -60,32 +66,28 @@ class Resolution(scipy.sparse.dia_matrix):
                     sparse_data[index,where] = np.diag(data,offset)
                 scipy.sparse.dia_matrix.__init__(self,(sparse_data,self.offsets),(n1,n1))
             else:
-                raise RuntimeError('Cannot initialize Resolution with array shape (%d,%d)' % (n1,n2))
+                raise ValueError('Cannot initialize Resolution with array shape (%d,%d)' % (n1,n2))
 
         else:
-            raise RuntimeError('Cannot initialize Resolution from %r' % data)
+            raise ValueError('Cannot initialize Resolution from %r' % data)
 
     def to_fits_array(self):
         """
         Convert to an array of sparse diagonal values.
 
-        This is the format used to store resolution matrices in FITS files. Note that some
-        values in the returned rectangular array do not correspond to actual matrix elements
-        since the diagonals get smaller as you move away from the central diagonal.
-        As long as you treat this array as an opaque representation for FITS I/O, you
-        don't care about this. To actually use the matrix, create a Resolution object
-        from the fits array first.
+        This is the format used to store resolution matrices in FITS files.
+        Note that some values in the returned rectangular array do not
+        correspond to actual matrix elements since the diagonals get smaller
+        as you move away from the central diagonal. As long as you treat this
+        array as an opaque representation for FITS I/O, you don't care about
+        this. To actually use the matrix, create a Resolution object from the
+        fits array first.
 
         Returns:
-            numpy.ndarray: An array of (num_diagonals,nbins) sparse matrix element values
-                close to the diagonal.
+            numpy.ndarray: An array of (num_diagonals,nbins) sparse matrix
+                element values close to the diagonal.
         """
         return self.data
-
-    # """
-    # A list of off-diagonal offsets in the canonical order.
-    # """
-    ### offsets = np.arange(num_diagonals//2,-(num_diagonals//2)-1,-1)
 
 def run_unit_tests(n = 100):
 
@@ -118,7 +120,7 @@ def run_unit_tests(n = 100):
     try:
         ndiag = 10
         R7 = Resolution(np.ones((ndiag, n)))
-        raise ValueError('an even number of diagonals is not supposed to be allowed')
+        raise RuntimeError('Incorrectly created Resolution with even number of diagonals')
     except ValueError, err:
         #- it correctly raised an error, so pass
         pass
