@@ -228,7 +228,9 @@ def integration_test(night=None, nspec=5, clobber=False):
     siminfo = fits.getdata(simspec, 'METADATA')
 
     print
-    print "------------------------------------------"
+    print "--------------------------------------------------"
+    print "Brick     True  z        ->  Class  z        zwarn"
+    # print "3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok"
     for b in bricks:
         zbest = io.read_zbest(io.findfile('zbest', brickid=b))
         for i in range(len(zbest.z)):
@@ -245,8 +247,8 @@ def integration_test(night=None, nspec=5, clobber=False):
             truetype = siminfo['OBJTYPE'][j]
             truez = siminfo['REDSHIFT'][j]
             dv = 3e5*(z-truez)/(1+truez)
-            print '{} {:4s} {:8.5f} {:4d} '.format(b, objtype, z, zwarn),
-            print '{:4s} {:8.5f}'.format(truetype, truez),
+            print '{}  {:4s} {:8.5f}  -> '.format(b, truetype, truez),
+            print '{:5s} {:8.5f} {:4d}  '.format(objtype, z, zwarn),
             if truetype == 'SKY' and zwarn > 0:
                 print '- ok'
             elif zwarn == 0:
@@ -263,7 +265,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             else:
                 print '- oops'
                 
-    print "------------------------------------------"
+    print "--------------------------------------------------"
 
 if __name__ == '__main__':
     integration_test()
