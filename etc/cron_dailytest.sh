@@ -1,11 +1,8 @@
 #!/bin/bash
 #- Cronjob to run daily integration tests on edison.nersc.gov
 
-#- Recreate a normal login environment
-# export NERSC_HOST=edison
-# export MODULEPATH=$MODULEPATH:/usr/common/usg/Modules/modulefiles:/usr/syscom/nsg/modulefiles:/usr/syscom/nsg/opt/modulefiles:/usr/common/das/Modules/modulefiles:/usr/common/graphics/Modules/modulefiles:/usr/common/tig/Modules/modulefiles
-# source ~/.bashrc
-# source ~/.bash_profile
+set -e
+echo `date` Running dailytest on `hostname`
 
 #- Load our code
 module load desispec/master
@@ -37,5 +34,8 @@ export PRODNAME=dailytest
 export DESI_SPECTRO_REDUX=$DESI_ROOT/spectro/redux
 
 #- Run the test
-python -m desispec.test.integration_test
+outdir=$DESI_SPECTRO_REDUX/$PRODNAME
+python -m desispec.test.integration_test > $outdir/dailytest.log
+tail -20 $outdir/dailytest.log
 
+echo `date` done with dailytest
