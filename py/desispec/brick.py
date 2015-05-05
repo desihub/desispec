@@ -1,10 +1,14 @@
 """
+desispec.brick
+==============
+
 Code for calculating bricks, which are a tiling of the sky with the following
 properties:
-  - bricks form rows in dec like a brick wall; edges are constant RA or dec
-  - they are rectangular with longest edge shorter or equal to bricksize
-  - circles at the poles with diameter=bricksize
-  - there are an even number of bricks per row
+
+- bricks form rows in dec like a brick wall; edges are constant RA or dec
+- they are rectangular with longest edge shorter or equal to bricksize
+- circles at the poles with diameter=bricksize
+- there are an even number of bricks per row
 
 Use this with caution!  In most cases you should be propagating brick
 info from input targeting, not recalculating brick locations and names.
@@ -15,15 +19,16 @@ from __future__ import division, absolute_import
 import numpy as np
 
 class Bricks(object):
+    """Bricks Object
+    """
     def __init__(self, bricksize=0.5):
-        """
-        Create Bricks object such that all bricks have longest size < bricksize
+        """Create Bricks object such that all bricks have longest size < bricksize
         """
         #- Brick row centers and edges
         center_dec = np.arange(-90.0, +90.0+bricksize/2, bricksize)
         edges_dec = np.arange(-90.0-bricksize/2, +90.0+bricksize, bricksize)
         nrow = len(center_dec)
-        
+
         #- How many columns per row: even number, no bigger than bricksize
         ncol_per_row = np.zeros(nrow, dtype=int)
         for i in range(nrow):
@@ -44,11 +49,11 @@ class Bricks(object):
             center_ra.append( 0.5*(edges[0:-1]+edges[1:]) )
             ### dra = edges[1]-edges[0]
             ### center_ra.append(dra/2 + np.arange(ncol_per_row[i])*dra)
-            
+
         #- More special cases at the poles
         edges_ra[0] = edges_ra[-1] = np.array([0, 360])
         center_ra[0] = center_ra[-1] = np.array([180,])
-        
+
         #- Brick names [row, col]
         brickname = list()
         for i in range(nrow):
@@ -59,7 +64,7 @@ class Bricks(object):
                 ra = center_ra[i][j]
                 names.append('{:04d}{}{:03d}'.format(int(ra*10), pm, int(abs(dec)*10)))
             brickname.append(names)
-            
+
         self._bricksize = bricksize
         self._ncol_per_row = ncol_per_row
         self._brickname = brickname
@@ -67,10 +72,9 @@ class Bricks(object):
         self._edges_dec = edges_dec
         self._center_ra = center_ra
         self._edges_ra = edges_ra
-        
+
     def brickname(self, ra, dec):
-        """
-        Return string name of brick that contains (ra, dec) [degrees]
+        """Return string name of brick that contains (ra, dec) [degrees]
         """
         inra, indec = ra, dec
         dec = np.atleast_1d(dec)
@@ -86,10 +90,9 @@ class Bricks(object):
             return names[0]
         else:
             return np.array(names)
-        
+
     def brick_radec(self, ra, dec):
-        """
-        Return center (ra,dec) of brick that contains input (ra, dec)
+        """Return center (ra,dec) of brick that contains input (ra, dec)
         """
         inra, indec = ra, dec
         dec = np.asarray(dec)
@@ -102,18 +105,20 @@ class Bricks(object):
             xdec = self._center_dec[irow]
         else:
             xra = np.array([self._center_ra[i][j] for i,j in zip(irow, jcol)])
-            xdec = self._center_dec[irow]            
-            
+            xdec = self._center_dec[irow]
+
         return xra, xdec
-        
+
 _bricks = None
 def brickname(ra, dec):
+    """Helper function to initialize brick cache.
+    """
     global _bricks
     if _bricks is None:
         _bricks = Bricks()
-        
+
     return _bricks.brickname(ra, dec)
-        
+
 #-------------------------------------------------------------------------
 if __name__ == '__main__':
     import os
@@ -121,7 +126,7 @@ if __name__ == '__main__':
     d = fits.getdata(os.getenv('HOME')+'/temp/bricks-0.50.fits')
     b = Bricks(0.5)
     ntest = 10000
-    
+
     ra = np.random.uniform(0, 360, size=ntest)
     dec = np.random.uniform(-90, 90, size=ntest)
     bricknames = b.brickname(ra, dec)
@@ -135,8 +140,3 @@ if __name__ == '__main__':
         ii = np.where( (d.DEC1 <= dec[i]) & (dec[i] < d.DEC2) & (d.RA1 <= ra[i]) & (ra[i] < d.RA2) )[0][0]
         if bricknames[i] != d.BRICKNAME[ii]:
             print bricknames[i], d.BRICKNAME[ii], ra[i], dec[i], b.brick_radec(ra[i], dec[i]), (d.RA[ii], d.DEC[ii])
-    
-    
-    
-        
-    

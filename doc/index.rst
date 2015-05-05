@@ -6,16 +6,11 @@ Contents
 ++++++++
 
 .. toctree::
-   :maxdepth: 2
+    :maxdepth: 2
 
-   intro.rst
-   coadd.rst
-
-The desispec package
-++++++++++++++++++++
-
-.. automodule:: desispec
-   :members:
+    intro.rst
+    coadd.rst
+    api.rst
 
 Indices and tables
 ++++++++++++++++++
