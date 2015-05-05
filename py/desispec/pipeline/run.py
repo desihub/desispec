@@ -46,6 +46,7 @@ class Machine( object ):
     """
 
     def __init__( self ):
+        pass
 
     def nodes( self ):
         """
