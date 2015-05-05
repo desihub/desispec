@@ -1,7 +1,10 @@
 """
+desispec.io.brick
+=================
+
 I/O routines for working with per-brick files.
 
-See doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID/*-BRICKID.rst in desiDataModel
+See ``doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID/*-BRICKID.rst`` in desiDataModel
 for a description of the relevant data models.
 
 See :doc:`coadd` and `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_
@@ -17,8 +20,7 @@ import astropy.io.fits
 import desispec.io.util
 
 class BrickBase(object):
-    """
-    Represents objects in a single brick and possibly also a single band b,r,z.
+    """Represents objects in a single brick and possibly also a single band b,r,z.
 
     The constructor will open an existing file and create a new file and parent
     directory if necessary.  The :meth:`close` method must be called for any updates
@@ -27,10 +29,8 @@ class BrickBase(object):
 
     Args:
         path(str): Path to the brick file to open.
-        mode(str): File access mode to use. Should normally be 'readonly' or 'update'.
-            Use 'update' to create a new file and its parent directory if necessary.
-        header: An optional header specification used to create a new file. See
-            :func:`desispec.io.util.fitsheader` for details on allowed values.
+        mode(str): File access mode to use. Should normally be 'readonly' or 'update'. Use 'update' to create a new file and its parent directory if necessary.
+        header: An optional header specification used to create a new file. See :func:`desispec.io.util.fitsheader` for details on allowed values.
 
     Raises:
         RuntimeError: Invalid mode requested.
@@ -85,15 +85,12 @@ class BrickBase(object):
             self.hdu_list = astropy.io.fits.open(path,mode = self.mode)
 
     def add_objects(self,flux,ivar,wave,resolution):
-        """
-        Add a list of objects to this brick file from the same night and exposure.
+        """Add a list of objects to this brick file from the same night and exposure.
 
         Args:
-            flux(numpy.ndarray): Array of (nobj,nwave) flux values for nobj objects tabulated
-                at nwave wavelengths.
+            flux(numpy.ndarray): Array of (nobj,nwave) flux values for nobj objects tabulated at nwave wavelengths.
             ivar(numpy.ndarray): Array of (nobj,nwave) inverse-variance values.
-            wave(numpy.ndarray): Array of (nwave,) wavelength values in Angstroms. All objects
-                are assumed to use the same wavelength grid.
+            wave(numpy.ndarray): Array of (nwave,) wavelength values in Angstroms. All objects are assumed to use the same wavelength grid.
             resolution(numpy.ndarray): Array of (nobj,nres,nwave) resolution matrix elements.
 
         Raises:
@@ -115,14 +112,12 @@ class BrickBase(object):
             self.hdu_list[3].data = resolution
 
     def get_wavelength_grid(self):
-        """
-        Return the wavelength grid used in this brick file.
+        """Return the wavelength grid used in this brick file.
         """
         return self.hdu_list[2].data
 
     def get_target(self,target_id):
-        """
-        Get the spectra and info for one target ID.
+        """Get the spectra and info for one target ID.
 
         Args:
             target_id(int): Target ID number to lookup.
@@ -141,12 +136,12 @@ class BrickBase(object):
             self.hdu_list[3].data[index_list],self.hdu_list[4].data[exposures])
 
     def get_target_ids(self):
-        """Return set of unique target IDs in this brick"""
+        """Return set of unique target IDs in this brick.
+        """
         return list(set(self.hdu_list[4].data['TARGETID']))
 
     def get_num_spectra(self):
-        """
-        Get the number of spectra contained in this brick file.
+        """Get the number of spectra contained in this brick file.
 
         Returns:
             int: Number of objects contained in this brick file.
@@ -154,8 +149,7 @@ class BrickBase(object):
         return len(self.hdu_list[0].data)
 
     def get_num_targets(self):
-        """
-        Get the number of distinct targets with at least one spectrum in this brick file.
+        """Get the number of distinct targets with at least one spectrum in this brick file.
 
         Returns:
             int: Number of unique targets represented with spectra in this brick file.
@@ -163,16 +157,14 @@ class BrickBase(object):
         return len(np.unique(self.hdu_list[4].data['TARGETID']))
 
     def close(self):
-        """
-        Write any updates and close the brick file.
+        """Write any updates and close the brick file.
         """
         if self.mode == 'update':
             self.hdu_list.writeto(self.path,clobber = True)
         self.hdu_list.close()
 
 class Brick(BrickBase):
-    """
-    Represents the combined cframe exposures in a single brick and band.
+    """Represents the combined cframe exposures in a single brick and band.
 
     See :class:`BrickBase` for constructor info.
     """
@@ -180,15 +172,12 @@ class Brick(BrickBase):
         BrickBase.__init__(self,path,mode,header)
 
     def add_objects(self,flux,ivar,wave,resolution,object_data,night,expid):
-        """
-        Add a list of objects to this brick file from the same night and exposure.
+        """Add a list of objects to this brick file from the same night and exposure.
 
         Args:
-            flux(numpy.ndarray): Array of (nobj,nwave) flux values for nobj objects tabulated
-                at nwave wavelengths.
+            flux(numpy.ndarray): Array of (nobj,nwave) flux values for nobj objects tabulated at nwave wavelengths.
             ivar(numpy.ndarray): Array of (nobj,nwave) inverse-variance values.
-            wave(numpy.ndarray): Array of (nwave,) wavelength values in Angstroms. All objects
-                are assumed to use the same wavelength grid.
+            wave(numpy.ndarray): Array of (nwave,) wavelength values in Angstroms. All objects are assumed to use the same wavelength grid.
             resolution(numpy.ndarray): Array of (nobj,nres,nwave) resolution matrix elements.
             object_data(numpy.ndarray): Record array of fibermap rows for the objects to add.
             night(str): Date string for the night these objects were observed in the format YYYYMMDD.
@@ -218,8 +207,7 @@ class Brick(BrickBase):
         self.hdu_list[4].data = np.concatenate((self.hdu_list[4].data,augmented_data,))
 
 class CoAddedBrick(BrickBase):
-    """
-    Represents the co-added exposures in a single brick and, possibly, a single band.
+    """Represents the co-added exposures in a single brick and, possibly, a single band.
 
     See :class:`BrickBase` for constructor info.
     """

@@ -1,7 +1,10 @@
 """
+desispec.resolution
+===================
+
 Standardized handling of sparse wavelength resolution matrices.
 
-Use `python -m desispec.resolution` to run unit tests.
+Use ``python -m desispec.resolution`` to run unit tests.
 """
 
 from __future__ import division, absolute_import
@@ -14,8 +17,7 @@ import scipy.sparse
 default_ndiag = 21
 
 class Resolution(scipy.sparse.dia_matrix):
-    """
-    Canonical representation of a resolution matrix.
+    """Canonical representation of a resolution matrix.
 
     Inherits all of the method of scipy.sparse.dia_matrix, including todense()
     for converting to a dense 2D numpy array of matrix elements, most of which
@@ -29,7 +31,7 @@ class Resolution(scipy.sparse.dia_matrix):
               values beyond default_ndiag will be silently dropped; or
           (3) a 2D numpy array[ndiag, nwave] that encodes the sparse diagonal
               values in the same format as scipy.sparse.dia_matrix.data .
-              
+
     The last format is the one used to store resolution matrices in FITS files.
 
     Raises:
@@ -72,8 +74,7 @@ class Resolution(scipy.sparse.dia_matrix):
             raise ValueError('Cannot initialize Resolution from %r' % data)
 
     def to_fits_array(self):
-        """
-        Convert to an array of sparse diagonal values.
+        """Convert to an array of sparse diagonal values.
 
         This is the format used to store resolution matrices in FITS files.
         Note that some values in the returned rectangular array do not
@@ -90,7 +91,8 @@ class Resolution(scipy.sparse.dia_matrix):
         return self.data
 
 def run_unit_tests(n = 100):
-
+    """No documentation yet.
+    """
     print 'Testing the Resolution class with n=%d...' % n
 
     dense = np.arange(n*n).reshape(n,n)
@@ -110,12 +112,12 @@ def run_unit_tests(n = 100):
 
     R5 = Resolution(R1.to_fits_array())
     assert np.array_equal(R1.toarray(),R5.toarray()),'to_fits_array() is broken.'
-    
+
     #- test different sizes of input diagonals
     for ndiag in [3,5,11]:
         R6 = Resolution(np.ones((ndiag, n)))
         assert len(R6.offsets) == ndiag, 'Constructor broken for ndiag={}'.format(ndiag)
-        
+
     #- An even number if diagonals is not allowed
     try:
         ndiag = 10
@@ -124,7 +126,7 @@ def run_unit_tests(n = 100):
     except ValueError, err:
         #- it correctly raised an error, so pass
         pass
-        
+
     #- Test creation with asymetric diagonals (should fail)
     R1.offsets += 1
     try:
@@ -133,7 +135,7 @@ def run_unit_tests(n = 100):
     except ValueError:
         #- correctly raised an error, so pass
         pass
-        
+
 
 if __name__ == '__main__':
     run_unit_tests()
