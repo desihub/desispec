@@ -6,6 +6,7 @@
 from __future__ import absolute_import, division
 
 import os
+import time
 
 import desispec.log
 
@@ -62,6 +63,7 @@ def runcmd(cmd, inputs=[], outputs=[], clobber=False):
     
     #- Green light to go; print input/output info
     #- Use log.level to decide verbosity, but avoid long prefixes
+    log.info(time.asctime())
     log.info("RUNNING: " + cmd)
     if log.level <= desispec.log.INFO:
         if len(inputs) > 0:
@@ -75,6 +77,7 @@ def runcmd(cmd, inputs=[], outputs=[], clobber=False):
 
     #- run command
     err = os.system(cmd)
+    log.info(time.asctime())
     if err > 0:
         log.critical("FAILED: "+cmd)
         return err

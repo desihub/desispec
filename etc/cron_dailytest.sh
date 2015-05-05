@@ -36,6 +36,11 @@ export DESI_SPECTRO_REDUX=$DESI_ROOT/spectro/redux
 #- Run the test
 outdir=$DESI_SPECTRO_REDUX/$PRODNAME
 python -m desispec.test.integration_test > $outdir/dailytest.log
-tail -20 $outdir/dailytest.log
+
+echo
+echo "[...]"
+echo
+
+tail -10 $outdir/dailytest.log
 
 echo `date` done with dailytest
