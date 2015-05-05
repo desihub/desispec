@@ -1,8 +1,9 @@
-
+====================================
 Welcome to desispec's documentation!
 ====================================
 
-Contents:
+Contents
+++++++++
 
 .. toctree::
    :maxdepth: 2
@@ -10,11 +11,15 @@ Contents:
    intro.rst
    coadd.rst
 
+The desispec package
+++++++++++++++++++++
+
+.. automodule:: desispec
+   :members:
 
 Indices and tables
-==================
+++++++++++++++++++
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
