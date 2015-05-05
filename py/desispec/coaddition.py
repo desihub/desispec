@@ -1,4 +1,7 @@
 """
+desispec.coaddition
+===================
+
 Algorithms for co-addition of independent observations of the same object.
 
 See :doc:`coadd` and `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_
@@ -15,8 +18,7 @@ import scipy.sparse.linalg
 import desispec.resolution
 
 class Spectrum(object):
-    """
-    A reduced flux spectrum with an associated diagonal inverse covariance and resolution matrix.
+    """A reduced flux spectrum with an associated diagonal inverse covariance and resolution matrix.
 
     Objects of this type provide the inputs and outputs of co-addition. When only a wavelength grid
     is passed to the constructor, the new object will represent a zero-flux spectrum. Use the +=
@@ -46,8 +48,7 @@ class Spectrum(object):
             self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
 
     def finalize(self):
-        """
-        Calculates the flux, inverse variance and resolution for this spectrum.
+        """Calculates the flux, inverse variance and resolution for this spectrum.
 
         Uses the accumulated data from all += operations so far but does not prevent
         further accumulation.  This is the expensive step in coaddition so we make
@@ -80,11 +81,10 @@ class Spectrum(object):
         self.resolution = desispec.resolution.Resolution(R)
 
     def __iadd__(self,other):
-        """
-        Coadd this spectrum with another spectrum.
+        """Coadd this spectrum with another spectrum.
 
         The calling object is updated to the combined result. Linear interpolation will be
-        used if the other spectrum uses a different wavelength grid. 
+        used if the other spectrum uses a different wavelength grid.
 
         Raises:
             AssertionError: The other spectrum's wavelength grid is not compatible with ours.
@@ -115,11 +115,10 @@ co-added spectra have a roughly constant FWHM/BINSIZE.
 global_wavelength_grid = np.arange(3579.0,9826.0,1.0)
 
 def get_resampling_matrix(global_grid,local_grid):
-    """
-    Build the rectangular matrix that linearly resamples from the global grid to a local grid.
-    
+    """Build the rectangular matrix that linearly resamples from the global grid to a local grid.
+
     The local grid range must be contained within the global grid range.
-    
+
     Args:
         global_grid(numpy.ndarray): Sorted array of n global grid wavelengths.
         local_grid(numpy.ndarray): Sorted array of m local grid wavelengths.
@@ -147,8 +146,7 @@ def get_resampling_matrix(global_grid,local_grid):
     return matrix
 
 def decorrelate(Cinv):
-    """
-    Decorrelate an inverse covariance using the matrix square root.
+    """Decorrelate an inverse covariance using the matrix square root.
 
     Implements the decorrelation part of the spectroperfectionism algorithm described in
     Bolton & Schlegel 2009 (BS) http://arxiv.org/abs/0911.2689, w uses the matrix square root of
