@@ -1,6 +1,8 @@
 """
-io routines for fibermap
+desispec.io.fibermap
+====================
 
+IO routines for fibermap.
 """
 import os
 import numpy as np
@@ -53,21 +55,20 @@ fibermap_comments = dict(
 )
 
 def empty_fibermap(nspec):
-    """
-    Return an empty fibermap ndarray to be filled in
+    """Return an empty fibermap ndarray to be filled in.
     """
     return np.zeros(nspec, dtype=fibermap_columns)
 
 def write_fibermap(outfile, fibermap, header=None):
-    """    
-    Write fibermap binary table to outfile
-       
-    Inputs:
-      - outfile : output filename
-      - fibermap : ndarray with named columns of fibermap data
-      - header : header data to include in same HDU as fibermap
-        
-    Returns full path to filename of fibermap file written
+    """Write fibermap binary table to outfile.
+
+    Args:
+        outfile (str): output filename
+        fibermap: ndarray with named columns of fibermap data
+        header: header data to include in same HDU as fibermap
+
+    Returns:
+        write_fibermap (str): full path to filename of fibermap file written.
     """
     outfile = makepath(outfile)
 
@@ -76,18 +77,17 @@ def write_fibermap(outfile, fibermap, header=None):
     hdr = fitsheader(header)
     write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
         extname="FIBERMAP", clobber=True)
-        
+
     return outfile
 
 
 def read_fibermap(filename) :
+    """Reads a fibermap fits file and returns its data.
     """
-    reads a fibermap fits file and returns its data
-    """
-    
+
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
-    
+
     tbdata, hdr = fits.getdata(filename, 'FIBERMAP', header=True)
-    
+
     return tbdata, hdr

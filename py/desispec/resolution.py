@@ -24,18 +24,22 @@ class Resolution(scipy.sparse.dia_matrix):
     will be zero (so you generally want to avoid this).
 
     Args:
-        data: Must be in one of the following formats:
-          (1) a scipy.sparse matrix in DIA format with the required diagonals
-              (but not necessarily in the canoncial order);
-          (2) a 2D square numpy arrray (i.e., a dense matrix) whose non-zero
-              values beyond default_ndiag will be silently dropped; or
-          (3) a 2D numpy array[ndiag, nwave] that encodes the sparse diagonal
-              values in the same format as scipy.sparse.dia_matrix.data .
-
-    The last format is the one used to store resolution matrices in FITS files.
+        data: Must be in one of the following formats listed below.
 
     Raises:
         ValueError: Invalid input for initializing a sparse resolution matrix.
+
+    Data formats:
+
+    1. a scipy.sparse matrix in DIA format with the required diagonals
+       (but not necessarily in the canoncial order);
+    2. a 2D square numpy arrray (i.e., a dense matrix) whose non-zero
+       values beyond default_ndiag will be silently dropped; or
+    3. a 2D numpy array[ndiag, nwave] that encodes the sparse diagonal
+       values in the same format as scipy.sparse.dia_matrix.data .
+
+    The last format is the one used to store resolution matrices in FITS files.
+
     """
     def __init__(self,data):
 

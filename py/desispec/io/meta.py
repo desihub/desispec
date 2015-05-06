@@ -1,8 +1,9 @@
-#
-# See top-level LICENSE file for Copyright information
-#
-# -*- coding: utf-8 -*-
+"""
+desispec.io.meta
+================
 
+IO metadata functions.
+"""
 
 import os
 import os.path
@@ -12,9 +13,8 @@ import re
 
 def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
     band=None, spectrograph=None, specprod=None):
-    """
-    Returns location where file should be
-    
+    """Returns location where file should be
+
     Args:
         filetype : file type, typically the prefix, e.g. "frame" or "psf"
         night : [optional] YEARMMDD string
@@ -51,7 +51,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
     #- Do we know about this kind of file?
     if filetype not in location:
         raise IOError("Unknown filetype {}; known types are {}".format(filetype, location.keys()))
-    
+
     if specprod is None:
         specprod = specprod_root()
 
@@ -63,8 +63,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
     return os.path.normpath(filepath)
 
 def get_files(filetype,night,expid,specprod = None):
-    """
-    Get files for a specified exposure.
+    """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified type.
     Any camera identifiers not matching the regular expression [brz][0-9] will be
@@ -92,8 +91,7 @@ def get_files(filetype,night,expid,specprod = None):
     return files
 
 def validate_night(night):
-    """
-    Validates a night string and converts to a date.
+    """Validates a night string and converts to a date.
 
     Args:
         night(str): Date string for the requested night in the format YYYYMMDD.
@@ -110,8 +108,7 @@ def validate_night(night):
         raise RuntimeError('Badly formatted night %s' % night)
 
 def get_exposures(night,raw = False,specprod = None):
-    """
-    Get a list of available exposures for the specified night.
+    """Get a list of available exposures for the specified night.
 
     Exposures are identified as correctly formatted subdirectory names within the
     night directory, but no checks for valid contents of these exposure subdirectories
@@ -158,19 +155,19 @@ def get_exposures(night,raw = False,specprod = None):
     return exposures
 
 def data_root():
+    """No documentation yet.
+    """
     dir = os.environ[ 'DESI_SPECTRO_DATA' ]
     if dir == None:
         raise RuntimeError('DESI_SPECTRO_DATA environment variable not set')
     return dir
 
 def specprod_root():
-    """
-    Return $DESI_SPECTRO_REDUX/$PRODNAME
+    """Return ``$DESI_SPECTRO_REDUX/$PRODNAME``.
 
-    raises AssertionError if these environment variables aren't set
+    Raises:
+        AssertionError: if these environment variables aren't set.
     """
     assert 'PRODNAME' in os.environ, 'Missing $PRODNAME environment variable'
     assert 'DESI_SPECTRO_REDUX' in os.environ, 'Missing $DESI_SPECTRO_REDUX environment variable'
     return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('PRODNAME'))
-
-
