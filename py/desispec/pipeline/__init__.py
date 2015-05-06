@@ -3,14 +3,10 @@
 #
 # -*- coding: utf-8 -*-
 """
-pipeline
-========
+desispec.pipeline
+=================
 
 Tools for pipeline creation and running.
-
 """
 
 from .core import runcmd
-
-
-

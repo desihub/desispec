@@ -1,6 +1,8 @@
 """
-io routines for frame
+desispec.io.frame
+=================
 
+IO routines for frame.
 """
 import os.path
 
@@ -14,10 +16,9 @@ from desispec.log import get_logger
 
 log = get_logger()
 
-def write_frame(outfile, flux, ivar, wave, resolution_data, header=None) :
-    """
-    Write a frame fits file and returns path to file written
-    
+def write_frame(outfile, flux, ivar, wave, resolution_data, header=None):
+    """Write a frame fits file and returns path to file written.
+
     Args:
         outfile: full path to output file, or tuple (night, expid, channel)
         flux[nspec, nwave] : 2D object flux array
@@ -30,49 +31,49 @@ def write_frame(outfile, flux, ivar, wave, resolution_data, header=None) :
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FLUX', 'no dimension')
     fits.writeto(outfile,flux,header=hdr, clobber=True)
-    
+
     hdr['EXTNAME'] = ('IVAR', 'no dimension')
     hdu = fits.ImageHDU(ivar, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
-    
+
     hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
     hdu = fits.ImageHDU(wave, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
-    
+
     hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
     hdu = fits.ImageHDU(resolution_data, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
-    
+
     return outfile
-    
+
 def read_frame(filename, nspec=None):
-    """
-    reads a frame fits file and returns its data
-    
+    """Reads a frame fits file and returns its data.
+
     Args:
         filename: path to a file, or (night, expid, camera) tuple where
             night = string YEARMMDD
             expid = integer exposure ID
             camera = b0, r1, .. z9
-        
-    returns tuple of:
-        phot[nspec, nwave] : uncalibrated photons per bin
-        ivar[nspec, nwave] : inverse variance of phot
-        wave[nwave] : vacuum wavelengths [Angstrom]
-        resolution[nspec, ndiag, nwave] : TODO DOCUMENT THIS FORMAT
-        header : fits.Header from HDU 0
+
+    Returns
+        read_frame (tuple):
+            phot[nspec, nwave] : uncalibrated photons per bin
+            ivar[nspec, nwave] : inverse variance of phot
+            wave[nwave] : vacuum wavelengths [Angstrom]
+            resolution[nspec, ndiag, nwave] : TODO DOCUMENT THIS FORMAT
+            header : fits.Header from HDU 0
     """
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, (str, unicode)):
         night, expid, camera = filename
         filename = findfile('frame', night, expid, camera)
-    
+
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
-    
+
     hdr = fits.getheader(filename)
     flux = native_endian(fits.getdata(filename, 0))
-    ivar = native_endian(fits.getdata(filename, "IVAR")) 
+    ivar = native_endian(fits.getdata(filename, "IVAR"))
     wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
     resolution_data = native_endian(fits.getdata(filename, "RESOLUTION"))
 
@@ -80,13 +81,14 @@ def read_frame(filename, nspec=None):
         flux = flux[0:nspec]
         ivar = ivar[0:nspec]
         resolution_data = resolution_data[0:nspec]
-    
+
     return flux,ivar,wave,resolution_data, hdr
 
 def resolution_data_to_sparse_matrix(resolution_data,fiber = None):
-    """
-    convert the resolution data for a given fiber into a sparse matrix
-    use function M.todense() or M.toarray() to convert output sparse matrix M to a dense matrix or numpy array
+    """Convert the resolution data for a given fiber into a sparse matrix.
+
+    Use function M.todense() or M.toarray() to convert output sparse matrix M
+    to a dense matrix or numpy array.
     """
 
     print ('Function desispec.io.frame.resolution_data_to_sparse_matrix is deprecated. ' +
@@ -109,4 +111,3 @@ def resolution_data_to_sparse_matrix(resolution_data,fiber = None):
     else :
         print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape
         sys.exit(12)
-    

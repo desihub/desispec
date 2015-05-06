@@ -1,6 +1,9 @@
 """
-Utility functions to dump log messages
-We can have something specific for DESI in the future but for now we use the standard python
+desispec.log
+============
+
+Utility functions to dump log messages. We can have something specific for
+DESI in the future but for now we use the standard Python.
 """
 
 import sys
@@ -14,7 +17,7 @@ desi_logger = None
 # we duplicate the logging levels
 DEBUG=logging.DEBUG        # Detailed information, typically of interest only when diagnosing problems.
 INFO=logging.INFO          # Confirmation that things are working as expected.
-WARNING=logging.WARNING    # An indication that something unexpected happened, or indicative of some problem 
+WARNING=logging.WARNING    # An indication that something unexpected happened, or indicative of some problem
                            # in the near future (e.g. "disk space low"). The software is still working as expected.
 ERROR=logging.ERROR        # Due to a more serious problem, the software has not been able to perform some function.
 CRITICAL=logging.CRITICAL  # A serious error, indicating that the program itself may be unable to continue running.
@@ -23,20 +26,19 @@ CRITICAL=logging.CRITICAL  # A serious error, indicating that the program itself
 
 
 def get_logger(level=None) :
-    """ 
-    returns a default desi logger
+    """Returns a default DESI logger
 
     Args:
        level: debugging level.
-    
-    If environment variable DESI_LOGLEVEL exists and has value  DEBUG,INFO,WARNING or ERROR (upper or lower case),
+
+    If environment variable :envvar:`DESI_LOGLEVEL` exists and has value  DEBUG,INFO,WARNING or ERROR (upper or lower case),
     it overules the level argument.
-    If DESI_LOGLEVEL is not set and level=None, the default level is set to INFO.    
+    If :envvar:`DESI_LOGLEVEL` is not set and level=None, the default level is set to INFO.    
     """
-    
+
     global desi_logger
-    
-    
+
+
 
     desi_level=os.getenv("DESI_LOGLEVEL")
     if desi_level is not None and (desi_level != "" ) :
@@ -53,34 +55,31 @@ def get_logger(level=None) :
                 message+=" %s"%k
             message+=")"
             print message
-            
+
     if level is None :
         level=INFO
-                    
+
     if desi_logger is not None :
         if level is not None :
             desi_logger.setLevel(level)
         return desi_logger
-    
+
     desi_logger = logging.getLogger("DESI")
-    
+
     desi_logger.setLevel(level)
-    
+
     while len(desi_logger.handlers) > 0:
         h = desi_logger.handlers[0]
         desi_logger.removeHandler(h)
-    
+
     ch = logging.StreamHandler(sys.stdout)
-    
+
     #formatter = logging.Formatter('%(asctime)s:%(name)s:%(levelname)s:%(message)s')
     formatter = logging.Formatter('%(levelname)s:%(filename)s:%(lineno)s:%(funcName)s: %(message)s')
 
     ch.setFormatter(formatter)
-    
-    
+
+
     desi_logger.addHandler(ch)
 
     return desi_logger
-
-
-
