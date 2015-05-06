@@ -77,9 +77,8 @@ The desispec API
 .. automodule:: desispec.zfind
     :members:
 
-.. This can't be imported right now unless redmonster is in PYTHONPATH
-.. .. automodule:: desispec.zfind.redmonster
-..     :members:
+.. automodule:: desispec.zfind.redmonster
+    :members:
 
 .. automodule:: desispec.zfind.zfind
     :members:
