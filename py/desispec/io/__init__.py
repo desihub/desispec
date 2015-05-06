@@ -3,11 +3,10 @@
 #
 # -*- coding: utf-8 -*-
 """
-IO
-========
+desispec.io
+===========
 
 Tools for data and metadata I/O.
-
 """
 
 # help with 2to3 support
@@ -24,5 +23,3 @@ from desispec.io import util
 from desispec.io.fluxcalibration import (
     read_stdstar_templates, read_filter_response, write_stdstar_model,
     read_flux_calibration, write_flux_calibration)
-
-

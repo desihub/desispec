@@ -2,15 +2,17 @@
 Coaddition of Spectroperfect Reductions
 =======================================
 
-This document covers coadd implementation details and mock-data tests. For details on the coadd dataflow and algorithms used for combining spectra, refer to `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_.
+This document covers coadd implementation details and mock-data tests.
+For details on the coadd dataflow and algorithms used for combining spectra,
+refer to `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_.
 
 Implementation
-==============
+++++++++++++++
 
 Files
------
+~~~~~
 
-All spectra are grouped by brick. There are three types of brick file under `$DESI_SPECTRO_REDUX/$PRODNAME//bricks/{brickid}/`:
+All spectra are grouped by brick. There are three types of brick file under ``$DESI_SPECTRO_REDUX/$PRODNAME//bricks/{brickid}/``:
 
 * The brick files contains all exposures of every target that has been observed in the brick, by band.
 * The band coadd files contain the coadd of all exposures for each target, by band.
@@ -24,26 +26,34 @@ All files have the same structure with 4 HDUs:
 * HDU4: Binary table of metadata.
 
 See the relevant `data model descriptions
-<https://desi.lbl.gov/trac/browser/code/desiDataModel/trunk/doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID>`_ for details (these are not in synch with the mock data challenge files as of 23-Mar-2015).
+<https://desi.lbl.gov/trac/browser/code/desiDataModel/trunk/doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID>`_
+for details (these are not in synch with the mock data challenge files as of 23-Mar-2015).
 
 Wavelength Grids
-----------------
+~~~~~~~~~~~~~~~~
 
-All brick files have their wavelength grid in HDU2, as summarized in the table below. Note that we do not use a log-lambda grid for the global coadd across bands, since this would not be a good match to the wavelength resolution at the red ends of r and z cameras. See the note for details.
+All brick files have their wavelength grid in HDU2, as summarized in the table
+below. Note that we do not use a log-lambda grid for the global coadd across
+bands, since this would not be a good match to the wavelength resolution at
+the red ends of r and z cameras. See the note for details.
 
-===== ======= ======= ======= ======= ================== 
+===== ======= ======= ======= ======= ==================
 Band  Min(A)  Max(A)  Nbins   Size(A) Files
 ===== ======= ======= ======= ======= ==================
-b     3579.0  5938.8  3934    0.6     brick, band coadd 
+b     3579.0  5938.8  3934    0.6     brick, band coadd
 r     5635.0  7730.8  3494    0.6     brick, band coadd
 z     7445.0  9824.0  3966    0.6     brick, band coadd
 all   3579.0  9825.0  6247    1.0     global coadd
 ===== ======= ======= ======= ======= ==================
 
 Metadata
---------
+~~~~~~~~
 
-The brick file and two co-add files all have a table with the same format in HDU4, with one entry per exposure of each object observed in the brick. Most of its columns are copied directly from the exposure fibermaps, except for the last three columns which identify the exposure and offset of the object's spectrum in the other HDUs.  The table columns are listed below.
+The brick file and two co-add files all have a table with the same format in
+HDU4, with one entry per exposure of each object observed in the brick. Most
+of its columns are copied directly from the exposure fibermaps, except for
+the last three columns which identify the exposure and offset of the object's
+spectrum in the other HDUs.  The table columns are listed below.
 
 ============ ======================================================
 Name         Description
@@ -74,7 +84,7 @@ INDEX        Index of this object in other HDUs
 ============ ======================================================
 
 Programs
---------
+~~~~~~~~
 
 The following programs are used to implement the coadd part of the pipeline:
 
@@ -84,7 +94,7 @@ The following programs are used to implement the coadd part of the pipeline:
 An additional program `desi_inspect` displays the information and creates a plot summarizing the coadd results for a single target.
 
 Benchmarks
-----------
+~~~~~~~~~~
 
 The rate-limiting step for performing coadds is the final conversion from `Cinv` and `Cinv_f` to `flux`, `ivar` and `resolution` in :meth:`desispec.coaddition.Spectrum.finalize`.  The computation time is dominated by one operation: solving the eigenvalue program for a large symmetric real-valued matrix using :func:`scipy.linalg.eigh`. The computation also involves inverting a real-valued resolution matrix using :func:`scipy.linalg.inv`, but this is relatively fast.
 
@@ -93,9 +103,9 @@ For a typical r-band coadd on a 2014 MacBook Pro, the total time for a single ta
 Interactive tests run on edison@nesrc indicate that it takes about 20s for each single-band coadd and 90s for the global coadd, for a total of about 150s per target.  Note that the coadd step can be parallelized across bricks to reduce the wall-clock time required to process an exposure.  The biggest speed improvement would likely come from using a sparse matrix eigensolver, or adjusting the algorithm to be able to use an incomplete set of eigenmodes (the :func:`scipy.sparse.linalg.eigsh` function can not calculate the full spectrum of eigenmodes).
 
 Notes
------
+~~~~~
 
-* The brick filenames have the format `brick-{band}-{expid}.fits`, where `band` is one of [rbz], which differs from the current data model (which is missing the `{band}`).
+* The brick filenames have the format ``brick-{band}-{expid}.fits``, where ``band`` is one of [rbz], which differs from the current data model (which is missing the ``{band}``).
 * Bricks contain a single wavelength grid in HDU2, the same as current CFRAMES, but different from the CFRAME data model (where HDU2 is a per-object mask).
 * The NIGHT column in HDU4 has type i4, not string. Is this a problem?
 * The 5*S10 FILTER values in the FIBERMAP are combined into a single comma-separated list stored as a single S50 FILTER value in HDU4 of the brick file.  This is a workaround until we sort out issues with astropy.io.fits and cfitsio handling of 5*S10 arrays.
@@ -106,17 +116,17 @@ Notes
 * The global coadd sometimes find negative eigenvalues for Cinv or a singular R.T. These cases need to be investigated.
 
 Mock Data Tests
-===============
++++++++++++++++
 
 DESI Environment
-----------------
+~~~~~~~~~~~~~~~~
 
 Ssh to edison.nersc.gov (remember to use `ssh -A` to propagate your keys for github access) and::
 
     source /project/projectdirs/desi/software/modules/desi_environment.sh
 
 Installation
-------------
+~~~~~~~~~~~~
 
 Clone the git package and select the co-add development branch (which should soon be merged into the master branch, making the last command unecessary)::
 
@@ -125,7 +135,7 @@ Clone the git package and select the co-add development branch (which should soo
     git checkout \#6
 
 Per-Login Setup
----------------
+~~~~~~~~~~~~~~~
 
 Manually set paths for using this installation (assuming `bash`)::
 
@@ -141,7 +151,7 @@ Set pipeline paths::
     export DESI_SPECTRO_DATA=$DESI_SPECTRO_SIM/alpha-5
 
 Run Tests
----------
+~~~~~~~~~
 
 Convert mocks cframes and fibermaps into brick files using::
 
