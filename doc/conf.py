@@ -23,7 +23,17 @@ import os
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-#needs_sphinx = '1.0'
+
+try:
+    import sphinx.ext.napoleon
+    napoleon_extension = 'sphinx.ext.napoleon'
+except ImportError:
+    try:
+        import sphinxcontrib.napoleon
+        napoleon_extension = 'sphinxcontrib.napoleon'
+        needs_sphinx = '1.2'
+    except ImportError:
+        needs_sphinx = '1.3'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -33,7 +43,7 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
-    'sphinx.ext.napoleon'
+    napoleon_extension
 ]
 
 # Add any paths that contain templates here, relative to this directory.

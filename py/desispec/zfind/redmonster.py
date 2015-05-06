@@ -9,12 +9,10 @@ from __future__ import division, absolute_import
 import os
 
 import numpy as np
-from redmonster.physics.zfinder import Zfinder
-from redmonster.physics.zfitter import Zfitter
-from redmonster.physics.zpicker import Zpicker
 
 from desispec.zfind import ZfindBase
 from desispec.interpolation import resample_flux
+from desispec.log import get_logger
 
 class RedMonsterZfind(ZfindBase):
     """Class documentation goes here.
@@ -26,6 +24,13 @@ class RedMonsterZfind(ZfindBase):
 
         TODO: document redmonster specific output variables
         """
+        try:
+            from redmonster.physics.zfinder import Zfinder
+            from redmonster.physics.zfitter import Zfitter
+            from redmonster.physics.zpicker import Zpicker
+        except ImportError:
+            get_logger().error("You are attempting to use RedMonster, but it is not available for import!")
+            raise
         #- RedMonster templates don't quite go far enough into the blue,
         #- so chop off some data
         ii, = np.where(wave>3965)
