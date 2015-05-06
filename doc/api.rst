@@ -40,3 +40,27 @@ The desispec API
 
 .. automodule:: desispec.io.brick
     :members:
+
+.. automodule:: desispec.io.fiberflat
+    :members:
+
+.. automodule:: desispec.io.fibermap
+    :members:
+
+.. automodule:: desispec.io.fluxcalibration
+    :members:
+
+.. automodule:: desispec.io.frame
+    :members:
+
+.. automodule:: desispec.io.meta
+    :members:
+
+.. automodule:: desispec.io.sky
+    :members:
+
+.. automodule:: desispec.io.util
+    :members:
+
+.. automodule:: desispec.io.zfind
+    :members:
