@@ -125,9 +125,10 @@ class TestIO(unittest.TestCase):
         for key in fibermap.dtype.names:
             c1 = fibermap[key]
             c2 = fm[key]
-            #- Endianness may change, but kind, size, and values are same
+            #- Endianness may change, but kind, size, shape, and values are same
             self.assertEqual(c1.dtype.kind, c2.dtype.kind)
             self.assertEqual(c1.dtype.itemsize, c2.dtype.itemsize)
+            self.assertEqual(c1.shape, c2.shape)
             self.assertTrue(np.all(c1 == c2))
                 
     def test_native_endian(self):
