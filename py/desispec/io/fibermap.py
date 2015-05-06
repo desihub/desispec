@@ -5,6 +5,7 @@ desispec.io.fibermap
 IO routines for fibermap.
 """
 import os
+import warnings
 import numpy as np
 from astropy.io import fits
 
@@ -72,11 +73,14 @@ def write_fibermap(outfile, fibermap, header=None):
     """
     outfile = makepath(outfile)
 
-    #- Comments for fibermap columns
-
+    #- astropy.io.fits incorrectly generates warning about 2D arrays of strings
+    #- Temporarily turn off warnings to avoid this; desispec.test.test_io will
+    #- catch it if the arrays actually are written incorrectly.
     hdr = fitsheader(header)
-    write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
-        extname="FIBERMAP", clobber=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
+            extname="FIBERMAP", clobber=True)
 
     return outfile
 
