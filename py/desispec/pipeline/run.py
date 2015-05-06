@@ -2,7 +2,12 @@
 # See top-level LICENSE file for Copyright information
 #
 # -*- coding: utf-8 -*-
+"""
+desispec.pipeline.run
+=====================
 
+Tools for running the pipeline.
+"""
 import os
 import errno
 import sys
@@ -11,7 +16,14 @@ import subprocess as sp
 
 def pid_exists( pid ):
     """Check whether pid exists in the current process table.
-    UNIX only.
+
+    **UNIX only.**
+
+    Args:
+        pid (int): A process ID.
+
+    Returns:
+        pid_exists (bool): ``True`` if the process exists in the current process table.
     """
     if pid < 0:
         return False
@@ -40,8 +52,7 @@ def pid_exists( pid ):
 
 
 class Machine( object ):
-    """
-    This class represents the properties of a single machine.  This includes
+    """This class represents the properties of a single machine.  This includes
     the node configuration, etc.
     """
 
@@ -49,25 +60,24 @@ class Machine( object ):
         pass
 
     def nodes( self ):
-        """
-        Returns the maximum number of nodes to use on this machine.
+        """Returns the maximum number of nodes to use on this machine.
         """
         return 1
 
     def cores_per_node( self ):
-        """
-        Returns the number of cores per node on this machine.
+        """Returns the number of cores per node on this machine.
         """
         return 1
 
     def proc_spawn( self, com, logfile ):
+        """Spawn a process and redirect output to a log file.
         """
-        Spawn a process and redirect output to a log file.
-        """
-        proc = sp.Popen ( com, stdout=open ( logfile, "w" ), stderr=sp.STDOUT, stdin=None, close_fds=True )
+        proc = sp.Popen( com, stdout=open ( logfile, "w" ), stderr=sp.STDOUT, stdin=None, close_fds=True )
         return proc.pid
 
     def proc_wait( self, pid ):
+        """Wait for a process to finish.
+        """
         if pid_exists( pid ):
             ex = os.wait( pid )
             return ex[1]
@@ -75,59 +85,53 @@ class Machine( object ):
             return 0
 
     def proc_poll( self, pid ):
-        """
-        Check if specified process is still running.
+        """Check if specified process is still running.
         """
         return pid_exists( pid )
 
     def job_run( self, com, nodes, ppn, log ):
-        """
-        Runs a command on a specified number of nodes, and a specified number
+        """Runs a command on a specified number of nodes, and a specified number
         of processes per node.
         """
         jobid = 0
         return jobid
 
     def job_wait( self, jobid ):
-        """
-        Wait for a job to finish before returning.
+        """Wait for a job to finish before returning.
         """
         return
 
     def job_complete( self, jobid ):
-        """
-        Is the speficied jobid still running?
+        """Is the speficied jobid still running?
         """
         return False
 
 
 class MachineLocal( Machine ):
-    """
-    Local machine definition.  We use one node and one process, and use
+    """Local machine definition.  We use one node and one process, and use
     subprocess to run jobs.
     """
 
     def __init__( self ):
+        pass
 
     def job_run( self, com, nodes, ppn, log ):
-        
-        
+        """No documentation yet.
+        """
         return jobid
 
     def job_wait( self, jobid ):
+        """Wait for a job to finish before returning.
         """
-        Wait for a job to finish before returning.
-        """
-
         return
 
     def job_complete( self, jobid ):
-        """
-        Is the speficied jobid still running?
+        """Is the speficied jobid still running?
         """
         return False
 
-
+"""
+Not sure why this stuff is here.
 
 class MachineEdison
 
@@ -160,5 +164,4 @@ PBS_NP=48
 PBS_NUM_PPN=1
 PBS_O_SERVER=edique02
 PBS_NODEFILE=/var/spool/torque/aux//2153436.edique02
-
-
+"""

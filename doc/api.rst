@@ -64,3 +64,12 @@ The desispec API
 
 .. automodule:: desispec.io.zfind
     :members:
+
+.. automodule:: desispec.pipeline
+    :members:
+
+.. automodule:: desispec.pipeline.core
+    :members:
+
+.. automodule:: desispec.pipeline.run
+    :members:
