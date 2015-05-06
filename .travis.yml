@@ -24,6 +24,11 @@ matrix:
           # OPTIONAL_DEPS needed because the plot_directive in sphinx needs them
           # -w is an astropy extension
 
+        # Do a bdist_egg compile.  This will catch things like syntax errors
+        # without needing to do a full python setup.py test
+        - python: 2.7
+          env: SETUP_CMD='bdist_egg'
+
         # Try all python versions with the latest numpy
         # - python: 2.7
         #   env: SETUP_CMD='test --open-files'
