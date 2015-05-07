@@ -14,11 +14,12 @@
 
 import sys
 import os
+import os.path
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../py'))
 
 # -- General configuration ------------------------------------------------
 
@@ -90,7 +91,7 @@ exclude_patterns = ['_build']
 #default_role = None
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
-#add_function_parentheses = True
+add_function_parentheses = True
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
@@ -107,7 +108,7 @@ pygments_style = 'sphinx'
 #modindex_common_prefix = []
 
 # If true, keep warnings as "system message" paragraphs in the built documents.
-#keep_warnings = False
+keep_warnings = True
 
 
 # -- Options for HTML output ----------------------------------------------
