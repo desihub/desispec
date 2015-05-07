@@ -36,8 +36,9 @@ And then install as usual
 Status
 ------
 
-.. image:: https://travis-ci.org/astropy/astropy.png
-    :target: https://travis-ci.org/astropy/astropy
+.. image:: https://travis-ci.org/weaverba137/desispec.png
+    :target: https://travis-ci.org/weaverba137/desispec
+    :alt: Travis Build Status
 
 License
 -------
