@@ -4,6 +4,8 @@ import numpy as np
 from desispec.sky import compute_sky
 from desispec.resolution import Resolution
 
+import pylab
+
 class TestSky(unittest.TestCase):
     
     #- Create unique test filename in a subdirectory
@@ -31,16 +33,26 @@ class TestSky(unittest.TestCase):
                 Rdata[i,:,j] = kernel
                 
         flux = np.zeros((self.nspec, self.nwave))
+        ivar = np.ones((self.nspec, self.nwave))
         for i in range(self.nspec):
             R = Resolution(Rdata[i])
             flux[i] = R.dot(self.flux)
-                
-        skyflux, skyivar, skymask = compute_sky(self.wave, flux, self.ivar, Rdata)
+
+                        
+        skyflux, skyivar, skymask, cskyflux, cskyivar = compute_sky(self.wave, flux, ivar, Rdata)
         self.assertEqual(len(skyflux.shape), 1)
         self.assertEqual(len(skyflux), self.nwave)
         self.assertEqual(len(skyflux), len(skyivar))
         self.assertEqual(len(skyflux), len(skymask))
+        delta=flux[0]-cskyflux
+        d=np.inner(delta,delta)
+        self.assertAlmostEqual(d,0.)
+        delta=flux[-1]-cskyflux
+        d=np.inner(delta,delta)
+        self.assertAlmostEqual(d,0.)
         
+
+
     def runTest(self):
         pass
                 
