@@ -38,8 +38,8 @@ matrix:
           env: SETUP_CMD='bdist_egg'
 
         # Try all python versions with the latest numpy
-        # - python: 2.7
-        #   env: SETUP_CMD='test --open-files'
+        - python: 2.7
+          env: SETUP_CMD='test'
         # - python: 3.3
         #   env: SETUP_CMD='test --open-files'
         # - python: 3.4
