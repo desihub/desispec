@@ -36,8 +36,8 @@ And then install as usual
 Status
 ------
 
-.. image:: https://travis-ci.org/weaverba137/desispec.png
-    :target: https://travis-ci.org/weaverba137/desispec
+.. image:: https://travis-ci.org/desihub/desispec.png
+    :target: https://travis-ci.org/desihub/desispec
     :alt: Travis Build Status
 
 License
