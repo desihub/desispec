@@ -28,7 +28,7 @@ matrix:
         # Check for sphinx doc build warnings - we do this first because it
         # runs for a long time
         - python: 2.7
-          env: SETUP_CMD='build_sphinx' OPTIONAL_DEPS=true
+          env: SETUP_CMD='build_sphinx'
           # OPTIONAL_DEPS needed because the plot_directive in sphinx needs them
           # -w is an astropy extension
 
@@ -38,8 +38,8 @@ matrix:
           env: SETUP_CMD='bdist_egg'
 
         # Try all python versions with the latest numpy
-        # - python: 2.7
-        #   env: SETUP_CMD='test --open-files'
+        - python: 2.7
+          env: SETUP_CMD='test'
         # - python: 3.3
         #   env: SETUP_CMD='test --open-files'
         # - python: 3.4
@@ -90,7 +90,7 @@ install:
     - export CONDA_INSTALL="conda install -c astropy-ci-extras --yes python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION"
 
     # CORE DEPENDENCIES
-    - if [[ $SETUP_CMD != egg_info ]]; then $CONDA_INSTALL numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION pytest pip Cython jinja2; fi
+    - if [[ $SETUP_CMD != egg_info ]]; then $CONDA_INSTALL numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION pyyaml pip Cython jinja2; fi
     - if [[ $SETUP_CMD != egg_info ]]; then $PIP_INSTALL pytest-xdist; fi
 
     # ASTROPY
@@ -98,7 +98,7 @@ install:
     - if [[ $SETUP_CMD != egg_info ]] && [[ $ASTROPY_VERSION == stable ]]; then $CONDA_INSTALL numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION astropy; fi
 
     # OPTIONAL DEPENDENCIES
-    - if $OPTIONAL_DEPS; then $CONDA_INSTALL scipy h5py matplotlib pyyaml; fi
+    # - if $OPTIONAL_DEPS; then $CONDA_INSTALL h5py matplotlib; fi
     # - if $OPTIONAL_DEPS; then pip install beautifulsoup4; fi
 
     # DOCUMENTATION DEPENDENCIES
