@@ -1,14 +1,21 @@
 language: python
 
 python:
+    # - 2.6
     - 2.7
     # - 3.3
     # - 3.4
     # This is just for "egg_info".  All other builds are explicitly given in the matrix
 env:
     global:
-        # Set defaults to avoid repeating in most cases
+        # The following versions are the 'default' for tests, unless
+        # overidden underneath. They are defined here in order to save having
+        # to repeat them for all configurations.
         - NUMPY_VERSION=1.9
+        - SCIPY_VERSION=0.14
+        - ASTROPY_VERSION=stable
+        - CONDA_INSTALL='conda install -c astropy-ci-extras --yes'
+        - PIP_INSTALL='pip install'
         - OPTIONAL_DEPS=false
         - MAIN_CMD='python setup.py'
     matrix:
