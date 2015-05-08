@@ -1,8 +1,12 @@
+"""
+tests desispec.interpolation.resample_flux
+"""
+
 import unittest, os
 import numpy as np
 from math import log
 
-from desispec.interpolation import resample_flux
+from desispec.interpolation import resample_flux, bin_bounds
 
 class TestResample(unittest.TestCase):
     """
@@ -42,7 +46,6 @@ class TestResample(unittest.TestCase):
         self.assertTrue(np.all(yout == 1.0))                
         
         
-    ### @unittest.expectedFailure
     def test_flux_conservation(self):
         n = 100
         x = np.arange(n)
@@ -76,6 +79,18 @@ class TestResample(unittest.TestCase):
             ivar_in  = np.sum(ivar)
             ivar_out = np.sum(ivout)
             self.assertAlmostEqual(ivar_in,ivar_out)
+            
+    def test_bin_bounds(self):
+        """Super basic test only"""
+        x = np.arange(10)
+        lo, hi = bin_bounds(x)
+        self.assertEqual(len(lo), len(x))
+        self.assertEqual(len(hi), len(x))
+        self.assertTrue(np.all(lo[1:] == hi[0:-1]))
+        dx = x[1]-x[0]
+        self.assertAlmostEqual(lo[0], x[0]-0.5*dx)
+        self.assertAlmostEqual(lo[1], x[0]+0.5*dx)
+        self.assertAlmostEqual(hi[-1], x[-1]+0.5*dx)
             
 
 #- This runs all test* functions in any TestCase class in this file

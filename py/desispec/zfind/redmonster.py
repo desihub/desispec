@@ -104,6 +104,10 @@ class RedMonsterZfind(ZfindBase):
 #- This is a container class needed by Redmonster zpicker
 class _RedMonsterSpecObj(object):
     def __init__(self, wave, flux, ivar, dof=None):
+        """
+        Create an object with .wave, .flux, .ivar, and .dof attributes;
+        these are needed by RedMonster as input
+        """
         nspec, nwave = flux.shape
         self.wave = wave
         self.flux = flux
@@ -118,52 +122,3 @@ class _RedMonsterSpecObj(object):
         self.hdr = None
         self.plugmap = None
 
-
-#-------------------------------------------------------------------------
-#- Test code during development
-# from desispec import io
-# def test_zfind(nspec=None):
-#     print "Reading bricks"
-#     brick = dict()
-#     for channel in ('b', 'r', 'z'):
-#         filename = io.findfile('brick', band=channel, brickid='3582m005')
-#         brick[channel] = io.Brick(filename)
-#
-#     print "Coadding individual channels and exposures"
-#     wb = brick['b'].get_wavelength_grid()
-#     wr = brick['r'].get_wavelength_grid()
-#     wz = brick['z'].get_wavelength_grid()
-#     wave = np.concatenate([wb, wr, wz])
-#     np.ndarray.sort(wave)
-#     nwave = len(wave)
-#
-#     if nspec is None:
-#         nspec = brick['b'].get_num_targets()
-#
-#     flux = np.zeros((nspec, nwave))
-#     ivar = np.zeros((nspec, nwave))
-#
-#     for i, targetid in enumerate(brick['b'].get_target_ids()):
-#         if i>=nspec: break
-#         xwave = list()
-#         xflux = list()
-#         xivar = list()
-#         for channel in ('b', 'r', 'z'):
-#             exp_flux, exp_ivar, resolution, info = brick[channel].get_target(targetid)
-#             weights = np.sum(exp_ivar, axis=0)
-#             ii, = np.where(weights > 0)
-#             xwave.extend(brick[channel].get_wavelength_grid()[ii])
-#             xflux.extend(np.average(exp_flux[:,ii], weights=exp_ivar[:,ii], axis=0))
-#             xivar.extend(weights[ii])
-#
-#         xwave = np.array(xwave)
-#         xivar = np.array(xivar)
-#         xflux = np.array(xflux)
-#
-#         ii = np.argsort(xwave)
-#         flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
-#
-#     zf = RedMonsterZfind(wave, flux, ivar)
-#     return zf
-
-#     return wave, xwave[ii], xflux[ii], xivar[ii]

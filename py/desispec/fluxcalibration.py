@@ -391,7 +391,15 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
     return calibration, calibivar, mask, ccalibration, ccalibivar
 
 def apply_flux_calibration(flux,ivar,resolution_data,wave,calibration,civar,cmask,cwave):
-    """No documentation yet.
+    """
+    Applies flux calibration to input flux and ivar
+    
+    Args:
+        flux : input flux[nspec, nwave] -- WILL BE MODIFIED IN-PLACE
+        ivar : input ivar[nspec, nwave] -- WILL BE MODIFIED IN-PLACE
+        resolution_data : 3D[nspec, ndiag, nwave] sparse resolution matrix data
+        wave : 1D[nwave] wavelength of flux
+        calibration, civar, cmask, cwave : from compute_flux_calibration()
     """
     log=get_logger()
     log.info("starting")
