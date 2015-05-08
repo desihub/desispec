@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 import scipy.sparse
 
+from desispec.fiberflat import FiberFlat
 from desispec.fiberflat import compute_fiberflat
 from desispec.log import get_logger
 
@@ -118,6 +119,39 @@ class TestFiberFlat(unittest.TestCase):
         """
         raise NotImplementedError
         
+class TestFiberFlatObject(unittest.TestCase):
+
+    def setUp(self):
+        self.nspec = 5
+        self.nwave = 10
+        self.wave = np.arange(self.nwave)
+        self.fiberflat = np.random.uniform(size=(self.nspec, self.nwave))
+        self.ivar = np.ones(self.fiberflat.shape)
+        self.mask = np.zeros(self.fiberflat.shape)
+        self.meanspec = np.random.uniform(size=self.nwave)
+        self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec)
+
+    def test_init(self):
+        for key in ('wave', 'fiberflat', 'ivar', 'mask', 'meanspec'):
+            x = self.ff.__getattribute__(key)
+            y = self.__getattribute__(key)
+            self.assertTrue(np.all(x == y), key)
+
+        self.assertEqual(self.nspec, self.ff.nspec)
+        self.assertEqual(self.nwave, self.ff.nwave)
+
+    def test_dimensions(self):
+        #- check dimensionality mismatches
+        self.assertRaises(ValueError, lambda x: FiberFlat(*x), (self.wave, self.wave, self.ivar, self.mask, self.meanspec))
+        self.assertRaises(ValueError, lambda x: FiberFlat(*x), (self.wave, self.fiberflat, self.ivar, self.mask, self.fiberflat))
+        self.assertRaises(ValueError, lambda x: FiberFlat(*x), (self.wave, self.fiberflat[0:2], self.ivar, self.mask, self.meanspec))
+
+    def test_slice(self):
+        x = self.ff[1]
+        x = self.ff[1:2]
+        x = self.ff[[1,2,3]]
+        x = self.ff[self.ff.fibers<3]
+
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

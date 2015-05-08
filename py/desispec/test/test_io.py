@@ -3,6 +3,7 @@ from uuid import uuid1
 
 import numpy as np
 
+from desispec.spectra import Spectra
 import desispec.io
 from astropy.io import fits
 
@@ -57,20 +58,21 @@ class TestIO(unittest.TestCase):
         self.assertRaises(ValueError, desispec.io.util.fitsheader, (1,))
         
     def test_frame_rw(self):
-        nspec, nwave, ndiag = 10, 20, 3
+        nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
         wave = np.arange(nwave)
         R = np.random.uniform( size=(nspec, ndiag, nwave) )
+        spx = Spectra(wave, flux, ivar, R)
                 
-        desispec.io.write_frame(self.testfile, flux, ivar, wave, R)
-        xflux, xivar, xwave, xR, hdr = desispec.io.read_frame(self.testfile)
+        desispec.io.write_frame(self.testfile, spx)
+        spectra = desispec.io.read_frame(self.testfile)
 
-        self.assertTrue(np.all(flux == xflux))
-        self.assertTrue(np.all(ivar == xivar))
-        self.assertTrue(np.all(wave == xwave))
-        self.assertTrue(np.all(R == xR))
-        self.assertTrue(R.dtype.isnative)
+        self.assertTrue(np.all(flux == spectra.flux))
+        self.assertTrue(np.all(ivar == spectra.ivar))
+        self.assertTrue(np.all(wave == spectra.wave))
+        self.assertTrue(np.all(R == spectra.resolution_data))
+        self.assertTrue(spectra.resolution_data.dtype.isnative)
         
     def test_sky_rw(self):
         nspec, nwave, ndiag = 10, 20, 3
@@ -137,7 +139,6 @@ class TestIO(unittest.TestCase):
             data2 = desispec.io.util.native_endian(data1)
             self.assertTrue(data2.dtype.isnative, dtype+' is not native endian')
             self.assertTrue(np.all(data1 == data2))
-        
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

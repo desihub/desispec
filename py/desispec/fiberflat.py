@@ -8,7 +8,6 @@ We try to keep all the (fits) io separated.
 
 
 import numpy as np
-# from desispec.io.frame import resolution_data_to_sparse_matrix
 from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
@@ -112,7 +111,6 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
 
-            ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
             R = Resolution(resolution_data[fiber])
 
             # diagonal sparse matrix with content = sqrt(ivar)*flat
@@ -137,7 +135,6 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             #if fiber%10==0 :
             #    log.info("iter %d fiber %d (smoothing)"%(iteration,fiber))
 
-            ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
             R = Resolution(resolution_data[fiber])
 
             #M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
@@ -204,7 +201,6 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     nsig_for_mask=4 # only mask out 4 sigma outliers
 
     for fiber in range(nfibers) :
-        ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
         R = Resolution(resolution_data[fiber])
         M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
         fiberflat[fiber] = (M!=0)*flux[fiber]/(M+(M==0)) + (M==0)
@@ -215,7 +211,6 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             mask[fiber,bad] += fiberflat_mask
 
     return fiberflat,fiberflat_ivar,mask,mean_spectrum
-
 
 
 def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
@@ -243,3 +238,74 @@ def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
 
 
     log.info("done")
+
+
+class FiberFlat(object):
+    def __init__(self, wave, fiberflat, ivar, mask, meanspec,
+            header=None, fibers=None, spectrograph=0):
+        """
+        Creates a lightweight data wrapper for fiberflats
+
+        Args:
+            wave: 1D[nwave] wavelength in Angstroms
+            fiberflat: 2D[nspec, nwave]
+            ivar: 2D[nspec, nwave] inverse variance of fiberflat
+            mask: 2D[nspec, nwave] mask where 0=good
+            meanspec: 1D[nwave] mean deconvolved average flat lamp spectrum
+            header: (optional) FITS header from HDU0
+            fibers: (optional) fiber indices
+            spectrograph: (optional) spectrograph number [0-9]       
+        """
+        if wave.ndim != 1:
+            raise ValueError("wave should be 1D")
+
+        if fiberflat.ndim != 2:
+            raise ValueError("fiberflat should be 2D[nspec, nwave]")
+
+        if fiberflat.shape != ivar.shape:
+            raise ValueError("fiberflat and ivar must have the same shape")
+
+        if fiberflat.shape != mask.shape:
+            raise ValueError("fiberflat and mask must have the same shape")
+        
+        if wave.shape != meanspec.shape:
+            raise ValueError("wrong size/shape for meanspec {}".format(meanspec.shape))
+        
+        if wave.shape[0] != fiberflat.shape[1]:
+            raise ValueError("nwave mismatch between wave.shape[0] and flux.shape[1]")
+
+        self.wave = wave
+        self.fiberflat = fiberflat
+        self.ivar = ivar
+        self.mask = mask
+        self.meanspec = meanspec
+
+        self.nspec, self.nwave = self.fiberflat.shape
+        self.header = header
+        
+        self.spectrograph = spectrograph
+        if fibers is None:
+            self.fibers = self.spectrograph + np.arange(self.nspec, dtype=int)
+        else:
+            if len(fibers) != self.nspec:
+                raise ValueError("len(fibers) != nspec ({} != {})".format(len(fibers), self.nspec))
+            self.fibers = fibers
+            
+    def __getitem__(self, index):
+        """
+        Return a subset of the spectra as a new Spectra object
+        
+        index can be anything that can index or slice a numpy array
+        """
+        #- convert index to 1d array to maintain dimentionality of sliced arrays
+        if not isinstance(index, slice):
+            index = np.atleast_1d(index)
+
+        result = FiberFlat(self.wave, self.fiberflat[index], self.ivar[index],
+                    self.mask[index], self.meanspec, header=self.header,
+                    fibers=self.fibers[index], spectrograph=self.spectrograph)
+        
+        #- TODO:
+        #- if we define fiber ranges in the fits headers, correct header
+        
+        return result

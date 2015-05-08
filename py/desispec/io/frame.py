@@ -10,39 +10,41 @@ import numpy as np
 import scipy,scipy.sparse
 from astropy.io import fits
 
+from desispec.spectra import Spectra
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
 from desispec.log import get_logger
 
 log = get_logger()
 
-def write_frame(outfile, flux, ivar, wave, resolution_data, header=None):
+def write_frame(outfile, spectra, header=None):
     """Write a frame fits file and returns path to file written.
 
     Args:
         outfile: full path to output file, or tuple (night, expid, channel)
-        flux[nspec, nwave] : 2D object flux array
-        ivar[nspec, nwave] : 2D inverse variance of flux
-        wave[nwave] : 1D wavelength array in Angstroms
-        resolution_data[nspec, ndiag, nwave] : optional 3D resolution matrix data
+        spectra: output desispec.spectra.Spectra object with wave, flux, ivar...
+        header: optional astropy.io.fits.Header or dict to override spectra.header
+        
+    Note:
+        spectra = Spectra(wave, flux, ivar, resolution_data)
     """
     outfile = makepath(outfile, 'frame')
 
-    hdr = fitsheader(header)
-    hdr['EXTNAME'] = ('FLUX', 'no dimension')
-    fits.writeto(outfile,flux,header=hdr, clobber=True)
+    if header is not None:
+        hdr = fitsheader(header)
+    else:
+        hdr = fitsheader(spectra.header)
 
-    hdr['EXTNAME'] = ('IVAR', 'no dimension')
-    hdu = fits.ImageHDU(ivar, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
+    hdus = fits.HDUList()
+    x = fits.PrimaryHDU(spectra.flux, header=hdr)
+    x.header['EXTNAME'] = 'FLUX'
+    hdus.append(x)
 
-    hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
-    hdu = fits.ImageHDU(wave, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
-    hdu = fits.ImageHDU(resolution_data, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
+    hdus.append( fits.ImageHDU(spectra.ivar, name='IVAR') )
+    hdus.append( fits.ImageHDU(spectra.wave, name='WAVELENGTH') )
+    hdus.append( fits.ImageHDU(spectra.resolution_data, name='RESOLUTION' ) )
+    
+    hdus.writeto(outfile, clobber=True)
 
     return outfile
 
@@ -82,32 +84,5 @@ def read_frame(filename, nspec=None):
         ivar = ivar[0:nspec]
         resolution_data = resolution_data[0:nspec]
 
-    return flux,ivar,wave,resolution_data, hdr
-
-def resolution_data_to_sparse_matrix(resolution_data,fiber = None):
-    """Convert the resolution data for a given fiber into a sparse matrix.
-
-    Use function M.todense() or M.toarray() to convert output sparse matrix M
-    to a dense matrix or numpy array.
-    """
-
-    print ('Function desispec.io.frame.resolution_data_to_sparse_matrix is deprecated. ' +
-        'Use desispec.resolution instead.')
-
-    if len(resolution_data.shape)==3 :
-        nfibers=resolution_data.shape[0]
-        d=resolution_data.shape[1]/2
-        nwave=resolution_data.shape[2]
-        offsets = range(d,-d-1,-1)
-        return scipy.sparse.dia_matrix((resolution_data[fiber],offsets),(nwave,nwave))
-    elif len(resolution_data.shape)==2 :
-        if fiber is not None:
-            print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape," and requested fiber=",fiber
-            sys.exit(12)
-        d=resolution_data.shape[0]/2
-        nwave=resolution_data.shape[1]
-        offsets = np.arange(d,-d-1,-1)
-        return scipy.sparse.dia_matrix((resolution_data,offsets),(nwave,nwave))
-    else :
-        print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape
-        sys.exit(12)
+    # return flux,ivar,wave,resolution_data, hdr
+    return Spectra(wave, flux, ivar, resolution_data, hdr)
