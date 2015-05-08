@@ -26,3 +26,6 @@ def runtests():
     tests = desispec_test_suite()
     #- Run them
     unittest.TextTestRunner(verbosity=2).run(tests)
+
+if __name__ == "__main__":
+    runtests()
