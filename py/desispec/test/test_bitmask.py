@@ -1,3 +1,7 @@
+"""
+test desispec.maskbits
+"""
+
 import unittest
 
 from desispec.maskbits import spmask, ccdmask, fibermask

@@ -1,13 +1,12 @@
-import unittest, os
-from uuid import uuid1
+"""
+test desispec.log
+"""
 
+import unittest, os
 import desispec.log as log
-import os
 
 class TestLog(unittest.TestCase):
-    
-    
-    
+
     def test_log(self):
         print "Testing desispec.log"
         desi_level=os.getenv("DESI_LOGLEVEL")

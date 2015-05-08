@@ -1,3 +1,7 @@
+"""
+test desispec.io.*
+"""
+
 import unittest
 
 import numpy as np
