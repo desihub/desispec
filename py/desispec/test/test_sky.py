@@ -4,8 +4,6 @@ import numpy as np
 from desispec.sky import compute_sky
 from desispec.resolution import Resolution
 
-import pylab
-
 class TestSky(unittest.TestCase):
     
     #- Create unique test filename in a subdirectory
