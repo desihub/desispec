@@ -1,3 +1,7 @@
+"""
+tests desispec.pipeline.core
+"""
+
 import os
 import unittest
 from uuid import uuid4

@@ -1,3 +1,7 @@
+"""
+tests desispec.sky
+"""
+
 import unittest
 
 import numpy as np
