@@ -1,61 +1,76 @@
+"""
+desispec.linalg
+===============
+
+Some linear algebra functions.
+"""
 import numpy as np
 import scipy,scipy.linalg,scipy.interpolate
 from desispec.log import get_logger
 
-def cholesky_solve(A,B,overwrite=False,lower=False) :
-    posv, = scipy.linalg.get_lapack_funcs(('posv',), (A,))
-    L,X,status=posv(A,B,lower=lower,overwrite_a=overwrite)
+def cholesky_solve(A,B,overwrite=False,lower=False):
+    """
+    returns the solution X of the linear system A.X=B
+    assuming A is a positive definite matrix
     
-    if status  != 0 :
-        get_logger().error("dposv status=%d"%status)
-        raise Exception("cholesky_solve_and_invert error dposv status=%d"%status)
-    
+    Args :
+         A : 2D (real symmetric) (nxn) positive definite matrix (numpy.ndarray)
+         B : 1D vector, must have dimension n  (numpy.ndarray)
+    Options :
+        overwrite: replace A data by cholesky decomposition (faster)
+        lower: cholesky decomposition triangular matrix is lower instead of upper
+    Returns :
+         X : 1D vector, same dimension as B  (numpy.ndarray)
+
+    """
+    UorL,lower = scipy.linalg.cho_factor(A, lower=lower, overwrite_a=overwrite)
+    X = scipy.linalg.cho_solve((UorL,lower),B)
     return X
 
 def cholesky_solve_and_invert(A,B,overwrite=False,lower=False) :
-    posv, = scipy.linalg.get_lapack_funcs(('posv',), (A,))
-    L,X,status=posv(A,B,lower=lower,overwrite_a=overwrite)
+    """
+    returns the solution X of the linear system A.X=B
+    assuming A is a positive definite matrix
     
-    if status != 0  :
-        get_logger().error("dposv status=%d"%status)
-        raise Exception("cholesky_solve_and_invert error dposv status=%d"%status)
-    
-    potri, = scipy.linalg.get_lapack_funcs(('potri',), (L,))
-    inv,status=potri(L,lower=(not lower)) # 'not lower' is not a mistake, there is a BUG in scipy!!!!   
-        
-    if status  != 0 :
-        get_logger().error("dpotri status=%d"%status)
-        raise Exception("cholesky_solve_and_invert error dpotri status=%d"%status)
-
-
-    #this routine can lead to nan without warning !!!
-    tmp=np.diagonal(inv)
-    if np.isnan(np.sum(tmp)) :
-        get_logger().error("covariance has NaN")
-        raise Exception("covariance has NaN")
-
-    
-    #symmetrize Ai
-    if True :
-        for i in range(inv.shape[0]) :
-            for j in range(i) :
-                if  not lower :
-                    inv[i,j]=inv[j,i]
-                else :
-                    inv[j,i]=inv[i,j]
+    Args :
+         A : 2D (real symmetric) (nxn) positive definite matrix (numpy.ndarray)
+         B : 1D vector, must have dimension n  (numpy.ndarray)
+    Options :
+        overwrite: replace A data by cholesky decomposition (faster)
+        lower: cholesky decomposition triangular matrix is lower instead of upper
+    Returns: 
+         X,cov, where
+         X : 1D vector, same dimension n as B  (numpy.ndarray)
+         cov : 2D positive definite matrix, inverse of A (numpy.ndarray)
+    """
+    UorL,lower = scipy.linalg.cho_factor(A, overwrite_a=overwrite)
+    X   = scipy.linalg.cho_solve((UorL,lower),B)
+    inv = scipy.linalg.cho_solve((UorL,lower),scipy.eye(A.shape[0]))
     return X,inv
 
-
-def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=None,order=3) :
+def cholesky_invert(A) :
     """
-    performs a spline fit 
+    returns the inverse of a positive definite matrix
+    
+    Args :
+         A : 2D (real symmetric) (nxn) positive definite matrix (numpy.ndarray)       
+    Returns: 
+         cov : 2D positive definite matrix, inverse of A (numpy.ndarray)
+    """
+    UorL,lower = scipy.linalg.cho_factor(A,overwrite_a=False)
+    inv = scipy.linalg.cho_solve((UorL,lower),scipy.eye(A.shape[0]))
+    return inv
+
+
+def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=None,order=3):
+    """Performs a spline fit.
     """
     if input_ivar is not None :
         selection=np.where(input_ivar>0)[0]
         if selection.size < 2 :
             log=get_logger()
-            log.error("cannot do spline fit because only %d values with ivar>0"%selection.size)
-            raise Error 
+            log.error("cannot do spline fit because only {0:d} values with ivar>0".format(selection.size))
+            raise Error
         w1=input_wave[selection[0]]
         w2=input_wave[selection[-1]]
     else :

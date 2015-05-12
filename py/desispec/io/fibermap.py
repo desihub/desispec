@@ -1,8 +1,11 @@
 """
-io routines for fibermap
+desispec.io.fibermap
+====================
 
+IO routines for fibermap.
 """
 import os
+import warnings
 import numpy as np
 from astropy.io import fits
 
@@ -53,41 +56,42 @@ fibermap_comments = dict(
 )
 
 def empty_fibermap(nspec):
-    """
-    Return an empty fibermap ndarray to be filled in
+    """Return an empty fibermap ndarray to be filled in.
     """
     return np.zeros(nspec, dtype=fibermap_columns)
 
 def write_fibermap(outfile, fibermap, header=None):
-    """    
-    Write fibermap binary table to outfile
-       
-    Inputs:
-      - outfile : output filename
-      - fibermap : ndarray with named columns of fibermap data
-      - header : header data to include in same HDU as fibermap
-        
-    Returns full path to filename of fibermap file written
+    """Write fibermap binary table to outfile.
+
+    Args:
+        outfile (str): output filename
+        fibermap: ndarray with named columns of fibermap data
+        header: header data to include in same HDU as fibermap
+
+    Returns:
+        write_fibermap (str): full path to filename of fibermap file written.
     """
     outfile = makepath(outfile)
 
-    #- Comments for fibermap columns
-
+    #- astropy.io.fits incorrectly generates warning about 2D arrays of strings
+    #- Temporarily turn off warnings to avoid this; desispec.test.test_io will
+    #- catch it if the arrays actually are written incorrectly.
     hdr = fitsheader(header)
-    write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
-        extname="FIBERMAP", clobber=True)
-        
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
+            extname="FIBERMAP", clobber=True)
+
     return outfile
 
 
 def read_fibermap(filename) :
+    """Reads a fibermap fits file and returns its data.
     """
-    reads a fibermap fits file and returns its data
-    """
-    
+
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
-    
+
     tbdata, hdr = fits.getdata(filename, 'FIBERMAP', header=True)
-    
+
     return tbdata, hdr
