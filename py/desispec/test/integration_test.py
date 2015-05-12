@@ -3,7 +3,7 @@ Run integration tests from pixsim through redshifts
 
 python -m desispec.test.integration_test
 """
-
+from __future__ import absolute_import, print_function
 import sys
 import os
 import random
@@ -231,10 +231,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
     siminfo = fits.getdata(simspec, 'METADATA')
 
-    print
-    print "--------------------------------------------------"
-    print "Brick     True  z        ->  Class  z        zwarn"
-    # print "3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok"
+    print()
+    print("--------------------------------------------------")
+    print("Brick     True  z        ->  Class  z        zwarn")
+    # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for b in bricks:
         zbest = io.read_zbest(io.findfile('zbest', brickid=b))
         for i in range(len(zbest.z)):
@@ -251,25 +251,25 @@ def integration_test(night=None, nspec=5, clobber=False):
             truetype = siminfo['OBJTYPE'][j]
             truez = siminfo['REDSHIFT'][j]
             dv = 3e5*(z-truez)/(1+truez)
-            print '{}  {:4s} {:8.5f}  -> '.format(b, truetype, truez),
-            print '{:5s} {:8.5f} {:4d}  '.format(objtype, z, zwarn),
             if truetype == 'SKY' and zwarn > 0:
-                print '- ok'
+                status = 'ok'
             elif zwarn == 0:
                 if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
-                    print '- ok'
+                    status = 'ok'
                 elif truetype == 'ELG' and objtype == 'GAL' and abs(dv) < 150:
-                    print '- ok'
+                    status = 'ok'
                 elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
-                    print '- ok'
+                    status = 'ok'
                 elif truetype == 'STD' and objtype == 'STAR':
-                    print '- ok'
+                    status = 'ok'
                 else:
-                    print '- oops'
+                    status = 'oops'
             else:
-                print '- oops'
+                status = 'oops'
+            print('{0}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
+                b, truetype, truez, objtype, z, zwarn, status))
 
-    print "--------------------------------------------------"
+    print("--------------------------------------------------")
 
 if __name__ == '__main__':
     integration_test()

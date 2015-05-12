@@ -41,23 +41,23 @@ def main() :
     # add calibration here when exists
 
     args = parser.parse_args()
+    log = get_logger()
 
     if args.infile is None:
-        print('Missing input')
+        log.critical('Missing input')
         parser.print_help()
         sys.exit(12)
 
     if args.fiberflat is None and args.sky is None:
-        print('Nothing to do ??')
+        log.critical('Nothing to do ??')
         parser.print_help()
         sys.exit(12)
 
     if args.outfile is None:
-        print('Missing output')
+        log.critical('Missing output')
         parser.print_help()
         sys.exit(12)
 
-    log = get_logger()
 
     flux,ivar,wave,resol,head = read_frame(args.infile)
 

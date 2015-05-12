@@ -10,7 +10,7 @@ processing, including the metadata of how we got to that processing step.
 Stephen Bailey
 April 2015
 """
-
+from __future__ import absolute_import, print_function
 import os
 import shutil
 import optparse
@@ -28,12 +28,10 @@ if not os.path.exists(outroot):
 #- Copy exposures
 for indir, subdirs, filenames in os.walk(inroot+'/exposures'):
     outdir = indir.replace(inroot, outroot)
-    print outdir
+    print(outdir)
     if not os.path.exists(outdir):
         os.makedirs(outdir)
 
     for name in filenames:
         if name.startswith('frame-'):
             shutil.copy2(indir+'/'+name, outdir+'/'+name)
-            
-

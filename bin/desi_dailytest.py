@@ -6,7 +6,7 @@ Run daily integration tests of the spectroscopic pipeline
 Stephen Bailey
 Spring 2015
 """
-
+from __future__ import absolute_import, print_function
 import sys
 import os
 import random
@@ -17,7 +17,7 @@ from desispec import io
 def runcmd(cmd, inputs=[], outputs=[], clobber=False):
     """
     Runs a command, checking inputs and outputs
-    
+
     TODO: document this more
     """
     #- Check that inputs exist
@@ -25,11 +25,11 @@ def runcmd(cmd, inputs=[], outputs=[], clobber=False):
     input_time = 0  #- timestamp of latest input file
     for x in inputs:
         if not os.path.exists(x):
-            print "ERROR: missing input "+x
+            print("ERROR: missing input "+x)
             err = 1
         else:
             input_time = max(input_time, os.stat(x).st_mtime)
-            
+
     if err > 0:
         return err
 
@@ -44,45 +44,45 @@ def runcmd(cmd, inputs=[], outputs=[], clobber=False):
             if len(inputs)>0 and os.stat(x).st_mtime < input_time:
                 already_done = False
                 break
-    
+
     if already_done:
-        print "SKIPPING:", cmd
+        print("SKIPPING:", cmd)
         return 0
-    
+
     #- Green light to go; print info
-    print "RUNNING:", cmd
+    print("RUNNING:", cmd)
     if len(inputs) > 0:
-        print "  Inputs"
+        print("  Inputs")
         for x in inputs:
-            print "   ", x
+            print("   ", x)
     if len(outputs) > 0:
-        print "  Outputs"
+        print("  Outputs")
         for x in outputs:
-            print "   ", x
+            print("   ", x)
 
     #- run command
     err = os.system(cmd)
     if err > 0:
-        print "FAILED:", cmd
+        print("FAILED:", cmd)
         return err
-        
+
     #- Check for outputs
     err = 0
     for x in outputs:
         if not os.path.exists(x):
-            print "ERROR: missing output "+x
+            print("ERROR: missing output "+x)
             err = 2
     if err > 0:
         return err
-        
-    print "SUCCESS:", cmd
-    return 0    
+
+    print("SUCCESS:", cmd)
+    return 0
 
 #-------------------------------------------------------------------------
 night = '20150429'
 params = dict(night=night, nspec=5)
 
-#-----    
+#-----
 #- Input fibermaps, spectra, and pixel-level raw data
 for expid, flavor in zip([0,1,2], ['flat', 'arc', 'science']):
     cmd = "pixsim-desi --newexp {flavor} --nspec {nspec} --night {night} --expid {expid}".format(
@@ -151,14 +151,14 @@ for channel in ['b', 'r', 'z']:
     inputs = [framefile, fibermap, fiberflat]
     outputs = [skyfile, ]
     runcmd(cmd, inputs, outputs)
-    
+
 #-----
 #- Fit standard stars
 if 'STD_TEMPLATES' in os.environ:
     std_templates = os.getenv('STD_TEMPLATES')
 else:
     std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/stellar_templates/v1.0/stdstar_templates_v1.0.fits'
-    
+
 stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
 cmd = """desi_fit_stdstars.py --spectrograph 0 \
   --fibermap {fibermap} \
@@ -166,7 +166,7 @@ cmd = """desi_fit_stdstars.py --spectrograph 0 \
   --models {std_templates} --outfile {stdstars}""".format(
     flat_expid=flat_expid, fibermap=fibermap, std_templates=std_templates,
     stdstars=stdstarfile)
-    
+
 inputs = [fibermap, std_templates]
 outputs = [stdstarfile,]
 runcmd(cmd, inputs, outputs)
@@ -207,14 +207,14 @@ for channel in ['b', 'r', 'z']:
 inputs = list()
 for camera in ['b0', 'r0', 'z0']:
     inputs.append( io.findfile('cframe', night, expid, camera) )
-    
+
 outputs = list()
 fibermap, hdr = io.read_fibermap(io.findfile('fibermap', night, expid))
 bricks = set(fibermap['BRICKNAME'])
 for b in bricks:
     for channel in ['b', 'r', 'z']:
         outputs.append( io.findfile('brick', brickid=b, band=channel))
-    
+
 cmd = "desi_make_bricks.py --night "+night
 runcmd(cmd, inputs, outputs)
 
@@ -235,8 +235,8 @@ simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
 siminfo = fits.getdata(simspec, 'METADATA')
 
 
-print
-print "------------------------------------------"
+print()
+print("------------------------------------------")
 for b in bricks:
     zbest = io.read_zbest(io.findfile('zbest', brickid=b))
     for i in range(len(zbest.z)):
@@ -246,31 +246,29 @@ for b in bricks:
             objtype = 'STAR'
         else:
             objtype = zbest.type[i]
-            
+
         z, zwarn = zbest.z[i], zbest.zwarn[i]
-            
+
         j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
         truetype = siminfo['OBJTYPE'][j]
         truez = siminfo['REDSHIFT'][j]
         dv = 3e5*(z-truez)/(1+truez)
-        print '{} {:4s} {:8.5f} {:4d} '.format(b, objtype, z, zwarn),
-        print '{:4s} {:8.5f}'.format(truetype, truez),
         if truetype == 'SKY' and zwarn > 0:
-            print '- ok'
+            status = 'ok'
         elif zwarn == 0:
             if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
-                print '- ok'
+                status = 'ok'
             elif truetype == 'ELG' and objtype == 'GAL' and abs(dv) < 150:
-                print '- ok'
+                status = 'ok'
             elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
-                print '- ok'
+                status = 'ok'
             elif truetype == 'STD' and objtype == 'STAR':
-                print '- ok'
+                status = 'ok'
             else:
-                print '- oops'
+                status = 'oops'
         else:
-            print '- oops'
-                
+            status = 'oops'
+        print('{0} {1:4s} {2:8.5f} {3:4d} {4:4s} {5:8.5f} - {6}'.format(b, objtype, z, zwarn, truetype, truez, status))
 
-print "------------------------------------------"
 
+print("------------------------------------------")
