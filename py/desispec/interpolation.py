@@ -14,11 +14,11 @@ from desispec.log import get_logger
 def bin_bounds(x):
     """
     Calculates the bin boundaries of an array x
-    
+
     Returns tuple of lower and upper bounds, each with same length as x
     """
     if x.size<2 :
-        get_logger().error("bin_bounds, x.size=%d"%x.size)
+        get_logger().error("bin_bounds, x.size={0:d}".format(x.size))
         exit(12)
     tx=np.sort(x)
     x_minus=np.roll(tx,1)

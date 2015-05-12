@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from __future__ import absolute_import, print_function
 import glob
 import os
 import re
@@ -9,35 +9,33 @@ from setuptools import setup, Command, find_packages
 
 def update_version_py():
     if not os.path.isdir(".git"):
-        print "This is not a git repository."
+        print("This is not a git repository.")
         return
     try:
         p = Popen(["git", "describe", "--tags", "--dirty", "--always"], stdout=PIPE)
     except EnvironmentError:
-        print "unable to run git, leaving py/desispec/_version.py alone"
+        print("unable to run git, leaving py/desispec/_version.py alone")
         return
     out = p.communicate()[0]
     ver = out.rstrip()
     if p.returncode != 0:
-        print "unable to run git, leaving py/desispec/_version.py alone"
+        print("unable to run git, leaving py/desispec/_version.py alone")
         return
-    f = open("py/desispec/_version.py", "w")
-    f.write( '__version__ = \'{}\''.format( ver ) )
-    f.close()
-    print "Set py/desispec/_version.py to {}".format( ver )
+    with open("py/desispec/_version.py", "w") as f:
+        f.write( '__version__ = \'{}\''.format( ver ) )
+    print("Set py/desispec/_version.py to {}".format( ver ))
 
 
 def get_version():
     if not os.path.isfile("py/desispec/_version.py"):
-        print 'Creating initial version file'
+        print('Creating initial version file')
         update_version_py()
     ver = 'unknown'
-    f = open("py/desispec/_version.py", "r")
-    for line in f.readlines():
-        mo = re.match("__version__ = '(.*)'", line)
-        if mo:
-            ver = mo.group(1)
-    f.close()
+    with open("py/desispec/_version.py", "r") as f:
+        for line in f.readlines():
+            mo = re.match("__version__ = '(.*)'", line)
+            if mo:
+                ver = mo.group(1)
     return ver
 
 
@@ -52,7 +50,7 @@ class Version(Command):
     def run(self):
         update_version_py()
         ver = get_version()
-        print "Version is now {}".format( ver )
+        print("Version is now {}".format( ver ))
 
 
 current_version = get_version()

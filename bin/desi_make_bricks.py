@@ -13,6 +13,7 @@ import os.path
 import numpy as np
 
 import desispec.io
+from desispec.log import get_logger, DEBUG
 
 def main():
 
@@ -24,9 +25,13 @@ def main():
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
         help = 'Override default path ($DESI_SPECTRO_REDUX/$PRODNAME) to processed data.')
     args = parser.parse_args()
+    if args.verbose:
+        log = get_logger(DEBUG)
+    else:
+        log = get_logger()
 
     if args.night is None:
-        print 'Missing required night argument.'
+        log.critical('Missing required night argument.')
         return -1
 
     # Initialize a dictionary of Brick objects indexed by '<band>_<brick-id>' strings.
@@ -38,8 +43,7 @@ def main():
             fibermap_path = desispec.io.findfile(filetype = 'fibermap',night = args.night,
                 expid = exposure,specprod = args.specprod)
             if not os.path.exists(fibermap_path):
-                if args.verbose:
-                    print 'Skipping exposure %08d with no fibermap.' % exposure
+                log.debug('Skipping exposure %08d with no fibermap.' % exposure)
                 continue
             # Open the fibermap.
             fibermap_data,fibermap_hdr = desispec.io.read_fibermap(fibermap_path)
@@ -47,9 +51,8 @@ def main():
             # Loop over per-camera cframes available for this exposure.
             cframes = desispec.io.get_files(filetype = 'cframe',night = args.night,
                 expid = exposure,specprod = args.specprod)
-            if args.verbose:
-                print 'Exposure %08d covers %d bricks and has cframes for %s.' % (
-                    exposure,len(brick_ids),','.join(cframes.keys()))
+            log.debug('Exposure %08d covers %d bricks and has cframes for %s.' % (
+                exposure,len(brick_ids),','.join(cframes.keys())))
             for camera,cframe_path in cframes.iteritems():
                 band,spectro_id = camera[0],int(camera[1:])
                 this_camera = (fibermap_data['SPECTROID'] == spectro_id)
@@ -74,13 +77,12 @@ def main():
                         wave,resolution[fibers],brick_data,args.night,exposure)
         # Close all brick files.
         for brick in bricks.itervalues():
-            if args.verbose:
-                print 'Brick %s now contains %d spectra for %d targets.' % (
-                    brick.path,brick.get_num_spectra(),brick.get_num_targets())
+            log.debug('Brick %s now contains %d spectra for %d targets.' % (
+                brick.path,brick.get_num_spectra(),brick.get_num_targets()))
             brick.close()
 
-    except RuntimeError,e:
-        print str(e)
+    except RuntimeError as e:
+        log.critical(str(e))
         return -2
 
 if __name__ == '__main__':

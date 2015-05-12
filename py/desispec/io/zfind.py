@@ -8,6 +8,7 @@ IO routines for zfind.
 import numpy as np
 from astropy.io import fits
 from desispec.zfind import ZfindBase
+from desispec.log import get_logger
 
 def write_zbest(filename, brickname, targetids, zfind, zspec=False):
     """Writes zfinder output to ``filename``.
@@ -78,9 +79,10 @@ def read_zbest(filename):
     return zf
 
 def _test_zbest_io():
-    """This should be moved to a separate test file?
+    """This should be moved to a separate test file?  Yes, it should.
     """
     import os
+    log=get_logger()
     nspec, nflux = 10, 20
     wave = np.arange(nflux)
     flux = np.random.uniform(size=(nspec, nflux))
@@ -109,6 +111,6 @@ def _test_zbest_io():
     assert np.all(zfind3.ivar == zfind1.ivar)
     assert np.all(zfind3.model == zfind1.model)
 
-    print "looks OK to me"
+    log.info("looks OK to me")
 
     os.remove(outfile)
