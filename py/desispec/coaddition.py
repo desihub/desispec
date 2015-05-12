@@ -8,7 +8,7 @@ See :doc:`coadd` and `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/
 for general information about the coaddition dataflow and algorithms.
 """
 
-from __future__ import division, absolute_import
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import scipy.sparse
@@ -16,6 +16,8 @@ import scipy.linalg
 import scipy.sparse.linalg
 
 import desispec.resolution
+
+from desispec.log import get_logger
 
 class Spectrum(object):
     """A reduced flux spectrum with an associated diagonal inverse covariance and resolution matrix.
@@ -35,6 +37,7 @@ class Spectrum(object):
         self.flux = flux
         self.ivar = ivar
         self.resolution = resolution
+        self.log = get_logger()
         # Initialize the quantities we will accumulate during co-addition. Note that our
         # internal Cinv is a dense matrix.
         if ivar is None:
@@ -76,7 +79,7 @@ class Spectrum(object):
             R_it = scipy.linalg.inv(R[keep_t,keep].T)
             self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
         except np.linalg.linalg.LinAlgError:
-            print 'WARNING: resolution matrix is singular so no coadded fluxes available.'
+            self.log.warning('resolution matrix is singular so no coadded fluxes available.')
         # Convert R from a dense matrix to a sparse one.
         self.resolution = desispec.resolution.Resolution(R)
 
@@ -167,6 +170,7 @@ def decorrelate(Cinv):
             wavelength bin. Note that R is returned as a regular (dense) numpy array but
             will normally have non-zero values concentrated near the diagonal.
     """
+    log = get_logger()
     # Clean up any roundoff errors by forcing Cinv to be symmetric.
     Cinv = 0.5*(Cinv + Cinv.T)
     # Convert to a dense matrix if necessary.
@@ -178,7 +182,7 @@ def decorrelate(Cinv):
     # Check for negative eigenvalues.
     nbad = np.count_nonzero(L < 0)
     if nbad > 0:
-        print 'WARNING: zeroing %d negative eigenvalue(s).' % nbad
+        log.warning('zeroing {0:d} negative eigenvalue(s).'.format(nbad))
         L[L < 0] = 0.
     # Calculate the matrix square root Q such that Cinv = Q.Q
     Q = X.dot(np.diag(np.sqrt(L)).dot(X.T))

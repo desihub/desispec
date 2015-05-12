@@ -14,7 +14,7 @@ Use this with caution!  In most cases you should be propagating brick
 info from input targeting, not recalculating brick locations and names.
 """
 
-from __future__ import division, absolute_import
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 
@@ -118,8 +118,9 @@ def brickname(ra, dec):
         _bricks = Bricks()
 
     return _bricks.brickname(ra, dec)
-
-#-------------------------------------------------------------------------
+#
+# THIS CODE SHOULD BE MOVED TO A TEST.
+#
 if __name__ == '__main__':
     import os
     from astropy.io import fits
@@ -134,9 +135,9 @@ if __name__ == '__main__':
     for row in range(len(b._center_dec)):
         n = len(d.BRICKROW[d.BRICKROW==row])
         if n != b._ncol_per_row[row]:
-            print row, n, len(b._center_ra[row])
+            print(row, n, len(b._center_ra[row]))
 
     for i in range(ntest):
         ii = np.where( (d.DEC1 <= dec[i]) & (dec[i] < d.DEC2) & (d.RA1 <= ra[i]) & (ra[i] < d.RA2) )[0][0]
         if bricknames[i] != d.BRICKNAME[ii]:
-            print bricknames[i], d.BRICKNAME[ii], ra[i], dec[i], b.brick_radec(ra[i], dec[i]), (d.RA[ii], d.DEC[ii])
+            print(bricknames[i], d.BRICKNAME[ii], ra[i], dec[i], b.brick_radec(ra[i], dec[i]), (d.RA[ii], d.DEC[ii]))
