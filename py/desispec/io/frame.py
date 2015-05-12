@@ -84,14 +84,14 @@ def read_frame(filename, nspec=None):
 
     return flux,ivar,wave,resolution_data, hdr
 
-def resolution_data_to_sparse_matrix(resolution_data,fiber = None):
+def resolution_data_to_sparse_matrix(resolution_data,fiber=None):
     """Convert the resolution data for a given fiber into a sparse matrix.
 
     Use function M.todense() or M.toarray() to convert output sparse matrix M
     to a dense matrix or numpy array.
     """
 
-    print ('Function desispec.io.frame.resolution_data_to_sparse_matrix is deprecated. ' +
+    log.warning('Function desispec.io.frame.resolution_data_to_sparse_matrix is deprecated. ' +
         'Use desispec.resolution instead.')
 
     if len(resolution_data.shape)==3 :
@@ -102,12 +102,12 @@ def resolution_data_to_sparse_matrix(resolution_data,fiber = None):
         return scipy.sparse.dia_matrix((resolution_data[fiber],offsets),(nwave,nwave))
     elif len(resolution_data.shape)==2 :
         if fiber is not None:
-            print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape," and requested fiber=",fiber
+            log.error("error in resolution_data_to_sparse_matrix, shape={0} and requested fiber={1}".format(str(resolution_data.shape),str(fiber)))
             sys.exit(12)
         d=resolution_data.shape[0]/2
         nwave=resolution_data.shape[1]
         offsets = np.arange(d,-d-1,-1)
         return scipy.sparse.dia_matrix((resolution_data,offsets),(nwave,nwave))
     else :
-        print "error in resolution_data_to_sparse_matrix, shape=",resolution_data.shape
+        log.error("error in resolution_data_to_sparse_matrix, shape={0}".format(str(resolution_data.shape)))
         sys.exit(12)

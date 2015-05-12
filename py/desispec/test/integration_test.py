@@ -14,56 +14,60 @@ from astropy.io import fits
 
 from desispec.pipeline import runcmd
 from desispec import io
+from desispec.log import get_logger
 
 def check_env():
     """
     Check required environment variables; raise RuntimeException if missing
     """
+    log = get_logger()
     #- template locations
     missing_template_env = False
     for objtype in ('ELG', 'LRG', 'STD', 'QSO'):
         name = 'DESI_'+objtype+'_TEMPLATES'
         if name not in os.environ:
-            print 'missing ${} needed for simulating spectra'.format(name)
+            log.warning('missing ${0} needed for simulating spectra'.format(name))
             missing_template_env = True
 
     if missing_template_env:
-        print '    e.g. see NERSC:/project/projectdirs/desi/datachallenge/dc2/templates/'
-            
+        log.warning('    e.g. see NERSC:/project/projectdirs/desi/datachallenge/dc2/templates/')
+
     missing_env = False
     for name in (
         'DESI_SPECTRO_SIM', 'DESI_SPECTRO_DATA', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'PRODNAME'):
         if name not in os.environ:
-            print "missing $"+name
+            log.warning("missing ${0}".format(name))
             missing_env = True
-        
+
     if missing_env:
-        print "Why are these needed?"
-        print "    Simulations written to $DESI_SPECTRO_SIM/$PIXPROD/"
-        print "    Raw data read from $DESI_SPECTRO_DATA/"
-        print "    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$PRODNAME/"
-            
+        log.warning("Why are these needed?")
+        log.warning("    Simulations written to $DESI_SPECTRO_SIM/$PIXPROD/")
+        log.warning("    Raw data read from $DESI_SPECTRO_DATA/")
+        log.warning("    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$PRODNAME/")
+
     #- Wait until end to raise exception so that we report everything that
     #- is missing before actually failing
     if missing_env or missing_template_env:
-        print "FATAL: missing env vars; exiting without running pipeline"
+        log.critical("missing env vars; exiting without running pipeline")
         sys.exit(1)
 
 
 #- TODO: fix usage of night to be something other than today
 def integration_test(night=None, nspec=5, clobber=False):
-
+    """No docstring yet.
+    """
+    log = get_logger()
     #- YEARMMDD string, rolls over at noon not midnight
     if night is None:
         night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
-        
+
     #- check for required environment variables
     check_env()
-    
+
     #- parameter dictionary that will later be used for formatting commands
     params = dict(night=night, nspec=nspec)
 
-    #-----    
+    #-----
     #- Input fibermaps, spectra, and pixel-level raw data
     for expid, flavor in zip([0,1,2], ['flat', 'arc', 'science']):
         cmd = "pixsim-desi --newexp {flavor} --nspec {nspec} --night {night} --expid {expid}".format(
@@ -137,15 +141,15 @@ def integration_test(night=None, nspec=5, clobber=False):
         outputs = [skyfile, ]
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('sky model failed for '+camera)
-            
-    
+
+
     #-----
     #- Fit standard stars
     if 'STD_TEMPLATES' in os.environ:
         std_templates = os.getenv('STD_TEMPLATES')
     else:
         std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/stellar_templates/v1.0/stdstar_templates_v1.0.fits'
-    
+
     stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
     cmd = """desi_fit_stdstars.py --spectrograph 0 \
       --fibermap {fibermap} \
@@ -153,12 +157,12 @@ def integration_test(night=None, nspec=5, clobber=False):
       --models {std_templates} --outfile {stdstars}""".format(
         flat_expid=flat_expid, fibermap=fibermap, std_templates=std_templates,
         stdstars=stdstarfile)
-    
+
     inputs = [fibermap, std_templates]
     outputs = [stdstarfile,]
     if runcmd(cmd, inputs, outputs, clobber) != 0:
         raise RuntimeError('fitting stdstars failed')
-        
+
 
     #-----
     #- Flux calibration
@@ -192,20 +196,20 @@ def integration_test(night=None, nspec=5, clobber=False):
         outputs = [cframefile, ]
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('combining calibration steps failed for '+camera)
-            
+
     #-----
     #- Bricks
     inputs = list()
     for camera in ['b0', 'r0', 'z0']:
         inputs.append( io.findfile('cframe', night, expid, camera) )
-    
+
     outputs = list()
     fibermap, hdr = io.read_fibermap(io.findfile('fibermap', night, expid))
     bricks = set(fibermap['BRICKNAME'])
     for b in bricks:
         for channel in ['b', 'r', 'z']:
             outputs.append( io.findfile('brick', brickid=b, band=channel))
-    
+
     cmd = "desi_make_bricks.py --night "+night
     if runcmd(cmd, inputs, outputs, clobber) != 0:
         raise RuntimeError('brick generation failed')
@@ -240,9 +244,9 @@ def integration_test(night=None, nspec=5, clobber=False):
                 objtype = 'STAR'
             else:
                 objtype = zbest.type[i]
-            
+
             z, zwarn = zbest.z[i], zbest.zwarn[i]
-            
+
             j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
             truez = siminfo['REDSHIFT'][j]
@@ -264,7 +268,7 @@ def integration_test(night=None, nspec=5, clobber=False):
                     print '- oops'
             else:
                 print '- oops'
-                
+
     print "--------------------------------------------------"
 
 if __name__ == '__main__':
