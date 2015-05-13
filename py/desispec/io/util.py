@@ -92,12 +92,17 @@ def makepath(outfile, filetype=None):
 
 def write_bintable(filename, data, header=None, comments=None, units=None,
                    extname=None, clobber=False):
-    """Utility function to write a fits binary table complete with comments
-    and units in the FITS header too.
+    """Utility function to write a fits binary table complete with
+    comments and units in the FITS header too.  DATA can either be
+    dictionary, an Astropy Table, or a numpy.recarray.
     """
 
+    #- Convert DATA as needed
+    if not isinstance(data,np.recarray):
+        outdata = _dict2ndarray(data)
+
     #- Write the data and header
-    hdu = astropy.io.fits.BinTableHDU(data, header=header, name=extname)
+    hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
     if clobber:
         astropy.io.fits.writeto(filename, hdu.data, hdu.header, clobber=True)
     else:
@@ -126,3 +131,40 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     #- Write updated header and close file
     fx.flush()
     fx.close()
+
+def _dict2ndarray(data, columns=None):
+    """
+    Convert a dictionary of ndarrays into a structured ndarray
+
+    Also works if DATA is an AstroPy Table.
+    
+    Args:
+        data: input dictionary, each value is an ndarray
+        columns: optional list of column names
+        
+    Notes:
+        data[key].shape[0] must be the same for every key
+        every entry in columns must be a key of data
+    
+    Example
+        d = dict(x=np.arange(10), y=np.arange(10)/2)
+        nddata = _dict2ndarray(d, columns=['x', 'y'])
+    """
+    if columns is None:
+        columns = data.keys()
+        
+    dtype = list()
+    for key in columns:
+        ### dtype.append( (key, data[key].dtype, data[key].shape) )
+        if data[key].ndim == 1:
+            dtype.append( (key, data[key].dtype) )
+        else:
+            dtype.append( (key, data[key].dtype, data[key].shape[1:]) )
+        
+    nrows = len(data[key])  #- use last column to get length    
+    xdata = np.empty(nrows, dtype=dtype)
+    
+    for key in columns:
+        xdata[key] = data[key]
+    
+    return xdata
