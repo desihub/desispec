@@ -94,11 +94,11 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
                    extname=None, clobber=False):
     """Utility function to write a fits binary table complete with
     comments and units in the FITS header too.  DATA can either be
-    dictionary, an Astropy Table, or a numpy.recarray.
+    dictionary, an Astropy Table, a numpy.recarray or a numpy.ndarray. 
     """
 
     #- Convert DATA as needed
-    if isinstance(data,np.recarray):
+    if isinstance(data,np.recarray) or isinstance(data,np.ndarray):
         outdata = data
     else:
         outdata = _dict2ndarray(data)
