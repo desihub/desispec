@@ -98,7 +98,9 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     """
 
     #- Convert DATA as needed
-    if not isinstance(data,np.recarray):
+    if isinstance(data,np.recarray):
+        outdata = data
+    else:
         outdata = _dict2ndarray(data)
 
     #- Write the data and header
