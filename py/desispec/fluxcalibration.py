@@ -101,7 +101,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
         diags=np.arange(10,-11,-1)
         nwave=len(wave)
         convolved=np.zeros(nwave)
-        #print 'resolution',resolution[1].shape
         R=Resolution(resolution)
         convolved=R.dot(flux)
 
@@ -126,7 +125,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
         rdelta=np.sum(((r_models-rnorm)**2)*rivar)
         bdelta=np.sum(((b_models-bnorm)**2)*bivar)
         zdelta=np.sum(((z_models-znorm)**2)*zivar)
-        #print i, (rdelta+bdelta+zdelta)/(len(bwave)+len(rwave)+len(zwave))
         if (rdelta+bdelta+zdelta)<maxDelta:
                 bestmodel={"r":r_models,"b":b_models,"z":z_models}
                 bestId=i
@@ -149,7 +147,7 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
 
     Only SDSS_r band is assumed to be used for normalization for now.
     """
-
+    log = get_logger()
     def ergs2photons(flux,wave):
         return flux*wave/hc
 
@@ -179,7 +177,7 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
             filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
             rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
             apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
-            print 'scaling SDSS_r mag',apMag,'to',refmag
+            log.info('scaling SDSS_r mag {0:f} to {1:f}.'.format(apMag,refmag))
             scalefac=10**((apMag-refmag)/2.5)
             normflux=stdflux*scalefac
 
@@ -312,7 +310,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
         #sys.exit(12)
 
 
-        log.info("iter %d rejecting"%iteration)
+        log.info("iter {0:d} rejecting".format(iteration))
 
         nout_iter=0
         if iteration<1 :
@@ -362,7 +360,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
     #calibration,calibcovar=cholesky_solve_and_invert(A.todense(),B)
     calibcovar=np.linalg.inv(A.todense())
     calibvar=np.diagonal(calibcovar)
-    print "mean(var)=",np.mean(calibvar)
+    log.info("mean(var)={0:f}".format(np.mean(calibvar)))
 
 
 
@@ -391,7 +389,15 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
     return calibration, calibivar, mask, ccalibration, ccalibivar
 
 def apply_flux_calibration(flux,ivar,resolution_data,wave,calibration,civar,cmask,cwave):
-    """No documentation yet.
+    """
+    Applies flux calibration to input flux and ivar
+
+    Args:
+        flux : input flux[nspec, nwave] -- WILL BE MODIFIED IN-PLACE
+        ivar : input ivar[nspec, nwave] -- WILL BE MODIFIED IN-PLACE
+        resolution_data : 3D[nspec, ndiag, nwave] sparse resolution matrix data
+        wave : 1D[nwave] wavelength of flux
+        calibration, civar, cmask, cwave : from compute_flux_calibration()
     """
     log=get_logger()
     log.info("starting")

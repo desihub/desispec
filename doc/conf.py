@@ -61,7 +61,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'desispec'
-copyright = u'2014, DESI'
+copyright = u'2014-2015, DESI'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -110,6 +110,8 @@ pygments_style = 'sphinx'
 # If true, keep warnings as "system message" paragraphs in the built documents.
 keep_warnings = True
 
+# Include functions that begin with an underscore, e.g. _private().
+napoleon_include_private_with_doc = True
 
 # -- Options for HTML output ----------------------------------------------
 

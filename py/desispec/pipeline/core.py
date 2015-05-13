@@ -9,7 +9,7 @@ desispec.pipeline.core
 Core functions.
 """
 
-from __future__ import absolute_import, division
+from __future__ import absolute_import, division, print_function
 
 import os
 import time
@@ -73,13 +73,13 @@ def runcmd(cmd, inputs=[], outputs=[], clobber=False):
     log.info("RUNNING: " + cmd)
     if log.level <= desispec.log.INFO:
         if len(inputs) > 0:
-            print "  Inputs"
+            print("  Inputs")
             for x in inputs:
-                print "   ", x
+                print("   ", x)
         if len(outputs) > 0:
-            print "  Outputs"
+            print("  Outputs")
             for x in outputs:
-                print "   ", x
+                print("   ", x)
 
     #- run command
     err = os.system(cmd)

@@ -20,6 +20,7 @@ import numpy as np
 import desispec.io
 import desispec.coaddition
 import desispec.resolution
+from desispec.log import get_logger, DEBUG
 
 def main():
 
@@ -35,9 +36,13 @@ def main():
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
         help = 'Override default path ($DESI_SPECTRO_REDUX/$PRODNAME) to processed data.')
     args = parser.parse_args()
+    if args.verbose:
+        log = get_logger(DEBUG)
+    else:
+        log = get_logger()
 
     if args.brick is None:
-        print 'Missing required brick argument.'
+        log.critical('Missing required brick argument.')
         return -1
 
     # Open the combined coadd file for this brick, for updating.
@@ -59,17 +64,16 @@ def main():
         # Open this band's brick file for reading.
         brick_path = desispec.io.meta.findfile('brick',brickid = args.brick,band = band,specprod = args.specprod)
         if not os.path.exists(brick_path):
-            print 'Skipping non-existent brick file',brick_path
+            log.info('Skipping non-existent brick file {0}.'.format(brick_path))
             continue
         brick_file = desispec.io.brick.Brick(brick_path,mode = 'readonly')
         flux_in,ivar_in,wlen,resolution_in = (brick_file.hdu_list[0].data,brick_file.hdu_list[1].data,
             brick_file.hdu_list[2].data,brick_file.hdu_list[3].data)
-        if args.verbose:
-            print 'Processing %s with %d exposures of %d targets...' % (
-                brick_path,brick_file.get_num_spectra(),brick_file.get_num_targets())
+        log.debug('Processing %s with %d exposures of %d targets...' % (
+                brick_path,brick_file.get_num_spectra(),brick_file.get_num_targets()))
         if resolution_in.shape[1] != desispec.resolution.num_diagonals:
-            print 'ERROR: resolution has unexpected shape (ndiag=%d != %d). Skipping this file.' % (
-                resolution_in.shape[1],desispec.resolution.num_diagonals)
+            log.error('resolution has unexpected shape (ndiag=%d != %d). Skipping this file.' % (
+                resolution_in.shape[1],desispec.resolution.num_diagonals))
             brick_file.close()
             continue
         # Open this band's coadd file for updating.
@@ -108,8 +112,8 @@ def main():
             exposure = info['EXPID']
             seen = (coadd_all_info['EXPID'] == exposure) & (coadd_all_info['TARGETID'] == target_id)
             if not np.any(seen):
-                print 'Adding exposure %d of target %d to global coadd with partial band coverage.' % (
-                    exposure,target_id)
+                log.info('Adding exposure %d of target %d to global coadd with partial band coverage.' % (
+                    exposure,target_id))
                 coadd_all_info.append(coadd_info[index])
             else:
                 coadd_all_info['INDEX'][index] = target_index[target_id]
@@ -125,13 +129,12 @@ def main():
 
         # Save the coadded spectra for this band.
         for target_id in coadded_spectra:
-            if band not in coadded_spectra[target_id]:                
+            if band not in coadded_spectra[target_id]:
                 continue
             exposures = (coadd_info['TARGETID'] == target_id)
             index = target_index[target_id]
-            if args.verbose:
-                print 'Saving coadd of %d exposures for target ID %d to index %d.' % (
-                    np.count_nonzero(exposures),target_id,index)
+            log.debug('Saving coadd of %d exposures for target ID %d to index %d.' % (
+                    np.count_nonzero(exposures),target_id,index))
             coadd = coadded_spectra[target_id][band]
             coadd.finalize()
             flux_out[index] = coadd.flux
@@ -158,10 +161,9 @@ def main():
     for target_id in coadded_spectra:
         index = target_index[target_id]
         bands = ','.join(sorted(coadded_spectra[target_id].keys()))
-        if args.verbose:
-            print 'Combining %s bands for target %d at index %d.' % (bands,target_id,index)
+        log.debug('Combining %s bands for target %d at index %d.' % (bands,target_id,index))
         if bands != all_bands:
-            print 'WARNING: target %d has partial band coverage: %s' % (target_id,bands)
+            log.warning('WARNING: target %d has partial band coverage: %s' % (target_id,bands))
         coadd_all = desispec.coaddition.Spectrum(desispec.coaddition.global_wavelength_grid)
         for coadd_band in coadded_spectra[target_id].itervalues():
             coadd_all += coadd_band

@@ -44,13 +44,13 @@ def main() :
 
 
     args = parser.parse_args()
+    log=get_logger()
 
     if args.infile is None or args.fibermap is None or args.outfile is None or args.fiberflat is None or args.sky is None or args.models is None :
-        print('Missing something')
+        log.critical('Missing something')
         parser.print_help()
         sys.exit(12)
 
-    log=get_logger()
 
     log.info("read frame")
     # read frame

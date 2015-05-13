@@ -5,7 +5,7 @@ desispec.log
 Utility functions to dump log messages. We can have something specific for
 DESI in the future but for now we use the standard Python.
 """
-
+from __future__ import absolute_import, division, print_function
 import sys
 import logging
 import os
@@ -33,7 +33,7 @@ def get_logger(level=None) :
 
     If environment variable :envvar:`DESI_LOGLEVEL` exists and has value  DEBUG,INFO,WARNING or ERROR (upper or lower case),
     it overules the level argument.
-    If :envvar:`DESI_LOGLEVEL` is not set and level=None, the default level is set to INFO.    
+    If :envvar:`DESI_LOGLEVEL` is not set and level=None, the default level is set to INFO.
     """
 
     global desi_logger
@@ -54,7 +54,7 @@ def get_logger(level=None) :
             for k in dico :
                 message+=" %s"%k
             message+=")"
-            print message
+            print(message)
 
     if level is None :
         level=INFO

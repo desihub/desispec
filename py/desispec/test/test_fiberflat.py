@@ -1,3 +1,7 @@
+"""
+test desispec.fiberflat
+"""
+
 import unittest
 import numpy as np
 import scipy.sparse

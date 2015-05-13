@@ -12,10 +12,13 @@ from desispec.log import get_logger
 #import time # for debugging
 
 def bin_bounds(x):
-    """No documentation yet.
+    """
+    Calculates the bin boundaries of an array x
+
+    Returns tuple of lower and upper bounds, each with same length as x
     """
     if x.size<2 :
-        get_logger().error("bin_bounds, x.size=%d"%x.size)
+        get_logger().error("bin_bounds, x.size={0:d}".format(x.size))
         exit(12)
     tx=np.sort(x)
     x_minus=np.roll(tx,1)
@@ -141,16 +144,13 @@ def _unweighted_resample(output_x,input_x,input_flux_density) :
     The total integrated flux is conserved.
 
     Args:
-       input_x: SORTED vector, not necessarily linearly spaced
-       output_x: SORTED vector, not necessarily linearly spaced
-       input_flux_density: input flux density dflux/dx sampled at x
+        output_x: SORTED vector, not necessarily linearly spaced
+        input_x: SORTED vector, not necessarily linearly spaced
+        input_flux_density: input flux density dflux/dx sampled at x
 
     both must represent the same quantity with the same unit
     input_flux_density =  dflux/dx sampled at input_x
 
-    Options:
-        left: value for expolation to the left, if None, use input_flux_density[0], default=0
-        right: value for expolation to the right, if None, use input_flux_density[-1], default=0
     Returns:
         returns output_flux
 

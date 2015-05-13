@@ -6,7 +6,7 @@
 """
 Inspect the desispec output for a single target.
 """
-
+from __future__ import absolute_import, print_function
 import argparse
 import os.path
 
@@ -18,6 +18,7 @@ import astropy.table
 
 import desispec.io
 import desispec.coaddition
+from desispec.log import get_logger, DEBUG
 
 def main():
 
@@ -45,7 +46,10 @@ def main():
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
         help = 'Override default path ($DESI_SPECTRO_REDUX/$PRODNAME) to processed data.')
     args = parser.parse_args()
-
+    if args.verbose:
+        log = get_logger(DEBUG)
+    else:
+        log = get_logger()
     figure = plt.figure(figsize=(12,8))
     left_axis = plt.gca()
     figure.set_facecolor('white')
@@ -66,34 +70,33 @@ def main():
         brick_path = desispec.io.meta.findfile('brick',brickid = args.brick,
             band = band,specprod = args.specprod)
         if not os.path.exists(brick_path):
-            print 'No %s-band brick file found for brick %s.' % (band,args.brick)
+            log.warning('No %s-band brick file found for brick %s.' % (band,args.brick))
         else:
             brick_file = desispec.io.brick.Brick(brick_path,mode = 'readonly')
             wlen = brick_file.get_wavelength_grid()
             wlen_min,wlen_max = min(wlen_min,np.min(wlen)),max(wlen_max,np.max(wlen))
             exp_flux,exp_ivar,exp_resolution,exp_info = brick_file.get_target(args.target)
-            if args.verbose:
-                print 'Found %d %s-band exposures covering %.1f-%.1fA: %s' % (
-                    len(exp_flux),band,np.min(wlen),np.max(wlen),','.join(map(str,exp_info['EXPID'])))
+            log.debug('Found %d %s-band exposures covering %.1f-%.1fA: %s' % (
+                len(exp_flux),band,np.min(wlen),np.max(wlen),','.join(map(str,exp_info['EXPID']))))
 
             if len(exp_flux) > 0:
                 if args.info:
                     exp_info = astropy.table.Table(exp_info)
-                    print exp_info
+                    print(exp_info)
 
                 for flux in exp_flux:
                     plt.scatter(wlen[::args.stride],flux[::args.stride],color = color,s = 1.,alpha = 0.5)
 
             else:
-                print 'No %s-band exposures recorded for target %d in brick %s' % (
-                    band,args.target,args.brick)
+                log.warning('No %s-band exposures recorded for target %d in brick %s' % (
+                    band,args.target,args.brick))
 
             brick_file.close()
 
         coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,
             band = band,specprod = args.specprod)
         if not os.path.exists(coadd_path):
-            print 'No %s-band coadd file found for brick %s.' % (band,args.brick)
+            log.warning('No %s-band coadd file found for brick %s.' % (band,args.brick))
         else:
             coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'readonly')
             wlen = coadd_file.get_wavelength_grid()
@@ -103,7 +106,7 @@ def main():
             if len(coadd_flux) == 1:
                 if args.info:
                     coadd_info = astropy.table.Table(coadd_info)
-                    print coadd_info
+                    print(coadd_info)
 
                 left_axis.scatter(wlen[::args.stride],coadd_flux[0,::args.stride],color = color,
                     marker = 'x',alpha = 0.5)
@@ -116,16 +119,16 @@ def main():
                     right_axis.fill_between(wlen_zoom,R[index,bins],color = color,alpha = 0.1)
 
             elif len(coadd_flux) == 0:
-                print 'No %s-band coadd available for target %d.' % (band,args.target)
+                log.warning('No %s-band coadd available for target %d.' % (band,args.target))
             else:
-                print 'ERROR: found %d (>1) coadded %d-band fluxes for target %d' % (
-                    len(coadd_flux),band,args.target)
+                log.error('found %d (>1) coadded %d-band fluxes for target %d' % (
+                    len(coadd_flux),band,args.target))
 
             coadd_file.close()
 
     coadd_all_path = desispec.io.meta.findfile('coadd_all',brickid = args.brick,specprod = args.specprod)
     if not os.path.exists(coadd_all_path):
-        print 'No global coadd available for brick %s.' % (args.brick)
+        log.warning('No global coadd available for brick %s.' % (args.brick))
     else:
         coadd_all_file = desispec.io.brick.CoAddedBrick(coadd_all_path,mode = 'readonly')
         wlen = coadd_all_file.get_wavelength_grid()
@@ -135,17 +138,17 @@ def main():
         if len(coadd_flux) == 1:
             if args.info:
                 coadd_info = astropy.table.Table(coadd_info)
-                print coadd_info
+                print(coadd_info)
             mask = (coadd_ivar[0] > 0)
             flux_error = np.zeros_like(coadd_flux[0])
             flux_error[mask] = coadd_ivar[0,mask]**-0.5
             left_axis.fill_between(wlen,coadd_flux[0]-flux_error,coadd_flux[0]+flux_error,
                 color='black',alpha=0.2)
         elif len(coadd_flux) == 0:
-            print 'No global coadd available for target %d.' % (args.target)
+            log.warning('No global coadd available for target %d.' % (args.target))
         else:
-            print 'ERROR: found %d (>1) global coadded fluxes for target %d' % (
-                len(coadd_flux),args.target)
+            log.error('found %d (>1) global coadded fluxes for target %d' % (
+                len(coadd_flux),args.target))
 
         plt.xlim(wlen_min,wlen_max)
         coadd_all_file.close()

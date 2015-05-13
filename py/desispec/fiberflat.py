@@ -5,7 +5,7 @@ desispec.fiberflat
 Utility functions to compute a fiber flat correction and apply it
 We try to keep all the (fits) io separated.
 """
-
+from __future__ import absolute_import, division
 
 import numpy as np
 from desispec.resolution import Resolution

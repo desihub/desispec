@@ -30,10 +30,12 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
-    returns tuple (skyflux, ivar, mask):
+    returns tuple (skyflux, ivar, mask, cskyflux, cskyivar):
         skyflux : 1D[nwave] deconvolved skyflux
         ivar : inverse variance of that skyflux
         mask : 0=ok >0 if problems
+        cskyflux :  1D[nwave] convolved skyflux at average resolution
+        cskyivar :  1D[nwave] convolved skyflux inverse variance
     """
 
     log=get_logger()
