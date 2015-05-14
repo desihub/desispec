@@ -16,7 +16,7 @@ from desispec.io.meta import findfile, get_exposures, get_files, data_root, spec
 from desispec.io.frame import read_frame, write_frame
 from desispec.io.sky import read_sky, write_sky
 from desispec.io.fiberflat import read_fiberflat, write_fiberflat
-from desispec.io.fibermap import read_fibermap, write_fibermap
+from desispec.io.fibermap import read_fibermap, write_fibermap, empty_fibermap
 from desispec.io.brick import Brick
 from desispec.io.zfind import read_zbest, write_zbest
 from desispec.io import util

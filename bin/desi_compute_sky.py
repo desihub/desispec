@@ -81,10 +81,10 @@ def main() :
     apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skyflux,skyivar,skymask,cskyflux,cskyivar = compute_sky(frame.wave,frame.flux[selection],frame.ivar[selection],frame.resolution_data[selection])
+    skymodel = compute_sky(frame[selection])
 
     # write result
-    write_sky(args.outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,frame.wave,frame.header)
+    write_sky(args.outfile, skymodel, frame.header)
 
     log.info("successfully wrote %s"%args.outfile)
 

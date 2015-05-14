@@ -125,7 +125,15 @@ def main() :
        meanspecFlat[i] = ff.meanspec
        waveFlat[i] = ff.wave
        headerFlat[i] = ff.header
-       sky[i],skyivar[i],skymask[i],cskyflux[i],civar[i],skywave[i],skyhdr[i]=io.read_sky(skyfile[i])
+
+       skymodel = io.read_sky(skyfile[i])
+       sky[i] = skymodel.flux
+       skyivar[i] = skymodel.ivar
+       skymask[i] = skymodel.mask
+       cskyflux[i] = skymodel.cflux
+       civar[i] = skymodel.civar
+       skywave[i] = skymodel.wave
+       skyhdr[i] = skymodel.header
 
     # Convolve Sky with Detector Resolution, so as to subtract from data. Convolve for all 500 specs. Subtracting sky this way should be equivalent to sky_subtract
 

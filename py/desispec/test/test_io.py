@@ -5,6 +5,7 @@ import numpy as np
 
 from desispec.spectra import Spectra
 from desispec.fiberflat import FiberFlat
+from desispec.sky import SkyModel
 import desispec.io
 from astropy.io import fits
 
@@ -76,25 +77,26 @@ class TestIO(unittest.TestCase):
         self.assertTrue(spectra.resolution_data.dtype.isnative)
         
     def test_sky_rw(self):
-        nspec, nwave, ndiag = 10, 20, 3
-        flux = np.random.uniform(size=(nspec, nwave))
-        ivar = np.random.uniform(size=(nspec, nwave))
-        mask = np.zeros(shape=(nspec, nwave))
-        cflux = np.random.uniform(size=(nspec, nwave))
-        civar = np.random.uniform(size=(nspec, nwave))
+        nwave = 20
         wave = np.arange(nwave)
+        flux = np.random.uniform(size=nwave)
+        ivar = np.random.uniform(size=nwave)
+        mask = np.zeros(shape=nwave)
+        cflux = np.random.uniform(size=nwave)
+        civar = np.random.uniform(size=nwave)
 
         # skyflux,skyivar,skymask,cskyflux,cskyivar,wave
-        desispec.io.write_sky(self.testfile, flux, ivar, mask, cflux, civar, wave)
-        xflux, xivar, xmask, xcflux, xcivar, xwave, hdr = desispec.io.read_sky(self.testfile)
+        sky = SkyModel(wave, flux, ivar, mask, cflux, civar)
+        desispec.io.write_sky(self.testfile, sky)
+        xsky = desispec.io.read_sky(self.testfile)
                 
-        self.assertTrue(np.all(flux == xflux))
-        self.assertTrue(np.all(ivar == xivar))
-        self.assertTrue(np.all(cflux == xcflux))
-        self.assertTrue(np.all(civar == xcivar))
-        self.assertTrue(np.all(mask == xmask))
-        self.assertTrue(np.all(wave == xwave))
-        self.assertTrue(flux.dtype.isnative)
+        self.assertTrue(np.all(sky.wave  == xsky.wave))
+        self.assertTrue(np.all(sky.flux  == xsky.flux))
+        self.assertTrue(np.all(sky.ivar  == xsky.ivar))
+        self.assertTrue(np.all(sky.mask  == xsky.mask))
+        self.assertTrue(np.all(sky.cflux == xsky.cflux))
+        self.assertTrue(np.all(sky.civar == xsky.civar))
+        self.assertTrue(xsky.flux.dtype.isnative)
                 
     # fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave
     def test_fiberflat_rw(self):

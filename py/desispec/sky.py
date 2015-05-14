@@ -16,7 +16,7 @@ from desispec.log import get_logger
 import scipy,scipy.sparse
 import sys
 
-def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
+def compute_sky(spectra, nsig_clipping=4.) :
     """Compute a sky model.
 
     Input has to correspond to sky fibers only.
@@ -24,31 +24,32 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     We don't check this in this routine.
 
     args:
-        wave : 1D wavelength grid in Angstroms
-        flux : 2D flux[nspec, nwave] density (only sky fibers)
-        ivar : 2D inverse variance of flux (only sky fibers)
-        resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
+        spectra : Spectra object of sky fibers, which includes attributes
+          - wave : 1D wavelength grid in Angstroms
+          - flux : 2D flux[nspec, nwave] density (only sky fibers)
+          - ivar : 2D inverse variance of flux (only sky fibers)
+          - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
-    returns tuple (skyflux, ivar, mask, cskyflux, cskyivar):
-        skyflux : 1D[nwave] deconvolved skyflux
-        ivar : inverse variance of that skyflux
-        mask : 0=ok >0 if problems
-        cskyflux :  1D[nwave] convolved skyflux at average resolution
-        cskyivar :  1D[nwave] convolved skyflux inverse variance
+    returns SkyModel object with attributes
+      - skyflux : 1D[nwave] deconvolved skyflux
+      - ivar : inverse variance of that skyflux
+      - mask : 0=ok >0 if problems
+      - cskyflux :  1D[nwave] convolved skyflux at average resolution
+      - cskyivar :  1D[nwave] convolved skyflux inverse variance
     """
 
     log=get_logger()
     log.info("starting")
 
-    nwave=wave.size
-    nfibers=flux.shape[0]
-    current_ivar=ivar.copy()
+    nwave=spectra.nwave
+    nfibers=spectra.nspec
+    current_ivar=spectra.ivar.copy()
 
     sqrtw=np.sqrt(current_ivar)
-    sqrtwflux=sqrtw*flux
+    sqrtwflux=sqrtw*spectra.flux
 
-    chi2=np.zeros(flux.shape)
+    chi2=np.zeros(spectra.flux.shape)
 
     #debug
     #nfibers=min(nfibers,2)
@@ -64,7 +65,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         for fiber in range(nfibers) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
-            R = Resolution(resolution_data[fiber])
+            R = spectra.R[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)
             SD.setdiag(sqrtw[fiber])
@@ -82,9 +83,8 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
         for fiber in range(nfibers) :
 
-            R = Resolution(resolution_data[fiber])
-            S = R.dot(skyflux)
-            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-S)**2
+            S = spectra.R[fiber].dot(skyflux)
+            chi2[fiber]=current_ivar[fiber]*(spectra.flux[fiber]-S)**2
 
         log.info("rejecting")
 
@@ -135,7 +135,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     # this might be handy
 
     # first compute average resolution
-    mean_res_data=np.mean(resolution_data,axis=0)
+    mean_res_data=np.mean(spectra.resolution_data,axis=0)
     R = Resolution(mean_res_data)
     # compute convolved sky and ivar
     cskyflux=R.dot(skyflux)
@@ -148,40 +148,72 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     # need to do better here
     mask=(skyvar>0).astype(long)  # SOMEONE CHECK THIS !
 
-    return skyflux, skyivar, mask, cskyflux, cskyivar
+    return SkyModel(spectra.wave.copy(), skyflux, skyivar, mask, cskyflux, cskyivar)
+
+class SkyModel(object):
+    def __init__(self, wave, flux, ivar, mask, cflux, civar):
+        """Create SkyModel object
+        
+        Args:
+            wave  : 1D[nwave] wavelength in Angstroms
+            flux  : 1D[nwave] deconvolved skyflux
+            ivar  : inverse variance of that skyflux
+            mask  : 0=ok >0 if problems
+            cflux : 1D[nwave] convolved skyflux at average resolution
+            civar : 1D[nwave] convolved skyflux inverse variance
+            
+        All input arguments become attributes
+        """
+        if wave.ndim != 1:  raise ValueError('wave should be 1D')
+        if flux.ndim != 1:  raise ValueError('flux should be 1D')
+        if ivar.ndim != 1:  raise ValueError('ivar should be 1D')
+        if mask.ndim != 1:  raise ValueError('mask should be 1D')
+        if cflux.ndim != 1: raise ValueError('cflux should be 1D')
+        if civar.ndim != 1: raise ValueError('civar should be 1D')
+        self.nwave = len(wave)
+        if len(flux) != self.nwave: raise ValueError('len(flux) != nwave')
+        if len(ivar) != self.nwave: raise ValueError('len(ivar) != nwave')
+        if len(mask) != self.nwave: raise ValueError('len(mask) != nwave')
+        if len(cflux) != self.nwave: raise ValueError('len(cflux) != nwave')
+        if len(civar) != self.nwave: raise ValueError('len(civar) != nwave')
+        
+        self.wave = wave
+        self.flux = flux
+        self.ivar = ivar
+        self.mask = mask
+        self.cflux = cflux
+        self.civar = civar
 
 
-
-
-def subtract_sky(flux,ivar,resolution_data,wave,skyflux,convolved_skyivar,skymask,skywave) :
-    """No documentation yet.
+def subtract_sky(spectra, skymodel) :
+    """Subtract skymodel from spectra, accounting for per-fiber resolution
+    
+    Alters spectra.flux and spectra.ivar
     """
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    mval=np.max(np.abs(wave-skywave))
-    if mval > 0.00001 :
-        log.error("not same wavelength (should raise an error instead)")
-        sys.exit(12)
+    if not np.allclose(spectra.wave, skymodel.wave):
+        message = "spectra and sky not on same wavelength grid"
+        log.error(message)
+        raise ValueError(message)
 
-    nwave=wave.size
-    nfibers=flux.shape[0]
+    nwave=spectra.nwave
+    nfibers=spectra.nspec
 
     for fiber in range(nfibers) :
 
         #if fiber%10==0 :
         #    log.info("fiber %d"%fiber)
 
-        R = Resolution(resolution_data[fiber])
-        S = R.dot(skyflux)
-        flux[fiber] -= S
+        spectra.flux[fiber] -= spectra.R[fiber].dot(skymodel.flux)
 
         # deal with variance
-        selection=np.where((ivar[fiber]>0)&(convolved_skyivar>0))[0]
+        selection=np.where((spectra.ivar[fiber]>0)&(skymodel.civar>0))[0]
         if selection.size==0 :
             continue
 
-        ivar[fiber,selection]=1./(1./ivar[fiber,selection]+1./convolved_skyivar[selection])
+        spectra.ivar[fiber,selection]=1./(1./spectra.ivar[fiber,selection]+1./skymodel.civar[selection])
 
     log.info("done")

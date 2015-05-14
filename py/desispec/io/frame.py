@@ -38,6 +38,11 @@ def write_frame(outfile, spectra, header=None):
     else:
         hdr = fitsheader(spectra.header)
 
+    if 'SPECMIN' not in hdr:
+        hdr['SPECMIN'] = 0
+    if 'SPECMAX' not in hdr:
+        hdr['SPECMAX'] = hdr['SPECMIN'] + spectra.nspec
+
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(spectra.flux, header=hdr)
     x.header['EXTNAME'] = 'FLUX'

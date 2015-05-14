@@ -72,10 +72,9 @@ def main() :
     if args.sky!=None :
         log.info("subtract sky")
         # read sky
-        skyflux,sivar,smask,cskyflux,csivar,swave,skyhdr=read_sky(args.sky)
+        skymodel=read_sky(args.sky)
         # subtract sky
-        subtract_sky(flux=frame.flux, ivar=frame.ivar, resolution_data=frame.resolution_data, wave=frame.wave,
-            skyflux=skyflux,convolved_skyivar=csivar,skymask=smask,skywave=swave)
+        subtract_sky(frame, skymodel)
 
     if args.calib!=None :
         log.info("calibrate")

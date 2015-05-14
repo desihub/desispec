@@ -65,12 +65,10 @@ def main() :
     
     log.info("subtract sky")
     # read sky
-    skyflux,sivar,smask,cskyflux,csivar,swave,skyhdr=read_sky(args.sky)
+    skymodel=read_sky(args.sky)
 
     # subtract sky
-    subtract_sky(flux=spectra.flux, ivar=spectra.ivar, wave=spectra.wave,
-        resolution_data=spectra.resolution_data,
-        skyflux=skyflux, convolved_skyivar=csivar, skymask=smask,skywave=swave)
+    subtract_sky(spectra, skymodel)
 
     log.info("compute flux calibration")
 
