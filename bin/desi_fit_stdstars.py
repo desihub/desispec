@@ -55,7 +55,7 @@ def main() :
     # read Standard Stars from the fibermap file
     # returns the Fiber id, filter names and mags for the standard stars
 
-    fiber_tbdata,fiber_header=io.read_fibermap(args.fibermap)
+    fiber_tbdata,fiber_header=io.read_fibermap(args.fibermap, header=True)
 
     #- Trim to just fibers on this spectrograph
     ii =  (500*args.spectrograph <= fiber_tbdata["FIBER"])
@@ -110,8 +110,21 @@ def main() :
 
     for i in ["b","r","z"]:
        #arg=(night,expid,'%s%s'%(i,spectrograph))
-       frameFlux[i],frameIvar[i],frameWave[i],frameResolution[i],framehdr[i]=io.read_frame(framefile[i])
-       fiberFlat[i],ivarFlat[i],maskFlat[i],meanspecFlat[i],waveFlat[i],headerFlat[i]=io.read_fiberflat(fiberflatfile[i])
+       #- minimal code change for refactored I/O, while not taking advantage of simplified structure
+       frame = io.read_frame(framefile[i])
+       frameFlux[i] = frame.flux
+       frameIvar[i] = frame.ivar
+       frameWave[i] = frame.wave
+       frameResolution[i] = frame.resolution_data
+       framehdr[i] = frame.header
+
+       ff = io.read_fiberflat(fiberflatfile[i])
+       fiberFlat[i] = ff.fiberflat
+       ivarFlat[i] = ff.ivar
+       maskFlat[i] = ff.mask
+       meanspecFlat[i] = ff.meanspec
+       waveFlat[i] = ff.wave
+       headerFlat[i] = ff.header
        sky[i],skyivar[i],skymask[i],cskyflux[i],civar[i],skywave[i],skyhdr[i]=io.read_sky(skyfile[i])
 
     # Convolve Sky with Detector Resolution, so as to subtract from data. Convolve for all 500 specs. Subtracting sky this way should be equivalent to sky_subtract

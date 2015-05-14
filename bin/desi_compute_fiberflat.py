@@ -43,9 +43,8 @@ def main() :
     log.info("starting")
 
     spectra = read_frame(args.infile)
-    fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum = \
-        compute_fiberflat(spectra.wave, spectra.flux, spectra.ivar, spectra.resolution_data)
-    write_fiberflat(args.outfile,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave,head)
+    fiberflat = compute_fiberflat(spectra)
+    write_fiberflat(args.outfile, fiberflat, spectra.header)
 
     log.info("successfully wrote %s"%args.outfile)
 

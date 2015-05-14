@@ -17,16 +17,14 @@ import sys
 from desispec.log import get_logger
 
 
-def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
+def compute_fiberflat(spectra, nsig_clipping=4.) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelenght grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
 
     args:
-        wave : 1D wavelength grid in Angstroms
-        flux : 2D flux[nspec, nwave] density
-        ivar : 2D inverse variance of flux
-        resolution_data : 3D[nspec, ndiag, nwave] ...
+        spectra (desispec.Spectra): input spectra object with attributes
+            wave, flux, ivar, resolution_data
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
     returns tuple (fiberflat, ivar, mask, meanspec):
@@ -76,17 +74,19 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     # (it's faster that way, and we try to use sparse matrices as much as possible)
     #
 
-
-    nwave=wave.size
-    nfibers=flux.shape[0]
-
+    #- Shortcuts
+    nwave=spectra.nwave
+    nfibers=spectra.nspec
+    wave = spectra.wave.copy()  #- this will become part of output too
+    flux = spectra.flux
+    ivar = spectra.ivar
 
 
     # iterative fitting and clipping to get precise mean spectrum
     current_ivar=ivar.copy()
 
 
-    smooth_fiberflat=np.ones((flux.shape))
+    smooth_fiberflat=np.ones((spectra.flux.shape))
     chi2=np.zeros((flux.shape))
 
 
@@ -111,7 +111,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
 
-            R = Resolution(resolution_data[fiber])
+            ### R = Resolution(resolution_data[fiber])
+            R = spectra.R[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)*flat
             SD.setdiag(sqrtwflat[fiber])
@@ -135,7 +136,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             #if fiber%10==0 :
             #    log.info("iter %d fiber %d (smoothing)"%(iteration,fiber))
 
-            R = Resolution(resolution_data[fiber])
+            ### R = Resolution(resolution_data[fiber])
+            R = spectra.R[fiber]
 
             #M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
             M = R.dot(mean_spectrum)
@@ -201,7 +203,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     nsig_for_mask=4 # only mask out 4 sigma outliers
 
     for fiber in range(nfibers) :
-        R = Resolution(resolution_data[fiber])
+        ### R = Resolution(resolution_data[fiber])
+        R = spectra.R[fiber]
         M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
         fiberflat[fiber] = (M!=0)*flux[fiber]/(M+(M==0)) + (M==0)
         fiberflat_ivar[fiber] = ivar[fiber]*M**2
@@ -210,20 +213,21 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         if bad.size>0 :
             mask[fiber,bad] += fiberflat_mask
 
-    return fiberflat,fiberflat_ivar,mask,mean_spectrum
+    return FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum)    
 
 
-def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
-    """No documentation yet.
+def apply_fiberflat(spectra, fiberflat):
+### def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
+    """Apply fiberflat to spectra.  Modifies spectra.flux and spectra.ivar
     """
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    mval=np.max(np.abs(wave-ffwave))
-    if mval > 0.00001 :
-        log.critical("error in apply_fiberflat, not same wavelength (should raise an error instead)")
-        sys.exit(12)
+    if not np.allclose(spectra.wave, fiberflat.wave):
+        message = "spectra and fiberflat do not have the same wavelength arrays"
+        log.critical(message)
+        raise ValueError(message)
 
     """
      F'=F/C
@@ -232,10 +236,12 @@ def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
              = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
              = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
     """
-
-    flux=flux*(fiberflat>0)/(fiberflat+(fiberflat==0))
-    ivar=(ivar>0)*(ffivar>0)*(fiberflat>0)/(   1./((ivar+(ivar==0))*(fiberflat**2+(fiberflat==0))) + flux**2/(ffivar*fiberflat**4+(ffivar*fiberflat==0))   )
-
+    #- shorthand
+    ff = fiberflat
+    sp = spectra
+    
+    sp.flux = sp.flux*(ff.fiberflat>0)/(ff.fiberflat+(ff.fiberflat==0))
+    sp.ivar=(sp.ivar>0)*(ff.ivar>0)*(ff.fiberflat>0)/( 1./((sp.ivar+(sp.ivar==0))*(ff.fiberflat**2+(ff.fiberflat==0))) + sp.flux**2/(ff.ivar*ff.fiberflat**4+(ff.ivar*ff.fiberflat==0)) )
 
     log.info("done")
 
@@ -261,6 +267,15 @@ class FiberFlat(object):
 
         if fiberflat.ndim != 2:
             raise ValueError("fiberflat should be 2D[nspec, nwave]")
+
+        if ivar.ndim != 2:
+            raise ValueError("ivar should be 2D")
+
+        if mask.ndim != 2:
+            raise ValueError("mask should be 2D")
+
+        if meanspec.ndim != 1:
+            raise ValueError("meanspec should be 1D")
 
         if fiberflat.shape != ivar.shape:
             raise ValueError("fiberflat and ivar must have the same shape")

@@ -22,8 +22,11 @@ def write_frame(outfile, spectra, header=None):
 
     Args:
         outfile: full path to output file, or tuple (night, expid, channel)
-        spectra: output desispec.spectra.Spectra object with wave, flux, ivar...
+        spectra:  desispec.spectra.Spectra object with wave, flux, ivar...
         header: optional astropy.io.fits.Header or dict to override spectra.header
+        
+    Returns:
+        full filepath of output file that was written
         
     Note:
         spectra = Spectra(wave, flux, ivar, resolution_data)
@@ -57,13 +60,8 @@ def read_frame(filename, nspec=None):
             expid = integer exposure ID
             camera = b0, r1, .. z9
 
-    Returns
-        read_frame (tuple):
-            phot[nspec, nwave] : uncalibrated photons per bin
-            ivar[nspec, nwave] : inverse variance of phot
-            wave[nwave] : vacuum wavelengths [Angstrom]
-            resolution[nspec, ndiag, nwave] : TODO DOCUMENT THIS FORMAT
-            header : fits.Header from HDU 0
+    Returns:
+        desispec.Spectra object with attributes wave, flux, ivar, etc.
     """
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, (str, unicode)):
@@ -73,11 +71,13 @@ def read_frame(filename, nspec=None):
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
 
-    hdr = fits.getheader(filename)
-    flux = native_endian(fits.getdata(filename, 0))
-    ivar = native_endian(fits.getdata(filename, "IVAR"))
-    wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
-    resolution_data = native_endian(fits.getdata(filename, "RESOLUTION"))
+    fx = fits.open(filename)
+    hdr = fx[0].header
+    flux = native_endian(fx['FLUX'].data)
+    ivar = native_endian(fx['IVAR'].data)
+    wave = native_endian(fx['WAVELENGTH'].data)
+    resolution_data = native_endian(fx['RESOLUTION'].data)
+    fx.close()
 
     if nspec is not None:
         flux = flux[0:nspec]

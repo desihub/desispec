@@ -62,28 +62,29 @@ def main() :
     log.info("starting")
 
     # read exposure to load data and get range of spectra
-    flux,ivar,wave,resol,head = read_frame(args.infile)
-    specmin=head["SPECMIN"]
-    specmax=head["SPECMAX"]
+    ### flux,ivar,wave,resol,head = read_frame(args.infile)
+    frame = read_frame(args.infile)
+    specmin=frame.header["SPECMIN"]
+    specmax=frame.header["SPECMAX"]
 
     # read fibermap to locate sky fibers
-    table,fmheader=read_fibermap(args.fibermap)
-    selection=np.where((table["OBJTYPE"]=="SKY")&(table["FIBER"]>=specmin)&(table["FIBER"]<=specmax))[0]
+    fibermap = read_fibermap(args.fibermap)
+    selection=np.where((fibermap["OBJTYPE"]=="SKY")&(fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
     if selection.size == 0 :
         log.error("no sky fiber in fibermap %s"%args.fibermap)
         sys.exit(12)
 
     # read fiberflat
-    fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
+    fiberflat = read_fiberflat(args.fiberflat)
 
     # apply fiberflat to sky fibers
-    apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
+    apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skyflux,skyivar,skymask,cskyflux,cskyivar = compute_sky(wave,flux[selection],ivar[selection],resol[selection])
+    skyflux,skyivar,skymask,cskyflux,cskyivar = compute_sky(frame.wave,frame.flux[selection],frame.ivar[selection],frame.resolution_data[selection])
 
     # write result
-    write_sky(args.outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,wave,head)
+    write_sky(args.outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,frame.wave,frame.header)
 
     log.info("successfully wrote %s"%args.outfile)
 

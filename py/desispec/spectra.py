@@ -8,11 +8,29 @@ import numpy as np
 
 from desispec.resolution import Resolution
 
+class Spectrum(object):
+    def __init__(self, wave, flux, ivar, R):
+        """Lightweight wrapper of a single spectrum
+        
+        Args:
+            wave (1D ndarray): wavelength in Angstroms
+            flux (1D ndarray): flux (photons or ergs/s/cm^2/A)
+            ivar (1D ndarray): inverse variance of flux
+            R : Resolution object
+            
+        All args become attributes.  This is syntactic sugar.        
+        """
+        self.wave = wave
+        self.flux = flux
+        self.ivar = ivar
+        self.R = R
+        
+
 class Spectra(object):
     def __init__(self, wave, flux, ivar, resolution_data=None, header=None,
                 fibers=None, spectrograph=0):
         """
-        Creates a lightweight wrapper for spectra
+        Lightweight wrapper for multiple spectra on a common wavelength grid
 
         sp.wave, sp.flux, sp.ivar, sp.resolution_data, sp.header, sp.R
         
@@ -65,13 +83,25 @@ class Spectra(object):
             if len(fibers) != self.nspec:
                 raise ValueError("len(fibers) != nspec ({} != {})".format(len(fibers), self.nspec))
             self.fibers = fibers
-            
+         
     def __getitem__(self, index):
         """
-        Return a subset of the spectra as a new Spectra object
+        Return a subset of the spectra
         
-        index can be anything that can index or slice a numpy array
+        If index is an integer, return a single Spectrum object, otherwise
+        return a Spectra object with the subset of spectra that are sliced
+        by index, which can be anything that can index or slice a numpy array.
+        
+        i.e.
+            type(self[1:3]) == Spectra
+            type(self[1])   == Spectrum #- not Spectra 
+            
+        This is analogous to how integers vs. slices or arrays return either
+        scalars or arrays when indexing numpy.ndarray .
         """
+        if isinstance(index, int):
+            return Spectrum(self.wave, self.flux[index], self.ivar[index], self.R[index])
+        
         #- convert index to 1d array to maintain dimentionality of sliced arrays
         if not isinstance(index, slice):
             index = np.atleast_1d(index)

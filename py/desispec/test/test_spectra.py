@@ -1,7 +1,7 @@
 import unittest
 
 import numpy as np
-from spectra import Spectra
+from desispec.spectra import Spectra, Spectrum
 from desispec.resolution import Resolution
 
 class TestSpectra(unittest.TestCase):
@@ -36,9 +36,13 @@ class TestSpectra(unittest.TestCase):
 
         sp = Spectra(wave, flux, ivar, rdata)
         x = sp[1]
+        self.assertEqual(type(x), Spectrum)
         x = sp[1:2]
+        self.assertEqual(type(x), Spectra)
         x = sp[[1,2,3]]
+        self.assertEqual(type(x), Spectra)
         x = sp[sp.fibers<3]
+        self.assertEqual(type(x), Spectra)
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

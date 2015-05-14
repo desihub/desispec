@@ -6,6 +6,8 @@ import unittest
 import numpy as np
 import scipy.sparse
 
+from desispec.resolution import Resolution
+from desispec.spectra import Spectra
 from desispec.fiberflat import FiberFlat
 from desispec.fiberflat import compute_fiberflat
 from desispec.log import get_logger
@@ -50,26 +52,27 @@ class TestFiberFlat(unittest.TestCase):
         sigma = 4.0
         ndiag = 21
         xx = np.linspace(-(ndiag-1)/2.0, +(ndiag-1)/2.0, ndiag)
-        R = np.zeros( (nspec, ndiag, nwave) )
+        Rdata = np.zeros( (nspec, ndiag, nwave) )
         for i in range(nspec):
             for j in range(nwave):
                 kernel = np.exp(-xx**2/(2*sigma))
                 kernel /= sum(kernel)
-                R[i,:,j] = kernel
+                Rdata[i,:,j] = kernel
 
         #- Run the code
-        fiberflat, ffivar, fmask, meanspec = compute_fiberflat(wave,flux,ivar,R)
+        spectra = Spectra(wave, flux, ivar, Rdata)
+        ff = compute_fiberflat(spectra)
             
         #- Check shape of outputs
-        self.assertEqual(fiberflat.shape, flux.shape)
-        self.assertEqual(ffivar.shape, flux.shape)
-        self.assertEqual(fmask.shape, flux.shape)
-        self.assertEqual(len(meanspec), nwave)
+        self.assertEqual(ff.fiberflat.shape, flux.shape)
+        self.assertEqual(ff.ivar.shape, flux.shape)
+        self.assertEqual(ff.mask.shape, flux.shape)
+        self.assertEqual(len(ff.meanspec), nwave)
         
         #- Identical inputs should result in identical ouputs
         for i in range(1, nspec):
-            self.assertTrue(np.all(fiberflat[i] == fiberflat[0]))
-            self.assertTrue(np.all(ffivar[i] == ffivar[0]))
+            self.assertTrue(np.all(ff.fiberflat[i] == ff.fiberflat[0]))
+            self.assertTrue(np.all(ff.ivar[i] == ff.ivar[0]))
         
     def test_resolution(self):
         """
@@ -86,25 +89,24 @@ class TestFiberFlat(unittest.TestCase):
         sigma = np.linspace(2, 10, nwave*nspec)
         ndiag = 21
         xx = np.linspace(-ndiag/2.0, +ndiag/2.0, ndiag)
-        R = np.zeros( (nspec, len(xx), nwave) )
+        Rdata = np.zeros( (nspec, len(xx), nwave) )
         for i in range(nspec):
             for j in range(nwave):
                 kernel = np.exp(-xx**2/(2*sigma[i*nwave+j]**2))
                 kernel /= sum(kernel)
-                R[i,:,j] = kernel
+                Rdata[i,:,j] = kernel
 
         #- Convolve the data with the resolution matrix
-        offsets = range(ndiag//2, -ndiag//2, -1)
         convflux = np.empty_like(flux)
         for i in range(nspec):
-            D = scipy.sparse.dia_matrix( (R[i], offsets), (nwave,nwave) )
-            convflux[i] = D.dot(flux[i])
+            convflux[i] = Resolution(Rdata[i]).dot(flux[i])
 
         #- Run the code
-        fiberflat, ffivar, fmask, meanspec = compute_fiberflat(wave,convflux,ivar,R)
+        spectra = Spectra(wave, convflux, ivar, Rdata)
+        ff = compute_fiberflat(spectra)
 
         #- These fiber flats should all be ~1
-        self.assertTrue( np.all(np.abs(fiberflat-1) < 0.001) )
+        self.assertTrue( np.all(np.abs(ff.fiberflat-1) < 0.001) )
 
     #- Tests to implement.  Remove the "expectedFailure" line when ready.
     @unittest.expectedFailure

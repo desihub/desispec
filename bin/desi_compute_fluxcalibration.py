@@ -58,10 +58,10 @@ def main() :
 
     log.info("apply fiberflat")
     # read fiberflat
-    fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
+    fiberflat = read_fiberflat(args.fiberflat)
 
     # apply fiberflat
-    apply_fiberflat(flux=spectra.flux,ivar=spectra.ivar,wave=spectra.wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
+    apply_fiberflat(spectra, fiberflat)
     
     log.info("subtract sky")
     # read sky
@@ -78,26 +78,26 @@ def main() :
     model_flux,model_wave,model_fibers=read_stdstar_models(args.models)
 
     # select fibers
-    SPECMIN=head["SPECMIN"]
-    SPECMAX=head["SPECMAX"]
+    SPECMIN=spectra.header["SPECMIN"]
+    SPECMAX=spectra.header["SPECMAX"]
     selec=np.where((model_fibers>=SPECMIN)&(model_fibers<=SPECMAX))[0]
     if selec.size == 0 :
         log.error("not stellar models for this spectro")
         sys.exit(12)
-    fibers=model_fibers[selec]-head["SPECMIN"]
+    fibers=model_fibers[selec]-spectra.header["SPECMIN"]
     log.info("star fibers= %s"%str(fibers))
 
-    table, fmhdr = read_fibermap(args.fibermap)
+    table, fmhdr = read_fibermap(args.fibermap, header=True)
     bad=np.where(table["OBJTYPE"][fibers]!="STD")[0]
     if bad.size > 0 :
         for fiber in fibers[bad] :
             log.error("inconsistency with fiber %d, OBJTYPE='%s' in fibermap"%(fiber,table["OBJTYPE"][fiber]))
         sys.exit(12)
 
-    calibration, calibivar, mask, ccalibration, ccalibivar = compute_flux_calibration(wave,flux[fibers],ivar[fibers],resol[fibers],model_wave,model_flux)
+    calibration, calibivar, mask, ccalibration, ccalibivar = compute_flux_calibration(spectra.wave, spectra.flux[fibers], spectra.ivar[fibers], spectra.resolution_data[fibers], model_wave, model_flux)
 
     # write result
-    write_flux_calibration(args.outfile,calibration, calibivar, mask, ccalibration, ccalibivar,wave, head)
+    write_flux_calibration(args.outfile,calibration, calibivar, mask, ccalibration, ccalibivar, spectra.wave, spectra.header)
 
 
     log.info("successfully wrote %s"%args.outfile)

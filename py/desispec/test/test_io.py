@@ -4,6 +4,7 @@ from uuid import uuid1
 import numpy as np
 
 from desispec.spectra import Spectra
+from desispec.fiberflat import FiberFlat
 import desispec.io
 from astropy.io import fits
 
@@ -101,18 +102,25 @@ class TestIO(unittest.TestCase):
         flat = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
         mask = np.zeros(shape=(nspec, nwave))
-        meanspec = np.random.uniform(size=(nspec, nwave))
+        meanspec = np.random.uniform(size=(nwave,))
         wave = np.arange(nwave)
 
-        desispec.io.write_fiberflat(self.testfile, flat, ivar, mask, meanspec, wave)
-        xflat, xivar, xmask, xmeanspec, xwave, hdr = desispec.io.read_fiberflat(self.testfile)
+        ff = FiberFlat(wave, flat, ivar, mask, meanspec)
+
+        desispec.io.write_fiberflat(self.testfile, ff)
+        xff = desispec.io.read_fiberflat(self.testfile)
                 
-        self.assertTrue(np.all(flat == xflat))
-        self.assertTrue(np.all(ivar == xivar))
-        self.assertTrue(np.all(mask == xmask))
-        self.assertTrue(np.all(meanspec == xmeanspec))
-        self.assertTrue(np.all(wave == xwave))
-        self.assertTrue(flat.dtype.isnative)
+        self.assertTrue(np.all(ff.fiberflat == xff.fiberflat))
+        self.assertTrue(np.all(ff.ivar == xff.ivar))
+        self.assertTrue(np.all(ff.mask == xff.mask))
+        self.assertTrue(np.all(ff.meanspec == xff.meanspec))
+        self.assertTrue(np.all(ff.wave == xff.wave))
+
+        self.assertTrue(xff.fiberflat.dtype.isnative)
+        self.assertTrue(xff.ivar.dtype.isnative)
+        self.assertTrue(xff.mask.dtype.isnative)
+        self.assertTrue(xff.meanspec.dtype.isnative)
+        self.assertTrue(xff.wave.dtype.isnative)
                 
     def test_fibermap_rw(self):
         fibermap = desispec.io.fibermap.empty_fibermap(10)
@@ -121,7 +129,14 @@ class TestIO(unittest.TestCase):
             fibermap[key] = np.random.random(column.shape).astype(column.dtype)
             
         desispec.io.write_fibermap(self.testfile, fibermap)
-        fm, hdr = desispec.io.read_fibermap(self.testfile)
+        
+        #- Read without and with header
+        fm = desispec.io.read_fibermap(self.testfile)
+        self.assertTrue(isinstance(fm, np.ndarray))
+
+        fm, hdr = desispec.io.read_fibermap(self.testfile, header=True)
+        self.assertTrue(isinstance(fm, np.ndarray))
+        self.assertTrue(isinstance(hdr, fits.Header))
                 
         self.assertEqual(set(fibermap.dtype.names), set(fm.dtype.names))
         for key in fibermap.dtype.names:

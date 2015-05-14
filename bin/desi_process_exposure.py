@@ -59,33 +59,34 @@ def main() :
         sys.exit(12)
 
 
-    flux,ivar,wave,resol,head = read_frame(args.infile)
-
+    frame = read_frame(args.infile)
+    
     if args.fiberflat!=None :
         log.info("apply fiberflat")
         # read fiberflat
-        fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
+        fiberflat = read_fiberflat(args.fiberflat)
 
         # apply fiberflat to sky fibers
-        apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
+        apply_fiberflat(frame, fiberflat)
 
     if args.sky!=None :
         log.info("subtract sky")
         # read sky
         skyflux,sivar,smask,cskyflux,csivar,swave,skyhdr=read_sky(args.sky)
         # subtract sky
-        subtract_sky(flux=flux,ivar=ivar,resolution_data=resol,wave=wave,skyflux=skyflux,convolved_skyivar=csivar,skymask=smask,skywave=swave)
+        subtract_sky(flux=frame.flux, ivar=frame.ivar, resolution_data=frame.resolution_data, wave=frame.wave,
+            skyflux=skyflux,convolved_skyivar=csivar,skymask=smask,skywave=swave)
 
     if args.calib!=None :
         log.info("calibrate")
         # read calibration
         calibration,calib_ivar,cmask,convolved_calibration,convolved_calib_ivar,calib_wave=read_flux_calibration(args.calib)
         # apply calibration
-        apply_flux_calibration(flux=flux,ivar=ivar,resolution_data=resol,wave=wave,calibration=calibration,civar=convolved_calib_ivar,cmask=cmask,cwave=calib_wave)
+        apply_flux_calibration(flux=frame.flux,ivar=frame.ivar,resolution_data=frame.resolution_data,wave=frame.wave,calibration=calibration,civar=convolved_calib_ivar,cmask=cmask,cwave=calib_wave)
 
 
     # save output
-    write_frame(args.outfile,flux,ivar,wave,resol,head)
+    write_frame(args.outfile, frame)
 
     log.info("successfully wrote %s"%args.outfile)
 
