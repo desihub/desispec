@@ -11,10 +11,38 @@ from __future__ import division, absolute_import
 
 import numpy as np
 import scipy.sparse
+from scipy.special import erf
 
 # The total number of diagonals that we keep in the sparse formats when
 # converting from a dense matrix
 default_ndiag = 21
+
+def _gauss_pix(x, mean=0.0, sigma=1.0):
+    """
+    Utility function to integrate Gaussian density within pixels
+    
+    Args:
+        x (1D array): pixel centers
+        mean (float): mean of Gaussian
+        sigma (float): sigma of Gaussian
+        
+    Returns:
+        array of integals of the Gaussian density in the pixels.
+        
+    Note:
+        All pixels must be the same size
+    """
+    x = (np.asarray(x, dtype=float) - mean) / sigma
+    dx = x[1]-x[0]
+    if not np.allclose(np.diff(x), dx):
+        raise ValueError('all pixels must have the same size')
+        
+    edges = np.concatenate([x-dx/2, x[-1:]+dx/2])
+    assert len(edges) == len(x)+1
+    
+    y = erf(edges)
+    return (y[1:] - y[0:-1])/2
+    
 
 class Resolution(scipy.sparse.dia_matrix):
     """Canonical representation of a resolution matrix.
@@ -56,7 +84,7 @@ class Resolution(scipy.sparse.dia_matrix):
                 raise ValueError('Offsets of input matrix are non-contiguous or non-symmetric')
             scipy.sparse.dia_matrix.__init__(self,(data.data[diag_order],self.offsets),data.shape)
 
-        elif isinstance(data,np.ndarray) and len(data.shape) == 2:
+        elif isinstance(data,np.ndarray) and data.ndim == 2:
             n1,n2 = data.shape
             if n2 > n1:
                 ndiag = n1  #- rename for clarity
@@ -74,6 +102,16 @@ class Resolution(scipy.sparse.dia_matrix):
             else:
                 raise ValueError('Cannot initialize Resolution with array shape (%d,%d)' % (n1,n2))
 
+        #- 1D data: Interpret as Gaussian sigmas in pixel units
+        elif isinstance(data, np.ndarray) and data.ndim == 1:
+            nwave = len(data)
+            rdata = np.empty((default_ndiag, nwave))
+            self.offsets = np.arange(default_ndiag//2,-(default_ndiag//2)-1,-1)
+            for i in range(nwave):
+                rdata[:, i] = np.abs(_gauss_pix(self.offsets, mean=0.0, sigma=data[i]))
+                
+            scipy.sparse.dia_matrix.__init__(self,(rdata,self.offsets),(nwave,nwave))
+            
         else:
             raise ValueError('Cannot initialize Resolution from %r' % data)
 

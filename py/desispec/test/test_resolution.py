@@ -54,3 +54,11 @@ class TestResolution(unittest.TestCase):
         except ValueError:
             #- correctly raised an error, so pass
             pass
+            
+        #- Test creation with sigmas - it should conserve flux
+        R9 = Resolution(np.linspace(1.0, 2.0, n))
+        self.assertTrue(np.allclose(np.sum(R9.data, axis=0), 1.0))
+
+#- This runs all test* functions in any TestCase class in this file
+if __name__ == '__main__':
+    unittest.main()           
