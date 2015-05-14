@@ -16,6 +16,9 @@ from desispec.pipeline import runcmd
 from desispec import io
 from desispec.log import get_logger
 
+#- prevent nose from trying to run this test since it takes too long
+__test__ = False
+
 def check_env():
     """
     Check required environment variables; raise RuntimeException if missing
