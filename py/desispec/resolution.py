@@ -17,33 +17,6 @@ from scipy.special import erf
 # converting from a dense matrix
 default_ndiag = 21
 
-def _gauss_pix(x, mean=0.0, sigma=1.0):
-    """
-    Utility function to integrate Gaussian density within pixels
-    
-    Args:
-        x (1D array): pixel centers
-        mean (float): mean of Gaussian
-        sigma (float): sigma of Gaussian
-        
-    Returns:
-        array of integals of the Gaussian density in the pixels.
-        
-    Note:
-        All pixels must be the same size
-    """
-    x = (np.asarray(x, dtype=float) - mean) / sigma
-    dx = x[1]-x[0]
-    if not np.allclose(np.diff(x), dx):
-        raise ValueError('all pixels must have the same size')
-        
-    edges = np.concatenate([x-dx/2, x[-1:]+dx/2])
-    assert len(edges) == len(x)+1
-    
-    y = erf(edges)
-    return (y[1:] - y[0:-1])/2
-    
-
 class Resolution(scipy.sparse.dia_matrix):
     """Canonical representation of a resolution matrix.
 
@@ -109,9 +82,9 @@ class Resolution(scipy.sparse.dia_matrix):
             self.offsets = np.arange(default_ndiag//2,-(default_ndiag//2)-1,-1)
             for i in range(nwave):
                 rdata[:, i] = np.abs(_gauss_pix(self.offsets, mean=0.0, sigma=data[i]))
-                
+
             scipy.sparse.dia_matrix.__init__(self,(rdata,self.offsets),(nwave,nwave))
-            
+
         else:
             raise ValueError('Cannot initialize Resolution from %r' % data)
 
@@ -131,5 +104,33 @@ class Resolution(scipy.sparse.dia_matrix):
                 element values close to the diagonal.
         """
         return self.data
+
+def _gauss_pix(x, mean=0.0, sigma=1.0):
+    """
+    Utility function to integrate Gaussian density within pixels
+
+    Args:
+        x (1D array): pixel centers
+        mean (float): mean of Gaussian
+        sigma (float): sigma of Gaussian
+
+    Returns:
+        array of integals of the Gaussian density in the pixels.
+
+    Note:
+        All pixels must be the same size
+    """
+    x = (np.asarray(x, dtype=float) - mean) / sigma
+    dx = x[1]-x[0]
+    if not np.allclose(np.diff(x), dx):
+        raise ValueError('all pixels must have the same size')
+
+    edges = np.concatenate([x-dx/2, x[-1:]+dx/2])
+    assert len(edges) == len(x)+1
+
+    y = erf(edges)
+    return (y[1:] - y[0:-1])/2
+
+
 
 #- (Unit tests moved to desispec.test.test_resolution)
