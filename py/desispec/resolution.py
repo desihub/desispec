@@ -11,7 +11,7 @@ from __future__ import division, absolute_import
 
 import numpy as np
 import scipy.sparse
-from scipy.special import erf
+import scipy.special
 
 # The total number of diagonals that we keep in the sparse formats when
 # converting from a dense matrix
@@ -81,7 +81,7 @@ class Resolution(scipy.sparse.dia_matrix):
             rdata = np.empty((default_ndiag, nwave))
             self.offsets = np.arange(default_ndiag//2,-(default_ndiag//2)-1,-1)
             for i in range(nwave):
-                rdata[:, i] = np.abs(_gauss_pix(self.offsets, mean=0.0, sigma=data[i]))
+                rdata[:, i] = np.abs(_gauss_pix(self.offsets, sigma=data[i]))
 
             scipy.sparse.dia_matrix.__init__(self,(rdata,self.offsets),(nwave,nwave))
 
@@ -128,8 +128,8 @@ def _gauss_pix(x, mean=0.0, sigma=1.0):
     edges = np.concatenate([x-dx/2, x[-1:]+dx/2])
     assert len(edges) == len(x)+1
 
-    y = erf(edges)
-    return (y[1:] - y[0:-1])/2
+    y = scipy.special.erf(edges)
+    return (y[1:] - y[:-1])/2
 
 
 
