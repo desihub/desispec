@@ -2,6 +2,8 @@
 Utility functions for desispec
 """
 
+import numpy as np
+
 def night2ymd(night):
     """
     parse night YEARMMDD string into tuple of integers (year, month, day)
@@ -24,4 +26,27 @@ def ymd2night(year, month, day):
     convert year, month, day integers into cannonical YEARMMDD night string
     """
     return "{:04d}{:02d}{:02d}".format(year, month, day)
+    
+def combine_ivar(ivar1, ivar2):
+    """
+    Returns the combined inverse variance of two inputs, making sure not to
+    divide by 0 in the process.
+    
+    ivar1 and ivar2 may be scalar or ndarray but must have the same dimensions
+    """
+    iv1 = np.asarray(ivar1)  #- handle list, tuple, and scalar input
+    iv2 = np.asarray(ivar2)
+    assert np.all(iv1 >= 0)
+    assert np.all(iv2 >= 0)
+    assert iv1.shape == iv2.shape
+    ii = (iv1 > 0) & (iv2 > 0)
+    ivar = np.zeros(iv1.shape)
+    ivar[ii] = 1.0 / (1.0/iv1[ii] + 1.0/iv2[ii])
+    
+    #- Convert back to python float if input was scalar
+    #- NOTE: if input was 0-dimensional ndarray, this strips
+    if isinstance(ivar1, (float, int)):
+        return float(ivar)
+    else:
+        return ivar
     
