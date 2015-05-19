@@ -5,9 +5,10 @@ tests desispec.sky
 import unittest
 
 import numpy as np
-from desispec.sky import compute_sky, subtract_sky, SkyModel
+from desispec.sky import compute_sky, subtract_sky
 from desispec.resolution import Resolution
 from desispec.spectra import Spectra
+import desispec.io
 
 class TestSky(unittest.TestCase):
     
@@ -37,31 +38,36 @@ class TestSky(unittest.TestCase):
                 
         flux = np.zeros((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))
+        mask = np.zeros((self.nspec, self.nwave), dtype=int)
         for i in range(self.nspec):
             R = Resolution(Rdata[i])
             flux[i] = R.dot(self.flux)
 
-        return Spectra(self.wave, flux, ivar, Rdata)
+        fibermap = desispec.io.empty_fibermap(self.nspec)
+        fibermap['OBJTYPE'][0::2] = 'SKY'
+
+        return Spectra(self.wave, flux, ivar, mask, Rdata), fibermap
                     
     def test_uniform_resolution(self):        
         #- Setup data for a Resolution matrix
-        spectra = self._get_spectra()
+        spectra, fibermap = self._get_spectra()
                         
-        sky = compute_sky(spectra)
-        self.assertEqual(len(sky.flux.shape), 1)
-        self.assertEqual(len(sky.flux), self.nwave)
-        self.assertEqual(len(sky.flux), len(sky.ivar))
-        self.assertEqual(len(sky.flux), len(sky.mask))
-        delta=spectra.flux[0]-sky.cflux
+        sky = compute_sky(spectra, fibermap)
+        self.assertEqual(sky.flux.shape, spectra.flux.shape)
+        self.assertEqual(sky.ivar.shape, spectra.ivar.shape)
+        self.assertEqual(sky.mask.shape, spectra.mask.shape)
+        
+        delta=spectra.flux[0]-sky.flux[0]
         d=np.inner(delta,delta)
         self.assertAlmostEqual(d,0.)
-        delta=spectra.flux[-1]-sky.cflux
+        
+        delta=spectra.flux[-1]-sky.flux[-1]
         d=np.inner(delta,delta)
         self.assertAlmostEqual(d,0.)
 
     def test_subtract_sky(self):
-        spectra = self._get_spectra()                        
-        sky = compute_sky(spectra)
+        spectra, fibermap = self._get_spectra()
+        sky = compute_sky(spectra, fibermap)
         subtract_sky(spectra, sky)
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-5, atol=1e-6))

@@ -85,7 +85,7 @@ def main() :
     fibers=model_fibers[selec]-spectra.header["SPECMIN"]
     log.info("star fibers= %s"%str(fibers))
 
-    table, fmhdr = read_fibermap(args.fibermap, header=True)
+    table = read_fibermap(args.fibermap)
     bad=np.where(table["OBJTYPE"][fibers]!="STD")[0]
     if bad.size > 0 :
         for fiber in fibers[bad] :

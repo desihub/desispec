@@ -34,8 +34,9 @@ class TestBinScripts(unittest.TestCase):
         wave = 5000+np.arange(self.nwave)
         flux = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))
+        mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        frame = Spectra(wave, flux, ivar, Rdata)
+        frame = Spectra(wave, flux, ivar, mask, Rdata)
         io.write_frame(self.framefile, frame)
         
     def _write_fiberflat(self):
@@ -43,7 +44,7 @@ class TestBinScripts(unittest.TestCase):
         wave = 5000+np.arange(self.nwave)
         fiberflat = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))
-        mask = np.zeros((self.nspec, self.nwave))
+        mask = np.zeros((self.nspec, self.nwave), dtype=int)
         meanspec = np.ones(self.nwave)
         ff = FiberFlat(wave, fiberflat, ivar, mask, meanspec)
         io.write_fiberflat(self.fiberflatfile, ff)
@@ -55,6 +56,12 @@ class TestBinScripts(unittest.TestCase):
             fibermap['OBJTYPE'][i] = 'SKY'
             
         io.write_fibermap(self.fibermapfile, fibermap)
+        
+    def _write_skymodel(self):
+        pass
+        
+    def _write_stdstars(self):
+        pass
 
     def test_compute_fiberflat(self):
         """

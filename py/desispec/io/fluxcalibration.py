@@ -67,7 +67,6 @@ def write_flux_calibration(outfile,calibration, calibration_ivar, mask, convolve
     hdu = fits.ImageHDU(mask, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
 
-
     hdr['EXTNAME'] = ('CCALIB', 'CHECK UNIT')
     hdu = fits.ImageHDU(convolved_calibration, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)

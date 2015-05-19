@@ -63,9 +63,10 @@ class TestIO(unittest.TestCase):
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
+        mask = np.zeros((nspec, nwave), dtype=int)
         wave = np.arange(nwave)
         R = np.random.uniform( size=(nspec, ndiag, nwave) )
-        spx = Spectra(wave, flux, ivar, R)
+        spx = Spectra(wave, flux, ivar, mask, R)
                 
         desispec.io.write_frame(self.testfile, spx)
         spectra = desispec.io.read_frame(self.testfile)
@@ -73,20 +74,19 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.all(flux == spectra.flux))
         self.assertTrue(np.all(ivar == spectra.ivar))
         self.assertTrue(np.all(wave == spectra.wave))
+        self.assertTrue(np.all(mask == spectra.mask))
         self.assertTrue(np.all(R == spectra.resolution_data))
         self.assertTrue(spectra.resolution_data.dtype.isnative)
         
     def test_sky_rw(self):
-        nwave = 20
+        nspec, nwave = 5,10 
         wave = np.arange(nwave)
-        flux = np.random.uniform(size=nwave)
-        ivar = np.random.uniform(size=nwave)
-        mask = np.zeros(shape=nwave)
-        cflux = np.random.uniform(size=nwave)
-        civar = np.random.uniform(size=nwave)
+        flux = np.random.uniform(size=(nspec, nwave))
+        ivar = np.random.uniform(size=(nspec, nwave))
+        mask = np.zeros(shape=(nspec, nwave), dtype=int)
 
         # skyflux,skyivar,skymask,cskyflux,cskyivar,wave
-        sky = SkyModel(wave, flux, ivar, mask, cflux, civar)
+        sky = SkyModel(wave, flux, ivar, mask)
         desispec.io.write_sky(self.testfile, sky)
         xsky = desispec.io.read_sky(self.testfile)
                 
@@ -94,8 +94,6 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.all(sky.flux  == xsky.flux))
         self.assertTrue(np.all(sky.ivar  == xsky.ivar))
         self.assertTrue(np.all(sky.mask  == xsky.mask))
-        self.assertTrue(np.all(sky.cflux == xsky.cflux))
-        self.assertTrue(np.all(sky.civar == xsky.civar))
         self.assertTrue(xsky.flux.dtype.isnative)
                 
     # fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave
@@ -103,7 +101,7 @@ class TestIO(unittest.TestCase):
         nspec, nwave, ndiag = 10, 20, 3
         flat = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        mask = np.zeros(shape=(nspec, nwave))
+        mask = np.zeros(shape=(nspec, nwave), dtype=int)
         meanspec = np.random.uniform(size=(nwave,))
         wave = np.arange(nwave)
 

@@ -81,7 +81,7 @@ def main() :
     apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skymodel = compute_sky(frame[selection])
+    skymodel = compute_sky(frame, fibermap)
 
     # write result
     write_sky(args.outfile, skymodel, frame.header)

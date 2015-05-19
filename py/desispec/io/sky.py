@@ -18,17 +18,18 @@ def write_sky(outfile, skymodel, header=None):
         outfile : filename or (night, expid, camera) tuple
         skymodel : SkyModel object, with the following attributes
             wave : 1D wavelength in vacuum Angstroms
-            flux : 1D unconvolved sky flux
-            ivar : inverse variance of skyflux
-            mask : mask for skyflux
-            cflux : 1D skyflux convolved with the mean resolution across all fibers
-            civar : inverse variance of cskyflux
+            flux : 2D[nspec, nwave] sky flux
+            ivar : 2D inverse variance of sky flux
+            mask : 2D mask for sky flux
         header : optional fits header data (fits.Header, dict, or list)
     """
     outfile = makepath(outfile, 'sky')
 
     #- Convert header to fits.Header if needed
-    hdr = fitsheader(header)
+    if header is not None:
+        hdr = fitsheader(header)
+    else:
+        hdr = fitsheader(skymodel.header)
 
     hdr['EXTNAME'] = ('SKY', 'no dimension')
     fits.writeto(outfile, skymodel.flux,header=hdr, clobber=True)
@@ -41,14 +42,6 @@ def write_sky(outfile, skymodel, header=None):
     hdu = fits.ImageHDU(skymodel.mask, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
 
-    hdr['EXTNAME'] = ('CSKY', 'convolved sky at average resolution')
-    hdu = fits.ImageHDU(skymodel.cflux, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('CIVAR', 'convolved sky inverse variance')
-    hdu = fits.ImageHDU(skymodel.civar, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
     hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
     hdu = fits.ImageHDU(skymodel.wave, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
@@ -57,12 +50,9 @@ def write_sky(outfile, skymodel, header=None):
 
 def read_sky(filename) :
     """Read sky model and return SkyModel object with attributes
-    flux, ivar, mask, cflux, civar, wave, header.
-
-    These are 1D unconvolved arrays that need to be convolved with the
-    per fiber resolution matrix to get the sky model for each fiber.
-
-    cflux & civar are the convolved quanities at mean resolution.
+    wave, flux, ivar, mask, header.
+    
+    skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
     """
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, (str, unicode)):
@@ -74,10 +64,7 @@ def read_sky(filename) :
     skyflux = native_endian(fits.getdata(filename, "SKY"))
     ivar = native_endian(fits.getdata(filename, "IVAR"))
     mask = native_endian(fits.getdata(filename, "MASK"))
-    cskyflux = native_endian(fits.getdata(filename, "CSKY"))
-    civar = native_endian(fits.getdata(filename, "CIVAR"))
 
-    skymodel = SkyModel(wave,skyflux,ivar,mask,cskyflux,civar)
-    skymodel.header = hdr
+    skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr)
 
     return skymodel

@@ -12,9 +12,10 @@ class TestSpectra(unittest.TestCase):
         wave = np.arange(nwave)
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones(flux.shape)
+        mask = np.zeros(flux.shape, dtype=int)
         rdata = np.ones((nspec, 5, nwave))
 
-        sp = Spectra(wave, flux, ivar, rdata)
+        sp = Spectra(wave, flux, ivar, mask, rdata)
         self.assertTrue(np.all(sp.wave == wave))
         self.assertTrue(np.all(sp.flux == flux))
         self.assertTrue(np.all(sp.ivar == ivar))
@@ -23,8 +24,8 @@ class TestSpectra(unittest.TestCase):
         self.assertEqual(sp.nwave, nwave)
         self.assertTrue(isinstance(sp.R[0], Resolution))
         #- check dimensionality mismatches
-        self.assertRaises(ValueError, lambda x: Spectra(*x), (wave, wave, ivar, rdata))
-        self.assertRaises(ValueError, lambda x: Spectra(*x), (wave, flux[0:2], ivar, rdata))
+        self.assertRaises(AssertionError, lambda x: Spectra(*x), (wave, wave, ivar, mask, rdata))
+        self.assertRaises(AssertionError, lambda x: Spectra(*x), (wave, flux[0:2], ivar, mask, rdata))
 
     def test_slice(self):
         nspec = 5
@@ -32,9 +33,10 @@ class TestSpectra(unittest.TestCase):
         wave = np.arange(nwave)
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones(flux.shape)
+        mask = np.zeros(flux.shape, dtype=int)
         rdata = np.ones((nspec, 5, nwave))
 
-        sp = Spectra(wave, flux, ivar, rdata)
+        sp = Spectra(wave, flux, ivar, mask, rdata)
         x = sp[1]
         self.assertEqual(type(x), Spectrum)
         x = sp[1:2]

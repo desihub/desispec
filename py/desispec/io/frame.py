@@ -49,6 +49,7 @@ def write_frame(outfile, spectra, header=None):
     hdus.append(x)
 
     hdus.append( fits.ImageHDU(spectra.ivar, name='IVAR') )
+    hdus.append( fits.ImageHDU(spectra.mask, name='MASK') )
     hdus.append( fits.ImageHDU(spectra.wave, name='WAVELENGTH') )
     hdus.append( fits.ImageHDU(spectra.resolution_data, name='RESOLUTION' ) )
     
@@ -81,6 +82,11 @@ def read_frame(filename, nspec=None):
     flux = native_endian(fx['FLUX'].data)
     ivar = native_endian(fx['IVAR'].data)
     wave = native_endian(fx['WAVELENGTH'].data)
+    if 'MASK' in fx:
+        mask = native_endian(fx['MASK'].data)
+    else:
+        mask = np.zeros(flux.shape, dtype=int)
+        
     resolution_data = native_endian(fx['RESOLUTION'].data)
     fx.close()
 
@@ -90,4 +96,4 @@ def read_frame(filename, nspec=None):
         resolution_data = resolution_data[0:nspec]
 
     # return flux,ivar,wave,resolution_data, hdr
-    return Spectra(wave, flux, ivar, resolution_data, hdr)
+    return Spectra(wave, flux, ivar, mask, resolution_data, hdr)

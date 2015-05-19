@@ -12,11 +12,12 @@ from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.log import get_logger
+from desispec import util
 
 import scipy,scipy.sparse
 import sys
 
-def compute_sky(spectra, nsig_clipping=4.) :
+def compute_sky(spectra, fibermap, nsig_clipping=4.) :
     """Compute a sky model.
 
     Input has to correspond to sky fibers only.
@@ -24,32 +25,34 @@ def compute_sky(spectra, nsig_clipping=4.) :
     We don't check this in this routine.
 
     args:
-        spectra : Spectra object of sky fibers, which includes attributes
+        spectra : Spectra object, which includes attributes
           - wave : 1D wavelength grid in Angstroms
-          - flux : 2D flux[nspec, nwave] density (only sky fibers)
-          - ivar : 2D inverse variance of flux (only sky fibers)
+          - flux : 2D flux[nspec, nwave] density
+          - ivar : 2D inverse variance of flux
+          - mask : 2D inverse mask flux (0=good)
           - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
+        fibermap : numpy table including OBJTYPE to know which fibers are SKY
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
-    returns SkyModel object with attributes
-      - skyflux : 1D[nwave] deconvolved skyflux
-      - ivar : inverse variance of that skyflux
-      - mask : 0=ok >0 if problems
-      - cskyflux :  1D[nwave] convolved skyflux at average resolution
-      - cskyivar :  1D[nwave] convolved skyflux inverse variance
+    returns SkyModel object with attributes wave, flux, ivar, mask
     """
 
     log=get_logger()
     log.info("starting")
 
+    skyfibers = np.where(fibermap["OBJTYPE"]=="SKY")[0]
+
     nwave=spectra.nwave
-    nfibers=spectra.nspec
-    current_ivar=spectra.ivar.copy()
+    nfibers=len(skyfibers)
+    
+    current_ivar=spectra.ivar[skyfibers].copy()
+    flux = spectra.flux[skyfibers]
+    Rsky = spectra.R[skyfibers]
 
     sqrtw=np.sqrt(current_ivar)
-    sqrtwflux=sqrtw*spectra.flux
+    sqrtwflux=sqrtw*flux
 
-    chi2=np.zeros(spectra.flux.shape)
+    chi2=np.zeros(flux.shape)
 
     #debug
     #nfibers=min(nfibers,2)
@@ -65,7 +68,7 @@ def compute_sky(spectra, nsig_clipping=4.) :
         for fiber in range(nfibers) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
-            R = spectra.R[fiber]
+            R = Rsky[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)
             SD.setdiag(sqrtw[fiber])
@@ -83,8 +86,8 @@ def compute_sky(spectra, nsig_clipping=4.) :
 
         for fiber in range(nfibers) :
 
-            S = spectra.R[fiber].dot(skyflux)
-            chi2[fiber]=current_ivar[fiber]*(spectra.flux[fiber]-S)**2
+            S = Rsky[fiber].dot(skyflux)
+            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-S)**2
 
         log.info("rejecting")
 
@@ -128,68 +131,65 @@ def compute_sky(spectra, nsig_clipping=4.) :
     # solve once again to get deconvolved sky variance
     skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
 
-    skyvar=np.diagonal(skycovar)
-    skyivar=(skyvar>0)/(skyvar+(skyvar==0))
+    #- sky inverse variance, but incomplete and not needed anyway
+    # skyvar=np.diagonal(skycovar)
+    # skyivar=(skyvar>0)/(skyvar+(skyvar==0))
 
-    # we also want to save the convolved sky and sky variance
-    # this might be handy
-
+    # Use diagonal of skycovar convolved with mean resolution of all fibers
     # first compute average resolution
     mean_res_data=np.mean(spectra.resolution_data,axis=0)
     R = Resolution(mean_res_data)
     # compute convolved sky and ivar
-    cskyflux=R.dot(skyflux)
     cskycovar=R.dot(skycovar).dot(R.T.todense())
     cskyvar=np.diagonal(cskycovar)
     cskyivar=(cskyvar>0)/(cskyvar+(cskyvar==0))
+    
+    # convert cskyivar to 2D; today it is the same for all spectra,
+    # but that may not be the case in the future
+    cskyivar = np.tile(cskyivar, spectra.nspec).reshape(spectra.nspec, nwave)
 
-
+    # Convolved sky
+    cskyflux = np.zeros(spectra.flux.shape)
+    for i in range(spectra.nspec):
+        cskyflux[i] = spectra.R[i].dot(skyflux)
 
     # need to do better here
-    mask=(skyvar>0).astype(long)  # SOMEONE CHECK THIS !
+    mask = (cskyivar==0).astype(int)
 
-    return SkyModel(spectra.wave.copy(), skyflux, skyivar, mask, cskyflux, cskyivar)
+    return SkyModel(spectra.wave.copy(), cskyflux, cskyivar, mask)
 
 class SkyModel(object):
-    def __init__(self, wave, flux, ivar, mask, cflux, civar):
+    def __init__(self, wave, flux, ivar, mask, header=None):
         """Create SkyModel object
         
         Args:
             wave  : 1D[nwave] wavelength in Angstroms
-            flux  : 1D[nwave] deconvolved skyflux
-            ivar  : inverse variance of that skyflux
-            mask  : 0=ok >0 if problems
-            cflux : 1D[nwave] convolved skyflux at average resolution
-            civar : 1D[nwave] convolved skyflux inverse variance
+            flux  : 2D[nspec, nwave] sky model to subtract
+            ivar  : 2D[nspec, nwave] inverse variance of the sky model
+            mask  : 2D[nspec, nwave] 0=ok or >0 if problems
+            header : (optional) header from FITS file HDU0
             
         All input arguments become attributes
         """
-        if wave.ndim != 1:  raise ValueError('wave should be 1D')
-        if flux.ndim != 1:  raise ValueError('flux should be 1D')
-        if ivar.ndim != 1:  raise ValueError('ivar should be 1D')
-        if mask.ndim != 1:  raise ValueError('mask should be 1D')
-        if cflux.ndim != 1: raise ValueError('cflux should be 1D')
-        if civar.ndim != 1: raise ValueError('civar should be 1D')
-        self.nwave = len(wave)
-        if len(flux) != self.nwave: raise ValueError('len(flux) != nwave')
-        if len(ivar) != self.nwave: raise ValueError('len(ivar) != nwave')
-        if len(mask) != self.nwave: raise ValueError('len(mask) != nwave')
-        if len(cflux) != self.nwave: raise ValueError('len(cflux) != nwave')
-        if len(civar) != self.nwave: raise ValueError('len(civar) != nwave')
+        assert wave.ndim == 1
+        assert flux.ndim == 2
+        assert ivar.shape == flux.shape
+        assert mask.shape == flux.shape
         
+        self.nspec, self.nwave = flux.shape
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
         self.mask = mask
-        self.cflux = cflux
-        self.civar = civar
+        self.header = header
 
 
 def subtract_sky(spectra, skymodel) :
-    """Subtract skymodel from spectra, accounting for per-fiber resolution
-    
-    Alters spectra.flux and spectra.ivar
+    """Subtract skymodel from spectra, altering spectra.flux, .ivar, and .mask
     """
+    assert spectra.nspec == skymodel.nspec
+    assert spectra.nwave == skymodel.nwave
+
     log=get_logger()
     log.info("starting")
 
@@ -199,21 +199,8 @@ def subtract_sky(spectra, skymodel) :
         log.error(message)
         raise ValueError(message)
 
-    nwave=spectra.nwave
-    nfibers=spectra.nspec
-
-    for fiber in range(nfibers) :
-
-        #if fiber%10==0 :
-        #    log.info("fiber %d"%fiber)
-
-        spectra.flux[fiber] -= spectra.R[fiber].dot(skymodel.flux)
-
-        # deal with variance
-        selection=np.where((spectra.ivar[fiber]>0)&(skymodel.civar>0))[0]
-        if selection.size==0 :
-            continue
-
-        spectra.ivar[fiber,selection]=1./(1./spectra.ivar[fiber,selection]+1./skymodel.civar[selection])
+    spectra.flux -= skymodel.flux
+    spectra.ivar = util.combine_ivar(spectra.ivar, skymodel.ivar)
+    spectra.mask |= skymodel.mask
 
     log.info("done")

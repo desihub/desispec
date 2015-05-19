@@ -9,7 +9,7 @@ import numpy as np
 from desispec.resolution import Resolution
 
 class Spectrum(object):
-    def __init__(self, wave, flux, ivar, R):
+    def __init__(self, wave, flux, ivar, mask=None, R=None):
         """Lightweight wrapper of a single spectrum
         
         Args:
@@ -23,53 +23,65 @@ class Spectrum(object):
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
+        if mask is None:
+            self.mask = np.zeros(self.flux.shape, dtype=int)
+        else:
+            self.mask = mask
+            
         self.R = R
         
 
 class Spectra(object):
-    def __init__(self, wave, flux, ivar, resolution_data=None, header=None,
-                fibers=None, spectrograph=0):
+    def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
+                header=None, fibers=None, spectrograph=0):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
-        sp.wave, sp.flux, sp.ivar, sp.resolution_data, sp.header, sp.R
+        sp.wave, sp.flux, sp.ivar, sp.mask, sp.resolution_data, sp.header, sp.R
         
         Args:
             wave: 1D[nwave] wavelength in Angstroms
             flux: 2D[nspec, nwave] flux
             ivar: 2D[nspec, nwave] inverse variance of flux
+            mask: (optional) 2D[nspec, nwave] integer bitmask of flux.  0=good.
             resolution_data: (optional) 3D[nspec, ndiag, nwave]
                              resolution matrix data
-            header: (optional) FITS header from HDU0            
+            header: (optional) FITS header from HDU0    
             
-        Note:
-            also converts resolution_data into R array of sparse Resolution
-            matrix objects.
+            fibers: (optional) which fibers these spectra correspond to
+            spectrograph: (optional) which spectrograph [0-9]        
+
+        Attributes:
+            All input args become object attributes.
+            nspec : number of spectra, flux.shape[0]
+            nwave : number of wavelengths, flux.shape[1]
+            R: array of sparse Resolution matrix objects converted
+               from resolution_data
         """
-        if wave.ndim != 1:
-            raise ValueError("wave should be 1D")
-
-        if flux.ndim != 2:
-            raise ValueError("flux should be 2D[nspec, nwave]")
-
-        if flux.shape != ivar.shape:
-            raise ValueError("flux and ivar must have the same shape")
-        
-        if wave.shape[0] != flux.shape[1]:
-            raise ValueError("nwave mismatch between wave.shape[0] and flux.shape[1]")
+        assert wave.ndim == 1
+        assert flux.ndim == 2
+        assert wave.shape[0] == flux.shape[1]
+        assert ivar.shape == flux.shape
+        assert (mask is None) or mask.shape == flux.shape
+        assert mask.dtype in (np.int64, np.int32, np.uint64, np.uint32)
 
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
-
         self.nspec, self.nwave = self.flux.shape
+        
+        if mask is None:
+            self.mask = np.zeros(flux.shape, dtype=int)
+        else:
+            self.mask = mask
 
         if resolution_data is not None:
             if resolution_data.ndim != 3 or \
                resolution_data.shape[0] != self.nspec or \
                resolution_data.shape[2] != self.nwave:
                raise ValueError("Wrong dimensions for resolution_data[nspec, ndiag, nwave]")
-        
+
+        #- Maybe setup non-None identity matrix resolution matrix instead?
         self.resolution_data = resolution_data
         if resolution_data is not None:
             self.R = np.array( [Resolution(r) for r in resolution_data] )
@@ -112,6 +124,7 @@ class Spectra(object):
             rdata = None
         
         result = Spectra(self.wave, self.flux[index], self.ivar[index],
+                    self.mask[index],
                     resolution_data=rdata, header=self.header,
                     fibers=self.fibers[index], spectrograph=self.spectrograph)
         

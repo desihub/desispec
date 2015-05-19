@@ -13,7 +13,7 @@ desi_fit_stdstars.py
 """
 
 from desispec import io
-from desispec.fluxcalibration import match_templates,normalize_templates,convolveFlux
+from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.log import get_logger
 import argparse
 import numpy as np
@@ -103,8 +103,6 @@ def main() :
     sky={}
     skyivar={}
     skymask={}
-    cskyflux={}
-    civar={}
     skywave={}
     skyhdr={}
 
@@ -130,14 +128,12 @@ def main() :
        sky[i] = skymodel.flux
        skyivar[i] = skymodel.ivar
        skymask[i] = skymodel.mask
-       cskyflux[i] = skymodel.cflux
-       civar[i] = skymodel.civar
        skywave[i] = skymodel.wave
        skyhdr[i] = skymodel.header
 
     # Convolve Sky with Detector Resolution, so as to subtract from data. Convolve for all 500 specs. Subtracting sky this way should be equivalent to sky_subtract
 
-    convolvedsky={"b":convolveFlux(frameWave["b"],frameResolution["b"],sky["b"]),"r":convolveFlux(frameWave["r"],frameResolution["r"],sky["r"]),"z":convolveFlux(frameWave["z"],frameResolution["z"],sky["z"])} # wave and sky are one-dimensional
+    convolvedsky={"b":sky["b"], "r":sky["r"], "z":sky["z"]}
 
     # Read the standard Star data and divide by flat and subtract sky
 

@@ -183,19 +183,16 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
 
     return stdwave,normflux
 
-def convolveFlux(wave,resolution,flux):
-    """I am writing this full convolution only for sky subtraction. It will be applied to sky model.
-    """
-    diags=np.arange(10,-11,-1)
-    nwave=len(wave)
-    nspec=resolution.shape[0]
-    convolved=np.zeros((nspec,nwave))
-    for i in range(nspec):
-       R=Resolution(resolution[i])
-       convolved[i]=R.dot(flux)
-
-    return convolved
-
+# def convolveFlux(wave,resolution,flux):
+#     """I am writing this full convolution only for sky subtraction. It will be applied to sky model.
+#     """
+#     nspec, nwave = flux.shape
+#     convolved=np.zeros((nspec,nwave))
+#     for i in range(nspec):
+#        R=Resolution(resolution[i])
+#        convolved[i]=R.dot(flux)
+# 
+#     return convolved
 
 def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,input_model_flux,nsig_clipping=4.):
     """Compute average frame throughtput based on data (wave,flux,ivar,resolution_data)
@@ -426,3 +423,5 @@ def apply_flux_calibration(flux,ivar,resolution_data,wave,calibration,civar,cmas
 
         flux[fiber]=flux[fiber]*(C>0)/(C+(C==0))
         ivar[fiber]=(ivar[fiber]>0)*(civar[fiber]>0)*(C>0)/(   1./((ivar[fiber]+(ivar[fiber]==0))*(C**2+(C==0))) + flux[fiber]**2/(civar[fiber]*C**4+(civar[fiber]*(C==0)))   )
+        
+
