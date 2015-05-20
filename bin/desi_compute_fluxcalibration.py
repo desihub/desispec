@@ -92,10 +92,10 @@ def main() :
             log.error("inconsistency with fiber %d, OBJTYPE='%s' in fibermap"%(fiber,table["OBJTYPE"][fiber]))
         sys.exit(12)
 
-    calibration, calibivar, mask, ccalibration, ccalibivar = compute_flux_calibration(spectra.wave, spectra.flux[fibers], spectra.ivar[fibers], spectra.resolution_data[fibers], model_wave, model_flux)
+    fluxcalib = compute_flux_calibration(spectra, fibers, model_wave, model_flux)
 
     # write result
-    write_flux_calibration(args.outfile,calibration, calibivar, mask, ccalibration, ccalibivar, spectra.wave, spectra.header)
+    write_flux_calibration(args.outfile, fluxcalib, header=spectra.header)
 
 
     log.info("successfully wrote %s"%args.outfile)
