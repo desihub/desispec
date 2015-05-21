@@ -29,6 +29,12 @@ def write_frame(outfile, flux, ivar, wave, resolution_data, header=None):
     outfile = makepath(outfile, 'frame')
 
     hdr = fitsheader(header)
+
+    if 'SPECMIN' not in hdr:
+        hdr['SPECMIN'] = 0
+    if 'SPECMAX' not in hdr:
+        hdr['SPECMAX'] = hdr['SPECMIN'] + flux.shape[0]
+
     hdr['EXTNAME'] = ('FLUX', 'no dimension')
     fits.writeto(outfile,flux,header=hdr, clobber=True)
 
