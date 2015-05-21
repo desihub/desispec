@@ -79,9 +79,9 @@ def main() :
     if args.calib!=None :
         log.info("calibrate")
         # read calibration
-        calibration,calib_ivar,cmask,convolved_calibration,convolved_calib_ivar,calib_wave=read_flux_calibration(args.calib)
+        fluxcalib=read_flux_calibration(args.calib)
         # apply calibration
-        apply_flux_calibration(flux=frame.flux,ivar=frame.ivar,resolution_data=frame.resolution_data,wave=frame.wave,calibration=calibration,civar=convolved_calib_ivar,cmask=cmask,cwave=calib_wave)
+        apply_flux_calibration(frame, fluxcalib)
 
 
     # save output

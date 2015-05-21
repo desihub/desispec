@@ -107,20 +107,3 @@ def read_stdstar_templates(stellarmodelfile):
 
     return wavebins,fluxData,templateid
 
-# reading filter quantum efficiency
-def read_filter_response(given_filter,basepath):
-    """No documentation yet.
-    """
-    filterNameMap={}
-
-    filttype=str.split(given_filter,'_')
-    if filttype[0]=='SDSS':
-        filterNameMap=given_filter.lower()+"0.txt"
-    else: #if breakfilt[0]=='DECAM':
-        filterNameMap=given_filter.lower()+".txt"
-    filter_response={}
-    fileName=basepath+filterNameMap
-    filt=numpy.loadtxt(fileName,unpack=True)
-    tck=scipy.interpolate.splrep(filt[0],filt[1],s=0)
-    filter_response=(filt[0],filt[1],tck)
-    return filter_response

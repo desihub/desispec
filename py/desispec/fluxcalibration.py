@@ -12,7 +12,7 @@ from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
-from desispec.io.fluxcalibration import read_filter_response
+from desispec.io.filters import read_filter_response
 from desispec.resolution import Resolution
 import scipy,scipy.sparse, scipy.ndimage
 import sys
@@ -217,9 +217,9 @@ def compute_flux_calibration(spectra, stdfibers, input_model_wave,input_model_fl
     nstds=stdstars.flux.shape[0]
 
     # resample model to data grid and convolve by resolution
-    model_flux=np.zeros(flux.shape)
+    model_flux=np.zeros((nstds, nwave))
     for fiber in range(model_flux.shape[0]) :
-        model_flux[fiber]=resample_flux(wave,input_model_wave,input_model_flux[fiber])
+        model_flux[fiber]=resample_flux(stdstars.wave,input_model_wave,input_model_flux[fiber])
 
         # debug
         # pylab.plot(input_model_wave,input_model_flux[fiber])
@@ -232,7 +232,7 @@ def compute_flux_calibration(spectra, stdfibers, input_model_wave,input_model_fl
         # pylab.show()
 
     # iterative fitting and clipping to get precise mean spectrum
-    current_ivar=ivar.copy()
+    current_ivar=stdstars.ivar.copy()
 
 
     smooth_fiber_correction=np.ones((stdstars.flux.shape))
@@ -295,9 +295,9 @@ def compute_flux_calibration(spectra, stdfibers, input_model_wave,input_model_fl
             #pylab.show()
             #continue
 
-            F = flux[fiber]/(M+(M==0))
-            smooth_fiber_correction[fiber]=spline_fit(wave,wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
-            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-smooth_fiber_correction[fiber]*M)**2
+            F = stdstars.flux[fiber]/(M+(M==0))
+            smooth_fiber_correction[fiber]=spline_fit(stdstars.wave,stdstars.wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
+            chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
 
             #pylab.plot(wave,F)
             #pylab.plot(wave,smooth_fiber_correction[fiber])
@@ -388,7 +388,7 @@ def compute_flux_calibration(spectra, stdfibers, input_model_wave,input_model_fl
     ccalibivar = np.tile(ccalibivar, spectra.nspec).reshape(spectra.nspec, spectra.nwave)
 
     # need to do better here
-    mask=(calibvar>0).astype(int)
+    mask=(ccalibivar>0).astype(int)
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
     return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask)
@@ -407,7 +407,7 @@ class FluxCalib(object):
         
         The calib vector should be such that
         
-        [erg/s/cm^2/A] = [photons/A] * calib
+        [erg/s/cm^2/A] = [photons/A] / calib
         """
         assert wave.ndim == 1
         assert calib.ndim == 2
@@ -421,43 +421,40 @@ class FluxCalib(object):
         self.ivar = ivar
         self.mask = mask
 
-def apply_flux_calibration(flux,ivar,resolution_data,wave,calibration,civar,cmask,cwave):
+def apply_flux_calibration(frame, fluxcalib):
     """
     Applies flux calibration to input flux and ivar
 
     Args:
-        flux : input flux[nspec, nwave] -- WILL BE MODIFIED IN-PLACE
-        ivar : input ivar[nspec, nwave] -- WILL BE MODIFIED IN-PLACE
-        resolution_data : 3D[nspec, ndiag, nwave] sparse resolution matrix data
-        wave : 1D[nwave] wavelength of flux
-        calibration, civar, cmask, cwave : from compute_flux_calibration()
+        frame: Spectra objects with attributes wave, flux, ivar, resolution_data
+        fluxcalib : FluxCalib object with wave, calib, ...
     """
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    mval=np.max(np.abs(wave-cwave))
+    mval=np.max(np.abs(frame.wave-fluxcalib.wave))
     if mval > 0.00001 :
         log.error("not same wavelength (should raise an error instead)")
         sys.exit(12)
 
-    nwave=wave.size
-    nfibers=flux.shape[0]
+    nwave=frame.nwave
+    nfibers=frame.nspec
 
-    for fiber in range(nfibers) :
+    """
+    F'=F/C
+    Var(F') = Var(F)/C**2 + F**2*(  d(1/C)/dC )**2*Var(C)
+    = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
+    = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
+    = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
+    """
+    # for fiber in range(nfibers) :
+    #     C = fluxcalib.calib[fiber]
+    #     flux[fiber]=frame.flux[fiber]*(C>0)/(C+(C==0))
+    #     ivar[fiber]=(ivar[fiber]>0)*(civar[fiber]>0)*(C>0)/(   1./((ivar[fiber]+(ivar[fiber]==0))*(C**2+(C==0))) + flux[fiber]**2/(civar[fiber]*C**4+(civar[fiber]*(C==0)))   )
 
-        R = Resolution(resolution_data[fiber])
-        C = R.dot(calibration)
-
-        """
-        F'=F/C
-        Var(F') = Var(F)/C**2 + F**2*(  d(1/C)/dC )**2*Var(C)
-        = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
-        = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
-        = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
-        """
-
-        flux[fiber]=flux[fiber]*(C>0)/(C+(C==0))
-        ivar[fiber]=(ivar[fiber]>0)*(civar[fiber]>0)*(C>0)/(   1./((ivar[fiber]+(ivar[fiber]==0))*(C**2+(C==0))) + flux[fiber]**2/(civar[fiber]*C**4+(civar[fiber]*(C==0)))   )
+    C = fluxcalib.calib
+    frame.flux = frame.flux * (C>0) / (C+(C==0))
+    frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
         
 
