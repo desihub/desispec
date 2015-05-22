@@ -7,7 +7,7 @@ import numpy as np
 import scipy.sparse
 
 from desispec.resolution import Resolution
-from desispec.spectra import Spectra
+from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.fiberflat import compute_fiberflat
 from desispec.log import get_logger
@@ -36,11 +36,6 @@ def _get_data():
 
 class TestFiberFlat(unittest.TestCase):
 
-    def test_example(self):
-        self.assertTrue( True )
-        self.assertEqual(2+1, 4-1)
-        self.assertAlmostEqual(1.0, 1.0+1e-12)
-        
     def test_interface(self):
         """
         Basic test that interface works and identical inputs result in
@@ -61,8 +56,8 @@ class TestFiberFlat(unittest.TestCase):
                 Rdata[i,:,j] = kernel
 
         #- Run the code
-        spectra = Spectra(wave, flux, ivar, mask, Rdata)
-        ff = compute_fiberflat(spectra)
+        frame = Frame(wave, flux, ivar, mask, Rdata)
+        ff = compute_fiberflat(frame)
             
         #- Check shape of outputs
         self.assertEqual(ff.fiberflat.shape, flux.shape)
@@ -103,8 +98,8 @@ class TestFiberFlat(unittest.TestCase):
             convflux[i] = Resolution(Rdata[i]).dot(flux[i])
 
         #- Run the code
-        spectra = Spectra(wave, convflux, ivar, mask, Rdata)
-        ff = compute_fiberflat(spectra)
+        frame = Frame(wave, convflux, ivar, mask, Rdata)
+        ff = compute_fiberflat(frame)
 
         #- These fiber flats should all be ~1
         self.assertTrue( np.all(np.abs(ff.fiberflat-1) < 0.001) )

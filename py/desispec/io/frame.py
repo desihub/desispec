@@ -10,48 +10,49 @@ import numpy as np
 import scipy,scipy.sparse
 from astropy.io import fits
 
-from desispec.spectra import Spectra
+from desispec.frame import Frame
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
 from desispec.log import get_logger
 
 log = get_logger()
 
-def write_frame(outfile, spectra, header=None):
+def write_frame(outfile, frame, header=None):
     """Write a frame fits file and returns path to file written.
 
     Args:
         outfile: full path to output file, or tuple (night, expid, channel)
-        spectra:  desispec.spectra.Spectra object with wave, flux, ivar...
-        header: optional astropy.io.fits.Header or dict to override spectra.header
+        frame:  desispec.frame.Frame object with wave, flux, ivar...
+        header: optional astropy.io.fits.Header or dict to override frame.header
         
     Returns:
         full filepath of output file that was written
         
     Note:
-        spectra = Spectra(wave, flux, ivar, resolution_data)
+        to create a Frame object to pass into write_frame,
+        frame = Frame(wave, flux, ivar, resolution_data)
     """
     outfile = makepath(outfile, 'frame')
 
     if header is not None:
         hdr = fitsheader(header)
     else:
-        hdr = fitsheader(spectra.header)
+        hdr = fitsheader(frame.header)
 
     if 'SPECMIN' not in hdr:
         hdr['SPECMIN'] = 0
     if 'SPECMAX' not in hdr:
-        hdr['SPECMAX'] = hdr['SPECMIN'] + spectra.nspec
+        hdr['SPECMAX'] = hdr['SPECMIN'] + frame.nspec
 
     hdus = fits.HDUList()
-    x = fits.PrimaryHDU(spectra.flux, header=hdr)
+    x = fits.PrimaryHDU(frame.flux, header=hdr)
     x.header['EXTNAME'] = 'FLUX'
     hdus.append(x)
 
-    hdus.append( fits.ImageHDU(spectra.ivar, name='IVAR') )
-    hdus.append( fits.ImageHDU(spectra.mask, name='MASK') )
-    hdus.append( fits.ImageHDU(spectra.wave, name='WAVELENGTH') )
-    hdus.append( fits.ImageHDU(spectra.resolution_data, name='RESOLUTION' ) )
+    hdus.append( fits.ImageHDU(frame.ivar, name='IVAR') )
+    hdus.append( fits.ImageHDU(frame.mask, name='MASK') )
+    hdus.append( fits.ImageHDU(frame.wave, name='WAVELENGTH') )
+    hdus.append( fits.ImageHDU(frame.resolution_data, name='RESOLUTION' ) )
     
     hdus.writeto(outfile, clobber=True)
 
@@ -67,7 +68,7 @@ def read_frame(filename, nspec=None):
             camera = b0, r1, .. z9
 
     Returns:
-        desispec.Spectra object with attributes wave, flux, ivar, etc.
+        desispec.Frame object with attributes wave, flux, ivar, etc.
     """
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, (str, unicode)):
@@ -96,4 +97,4 @@ def read_frame(filename, nspec=None):
         resolution_data = resolution_data[0:nspec]
 
     # return flux,ivar,wave,resolution_data, hdr
-    return Spectra(wave, flux, ivar, mask, resolution_data, hdr)
+    return Frame(wave, flux, ivar, mask, resolution_data, hdr)

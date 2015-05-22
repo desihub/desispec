@@ -5,7 +5,8 @@
 # -*- coding: utf-8 -*-
 
 """
-This script processes an exposure by applying fiberflat, sky subtraction, spectro-photometric calibration depending on input.
+This script processes an exposure by applying fiberflat, sky subtraction,
+spectro-photometric calibration depending on input.
 """
 
 from desispec.io import read_frame, write_frame
@@ -18,9 +19,6 @@ from desispec.fluxcalibration import apply_flux_calibration
 from desispec.log import get_logger
 
 import argparse
-import os
-import os.path
-import numpy as np
 import sys
 
 
@@ -28,7 +26,7 @@ def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--infile', type = str, default = None,
+    parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None,
                         help = 'path of DESI fiberflat fits file')
@@ -36,28 +34,16 @@ def main() :
                         help = 'path of DESI sky fits file')
     parser.add_argument('--calib', type = str, default = None,
                         help = 'path of DESI calibration fits file')
-    parser.add_argument('--outfile', type = str, default = None,
+    parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
     # add calibration here when exists
 
     args = parser.parse_args()
     log = get_logger()
 
-    if args.infile is None:
-        log.critical('Missing input')
-        parser.print_help()
+    if (args.fiberflat is None) and (args.sky is None) and (args.calib is None):
+        log.critical('no --fiberflat, --sky, or --calib; nothing to do ?!?')
         sys.exit(12)
-
-    if args.fiberflat is None and args.sky is None:
-        log.critical('Nothing to do ??')
-        parser.print_help()
-        sys.exit(12)
-
-    if args.outfile is None:
-        log.critical('Missing output')
-        parser.print_help()
-        sys.exit(12)
-
 
     frame = read_frame(args.infile)
     

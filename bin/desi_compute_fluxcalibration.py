@@ -29,46 +29,40 @@ def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--infile', type = str, default = None,
+    parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fibermap', type = str, default = None,
+    parser.add_argument('--fibermap', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fiberflat', type = str, default = None,
+    parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
-    parser.add_argument('--sky', type = str, default = None,
+    parser.add_argument('--sky', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
-    parser.add_argument('--models', type = str, default = None,
+    parser.add_argument('--models', type = str, default = None, required=True,
                         help = 'path of spetro-photometric stellar spectra fits file')
-    parser.add_argument('--outfile', type = str, default = None,
+    parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
 
 
     args = parser.parse_args()
     log=get_logger()
 
-    if args.infile is None or args.fibermap is None or args.outfile is None or args.fiberflat is None or args.sky is None or args.models is None :
-        log.critical('Missing something')
-        parser.print_help()
-        sys.exit(12)
-
-
     log.info("read frame")
     # read frame
-    spectra = read_frame(args.infile)
+    frame = read_frame(args.infile)
 
     log.info("apply fiberflat")
     # read fiberflat
     fiberflat = read_fiberflat(args.fiberflat)
 
     # apply fiberflat
-    apply_fiberflat(spectra, fiberflat)
+    apply_fiberflat(frame, fiberflat)
     
     log.info("subtract sky")
     # read sky
     skymodel=read_sky(args.sky)
 
     # subtract sky
-    subtract_sky(spectra, skymodel)
+    subtract_sky(frame, skymodel)
 
     log.info("compute flux calibration")
 
@@ -76,13 +70,13 @@ def main() :
     model_flux,model_wave,model_fibers=read_stdstar_models(args.models)
 
     # select fibers
-    SPECMIN=spectra.header["SPECMIN"]
-    SPECMAX=spectra.header["SPECMAX"]
+    SPECMIN=frame.header["SPECMIN"]
+    SPECMAX=frame.header["SPECMAX"]
     selec=np.where((model_fibers>=SPECMIN)&(model_fibers<=SPECMAX))[0]
     if selec.size == 0 :
-        log.error("not stellar models for this spectro")
+        log.error("no stellar models for this spectro")
         sys.exit(12)
-    fibers=model_fibers[selec]-spectra.header["SPECMIN"]
+    fibers=model_fibers[selec]-frame.header["SPECMIN"]
     log.info("star fibers= %s"%str(fibers))
 
     table = read_fibermap(args.fibermap)
@@ -92,10 +86,10 @@ def main() :
             log.error("inconsistency with fiber %d, OBJTYPE='%s' in fibermap"%(fiber,table["OBJTYPE"][fiber]))
         sys.exit(12)
 
-    fluxcalib = compute_flux_calibration(spectra, fibers, model_wave, model_flux)
+    fluxcalib = compute_flux_calibration(frame, fibers, model_wave, model_flux)
 
     # write result
-    write_flux_calibration(args.outfile, fluxcalib, header=spectra.header)
+    write_flux_calibration(args.outfile, fluxcalib, header=frame.header)
 
 
     log.info("successfully wrote %s"%args.outfile)

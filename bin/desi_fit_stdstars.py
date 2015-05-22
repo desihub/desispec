@@ -12,6 +12,9 @@ desi_fit_stdstars.py
     --outfile X
 """
 
+#- TODO: refactor algorithmic code into a separate module/function
+#- TODO: move filters out of desisim and remove $DESISIM dependency
+
 from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.log import get_logger

@@ -8,7 +8,7 @@ def night2ymd(night):
     """
     parse night YEARMMDD string into tuple of integers (year, month, day)
     """
-    assert isinstance(night, str)
+    assert isinstance(night, str), 'night is not a string'
     assert len(night) == 8, 'invalid YEARMMDD night string '+night
     
     year = int(night[0:4])
@@ -36,9 +36,9 @@ def combine_ivar(ivar1, ivar2):
     """
     iv1 = np.asarray(ivar1)  #- handle list, tuple, and scalar input
     iv2 = np.asarray(ivar2)
-    assert np.all(iv1 >= 0)
-    assert np.all(iv2 >= 0)
-    assert iv1.shape == iv2.shape
+    assert np.all(iv1 >= 0), 'ivar1 has negative elements'
+    assert np.all(iv2 >= 0), 'ivar2 has negative elements'
+    assert iv1.shape == iv2.shape, 'shape mismatch {} vs. {}'.format(iv1.shape, iv2.shape)
     ii = (iv1 > 0) & (iv2 > 0)
     ivar = np.zeros(iv1.shape)
     ivar[ii] = 1.0 / (1.0/iv1[ii] + 1.0/iv2[ii])

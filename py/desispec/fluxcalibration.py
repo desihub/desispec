@@ -23,9 +23,9 @@ import sys
 #But should move from here anyway.
 
 def rebinSpectra(spectra,oldWaveBins,newWaveBins):
-        tck=scipy.interpolate.splrep(oldWaveBins,spectra,s=0,k=5)
-        specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
-        return specnew
+    tck=scipy.interpolate.splrep(oldWaveBins,spectra,s=0,k=5)
+    specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
+    return specnew
 
 #import some global constants
 import scipy.constants as const
@@ -184,14 +184,14 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
     return stdwave,normflux
 
 
-def compute_flux_calibration(spectra, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.):
-    """Compute average frame throughtput based on data spectra.(wave,flux,ivar,resolution_data)
+def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.):
+    """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
     
     Args:
-      spectra : Spectra object with attributes wave, flux, ivar, resolution_data
-      stdfibers: 1D[nwave] array of indices of spectra that are standard stars
+      frame : Frame object with attributes wave, flux, ivar, resolution_data
+      stdfibers: 1D[nwave] array of indices of frame that are standard stars
       input_model_wave : 1D[nwave] array of model wavelengths
       input_model_flux : 2D[nstd, nwave] array of model fluxes
       nsig_clipping : (optional) sigma clipping level
@@ -209,9 +209,9 @@ def compute_flux_calibration(spectra, stdfibers, input_model_wave,input_model_fl
     log.info("starting")
 
     #- Pull out just the standard stars for convenience, but keep the
-    #- full spectra around because we will later need to convolved the
-    #- calibration vector for each fiber individually
-    stdstars = spectra[stdfibers]
+    #- full frame of spectra around because we will later need to convolved
+    #- the calibration vector for each fiber individually
+    stdstars = frame[stdfibers]
 
     nwave=stdstars.nwave
     nstds=stdstars.flux.shape[0]
@@ -368,12 +368,12 @@ def compute_flux_calibration(spectra, stdfibers, input_model_wave,input_model_fl
 
     # we also want to save the convolved calibration and calibration variance
     # first compute average resolution
-    mean_res_data=np.mean(spectra.resolution_data,axis=0)
+    mean_res_data=np.mean(frame.resolution_data,axis=0)
     R = Resolution(mean_res_data)
     # compute convolved calib
-    ccalibration = np.zeros(spectra.flux.shape)
-    for i in range(spectra.nspec):
-        ccalibration[i]=spectra.R[i].dot(calibration)
+    ccalibration = np.zeros(frame.flux.shape)
+    for i in range(frame.nspec):
+        ccalibration[i]=frame.R[i].dot(calibration)
         
     # Use diagonal of mean calibration covariance for output.
     ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
@@ -385,7 +385,7 @@ def compute_flux_calibration(spectra, stdfibers, input_model_wave,input_model_fl
     
     # convert to 2D
     # For now this is the same for all fibers; in the future it may not be
-    ccalibivar = np.tile(ccalibivar, spectra.nspec).reshape(spectra.nspec, spectra.nwave)
+    ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
 
     # need to do better here
     mask=(ccalibivar>0).astype(int)

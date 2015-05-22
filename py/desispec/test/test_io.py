@@ -3,7 +3,7 @@ from uuid import uuid1
 
 import numpy as np
 
-from desispec.spectra import Spectra
+from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
 import desispec.io
@@ -66,17 +66,17 @@ class TestIO(unittest.TestCase):
         mask = np.zeros((nspec, nwave), dtype=int)
         wave = np.arange(nwave)
         R = np.random.uniform( size=(nspec, ndiag, nwave) )
-        spx = Spectra(wave, flux, ivar, mask, R)
+        frx = Frame(wave, flux, ivar, mask, R)
                 
-        desispec.io.write_frame(self.testfile, spx)
-        spectra = desispec.io.read_frame(self.testfile)
+        desispec.io.write_frame(self.testfile, frx)
+        frame = desispec.io.read_frame(self.testfile)
 
-        self.assertTrue(np.all(flux == spectra.flux))
-        self.assertTrue(np.all(ivar == spectra.ivar))
-        self.assertTrue(np.all(wave == spectra.wave))
-        self.assertTrue(np.all(mask == spectra.mask))
-        self.assertTrue(np.all(R == spectra.resolution_data))
-        self.assertTrue(spectra.resolution_data.dtype.isnative)
+        self.assertTrue(np.all(flux == frame.flux))
+        self.assertTrue(np.all(ivar == frame.ivar))
+        self.assertTrue(np.all(wave == frame.wave))
+        self.assertTrue(np.all(mask == frame.mask))
+        self.assertTrue(np.all(R == frame.resolution_data))
+        self.assertTrue(frame.resolution_data.dtype.isnative)
         
     def test_sky_rw(self):
         nspec, nwave = 5,10 

@@ -16,8 +16,6 @@ from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.log import get_logger
 import argparse
-import os
-import os.path
 import numpy as np
 import sys
 
@@ -25,44 +23,22 @@ def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--infile', type = str, default = None,
+    parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fibermap', type = str, default = None,
+    parser.add_argument('--fibermap', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fiberflat', type = str, default = None,
+    parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
-    parser.add_argument('--outfile', type = str, default = None,
+    parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
 
 
     args = parser.parse_args()
     log=get_logger()
 
-    if args.infile is None:
-        log.critical('Missing input')
-        parser.print_help()
-        sys.exit(12)
-
-    if args.fibermap is None:
-        log.critical('Missing fibermap')
-        parser.print_help()
-        sys.exit(12)
-
-    if args.fiberflat is None:
-        log.critical('Missing fiberflat')
-        parser.print_help()
-        sys.exit(12)
-
-    if args.outfile is None:
-        log.critical('Missing output')
-        parser.print_help()
-        sys.exit(12)
-
-
     log.info("starting")
 
     # read exposure to load data and get range of spectra
-    ### flux,ivar,wave,resol,head = read_frame(args.infile)
     frame = read_frame(args.infile)
     specmin=frame.header["SPECMIN"]
     specmax=frame.header["SPECMAX"]

@@ -17,7 +17,7 @@ from desispec import util
 import scipy,scipy.sparse
 import sys
 
-def compute_sky(spectra, fibermap, nsig_clipping=4.) :
+def compute_sky(frame, fibermap, nsig_clipping=4.) :
     """Compute a sky model.
 
     Input has to correspond to sky fibers only.
@@ -25,7 +25,7 @@ def compute_sky(spectra, fibermap, nsig_clipping=4.) :
     We don't check this in this routine.
 
     args:
-        spectra : Spectra object, which includes attributes
+        frame : Frame object, which includes attributes
           - wave : 1D wavelength grid in Angstroms
           - flux : 2D flux[nspec, nwave] density
           - ivar : 2D inverse variance of flux
@@ -42,12 +42,12 @@ def compute_sky(spectra, fibermap, nsig_clipping=4.) :
 
     skyfibers = np.where(fibermap["OBJTYPE"]=="SKY")[0]
 
-    nwave=spectra.nwave
+    nwave=frame.nwave
     nfibers=len(skyfibers)
     
-    current_ivar=spectra.ivar[skyfibers].copy()
-    flux = spectra.flux[skyfibers]
-    Rsky = spectra.R[skyfibers]
+    current_ivar=frame.ivar[skyfibers].copy()
+    flux = frame.flux[skyfibers]
+    Rsky = frame.R[skyfibers]
 
     sqrtw=np.sqrt(current_ivar)
     sqrtwflux=sqrtw*flux
@@ -137,7 +137,7 @@ def compute_sky(spectra, fibermap, nsig_clipping=4.) :
 
     # Use diagonal of skycovar convolved with mean resolution of all fibers
     # first compute average resolution
-    mean_res_data=np.mean(spectra.resolution_data,axis=0)
+    mean_res_data=np.mean(frame.resolution_data,axis=0)
     R = Resolution(mean_res_data)
     # compute convolved sky and ivar
     cskycovar=R.dot(skycovar).dot(R.T.todense())
@@ -146,17 +146,17 @@ def compute_sky(spectra, fibermap, nsig_clipping=4.) :
     
     # convert cskyivar to 2D; today it is the same for all spectra,
     # but that may not be the case in the future
-    cskyivar = np.tile(cskyivar, spectra.nspec).reshape(spectra.nspec, nwave)
+    cskyivar = np.tile(cskyivar, frame.nspec).reshape(frame.nspec, nwave)
 
     # Convolved sky
-    cskyflux = np.zeros(spectra.flux.shape)
-    for i in range(spectra.nspec):
-        cskyflux[i] = spectra.R[i].dot(skyflux)
+    cskyflux = np.zeros(frame.flux.shape)
+    for i in range(frame.nspec):
+        cskyflux[i] = frame.R[i].dot(skyflux)
 
     # need to do better here
     mask = (cskyivar==0).astype(int)
 
-    return SkyModel(spectra.wave.copy(), cskyflux, cskyivar, mask)
+    return SkyModel(frame.wave.copy(), cskyflux, cskyivar, mask)
 
 class SkyModel(object):
     def __init__(self, wave, flux, ivar, mask, header=None):
@@ -184,23 +184,23 @@ class SkyModel(object):
         self.header = header
 
 
-def subtract_sky(spectra, skymodel) :
-    """Subtract skymodel from spectra, altering spectra.flux, .ivar, and .mask
+def subtract_sky(frame, skymodel) :
+    """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
     """
-    assert spectra.nspec == skymodel.nspec
-    assert spectra.nwave == skymodel.nwave
+    assert frame.nspec == skymodel.nspec
+    assert frame.nwave == skymodel.nwave
 
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    if not np.allclose(spectra.wave, skymodel.wave):
-        message = "spectra and sky not on same wavelength grid"
+    if not np.allclose(frame.wave, skymodel.wave):
+        message = "frame and sky not on same wavelength grid"
         log.error(message)
         raise ValueError(message)
 
-    spectra.flux -= skymodel.flux
-    spectra.ivar = util.combine_ivar(spectra.ivar, skymodel.ivar)
-    spectra.mask |= skymodel.mask
+    frame.flux -= skymodel.flux
+    frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
+    frame.mask |= skymodel.mask
 
     log.info("done")

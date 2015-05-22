@@ -5,7 +5,7 @@ from uuid import uuid4
 import numpy as np
 
 from desispec.resolution import Resolution
-from desispec.spectra import Spectra
+from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec import io
 from desispec.pipeline.core import runcmd
@@ -36,7 +36,7 @@ class TestBinScripts(unittest.TestCase):
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        frame = Spectra(wave, flux, ivar, mask, Rdata)
+        frame = Frame(wave, flux, ivar, mask, Rdata)
         io.write_frame(self.framefile, frame)
         
     def _write_fiberflat(self):

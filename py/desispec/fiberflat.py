@@ -17,13 +17,13 @@ import sys
 from desispec.log import get_logger
 
 
-def compute_fiberflat(spectra, nsig_clipping=4.) :
+def compute_fiberflat(frame, nsig_clipping=4.) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelenght grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
 
     args:
-        spectra (desispec.Spectra): input spectra object with attributes
+        frame (desispec.Frame): input Frame object with attributes
             wave, flux, ivar, resolution_data
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
@@ -75,18 +75,18 @@ def compute_fiberflat(spectra, nsig_clipping=4.) :
     #
 
     #- Shortcuts
-    nwave=spectra.nwave
-    nfibers=spectra.nspec
-    wave = spectra.wave.copy()  #- this will become part of output too
-    flux = spectra.flux
-    ivar = spectra.ivar
+    nwave=frame.nwave
+    nfibers=frame.nspec
+    wave = frame.wave.copy()  #- this will become part of output too
+    flux = frame.flux
+    ivar = frame.ivar
 
 
     # iterative fitting and clipping to get precise mean spectrum
     current_ivar=ivar.copy()
 
 
-    smooth_fiberflat=np.ones((spectra.flux.shape))
+    smooth_fiberflat=np.ones((frame.flux.shape))
     chi2=np.zeros((flux.shape))
 
 
@@ -112,7 +112,7 @@ def compute_fiberflat(spectra, nsig_clipping=4.) :
                 log.info("iter %d fiber %d"%(iteration,fiber))
 
             ### R = Resolution(resolution_data[fiber])
-            R = spectra.R[fiber]
+            R = frame.R[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)*flat
             SD.setdiag(sqrtwflat[fiber])
@@ -137,7 +137,7 @@ def compute_fiberflat(spectra, nsig_clipping=4.) :
             #    log.info("iter %d fiber %d (smoothing)"%(iteration,fiber))
 
             ### R = Resolution(resolution_data[fiber])
-            R = spectra.R[fiber]
+            R = frame.R[fiber]
 
             #M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
             M = R.dot(mean_spectrum)
@@ -204,7 +204,7 @@ def compute_fiberflat(spectra, nsig_clipping=4.) :
 
     for fiber in range(nfibers) :
         ### R = Resolution(resolution_data[fiber])
-        R = spectra.R[fiber]
+        R = frame.R[fiber]
         M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
         fiberflat[fiber] = (M!=0)*flux[fiber]/(M+(M==0)) + (M==0)
         fiberflat_ivar[fiber] = ivar[fiber]*M**2
@@ -216,16 +216,16 @@ def compute_fiberflat(spectra, nsig_clipping=4.) :
     return FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum)    
 
 
-def apply_fiberflat(spectra, fiberflat):
+def apply_fiberflat(frame, fiberflat):
 ### def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
-    """Apply fiberflat to spectra.  Modifies spectra.flux and spectra.ivar
+    """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar
     """
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    if not np.allclose(spectra.wave, fiberflat.wave):
-        message = "spectra and fiberflat do not have the same wavelength arrays"
+    if not np.allclose(frame.wave, fiberflat.wave):
+        message = "frame and fiberflat do not have the same wavelength arrays"
         log.critical(message)
         raise ValueError(message)
 
@@ -238,7 +238,7 @@ def apply_fiberflat(spectra, fiberflat):
     """
     #- shorthand
     ff = fiberflat
-    sp = spectra
+    sp = frame  #- sp=spectra for this frame
     
     sp.flux = sp.flux*(ff.fiberflat>0)/(ff.fiberflat+(ff.fiberflat==0))
     sp.ivar=(sp.ivar>0)*(ff.ivar>0)*(ff.fiberflat>0)/( 1./((sp.ivar+(sp.ivar==0))*(ff.fiberflat**2+(ff.fiberflat==0))) + sp.flux**2/(ff.ivar*ff.fiberflat**4+(ff.ivar*ff.fiberflat==0)) )
@@ -308,7 +308,7 @@ class FiberFlat(object):
             
     def __getitem__(self, index):
         """
-        Return a subset of the spectra as a new Spectra object
+        Return a subset of the spectra as a new FiberFlat object
         
         index can be anything that can index or slice a numpy array
         """

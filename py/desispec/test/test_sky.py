@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 from desispec.sky import compute_sky, subtract_sky
 from desispec.resolution import Resolution
-from desispec.spectra import Spectra
+from desispec.frame import Frame
 import desispec.io
 
 class TestSky(unittest.TestCase):
@@ -46,7 +46,7 @@ class TestSky(unittest.TestCase):
         fibermap = desispec.io.empty_fibermap(self.nspec)
         fibermap['OBJTYPE'][0::2] = 'SKY'
 
-        return Spectra(self.wave, flux, ivar, mask, Rdata), fibermap
+        return Frame(self.wave, flux, ivar, mask, Rdata), fibermap
                     
     def test_uniform_resolution(self):        
         #- Setup data for a Resolution matrix
