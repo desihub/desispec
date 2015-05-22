@@ -7,29 +7,30 @@ from __future__ import absolute_import, division
 import numpy as np
 
 from desispec.resolution import Resolution
+from desispec.coaddition import Spectrum
 
-class Spectrum(object):
-    def __init__(self, wave, flux, ivar, mask=None, R=None):
-        """Lightweight wrapper of a single spectrum
-        
-        Args:
-            wave (1D ndarray): wavelength in Angstroms
-            flux (1D ndarray): flux (photons or ergs/s/cm^2/A)
-            ivar (1D ndarray): inverse variance of flux
-            R : Resolution object
-            
-        All args become attributes.  This is syntactic sugar.        
-        """
-        self.wave = wave
-        self.flux = flux
-        self.ivar = ivar
-        if mask is None:
-            self.mask = np.zeros(self.flux.shape, dtype=int)
-        else:
-            self.mask = mask
-            
-        self.R = R
-        
+# class Spectrum(object):
+#     def __init__(self, wave, flux, ivar, mask=None, R=None):
+#         """Lightweight wrapper of a single spectrum
+#         
+#         Args:
+#             wave (1D ndarray): wavelength in Angstroms
+#             flux (1D ndarray): flux (photons or ergs/s/cm^2/A)
+#             ivar (1D ndarray): inverse variance of flux
+#             R : Resolution object
+#             
+#         All args become attributes.  This is syntactic sugar.
+#         """
+#         self.wave = wave
+#         self.flux = flux
+#         self.ivar = ivar
+#         if mask is None:
+#             self.mask = np.zeros(self.flux.shape, dtype=int)
+#         else:
+#             self.mask = mask
+#             
+#         self.R = R
+#         
 
 class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
@@ -45,7 +46,7 @@ class Frame(object):
             ivar: 2D[nspec, nwave] inverse variance of flux
             mask: (optional) 2D[nspec, nwave] integer bitmask of flux.  0=good.
             resolution_data: (optional) 3D[nspec, ndiag, nwave]
-                             resolution matrix data
+                             diagonals of resolution matrix data
             header: (optional) FITS header from HDU0    
             
             fibers: (optional) which fibers these spectra correspond to
@@ -112,7 +113,7 @@ class Frame(object):
         scalars or arrays when indexing numpy.ndarray .
         """
         if isinstance(index, int):
-            return Spectrum(self.wave, self.flux[index], self.ivar[index], self.R[index])
+            return Spectrum(self.wave, self.flux[index], self.ivar[index], self.mask[index], self.R[index])
         
         #- convert index to 1d array to maintain dimentionality of sliced arrays
         if not isinstance(index, slice):
