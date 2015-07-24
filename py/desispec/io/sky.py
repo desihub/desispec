@@ -63,7 +63,7 @@ def read_sky(filename) :
     wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
     skyflux = native_endian(fits.getdata(filename, "SKY"))
     ivar = native_endian(fits.getdata(filename, "IVAR"))
-    mask = native_endian(fits.getdata(filename, "MASK"))
+    mask = native_endian(fits.getdata(filename, "MASK", uint=True))
 
     skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr)
 

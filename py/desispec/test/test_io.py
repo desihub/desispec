@@ -63,39 +63,44 @@ class TestIO(unittest.TestCase):
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        mask = np.zeros((nspec, nwave), dtype=int)
+        mask_int = np.zeros((nspec, nwave), dtype=int)
+        mask_uint = np.zeros((nspec, nwave), dtype=np.uint32)
         wave = np.arange(nwave)
         R = np.random.uniform( size=(nspec, ndiag, nwave) )
-        frx = Frame(wave, flux, ivar, mask, R)
                 
-        desispec.io.write_frame(self.testfile, frx)
-        frame = desispec.io.read_frame(self.testfile)
+        for mask in (mask_int, mask_uint):
+            frx = Frame(wave, flux, ivar, mask, R)
+            desispec.io.write_frame(self.testfile, frx)
+            frame = desispec.io.read_frame(self.testfile)
 
-        self.assertTrue(np.all(flux == frame.flux))
-        self.assertTrue(np.all(ivar == frame.ivar))
-        self.assertTrue(np.all(wave == frame.wave))
-        self.assertTrue(np.all(mask == frame.mask))
-        self.assertTrue(np.all(R == frame.resolution_data))
-        self.assertTrue(frame.resolution_data.dtype.isnative)
+            self.assertTrue(np.all(flux == frame.flux))
+            self.assertTrue(np.all(ivar == frame.ivar))
+            self.assertTrue(np.all(wave == frame.wave))
+            self.assertTrue(np.all(mask == frame.mask))
+            self.assertTrue(np.all(R == frame.resolution_data))
+            self.assertTrue(frame.resolution_data.dtype.isnative)
         
     def test_sky_rw(self):
         nspec, nwave = 5,10 
         wave = np.arange(nwave)
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        mask = np.zeros(shape=(nspec, nwave), dtype=int)
+        mask_int = np.zeros(shape=(nspec, nwave), dtype=int)
+        mask_uint = np.zeros(shape=(nspec, nwave), dtype=np.uint32)
 
-        # skyflux,skyivar,skymask,cskyflux,cskyivar,wave
-        sky = SkyModel(wave, flux, ivar, mask)
-        desispec.io.write_sky(self.testfile, sky)
-        xsky = desispec.io.read_sky(self.testfile)
+        for mask in (mask_int, mask_uint):
+            # skyflux,skyivar,skymask,cskyflux,cskyivar,wave
+            sky = SkyModel(wave, flux, ivar, mask)
+            desispec.io.write_sky(self.testfile, sky)
+            xsky = desispec.io.read_sky(self.testfile)
                 
-        self.assertTrue(np.all(sky.wave  == xsky.wave))
-        self.assertTrue(np.all(sky.flux  == xsky.flux))
-        self.assertTrue(np.all(sky.ivar  == xsky.ivar))
-        self.assertTrue(np.all(sky.mask  == xsky.mask))
-        self.assertTrue(xsky.flux.dtype.isnative)
-                
+            self.assertTrue(np.all(sky.wave  == xsky.wave))
+            self.assertTrue(np.all(sky.flux  == xsky.flux))
+            self.assertTrue(np.all(sky.ivar  == xsky.ivar))
+            self.assertTrue(np.all(sky.mask  == xsky.mask))
+            self.assertTrue(xsky.flux.dtype.isnative)
+            self.assertEqual(sky.mask.dtype, xsky.mask.dtype)
+                        
     # fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave
     def test_fiberflat_rw(self):
         nspec, nwave, ndiag = 10, 20, 3

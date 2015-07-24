@@ -77,7 +77,7 @@ def read_flux_calibration(filename):
     """
     calib=native_endian(fits.getdata(filename, 0))
     ivar=native_endian(fits.getdata(filename, "IVAR"))
-    mask=native_endian(fits.getdata(filename, "MASK"))
+    mask=native_endian(fits.getdata(filename, "MASK"), uint=True)
     wave=native_endian(fits.getdata(filename, "WAVELENGTH"))
 
     fluxcalib = FluxCalib(wave, calib, ivar, mask)

@@ -61,7 +61,7 @@ def read_fiberflat(filename):
     header    = fits.getheader(filename, 0)
     fiberflat = native_endian(fits.getdata(filename, 0))
     ivar      = native_endian(fits.getdata(filename, "IVAR"))
-    mask      = native_endian(fits.getdata(filename, "MASK"))
+    mask      = native_endian(fits.getdata(filename, "MASK", uint=True))
     meanspec  = native_endian(fits.getdata(filename, "MEANSPEC"))
     wave      = native_endian(fits.getdata(filename, "WAVELENGTH"))
 

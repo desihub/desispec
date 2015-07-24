@@ -70,7 +70,8 @@ class Frame(object):
         assert wave.shape[0] == flux.shape[1]
         assert ivar.shape == flux.shape
         assert (mask is None) or mask.shape == flux.shape
-        assert (mask is None) or mask.dtype in (np.int64, np.int32, np.uint64, np.uint32)
+        assert (mask is None) or mask.dtype in \
+            (int, np.int64, np.int32, np.uint64, np.uint32), "Bad mask type "+str(mask.dtype)
 
         self.wave = wave
         self.flux = flux

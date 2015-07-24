@@ -78,7 +78,7 @@ def read_frame(filename, nspec=None):
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
 
-    fx = fits.open(filename)
+    fx = fits.open(filename, uint=True)
     hdr = fx[0].header
     flux = native_endian(fx['FLUX'].data)
     ivar = native_endian(fx['IVAR'].data)
