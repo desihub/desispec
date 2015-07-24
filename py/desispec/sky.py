@@ -154,7 +154,7 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
         cskyflux[i] = frame.R[i].dot(skyflux)
 
     # need to do better here
-    mask = (cskyivar==0).astype(int)
+    mask = (cskyivar==0).astype(np.uint32)
 
     return SkyModel(frame.wave.copy(), cskyflux, cskyivar, mask)
 
