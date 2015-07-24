@@ -26,6 +26,23 @@ class TestFrame(unittest.TestCase):
         #- check dimensionality mismatches
         self.assertRaises(AssertionError, lambda x: Frame(*x), (wave, wave, ivar, mask, rdata))
         self.assertRaises(AssertionError, lambda x: Frame(*x), (wave, flux[0:2], ivar, mask, rdata))
+        
+        #- Check constructing with defaults
+        frame = Frame(wave, flux, ivar)
+        self.assertEqual(frame.flux.shape, frame.mask.shape)
+        
+        #- Check usage of fibers inputs
+        fibers = np.arange(nspec)
+        frame = Frame(wave, flux, ivar, fibers=fibers)
+        frame = Frame(wave, flux, ivar, fibers=fibers*2)
+        manyfibers = np.arange(2*nspec)
+        self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar, None, None, None, manyfibers))
+
+        #- Check usage of spectrograph input
+        for i in range(3):
+            frame = Frame(wave, flux, ivar, spectrograph=i)
+            self.assertEqual(len(frame.fibers), nspec)
+            self.assertEqual(frame.fibers[0], i*nspec)
 
     def test_slice(self):
         nspec = 5

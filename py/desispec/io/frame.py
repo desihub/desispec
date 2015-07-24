@@ -86,7 +86,7 @@ def read_frame(filename, nspec=None):
     if 'MASK' in fx:
         mask = native_endian(fx['MASK'].data)
     else:
-        mask = np.zeros(flux.shape, dtype=int)
+        mask = None   #- let the Frame object create the default mask
         
     resolution_data = native_endian(fx['RESOLUTION'].data)
     fx.close()

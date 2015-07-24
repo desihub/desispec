@@ -49,8 +49,14 @@ class Frame(object):
                              diagonals of resolution matrix data
             header: (optional) FITS header from HDU0    
             
-            fibers: (optional) which fibers these spectra correspond to
-            spectrograph: (optional) which spectrograph [0-9]        
+            fibers: (optional) ndarray of which fibers these spectra are
+            spectrograph: (optional) integer, which spectrograph [0-9]        
+
+        Notes:
+            spectrograph input is used only if fibers is None.  In this case,
+            it assumes nspec_per_spectrograph = flux.shape[0] and calculates
+            the fibers array for this spectrograph, i.e.
+            fibers = spectrograph * flux.shape[0] + np.arange(flux.shape[0])
 
         Attributes:
             All input args become object attributes.
@@ -64,7 +70,7 @@ class Frame(object):
         assert wave.shape[0] == flux.shape[1]
         assert ivar.shape == flux.shape
         assert (mask is None) or mask.shape == flux.shape
-        assert mask.dtype in (np.int64, np.int32, np.uint64, np.uint32)
+        assert (mask is None) or mask.dtype in (np.int64, np.int32, np.uint64, np.uint32)
 
         self.wave = wave
         self.flux = flux
@@ -72,7 +78,7 @@ class Frame(object):
         self.nspec, self.nwave = self.flux.shape
         
         if mask is None:
-            self.mask = np.zeros(flux.shape, dtype=int)
+            self.mask = np.zeros(flux.shape, dtype=np.uint32)
         else:
             self.mask = mask
 
@@ -91,7 +97,7 @@ class Frame(object):
         
         self.spectrograph = spectrograph
         if fibers is None:
-            self.fibers = self.spectrograph + np.arange(self.nspec, dtype=int)
+            self.fibers = self.spectrograph*self.nspec + np.arange(self.nspec, dtype=int)
         else:
             if len(fibers) != self.nspec:
                 raise ValueError("len(fibers) != nspec ({} != {})".format(len(fibers), self.nspec))
