@@ -1,4 +1,4 @@
-import os
+import os, sys
 import unittest
 from uuid import uuid4
 
@@ -21,6 +21,14 @@ class TestBinScripts(unittest.TestCase):
         cls.fiberflatfile = 'fiberflat-'+id+'.fits'
         cls.fibermapfile = 'fibermap-'+id+'.fits'
         cls.skyfile = 'sky-'+id+'.fits'
+        cls.topDir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        cls.binDir = os.path.join(cls.topDir,'bin')
+        try:
+            cls.origPath = os.environ['PYTHONPATH']
+            os.environ['PYTHONPATH'] = os.path.join(cls.topDir,'py') + ':' + cls.origPath
+        except KeyError:
+            cls.origPath = None
+            os.environ['PYTHONPATH'] = os.path.join(cls.topDir,'py')
 
     @classmethod
     def tearDownClass(cls):
@@ -28,6 +36,10 @@ class TestBinScripts(unittest.TestCase):
         for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, cls.skyfile]:
             if os.path.exists(filename):
                 os.remove(filename)
+        if cls.origPath is None:
+            del os.environ['PYTHONPATH']
+        else:
+            os.environ['PYTHONPATH'] = cls.origPath
 
     def _write_frame(self):
         """Write a fake frame"""
@@ -38,7 +50,7 @@ class TestBinScripts(unittest.TestCase):
         Rdata = np.ones((self.nspec, 1, self.nwave))
         frame = Frame(wave, flux, ivar, mask, Rdata)
         io.write_frame(self.framefile, frame)
-        
+
     def _write_fiberflat(self):
         """Write a fake fiberflat"""
         wave = 5000+np.arange(self.nwave)
@@ -48,18 +60,18 @@ class TestBinScripts(unittest.TestCase):
         meanspec = np.ones(self.nwave)
         ff = FiberFlat(wave, fiberflat, ivar, mask, meanspec)
         io.write_fiberflat(self.fiberflatfile, ff)
-        
+
     def _write_fibermap(self):
         """Write a fake fiberflat"""
         fibermap = io.empty_fibermap(self.nspec)
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
-            
+
         io.write_fibermap(self.fibermapfile, fibermap)
-        
+
     def _write_skymodel(self):
         pass
-        
+
     def _write_stdstars(self):
         pass
 
@@ -69,14 +81,15 @@ class TestBinScripts(unittest.TestCase):
         """
         self._write_frame()
         #- run the command and confirm error code = 0
-        cmd = 'desi_compute_fiberflat.py --infile {} --outfile {}'.format(
-            self.framefile, self.fiberflatfile)
+        cmd = '{} {}/desi_compute_fiberflat.py --infile {} --outfile {}'.format(
+            sys.executable, self.binDir, self.framefile, self.fiberflatfile)
+        # self.assertTrue(os.path.exists(os.path.join(self.binDir,'desi_compute_fiberflat.py')))
         err = runcmd(cmd, [self.framefile,], [self.fiberflatfile,], clobber=True)
         self.assertEqual(err, 0)
-        
+
         #- Confirm that the output file can be read as a fiberflat
         ff = io.read_fiberflat(self.fiberflatfile)
-        
+
     def test_compute_sky(self):
         """
         Tests desi_compute_sky.py --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
@@ -84,18 +97,15 @@ class TestBinScripts(unittest.TestCase):
         self._write_frame()
         self._write_fiberflat()
         self._write_fibermap()
-        
-        cmd = "desi_compute_sky.py --infile {} --fibermap {} --fiberflat {} --outfile {}".format(
-            self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile)
+
+        cmd = "{} {}/desi_compute_sky.py --infile {} --fibermap {} --fiberflat {} --outfile {}".format(
+            sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile)
         err = runcmd(cmd,
                 inputs  = [self.framefile, self.fiberflatfile, self.fibermapfile],
                 outputs = [self.skyfile,], clobber=True )
         self.assertEqual(err, 0)
-        
-        
+
+
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
-    unittest.main()           
-
-        
-        
+    unittest.main()
