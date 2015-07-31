@@ -17,22 +17,23 @@ class TestCoadd(unittest.TestCase):
         rdat[2] *= 0.25
         R = Resolution(rdat)
         ### return wave, flux, ivar, mask, R
-        return wave, flux, ivar, R
+        return wave, flux, ivar, None, R
         
     def test_spectrum(self):
         """Test basic constructor interface"""
-        wave, flux, ivar, R = self._getdata(10)
+        wave, flux, ivar, mask, R = self._getdata(10)
         
         #- Each of these should be allowable
         s = Spectrum(wave)
         s = Spectrum(wave, flux)
-        s = Spectrum(wave, flux, ivar, R)
+        s = Spectrum(wave, flux, ivar, mask, R)
 
         #- But ivar does require R
         self.assertRaises(AssertionError, lambda x: Spectrum(*x), (wave, flux, ivar))
+        self.assertRaises(AssertionError, lambda x: Spectrum(*x), (wave, flux, ivar, mask))
 
         #- did it get filled in?
-        self.assertTrue(np.array_equal(s.wlen, wave))
+        self.assertTrue(np.array_equal(s.wave, wave))
         self.assertTrue(np.array_equal(s.flux, flux))
         self.assertTrue(np.array_equal(s.ivar, ivar))
         
