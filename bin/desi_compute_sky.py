@@ -16,8 +16,6 @@ from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.log import get_logger
 import argparse
-import os
-import os.path
 import numpy as np
 import sys
 
@@ -25,65 +23,44 @@ def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--infile', type = str, default = None,
+    parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fibermap', type = str, default = None,
+    parser.add_argument('--fibermap', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fiberflat', type = str, default = None,
+    parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
-    parser.add_argument('--outfile', type = str, default = None,
+    parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
 
 
     args = parser.parse_args()
     log=get_logger()
 
-    if args.infile is None:
-        log.critical('Missing input')
-        parser.print_help()
-        sys.exit(12)
-
-    if args.fibermap is None:
-        log.critical('Missing fibermap')
-        parser.print_help()
-        sys.exit(12)
-
-    if args.fiberflat is None:
-        log.critical('Missing fiberflat')
-        parser.print_help()
-        sys.exit(12)
-
-    if args.outfile is None:
-        log.critical('Missing output')
-        parser.print_help()
-        sys.exit(12)
-
-
     log.info("starting")
 
     # read exposure to load data and get range of spectra
-    flux,ivar,wave,resol,head = read_frame(args.infile)
-    specmin=head["SPECMIN"]
-    specmax=head["SPECMAX"]
+    frame = read_frame(args.infile)
+    specmin=frame.header["SPECMIN"]
+    specmax=frame.header["SPECMAX"]
 
     # read fibermap to locate sky fibers
-    table,fmheader=read_fibermap(args.fibermap)
-    selection=np.where((table["OBJTYPE"]=="SKY")&(table["FIBER"]>=specmin)&(table["FIBER"]<=specmax))[0]
+    fibermap = read_fibermap(args.fibermap)
+    selection=np.where((fibermap["OBJTYPE"]=="SKY")&(fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
     if selection.size == 0 :
         log.error("no sky fiber in fibermap %s"%args.fibermap)
         sys.exit(12)
 
     # read fiberflat
-    fiberflat,ffivar,ffmask,ffmeanspec,ffwave,ffhdr = read_fiberflat(args.fiberflat)
+    fiberflat = read_fiberflat(args.fiberflat)
 
     # apply fiberflat to sky fibers
-    apply_fiberflat(flux=flux,ivar=ivar,wave=wave,fiberflat=fiberflat,ffivar=ffivar,ffmask=ffmask,ffwave=ffwave)
+    apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skyflux,skyivar,skymask,cskyflux,cskyivar = compute_sky(wave,flux[selection],ivar[selection],resol[selection])
+    skymodel = compute_sky(frame, fibermap)
 
     # write result
-    write_sky(args.outfile,skyflux,skyivar,skymask,cskyflux,cskyivar,wave,head)
+    write_sky(args.outfile, skymodel, frame.header)
 
     log.info("successfully wrote %s"%args.outfile)
 

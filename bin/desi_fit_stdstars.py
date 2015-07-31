@@ -12,8 +12,11 @@ desi_fit_stdstars.py
     --outfile X
 """
 
+#- TODO: refactor algorithmic code into a separate module/function
+#- TODO: move filters out of desisim and remove $DESISIM dependency
+
 from desispec import io
-from desispec.fluxcalibration import match_templates,normalize_templates,convolveFlux
+from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.log import get_logger
 import argparse
 import numpy as np
@@ -55,7 +58,7 @@ def main() :
     # read Standard Stars from the fibermap file
     # returns the Fiber id, filter names and mags for the standard stars
 
-    fiber_tbdata,fiber_header=io.read_fibermap(args.fibermap)
+    fiber_tbdata,fiber_header=io.read_fibermap(args.fibermap, header=True)
 
     #- Trim to just fibers on this spectrograph
     ii =  (500*args.spectrograph <= fiber_tbdata["FIBER"])
@@ -103,20 +106,37 @@ def main() :
     sky={}
     skyivar={}
     skymask={}
-    cskyflux={}
-    civar={}
     skywave={}
     skyhdr={}
 
     for i in ["b","r","z"]:
        #arg=(night,expid,'%s%s'%(i,spectrograph))
-       frameFlux[i],frameIvar[i],frameWave[i],frameResolution[i],framehdr[i]=io.read_frame(framefile[i])
-       fiberFlat[i],ivarFlat[i],maskFlat[i],meanspecFlat[i],waveFlat[i],headerFlat[i]=io.read_fiberflat(fiberflatfile[i])
-       sky[i],skyivar[i],skymask[i],cskyflux[i],civar[i],skywave[i],skyhdr[i]=io.read_sky(skyfile[i])
+       #- minimal code change for refactored I/O, while not taking advantage of simplified structure
+       frame = io.read_frame(framefile[i])
+       frameFlux[i] = frame.flux
+       frameIvar[i] = frame.ivar
+       frameWave[i] = frame.wave
+       frameResolution[i] = frame.resolution_data
+       framehdr[i] = frame.header
+
+       ff = io.read_fiberflat(fiberflatfile[i])
+       fiberFlat[i] = ff.fiberflat
+       ivarFlat[i] = ff.ivar
+       maskFlat[i] = ff.mask
+       meanspecFlat[i] = ff.meanspec
+       waveFlat[i] = ff.wave
+       headerFlat[i] = ff.header
+
+       skymodel = io.read_sky(skyfile[i])
+       sky[i] = skymodel.flux
+       skyivar[i] = skymodel.ivar
+       skymask[i] = skymodel.mask
+       skywave[i] = skymodel.wave
+       skyhdr[i] = skymodel.header
 
     # Convolve Sky with Detector Resolution, so as to subtract from data. Convolve for all 500 specs. Subtracting sky this way should be equivalent to sky_subtract
 
-    convolvedsky={"b":convolveFlux(frameWave["b"],frameResolution["b"],sky["b"]),"r":convolveFlux(frameWave["r"],frameResolution["r"],sky["r"]),"z":convolveFlux(frameWave["z"],frameResolution["z"],sky["z"])} # wave and sky are one-dimensional
+    convolvedsky={"b":sky["b"], "r":sky["r"], "z":sky["z"]}
 
     # Read the standard Star data and divide by flat and subtract sky
 

@@ -98,7 +98,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     """
 
     #- Convert DATA as needed
-    if isinstance(data,np.recarray) or isinstance(data,np.ndarray):
+    if isinstance(data, (np.recarray,np.ndarray)):
         outdata = data
     else:
         outdata = _dict2ndarray(data)
@@ -143,6 +143,9 @@ def _dict2ndarray(data, columns=None):
     Args:
         data: input dictionary, each value is an ndarray
         columns: optional list of column names
+        
+    Returns:
+        structured numpy.ndarray with named columns from input data dictionary
         
     Notes:
         data[key].shape[0] must be the same for every key

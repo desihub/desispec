@@ -27,21 +27,30 @@ class Spectrum(object):
     operator to co-add spectra.
 
     Args:
-        wlen(numpy.ndarray): Array of shape (n,) wavelengths in Angstroms where the flux is tabulated.
+        wave(numpy.ndarray): Array of shape (n,) wavelengths in Angstroms where the flux is tabulated.
         flux(numpy.ndarray): Array of shape (n,) flux densities in 1e-17 erg/s/cm**2 at each wavelength.
         ivar(numpy.ndarray): Array of shape (n,) inverse variances of flux at each wavelength.
         resolution(desimodel.resolution.Resolution): Sparse matrix of wavelength resolutions.
     """
-    def __init__(self,wlen,flux=None,ivar=None,resolution=None):
-        self.wlen = wlen
+    def __init__(self,wave,flux=None,ivar=None,mask=None,resolution=None):
+        assert wave.ndim == 1, "Input wavelength should be 1D"
+        assert (flux is None) or (flux.shape == wave.shape), "wave and flux should have same shape"
+        assert (ivar is None) or (ivar.shape == wave.shape), "wave and ivar should have same shape"
+        assert (mask is None) or (mask.shape == wave.shape), "wave and mask should have same shape"
+        assert (resolution is None) or (isinstance(resolution, desispec.resolution.Resolution))
+        assert (resolution is None) or (resolution.shape[0] == len(wave)), "resolution size mismatch to wave"
+        
+        self.wave = wave
         self.flux = flux
         self.ivar = ivar
+        self.mask = mask
         self.resolution = resolution
+        self.R = resolution #- shorthand
         self.log = get_logger()
         # Initialize the quantities we will accumulate during co-addition. Note that our
         # internal Cinv is a dense matrix.
         if ivar is None:
-            n = len(wlen)
+            n = len(wave)
             self.Cinv = np.zeros((n,n))
             self.Cinv_f = np.zeros((n,))
         else:
@@ -92,14 +101,24 @@ class Spectrum(object):
         Raises:
             AssertionError: The other spectrum's wavelength grid is not compatible with ours.
         """
+        # Create self.mask if needed to merge with other.mask
+        if self.mask is None and other.mask is not None:
+            self.mask = np.zeros(len(self.wave), dtype=int)
+        
         # Accumulate weighted deconvolved fluxes.
-        if np.array_equal(self.wlen,other.wlen):
+        if np.array_equal(self.wave,other.wave):
             self.Cinv += other.Cinv
             self.Cinv_f += other.Cinv_f
+            if (self.mask is not None) and (other.mask is not None):
+                self.mask |= other.mask
         else:
-            resampler = get_resampling_matrix(self.wlen,other.wlen)
+            resampler = get_resampling_matrix(self.wave,other.wave)
             self.Cinv += resampler.T.dot(other.Cinv.dot(resampler))
             self.Cinv_f += resampler.T.dot(other.Cinv_f)
+            if (self.mask is not None) and (other.mask is not None):
+                mask_resampler = (resampler != 0).T
+                self.mask |= mask_resampler.T.dot(other.mask)
+                
         # Make sure we don't forget to call finalize.
         self.flux = None
         self.ivar = None
