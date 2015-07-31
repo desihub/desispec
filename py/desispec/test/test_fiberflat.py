@@ -6,6 +6,9 @@ import unittest
 import numpy as np
 import scipy.sparse
 
+from desispec.resolution import Resolution
+from desispec.frame import Frame
+from desispec.fiberflat import FiberFlat
 from desispec.fiberflat import compute_fiberflat
 from desispec.log import get_logger
 
@@ -26,56 +29,53 @@ def _get_data():
     y = np.sin(wave)
     flux = np.tile(y, nspec).reshape(nspec, nwave)
     ivar = np.ones(flux.shape)
+    mask = np.zeros(flux.shape, dtype=int)
     
-    return wave, flux, ivar
+    return wave, flux, ivar, mask
     
 
 class TestFiberFlat(unittest.TestCase):
 
-    def test_example(self):
-        self.assertTrue( True )
-        self.assertEqual(2+1, 4-1)
-        self.assertAlmostEqual(1.0, 1.0+1e-12)
-        
     def test_interface(self):
         """
         Basic test that interface works and identical inputs result in
         identical outputs
         """
-        wave, flux, ivar = _get_data()
+        wave, flux, ivar, mask = _get_data()
         nspec, nwave = flux.shape
         
         #- Setup data for a Resolution matrix
         sigma = 4.0
         ndiag = 21
         xx = np.linspace(-(ndiag-1)/2.0, +(ndiag-1)/2.0, ndiag)
-        R = np.zeros( (nspec, ndiag, nwave) )
+        Rdata = np.zeros( (nspec, ndiag, nwave) )
         for i in range(nspec):
             for j in range(nwave):
                 kernel = np.exp(-xx**2/(2*sigma))
                 kernel /= sum(kernel)
-                R[i,:,j] = kernel
+                Rdata[i,:,j] = kernel
 
         #- Run the code
-        fiberflat, ffivar, fmask, meanspec = compute_fiberflat(wave,flux,ivar,R)
+        frame = Frame(wave, flux, ivar, mask, Rdata)
+        ff = compute_fiberflat(frame)
             
         #- Check shape of outputs
-        self.assertEqual(fiberflat.shape, flux.shape)
-        self.assertEqual(ffivar.shape, flux.shape)
-        self.assertEqual(fmask.shape, flux.shape)
-        self.assertEqual(len(meanspec), nwave)
+        self.assertEqual(ff.fiberflat.shape, flux.shape)
+        self.assertEqual(ff.ivar.shape, flux.shape)
+        self.assertEqual(ff.mask.shape, flux.shape)
+        self.assertEqual(len(ff.meanspec), nwave)
         
         #- Identical inputs should result in identical ouputs
         for i in range(1, nspec):
-            self.assertTrue(np.all(fiberflat[i] == fiberflat[0]))
-            self.assertTrue(np.all(ffivar[i] == ffivar[0]))
+            self.assertTrue(np.all(ff.fiberflat[i] == ff.fiberflat[0]))
+            self.assertTrue(np.all(ff.ivar[i] == ff.ivar[0]))
         
     def test_resolution(self):
         """
         Test that identical spectra convolved with different resolutions
         results in identical fiberflats
         """
-        wave, flux, ivar = _get_data()
+        wave, flux, ivar, mask = _get_data()
         nspec, nwave = flux.shape
         
         #- Setup a Resolution matrix that varies with fiber and wavelength
@@ -85,25 +85,24 @@ class TestFiberFlat(unittest.TestCase):
         sigma = np.linspace(2, 10, nwave*nspec)
         ndiag = 21
         xx = np.linspace(-ndiag/2.0, +ndiag/2.0, ndiag)
-        R = np.zeros( (nspec, len(xx), nwave) )
+        Rdata = np.zeros( (nspec, len(xx), nwave) )
         for i in range(nspec):
             for j in range(nwave):
                 kernel = np.exp(-xx**2/(2*sigma[i*nwave+j]**2))
                 kernel /= sum(kernel)
-                R[i,:,j] = kernel
+                Rdata[i,:,j] = kernel
 
         #- Convolve the data with the resolution matrix
-        offsets = range(ndiag//2, -ndiag//2, -1)
         convflux = np.empty_like(flux)
         for i in range(nspec):
-            D = scipy.sparse.dia_matrix( (R[i], offsets), (nwave,nwave) )
-            convflux[i] = D.dot(flux[i])
+            convflux[i] = Resolution(Rdata[i]).dot(flux[i])
 
         #- Run the code
-        fiberflat, ffivar, fmask, meanspec = compute_fiberflat(wave,convflux,ivar,R)
+        frame = Frame(wave, convflux, ivar, mask, Rdata)
+        ff = compute_fiberflat(frame)
 
         #- These fiber flats should all be ~1
-        self.assertTrue( np.all(np.abs(fiberflat-1) < 0.001) )
+        self.assertTrue( np.all(np.abs(ff.fiberflat-1) < 0.001) )
 
     #- Tests to implement.  Remove the "expectedFailure" line when ready.
     @unittest.expectedFailure
@@ -122,6 +121,39 @@ class TestFiberFlat(unittest.TestCase):
         """
         raise NotImplementedError
         
+class TestFiberFlatObject(unittest.TestCase):
+
+    def setUp(self):
+        self.nspec = 5
+        self.nwave = 10
+        self.wave = np.arange(self.nwave)
+        self.fiberflat = np.random.uniform(size=(self.nspec, self.nwave))
+        self.ivar = np.ones(self.fiberflat.shape)
+        self.mask = np.zeros(self.fiberflat.shape)
+        self.meanspec = np.random.uniform(size=self.nwave)
+        self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec)
+
+    def test_init(self):
+        for key in ('wave', 'fiberflat', 'ivar', 'mask', 'meanspec'):
+            x = self.ff.__getattribute__(key)
+            y = self.__getattribute__(key)
+            self.assertTrue(np.all(x == y), key)
+
+        self.assertEqual(self.nspec, self.ff.nspec)
+        self.assertEqual(self.nwave, self.ff.nwave)
+
+    def test_dimensions(self):
+        #- check dimensionality mismatches
+        self.assertRaises(ValueError, lambda x: FiberFlat(*x), (self.wave, self.wave, self.ivar, self.mask, self.meanspec))
+        self.assertRaises(ValueError, lambda x: FiberFlat(*x), (self.wave, self.fiberflat, self.ivar, self.mask, self.fiberflat))
+        self.assertRaises(ValueError, lambda x: FiberFlat(*x), (self.wave, self.fiberflat[0:2], self.ivar, self.mask, self.meanspec))
+
+    def test_slice(self):
+        x = self.ff[1]
+        x = self.ff[1:2]
+        x = self.ff[[1,2,3]]
+        x = self.ff[self.ff.fibers<3]
+
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

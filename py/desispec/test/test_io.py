@@ -3,6 +3,9 @@ from uuid import uuid1
 
 import numpy as np
 
+from desispec.frame import Frame
+from desispec.fiberflat import FiberFlat
+from desispec.sky import SkyModel
 import desispec.io
 from astropy.io import fits
 
@@ -57,60 +60,72 @@ class TestIO(unittest.TestCase):
         self.assertRaises(ValueError, desispec.io.util.fitsheader, (1,))
         
     def test_frame_rw(self):
-        nspec, nwave, ndiag = 10, 20, 3
+        nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
+        mask_int = np.zeros((nspec, nwave), dtype=int)
+        mask_uint = np.zeros((nspec, nwave), dtype=np.uint32)
         wave = np.arange(nwave)
         R = np.random.uniform( size=(nspec, ndiag, nwave) )
                 
-        desispec.io.write_frame(self.testfile, flux, ivar, wave, R)
-        xflux, xivar, xwave, xR, hdr = desispec.io.read_frame(self.testfile)
+        for mask in (mask_int, mask_uint):
+            frx = Frame(wave, flux, ivar, mask, R)
+            desispec.io.write_frame(self.testfile, frx)
+            frame = desispec.io.read_frame(self.testfile)
 
-        self.assertTrue(np.all(flux == xflux))
-        self.assertTrue(np.all(ivar == xivar))
-        self.assertTrue(np.all(wave == xwave))
-        self.assertTrue(np.all(R == xR))
-        self.assertTrue(R.dtype.isnative)
+            self.assertTrue(np.all(flux == frame.flux))
+            self.assertTrue(np.all(ivar == frame.ivar))
+            self.assertTrue(np.all(wave == frame.wave))
+            self.assertTrue(np.all(mask == frame.mask))
+            self.assertTrue(np.all(R == frame.resolution_data))
+            self.assertTrue(frame.resolution_data.dtype.isnative)
         
     def test_sky_rw(self):
-        nspec, nwave, ndiag = 10, 20, 3
+        nspec, nwave = 5,10 
+        wave = np.arange(nwave)
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        mask = np.zeros(shape=(nspec, nwave))
-        cflux = np.random.uniform(size=(nspec, nwave))
-        civar = np.random.uniform(size=(nspec, nwave))
-        wave = np.arange(nwave)
+        mask_int = np.zeros(shape=(nspec, nwave), dtype=int)
+        mask_uint = np.zeros(shape=(nspec, nwave), dtype=np.uint32)
 
-        # skyflux,skyivar,skymask,cskyflux,cskyivar,wave
-        desispec.io.write_sky(self.testfile, flux, ivar, mask, cflux, civar, wave)
-        xflux, xivar, xmask, xcflux, xcivar, xwave, hdr = desispec.io.read_sky(self.testfile)
+        for mask in (mask_int, mask_uint):
+            # skyflux,skyivar,skymask,cskyflux,cskyivar,wave
+            sky = SkyModel(wave, flux, ivar, mask)
+            desispec.io.write_sky(self.testfile, sky)
+            xsky = desispec.io.read_sky(self.testfile)
                 
-        self.assertTrue(np.all(flux == xflux))
-        self.assertTrue(np.all(ivar == xivar))
-        self.assertTrue(np.all(cflux == xcflux))
-        self.assertTrue(np.all(civar == xcivar))
-        self.assertTrue(np.all(mask == xmask))
-        self.assertTrue(np.all(wave == xwave))
-        self.assertTrue(flux.dtype.isnative)
-                
+            self.assertTrue(np.all(sky.wave  == xsky.wave))
+            self.assertTrue(np.all(sky.flux  == xsky.flux))
+            self.assertTrue(np.all(sky.ivar  == xsky.ivar))
+            self.assertTrue(np.all(sky.mask  == xsky.mask))
+            self.assertTrue(xsky.flux.dtype.isnative)
+            self.assertEqual(sky.mask.dtype, xsky.mask.dtype)
+                        
     # fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave
     def test_fiberflat_rw(self):
         nspec, nwave, ndiag = 10, 20, 3
         flat = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        mask = np.zeros(shape=(nspec, nwave))
-        meanspec = np.random.uniform(size=(nspec, nwave))
+        mask = np.zeros(shape=(nspec, nwave), dtype=int)
+        meanspec = np.random.uniform(size=(nwave,))
         wave = np.arange(nwave)
 
-        desispec.io.write_fiberflat(self.testfile, flat, ivar, mask, meanspec, wave)
-        xflat, xivar, xmask, xmeanspec, xwave, hdr = desispec.io.read_fiberflat(self.testfile)
+        ff = FiberFlat(wave, flat, ivar, mask, meanspec)
+
+        desispec.io.write_fiberflat(self.testfile, ff)
+        xff = desispec.io.read_fiberflat(self.testfile)
                 
-        self.assertTrue(np.all(flat == xflat))
-        self.assertTrue(np.all(ivar == xivar))
-        self.assertTrue(np.all(mask == xmask))
-        self.assertTrue(np.all(meanspec == xmeanspec))
-        self.assertTrue(np.all(wave == xwave))
-        self.assertTrue(flat.dtype.isnative)
+        self.assertTrue(np.all(ff.fiberflat == xff.fiberflat))
+        self.assertTrue(np.all(ff.ivar == xff.ivar))
+        self.assertTrue(np.all(ff.mask == xff.mask))
+        self.assertTrue(np.all(ff.meanspec == xff.meanspec))
+        self.assertTrue(np.all(ff.wave == xff.wave))
+
+        self.assertTrue(xff.fiberflat.dtype.isnative)
+        self.assertTrue(xff.ivar.dtype.isnative)
+        self.assertTrue(xff.mask.dtype.isnative)
+        self.assertTrue(xff.meanspec.dtype.isnative)
+        self.assertTrue(xff.wave.dtype.isnative)
                 
     def test_fibermap_rw(self):
         fibermap = desispec.io.fibermap.empty_fibermap(10)
@@ -119,7 +134,14 @@ class TestIO(unittest.TestCase):
             fibermap[key] = np.random.random(column.shape).astype(column.dtype)
             
         desispec.io.write_fibermap(self.testfile, fibermap)
-        fm, hdr = desispec.io.read_fibermap(self.testfile)
+        
+        #- Read without and with header
+        fm = desispec.io.read_fibermap(self.testfile)
+        self.assertTrue(isinstance(fm, np.ndarray))
+
+        fm, hdr = desispec.io.read_fibermap(self.testfile, header=True)
+        self.assertTrue(isinstance(fm, np.ndarray))
+        self.assertTrue(isinstance(hdr, fits.Header))
                 
         self.assertEqual(set(fibermap.dtype.names), set(fm.dtype.names))
         for key in fibermap.dtype.names:
@@ -137,7 +159,6 @@ class TestIO(unittest.TestCase):
             data2 = desispec.io.util.native_endian(data1)
             self.assertTrue(data2.dtype.isnative, dtype+' is not native endian')
             self.assertTrue(np.all(data1 == data2))
-        
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

@@ -25,7 +25,7 @@ class BrickBase(object):
     The constructor will open an existing file and create a new file and parent
     directory if necessary.  The :meth:`close` method must be called for any updates
     or new data to be recorded. Successful completion of the constructor does not
-    guarantee that :meth:`close` will suceed.
+    guarantee that :meth:`close` will succeed.
 
     Args:
         path(str): Path to the brick file to open.

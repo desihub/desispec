@@ -7,46 +7,45 @@ IO routines for fiberflat.
 import os
 from astropy.io import fits
 
+from desispec.fiberflat import FiberFlat
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
 
-def write_fiberflat(outfile,fiberflat,fiberflat_ivar,fiberflat_mask,mean_spectrum,wave, header=None):
-    """Write fiberflat.
+def write_fiberflat(outfile,fiberflat,header=None):
+    """Write fiberflat object to outfile
 
     Args:
-        outfile (str): TODO
+        outfile: filepath string or (night, expid, camera) tuple
+        header: (optional) dict or fits.Header object to use as HDU 0 header
 
     Returns:
-        write_fiberflat: TODO
+        filepath of file that was written
     """
     outfile = makepath(outfile, 'fiberflat')
 
-    hdr = fitsheader(header)
-    hdr['EXTNAME'] = ('FIBERFLAT', 'no dimension')
-    fits.writeto(outfile,fiberflat,header=hdr, clobber=True)
+    if header is None:
+        hdr = fitsheader(fiberflat.header)
+    else:
+        hdr = fitsheader(header)
 
-    hdr['EXTNAME'] = ('IVAR', 'no dimension')
-    hdu = fits.ImageHDU(fiberflat_ivar, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('MASK', 'no dimension')
-    hdu = fits.ImageHDU(fiberflat_mask, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('MEANSPEC', 'electrons')
-    hdu = fits.ImageHDU(mean_spectrum, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
-    hdu = fits.ImageHDU(wave, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
+    ff = fiberflat   #- shorthand
+    
+    hdus = fits.HDUList()
+    hdus.append(fits.PrimaryHDU(ff.fiberflat, header=hdr))
+    hdus.append(fits.ImageHDU(ff.ivar,     name='IVAR'))
+    hdus.append(fits.ImageHDU(ff.mask,     name='MASK'))
+    hdus.append(fits.ImageHDU(ff.meanspec, name='MEANSPEC'))
+    hdus.append(fits.ImageHDU(ff.wave,     name='WAVELENGTH'))
+    
+    hdus.writeto(outfile, clobber=True)
+    return outfile
 
 
 def read_fiberflat(filename):
-    """Read fiberflat.
+    """Read fiberflat from filename
 
     Args:
-        filename (str): Name of fiberflat file.
+        filename (str): Name of fiberflat file, or (night, expid, camera) tuple
 
     Returns:
         read_fiberflat (tuple): fiberflat, ivar, mask, meanspec, wave, header
@@ -55,15 +54,15 @@ def read_fiberflat(filename):
     meanspec and wave are 1D [nwave]
     """
     #- check if outfile is (night, expid, camera) tuple instead
-    if not isinstance(filename, (str, unicode)):
+    if isinstance(filename, (tuple, list)) and len(filename) == 3:
         night, expid, camera = filename
         filename = findfile('fiberflat', night, expid, camera)
 
-    header = fits.getheader(filename, 0)
+    header    = fits.getheader(filename, 0)
     fiberflat = native_endian(fits.getdata(filename, 0))
-    ivar = native_endian(fits.getdata(filename, "IVAR"))
-    mask = native_endian(fits.getdata(filename, "MASK"))
-    meanspec = native_endian(fits.getdata(filename, "MEANSPEC"))
-    wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
+    ivar      = native_endian(fits.getdata(filename, "IVAR"))
+    mask      = native_endian(fits.getdata(filename, "MASK", uint=True))
+    meanspec  = native_endian(fits.getdata(filename, "MEANSPEC"))
+    wave      = native_endian(fits.getdata(filename, "WAVELENGTH"))
 
-    return fiberflat,ivar,mask,meanspec,wave, header
+    return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header)

@@ -6,8 +6,9 @@ IO routines for flux calibration.
 """
 import os
 from astropy.io import fits
-from desispec.io.util import fitsheader, native_endian, makepath
 import numpy,scipy
+from desispec.io.util import fitsheader, native_endian, makepath
+from desispec.fluxcalibration import FluxCalib
 
 def write_stdstar_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
     """Writes the normalized flux for the best model.
@@ -52,45 +53,36 @@ def read_stdstar_models(filename):
     return flux,wave,fibers
 
 
-def write_flux_calibration(outfile,calibration, calibration_ivar, mask, convolved_calibration, convolved_calibration_ivar,wave,header=None):
+def write_flux_calibration(outfile, fluxcalib, header=None):
     """Writes  flux calibration.
     """
     hdr = fitsheader(header)
-    hdr['EXTNAME'] = ('CALIB', 'CHECK UNIT')
-    fits.writeto(outfile,calibration,header=hdr, clobber=True)
+    hdr['EXTNAME'] = ('FLUXCALIB', 'CHECK UNIT')
+    fits.writeto(outfile,fluxcalib.calib,header=hdr, clobber=True)
 
     hdr['EXTNAME'] = ('IVAR', 'CHECK UNIT')
-    hdu = fits.ImageHDU(calibration_ivar, header=hdr)
+    hdu = fits.ImageHDU(fluxcalib.ivar, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
 
     hdr['EXTNAME'] = ('MASK', 'no dimension')
-    hdu = fits.ImageHDU(mask, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-
-    hdr['EXTNAME'] = ('CCALIB', 'CHECK UNIT')
-    hdu = fits.ImageHDU(convolved_calibration, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('CIVAR', 'CHECK UNIT')
-    hdu = fits.ImageHDU(convolved_calibration_ivar, header=hdr)
+    hdu = fits.ImageHDU(fluxcalib.mask, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
 
     hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
-    hdu = fits.ImageHDU(wave, header=hdr)
+    hdu = fits.ImageHDU(fluxcalib.wave, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
 
 def read_flux_calibration(filename):
     """Read flux calibration.
     """
-    calibration=native_endian(fits.getdata(filename, 0))
-    calib_ivar=native_endian(fits.getdata(filename, "IVAR"))
-    mask=native_endian(fits.getdata(filename, "MASK"))
-    convolved_calibration=native_endian(fits.getdata(filename, "CCALIB"))
-    convolved_calib_ivar=native_endian(fits.getdata(filename, "CIVAR"))
+    calib=native_endian(fits.getdata(filename, 0))
+    ivar=native_endian(fits.getdata(filename, "IVAR"))
+    mask=native_endian(fits.getdata(filename, "MASK", uint=True))
     wave=native_endian(fits.getdata(filename, "WAVELENGTH"))
 
-    return calibration,calib_ivar,mask,convolved_calibration,convolved_calib_ivar,wave
+    fluxcalib = FluxCalib(wave, calib, ivar, mask)
+    fluxcalib.header = fits.getheader(filename, 0)
+    return fluxcalib
 
 
 def read_stdstar_templates(stellarmodelfile):
@@ -115,20 +107,3 @@ def read_stdstar_templates(stellarmodelfile):
 
     return wavebins,fluxData,templateid
 
-# reading filter quantum efficiency
-def read_filter_response(given_filter,basepath):
-    """No documentation yet.
-    """
-    filterNameMap={}
-
-    filttype=str.split(given_filter,'_')
-    if filttype[0]=='SDSS':
-        filterNameMap=given_filter.lower()+"0.txt"
-    else: #if breakfilt[0]=='DECAM':
-        filterNameMap=given_filter.lower()+".txt"
-    filter_response={}
-    fileName=basepath+filterNameMap
-    filt=numpy.loadtxt(fileName,unpack=True)
-    tck=scipy.interpolate.splrep(filt[0],filt[1],s=0)
-    filter_response=(filt[0],filt[1],tck)
-    return filter_response

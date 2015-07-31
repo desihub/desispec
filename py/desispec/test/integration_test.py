@@ -16,6 +16,9 @@ from desispec.pipeline import runcmd
 from desispec import io
 from desispec.log import get_logger
 
+#- prevent nose from trying to run this test since it takes too long
+__test__ = False
+
 def check_env():
     """
     Check required environment variables; raise RuntimeException if missing
@@ -54,7 +57,16 @@ def check_env():
 
 #- TODO: fix usage of night to be something other than today
 def integration_test(night=None, nspec=5, clobber=False):
-    """No docstring yet.
+    """Run an integration test from raw data simulations through redshifts
+    
+    Args:
+        night (str, optional): YEARMMDD, defaults to current night
+        nspec (int, optional): number of spectra to include
+        clobber (bool, optional): rerun steps even if outputs already exist
+        
+    Raises:
+        RuntimeError if any script fails
+      
     """
     log = get_logger()
     #- YEARMMDD string, rolls over at noon not midnight
@@ -204,7 +216,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs.append( io.findfile('cframe', night, expid, camera) )
 
     outputs = list()
-    fibermap, hdr = io.read_fibermap(io.findfile('fibermap', night, expid))
+    fibermap = io.read_fibermap(io.findfile('fibermap', night, expid))
     bricks = set(fibermap['BRICKNAME'])
     for b in bricks:
         for channel in ['b', 'r', 'z']:
