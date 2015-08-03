@@ -5,7 +5,8 @@ desispec.io.download
 Download files from DESI repository.
 """
 
-from requests import get, HTTPDigestAuth
+from requests import get
+from requests.auth import HTTPDigestAuth
 from netrc import netrc
 
 
@@ -31,4 +32,3 @@ def download(filenames,baseurl='https://portal.nersc.gov/project/desi'):
     else:
         file_list = filenames
     machine = baseurl.split('/')[2]
-    
