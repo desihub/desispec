@@ -41,8 +41,10 @@ def download(filenames,baseurl='https://portal.nersc.gov/project/desi/collab'):
     downloaded_list = list()
     for f in file_list:
         dst = join(local_cache,f)
-        download_success = exists(dst)
-        if not download_success:
+        download_success = False
+        if exists(dst):
+            download_success = True
+        else:
             src = join(baseurl,f)
             r = get(src,auth=a)
             if not exists(dirname(dst)):
@@ -52,6 +54,7 @@ def download(filenames,baseurl='https://portal.nersc.gov/project/desi/collab'):
             atime = stat(dst).st_atime
             mtime = timegm(datetime.strptime(r.headers['last-modified'],'%a, %d %b %Y %H:%M:%S %Z').utctimetuple())
             utime(dst,(atime,mtime))
+            download_success = True
         if download_success:
             downloaded_list.append(dst)
         else:
