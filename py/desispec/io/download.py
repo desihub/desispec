@@ -37,7 +37,10 @@ def download(filenames,baseurl='https://portal.nersc.gov/project/desi/collab'):
         file_list = filenames
     machine = baseurl.split('/')[2]
     local_cache = join(environ['HOME'],'Desktop','desi')
-    a = _auth()
+    try:
+        a = _auth()
+    except IOError:
+        return [None for f in file_list]
     downloaded_list = list()
     for f in file_list:
         dst = join(local_cache,f)
