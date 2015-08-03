@@ -24,3 +24,4 @@ from desispec.io.fluxcalibration import (
     read_stdstar_templates, write_stdstar_model,
     read_flux_calibration, write_flux_calibration)
 from desispec.io.filters import read_filter_response
+from desispec.io.download import download
