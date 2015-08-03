@@ -12,7 +12,7 @@ import glob
 import re
 
 def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
-    band=None, spectrograph=None, specprod=None):
+    band=None, spectrograph=None, specprod=None, download=False):
     """Returns location where file should be
 
     Args:
@@ -24,7 +24,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
         band : [optional] one of 'b','r','z' identifying the camera band
         spectrograph : [optional] spectrograph number, 0-9
         specprod : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
-        fetch : [optional, not yet implemented]
+        download : [optional, not yet implemented]
             if not found locally, try to fetch remotely
     """
     location = dict(
