@@ -12,6 +12,7 @@ from datetime import datetime
 from requests import get
 from requests.auth import HTTPDigestAuth
 from netrc import netrc
+from .meta import specprod_root
 
 
 def _auth(machine='portal.nersc.gov'):
@@ -21,7 +22,17 @@ def _auth(machine='portal.nersc.gov'):
     u,foo,p = n.authenticators(machine)
     return HTTPDigestAuth(u,p)
 
-def download(filenames,baseurl='https://portal.nersc.gov/project/desi/collab'):
+def filepath2url(path,baseurl='https://portal.nersc.gov/project/desi',release='collab',specprod=None):
+    """Convert a fully-qualified file path to a URL.
+    """
+    if specprod is None:
+        specprod = specprod_root()
+    if release != 'collab':
+        if not release.startswith('release'):
+            release = join('release',release)
+    return join(baseurl,release,prodname)
+
+def download(filenames):
     """Download files from the DESI repository.
 
     Args:
