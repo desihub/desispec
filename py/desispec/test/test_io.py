@@ -14,6 +14,16 @@ class TestIO(unittest.TestCase):
     #- Create unique test filename in a subdirectory
     def setUp(self):
         self.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
+        self.origEnv = {'PRODNAME':None,
+            "DESI_SPECTRO_DATA":None,
+            "DESI_SPECTRO_REDUX":None}
+        self.testEnv = {'PRODNAME':'dailytest',
+            "DESI_SPECTRO_DATA":os.path.join(os.environ['HOME'],'desi','spectro','data'),
+            "DESI_SPECTRO_REDUX":os.path.join(os.environ['HOME'],'desi','spectro','redux')}
+        for e in self.origEnv:
+            if e in os.environ:
+                self.origEnv[e] = os.environ[e]
+            os.environ[e] = self.testEnv[e]
 
     #- Cleanup test files if they exist
     def tearDown(self):
@@ -22,6 +32,11 @@ class TestIO(unittest.TestCase):
             testpath = os.path.normpath(os.path.dirname(self.testfile))
             if testpath != '.':
                 os.removedirs(testpath)
+        for e in self.origEnv:
+            if self.origEnv[e] is None:
+                del os.environ[e]
+            else:
+                os.environ[e] = self.origEnv[e]
 
     def test_fitsheader(self):
         #- None is ok; just returns blank Header
@@ -174,8 +189,9 @@ class TestIO(unittest.TestCase):
             filenames1.append(desispec.io.findfile(i,expid=exposureid,night=night,camera=camera,spectrograph=spectro))
             filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],os.environ['PRODNAME'],'exposures',night,'{0:08d}'.format(exposureid),'{0}-{1}-{2:08d}.fits'.format(i,camera,exposureid)))
         for k,f in enumerate(filenames1):
+            self.assertEqual(os.path.basename(filenames1[k]),os.path.basename(filenames2[k]))
             self.assertEqual(filenames1[k],filenames2[k])
-            self.assertEqual(desispec.io.filepath2url(filenames1[k]),os.path.join('https://portal.nersc.gov/project/desi','spectro','redux',os.environ['PRODNAME'],'exposures',night,'{0:08d}'.format(exposureid),'{0}-{1}-{2:08d}.fits'.format(i,camera,exposureid)))
+            self.assertEqual(desispec.io.filepath2url(filenames1[k]),os.path.join('https://portal.nersc.gov/project/desi','collab','spectro','redux',os.environ['PRODNAME'],'exposures',night,'{0:08d}'.format(exposureid),os.path.basename(filenames2[k])))
         # paths = desispec.io.download(filenames)
         # for k,f in enumerate(filenames):
             # self.assertIsNone(paths[k])

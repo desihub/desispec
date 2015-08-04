@@ -157,10 +157,8 @@ def get_exposures(night,raw = False,specprod = None):
 def data_root():
     """No documentation yet.
     """
-    dir = os.environ[ 'DESI_SPECTRO_DATA' ]
-    if dir == None:
-        raise RuntimeError('DESI_SPECTRO_DATA environment variable not set')
-    return dir
+    assert 'DESI_SPECTRO_DATA' in os.environ, 'Missing $DESI_SPECTRO_DATA environment variable'
+    return os.environ['DESI_SPECTRO_DATA']
 
 def specprod_root():
     """Return ``$DESI_SPECTRO_REDUX/$PRODNAME``.
