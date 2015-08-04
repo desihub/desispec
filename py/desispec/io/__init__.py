@@ -25,4 +25,4 @@ from .fluxcalibration import (
     read_stdstar_templates, write_stdstar_model,
     read_flux_calibration, write_flux_calibration)
 from .filters import read_filter_response
-from .download import download
+from .download import download, filepath2url

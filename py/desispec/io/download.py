@@ -43,10 +43,10 @@ def download(filenames):
         Full, local path to the file(s) downloaded.
     """
     if isinstance(filenames,str):
-        file_list = [filenames]
+        file_list = [ filepath2url(filenames) ]
     else:
-        file_list = filenames
-    machine = baseurl.split('/')[2]
+        file_list = [ filepath2url(f) for f in filenames ]
+    machine = file_list[0].split('/')[2]
     local_cache = join(environ['HOME'],'Desktop','desi')
     try:
         a = _auth()
