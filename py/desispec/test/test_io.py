@@ -161,16 +161,25 @@ class TestIO(unittest.TestCase):
             self.assertTrue(np.all(data1 == data2))
 
     def test_download(self):
-        filenames = list()
-        baseDir = 'spectro/redux/dailytest/exposures/20150510/00000002'
+        filenames1 = list()
+        filenames2 = list()
+        night = '20150510'
+        exposureid=2
+        spectro = 0
         for i in ('sky', 'stdstars'):
-            for j in 'brz':
-                filenames.append(os.path.join(baseDir,'{0}-{1}0-00000002.fits'.format(i,j)))
-        paths = desispec.io.download(filenames)
-        for k,f in enumerate(filenames):
-            self.assertIsNone(paths[k])
-        #     self.assertEqual(os.path.join(os.getenv('HOME'),'Desktop','desi',f),paths[k])
-        #     self.assertTrue(os.path.exists(paths[k]))
+            if i == 'sky':
+                camera = 'b{0:d}'.format(spectro)
+            else:
+                camera = 'sp{0:d}'.format(spectro)
+            filenames1.append(desispec.io.findfile(i,expid=exposureid,night=night,camera=camera,spectrograph=spectro))
+            filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],os.environ['PRODNAME'],'exposures',night,'{0:08d}'.format(exposureid),'{0}-{1}-{2:08d}.fits'.format(i,camera,exposureid)))
+        for k,f in enumerate(filenames1):
+            self.assertEqual(filenames1[k],filenames2[k])
+        # paths = desispec.io.download(filenames)
+        # for k,f in enumerate(filenames):
+            # self.assertIsNone(paths[k])
+            # self.assertEqual(os.path.join(os.getenv('HOME'),'Desktop','desi',f),paths[k])
+            # self.assertTrue(os.path.exists(paths[k]))
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
