@@ -175,6 +175,7 @@ class TestIO(unittest.TestCase):
             filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],os.environ['PRODNAME'],'exposures',night,'{0:08d}'.format(exposureid),'{0}-{1}-{2:08d}.fits'.format(i,camera,exposureid)))
         for k,f in enumerate(filenames1):
             self.assertEqual(filenames1[k],filenames2[k])
+            self.assertEqual(desispec.io.filepath2url(filenames1[k]),os.path.join('https://portal.nersc.gov/project/desi','spectro','redux',os.environ['PRODNAME'],'exposures',night,'{0:08d}'.format(exposureid),'{0}-{1}-{2:08d}.fits'.format(i,camera,exposureid)))
         # paths = desispec.io.download(filenames)
         # for k,f in enumerate(filenames):
             # self.assertIsNone(paths[k])
