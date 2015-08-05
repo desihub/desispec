@@ -8,6 +8,7 @@ from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
 import desispec.io
 from astropy.io import fits
+from shutil import rmtree
 
 class TestIO(unittest.TestCase):
 
@@ -15,12 +16,13 @@ class TestIO(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
+        cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
         cls.origEnv = {'PRODNAME':None,
             "DESI_SPECTRO_DATA":None,
             "DESI_SPECTRO_REDUX":None}
         cls.testEnv = {'PRODNAME':'dailytest',
-            "DESI_SPECTRO_DATA":os.path.join(os.environ['HOME'],'desi','spectro','data'),
-            "DESI_SPECTRO_REDUX":os.path.join(os.environ['HOME'],'desi','spectro','redux')}
+            "DESI_SPECTRO_DATA":os.path.join(cls.testDir,'spectro','data'),
+            "DESI_SPECTRO_REDUX":os.path.join(cls.testDir,'spectro','redux')}
         for e in cls.origEnv:
             if e in os.environ:
                 cls.origEnv[e] = os.environ[e]
@@ -39,6 +41,8 @@ class TestIO(unittest.TestCase):
                 del os.environ[e]
             else:
                 os.environ[e] = cls.origEnv[e]
+        if os.path.exists(cls.testDir):
+            rmtree(cls.testDir)
 
     def test_fitsheader(self):
         #- None is ok; just returns blank Header
