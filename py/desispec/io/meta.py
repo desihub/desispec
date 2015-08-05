@@ -12,7 +12,7 @@ import glob
 import re
 
 def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
-    band=None, spectrograph=None, specprod=None):
+    band=None, spectrograph=None, specprod=None, download=False):
     """Returns location where file should be
 
     Args:
@@ -24,7 +24,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
         band : [optional] one of 'b','r','z' identifying the camera band
         spectrograph : [optional] spectrograph number, 0-9
         specprod : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
-        fetch : [optional, not yet implemented]
+        download : [optional, not yet implemented]
             if not found locally, try to fetch remotely
     """
     location = dict(
@@ -55,12 +55,16 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
     if specprod is None:
         specprod = specprod_root()
 
-    filepath = location[filetype].format(data=data_root(), specprod=specprod,
-        night=night, expid=expid, camera=camera, brickid = brickid, band = band,
-        spectrograph=spectrograph)
-
     #- normpath to remove extraneous double slashes /a/b//c/d
-    return os.path.normpath(filepath)
+    filepath = os.path.normpath(location[filetype].format(data=data_root(),
+        specprod=specprod,
+        night=night, expid=expid, camera=camera, brickid = brickid, band = band,
+        spectrograph=spectrograph))
+
+    if download:
+        from .download import download
+        filepath = download(filepath,single_thread=True)[0]
+    return filepath
 
 def get_files(filetype,night,expid,specprod = None):
     """Get files for a specified exposure.
@@ -157,10 +161,8 @@ def get_exposures(night,raw = False,specprod = None):
 def data_root():
     """No documentation yet.
     """
-    dir = os.environ[ 'DESI_SPECTRO_DATA' ]
-    if dir == None:
-        raise RuntimeError('DESI_SPECTRO_DATA environment variable not set')
-    return dir
+    assert 'DESI_SPECTRO_DATA' in os.environ, 'Missing $DESI_SPECTRO_DATA environment variable'
+    return os.environ['DESI_SPECTRO_DATA']
 
 def specprod_root():
     """Return ``$DESI_SPECTRO_REDUX/$PRODNAME``.

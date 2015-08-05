@@ -9,16 +9,17 @@ import scipy,scipy.linalg,scipy.interpolate
 from desispec.log import get_logger
 
 def cholesky_solve(A,B,overwrite=False,lower=False):
-    """
-    returns the solution X of the linear system A.X=B
+    """Returns the solution X of the linear system A.X=B
     assuming A is a positive definite matrix
-    
+
     Args :
          A : 2D (real symmetric) (nxn) positive definite matrix (numpy.ndarray)
          B : 1D vector, must have dimension n  (numpy.ndarray)
+
     Options :
         overwrite: replace A data by cholesky decomposition (faster)
         lower: cholesky decomposition triangular matrix is lower instead of upper
+
     Returns :
          X : 1D vector, same dimension as B  (numpy.ndarray)
 
@@ -31,14 +32,16 @@ def cholesky_solve_and_invert(A,B,overwrite=False,lower=False) :
     """
     returns the solution X of the linear system A.X=B
     assuming A is a positive definite matrix
-    
+
     Args :
          A : 2D (real symmetric) (nxn) positive definite matrix (numpy.ndarray)
          B : 1D vector, must have dimension n  (numpy.ndarray)
+
     Options :
         overwrite: replace A data by cholesky decomposition (faster)
         lower: cholesky decomposition triangular matrix is lower instead of upper
-    Returns: 
+
+    Returns:
          X,cov, where
          X : 1D vector, same dimension n as B  (numpy.ndarray)
          cov : 2D positive definite matrix, inverse of A (numpy.ndarray)
@@ -51,10 +54,11 @@ def cholesky_solve_and_invert(A,B,overwrite=False,lower=False) :
 def cholesky_invert(A) :
     """
     returns the inverse of a positive definite matrix
-    
+
     Args :
-         A : 2D (real symmetric) (nxn) positive definite matrix (numpy.ndarray)       
-    Returns: 
+         A : 2D (real symmetric) (nxn) positive definite matrix (numpy.ndarray)
+
+    Returns:
          cov : 2D positive definite matrix, inverse of A (numpy.ndarray)
     """
     UorL,lower = scipy.linalg.cho_factor(A,overwrite_a=False)

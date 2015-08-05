@@ -12,10 +12,9 @@ from desispec.log import get_logger
 #import time # for debugging
 
 def bin_bounds(x):
-    """
-    Calculates the bin boundaries of an array x
+    """Calculates the bin boundaries of an array `x`.
 
-    Returns tuple of lower and upper bounds, each with same length as x
+    Returns tuple of lower and upper bounds, each with same length as `x`.
     """
     if x.size<2 :
         get_logger().error("bin_bounds, x.size={0:d}".format(x.size))
@@ -163,11 +162,13 @@ def _unweighted_resample(output_x,input_x,input_flux_density) :
     so flux density is zero for x<x[0]-(x[1]-x[0])/2 and x>x[-1]+(x[-1]-x[-2])/2
 
     The input is interpreted as the nodes positions and node values of
-    a piece-wise linear function.
-    y(x) = sum_i y_i * f_i(x)
-    with
-    f_i(x) =    (x_{i-1}<x<=x_{i})*(x-x_{i-1})/(x_{i}-x_{i-1})
-              + (x_{i}<x<=x_{i+1})*(x-x_{i+1})/(x_{i}-x_{i+1})
+    a piece-wise linear function::
+
+        y(x) = sum_i y_i * f_i(x)
+
+    with::
+        f_i(x) =    (x_{i-1}<x<=x_{i})*(x-x_{i-1})/(x_{i}-x_{i-1})
+                + (x_{i}<x<=x_{i+1})*(x-x_{i+1})/(x_{i}-x_{i+1})
 
     the output value is the average flux density in a bin
     flux_out(j) = int_{x>(x_{j-1}+x_j)/2}^{x<(x_j+x_{j+1})/2} y(x) dx /  0.5*(x_{j+1}+x_{j-1})
