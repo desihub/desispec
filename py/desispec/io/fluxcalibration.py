@@ -4,11 +4,11 @@ desispec.io.fluxcalibration
 
 IO routines for flux calibration.
 """
+from __future__ import absolute_import
 import os
 from astropy.io import fits
 import numpy,scipy
-from desispec.io.util import fitsheader, native_endian, makepath
-from desispec.fluxcalibration import FluxCalib
+from .util import fitsheader, native_endian, makepath
 
 def write_stdstar_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
     """Writes the normalized flux for the best model.
@@ -75,6 +75,8 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
 def read_flux_calibration(filename):
     """Read flux calibration.
     """
+    # Avoid a circular import conflict at package install/build_sphinx time.
+    from ..fluxcalibration import FluxCalib
     calib=native_endian(fits.getdata(filename, 0))
     ivar=native_endian(fits.getdata(filename, "IVAR"))
     mask=native_endian(fits.getdata(filename, "MASK", uint=True))
@@ -106,4 +108,3 @@ def read_stdstar_templates(stellarmodelfile):
     phdu.close()
 
     return wavebins,fluxData,templateid
-

@@ -4,17 +4,14 @@ desispec.fluxcalibration
 
 Flux calibration routines.
 """
-
+from __future__ import absolute_import
 import numpy as np
-from desispec.resolution import Resolution
-from desispec.linalg import cholesky_solve
-from desispec.linalg import cholesky_solve_and_invert
-from desispec.linalg import spline_fit
-from desispec.interpolation import resample_flux
-from desispec.log import get_logger
-from desispec.io.filters import read_filter_response
-from desispec.resolution import Resolution
-import scipy,scipy.sparse, scipy.ndimage
+from .resolution import Resolution
+from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
+from .interpolation import resample_flux
+from .log import get_logger
+from .io.filters import read_filter_response
+import scipy, scipy.sparse, scipy.ndimage
 import sys
 #debug
 #import pylab
@@ -188,7 +185,7 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
-    
+
     Args:
       frame : Frame object with attributes wave, flux, ivar, resolution_data
       stdfibers: 1D[nwave] array of indices of frame that are standard stars
@@ -374,7 +371,7 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
     ccalibration = np.zeros(frame.flux.shape)
     for i in range(frame.nspec):
         ccalibration[i]=frame.R[i].dot(calibration)
-        
+
     # Use diagonal of mean calibration covariance for output.
     ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
     ccalibvar=np.array(np.diagonal(ccalibcovar))
@@ -382,7 +379,7 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
     # apply the mean (as in the iterative loop)
     ccalibvar *= mean**2
     ccalibivar=(ccalibvar>0)/(ccalibvar+(ccalibvar==0))
-    
+
     # convert to 2D
     # For now this is the same for all fibers; in the future it may not be
     ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
@@ -396,17 +393,17 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
 class FluxCalib(object):
     def __init__(self, wave, calib, ivar, mask):
         """Lightweight wrapper object for flux calibration vectors
-        
+
         Args:
             wave : 1D[nwave] input wavelength (Angstroms)
             calib: 2D[nspec, nwave] calibration vectors for each spectrum
             ivar : 2D[nspec, nwave] inverse variance of calib
             mask : 2D[nspec, nwave] mask of calib (0=good)
-            
+
         All arguments become attributes, plus nspec,nwave = calib.shape
-        
+
         The calib vector should be such that
-        
+
         [erg/s/cm^2/A] = [photons/A] / calib
         """
         assert wave.ndim == 1
@@ -414,7 +411,7 @@ class FluxCalib(object):
         assert calib.shape == ivar.shape
         assert calib.shape == mask.shape
         assert np.all(ivar >= 0)
-        
+
         self.nspec, self.nwave = calib.shape
         self.wave = wave
         self.calib = calib
@@ -456,5 +453,3 @@ def apply_flux_calibration(frame, fluxcalib):
     C = fluxcalib.calib
     frame.flux = frame.flux * (C>0) / (C+(C==0))
     frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
-        
-
