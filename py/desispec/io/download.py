@@ -11,7 +11,7 @@ from calendar import timegm
 from datetime import datetime
 from requests import get
 from requests.auth import HTTPDigestAuth
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from netrc import netrc
 from .meta import specprod_root
 
@@ -39,18 +39,22 @@ def filepath2url(path,baseurl='https://portal.nersc.gov/project/desi',release='c
             release = join('release',release)
     return path.replace(specprod,join(baseurl,release,'spectro','redux',environ['PRODNAME']))
 
-def download(filenames):
+def download(filenames,single_thread=False,workers=None):
     """Download files from the DESI repository.
 
     Args:
         filenames: string or list-like object containing filenames.
-        baseurl: (optional) URL to look for files.
+        single_thread: (optional) if ``True``, do not use multiprocessing to
+            download files.
+        workers: (optional) integer indicating the number of worker
+            processes to create.
 
     Returns:
         Full, local path to the file(s) downloaded.
     """
     if isinstance(filenames,str):
         file_list = [ filenames ]
+        single_thread = True
     else:
         file_list = filenames
     http_list = [ filepath2url(f) for f in file_list ]
@@ -60,8 +64,16 @@ def download(filenames):
         a = _auth(machine)
     except IOError:
         return [None for f in file_list]
-    p = Pool(5)
-    downloaded_list = p.map(_map_download,zip(file_list,http_list,[a]*len(file_list)))
+    if single_thread:
+        downloaded_list = list()
+        for k,f in enumerate(file_list):
+            foo = _map_download((file_list[k],http_list[k],a))
+            downloaded_list.append(foo)
+    else:
+        if workers is None:
+            workers = cpu_count()
+        p = Pool(workers)
+        downloaded_list = p.map(_map_download,zip(file_list,http_list,[a]*len(file_list)))
     return downloaded_list
 
 def _map_download(map_tuple):

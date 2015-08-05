@@ -12,31 +12,33 @@ from astropy.io import fits
 class TestIO(unittest.TestCase):
 
     #- Create unique test filename in a subdirectory
-    def setUp(self):
-        self.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
-        self.origEnv = {'PRODNAME':None,
+    @classmethod
+    def setUpClass(cls):
+        cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
+        cls.origEnv = {'PRODNAME':None,
             "DESI_SPECTRO_DATA":None,
             "DESI_SPECTRO_REDUX":None}
-        self.testEnv = {'PRODNAME':'dailytest',
+        cls.testEnv = {'PRODNAME':'dailytest',
             "DESI_SPECTRO_DATA":os.path.join(os.environ['HOME'],'desi','spectro','data'),
             "DESI_SPECTRO_REDUX":os.path.join(os.environ['HOME'],'desi','spectro','redux')}
-        for e in self.origEnv:
+        for e in cls.origEnv:
             if e in os.environ:
-                self.origEnv[e] = os.environ[e]
-            os.environ[e] = self.testEnv[e]
+                cls.origEnv[e] = os.environ[e]
+            os.environ[e] = cls.testEnv[e]
 
     #- Cleanup test files if they exist
-    def tearDown(self):
-        if os.path.exists(self.testfile):
-            os.remove(self.testfile)
-            testpath = os.path.normpath(os.path.dirname(self.testfile))
+    @classmethod
+    def tearDownClass(cls):
+        if os.path.exists(cls.testfile):
+            os.remove(cls.testfile)
+            testpath = os.path.normpath(os.path.dirname(cls.testfile))
             if testpath != '.':
                 os.removedirs(testpath)
-        for e in self.origEnv:
-            if self.origEnv[e] is None:
+        for e in cls.origEnv:
+            if cls.origEnv[e] is None:
                 del os.environ[e]
             else:
-                os.environ[e] = self.origEnv[e]
+                os.environ[e] = cls.origEnv[e]
 
     def test_fitsheader(self):
         #- None is ok; just returns blank Header
@@ -175,28 +177,47 @@ class TestIO(unittest.TestCase):
             self.assertTrue(data2.dtype.isnative, dtype+' is not native endian')
             self.assertTrue(np.all(data1 == data2))
 
-    def test_download(self):
+    def test_findfile(self):
         filenames1 = list()
         filenames2 = list()
-        night = '20150510'
-        exposureid=2
-        spectro = 0
+        kwargs = {
+            'night':'20150510',
+            'expid':2,
+            'spectrograph':0
+        }
         for i in ('sky', 'stdstars'):
-            if i == 'sky':
-                camera = 'b{0:d}'.format(spectro)
-            else:
-                camera = 'sp{0:d}'.format(spectro)
-            filenames1.append(desispec.io.findfile(i,expid=exposureid,night=night,camera=camera,spectrograph=spectro))
-            filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],os.environ['PRODNAME'],'exposures',night,'{0:08d}'.format(exposureid),'{0}-{1}-{2:08d}.fits'.format(i,camera,exposureid)))
+            # kwargs['i'] = i
+            for j in ('b','r','z'):
+                kwargs['band'] = j
+                if i == 'sky':
+                    kwargs['camera'] = '{band}{spectrograph:d}'.format(**kwargs)
+                else:
+                    kwargs['camera'] = 'sp{spectrograph:d}'.format(**kwargs)
+                filenames1.append(desispec.io.findfile(i,**kwargs))
+                filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                    os.environ['PRODNAME'],'exposures',kwargs['night'],
+                    '{expid:08d}'.format(**kwargs),
+                    '{i}-{camera}-{expid:08d}.fits'.format(i=i,camera=kwargs['camera'],expid=kwargs['expid'])))
         for k,f in enumerate(filenames1):
-            self.assertEqual(os.path.basename(filenames1[k]),os.path.basename(filenames2[k]))
+            self.assertEqual(os.path.basename(filenames1[k]),
+                os.path.basename(filenames2[k]))
             self.assertEqual(filenames1[k],filenames2[k])
-            self.assertEqual(desispec.io.filepath2url(filenames1[k]),os.path.join('https://portal.nersc.gov/project/desi','collab','spectro','redux',os.environ['PRODNAME'],'exposures',night,'{0:08d}'.format(exposureid),os.path.basename(filenames2[k])))
-        # paths = desispec.io.download(filenames)
-        # for k,f in enumerate(filenames):
-            # self.assertIsNone(paths[k])
-            # self.assertEqual(os.path.join(os.getenv('HOME'),'Desktop','desi',f),paths[k])
-            # self.assertTrue(os.path.exists(paths[k]))
+            self.assertEqual(desispec.io.filepath2url(filenames1[k]),
+                os.path.join('https://portal.nersc.gov/project/desi',
+                'collab','spectro','redux',os.environ['PRODNAME'],'exposures',
+                kwargs['night'],'{expid:08d}'.format(**kwargs),
+                os.path.basename(filenames2[k])))
+
+    @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
+    def test_download(self):
+        #
+        # Test by downloading a single file.  This sidesteps any issues
+        # with running multiprocessing within the unittest environment.
+        #
+        filename = desispec.io.findfile('sky',expid=2,night='20150510',camera='b0',spectrograph=0)
+        paths = desispec.io.download(filename)
+        self.assertEqual(paths[0],filename)
+        self.assertTrue(os.path.exists(paths[0]))
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

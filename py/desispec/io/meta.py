@@ -55,12 +55,16 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
     if specprod is None:
         specprod = specprod_root()
 
-    filepath = location[filetype].format(data=data_root(), specprod=specprod,
-        night=night, expid=expid, camera=camera, brickid = brickid, band = band,
-        spectrograph=spectrograph)
-
     #- normpath to remove extraneous double slashes /a/b//c/d
-    return os.path.normpath(filepath)
+    filepath = os.path.normpath(location[filetype].format(data=data_root(),
+        specprod=specprod,
+        night=night, expid=expid, camera=camera, brickid = brickid, band = band,
+        spectrograph=spectrograph))
+
+    if download:
+        from .download import download
+        filepath = download(filepath,single_thread=True)[0]
+    return filepath
 
 def get_files(filetype,night,expid,specprod = None):
     """Get files for a specified exposure.
