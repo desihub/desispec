@@ -20,8 +20,7 @@ CREATE TABLE brick (
 --
 --
 CREATE TABLE filetype (
-    id INTEGER PRIMARY KEY,
-    type TEXT NOT NULL
+    type TEXT PRIMARY KEY
 );
 --
 --
@@ -31,14 +30,14 @@ CREATE TABLE file (
     filename TEXT NOT NULL,
     directory TEXT NOT NULL,
     prodname TEXT NOT NULL,
-    filetype INTEGER NOT NULL, -- Foreign key on filetype
-    FOREIGN KEY (filetype) REFERENCES filetype (id)
+    filetype TEXT NOT NULL, -- Foreign key on filetype
+    FOREIGN KEY (filetype) REFERENCES filetype (type)
 );
 --
 -- Both fileid and requires are primary keys in file.
 -- 'requires' == 'needs this file'
 --
-CREATE TABLE filedependcy (
+CREATE TABLE filedependency (
     fileid INTEGER NOT NULL,
     requires INTEGER NOT NULL, -- Primary key on the two columns (fileid, requires)
     PRIMARY KEY (fileid, requires),
@@ -65,8 +64,7 @@ CREATE TABLE night (
 --
 --
 CREATE TABLE exposureflavor (
-    id INTEGER PRIMARY KEY,
-    flavor TEXT UNIQUE NOT NULL
+    flavor TEXT PRIMARY KEY
 );
 --
 --
@@ -74,16 +72,16 @@ CREATE TABLE exposureflavor (
 CREATE TABLE exposure (
     expid INTEGER PRIMARY KEY,
     night INTEGER NOT NULL, -- foreign key on night
-    flavor INTEGER NOT NULL, -- arc, flat, science, etc. might want a separate table?
+    flavor TEXT NOT NULL, -- arc, flat, science, etc. might want a separate table?
     telra REAL NOT NULL,
     teldec REAL NOT NULL,
     tileid INTEGER, -- it is possible for the telescope to not point at a tile.
     exptime REAL NOT NULL,
-    dateobs DATETIME, -- text or integer are also possible here.
+    dateobs TIMESTAMP, -- text or integer are also possible here.  TIMESTAMP allows automatic conversion to Python datetime objects.
     alt REAL NOT NULL,
     az REAL NOT NULL,
     FOREIGN KEY (night) REFERENCES night (night),
-    FOREIGN KEY (flavor) REFERENCES exposureflavor (id)
+    FOREIGN KEY (flavor) REFERENCES exposureflavor (flavor)
 );
 --
 -- JOIN table
