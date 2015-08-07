@@ -32,7 +32,7 @@ def load_brick(fitsfile,dbfile,fix_area=False):
     if fix_area:
         area = np.degrees(
             (brickdata['ra2'] - brickdata['ra1'])
-            * (np.sin(np.radians(brickdata['dec2'])) - np.sin(np.radians(brickdata['dec2']))))
+            * (np.sin(np.radians(brickdata['dec2'])) - np.sin(np.radians(brickdata['dec1']))))
         bricklist.append(area.tolist())
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
