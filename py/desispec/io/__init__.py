@@ -26,4 +26,5 @@ from .fluxcalibration import (
     read_flux_calibration, write_flux_calibration)
 from .filters import read_filter_response
 from .download import download, filepath2url
-from .database import load_brick
+from .database import load_brick, load_night, load_data
+
