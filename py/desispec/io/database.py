@@ -205,7 +205,7 @@ def load_data(datapath,dbfile):
             0.0)) # az
         brickids = get_brickid_by_name(bricknames,dbfile)
         for i in brickids:
-            exposure2brick_data.append( (expid, brickids[i]) )
+            exposure2brick_data.append( (exposures[k], brickids[i]) )
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
     insert = """INSERT INTO exposure
