@@ -75,9 +75,9 @@ CREATE TABLE exposure (
     flavor TEXT NOT NULL, -- arc, flat, science, etc. might want a separate table?
     telra REAL NOT NULL,
     teldec REAL NOT NULL,
-    tileid INTEGER, -- it is possible for the telescope to not point at a tile.
+    tileid INTEGER NOT NULL DEFAULT -1, -- it is possible for the telescope to not point at a tile.
     exptime REAL NOT NULL,
-    dateobs TIMESTAMP, -- text or integer are also possible here.  TIMESTAMP allows automatic conversion to Python datetime objects.
+    dateobs TIMESTAMP NOT NULL, -- text or integer are also possible here.  TIMESTAMP allows automatic conversion to Python datetime objects.
     alt REAL NOT NULL,
     az REAL NOT NULL,
     FOREIGN KEY (night) REFERENCES night (night),
