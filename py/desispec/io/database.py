@@ -226,6 +226,6 @@ if __name__ == '__main__':
     # if os.path.exists(dbfile):
     #     os.remove(dbfile)
     datapath = os.path.join(os.environ['DESI_SPECTRO_SIM'],'alpha-5')
-    load_brick(os.path.join(datapath,'bricks-0.5-2.fits'),dbfile,fix_area=True)
+    load_brick(os.path.join(datapath,'bricks-0.50-2.fits'),dbfile,fix_area=True)
     datapath = os.path.join(datapath,'20150211')
     exposures = load_data(datapath,dbfile)
