@@ -229,3 +229,13 @@ if __name__ == '__main__':
     load_brick(os.path.join(datapath,'bricks-0.50-2.fits'),dbfile,fix_area=True)
     datapath = os.path.join(datapath,'20150211')
     exposures = load_data(datapath,dbfile)
+#
+# TODO
+#
+# Load file information
+# Which files get entries in the file2brick table?  There could be a lot of
+# duplication if every file goes in.
+# How to determine file dependencies?
+# How to elegantly determine the file id.  If it is autoincremented, how
+# do you select for the file when you don't know its id in advance?
+#
