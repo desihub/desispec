@@ -91,6 +91,75 @@ def load_night(nights,dbfile):
 #
 #
 #
+def is_flavor(flavor,dbfile):
+    """Returns ``True`` if the flavor is in the exposureflavor table.
+    """
+    f = (flavor,)
+    conn = sqlite3.connect(dbfile)
+    c = conn.cursor()
+    q = "SELECT flavor FROM exposureflavor WHERE flavor = ?;"
+    c.execute(q,f)
+    rows = c.fetchall()
+    conn.commit()
+    conn.close()
+    return len(rows) == 1
+#
+#
+#
+def load_flavor(flavors,dbfile):
+    """Load a flavor or multiple flavors into the exposureflavor table.
+
+    Args:
+        flavors: string or list of nights
+        dbfile: string containing the name of a SQLite database file.
+
+    Returns:
+        None
+    """
+    if isinstance(flavors,str):
+        my_flavors = [flavors]
+    else:
+        my_flavors = flavors
+    conn = sqlite3.connect(dbfile)
+    c = conn.cursor()
+    insert = """INSERT INTO exposureflavor (flavor)
+        VALUES (?);"""
+    c.executemany(insert,zip(my_flavors))
+    conn.commit()
+    conn.close()
+    return
+#
+#
+#
+def get_bricks_by_name(bricknames,dbfile):
+    """Search for and return brick data given the brick names.
+    """
+    if isinstance(bricknames,str):
+        b = [bricknames]
+    else:
+        b = bricknames
+    conn = sqlite3.connect(dbfile)
+    c = conn.cursor()
+    q = "SELECT * FROM brick WHERE brickname IN ({})".format(','.join(['?']*len(b)))
+    c.execute(q,b)
+    bricks = c.fetchall()
+    conn.commit()
+    conn.close()
+    return bricks
+#
+#
+#
+def get_brickid_by_name(bricknames,dbfile):
+    """Return the brickids that correspond to a set of bricknames.
+    """
+    bid = dict()
+    bricks = get_bricks_by_name(bricknames,dbfile)
+    for row in bricks:
+        bid[row[1]] = row[0]
+    return bid
+#
+#
+#
 def load_data(datapath,dbfile):
     """Load a night or multiple nights into the night table.
 
@@ -107,14 +176,15 @@ def load_data(datapath,dbfile):
     fibermapre = re.compile(r'fibermap-([0-9]{8})\.fits')
     exposures = [ int(fibermapre.findall(f)[0]) for f in fibermaps ]
     exposure_data = list()
+    exposure2brick_data = list()
     for k,f in enumerate(fibermaps):
         with fits.open(f) as hdulist:
             night = int(hdulist['FIBERMAP'].header['NIGHT'])
             dateobs = datetime.strptime(hdulist['FIBERMAP'].header['DATE-OBS'],'%Y-%m-%dT%H:%M:%S')
-            bricks = set(hdulist['FIBERMAP'].data['BRICKNAME'].tolist())
-        datafiles = glob(os.path.join(datapath,'desi-*-{0:08d}.fits'.format(exposures[k)))
+            bricknames = list(set(hdulist['FIBERMAP'].data['BRICKNAME'].tolist()))
+        datafiles = glob(os.path.join(datapath,'desi-*-{0:08d}.fits'.format(exposures[k])))
         if len(datafiles) == 0:
-            datafiles = glob(os.path.join(datapath,'pix-*-{0:08d}.fits'.format(exposures[k)))
+            datafiles = glob(os.path.join(datapath,'pix-*-{0:08d}.fits'.format(exposures[k])))
         with fits.open(datafiles[0]) as hdulist:
             exptime = hdulist[0].header['EXPTIME']
             flavor = hdulist[0].header['FLAVOR']
@@ -133,12 +203,29 @@ def load_data(datapath,dbfile):
             dateobs, # dateobs
             0.0, # alt
             0.0)) # az
+        brickids = get_brickid_by_name(bricknames,dbfile)
+        for i in brickids:
+            exposure2brick_data.append( (expid, brickids[i]) )
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
     insert = """INSERT INTO exposure
         (expid, night, flavor, telra, teldec, tileid, exptime, dateobs, alt, az)
         VALUES (?,?,?,?,?,?,?,?,?,?);"""
     c.executemany(insert,exposure_data)
+    insert = """INSERT INTO exposure2brick
+        (expid,brickid) VALUES (?,?);"""
+    c.executemany(insert,exposure2brick_data)
     conn.commit()
-    conn.close()            
+    conn.close()
     return exposures
+#
+#
+#
+if __name__ == '__main__':
+    dbfile = os.path.join(os.environ["DESISPEC"],'metadata.db')
+    # if os.path.exists(dbfile):
+    #     os.remove(dbfile)
+    datapath = os.path.join(os.environ['DESI_SPECTRO_SIM'],'alpha-5')
+    load_brick(os.path.join(datapath,'bricks-0.5-2.fits'),dbfile,fix_area=True)
+    datapath = os.path.join(datapath,'20150211')
+    exposures = load_data(datapath,dbfile)
