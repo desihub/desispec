@@ -223,6 +223,14 @@ class TestIO(unittest.TestCase):
         self.assertEqual(paths[0],filename)
         self.assertTrue(os.path.exists(paths[0]))
 
+    def test_memcrc(self):
+        test_strings = ('The quick brown fox jumped over the lazy dog.',
+            "The sixth sick sheik's sixth sheep's sick.",
+            'Jackdaws love my big sphinx of quartz.')
+        test_results = (2142034932,2348585565,358631216)
+        for k,t in enumerate(test_strings):
+            self.assertEqual(desispec.io.memcrc(t),test_results[k])
+
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
     unittest.main()
