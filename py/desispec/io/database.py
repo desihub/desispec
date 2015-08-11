@@ -236,6 +236,3 @@ if __name__ == '__main__':
 # Which files get entries in the file2brick table?  There could be a lot of
 # duplication if every file goes in.
 # How to determine file dependencies?
-# How to elegantly determine the file id.  If it is autoincremented, how
-# do you select for the file when you don't know its id in advance?
-#

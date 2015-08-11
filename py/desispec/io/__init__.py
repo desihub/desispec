@@ -26,5 +26,6 @@ from .fluxcalibration import (
     read_flux_calibration, write_flux_calibration)
 from .filters import read_filter_response
 from .download import download, filepath2url
+from .crc import memcrc
 from .database import (load_brick, is_night, load_night, is_flavor, load_flavor,
     get_bricks_by_name, get_brickid_by_name, load_data)
