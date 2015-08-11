@@ -90,3 +90,16 @@ def memcrc(b):
         n = n >> 8
         s = UNSIGNED(s << 8) ^ crctab[(s >> 24) ^ c]
     return UNSIGNED(~s)
+
+def cksum(filename):
+    """Compute POSIX CRC checksum on a *file*.
+
+    Args:
+        filename: string containing name of the file.
+
+    Returns:
+        The CRC checksum.
+    """
+    with open(filename,'rb') as f:
+        data = f.read()
+    return memcrc(data)
