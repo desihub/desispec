@@ -262,6 +262,7 @@ def load_data(datapath,dbfile):
         datafiles = glob(os.path.join(datapath,'desi-*-{0:08d}.fits'.format(exposures[k])))
         if len(datafiles) == 0:
             datafiles = glob(os.path.join(datapath,'pix-*-{0:08d}.fits'.format(exposures[k])))
+        print(datafiles)
         datafile_ids = load_file(datafiles,dbfile)
         file2exposure_data += list(zip(datafile_ids, [exposures[k]]*len(datafile_ids)))
         with fits.open(datafiles[0]) as hdulist:
@@ -316,11 +317,13 @@ def main():
     c.executescript(script)
     conn.commit()
     conn.close()
+    print("Created schema...")
     datapath = os.path.join(os.environ['DESI_SPECTRO_SIM'],'alpha-5')
     load_brick(os.path.join(datapath,'bricks-0.50-2.fits'),dbfile,fix_area=True)
+    print("Loaded bricks...")
     datapath = os.path.join(datapath,'20150211')
     exposures = load_data(datapath,dbfile)
-    print(exposures)
+    print("Loaded exposures: {}".format(', '.join(exposures)))
     return 0
 #
 # TODO
