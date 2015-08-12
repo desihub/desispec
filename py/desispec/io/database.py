@@ -324,7 +324,7 @@ def main():
     datapath = os.path.join(datapath,'20150211')
     exposures = load_data(datapath,dbfile)
     # print(exposures)
-    print("Loaded exposures: {0}".format(', '.join(map(str,exposures)))
+    print("Loaded exposures: {0}".format(', '.join(map(str,exposures))))
     return 0
 #
 # TODO
