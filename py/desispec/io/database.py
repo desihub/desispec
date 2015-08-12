@@ -138,7 +138,7 @@ def is_filetype(filetype,dbfile):
     f = (filetype,)
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
-    q = "SELECT flavor FROM filetype WHERE type = ?;"
+    q = "SELECT type FROM filetype WHERE type = ?;"
     c.execute(q,f)
     rows = c.fetchall()
     conn.commit()
