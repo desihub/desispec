@@ -12,6 +12,7 @@ from glob import glob
 import os
 import re
 from datetime import datetime
+from .crc import cksum
 #
 #
 #
@@ -110,7 +111,7 @@ def load_flavor(flavors,dbfile):
     """Load a flavor or multiple flavors into the exposureflavor table.
 
     Args:
-        flavors: string or list of nights
+        flavors: string or list of flavors
         dbfile: string containing the name of a SQLite database file.
 
     Returns:
@@ -125,6 +126,46 @@ def load_flavor(flavors,dbfile):
     insert = """INSERT INTO exposureflavor (flavor)
         VALUES (?);"""
     c.executemany(insert,zip(my_flavors))
+    conn.commit()
+    conn.close()
+    return
+#
+#
+#
+def is_filetype(filetype,dbfile):
+    """Returns ``True`` if the filetype is in the exposureflavor table.
+    """
+    f = (filetype,)
+    conn = sqlite3.connect(dbfile)
+    c = conn.cursor()
+    q = "SELECT flavor FROM filetype WHERE type = ?;"
+    c.execute(q,f)
+    rows = c.fetchall()
+    conn.commit()
+    conn.close()
+    return len(rows) == 1
+#
+#
+#
+def load_filetype(filetype,dbfile):
+    """Load a filetype or multiple filetypes into the filetype table.
+
+    Args:
+        filetype: string or list of filetypes
+        dbfile: string containing the name of a SQLite database file.
+
+    Returns:
+        None
+    """
+    if isinstance(filetype,str):
+        my_types = [filetype]
+    else:
+        my_types = filetype
+    conn = sqlite3.connect(dbfile)
+    c = conn.cursor()
+    insert = """INSERT INTO filetype (type)
+        VALUES (?);"""
+    c.executemany(insert,zip(my_types))
     conn.commit()
     conn.close()
     return
@@ -160,6 +201,40 @@ def get_brickid_by_name(bricknames,dbfile):
 #
 #
 #
+def load_file(files,dbfile):
+    """Load a file or list of files into the file table.
+
+    Args:
+        files: string or list containing filenames.
+        dbfile: string containing the name of a SQLite database file.
+
+    Returns:
+        load_file: a list of the file ids.
+    """
+    if isinstance(files,str):
+        my_files = [files]
+    else:
+        my_files = files
+    ids = [cksum(f) for f in my_files]
+    filenames = [os.path.basename(f) for f in my_files]
+    directories = [os.path.dirname(f) for f in my_files]
+    prodnames = [os.environ['PRODNAME']]*len(my_files)
+    filetypes =[os.path.basename(f).split('-')[0] for f in my_files]
+    for t in set(filetypes):
+        if not is_filetype(t,dbfile):
+            load_filetype(t,dbfile)
+    conn = sqlite3.connect(dbfile)
+    c = conn.cursor()
+    insert = """INSERT INTO files
+        (id, filename, directory, prodname, filetype)
+        VALUES (?,?,?,?,?);"""
+    c.executemany(insert,zip(ids,filenames,directories,prodnames,filetypes))
+    conn.commit()
+    conn.close()
+    return ids
+#
+#
+#
 def load_data(datapath,dbfile):
     """Load a night or multiple nights into the night table.
 
@@ -173,10 +248,12 @@ def load_data(datapath,dbfile):
     fibermaps = glob(os.path.join(datapath,'fibermap*.fits'))
     if len(fibermaps) == 0:
         return []
+    fibermap_ids = load_file(fibermaps,dbfile)
     fibermapre = re.compile(r'fibermap-([0-9]{8})\.fits')
     exposures = [ int(fibermapre.findall(f)[0]) for f in fibermaps ]
     exposure_data = list()
     exposure2brick_data = list()
+    file2exposure_data = list(zip(fibermap_ids,exposures))
     for k,f in enumerate(fibermaps):
         with fits.open(f) as hdulist:
             night = int(hdulist['FIBERMAP'].header['NIGHT'])
@@ -185,6 +262,8 @@ def load_data(datapath,dbfile):
         datafiles = glob(os.path.join(datapath,'desi-*-{0:08d}.fits'.format(exposures[k])))
         if len(datafiles) == 0:
             datafiles = glob(os.path.join(datapath,'pix-*-{0:08d}.fits'.format(exposures[k])))
+        datafile_ids = load_file(datafiles,dbfile)
+        file2exposure_data += list(zip(datafile_ids, [exposures[k]]*len(datafile_ids)))
         with fits.open(datafiles[0]) as hdulist:
             exptime = hdulist[0].header['EXPTIME']
             flavor = hdulist[0].header['FLAVOR']
@@ -215,6 +294,9 @@ def load_data(datapath,dbfile):
     insert = """INSERT INTO exposure2brick
         (expid,brickid) VALUES (?,?);"""
     c.executemany(insert,exposure2brick_data)
+    insert = """INSERT INTO file2exposure
+        (fileid,expid) VALUES (?,?);"""
+    c.executemany(insert,file2exposure_data)
     conn.commit()
     conn.close()
     return exposures
@@ -232,7 +314,7 @@ if __name__ == '__main__':
 #
 # TODO
 #
-# Load file information
+# Load file information; relative directory path
 # Which files get entries in the file2brick table?  There could be a lot of
 # duplication if every file goes in.
 # How to determine file dependencies?

@@ -10,7 +10,7 @@ def night2ymd(night):
     """
     assert isinstance(night, str), 'night is not a string'
     assert len(night) == 8, 'invalid YEARMMDD night string '+night
-    
+
     year = int(night[0:4])
     month = int(night[4:6])
     day = int(night[6:8])
@@ -18,20 +18,20 @@ def night2ymd(night):
         raise ValueError('YEARMMDD month should be 1-12, not {}'.format(month))
     if day < 1 or 31 < day:
         raise ValueError('YEARMMDD day should be 1-31, not {}'.format(day))
-        
+
     return (year, month, day)
-    
+
 def ymd2night(year, month, day):
     """
     convert year, month, day integers into cannonical YEARMMDD night string
     """
     return "{:04d}{:02d}{:02d}".format(year, month, day)
-    
+
 def combine_ivar(ivar1, ivar2):
     """
     Returns the combined inverse variance of two inputs, making sure not to
     divide by 0 in the process.
-    
+
     ivar1 and ivar2 may be scalar or ndarray but must have the same dimensions
     """
     iv1 = np.asarray(ivar1)  #- handle list, tuple, ndarray, and scalar input
@@ -41,12 +41,15 @@ def combine_ivar(ivar1, ivar2):
     assert iv1.shape == iv2.shape, 'shape mismatch {} vs. {}'.format(iv1.shape, iv2.shape)
     ii = (iv1 > 0) & (iv2 > 0)
     ivar = np.zeros(iv1.shape)
-    ivar[ii] = 1.0 / (1.0/iv1[ii] + 1.0/iv2[ii])
-    
+    if np.__version__ < '1.9' and iv1.shape == ():
+        if ii:
+            ivar = 1.0 / (1.0/iv1 + 1.0/iv2)
+    else:
+        ivar[ii] = 1.0 / (1.0/iv1[ii] + 1.0/iv2[ii])
+
     #- Convert back to python float if input was scalar
     #- NOTE: if input was 0-dimensional ndarray, this strips
     if isinstance(ivar1, (float, int)):
         return float(ivar)
     else:
         return ivar
-    
