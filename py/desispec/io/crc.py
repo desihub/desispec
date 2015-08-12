@@ -100,6 +100,11 @@ def cksum(filename):
     Returns:
         The CRC checksum.
     """
-    with open(filename,'rb') as f:
-        data = f.read()
-    return memcrc(data)
+    from subprocess import Popen, PIPE
+    proc = Popen(['cksum',filename],stdout=PIPE,stderr=PIPE)
+    status = proc.wait()
+    out, err = proc.communicate()
+    return int(out.split(' ')[0])
+    # with open(filename,'rb') as f:
+    #     data = f.read()
+    # return memcrc(data)
