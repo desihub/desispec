@@ -225,7 +225,7 @@ def load_file(files,dbfile):
             load_filetype(t,dbfile)
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
-    insert = """INSERT INTO files
+    insert = """INSERT INTO file
         (id, filename, directory, prodname, filetype)
         VALUES (?,?,?,?,?);"""
     c.executemany(insert,zip(ids,filenames,directories,prodnames,filetypes))
@@ -303,14 +303,25 @@ def load_data(datapath,dbfile):
 #
 #
 #
-if __name__ == '__main__':
+def main():
+    """Call this function from a command-line script.
+    """
     dbfile = os.path.join(os.environ["DESISPEC"],'metadata.db')
-    # if os.path.exists(dbfile):
-    #     os.remove(dbfile)
+    if os.path.exists(dbfile):
+        os.remove(dbfile)
+    with open(os.path.join(os.environ['DESISPEC'],'etc','file_db.sql')) as sql:
+        script = sql.read()
+    conn = sqlite3.connect(dbfile)
+    c = conn.cursor()
+    c.executescript(script)
+    conn.commit()
+    conn.close()
     datapath = os.path.join(os.environ['DESI_SPECTRO_SIM'],'alpha-5')
     load_brick(os.path.join(datapath,'bricks-0.50-2.fits'),dbfile,fix_area=True)
     datapath = os.path.join(datapath,'20150211')
     exposures = load_data(datapath,dbfile)
+    print(exposures)
+    return 0
 #
 # TODO
 #
