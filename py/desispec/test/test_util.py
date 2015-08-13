@@ -56,10 +56,7 @@ class TestNight(unittest.TestCase):
         ivar = util.combine_ivar(1.0, 2.0)
         self.assertTrue(isinstance(ivar, float))
         ivar = util.combine_ivar(np.asarray(1.0), np.asarray(2.0))
-        if np.__version__ < '1.9':
-            self.assertTrue(isinstance(ivar, np.float64))
-        else:
-            self.assertTrue(isinstance(ivar, np.ndarray))
+        self.assertTrue(isinstance(ivar, np.ndarray))
 
 
 if __name__ == '__main__':
