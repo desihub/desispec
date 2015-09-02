@@ -38,6 +38,10 @@ class TestFrame(unittest.TestCase):
         manyfibers = np.arange(2*nspec)
         self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar, None, None, None, manyfibers))
 
+        #- Check usage of meta
+        meta = dict(SPECMIN=0)
+        frame = Frame(wave, flux, ivar, meta=meta)
+
         #- Check usage of spectrograph input
         for i in range(3):
             frame = Frame(wave, flux, ivar, spectrograph=i)
