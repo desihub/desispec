@@ -33,8 +33,8 @@ from desispec.coaddition import Spectrum
 #         
 
 class Frame(object):
-    def __init__(self, wave, flux, ivar, meta, mask=None, resolution_data=None,
-                fibers=None, spectrograph=0):
+    def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
+                fibers=None, spectrograph=0, meta=None):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
@@ -44,13 +44,13 @@ class Frame(object):
             wave: 1D[nwave] wavelength in Angstroms
             flux: 2D[nspec, nwave] flux
             ivar: 2D[nspec, nwave] inverse variance of flux
-            meta: dict-like object (e.g. FITS header from HDU0) 
-                  Must include SPECMIN
             mask: (optional) 2D[nspec, nwave] integer bitmask of flux.  0=good.
             resolution_data: (optional) 3D[nspec, ndiag, nwave]
                              diagonals of resolution matrix data
             fibers: (optional) ndarray of which fibers these spectra are
             spectrograph: (optional) integer, which spectrograph [0-9]        
+            meta: (optional) dict-like object (e.g. FITS header from HDU0) 
+                  Must include SPECMIN
 
         Notes:
             spectrograph input is used only if fibers is None.  In this case,
@@ -79,7 +79,10 @@ class Frame(object):
         self.ivar = ivar
         self.meta = meta
         self.nspec, self.nwave = self.flux.shape
-        self.specmin = self.meta['SPECMIN']
+        if self.meta is not None:
+            self.specmin = self.meta['SPECMIN']
+        else:
+            self.specmin = 0
         self.specmax = self.specmin + flux.shape[0] - 1
         
         if mask is None:
@@ -134,9 +137,9 @@ class Frame(object):
             rdata = None
         
         result = Frame(self.wave, self.flux[index], self.ivar[index],
-                    self.meta, self.mask[index],
-                    resolution_data=rdata, 
-                    fibers=self.fibers[index], spectrograph=self.spectrograph)
+                    self.mask[index], resolution_data=rdata,
+                    fibers=self.fibers[index], spectrograph=self.spectrograph,
+                    meta=self.meta)
         
         #- TODO:
         #- if we define fiber ranges in the fits headers, correct header

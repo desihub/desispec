@@ -91,7 +91,7 @@ class TestIO(unittest.TestCase):
         R = np.random.uniform( size=(nspec, ndiag, nwave) )
 
         for mask in (mask_int, mask_uint):
-            frx = Frame(wave, flux, ivar, meta, mask, R)
+            frx = Frame(wave, flux, ivar, mask, R, meta=meta)
             desispec.io.write_frame(self.testfile, frx)
             frame = desispec.io.read_frame(self.testfile)
 

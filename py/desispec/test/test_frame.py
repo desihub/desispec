@@ -12,11 +12,10 @@ class TestFrame(unittest.TestCase):
         wave = np.arange(nwave)
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones(flux.shape)
-        meta = dict(SPECMIN=0)
         mask = np.zeros(flux.shape, dtype=int)
         rdata = np.ones((nspec, 5, nwave))
 
-        frame = Frame(wave, flux, ivar, meta, mask, rdata)
+        frame = Frame(wave, flux, ivar, mask, rdata)
         self.assertTrue(np.all(frame.wave == wave))
         self.assertTrue(np.all(frame.flux == flux))
         self.assertTrue(np.all(frame.ivar == ivar))
@@ -29,19 +28,23 @@ class TestFrame(unittest.TestCase):
         self.assertRaises(AssertionError, lambda x: Frame(*x), (wave, flux[0:2], ivar, mask, rdata))
         
         #- Check constructing with defaults
-        frame = Frame(wave, flux, ivar, meta)
+        frame = Frame(wave, flux, ivar)
         self.assertEqual(frame.flux.shape, frame.mask.shape)
         
         #- Check usage of fibers inputs
         fibers = np.arange(nspec)
-        frame = Frame(wave, flux, ivar, meta, fibers=fibers)
-        frame = Frame(wave, flux, ivar, meta, fibers=fibers*2)
+        frame = Frame(wave, flux, ivar, fibers=fibers)
+        frame = Frame(wave, flux, ivar, fibers=fibers*2)
         manyfibers = np.arange(2*nspec)
-        self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar, meta, None, None, None, manyfibers))
+        self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar, None, None, None, manyfibers))
+
+        #- Check usage of meta
+        meta = dict(SPECMIN=0)
+        frame = Frame(wave, flux, ivar, meta=meta)
 
         #- Check usage of spectrograph input
         for i in range(3):
-            frame = Frame(wave, flux, ivar, meta, spectrograph=i)
+            frame = Frame(wave, flux, ivar, spectrograph=i)
             self.assertEqual(len(frame.fibers), nspec)
             self.assertEqual(frame.fibers[0], i*nspec)
 
@@ -51,11 +54,10 @@ class TestFrame(unittest.TestCase):
         wave = np.arange(nwave)
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones(flux.shape)
-        meta = dict(SPECMIN=0)
         mask = np.zeros(flux.shape, dtype=int)
         rdata = np.ones((nspec, 5, nwave))
 
-        frame = Frame(wave, flux, ivar, meta, mask, rdata)
+        frame = Frame(wave, flux, ivar, mask, rdata)
         x = frame[1]
         self.assertEqual(type(x), Spectrum)
         x = frame[1:2]

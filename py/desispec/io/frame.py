@@ -98,4 +98,4 @@ def read_frame(filename, nspec=None):
         resolution_data = resolution_data[0:nspec]
 
     # return flux,ivar,wave,resolution_data, hdr
-    return Frame(wave, flux, ivar, hdr, mask, resolution_data)
+    return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr)
