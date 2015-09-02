@@ -80,7 +80,7 @@ class Frame(object):
         self.meta = meta
         self.nspec, self.nwave = self.flux.shape
         self.specmin = self.meta['SPECMIN']
-        self.specmax = self.specmin + flux.shape[1] - 1
+        self.specmax = self.specmin + flux.shape[0] - 1
         
         if mask is None:
             self.mask = np.zeros(flux.shape, dtype=np.uint32)
