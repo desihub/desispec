@@ -33,8 +33,8 @@ from desispec.coaddition import Spectrum
 #         
 
 class Frame(object):
-    def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
-                header=None, fibers=None, spectrograph=0):
+    def __init__(self, wave, flux, ivar, meta, mask=None, resolution_data=None,
+                fibers=None, spectrograph=0):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
@@ -44,11 +44,11 @@ class Frame(object):
             wave: 1D[nwave] wavelength in Angstroms
             flux: 2D[nspec, nwave] flux
             ivar: 2D[nspec, nwave] inverse variance of flux
+            meta: dict-like object (e.g. FITS header from HDU0) 
+                  Must include SPECMIN
             mask: (optional) 2D[nspec, nwave] integer bitmask of flux.  0=good.
             resolution_data: (optional) 3D[nspec, ndiag, nwave]
                              diagonals of resolution matrix data
-            header: (optional) FITS header from HDU0    
-            
             fibers: (optional) ndarray of which fibers these spectra are
             spectrograph: (optional) integer, which spectrograph [0-9]        
 
@@ -62,6 +62,7 @@ class Frame(object):
             All input args become object attributes.
             nspec : number of spectra, flux.shape[0]
             nwave : number of wavelengths, flux.shape[1]
+            specmin : minimum fiber number
             R: array of sparse Resolution matrix objects converted
                from resolution_data
         """
@@ -76,7 +77,10 @@ class Frame(object):
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
+        self.meta = meta
         self.nspec, self.nwave = self.flux.shape
+        self.specmin = self.meta['SPECMIN']
+        self.specmax = self.specmin + flux.shape[1] - 1
         
         if mask is None:
             self.mask = np.zeros(flux.shape, dtype=np.uint32)
@@ -94,8 +98,6 @@ class Frame(object):
         if resolution_data is not None:
             self.R = np.array( [Resolution(r) for r in resolution_data] )
 
-        self.header = header
-        
         self.spectrograph = spectrograph
         if fibers is None:
             self.fibers = self.spectrograph*self.nspec + np.arange(self.nspec, dtype=int)
@@ -132,8 +134,8 @@ class Frame(object):
             rdata = None
         
         result = Frame(self.wave, self.flux[index], self.ivar[index],
-                    self.mask[index],
-                    resolution_data=rdata, header=self.header,
+                    self.meta, self.mask[index],
+                    resolution_data=rdata, 
                     fibers=self.fibers[index], spectrograph=self.spectrograph)
         
         #- TODO:

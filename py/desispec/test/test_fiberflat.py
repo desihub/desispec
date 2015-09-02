@@ -29,9 +29,10 @@ def _get_data():
     y = np.sin(wave)
     flux = np.tile(y, nspec).reshape(nspec, nwave)
     ivar = np.ones(flux.shape)
+    meta = dict(SPECMIN=0)
     mask = np.zeros(flux.shape, dtype=int)
     
-    return wave, flux, ivar, mask
+    return wave, flux, ivar, meta, mask
     
 
 class TestFiberFlat(unittest.TestCase):
@@ -41,7 +42,7 @@ class TestFiberFlat(unittest.TestCase):
         Basic test that interface works and identical inputs result in
         identical outputs
         """
-        wave, flux, ivar, mask = _get_data()
+        wave, flux, ivar, meta, mask = _get_data()
         nspec, nwave = flux.shape
         
         #- Setup data for a Resolution matrix
@@ -56,7 +57,7 @@ class TestFiberFlat(unittest.TestCase):
                 Rdata[i,:,j] = kernel
 
         #- Run the code
-        frame = Frame(wave, flux, ivar, mask, Rdata)
+        frame = Frame(wave, flux, ivar, meta, mask, Rdata)
         ff = compute_fiberflat(frame)
             
         #- Check shape of outputs
@@ -75,7 +76,7 @@ class TestFiberFlat(unittest.TestCase):
         Test that identical spectra convolved with different resolutions
         results in identical fiberflats
         """
-        wave, flux, ivar, mask = _get_data()
+        wave, flux, ivar, meta, mask = _get_data()
         nspec, nwave = flux.shape
         
         #- Setup a Resolution matrix that varies with fiber and wavelength
@@ -98,7 +99,7 @@ class TestFiberFlat(unittest.TestCase):
             convflux[i] = Resolution(Rdata[i]).dot(flux[i])
 
         #- Run the code
-        frame = Frame(wave, convflux, ivar, mask, Rdata)
+        frame = Frame(wave, convflux, ivar, meta, mask, Rdata)
         ff = compute_fiberflat(frame)
 
         #- These fiber flats should all be ~1

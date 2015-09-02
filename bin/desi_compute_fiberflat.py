@@ -32,7 +32,7 @@ def main() :
 
     frame = read_frame(args.infile)
     fiberflat = compute_fiberflat(frame)
-    write_fiberflat(args.outfile, fiberflat, frame.header)
+    write_fiberflat(args.outfile, fiberflat, frame.meta)
 
     log.info("successfully wrote %s"%args.outfile)
 

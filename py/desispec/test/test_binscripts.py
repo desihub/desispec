@@ -46,9 +46,10 @@ class TestBinScripts(unittest.TestCase):
         wave = 5000+np.arange(self.nwave)
         flux = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))
+        meta = dict(SPECMIN=0)
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        frame = Frame(wave, flux, ivar, mask, Rdata)
+        frame = Frame(wave, flux, ivar, meta, mask, Rdata)
         io.write_frame(self.framefile, frame)
 
     def _write_fiberflat(self):
