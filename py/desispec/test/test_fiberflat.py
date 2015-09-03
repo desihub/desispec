@@ -56,7 +56,7 @@ class TestFiberFlat(unittest.TestCase):
                 Rdata[i,:,j] = kernel
 
         #- Run the code
-        frame = Frame(wave, flux, ivar, mask, Rdata)
+        frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0)
         ff = compute_fiberflat(frame)
             
         #- Check shape of outputs
@@ -98,7 +98,7 @@ class TestFiberFlat(unittest.TestCase):
             convflux[i] = Resolution(Rdata[i]).dot(flux[i])
 
         #- Run the code
-        frame = Frame(wave, convflux, ivar, mask, Rdata)
+        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0)
         ff = compute_fiberflat(frame)
 
         #- These fiber flats should all be ~1

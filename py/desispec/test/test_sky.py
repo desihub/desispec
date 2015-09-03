@@ -45,9 +45,8 @@ class TestSky(unittest.TestCase):
 
         fibermap = desispec.io.empty_fibermap(self.nspec)
         fibermap['OBJTYPE'][0::2] = 'SKY'
-        meta = dict(SPECMIN=0)
 
-        return Frame(self.wave, flux, ivar, mask, Rdata, meta=meta), fibermap
+        return Frame(self.wave, flux, ivar, mask, Rdata, spectrograph=0), fibermap
                     
     def test_uniform_resolution(self):        
         #- Setup data for a Resolution matrix

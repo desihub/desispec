@@ -1,3 +1,4 @@
+
 import os, sys
 import unittest
 from uuid import uuid4
@@ -48,7 +49,7 @@ class TestBinScripts(unittest.TestCase):
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        frame = Frame(wave, flux, ivar, mask, Rdata)
+        frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0)
         io.write_frame(self.framefile, frame)
 
     def _write_fiberflat(self):
