@@ -34,7 +34,7 @@ from desispec.coaddition import Spectrum
 
 class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
-                fibers=None, spectrograph=0, meta=None):
+                fibers=None, spectrograph=None, meta=None):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
@@ -79,11 +79,6 @@ class Frame(object):
         self.ivar = ivar
         self.meta = meta
         self.nspec, self.nwave = self.flux.shape
-        if self.meta is not None:
-            self.specmin = self.meta['SPECMIN']
-        else:
-            self.specmin = 0
-        self.specmax = self.specmin + flux.shape[0] - 1
         
         if mask is None:
             self.mask = np.zeros(flux.shape, dtype=np.uint32)
@@ -102,12 +97,31 @@ class Frame(object):
             self.R = np.array( [Resolution(r) for r in resolution_data] )
 
         self.spectrograph = spectrograph
-        if fibers is None:
-            self.fibers = self.spectrograph*self.nspec + np.arange(self.nspec, dtype=int)
-        else:
+
+        # Deal with Fibers (these must be set!)
+        if fibers is not None:
             if len(fibers) != self.nspec:
                 raise ValueError("len(fibers) != nspec ({} != {})".format(len(fibers), self.nspec))
             self.fibers = fibers
+        else:
+            self.fibers = None
+        # If spectrograph given and fibers set, check these are consistent
+        if self.spectrograph is not None: 
+            if self.fibers is None:
+                self.fibers = self.spectrograph*self.nspec + np.arange(self.nspec, dtype=int)
+        # If meta given, check for specmin 
+        if self.meta is not None:
+            if 'SPECMIN' in self.meta.keys():
+                if self.fibers is None:
+                    self.fibers = self.meta['SPECMIN'] + np.arange(self.nspec, dtype=int)
+                else:
+                    assert np.min(self.fibers) >= self.meta['SPECMIN']
+
+        # Require fibers is set!
+        if self.fibers is None:
+            raise ValueError("Must set fibers by one of the methods!")
+
+
          
     def __getitem__(self, index):
         """
