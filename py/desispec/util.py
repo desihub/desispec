@@ -46,9 +46,8 @@ def combine_ivar(ivar1, ivar2):
     #- Convert back to python float if input was scalar
     if isinstance(ivar1, (float, int)):
         return float(ivar)
-    #- If input was 0-dim numpy array, convert back to 0-dim
+    #- If input was 0-dim numpy array, convert back to 0-di
     elif ivar1.ndim == 0:
         return np.asarray(ivar[0])
     else:
         return ivar
-    
