@@ -40,10 +40,7 @@ def main() :
 
     # read exposure to load data and get range of spectra
     frame = read_frame(args.infile)
-    specmin=frame.specmin
-    specmax=frame.specmax
-    #specmin=frame.header["SPECMIN"]
-    #specmax=frame.header["SPECMAX"]
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
 
     # read fibermap to locate sky fibers
     fibermap = read_fibermap(args.fibermap)
