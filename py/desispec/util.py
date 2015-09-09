@@ -44,8 +44,10 @@ def combine_ivar(ivar1, ivar2):
     ivar[ii] = 1.0 / (1.0/iv1[ii] + 1.0/iv2[ii])
 
     #- Convert back to python float if input was scalar
-    #- NOTE: if input was 0-dimensional ndarray, this strips
     if isinstance(ivar1, (float, int)):
         return float(ivar)
+    #- If input was 0-dim numpy array, convert back to 0-di
+    elif ivar1.ndim == 0:
+        return np.asarray(ivar[0])
     else:
         return ivar
