@@ -57,6 +57,7 @@ class TestNight(unittest.TestCase):
         self.assertTrue(isinstance(ivar, float))
         ivar = util.combine_ivar(np.asarray(1.0), np.asarray(2.0))
         self.assertTrue(isinstance(ivar, np.ndarray))
+        self.assertEqual(ivar.ndim, 0)
         
         
 if __name__ == '__main__':
