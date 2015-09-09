@@ -40,8 +40,7 @@ def main() :
 
     # read exposure to load data and get range of spectra
     frame = read_frame(args.infile)
-    specmin=frame.header["SPECMIN"]
-    specmax=frame.header["SPECMAX"]
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
 
     # read fibermap to locate sky fibers
     fibermap = read_fibermap(args.fibermap)
@@ -60,7 +59,7 @@ def main() :
     skymodel = compute_sky(frame, fibermap)
 
     # write result
-    write_sky(args.outfile, skymodel, frame.header)
+    write_sky(args.outfile, skymodel, frame.meta)
 
     log.info("successfully wrote %s"%args.outfile)
 

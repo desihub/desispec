@@ -40,7 +40,11 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
     log=get_logger()
     log.info("starting")
 
-    skyfibers = np.where(fibermap["OBJTYPE"]=="SKY")[0]
+    # Grab sky fibers on this frame
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
+    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
+        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
+    assert np.max(skyfibers) < 500
 
     nwave=frame.nwave
     nfibers=len(skyfibers)
