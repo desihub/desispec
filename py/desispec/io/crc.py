@@ -91,20 +91,72 @@ def memcrc(b):
         s = UNSIGNED(s << 8) ^ crctab[(s >> 24) ^ c]
     return UNSIGNED(~s)
 
-def cksum(filename):
-    """Compute POSIX CRC checksum on a *file*.
+def cksum(filename,hashname='crc'):
+    """Compute POSIX CRC checksum or other hash on a *file*.
 
     Args:
         filename: string containing name of the file.
+        hashname (optional): One of 'crc', 'md5', 'sha1'
 
     Returns:
-        The CRC checksum.
+        The CRC or other hash checksum.
     """
+    from glob import glob
+    from os.path import basename, dirname, exists, join
+    from hashlib import md5, sha1
     from subprocess import Popen, PIPE
-    proc = Popen(['cksum',filename],stdout=PIPE,stderr=PIPE)
-    status = proc.wait()
-    out, err = proc.communicate()
-    return int(out.split(' ')[0])
-    # with open(filename,'rb') as f:
-    #     data = f.read()
-    # return memcrc(data)
+    from ..log import desi_logger
+    hash_to_extension = {'crc':'.cksum','md5':'.md5sum','sha1','.sha1sum'}
+    if hashname not in hash_to_extension:
+        raise ValueError("Not a valid hash function name: {0}".format(hashname))
+    checksum_files = glob(join(dirname(filename),'*'+hash_to_extension[hashname]))
+    if len(checksum_files) == 1:
+        desi_logger.debug("Found checksum file: {0}.".format(checksum_files[0]))
+        checksum_data = parse_cksum_file(checksum_files[0])
+    else:
+        checksum_data = {}
+    if basename(filename) in checksum_data:
+        return checksum_data[basename(filename)]
+    else:
+        if hashname == 'crc':
+            proc = Popen(['cksum',filename],stdout=PIPE,stderr=PIPE)
+            status = proc.wait()
+            out, err = proc.communicate()
+            return int(out.split(' ')[0])
+            # with open(filename,'rb') as f:
+            #     data = f.read()
+            # return memcrc(data)
+        else:
+            hash_to_class = {'md5':md5, 'sha1':sha1}
+            h = hash_to_class[hashname]()
+            with open(filename,'rb') as f:
+                data = f.read()
+            h.update(data)
+            return h.hexdigest()
+
+def parse_cksum_file(filename):
+    """Read a checksum file and return a mapping of filename to checksum.
+
+    Args:
+        filename: string containing the name of a checksum file.
+
+    Returns:
+        A dictionary containing the mapping of filename to checksum.
+    """
+    from re import compile
+    parsed_data = dict()
+    with open(filename) as c:
+        data = c.read()
+    if filename.endswith('.cksum'):
+        cksum_re = compile(r'([0-9]+) ([0-9]+) (.+)$')
+    else:
+        cksum_re = compile(r'([0-9a-f]+)  (.+)$')
+    for line in data.split('\n'):
+        m = cksum_re.match(line.strip())
+        if m is not None:
+            g = m.groups()
+            if len(g) > 2:
+                parsed_data[g[2]] = int(g[0])
+            else:
+                parsed_data[g[1]] = g[0]
+    return parsed_data
