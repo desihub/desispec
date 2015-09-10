@@ -117,7 +117,7 @@ def main() :
        frameIvar[i] = frame.ivar
        frameWave[i] = frame.wave
        frameResolution[i] = frame.resolution_data
-       framehdr[i] = frame.header
+       framehdr[i] = frame.meta
 
        ff = io.read_fiberflat(fiberflatfile[i])
        fiberFlat[i] = ff.fiberflat

@@ -70,13 +70,13 @@ def main() :
     model_flux,model_wave,model_fibers=read_stdstar_models(args.models)
 
     # select fibers
-    SPECMIN=frame.header["SPECMIN"]
-    SPECMAX=frame.header["SPECMAX"]
+    SPECMIN=frame.meta["SPECMIN"]
+    SPECMAX=frame.meta["SPECMAX"]
     selec=np.where((model_fibers>=SPECMIN)&(model_fibers<=SPECMAX))[0]
     if selec.size == 0 :
         log.error("no stellar models for this spectro")
         sys.exit(12)
-    fibers=model_fibers[selec]-frame.header["SPECMIN"]
+    fibers=model_fibers[selec]-frame.meta["SPECMIN"]
     log.info("star fibers= %s"%str(fibers))
 
     table = read_fibermap(args.fibermap)
@@ -89,7 +89,7 @@ def main() :
     fluxcalib = compute_flux_calibration(frame, fibers, model_wave, model_flux)
 
     # write result
-    write_flux_calibration(args.outfile, fluxcalib, header=frame.header)
+    write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)
 
 
     log.info("successfully wrote %s"%args.outfile)
