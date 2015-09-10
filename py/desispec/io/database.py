@@ -246,6 +246,7 @@ def load_data(datapath,dbfile):
     Returns:
         load_data: a list of the exposure numbers found.
     """
+    log = get_logger()
     fibermaps = glob(os.path.join(datapath,'fibermap*.fits'))
     if len(fibermaps) == 0:
         return []
@@ -263,7 +264,7 @@ def load_data(datapath,dbfile):
         datafiles = glob(os.path.join(datapath,'desi-*-{0:08d}.fits'.format(exposures[k])))
         if len(datafiles) == 0:
             datafiles = glob(os.path.join(datapath,'pix-*-{0:08d}.fits'.format(exposures[k])))
-        print(datafiles)
+        log.debug("Found datafiles: {0}.".format(", ".join(datafiles)))
         datafile_ids = load_file(datafiles,dbfile)
         file2exposure_data += list(zip(datafile_ids, [exposures[k]]*len(datafile_ids)))
         with fits.open(datafiles[0]) as hdulist:
