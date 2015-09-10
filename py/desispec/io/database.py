@@ -361,7 +361,7 @@ def main():
     exposures = list()
     for e in exposurepaths:
         log.info("Loading exposures in {0}.".format(e))
-        exposures += load_data(e,options.dbfile)
+        exposures += load_data(e,dbfile)
     log.info("Loaded exposures: {0}".format(', '.join(map(str,exposures))))
     return 0
 #
