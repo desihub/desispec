@@ -145,6 +145,7 @@ def parse_cksum_file(filename):
     Returns:
         A dictionary containing the mapping of filename to checksum.
     """
+    global checksum_cache
     from re import compile
     if checksum_cache is None:
         checksum_cache = dict()
