@@ -26,7 +26,7 @@ CREATE TABLE filetype (
 --
 --
 CREATE TABLE file (
-    id INTEGER PRIMARY KEY,
+    id TEXT PRIMARY KEY, -- Checksum of the file.  SHA1 preferred.
     filename TEXT NOT NULL,
     directory TEXT NOT NULL,
     prodname TEXT NOT NULL,
@@ -38,8 +38,8 @@ CREATE TABLE file (
 -- 'requires' == 'needs this file'
 --
 CREATE TABLE filedependency (
-    fileid INTEGER NOT NULL,
-    requires INTEGER NOT NULL, -- Primary key on the two columns (fileid, requires)
+    fileid TEXT NOT NULL,
+    requires TEXT NOT NULL, -- Primary key on the two columns (fileid, requires)
     PRIMARY KEY (fileid, requires),
     FOREIGN KEY (fileid) REFERENCES file (id),
     FOREIGN KEY (requires) REFERENCES file (id)
@@ -48,7 +48,7 @@ CREATE TABLE filedependency (
 -- JOIN table
 --
 CREATE TABLE file2brick (
-    fileid INTEGER NOT NULL,
+    fileid TEXT NOT NULL,
     brickid INTEGER NOT NULL,
     PRIMARY KEY (fileid, brickid),
     FOREIGN KEY (fileid) REFERENCES file (id),
@@ -87,7 +87,7 @@ CREATE TABLE exposure (
 -- JOIN table
 --
 CREATE TABLE file2exposure (
-    fileid INTEGER NOT NULL,
+    fileid TEXT NOT NULL,
     expid INTEGER NOT NULL,
     PRIMARY KEY (fileid, expid),
     FOREIGN KEY (fileid) REFERENCES file (id),

@@ -15,6 +15,8 @@ in the GNU version of ``cksum``.  That is, it is not possible to do
 """
 from __future__ import absolute_import, division
 
+checksum_cache = None
+
 crctab = [ 0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc,
         0x17c56b6b, 0x1a864db2, 0x1e475005, 0x2608edb8, 0x22c9f00f,
         0x2f8ad6d6, 0x2b4bcb61, 0x350c9b64, 0x31cd86d3, 0x3c8ea00a,
@@ -144,7 +146,12 @@ def parse_cksum_file(filename):
         A dictionary containing the mapping of filename to checksum.
     """
     from re import compile
-    parsed_data = dict()
+    if checksum_cache is None:
+        checksum_cache = dict()
+    if filename in checksum_cache:
+        return checksum_cache[filename]
+    else:
+        parsed_data = dict()
     with open(filename) as c:
         data = c.read()
     if filename.endswith('.cksum'):
@@ -159,4 +166,5 @@ def parse_cksum_file(filename):
                 parsed_data[g[2]] = int(g[0])
             else:
                 parsed_data[g[1]] = g[0]
+    checksum_cache[filename] = parsed_data
     return parsed_data

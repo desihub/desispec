@@ -216,7 +216,7 @@ def load_file(files,dbfile):
         my_files = [files]
     else:
         my_files = files
-    ids = [cksum(f) for f in my_files]
+    ids = [cksum(f,hashname='sha1') for f in my_files]
     filenames = [os.path.basename(f) for f in my_files]
     directories = [os.path.dirname(f) for f in my_files]
     prodnames = [os.environ['PRODNAME']]*len(my_files)
