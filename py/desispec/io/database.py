@@ -343,6 +343,7 @@ def main():
     if options.clobber and os.path.exists(dbfile):
         log.info("Removing file: {0}.".format(dbfile))
         os.remove(dbfile)
+    if not os.path.exists(dbfile):
         schema = os.path.join(os.environ['DESISPEC'],'etc','file_db.sql')
         log.info("Reading schema from {0}.".format(schema))
         with open(schema) as sql:
@@ -353,9 +354,9 @@ def main():
         conn.commit()
         conn.close()
         log.info("Created schema.")
-    brickfile = os.path.join(options.datapath,options.brickfile)
-    load_brick(brickfile,dbfile,fix_area=options.fixarea)
-    log.info("Loaded bricks from {0}.".format(brickfile))
+        brickfile = os.path.join(options.datapath,options.brickfile)
+        load_brick(brickfile,dbfile,fix_area=options.fixarea)
+        log.info("Loaded bricks from {0}.".format(brickfile))
     exposurepaths = glob(os.path.join(options.datapath,'[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'))
     exposures = list()
     for e in exposurepaths:
