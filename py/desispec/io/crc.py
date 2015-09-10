@@ -106,7 +106,7 @@ def cksum(filename,hashname='crc'):
     from hashlib import md5, sha1
     from subprocess import Popen, PIPE
     from ..log import desi_logger
-    hash_to_extension = {'crc':'.cksum','md5':'.md5sum','sha1','.sha1sum'}
+    hash_to_extension = {'crc':'.cksum','md5':'.md5sum','sha1':'.sha1sum'}
     if hashname not in hash_to_extension:
         raise ValueError("Not a valid hash function name: {0}".format(hashname))
     checksum_files = glob(join(dirname(filename),'*'+hash_to_extension[hashname]))
