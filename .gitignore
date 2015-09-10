@@ -27,6 +27,3 @@ distribute-*.tar.gz
 
 # Mac OSX
 .DS_Store
-
-# Files produced in testing
-*.db

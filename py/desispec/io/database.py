@@ -13,6 +13,7 @@ import os
 import re
 from datetime import datetime
 from .crc import cksum
+from ..log import get_logger, DEBUG
 #
 #
 #
@@ -307,24 +308,60 @@ def load_data(datapath,dbfile):
 def main():
     """Call this function from a command-line script.
     """
-    dbfile = os.path.join(os.environ["DESISPEC"],'metadata.db')
-    if os.path.exists(dbfile):
+    #
+    # command-line arguments
+    #
+    from argparse import ArgumentParser
+    parser = ArgumentParser(description="Create and load a DESI metadata database.")
+    parser.add_argument('-a', '--area', action='store_true', dest='fixarea',
+        help='If area is not specified in the brick file, recompute it.')
+    parser.add_argument('-b', '--bricks', action='store', dest='brickfile',
+        default='bricks-0.50-2.fits', metavar='FILE',
+        help='Read brick data from FILE.')
+    parser.add_argument('-c', '--clobber', action='store_true', dest='clobber',
+        help='Delete any existing file before loading.')
+    parser.add_argument('-d', '--data', action='store', dest='datapath',
+        default=os.path.join(os.environ['DESI_SPECTRO_SIM'],os.environ['PRODNAME']), metavar='DIR',
+        help='Load the data in DIR.')
+    parser.add_argument('-f', '--filename', action='store', dest='dbfile',
+        default='metadata.db', metavar='FILE',
+        help="Store data in FILE.")
+    parser.add_argument('-v', '--verbose', action='store_true', dest='verbose',
+        help='Print extra information.')
+    options = parser.parse_args()
+    #
+    # Logging
+    #
+    if options.verbose:
+        log = get_logger(DEBUG)
+    else:
+        log = get_logger()
+    #
+    # Create the file.
+    #
+    dbfile = os.path.join(options.datapath,'etc',options.dbfile)
+    if options.clobber and os.path.exists(dbfile):
+        log.info("Removing file: {0}.".format(dbfile))
         os.remove(dbfile)
-    with open(os.path.join(os.environ['DESISPEC'],'etc','file_db.sql')) as sql:
-        script = sql.read()
-    conn = sqlite3.connect(dbfile)
-    c = conn.cursor()
-    c.executescript(script)
-    conn.commit()
-    conn.close()
-    print("Created schema...")
-    datapath = os.path.join(os.environ['DESI_SPECTRO_SIM'],'alpha-5')
-    load_brick(os.path.join(datapath,'bricks-0.50-2.fits'),dbfile,fix_area=True)
-    print("Loaded bricks...")
-    datapath = os.path.join(datapath,'20150211')
-    exposures = load_data(datapath,dbfile)
-    # print(exposures)
-    print("Loaded exposures: {0}".format(', '.join(map(str,exposures))))
+        schema = os.path.join(os.environ['DESISPEC'],'etc','file_db.sql')
+        log.info("Reading schema from {0}.".format(schema))
+        with open(schema) as sql:
+            script = sql.read()
+        conn = sqlite3.connect(dbfile)
+        c = conn.cursor()
+        c.executescript(script)
+        conn.commit()
+        conn.close()
+        log.info("Created schema.")
+    brickfile = os.path.join(options.datapath,options.brickfile)
+    load_brick(brickfile,dbfile,fix_area=options.fixarea)
+    log.info("Loaded bricks from {0}.".format(brickfile))
+    exposurepaths = glob(os.path.join(options.datapath,'[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'))
+    exposures = list()
+    for e in exposurepaths:
+        log.info("Loading exposures in {0}.".format(e))
+        exposures += load_data(e,options.dbfile)
+    log.info("Loaded exposures: {0}".format(', '.join(map(str,exposures))))
     return 0
 #
 # TODO
