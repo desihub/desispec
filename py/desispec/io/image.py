@@ -29,10 +29,13 @@ def write_image(outfile, image, meta=None):
         hdr = fitsheader(image.meta)
         
     hx = fits.HDUList()
-    hdu = fits.ImageHDU(image.pix.astype(np.float32), name='IMAGE')
-    hdu.header.append( ('CAMERA', image.camera, 'Spectograph Camera') )
-    hdu.header.append( ('VSPECTER', '0.0.0', 'TODO: Specter version') )    
-    hdu.header.append( ('RDNOISE', image.readnoise, 'Read noise [electrons]'))
+    hdu = fits.ImageHDU(image.pix.astype(np.float32), name='IMAGE', header=hdr)
+    if 'CAMERA' not in hdu.header:
+        hdu.header.append( ('CAMERA', image.camera, 'Spectograph Camera') )
+
+    if 'RDNOISE' not in hdu.header:
+        hdu.header.append( ('RDNOISE', image.readnoise, 'Read noise [RMS electrons/pixel]'))
+
     hx.append(hdu)
     
     hx.append(fits.ImageHDU(image.ivar.astype(np.float32), name='IVAR'))
@@ -51,5 +54,7 @@ def read_image(filename):
     mask = native_endian(fx['MASK'].data)
     readnoise = fx['IMAGE'].header['RDNOISE']
     camera = fx['IMAGE'].header['CAMERA']
+    meta = fx['IMAGE'].header
     
-    return Image(image, ivar, mask=mask, readnoise=readnoise, camera=camera)
+    return Image(image, ivar, mask=mask, readnoise=readnoise,
+                 camera=camera, meta=meta)

@@ -194,7 +194,7 @@ class TestIO(unittest.TestCase):
         self.assertFalse(np.all(img1.pix == img2.pix))
         self.assertFalse(np.all(img1.ivar == img2.ivar))
         
-        #- But they should be close, and identify after float64->float32
+        #- But they should be close, and identical after float64->float32
         self.assertTrue(np.allclose(img1.pix, img2.pix))
         self.assertTrue(np.all(img1.pix.astype(np.float32) == img2.pix))
         self.assertTrue(np.allclose(img1.ivar, img2.ivar))
@@ -204,6 +204,22 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.all(img1.mask == img2.mask))
         self.assertEqual(img1.readnoise, img2.readnoise)
         self.assertEqual(img1.camera, img2.camera)
+        
+        #- should work with various kinds of metadata header input
+        meta = dict(BLAT='foo', BAR='quat', BIZ=1.0)
+        img1 = Image(pix, ivar, mask, readnoise=1.0, camera='b0', meta=meta)
+        desispec.io.write_image(self.testfile, img1)
+        img2 = desispec.io.read_image(self.testfile)
+        for key in meta:
+            self.assertEqual(meta[key], img2.meta[key], 'meta[{}] not propagated'.format(key))
+
+        #- img2 has meta as a FITS header instead of a dictionary;
+        #- confirm that works too
+        desispec.io.write_image(self.testfile, img2)
+        img3 = desispec.io.read_image(self.testfile)
+        for key in meta:
+            self.assertEqual(meta[key], img3.meta[key], 'meta[{}] not propagated'.format(key))
+
 
     def test_native_endian(self):
         for dtype in ('>f8', '<f8', '<f4', '>f4', '>i4', '<i4', '>i8', '<i8'):

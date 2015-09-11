@@ -14,7 +14,7 @@ class Image(object):
             
         Optional:
             mask : 0 is good, non-0 is bad; default is (ivar==0)
-            readnoise : readnoise (float)
+            readnoise : CCD readout noise in electrons/pixel (float)
             camera : e.g. 'b0', 'r1', 'z9'
             meta : dict-like metadata key/values, e.g. from FITS header
             
@@ -44,4 +44,3 @@ class Image(object):
             return (self.ivar == 0)
         else:
             return self._mask
-    
