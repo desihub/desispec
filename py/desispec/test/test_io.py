@@ -6,6 +6,7 @@ import numpy as np
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
+from desispec.image import Image
 import desispec.io
 from astropy.io import fits
 from shutil import rmtree
@@ -174,6 +175,35 @@ class TestIO(unittest.TestCase):
             self.assertEqual(c1.dtype.itemsize, c2.dtype.itemsize)
             self.assertEqual(c1.shape, c2.shape)
             self.assertTrue(np.all(c1 == c2))
+
+    def test_image_rw(self):
+        shape = (5,5)
+        pix = np.random.uniform(size=shape)
+        ivar = np.random.uniform(size=shape)
+        mask = np.random.randint(0, 3, size=shape)        
+        img1 = Image(pix, ivar, mask, readnoise=1.0, camera='b0')
+        desispec.io.write_image(self.testfile, img1)
+        img2 = desispec.io.read_image(self.testfile)
+
+        #- Check output datatypes
+        self.assertEqual(img2.pix.dtype, np.float64)
+        self.assertEqual(img2.ivar.dtype, np.float64)
+        self.assertEqual(img2.mask.dtype, np.uint16)
+
+        #- Rounding from keeping np.float32 on disk means they aren't equal
+        self.assertFalse(np.all(img1.pix == img2.pix))
+        self.assertFalse(np.all(img1.ivar == img2.ivar))
+        
+        #- But they should be close, and identify after float64->float32
+        self.assertTrue(np.allclose(img1.pix, img2.pix))
+        self.assertTrue(np.all(img1.pix.astype(np.float32) == img2.pix))
+        self.assertTrue(np.allclose(img1.ivar, img2.ivar))
+        self.assertTrue(np.all(img1.ivar.astype(np.float32) == img2.ivar))
+        
+        #- masks should agree
+        self.assertTrue(np.all(img1.mask == img2.mask))
+        self.assertEqual(img1.readnoise, img2.readnoise)
+        self.assertEqual(img1.camera, img2.camera)
 
     def test_native_endian(self):
         for dtype in ('>f8', '<f8', '<f4', '>f4', '>i4', '<i4', '>i8', '<i8'):

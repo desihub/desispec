@@ -5,9 +5,13 @@ desispec.io.image
 I/O routines for Image objects
 """
 
-from desispec.image import Image
+import numpy as np
 
-def write_image(outfile, image, meta=meta):
+from desispec.image import Image
+from desispec.io.util import fitsheader, native_endian, makepath
+from astropy.io import fits
+
+def write_image(outfile, image, meta=None):
     """Writes image object to outfile
     
     Args:
@@ -20,15 +24,15 @@ def write_image(outfile, image, meta=meta):
     """
 
     if meta is not None:
-        hdr = fitsheader(meata)
+        hdr = fitsheader(meta)
     else:
         hdr = fitsheader(image.meta)
         
     hx = fits.HDUList()
-    hdu = fits.ImageHDU(image.image.astype(np.float32), name='IMAGE')
+    hdu = fits.ImageHDU(image.pix.astype(np.float32), name='IMAGE')
     hdu.header.append( ('CAMERA', image.camera, 'Spectograph Camera') )
     hdu.header.append( ('VSPECTER', '0.0.0', 'TODO: Specter version') )    
-    hdu.header.append( ('RDNOISE', image.rdnoise, 'Read noise [electrons]'))
+    hdu.header.append( ('RDNOISE', image.readnoise, 'Read noise [electrons]'))
     hx.append(hdu)
     
     hx.append(fits.ImageHDU(image.ivar.astype(np.float32), name='IVAR'))
@@ -41,9 +45,11 @@ def read_image(filename):
     """
     Returns desispec.image.Image object from input file
     """
-    fx = fits.open(filename)
-    image = fx['IMAGE'].data.astype(np.float64)
-    ivar = fx['IVAR'].data.astype(np.float64)
-    mask = fx['MASK'].data
+    fx = fits.open(filename, uint=True)
+    image = native_endian(fx['IMAGE'].data).astype(np.float64)
+    ivar = native_endian(fx['IVAR'].data).astype(np.float64)
+    mask = native_endian(fx['MASK'].data)
+    readnoise = fx['IMAGE'].header['RDNOISE']
+    camera = fx['IMAGE'].header['CAMERA']
     
-    return Image(image, ivar, mask=mask)
+    return Image(image, ivar, mask=mask, readnoise=readnoise, camera=camera)
