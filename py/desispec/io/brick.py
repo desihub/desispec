@@ -58,7 +58,6 @@ class BrickBase(object):
             hdu2 = astropy.io.fits.ImageHDU(header = hdr)
             hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
             hdu3 = astropy.io.fits.ImageHDU(header = hdr)
-            hdr['EXTNAME'] = ('FIBERMAP', 'no dimension')
             # Create an HDU4 using the columns from fibermap with a few extras added.
             columns = desispec.io.fibermap.fibermap_columns[:]
             columns.extend([
@@ -68,7 +67,7 @@ class BrickBase(object):
                 ])
             data = np.empty(shape = (0,),dtype = columns)
             hdr = desispec.io.util.fitsheader(header)
-            hdu4 = astropy.io.fits.BinTableHDU(data = data,header = hdr)
+            hdu4 = astropy.io.fits.BinTableHDU(data=data, header=hdr, name='FIBERMAP')
             # Add comments for fibermap columns.
             num_fibermap_columns = len(desispec.io.fibermap.fibermap_comments)
             for i in range(1,1+num_fibermap_columns):
