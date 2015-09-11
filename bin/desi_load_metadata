@@ -1,0 +1,5 @@
+#!/usr/bin/env python
+from desispec.io.database import main
+from sys import exit
+exit(main())
+

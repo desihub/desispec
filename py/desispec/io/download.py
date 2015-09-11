@@ -9,8 +9,6 @@ from os import environ, makedirs, stat, utime
 from os.path import dirname, exists, join
 from calendar import timegm
 from datetime import datetime
-from requests import get
-from requests.auth import HTTPDigestAuth
 from multiprocessing import Pool, cpu_count
 from netrc import netrc
 from .meta import specprod_root
@@ -19,6 +17,8 @@ from .meta import specprod_root
 def _auth(machine='portal.nersc.gov'):
     """Get authentication credentials.
     """
+    from netrc import netrc
+    from requests.auth import HTTPDigestAuth
     n = netrc()
     u,foo,p = n.authenticators(machine)
     return HTTPDigestAuth(u,p)
@@ -79,6 +79,7 @@ def download(filenames,single_thread=False,workers=None):
 def _map_download(map_tuple):
     """Wrapper function to pass to multiprocess.Pool.map().
     """
+    from requests import get
     filename, httpname, auth = map_tuple
     download_success = False
     if exists(filename):
