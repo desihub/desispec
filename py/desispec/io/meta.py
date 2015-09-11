@@ -28,8 +28,8 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
             if not found locally, try to fetch remotely
     """
     location = dict(
-        raw = '{data}/{night}/desi-{expid:08d}.fits',
-        pix = '{data}/{night}/pix-{camera}-{expid:08d}.fits',
+        raw = '{rawdatadir}/{night}/desi-{expid:08d}.fits',
+        pix = '{rawdatadir}/{night}/pix-{camera}-{expid:08d}.fits',
         ### fiberflat = '{specprod}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits',
         frame = '{specprod}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
@@ -56,10 +56,12 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
         specprod = specprod_root()
 
     #- normpath to remove extraneous double slashes /a/b//c/d
-    filepath = os.path.normpath(location[filetype].format(data=data_root(),
-        specprod=specprod,
-        night=night, expid=expid, camera=camera, brickid = brickid, band = band,
-        spectrograph=spectrograph))
+    filepath = location[filetype].format(
+        rawdatadir=data_root(), specprod=specprod,
+        night=night, expid=expid, camera=camera, brickid=brickid,
+        band=band, spectrograph=spectrograph
+        )
+    filepath = os.path.normpath(filepath)
 
     if download:
         from .download import download
@@ -159,13 +161,17 @@ def get_exposures(night,raw = False,specprod = None):
     return exposures
 
 def data_root():
-    """No documentation yet.
+    """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
+
+    Raises:
+        AssertionError: if these environment variables aren't set.
     """
     assert 'DESI_SPECTRO_DATA' in os.environ, 'Missing $DESI_SPECTRO_DATA environment variable'
     return os.environ['DESI_SPECTRO_DATA']
 
 def specprod_root():
-    """Return ``$DESI_SPECTRO_REDUX/$PRODNAME``.
+    """Return directory root for spectro production, i.e.
+    ``$DESI_SPECTRO_REDUX/$PRODNAME``.
 
     Raises:
         AssertionError: if these environment variables aren't set.

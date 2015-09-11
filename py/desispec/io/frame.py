@@ -2,7 +2,7 @@
 desispec.io.frame
 =================
 
-IO routines for frame.
+I/O routines for Frame objects
 """
 import os.path
 
