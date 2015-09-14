@@ -57,7 +57,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
 
     #- normpath to remove extraneous double slashes /a/b//c/d
     filepath = location[filetype].format(
-        rawdatadir=data_root(), specprod=specprod,
+        rawdatadir=rawdata_root(), specprod=specprod,
         night=night, expid=expid, camera=camera, brickid=brickid,
         band=band, spectrograph=spectrograph
         )
@@ -138,7 +138,7 @@ def get_exposures(night,raw = False,specprod = None):
     date = validate_night(night)
 
     if raw:
-        night_path = os.path.join(data_root(),'exposures',night)
+        night_path = os.path.join(rawdata_root(),'exposures',night)
     else:
         if specprod is None:
             specprod = specprod_root()
@@ -160,7 +160,7 @@ def get_exposures(night,raw = False,specprod = None):
 
     return exposures
 
-def data_root():
+def rawdata_root():
     """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
 
     Raises:
