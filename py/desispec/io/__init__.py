@@ -12,13 +12,14 @@ Tools for data and metadata I/O.
 # help with 2to3 support
 from __future__ import absolute_import, division
 
-from .meta import findfile, get_exposures, get_files, data_root, specprod_root
+from .meta import findfile, get_exposures, get_files, rawdata_root, specprod_root
 from .frame import read_frame, write_frame
 from .sky import read_sky, write_sky
 from .fiberflat import read_fiberflat, write_fiberflat
 from .fibermap import read_fibermap, write_fibermap, empty_fibermap
 from .brick import Brick
 from .zfind import read_zbest, write_zbest
+from .image import read_image, write_image
 from .util import (header2wave, fitsheader, native_endian, makepath,
     write_bintable)
 from .fluxcalibration import (
