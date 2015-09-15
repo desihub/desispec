@@ -281,7 +281,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(paths[0],filename)
         self.assertTrue(os.path.exists(paths[0]))
         #
-        #
+        # Deliberately test a non-existent file.
         #
         filename = desispec.io.findfile('sky',expid=2,night='20150510',camera='b9',spectrograph=9)
         paths = desispec.io.download(filename)
