@@ -258,6 +258,17 @@ class TestIO(unittest.TestCase):
                 'collab','spectro','redux',os.environ['PRODNAME'],'exposures',
                 kwargs['night'],'{expid:08d}'.format(**kwargs),
                 os.path.basename(filenames2[k])))
+        #
+        # Make sure that all required inputs are set.
+        #
+        with self.assertRaises(ValueError) as cm:
+            foo = desispec.io.findfile('stdstars',expid=2,spectrograph=0)
+        the_exception = cm.exception
+        self.assertEqual(the_exception.message, "Required input 'night' is not set for type 'stdstars'!")
+        with self.assertRaises(ValueError) as cm:
+            foo = desispec.io.findfile('brick',brickid='3338p190')
+        the_exception = cm.exception
+        self.assertEqual(the_exception.message, "Required input 'band' is not set for type 'brick'!")
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
     def test_download(self):
