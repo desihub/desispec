@@ -180,7 +180,7 @@ class TestIO(unittest.TestCase):
         shape = (5,5)
         pix = np.random.uniform(size=shape)
         ivar = np.random.uniform(size=shape)
-        mask = np.random.randint(0, 3, size=shape)        
+        mask = np.random.randint(0, 3, size=shape)
         img1 = Image(pix, ivar, mask, readnoise=1.0, camera='b0')
         desispec.io.write_image(self.testfile, img1)
         img2 = desispec.io.read_image(self.testfile)
@@ -193,18 +193,18 @@ class TestIO(unittest.TestCase):
         #- Rounding from keeping np.float32 on disk means they aren't equal
         self.assertFalse(np.all(img1.pix == img2.pix))
         self.assertFalse(np.all(img1.ivar == img2.ivar))
-        
+
         #- But they should be close, and identical after float64->float32
         self.assertTrue(np.allclose(img1.pix, img2.pix))
         self.assertTrue(np.all(img1.pix.astype(np.float32) == img2.pix))
         self.assertTrue(np.allclose(img1.ivar, img2.ivar))
         self.assertTrue(np.all(img1.ivar.astype(np.float32) == img2.ivar))
-        
+
         #- masks should agree
         self.assertTrue(np.all(img1.mask == img2.mask))
         self.assertEqual(img1.readnoise, img2.readnoise)
         self.assertEqual(img1.camera, img2.camera)
-        
+
         #- should work with various kinds of metadata header input
         meta = dict(BLAT='foo', BAR='quat', BIZ=1.0)
         img1 = Image(pix, ivar, mask, readnoise=1.0, camera='b0', meta=meta)
@@ -258,6 +258,17 @@ class TestIO(unittest.TestCase):
                 'collab','spectro','redux',os.environ['PRODNAME'],'exposures',
                 kwargs['night'],'{expid:08d}'.format(**kwargs),
                 os.path.basename(filenames2[k])))
+        #
+        # Make sure that all required inputs are set.
+        #
+        with self.assertRaises(ValueError) as cm:
+            foo = desispec.io.findfile('stdstars',expid=2,spectrograph=0)
+        the_exception = cm.exception
+        self.assertEqual(the_exception.message, "Required input 'night' is not set for type 'stdstars'!")
+        with self.assertRaises(ValueError) as cm:
+            foo = desispec.io.findfile('brick',brickid='3338p190')
+        the_exception = cm.exception
+        self.assertEqual(the_exception.message, "Required input 'band' is not set for type 'brick'!")
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
     def test_download(self):
@@ -269,6 +280,13 @@ class TestIO(unittest.TestCase):
         paths = desispec.io.download(filename)
         self.assertEqual(paths[0],filename)
         self.assertTrue(os.path.exists(paths[0]))
+        #
+        # Deliberately test a non-existent file.
+        #
+        filename = desispec.io.findfile('sky',expid=2,night='20150510',camera='b9',spectrograph=9)
+        paths = desispec.io.download(filename)
+        self.assertIsNone(paths[0])
+        # self.assertFalse(os.path.exists(paths[0]))
 
     def test_memcrc(self):
         test_strings = ('The quick brown fox jumped over the lazy dog.',

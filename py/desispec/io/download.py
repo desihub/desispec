@@ -89,6 +89,8 @@ def _map_download(map_tuple):
             r = get(httpname)
         else:
             r = get(httpname,auth=auth)
+        if r.status_code != 200:
+            return None
         if not exists(dirname(filename)):
             makedirs(dirname(filename))
         with open(filename,'w') as d:
