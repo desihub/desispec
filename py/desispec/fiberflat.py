@@ -33,6 +33,7 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
 
     Notes:
     - we first iteratively :
+
        - compute a deconvolved mean spectrum
        - compute a fiber flat using the resolution convolved mean spectrum for each fiber
        - smooth the fiber flat along wavelength
