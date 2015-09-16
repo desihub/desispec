@@ -102,12 +102,14 @@ def reject_cosmic_rays_ala_sdss_single(img,psf_sigma_pix=1.,nsig=6.,cfudge=3.,c2
 
     # first criterion, signal in pix must be significantly higher than neighbours (=back)
     # in all directions 
-    # JG comment : this does not look great for muon tracks for instance where one axis 
-    # will likely not pass the test, but it works ... we can study this latter 
-    first_criterion=np.ones(pix.shape).astype(bool)
+    # JG comment : this does not look great for muon tracks that are perfectly aligned
+    # with one the axis.
+    # I change the algorithm to accept 3 out of 4 valid tests
+    first_criterion=np.ones(pix.shape)
     tmp=pix-nsig/np.sqrt(pixivar)
     for a in range(naxis) :
-        first_criterion &= (tmp>back[a])
+        first_criterion += (tmp>back[a])
+    first_criterion=(first_criterion>=3).astype(bool)
     
     # second criterion, rejected if at least for one axis
     # the values back are not consistent with PSF given the central
