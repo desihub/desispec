@@ -67,7 +67,20 @@ def cholesky_invert(A) :
 
 
 def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=None,order=3):
-    """Performs a spline fit.
+    """Performs spline fit of input_flux vs. input_wave and resamples at output_wave
+    
+    Args:
+        output_wave : 1D array of output wavelength samples
+        input_wave : 1D array of input wavelengths
+        input_flux : 1D array of input flux density
+        required_resolution (float) : resolution for spline knot placement
+    
+    Options:
+        input_ivar : 1D array of weights for input_flux
+        order (int) : spline order
+        
+    Returns:
+        output_flux : 1D array of flux sampled at output_wave    
     """
     if input_ivar is not None :
         selection=np.where(input_ivar>0)[0]

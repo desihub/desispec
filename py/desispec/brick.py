@@ -75,6 +75,13 @@ class Bricks(object):
 
     def brickname(self, ra, dec):
         """Return string name of brick that contains (ra, dec) [degrees]
+        
+        Args:
+            ra (float) : Right Ascension in degrees
+            dec (float) : Declination in degrees
+            
+        Returns:
+            brick name string
         """
         inra, indec = ra, dec
         dec = np.atleast_1d(dec)
@@ -92,7 +99,7 @@ class Bricks(object):
             return np.array(names)
 
     def brick_radec(self, ra, dec):
-        """Return center (ra,dec) of brick that contains input (ra, dec)
+        """Return center (ra,dec) of brick that contains input (ra, dec) [deg]
         """
         inra, indec = ra, dec
         dec = np.asarray(dec)
@@ -111,7 +118,7 @@ class Bricks(object):
 
 _bricks = None
 def brickname(ra, dec):
-    """Helper function to initialize brick cache.
+    """Return brick name of brick covering (ra, dec) [degrees]
     """
     global _bricks
     if _bricks is None:

@@ -86,7 +86,13 @@ def write_fibermap(outfile, fibermap, header=None):
 
 
 def read_fibermap(filename, header=False) :
-    """Reads a fibermap fits file and returns its data.
+    """Reads a fibermap file and returns its data as a numpy structured array
+    
+    Args:
+        filename : input file name
+        
+    Options:
+        header : if True, return (fibermap, header) tuple
     """
 
     if not os.path.isfile(filename) :

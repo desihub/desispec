@@ -142,6 +142,10 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
         mags : 1D array of observed AB magnitudes
         filters : list of filter names for mags, e.g. ['SDSS_r', 'DECAM_g', ...]
 
+    Returns:
+        stdwave : same as input
+        normflux : normalized flux array
+
     Only SDSS_r band is assumed to be used for normalization for now.
     """
     log = get_logger()
@@ -192,6 +196,8 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
       input_model_wave : 1D[nwave] array of model wavelengths
       input_model_flux : 2D[nstd, nwave] array of model fluxes
       nsig_clipping : (optional) sigma clipping level
+
+    Returns desispec.FluxCalib object
 
     Notes:
       - we first resample the model on the input flux wave grid
@@ -403,8 +409,8 @@ class FluxCalib(object):
         All arguments become attributes, plus nspec,nwave = calib.shape
 
         The calib vector should be such that
-
-        [erg/s/cm^2/A] = [photons/A] / calib
+        
+            [erg/s/cm^2/A] = [photons/A] / calib
         """
         assert wave.ndim == 1
         assert calib.ndim == 2
@@ -423,8 +429,10 @@ def apply_flux_calibration(frame, fluxcalib):
     Applies flux calibration to input flux and ivar
 
     Args:
-        frame: Spectra objects with attributes wave, flux, ivar, resolution_data
+        frame: Spectra object with attributes wave, flux, ivar, resolution_data
         fluxcalib : FluxCalib object with wave, calib, ...
+        
+    Modifies frame.flux and frame.ivar
     """
     log=get_logger()
     log.info("starting")
