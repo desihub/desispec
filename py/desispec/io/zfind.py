@@ -78,9 +78,8 @@ def read_zbest(filename):
     fx.close()
     return zf
 
+#- TODO: This should be moved to a separate test file.
 def _test_zbest_io():
-    """This should be moved to a separate test file?  Yes, it should.
-    """
     import os
     log=get_logger()
     nspec, nflux = 10, 20

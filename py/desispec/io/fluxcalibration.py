@@ -12,6 +12,14 @@ from .util import fitsheader, native_endian, makepath
 
 def write_stdstar_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
     """Writes the normalized flux for the best model.
+    
+    Args:
+        norm_modelfile : output file path
+        normalizedFlux : 2D array of flux[nstdstars, nwave]
+        wave : 1D array of wavelengths[nwave] in Angstroms
+        fibers : 1D array of fiberids for these spectra
+        data : meta data table about which templates best fit; should include
+            BESTMODELINDEX, TEMPLATEID, CHI2DOF
     """
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
@@ -55,6 +63,13 @@ def read_stdstar_models(filename):
 
 def write_flux_calibration(outfile, fluxcalib, header=None):
     """Writes  flux calibration.
+    
+    Args:
+        outfile : output file name
+        fluxcalib : FluxCalib object
+        
+    Options:
+        header : dict-like object of key/value pairs to include in header
     """
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FLUXCALIB', 'CHECK UNIT')
@@ -73,7 +88,7 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     fits.append(outfile, hdu.data, header=hdu.header)
 
 def read_flux_calibration(filename):
-    """Read flux calibration.
+    """Read flux calibration file; returns a FluxCalib object
     """
     # Avoid a circular import conflict at package install/build_sphinx time.
     from ..fluxcalibration import FluxCalib
@@ -88,7 +103,16 @@ def read_flux_calibration(filename):
 
 
 def read_stdstar_templates(stellarmodelfile):
-    """No documentation yet.
+    """
+    Reads an input stellar model file
+    
+    Args:
+        stellarmodelfile : input filename
+    
+    Returns (wave, flux, templateid) tuple:
+        wave : 1D[nwave] array of wavelengths [Angstroms]
+        flux : 2D[nmodel, nwave] array of model fluxes
+        templateid : 1D[nmodel] array of template IDs for each spectrum
     """
     phdu=fits.open(stellarmodelfile)
     hdr0=phdu[0].header

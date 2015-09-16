@@ -190,6 +190,10 @@ class SkyModel(object):
 
 def subtract_sky(frame, skymodel) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
+    
+    Args:
+        frame : desispec.Frame object
+        skymodel : desispec.SkyModel object
     """
     assert frame.nspec == skymodel.nspec
     assert frame.nwave == skymodel.nwave
