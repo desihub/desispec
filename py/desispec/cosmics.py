@@ -15,7 +15,7 @@ import copy
 #import sys # for debug 
 #import pyfits # for debug
 
-def reject_cosmic_rays_ala_sdss_single(img,psf_sigma_pix=1.,nsig=6.,cfudge=3.,c2fudge=1.) :
+def reject_cosmic_rays_ala_sdss_single(img,psf_sigma_pix,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
     
