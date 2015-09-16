@@ -21,7 +21,8 @@ class TestCosmics(unittest.TestCase):
         """
         pix=np.zeros((53,50))
         ivar=np.ones(pix.shape)
-        pix[12,12]=100
+        for i in range(12,20) :
+            pix[i,i]=100
         image = Image(pix,ivar)        
         rejected=reject_cosmic_rays_ala_sdss(image,dilate=False)
         diff=np.sum(np.abs((pix>0).astype(int) - rejected.astype(int)))
