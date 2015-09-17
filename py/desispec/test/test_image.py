@@ -93,6 +93,12 @@ class TestImage(unittest.TestCase):
         self.assertEqual(img2.pix.shape[1], nx)
         self.assertEqual(img2.pix.shape[0], img2.meta['NAXIS2'])
         self.assertEqual(img2.pix.shape[1], img2.meta['NAXIS1'])
+        
+        #- Test bad slicing
+        with self.assertRaises(ValueError):
+            img1['blat']
+        with self.assertRaises(ValueError):
+            img1[1:2, 3:4, 5:6]
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
