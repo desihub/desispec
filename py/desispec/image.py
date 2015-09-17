@@ -59,11 +59,19 @@ class Image(object):
     
         #- NAXIS1 = x, NAXIS2 = y; python slices[y,x] = [NAXIS2, NAXIS1]
         if meta is not None and (('NAXIS1' in meta) or ('NAXIS2' in meta)):
-            slicey, slicex = xyslice
-            nx = slicex.stop - slicex.start
-            ny = slicey.stop - slicey.start
-            meta['NAXIS1'] = nx
-            meta['NAXIS2'] = ny
+            #- image[a:b] instead of image[a:b, c:d]
+            if isinstance(xyslice, slice):
+                ny = xyslice.stop - xyslice.start
+                meta['NAXIS2'] = ny
+            else:
+                slicey, slicex = xyslice
+                #- slices ranges could be None if using : instead of a:b
+                if (slicex.stop is not None):
+                    nx = slicex.stop - slicex.start
+                    meta['NAXIS1'] = nx
+                if (slicey.stop is not None):
+                    ny = slicey.stop - slicey.start
+                    meta['NAXIS2'] = ny
             
         return Image(pix, ivar, mask, \
             readnoise=self.readnoise, camera=self.camera, meta=meta)

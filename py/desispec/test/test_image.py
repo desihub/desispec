@@ -74,6 +74,26 @@ class TestImage(unittest.TestCase):
         self.assertTrue(img2.pix.shape == img2.ivar.shape)
         self.assertTrue(img2.pix.shape == img2.mask.shape)
 
+        #- Slice and dice multiple ways, getting meta NAXIS1/NAXIS2 correct
+        img1 = Image(self.pix, self.ivar, meta=meta)
+        img2 = img1[0:ny]
+        self.assertEqual(img2.pix.shape[0], ny)
+        self.assertEqual(img2.pix.shape[1], img1.pix.shape[1])
+        self.assertEqual(img2.pix.shape[0], img2.meta['NAXIS2'])
+        self.assertEqual(img2.pix.shape[1], img2.meta['NAXIS1'])
+
+        img2 = img1[0:ny, :]
+        self.assertEqual(img2.pix.shape[0], ny)
+        self.assertEqual(img2.pix.shape[1], img1.pix.shape[1])
+        self.assertEqual(img2.pix.shape[0], img2.meta['NAXIS2'])
+        self.assertEqual(img2.pix.shape[1], img2.meta['NAXIS1'])
+
+        img2 = img1[:, 0:nx]
+        self.assertEqual(img2.pix.shape[0], img1.pix.shape[0])
+        self.assertEqual(img2.pix.shape[1], nx)
+        self.assertEqual(img2.pix.shape[0], img2.meta['NAXIS2'])
+        self.assertEqual(img2.pix.shape[1], img2.meta['NAXIS1'])
+
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
     unittest.main()           
