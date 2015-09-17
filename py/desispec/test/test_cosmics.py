@@ -25,7 +25,8 @@ class TestCosmics(unittest.TestCase):
         for i in range(12,20) :
             pix[i,i]=100
 
-        image = Image(pix,ivar)
+        image = Image(pix,ivar,camera="r0")
+                
         rejected=reject_cosmic_rays_ala_sdss(image,dilate=False)
         diff=np.sum(np.abs((pix>0).astype(int) - rejected.astype(int)))
         self.assertTrue(diff==0)
@@ -37,13 +38,16 @@ class TestCosmics(unittest.TestCase):
                 r2 = i**2 + j**2
                 psfpix[i,j] = np.exp(-r2/2.0)
 
-        image = Image(psfpix,ivar)
+        image = Image(psfpix,ivar,camera="r0")
+        
         rejected=reject_cosmic_rays_ala_sdss(image,dilate=False)
         diff=np.sum(np.abs((pix>0).astype(int) - rejected.astype(int)))
         self.assertTrue(np.all(psfpix*(rejected==0) == psfpix))
 
         #- Can it find one and not the other?
-        image = Image(pix+psfpix,ivar)
+        image = Image(pix+psfpix,ivar,camera="r0")
+        
+
         rejected=reject_cosmic_rays_ala_sdss(image,dilate=False)
         diff=np.sum(np.abs((pix>0).astype(int) - rejected.astype(int)))
         self.assertTrue(np.all(psfpix*(rejected==0) == psfpix))
