@@ -99,6 +99,10 @@ class TestImage(unittest.TestCase):
             img1['blat']
         with self.assertRaises(ValueError):
             img1[1:2, 3:4, 5:6]
+        with self.assertRaises(ValueError):
+            img1[1:2, 'blat']
+        with self.assertRaises(ValueError):
+            img1[None, 1:2]
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
