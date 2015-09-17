@@ -48,6 +48,21 @@ class Image(object):
             
     #- Allow image slicing
     def __getitem__(self, xyslice):
+
+        #- Slices must be a slice object, or a tuple of (slice, slice)
+        if isinstance(xyslice, slice):
+            pass #- valid slice
+        elif isinstance(xyslice, tuple):
+            #- tuples of (slice, slice) are valid
+            if len(xyslice) > 2:
+                raise ValueError('Must slice in 1D or 2D, not {}D'.format(len(xyslice)))
+            else:
+                if not isinstance(xyslice[0], slice) or \
+                   not isinstance(xyslice[1], slice):
+                    raise ValueError('Invalid slice for Image objects')
+        else:
+            raise ValueError('Invalid slice for Image objects')
+
         pix = self.pix[xyslice]
         ivar = self.ivar[xyslice]
         if self._mask is not None:
