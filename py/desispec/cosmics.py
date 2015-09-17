@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """
 desispec.cosmics
 ============
@@ -15,7 +13,7 @@ import copy
 #import sys # for debug 
 #import pyfits # for debug
 
-def reject_cosmic_rays_ala_sdss_single(img,psf_sigma_pix,nsig,cfudge,c2fudge) :
+def reject_cosmic_rays_ala_sdss_single(img,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
     
@@ -27,7 +25,6 @@ def reject_cosmic_rays_ala_sdss_single(img,psf_sigma_pix,nsig,cfudge,c2fudge) :
     
     Args:
        img: input desispec.Image
-       psf_sigma_pix: sigma of Gaussian PSF in pixel units (can do better if needed)
        nsig: number of sigma above background required
        cfudge: number of sigma inconsistent with PSF required
        c2fudge:  fudge factor applied to PSF
@@ -35,18 +32,14 @@ def reject_cosmic_rays_ala_sdss_single(img,psf_sigma_pix,nsig,cfudge,c2fudge) :
     log=get_logger()
     log.debug("starting with nsig=%2.1f cfudge=%2.1f c2fudge=%2.1f"%(nsig,cfudge,c2fudge))
     
-    # assume a Gaussian PSF with sigma_pix
-    # psf is the ratio of pixel intensity between center and offsets of 1 or sqrt(2) pixels depending
-    # on the direction.
-    # JG : we could use a real PSF but this is very likely not necessary, for instance
-    # we could use for sigma_pix an image to account for PSF variation in CCD
-    
+    # psf is precomputed for each camera
+    #
     naxis=4
-    psf=np.zeros((naxis))
-    psf[0]=math.exp(-1./(2*psf_sigma_pix**2))
-    psf[1]=math.exp(-1./(2*psf_sigma_pix**2))
-    psf[2]=math.exp(-2./(2*psf_sigma_pix**2))
-    psf[3]=math.exp(-2./(2*psf_sigma_pix**2))
+    if img.camera.find("r")==0 :
+        psf=np.array([0.39508155,0.2951822,0.13044542,0.14904523])
+    else :
+        log.error("do not have psf for camera '%s'"%img.camera)
+        raise KeyError
     
     # we preselect pixels above threshold to try to go as fast as possible with python
     selection=((img.pix*np.sqrt(img.ivar)*(img.mask==0))[1:-1,1:-1]>nsig).astype(bool)
@@ -131,7 +124,7 @@ def reject_cosmic_rays_ala_sdss_single(img,psf_sigma_pix,nsig,cfudge,c2fudge) :
     rejection[1:-1,1:-1][selection] = (first_criterion&second_criterion).reshape(img.pix[1:-1,1:-1][selection].shape)
     return rejection
 
-def reject_cosmic_rays_ala_sdss(img,psf_sigma_pix=1.,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=True) :
+def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=True) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
     
@@ -144,7 +137,6 @@ def reject_cosmic_rays_ala_sdss(img,psf_sigma_pix=1.,nsig=6.,cfudge=3.,c2fudge=0
     
     Args:
        img: input desispec.Image
-       psf_sigma_pix: sigma of Gaussian PSF in pixel units (can do better if needed)
        nsig: number of sigma above background required
        cfudge: number of sigma inconsistent with PSF required
        c2fudge:  fudge factor applied to PSF
@@ -156,7 +148,7 @@ def reject_cosmic_rays_ala_sdss(img,psf_sigma_pix=1.,nsig=6.,cfudge=3.,c2fudge=0
 
     
    
-    rejected=reject_cosmic_rays_ala_sdss_single(img,psf_sigma_pix=psf_sigma_pix,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge)
+    rejected=reject_cosmic_rays_ala_sdss_single(img,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge)
     log.info("first pass: %d pixels rejected"%(np.sum(rejected)))
     
     tmpimg=copy.deepcopy(img)
@@ -179,7 +171,7 @@ def reject_cosmic_rays_ala_sdss(img,psf_sigma_pix=1.,nsig=6.,cfudge=3.,c2fudge=0
         
         tmpimg.ivar[neighbors]=img.ivar[neighbors]*(rejected[neighbors]==0) 
         
-        newrejected=reject_cosmic_rays_ala_sdss_single(tmpimg,psf_sigma_pix,nsig=nsig,cfudge=0.,c2fudge=1.)
+        newrejected=reject_cosmic_rays_ala_sdss_single(tmpimg,nsig=nsig,cfudge=0.,c2fudge=1.)
         log.info("at iter %d: %d new pixels rejected"%(iteration,np.sum(newrejected)))
         if np.sum(newrejected)<2 :
             break
@@ -202,3 +194,16 @@ def reject_cosmic_rays_ala_sdss(img,psf_sigma_pix=1.,nsig=6.,cfudge=3.,c2fudge=0
     
     log.info("end : %s pixels rejected"%(np.sum(rejected)))
     return rejected
+
+def reject_cosmic_rays(img) :
+    """Cosmic ray rejection 
+    Input is a pre-processed image : desispec.Image
+    The image mask is modified
+    
+    Args:
+       img: input desispec.Image
+       
+    """
+    rejected=reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=True)
+    img._mask |= rejected
+    
