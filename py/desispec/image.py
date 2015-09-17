@@ -1,6 +1,7 @@
 '''
 Lightweight wrapper class for preprocessed image data
 '''
+import copy
 
 class Image(object):
     def __init__(self, pix, ivar, mask=None, readnoise=0.0, camera='unknown',
@@ -44,3 +45,25 @@ class Image(object):
             return (self.ivar == 0)
         else:
             return self._mask
+            
+    #- Allow image slicing
+    def __getitem__(self, xyslice):
+        pix = self.pix[xyslice]
+        ivar = self.ivar[xyslice]
+        if self._mask is not None:
+            mask = self.mask[xyslice]
+        else:
+            mask = None
+        
+        meta = copy.copy(self.meta)
+    
+        #- NAXIS1 = x, NAXIS2 = y; python slices[y,x] = [NAXIS2, NAXIS1]
+        if meta is not None and (('NAXIS1' in meta) or ('NAXIS2' in meta)):
+            slicey, slicex = xyslice
+            nx = slicex.stop - slicex.start
+            ny = slicey.stop - slicey.start
+            meta['NAXIS1'] = nx
+            meta['NAXIS2'] = ny
+            
+        return Image(pix, ivar, mask, \
+            readnoise=self.readnoise, camera=self.camera, meta=meta)
