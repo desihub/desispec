@@ -24,6 +24,10 @@ class TestImage(unittest.TestCase):
 
         image = Image(self.pix, self.ivar, self.mask)
         self.assertTrue(np.all(image.mask == self.mask))
+        self.assertEqual(image.mask.dtype, np.uint16)
+
+        image = Image(self.pix, self.ivar, self.mask.astype(np.int16))
+        self.assertEqual(image.mask.dtype, np.uint16)
 
     def test_readnoise(self):
         image = Image(self.pix, self.ivar)

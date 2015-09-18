@@ -2,6 +2,7 @@
 Lightweight wrapper class for preprocessed image data
 '''
 import copy
+import numpy as np
 
 class Image(object):
     def __init__(self, pix, ivar, mask=None, readnoise=0.0, camera='unknown',
@@ -31,7 +32,10 @@ class Image(object):
             
         self.pix = pix
         self.ivar = ivar
-        self._mask = mask
+        if mask is not None:
+            self._mask = mask.astype(np.uint16)
+        else:
+            self._mask = None
         self.meta = meta
         
         #- Optional parameters
