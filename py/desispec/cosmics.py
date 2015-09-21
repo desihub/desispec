@@ -10,10 +10,9 @@ from desispec.log import get_logger
 import numpy as np
 import math
 import copy
-#import sys # for debug 
-#import pyfits # for debug
+from desispec.maskbits import ccdmask
 
-def reject_cosmic_rays_ala_sdss_single(img,nsig,cfudge,c2fudge) :
+def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
     
@@ -25,6 +24,7 @@ def reject_cosmic_rays_ala_sdss_single(img,nsig,cfudge,c2fudge) :
     
     Args:
        img: input desispec.Image
+       selection: selection of pixels to be tested (boolean array of same shape as img.pix[1:-1,1:-1])
        nsig: number of sigma above background required
        cfudge: number of sigma inconsistent with PSF required
        c2fudge:  fudge factor applied to PSF
@@ -48,8 +48,8 @@ def reject_cosmic_rays_ala_sdss_single(img,nsig,cfudge,c2fudge) :
         log.error("do not have psf for camera '%s'"%img.camera)
         raise KeyError
     
-    # we preselect pixels above threshold to try to go as fast as possible with python
-    selection=((img.pix*np.sqrt(img.ivar)*(img.mask==0))[1:-1,1:-1]>nsig).astype(bool)
+    # selection is now an argument (for neighbors)
+    # selection=((img.pix*np.sqrt(img.ivar)*(img.mask==0))[1:-1,1:-1]>nsig).astype(bool)
     
     if np.sum(selection) ==0 :
         log.warning("no valid pixel above %2.1f sigma"%nsig)
@@ -154,8 +154,8 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
     log.info("starting with nsig=%2.1f cfudge=%2.1f c2fudge=%2.1f"%(nsig,cfudge,c2fudge))
 
     
-   
-    rejected=reject_cosmic_rays_ala_sdss_single(img,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge)
+    selection=((img.pix*np.sqrt(img.ivar)*(img.mask==0))[1:-1,1:-1]>nsig).astype(bool)
+    rejected=reject_cosmic_rays_ala_sdss_single(img,selection,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge)
     log.info("first pass: %d pixels rejected"%(np.sum(rejected)))
     
     tmpimg=copy.deepcopy(img)
@@ -165,20 +165,22 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
         if np.sum(rejected)==0 :
             break
         neighbors   *= 0
-        tmpimg.ivar *= 0
+        # left and right neighbors
         neighbors[1:,:]  |= rejected[:-1,:]
         neighbors[:-1,:] |= rejected[1:,:]
         neighbors[:,1:]  |= rejected[:,:-1]
         neighbors[:,:-1] |= rejected[:,1:]
-        # adding diagonals (not in SDSS version)
+        # adding diagonals (not in original SDSS version)
         neighbors[1:,1:]  |= rejected[:-1,:-1]
         neighbors[:-1,:-1]  |= rejected[1:,1:]
         neighbors[1:,:-1]  |= rejected[:-1,1:]
         neighbors[:-1,1:]  |= rejected[1:,:-1]
+
+        neighbors &= (rejected==False) # excluded already rejected pixel
+        tmpimg.ivar[rejected] = 0. # mask already rejected pixels for the calculation of the background of the neighbors
         
-        tmpimg.ivar[neighbors]=img.ivar[neighbors]*(rejected[neighbors]==0) 
-        
-        newrejected=reject_cosmic_rays_ala_sdss_single(tmpimg,nsig=nsig,cfudge=0.,c2fudge=1.)
+        # rerun with much more strict cuts
+        newrejected=reject_cosmic_rays_ala_sdss_single(tmpimg,neighbors[1:-1,1:-1],nsig=3.,cfudge=0.,c2fudge=1.)
         log.info("at iter %d: %d new pixels rejected"%(iteration,np.sum(newrejected)))
         if np.sum(newrejected)<2 :
             break
@@ -186,7 +188,8 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
     
     
         
-    if dilate :    
+    if dilate :   
+        log.debug("dilating cosmic ray mask")
         # now apply the dilatation included in sdssproc.pro
         # in IDL it is crmask = dilate(crmask, replicate(1,3,3))
         tmp=rejected.copy()
@@ -211,6 +214,6 @@ def reject_cosmic_rays(img) :
        img: input desispec.Image
        
     """
-    rejected=reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=True)
-    img._mask |= rejected
+    rejected=reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=20,dilate=False)
+    img._mask[rejected] |= ccdmask.COSMIC
     
