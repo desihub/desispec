@@ -40,9 +40,9 @@ def reject_cosmic_rays_ala_sdss_single(img,nsig,cfudge,c2fudge) :
     naxis=4
     if img.camera.find("b")==0 :
         psf=np.array([0.366247,0.391422,0.172965,0.184552])
-    if img.camera.find("r")==0 :
+    elif img.camera.find("r")==0 :
         psf=np.array([0.39508155,0.2951822,0.13044542,0.14904523])
-    if img.camera.find("z")==0 :
+    elif img.camera.find("z")==0 :
         psf=np.array([0.513852,0.537679,0.297071,0.276298])
     else :
         log.error("do not have psf for camera '%s'"%img.camera)
