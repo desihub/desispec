@@ -24,6 +24,10 @@ class TestImage(unittest.TestCase):
 
         image = Image(self.pix, self.ivar, self.mask)
         self.assertTrue(np.all(image.mask == self.mask))
+        self.assertEqual(image.mask.dtype, np.uint16)
+
+        image = Image(self.pix, self.ivar, self.mask.astype(np.int16))
+        self.assertEqual(image.mask.dtype, np.uint16)
 
     def test_readnoise(self):
         image = Image(self.pix, self.ivar)
@@ -44,8 +48,66 @@ class TestImage(unittest.TestCase):
             Image(self.pix, self.ivar[0])       #- pix.shape != ivar.shape
         with self.assertRaises(ValueError):
             Image(self.pix, self.ivar, self.mask[:, 0:1])   #- pix.shape != mask.shape
+            
+    def test_slicing(self):
+        meta = dict(blat='foo', NAXIS1=self.pix.shape[1], NAXIS2=self.pix.shape[0])
+        img1 = Image(self.pix, self.ivar, meta=meta)
+        nx, ny = 2, 3
+        img2 = img1[0:ny, 0:nx]
+        self.assertEqual(img2.pix.shape[0], ny)
+        self.assertEqual(img2.pix.shape[1], nx)
+        self.assertTrue(img2.pix.shape == img2.ivar.shape)
+        self.assertTrue(img2.pix.shape == img2.mask.shape)
 
+        self.assertEqual(img1.camera, img2.camera)
+        self.assertEqual(img1.readnoise, img2.readnoise)
+        for key in img1.meta:
+            if key != 'NAXIS1' and key != 'NAXIS2':
+                self.assertEqual(img1.meta[key], img2.meta[key])
+        self.assertFalse(img1.meta is img2.meta)
+
+        self.assertEqual(img2.meta['NAXIS1'], nx)
+        self.assertEqual(img2.meta['NAXIS2'], ny)
         
+        #- also works for non-None mask and meta=None
+        img1 = Image(self.pix, self.ivar, mask=(self.ivar==0))
+        nx, ny = 2, 3
+        img2 = img1[0:ny, 0:nx]
+        self.assertEqual(img2.pix.shape[0], ny)
+        self.assertEqual(img2.pix.shape[1], nx)
+        self.assertTrue(img2.pix.shape == img2.ivar.shape)
+        self.assertTrue(img2.pix.shape == img2.mask.shape)
+
+        #- Slice and dice multiple ways, getting meta NAXIS1/NAXIS2 correct
+        img1 = Image(self.pix, self.ivar, meta=meta)
+        img2 = img1[0:ny]
+        self.assertEqual(img2.pix.shape[0], ny)
+        self.assertEqual(img2.pix.shape[1], img1.pix.shape[1])
+        self.assertEqual(img2.pix.shape[0], img2.meta['NAXIS2'])
+        self.assertEqual(img2.pix.shape[1], img2.meta['NAXIS1'])
+
+        img2 = img1[0:ny, :]
+        self.assertEqual(img2.pix.shape[0], ny)
+        self.assertEqual(img2.pix.shape[1], img1.pix.shape[1])
+        self.assertEqual(img2.pix.shape[0], img2.meta['NAXIS2'])
+        self.assertEqual(img2.pix.shape[1], img2.meta['NAXIS1'])
+
+        img2 = img1[:, 0:nx]
+        self.assertEqual(img2.pix.shape[0], img1.pix.shape[0])
+        self.assertEqual(img2.pix.shape[1], nx)
+        self.assertEqual(img2.pix.shape[0], img2.meta['NAXIS2'])
+        self.assertEqual(img2.pix.shape[1], img2.meta['NAXIS1'])
+        
+        #- Test bad slicing
+        with self.assertRaises(ValueError):
+            img1['blat']
+        with self.assertRaises(ValueError):
+            img1[1:2, 3:4, 5:6]
+        with self.assertRaises(ValueError):
+            img1[1:2, 'blat']
+        with self.assertRaises(ValueError):
+            img1[None, 1:2]
+
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
     unittest.main()           

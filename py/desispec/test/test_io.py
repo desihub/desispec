@@ -204,6 +204,7 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.all(img1.mask == img2.mask))
         self.assertEqual(img1.readnoise, img2.readnoise)
         self.assertEqual(img1.camera, img2.camera)
+        self.assertEqual(img2.mask.dtype, np.uint16)
 
         #- should work with various kinds of metadata header input
         meta = dict(BLAT='foo', BAR='quat', BIZ=1.0)

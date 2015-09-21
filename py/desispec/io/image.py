@@ -39,7 +39,7 @@ def write_image(outfile, image, meta=None):
     hx.append(hdu)
     
     hx.append(fits.ImageHDU(image.ivar.astype(np.float32), name='IVAR'))
-    hx.append(fits.CompImageHDU(image.mask.astype(np.uint16), name='MASK'))
+    hx.append(fits.CompImageHDU(image.mask.astype(np.int16), name='MASK'))
     hx.writeto(outfile, clobber=True)
     
     return outfile
@@ -51,7 +51,7 @@ def read_image(filename):
     fx = fits.open(filename, uint=True)
     image = native_endian(fx['IMAGE'].data).astype(np.float64)
     ivar = native_endian(fx['IVAR'].data).astype(np.float64)
-    mask = native_endian(fx['MASK'].data)
+    mask = native_endian(fx['MASK'].data).astype(np.uint16)
     readnoise = fx['IMAGE'].header['RDNOISE']
     camera = fx['IMAGE'].header['CAMERA']
     meta = fx['IMAGE'].header

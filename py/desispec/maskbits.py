@@ -30,10 +30,11 @@ import yaml
 _bitdefs = yaml.load("""
 #- CCD pixel mask
 ccdmask:
-    - [COSMIC,    0, "Cosmic ray"]
+    - [BAD,       0, "Pre-determined bad pixel (any reason)"]
     - [HOT,       1, "Hot pixel"]
     - [DEAD,      2, "Dead pixel"]
     - [SATURATED, 3, "Saturated pixel from object"]
+    - [COSMIC,    4, "Cosmic ray"]
 
 #- Mask bits that apply to an entire fiber
 fibermask:

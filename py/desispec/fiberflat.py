@@ -22,18 +22,18 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
     Input data are expected to be on the same wavelenght grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
 
-    args:
+    Args:
         frame (desispec.Frame): input Frame object with attributes
             wave, flux, ivar, resolution_data
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
-    returns tuple (fiberflat, ivar, mask, meanspec):
-        fiberflat : 2D[nwave, nflux] fiberflat (data have to be divided by this to be flatfielded)
-        ivar : inverse variance of that fiberflat
-        mask : 0=ok >0 if problems
-        meanspec : deconvolved mean spectrum
+    Returns:
+        desispec.FiberFlat object with attributes
+            wave, fiberflat, ivar, mask, meanspec
 
+    Notes:
     - we first iteratively :
+
        - compute a deconvolved mean spectrum
        - compute a fiber flat using the resolution convolved mean spectrum for each fiber
        - smooth the fiber flat along wavelength
@@ -219,6 +219,10 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
 def apply_fiberflat(frame, fiberflat):
 ### def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
     """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar
+    
+    Args:
+        frame : `desispec.Frame` object
+        fiberflat : `desispec.FiberFlat` object
     """
     log=get_logger()
     log.info("starting")
@@ -250,7 +254,7 @@ class FiberFlat(object):
     def __init__(self, wave, fiberflat, ivar, mask, meanspec,
             header=None, fibers=None, spectrograph=0):
         """
-        Creates a lightweight data wrapper for fiberflats
+        Creates a lightweight data wrapper for fiber flats
 
         Args:
             wave: 1D[nwave] wavelength in Angstroms
