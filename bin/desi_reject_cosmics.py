@@ -47,10 +47,7 @@ def main() :
         log.debug("ccdmask.COSMIC = %d"%ccdmask.COSMIC)
         cosmic_ray_prexisting_mask = img.mask & ccdmask.COSMIC
         img._mask &= ~ccdmask.COSMIC  #- turn off cosmic mask
-        # debug 
-        # pyfits.writeto("cosmics.fits",cosmic_ray_prexisting_mask.astype(int),clobber=True)
-        # sys.exit(12)
-        
+            
     reject_cosmic_rays(img)
     
     log.info("writing data and new mask in %s"%outfile)
