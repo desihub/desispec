@@ -15,6 +15,7 @@ def update_version_py(tag=None,debug=False):
     Args:
         tag (str, optional) : Set the version to this string, unconditionally.
         debug (bool, optional) : Print extra debug information.
+
     Returns:
         None
     """
@@ -55,7 +56,16 @@ def update_version_py(tag=None,debug=False):
         print("Set py/desispec/_version.py to {}".format( ver ))
     return
 
+
 def get_version(debug=False):
+    """Get the value of ``__version__`` without having to import the module.
+
+    Args:
+        debug (bool, optional) : Print extra debug information.
+
+    Returns:
+        get_version (str) : The value of ``__version__``.
+    """
     if not os.path.isfile("py/desispec/_version.py"):
         if debug:
             print('Creating initial version file.')
