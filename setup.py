@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Licensed under a 3-clause BSD style license - see LICENSE
 from __future__ import absolute_import, print_function
 import glob
 import os
@@ -11,20 +12,35 @@ def update_version_py():
     if not os.path.isdir(".git"):
         print("This is not a git repository.")
         return
+    no_git = "Unable to run git, leaving py/desispec/_version.py alone."
     try:
-        p = Popen(["git", "describe", "--tags", "--dirty", "--always"], stdout=PIPE)
+        p = Popen(["git", "describe", "--tags", "--dirty", "--always"], stdout=PIPE, stderr=PIPE)
     except EnvironmentError:
-        print("unable to run git, leaving py/desispec/_version.py alone")
+        print("Could not run 'git describe'!")
+        print(no_git)
         return
-    out = p.communicate()[0]
-    ver = out.rstrip()
+    out, err = p.communicate()
     if p.returncode != 0:
-        print("unable to run git, leaving py/desispec/_version.py alone")
+        print("Returncode = {0}".format(p.returncode))
+        print(no_git)
         return
+    ver = out.rstrip().split('-')[0]+'.dev'
+    try:
+        p = Popen(["git", "rev-list", "--count", "HEAD"], stdout=PIPE, stderr=PIPE)
+    except EnvironmentError:
+        print("Could not run 'git rev-list'!")
+        print(no_git)
+        return
+    out, err = p.communicate()
+    if p.returncode != 0:
+        print("Returncode = {0}".format(p.returncode))
+        print(no_git)
+        return
+    ver += out.rstrip()
     with open("py/desispec/_version.py", "w") as f:
-        f.write( '__version__ = \'{}\''.format( ver ) )
+        f.write( "__version__ = '{}'\n".format( ver ) )
     print("Set py/desispec/_version.py to {}".format( ver ))
-
+    return
 
 def get_version():
     if not os.path.isfile("py/desispec/_version.py"):
