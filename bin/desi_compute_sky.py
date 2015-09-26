@@ -12,12 +12,16 @@ from desispec.io import read_frame
 from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import write_sky
+from desispec.io import write_qa_exposure
+from desispec.io import read_qa_exposure
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
+from desispec.sky import qa_skysub
+from desispec.qa.qa_exposure import QA_Exposure
 from desispec.log import get_logger
 import argparse
 import numpy as np
-import sys
+import sys, glob
 
 def main() :
 
@@ -31,7 +35,9 @@ def main() :
                         help = 'path of DESI fiberflat fits file')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
-
+    parser.add_argument('--qafile', type = str, default = None, required=False,
+                        help = 'path of QA file. Will calculate for Sky Subtraction')
+    #parser.add_argument('--qafig', type = str, default = None, required=False)
 
     args = parser.parse_args()
     log=get_logger()
@@ -58,9 +64,24 @@ def main() :
     # compute sky model
     skymodel = compute_sky(frame, fibermap)
 
+    # QA
+    if args.qafile is not None: 
+        log.info("performing skysub QA")
+        # Load (read, if it exists)
+        if len(glob.glob(args.qafile)) == 1:
+            qaexp = read_qa_exposure(args.qafile)
+        else:
+            qaexp = QA_Exposure('science') # Include expid too if we can
+        # Init SkySub
+        qaexp.init_skysub(frame.meta['camera'])
+        # Run
+        qa_skysub(qaexp, frame, fibermap, skymodel)
+        # Write
+        write_qa_exposure(args.qafile, qaexp)
+        log.info("successfully wrote {:s}".format(args.qafile))
+
     # write result
     write_sky(args.outfile, skymodel, frame.meta)
-
     log.info("successfully wrote %s"%args.outfile)
 
 

@@ -14,7 +14,7 @@ from desispec.linalg import spline_fit
 from desispec.log import get_logger
 from desispec import util
 
-import scipy,scipy.sparse
+import scipy,scipy.sparse,scipy.stats
 import sys
 
 def compute_sky(frame, fibermap, nsig_clipping=4.) :
@@ -212,3 +212,52 @@ def subtract_sky(frame, skymodel) :
     frame.mask |= skymodel.mask
 
     log.info("done")
+
+def qa_skysub(qaexp, frame, fibermap, skymodel) :
+    """Calculate QA on SkySubtraction
+    Note: Pixels rejected in generating the SkyModel (as above), are  
+      not rejected in the stats calcualted here.  Would need to carry
+      along current_ivar to do so.
+
+    Args:
+        qaexp : desispec.qa QA_Exposure object
+        frame : desispec.Frame object
+        fibermap : numpy table including OBJTYPE to know which fibers are SKY
+        skymodel : desispec.SkyModel object
+    """
+    log=get_logger()
+
+    # Camera
+    camera = frame.meta['camera']
+
+    # Grab sky fibers on this frame
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
+    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
+        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
+    assert np.max(skyfibers) < 500
+    nfibers=len(skyfibers)
+    qaexp._data[camera]['SKYSUB']['NSKY_FIB'] = int(nfibers)
+
+    current_ivar=frame.ivar[skyfibers].copy()
+    flux = frame.flux[skyfibers]
+
+    # Subtract
+    res = flux - skymodel.flux[skyfibers] # Residuals
+    res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers]) 
+
+    # Chi^2 and Probability
+    chi2_fiber = np.zeros(nfibers)
+    chi2_prob = np.zeros(nfibers)
+    for ii in range(nfibers):
+        # Stats
+        chi2_fiber[ii] = np.sum(res_ivar[ii,:]*(res[ii,:]**2)) 
+        dof = np.sum(res_ivar[ii,:] > 0.)
+        chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
+    # Bad models
+    qaexp._data[camera]['SKYSUB']['NBAD_PCHI'] = int(np.sum(chi2_prob < 
+        qaexp._data[camera]['SKYSUB']['PCHI_RESID']))
+
+    # Median residual
+    qaexp._data[camera]['SKYSUB']['MED_RESID'] = float(np.median(res)) # Median residual (counts)
+    log.info("Median residual for sky fibers = {:g}".format(
+        qaexp._data[camera]['SKYSUB']['MED_RESID'])) 
