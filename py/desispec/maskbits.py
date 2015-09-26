@@ -46,7 +46,7 @@ fibermask:
     - [MANYREJECTED, 5, ">10% of pixels rejected in extraction"]
 
 #- Spectral pixel mask: bits that apply to individual spectral bins
-spmask:
+specmask:
     - [SOMEBADPIX,   0, "Some input pixels were masked or ivar=0"]
     - [ALLBADPIX,    1, "All input pixels were masked or ivar=0"]
     - [COSMIC,       2, "Input pixels included a masked cosmic"]
@@ -70,7 +70,7 @@ class BitMask(object):
 
         Users are not expected to create BitMask objects directly.
 
-        See maskbits.ccdmask, maskbits.spmask, maskbits.fibermask, ...
+        See maskbits.ccdmask, maskbits.specmask, maskbits.fibermask, ...
         """
         self._name = name
         self._bitname = dict()  #- key num -> value name
@@ -141,6 +141,6 @@ class BitMask(object):
 
 #-------------------------------------------------------------------------
 #- The actual masks
-spmask = BitMask('spmask', _bitdefs)
+specmask = BitMask('specmask', _bitdefs)
 ccdmask = BitMask('ccdmask', _bitdefs)
 fibermask = BitMask('fibermask', _bitdefs)

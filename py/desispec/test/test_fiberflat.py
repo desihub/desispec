@@ -7,6 +7,7 @@ import numpy as np
 import scipy.sparse
 import copy
 
+from desispec.maskbits import specmask
 from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
@@ -131,19 +132,31 @@ class TestFiberFlat(unittest.TestCase):
         frame = Frame(wave, flux, ivar, spectrograph=0)
         
         fiberflat = np.ones_like(flux)
+        ffivar = 2*np.ones_like(flux)
+        ffmask = np.zeros_like(flux)
         fiberflat[0] *= 0.8
         fiberflat[1] *= 1.2
-        fiberflat[2, 0:nwave//2] = 0
-        ffivar = 2*np.ones_like(flux)
+        fiberflat[2, 0:10] = 0  #- bad fiberflat
+        ffivar[2, 10:20] = 0    #- bad fiberflat
+        ffmask[2, 20:30] = 1    #- bad fiberflat
+        
         ff = FiberFlat(wave, fiberflat, ffivar)
 
         origframe = copy.deepcopy(frame)
         apply_fiberflat(frame, ff)
+
+        #- was fiberflat applied?
         self.assertTrue(np.all(frame.flux[0] == origframe.flux[0]/0.8))
         self.assertTrue(np.all(frame.flux[1] == origframe.flux[1]/1.2))
         self.assertTrue(np.all(frame.flux[2] == origframe.flux[2]))
-        
-        
+
+        #- did mask get set?
+        ii = (ff.fiberflat == 0)
+        self.assertTrue(np.all((frame.mask[ii] & specmask.BADFIBERFLAT) != 0))
+        ii = (ff.ivar == 0)
+        self.assertTrue(np.all((frame.mask[ii] & specmask.BADFIBERFLAT) != 0))
+        ii = (ff.mask != 0)
+        self.assertTrue(np.all((frame.mask[ii] & specmask.BADFIBERFLAT) != 0))
         
 class TestFiberFlatObject(unittest.TestCase):
 

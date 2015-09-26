@@ -4,13 +4,13 @@ test desispec.maskbits
 
 import unittest
 
-from desispec.maskbits import spmask, ccdmask, fibermask
+from desispec.maskbits import specmask, ccdmask, fibermask
 
 class TestBitMasks(unittest.TestCase):
     
     #- Which bitmasks to test
     def setUp(self):
-        self.masks = [spmask, ccdmask, fibermask]
+        self.masks = [specmask, ccdmask, fibermask]
             
     def test_names(self):
         """

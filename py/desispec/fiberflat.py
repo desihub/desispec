@@ -12,6 +12,7 @@ from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
+from desispec.maskbits import specmask
 import scipy,scipy.sparse
 import sys
 from desispec.log import get_logger
@@ -224,8 +225,12 @@ def apply_fiberflat(frame, fiberflat):
         frame : `desispec.Frame` object
         fiberflat : `desispec.FiberFlat` object
         
-    The frame is divided by the fiberflat except where the fiberflat is 0
-    frame /= fiberflat
+    The frame is divided by the fiberflat, except where the fiberflat=0.
+
+    frame.mask gets bit specmask.BADFIBERFLAT set where
+      * fiberflat.fiberflat == 0
+      * fiberflat.ivar == 0
+      * fiberflat.mask != 0
     """
     log=get_logger()
     log.info("starting")
@@ -247,8 +252,14 @@ def apply_fiberflat(frame, fiberflat):
     ff = fiberflat
     sp = frame  #- sp=spectra for this frame
     
-    sp.flux = sp.flux*(ff.fiberflat>0)/(ff.fiberflat+(ff.fiberflat==0))
+    ### sp.flux = sp.flux*(ff.fiberflat>0)/(ff.fiberflat+(ff.fiberflat==0))
+    ii = np.where(ff.fiberflat > 0)
+    sp.flux[ii] = sp.flux[ii] / ff.fiberflat[ii]
+
     sp.ivar=(sp.ivar>0)*(ff.ivar>0)*(ff.fiberflat>0)/( 1./((sp.ivar+(sp.ivar==0))*(ff.fiberflat**2+(ff.fiberflat==0))) + sp.flux**2/(ff.ivar*ff.fiberflat**4+(ff.ivar*ff.fiberflat==0)) )
+
+    badff = (ff.fiberflat == 0.0) | (ff.ivar == 0) | (ff.mask != 0)
+    sp.mask[badff] |= specmask.BADFIBERFLAT
 
     log.info("done")
 
