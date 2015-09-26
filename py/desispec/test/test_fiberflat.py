@@ -5,11 +5,12 @@ test desispec.fiberflat
 import unittest
 import numpy as np
 import scipy.sparse
+import copy
 
 from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
-from desispec.fiberflat import compute_fiberflat
+from desispec.fiberflat import compute_fiberflat, apply_fiberflat
 from desispec.log import get_logger
 
 #- Create a DESI logger at level WARNING to quiet down the fiberflat calc
@@ -120,6 +121,29 @@ class TestFiberFlat(unittest.TestCase):
         result in fiberflat variations that are only due to throughput.
         """
         raise NotImplementedError
+        
+    def test_apply_fiberflat(self):
+        wave = np.arange(5000, 5100)
+        nwave = len(wave)
+        nspec = 3
+        flux = np.random.uniform(size=(nspec, nwave))
+        ivar = np.ones_like(flux)
+        frame = Frame(wave, flux, ivar, spectrograph=0)
+        
+        fiberflat = np.ones_like(flux)
+        fiberflat[0] *= 0.8
+        fiberflat[1] *= 1.2
+        fiberflat[2, 0:nwave//2] = 0
+        ffivar = 2*np.ones_like(flux)
+        ff = FiberFlat(wave, fiberflat, ffivar)
+
+        origframe = copy.deepcopy(frame)
+        apply_fiberflat(frame, ff)
+        self.assertTrue(np.all(frame.flux[0] == origframe.flux[0]/0.8))
+        self.assertTrue(np.all(frame.flux[1] == origframe.flux[1]/1.2))
+        self.assertTrue(np.all(frame.flux[2] == origframe.flux[2]))
+        
+        
         
 class TestFiberFlatObject(unittest.TestCase):
 

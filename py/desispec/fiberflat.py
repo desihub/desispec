@@ -223,6 +223,9 @@ def apply_fiberflat(frame, fiberflat):
     Args:
         frame : `desispec.Frame` object
         fiberflat : `desispec.FiberFlat` object
+        
+    The frame is divided by the fiberflat except where the fiberflat is 0
+    frame /= fiberflat
     """
     log=get_logger()
     log.info("starting")
@@ -251,7 +254,7 @@ def apply_fiberflat(frame, fiberflat):
 
 
 class FiberFlat(object):
-    def __init__(self, wave, fiberflat, ivar, mask, meanspec,
+    def __init__(self, wave, fiberflat, ivar, mask=None, meanspec=None,
             header=None, fibers=None, spectrograph=0):
         """
         Creates a lightweight data wrapper for fiber flats
@@ -260,7 +263,9 @@ class FiberFlat(object):
             wave: 1D[nwave] wavelength in Angstroms
             fiberflat: 2D[nspec, nwave]
             ivar: 2D[nspec, nwave] inverse variance of fiberflat
-            mask: 2D[nspec, nwave] mask where 0=good
+            
+        Optional inputs:
+            mask: 2D[nspec, nwave] mask where 0=good; default ivar==0
             meanspec: 1D[nwave] mean deconvolved average flat lamp spectrum
             header: (optional) FITS header from HDU0
             fibers: (optional) fiber indices
@@ -275,23 +280,29 @@ class FiberFlat(object):
         if ivar.ndim != 2:
             raise ValueError("ivar should be 2D")
 
-        if mask.ndim != 2:
-            raise ValueError("mask should be 2D")
-
-        if meanspec.ndim != 1:
-            raise ValueError("meanspec should be 1D")
-
         if fiberflat.shape != ivar.shape:
             raise ValueError("fiberflat and ivar must have the same shape")
 
-        if fiberflat.shape != mask.shape:
+        if mask is not None and mask.ndim != 2:
+            raise ValueError("mask should be 2D")
+
+        if meanspec is not None and meanspec.ndim != 1:
+            raise ValueError("meanspec should be 1D")
+
+        if mask is not None and fiberflat.shape != mask.shape:
             raise ValueError("fiberflat and mask must have the same shape")
         
-        if wave.shape != meanspec.shape:
+        if meanspec is not None and wave.shape != meanspec.shape:
             raise ValueError("wrong size/shape for meanspec {}".format(meanspec.shape))
         
         if wave.shape[0] != fiberflat.shape[1]:
             raise ValueError("nwave mismatch between wave.shape[0] and flux.shape[1]")
+
+        if mask is None:
+            mask = (ivar == 0)
+
+        if meanspec is None:
+            meanspec = np.ones_like(wave)
 
         self.wave = wave
         self.fiberflat = fiberflat
