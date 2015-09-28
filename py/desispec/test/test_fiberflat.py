@@ -272,6 +272,16 @@ class TestFiberFlat(unittest.TestCase):
         var = frame.flux**2 * (1.0/(origframe.ivar * origframe.flux**2) + \
                                1.0/(ff.ivar * ff.fiberflat**2))
         self.assertTrue(np.allclose(frame.ivar, 1/var))
+
+        #- ff.ivar=0 should result in frame.ivar=0, even if ff.fiberflat=0 too
+        ffivar = np.ones_like(flux)
+        ffivar[0, 0:5] = 0.0
+        fiberflat[0, 0:5] = 0.0
+        ff = FiberFlat(wave, fiberflat, ffivar)
+        frame = copy.deepcopy(origframe)
+        apply_fiberflat(frame, ff)
+
+        self.assertTrue(np.all(frame.ivar[0, 0:5] == 0.0))
         
                 
 class TestFiberFlatObject(unittest.TestCase):
