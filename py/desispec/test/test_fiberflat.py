@@ -237,8 +237,8 @@ class TestFiberFlat(unittest.TestCase):
 
         fiberflat = np.ones_like(flux)
         ffmask = np.zeros_like(flux)
-        fiberflat[0] *= 0.9
-        fiberflat[1] *= 1.1
+        fiberflat[0] *= 0.5
+        fiberflat[1] *= 1.5
 
         #- ff with essentially no error
         ffivar = 1e20 * np.ones_like(flux)
@@ -247,23 +247,18 @@ class TestFiberFlat(unittest.TestCase):
         apply_fiberflat(frame, ff)
         self.assertTrue(np.allclose(frame.ivar, fiberflat**2))
 
-        # #- ff with large error
-        # ffivar = np.ones_like(flux)
-        # ff = FiberFlat(wave, fiberflat, ffivar)
-        # frame = copy.deepcopy(origframe)
-        # apply_fiberflat(frame, ff)
-        # 
-        # var = frame.flux * (1.0/(origframe.ivar * origframe.flux**2) + \
-        #                        1.0/(ff.ivar * ff.fiberflat**2))
-        # 
-        # ivar = 1/var
-        # 
-        # var = 1.0/(origframe.ivar * ff.fiberflat**2) + origframe.flux**2 / (ff.fiberflat**4 * ff.ivar)
-        # 
-        # #--- DEBUG ---
-        # import IPython
-        # IPython.embed()
-        # #--- DEBUG ---        
+        #- ff with large error
+        ffivar = np.ones_like(flux)
+        ff = FiberFlat(wave, fiberflat, ffivar)
+        frame = copy.deepcopy(origframe)
+        apply_fiberflat(frame, ff)
+        
+        #- c = a/b
+        #- (sigma_c/c)^2 = (sigma_a/a)^2 + (sigma_b/b)^2
+        var = frame.flux**2 * (1.0/(origframe.ivar * origframe.flux**2) + \
+                               1.0/(ff.ivar * ff.fiberflat**2))
+        self.assertTrue(np.allclose(frame.ivar, 1/var))
+        
                 
 class TestFiberFlatObject(unittest.TestCase):
 

@@ -251,11 +251,12 @@ def apply_fiberflat(frame, fiberflat):
     ff = fiberflat
     sp = frame  #- sp=spectra for this frame
     
-    ### sp.flux = sp.flux*(ff.fiberflat>0)/(ff.fiberflat+(ff.fiberflat==0))
+    #- update sp.ivar first since it depends upon the original sp.flux
+    sp.ivar=(sp.ivar>0)*(ff.ivar>0)*(ff.fiberflat>0)/( 1./((sp.ivar+(sp.ivar==0))*(ff.fiberflat**2+(ff.fiberflat==0))) + sp.flux**2/(ff.ivar*ff.fiberflat**4+(ff.ivar*ff.fiberflat==0)) )
+
+    #- Then update sp.flux, taking care not to divide by 0
     ii = np.where(ff.fiberflat > 0)
     sp.flux[ii] = sp.flux[ii] / ff.fiberflat[ii]
-
-    sp.ivar=(sp.ivar>0)*(ff.ivar>0)*(ff.fiberflat>0)/( 1./((sp.ivar+(sp.ivar==0))*(ff.fiberflat**2+(ff.fiberflat==0))) + sp.flux**2/(ff.ivar*ff.fiberflat**4+(ff.ivar*ff.fiberflat==0)) )
 
     badff = (ff.fiberflat == 0.0) | (ff.ivar == 0) | (ff.mask != 0)
     sp.mask[badff] |= specmask.BADFIBERFLAT
