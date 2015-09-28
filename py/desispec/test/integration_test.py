@@ -160,7 +160,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     if 'STD_TEMPLATES' in os.environ:
         std_templates = os.getenv('STD_TEMPLATES')
     else:
-        std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/stellar_templates/v1.0/stdstar_templates_v1.0.fits'
+        std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'
 
     stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
     cmd = """desi_fit_stdstars.py --spectrograph 0 \
