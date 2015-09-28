@@ -218,7 +218,6 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
 
 
 def apply_fiberflat(frame, fiberflat):
-### def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
     """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar
     
     Args:
