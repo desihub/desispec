@@ -5,9 +5,11 @@ test desispec.fiberflat
 from __future__ import division
 
 import unittest
+import copy
+import os
+
 import numpy as np
 import scipy.sparse
-import copy
 
 from desispec.maskbits import specmask
 from desispec.resolution import Resolution
@@ -15,10 +17,6 @@ from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.fiberflat import compute_fiberflat, apply_fiberflat
 from desispec.log import get_logger
-
-#- Create a DESI logger at level WARNING to quiet down the fiberflat calc
-import logging
-log = get_logger(logging.WARNING)
 
 def _get_data():
     """
@@ -145,7 +143,6 @@ class TestFiberFlat(unittest.TestCase):
         self.assertTrue(np.allclose(ff.fiberflat[0], ff.fiberflat[2]/1.2))
         self.assertTrue(np.allclose(ff.fiberflat[0], ff.fiberflat[3]/0.8))
 
-    @unittest.skip('still under development; maybe a real edge effect in code')
     def test_throughput_resolution(self):
         """
         Test that spectra with different throughputs and different resolutions
@@ -171,7 +168,8 @@ class TestFiberFlat(unittest.TestCase):
         #- Vary the input flux prior to calculating the fiber flat
         flux[1] *= 1.1
         flux[2] *= 1.2
-        flux[3] *= 0.8
+        flux[3] /= 1.1
+        flux[4] /= 1.2
 
         #- Convolve the data with the varying resolution matrix
         convflux = np.empty_like(flux)
@@ -182,12 +180,27 @@ class TestFiberFlat(unittest.TestCase):
         frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0)
         ff = compute_fiberflat(frame)
 
-        #- flux[1] is brighter, so should fiberflat[1].  etc.
-        self.assertTrue(np.allclose(ff.fiberflat[0], ff.fiberflat[1]/1.1))
-        self.assertTrue(np.allclose(ff.fiberflat[0], ff.fiberflat[2]/1.2))
-        self.assertTrue(np.allclose(ff.fiberflat[0], ff.fiberflat[3]/0.8))
+        #- there are edge effects, so ignore region within +-2 sigma
+        border = int(2*np.max(sigma))
+
+        #- Compare variation with middle fiber
+        mid = ff.fiberflat.shape[0] // 2
+        
+        threshold = 0.001
+        diff = (ff.fiberflat[1]/1.1 - ff.fiberflat[mid])[border:-border]
+        self.assertLess(np.max(np.abs(diff)), threshold)
+
+        diff = (ff.fiberflat[2]/1.2 - ff.fiberflat[mid])[border:-border]
+        self.assertLess(np.max(np.abs(diff)), threshold)
+
+        diff = (ff.fiberflat[3]*1.1 - ff.fiberflat[mid])[border:-border]
+        self.assertLess(np.max(np.abs(diff)), threshold)
+
+        diff = (ff.fiberflat[4]*1.2 - ff.fiberflat[mid])[border:-border]
+        self.assertLess(np.max(np.abs(diff)), threshold)
         
     def test_apply_fiberflat(self):
+        '''test apply_fiberflat interface and changes to flux and mask'''
         wave = np.arange(5000, 5050)
         nwave = len(wave)
         nspec = 3
@@ -228,6 +241,7 @@ class TestFiberFlat(unittest.TestCase):
             apply_fiberflat(frame, ff)
         
     def test_apply_fiberflat_ivar(self):
+        '''test error propagation in apply_fiberflat'''
         wave = np.arange(5000, 5010)
         nwave = len(wave)
         nspec = 3
