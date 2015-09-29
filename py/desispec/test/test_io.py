@@ -6,7 +6,7 @@ import numpy as np
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
-from desispec.qa.qa_exposure import QA_Exposure
+from desispec.qa.qa_exposure import QA_Frame
 from desispec.image import Image
 import desispec.io
 import desispec.io.qa as desio_qa
@@ -224,17 +224,17 @@ class TestIO(unittest.TestCase):
         for key in meta:
             self.assertEqual(meta[key], img3.meta[key], 'meta[{}] not propagated'.format(key))
 
-    def test_io_qa_exposure(self):        
+    def test_io_qa_frame(self):        
         #- Init 
-        qaexp = QA_Exposure('science',2)
-        qaexp.init_skysub('b0')
+        qaframe = QA_Frame('science')
+        qaframe.init_skysub()
         # Write
-        desio_qa.write_qa_exposure(self.testyfile, qaexp)
+        desio_qa.write_qa_frame(self.testyfile, qaframe)
         # Read
-        xqaexp = desio_qa.read_qa_exposure(self.testyfile)
+        xqaframe = desio_qa.read_qa_frame(self.testyfile)
         # Check
-        self.assertTrue(qaexp._data['b0']['SKYSUB']['NSKY_FIB']  == xqaexp._data['b0']['SKYSUB']['NSKY_FIB'])
-        self.assertTrue(qaexp.expid == xqaexp.expid)
+        self.assertTrue(qaframe.data['SKYSUB']['PARAM']['PCHI_RESID'] == xqaframe.data['SKYSUB']['PARAM']['PCHI_RESID'])
+        self.assertTrue(qaframe.flavor == xqaframe.flavor)
 
     def test_native_endian(self):
         for dtype in ('>f8', '<f8', '<f4', '>f4', '>i4', '<i4', '>i8', '<i8'):

@@ -12,16 +12,15 @@ from desispec.io import read_frame
 from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import write_sky
-from desispec.io import write_qa_exposure
-from desispec.io import read_qa_exposure
+from desispec.io import read_qa_frame
+from desispec.io import write_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
-from desispec.sky import qa_skysub
-from desispec.qa.qa_exposure import QA_Exposure
+from desispec.qa.qa_exposure import QA_Frame
 from desispec.log import get_logger
 import argparse
 import numpy as np
-import sys, glob
+import sys, os
 
 def main() :
 
@@ -67,17 +66,15 @@ def main() :
     # QA
     if args.qafile is not None: 
         log.info("performing skysub QA")
-        # Load (read, if it exists)
-        if len(glob.glob(args.qafile)) == 1:
-            qaexp = read_qa_exposure(args.qafile)
-        else:
-            qaexp = QA_Exposure('science') # Include expid too if we can
-        # Init SkySub
-        qaexp.init_skysub(frame.meta['camera'])
+        # Load (read from file, if it exists)
+        if os.path.isfile(args.qafile):
+            qaframe = read_qa_frame(args.qafile)
+        else: 
+            qaframe = QA_Frame(flavor='science') # Would prefer to get flavor from Frame
         # Run
-        qa_skysub(qaexp, frame, fibermap, skymodel)
+        qaframe.run_qa('SKYSUB', (frame, fibermap, skymodel))
         # Write
-        write_qa_exposure(args.qafile, qaexp)
+        write_qa_frame(args.qafile, qaframe)
         log.info("successfully wrote {:s}".format(args.qafile))
 
     # write result
