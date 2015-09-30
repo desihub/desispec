@@ -3,6 +3,7 @@ Lightweight wrapper class for preprocessed image data
 '''
 import copy
 import numpy as np
+from desispec.maskbits import ccdmask
 
 class Image(object):
     def __init__(self, pix, ivar, mask=None, readnoise=0.0, camera='unknown',
@@ -32,24 +33,17 @@ class Image(object):
             
         self.pix = pix
         self.ivar = ivar
-        if mask is not None:
-            self._mask = mask.astype(np.uint16)
-        else:
-            self._mask = None
         self.meta = meta
+        if mask is not None:
+            self.mask = mask.astype(np.uint16)
+        else:
+            self.mask = np.zeros_like(self.ivar, dtype=np.uint16)
+            self.mask[self.ivar == 0] |= ccdmask.BAD
         
         #- Optional parameters
         self.readnoise = readnoise
         self.camera = camera
-    
-    #- Image.mask = (ivar==0) if input mask was None    
-    @property
-    def mask(self):
-        if self._mask is None:
-            return (self.ivar == 0)
-        else:
-            return self._mask
-            
+                
     #- Allow image slicing
     def __getitem__(self, xyslice):
 
@@ -69,11 +63,7 @@ class Image(object):
 
         pix = self.pix[xyslice]
         ivar = self.ivar[xyslice]
-        if self._mask is not None:
-            mask = self.mask[xyslice]
-        else:
-            mask = None
-        
+        mask = self.mask[xyslice]        
         meta = copy.copy(self.meta)
     
         #- NAXIS1 = x, NAXIS2 = y; python slices[y,x] = [NAXIS2, NAXIS1]

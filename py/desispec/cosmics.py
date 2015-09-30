@@ -215,5 +215,5 @@ def reject_cosmic_rays(img) :
        
     """
     rejected=reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=20,dilate=False)
-    img._mask[rejected] |= ccdmask.COSMIC
+    img.mask[rejected] |= ccdmask.COSMIC
     

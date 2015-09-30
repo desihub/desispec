@@ -2,6 +2,7 @@ import unittest
 
 import numpy as np
 from desispec.image import Image
+from desispec.maskbits import ccdmask
 
 # Image(self, pix, ivar, mask=None, readnoise=0.0, camera='unknown'):
 class TestImage(unittest.TestCase):
@@ -20,7 +21,8 @@ class TestImage(unittest.TestCase):
         
     def test_mask(self):
         image = Image(self.pix, self.ivar)
-        self.assertTrue(np.all(image.mask == (self.ivar==0)))
+        self.assertTrue(np.all(image.mask == (self.ivar==0)*ccdmask.BAD))
+        self.assertEqual(image.mask.dtype, np.uint16)
 
         image = Image(self.pix, self.ivar, self.mask)
         self.assertTrue(np.all(image.mask == self.mask))
