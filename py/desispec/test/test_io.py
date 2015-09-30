@@ -6,8 +6,10 @@ import numpy as np
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
+from desispec.qa.qa_exposure import QA_Frame
 from desispec.image import Image
 import desispec.io
+import desispec.io.qa as desio_qa
 from astropy.io import fits
 from shutil import rmtree
 
@@ -17,6 +19,7 @@ class TestIO(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
+        cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
         cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
         cls.origEnv = {'PRODNAME':None,
             "DESI_SPECTRO_DATA":None,
@@ -221,6 +224,17 @@ class TestIO(unittest.TestCase):
         for key in meta:
             self.assertEqual(meta[key], img3.meta[key], 'meta[{}] not propagated'.format(key))
 
+    def test_io_qa_frame(self):        
+        #- Init 
+        qaframe = QA_Frame('science')
+        qaframe.init_skysub()
+        # Write
+        desio_qa.write_qa_frame(self.testyfile, qaframe)
+        # Read
+        xqaframe = desio_qa.read_qa_frame(self.testyfile)
+        # Check
+        self.assertTrue(qaframe.data['SKYSUB']['PARAM']['PCHI_RESID'] == xqaframe.data['SKYSUB']['PARAM']['PCHI_RESID'])
+        self.assertTrue(qaframe.flavor == xqaframe.flavor)
 
     def test_native_endian(self):
         for dtype in ('>f8', '<f8', '<f4', '>f4', '>i4', '<i4', '>i8', '<i8'):
