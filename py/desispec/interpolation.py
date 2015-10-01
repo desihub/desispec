@@ -211,12 +211,20 @@ def _unweighted_resample(output_x,input_x,input_flux_density) :
     # (last entry, which is not used, is wrong, because of the np.roll)
     trapeze_integrals=(np.roll(ty,-1)+ty)*(np.roll(tx,-1)-tx)/2.
 
-    # output flux
-    of=np.zeros((ox.size))
-    for i in range(ox.size) :
-        # for each bin, we sum the trapeze_integrals that belong to that bin
-        # IGNORING those that are outside of the range [ixmin,ixmax]
-        # and we divide by the full output bin size (even if outside of [ixmin,ixmax])
-        of[i] = np.sum(trapeze_integrals[(tx>=max(oxm[i],ixmin))&(tx<min(oxp[i],ixmax))])/(oxp[i]-oxm[i])
+    #- output flux
+    #- for each bin, we sum the trapeze_integrals that belong to that bin
+    #- IGNORING those that are outside of the range [ixmin,ixmax]
+    #- and we divide by the full output bin size (even if outside of [ixmin,ixmax])
+
+    # of=np.zeros((ox.size))
+    # for i in range(ox.size) :
+    #     of[i] = np.sum(trapeze_integrals[(tx>=max(oxm[i],ixmin))&(tx<min(oxp[i],ixmax))])/(oxp[i]-oxm[i])
+
+    #- A faster version of the above loop:
+    #- histogram while not including elements exactly on the rightmost edge;
+    #- np.histogram will include those by default so shift edge by 1e-12 binsize
+    binsize = oxp - oxm
+    edges = np.concatenate([oxm, oxp[-1:]]).clip(ixmin, ixmax-1e-12*binsize[-1])
+    of = np.histogram(tx, edges, weights=trapeze_integrals)[0] / binsize
 
     return of
