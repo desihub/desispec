@@ -12,7 +12,7 @@ class TestResample(unittest.TestCase):
     """
     Unit tests for interpolation.resample_flux
     """
-        
+
     def test_resample(self):
         n = 100
         x = np.arange(n)
@@ -25,7 +25,7 @@ class TestResample(unittest.TestCase):
         xout = np.arange(nout)*stepout+stepout/2-0.5 
         yout = resample_flux(xout, x, y)
         self.assertTrue(np.all(yout == 1.0))                
-    
+
     def test_non_uniform_grid(self):
         n = 100
         x = np.arange(n)+1.
@@ -44,8 +44,7 @@ class TestResample(unittest.TestCase):
         yout = resample_flux(xout, x, y)
         
         self.assertTrue(np.all(yout == 1.0))                
-        
-        
+
     def test_flux_conservation(self):
         n = 100
         x = np.arange(n)
@@ -79,9 +78,9 @@ class TestResample(unittest.TestCase):
             ivar_in  = np.sum(ivar)
             ivar_out = np.sum(ivout)
             self.assertAlmostEqual(ivar_in,ivar_out)
-            
+
     def test_bin_bounds(self):
-        """Super basic test only"""
+        """Super basic test of bin boundaries"""
         x = np.arange(10)
         lo, hi = bin_bounds(x)
         self.assertEqual(len(lo), len(x))
@@ -91,7 +90,17 @@ class TestResample(unittest.TestCase):
         self.assertAlmostEqual(lo[0], x[0]-0.5*dx)
         self.assertAlmostEqual(lo[1], x[0]+0.5*dx)
         self.assertAlmostEqual(hi[-1], x[-1]+0.5*dx)
-            
+
+    @unittest.expectedFailure
+    def test_edges(self):
+        '''Test for large edge effects in resampling'''
+        x = np.arange(0.0, 100)
+        y = np.sin(x/20)
+        xx = np.linspace(1, 99, 23)
+        yy = resample_flux(xx, x, y)
+        diff = np.abs(yy - np.interp(xx, x, y))
+        self.assertLess(np.max(np.abs(diff)), 1e-2)
+    
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
