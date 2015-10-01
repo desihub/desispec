@@ -35,16 +35,19 @@ class TestIO(unittest.TestCase):
     #- Cleanup test files if they exist
     @classmethod
     def tearDownClass(cls):
-        if os.path.exists(cls.testfile):
-            os.remove(cls.testfile)
-            testpath = os.path.normpath(os.path.dirname(cls.testfile))
-            if testpath != '.':
-                os.removedirs(testpath)
+        for testfile in [cls.testfile, cls.testyfile]:
+            if os.path.exists(testfile):
+                os.remove(testfile)
+                testpath = os.path.normpath(os.path.dirname(testfile))
+                if testpath != '.':
+                    os.removedirs(testpath)
+                    
         for e in cls.origEnv:
             if cls.origEnv[e] is None:
                 del os.environ[e]
             else:
                 os.environ[e] = cls.origEnv[e]
+                
         if os.path.exists(cls.testDir):
             rmtree(cls.testDir)
 

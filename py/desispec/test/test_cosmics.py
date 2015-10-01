@@ -64,6 +64,19 @@ class TestCosmics(unittest.TestCase):
         image.pix[self.badmask>0] = 0
         rejected=reject_cosmic_rays_ala_sdss(image,dilate=False)                
         self.assertTrue(not np.any(rejected))
+
+    def test_different_cameras(self):
+        '''test a PSF-like spot with a masked column going through it'''
+        for camera in ('b0', 'r1', 'z2'):
+            image = Image(self.pix, self.ivar, mask=self.badmask, camera=camera)
+            rejected = reject_cosmic_rays_ala_sdss(image,dilate=False)                
+            cosmic = image.pix > 0
+            self.assertTrue(np.all(rejected[cosmic]))
+            
+        #- camera must be valid
+        with self.assertRaises(KeyError):
+            image = Image(self.pix, self.ivar, mask=self.badmask, camera='a0')
+            rejected = reject_cosmic_rays_ala_sdss(image,dilate=False)                
         
     def test_reject_cosmics(self):
         """
