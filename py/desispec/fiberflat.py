@@ -18,7 +18,7 @@ import sys
 from desispec.log import get_logger
 
 
-def compute_fiberflat(frame, nsig_clipping=4.) :
+def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelenght grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
@@ -27,7 +27,7 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
         frame (desispec.Frame): input Frame object with attributes
             wave, flux, ivar, resolution_data
         nsig_clipping : [optional] sigma clipping value for outlier rejection
-
+        accuracy : [optional] accuracy of fiberflat (end test for the iterative loop)
     Returns:
         desispec.FiberFlat object with attributes
             wave, fiberflat, ivar, mask, meanspec
@@ -88,17 +88,28 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
 
 
     smooth_fiberflat=np.ones((frame.flux.shape))
+    
+    # allocate memory for keeping a copy of the previous iteration fiberflat
+    previous_smooth_fiberflat=np.ones((frame.flux.shape)) 
+    
     chi2=np.zeros((flux.shape))
 
 
-    sqrtwflat=np.sqrt(current_ivar)*smooth_fiberflat
+    # this is to go a bit faster
     sqrtwflux=np.sqrt(current_ivar)*flux
 
 
-    # test
-    #nfibers=20
+    # we first need to iterate to converge on a solution of mean spectrum
+    # and smooth fiber flat. several interations are needed when
+    # throughput AND resolution vary from fiber to fiber.
+    # the end test is that the fiber flat has varied by less than 0.1*accuracy
+    # of previous iteration for all wavelength
+    # we also have a max. number of iterations for this code
+    max_iterations = 100
     nout_tot=0
-    for iteration in range(20) :
+    for iteration in range(max_iterations) :
+
+        
 
         # fit mean spectrum
         A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
@@ -106,6 +117,9 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
 
         # diagonal sparse matrix with content = sqrt(ivar)*flat of a given fiber
         SD=scipy.sparse.lil_matrix((nwave,nwave))
+
+        # this is to go a bit faster
+        sqrtwflat=np.sqrt(current_ivar)*smooth_fiberflat
 
         # loop on fiber to handle resolution
         for fiber in range(nfibers) :
@@ -147,10 +161,23 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
             smooth_fiberflat[fiber]=spline_fit(wave,wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
             chi2[fiber]=current_ivar[fiber]*(flux[fiber]-smooth_fiberflat[fiber]*M)**2
 
+        # normalize to get a mean fiberflat=1
+        mean=np.mean(smooth_fiberflat,axis=0)
+        smooth_fiberflat = smooth_fiberflat/mean
+        mean_spectrum    = mean_spectrum*mean
+        
+        # this is the max difference between two iterations
+        max_diff=np.max(np.abs(smooth_fiberflat-previous_smooth_fiberflat))
+        previous_smooth_fiberflat=smooth_fiberflat
+        
+        # we don't start the rejection tests until we have converged on this
+        if max_diff>0.1*accuracy :
+            continue
+
         log.info("rejecting")
 
         nout_iter=0
-        if iteration<1 :
+        if nout_tot==0 :
             # only remove worst outlier per wave
             # apply rejection iteratively, only one entry per wave among fibers
             # find waves with outlier (fastest way)
@@ -180,10 +207,7 @@ def compute_fiberflat(frame, nsig_clipping=4.) :
             chi2pdf=sum_chi2/ndf
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter))
 
-        # normalize to get a mean fiberflat=1
-        mean=np.mean(smooth_fiberflat,axis=0)
-        smooth_fiberflat = smooth_fiberflat/mean
-        mean_spectrum    = mean_spectrum*mean
+        
 
 
 
