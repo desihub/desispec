@@ -178,26 +178,24 @@ class TestFiberFlat(unittest.TestCase):
     
         #- Run the code
         frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0)
-        ff = compute_fiberflat(frame)
-
-        #- there are edge effects, so ignore region within +-2 sigma
-        border = int(2*np.max(sigma))
-
+        #- Set an accuracy for this
+        accuracy=1.e-9
+        ff = compute_fiberflat(frame,accuracy=accuracy)
+        
         #- Compare variation with middle fiber
         mid = ff.fiberflat.shape[0] // 2
-        
-        threshold = 0.001
-        diff = (ff.fiberflat[1]/1.1 - ff.fiberflat[mid])[border:-border]
-        self.assertLess(np.max(np.abs(diff)), threshold)
+           
+        diff = (ff.fiberflat[1]/1.1 - ff.fiberflat[mid])
+        self.assertLess(np.max(np.abs(diff)), accuracy)
 
-        diff = (ff.fiberflat[2]/1.2 - ff.fiberflat[mid])[border:-border]
-        self.assertLess(np.max(np.abs(diff)), threshold)
+        diff = (ff.fiberflat[2]/1.2 - ff.fiberflat[mid])
+        self.assertLess(np.max(np.abs(diff)), accuracy)
 
-        diff = (ff.fiberflat[3]*1.1 - ff.fiberflat[mid])[border:-border]
-        self.assertLess(np.max(np.abs(diff)), threshold)
+        diff = (ff.fiberflat[3]*1.1 - ff.fiberflat[mid])
+        self.assertLess(np.max(np.abs(diff)), accuracy)
 
-        diff = (ff.fiberflat[4]*1.2 - ff.fiberflat[mid])[border:-border]
-        self.assertLess(np.max(np.abs(diff)), threshold)
+        diff = (ff.fiberflat[4]*1.2 - ff.fiberflat[mid])
+        self.assertLess(np.max(np.abs(diff)), accuracy)
         
     def test_apply_fiberflat(self):
         '''test apply_fiberflat interface and changes to flux and mask'''
