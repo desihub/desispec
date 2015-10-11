@@ -164,7 +164,7 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
           
         if np.sum(rejected)==0 :
             break
-        neighbors   *= 0
+        neighbors *= False
         # left and right neighbors
         neighbors[1:,:]  |= rejected[:-1,:]
         neighbors[:-1,:] |= rejected[1:,:]
