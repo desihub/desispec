@@ -13,7 +13,13 @@ Example::
 
     from desispec.maskbits import ccdmask
 
-    ccdmask.COSMIC | specmask.SATURATED
+    #- bit operations
+    mask |= ccdmask.COSMIC     #- set ccdmask.COSMIC in integer/array `mask`
+    mask & ccdmask.COSMIC      #- get ccdmask.COSMIC from integer/array `mask`
+    (mask & ccdmask.COSMIC) != 0  #- test boolean status of ccdmask.COSMIC in integer/array `mask`
+    ccdmask.COSMIC | specmask.SATURATED  #- Combine two bitmasks.
+    
+    #- bit attributes
     ccdmask.mask('COSMIC')     #- 2**0, same as ccdmask.COSMIC
     ccdmask.mask(0)            #- 2**0, same as ccdmask.COSMIC
     ccdmask.COSMIC             #- 2**0, same as ccdmask.mask('COSMIC')
@@ -23,6 +29,8 @@ Example::
     ccdmask.names(3)           #- ['COSMIC', 'HOT']
     ccdmask.comment(0)         #- "Cosmic ray"
     ccdmask.comment('BADPIX')  #- "Cosmic ray"
+
+
 """
 
 #- Move these definitions into a separate yaml file
