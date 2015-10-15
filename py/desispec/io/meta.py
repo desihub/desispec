@@ -12,7 +12,7 @@ import glob
 import re
 
 def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
-    band=None, spectrograph=None, specprod=None):
+    band=None, spectrograph=None, specprod=None, download=False):
     """Returns location where file should be
 
     Args:
@@ -24,12 +24,12 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
         band : [optional] one of 'b','r','z' identifying the camera band
         spectrograph : [optional] spectrograph number, 0-9
         specprod : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
-        fetch : [optional, not yet implemented]
+        download : [optional, not yet implemented]
             if not found locally, try to fetch remotely
     """
     location = dict(
-        raw = '{data}/{night}/desi-{expid:08d}.fits',
-        pix = '{data}/{night}/pix-{camera}-{expid:08d}.fits',
+        raw = '{rawdatadir}/{night}/desi-{expid:08d}.fits',
+        pix = '{rawdatadir}/{night}/pix-{camera}-{expid:08d}.fits',
         ### fiberflat = '{specprod}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits',
         frame = '{specprod}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
@@ -39,7 +39,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
         calib = '{specprod}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
         ### psf = '{specprod}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
         psf = '{specprod}/calib2d/{night}/psf-{camera}-{expid:08d}.fits',
-        fibermap = '{data}/{night}/fibermap-{expid:08d}.fits',
+        fibermap = '{rawdatadir}/{night}/fibermap-{expid:08d}.fits',
         brick = '{specprod}/bricks/{brickid}/brick-{band}-{brickid}.fits',
         coadd = '{specprod}/bricks/{brickid}/coadd-{band}-{brickid}.fits',
         coadd_all = '{specprod}/bricks/{brickid}/coadd-{brickid}.fits',
@@ -55,12 +55,23 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
     if specprod is None:
         specprod = specprod_root()
 
-    filepath = location[filetype].format(data=data_root(), specprod=specprod,
-        night=night, expid=expid, camera=camera, brickid = brickid, band = band,
-        spectrograph=spectrograph)
-
+    #- Check for missing inputs
+    required_inputs = [i[0] for i in re.findall(r'\{([a-z]+)(|[:0-9d]+)\}',location[filetype])]
+    actual_inputs = {
+        'rawdatadir':rawdata_root(), 'specprod':specprod,
+        'night':night, 'expid':expid, 'camera':camera, 'brickid':brickid,
+        'band':band, 'spectrograph':spectrograph
+        }
+    for i in required_inputs:
+        if actual_inputs[i] is None:
+            raise ValueError("Required input '{0}' is not set for type '{1}'!".format(i,filetype))
     #- normpath to remove extraneous double slashes /a/b//c/d
-    return os.path.normpath(filepath)
+    filepath = os.path.normpath(location[filetype].format(**actual_inputs))
+
+    if download:
+        from .download import download
+        filepath = download(filepath,single_thread=True)[0]
+    return filepath
 
 def get_files(filetype,night,expid,specprod = None):
     """Get files for a specified exposure.
@@ -132,7 +143,7 @@ def get_exposures(night,raw = False,specprod = None):
     date = validate_night(night)
 
     if raw:
-        night_path = os.path.join(data_root(),'exposures',night)
+        night_path = os.path.join(rawdata_root(),'exposures',night)
     else:
         if specprod is None:
             specprod = specprod_root()
@@ -154,16 +165,18 @@ def get_exposures(night,raw = False,specprod = None):
 
     return exposures
 
-def data_root():
-    """No documentation yet.
+def rawdata_root():
+    """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
+
+    Raises:
+        AssertionError: if these environment variables aren't set.
     """
-    dir = os.environ[ 'DESI_SPECTRO_DATA' ]
-    if dir == None:
-        raise RuntimeError('DESI_SPECTRO_DATA environment variable not set')
-    return dir
+    assert 'DESI_SPECTRO_DATA' in os.environ, 'Missing $DESI_SPECTRO_DATA environment variable'
+    return os.environ['DESI_SPECTRO_DATA']
 
 def specprod_root():
-    """Return ``$DESI_SPECTRO_REDUX/$PRODNAME``.
+    """Return directory root for spectro production, i.e.
+    ``$DESI_SPECTRO_REDUX/$PRODNAME``.
 
     Raises:
         AssertionError: if these environment variables aren't set.

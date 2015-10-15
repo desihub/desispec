@@ -8,35 +8,33 @@ We try to keep all the (fits) io separated.
 from __future__ import absolute_import, division
 
 import numpy as np
-# from desispec.io.frame import resolution_data_to_sparse_matrix
 from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
+from desispec.maskbits import specmask
 import scipy,scipy.sparse
 import sys
 from desispec.log import get_logger
 
 
-def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
+def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelenght grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
 
-    args:
-        wave : 1D wavelength grid in Angstroms
-        flux : 2D flux[nspec, nwave] density
-        ivar : 2D inverse variance of flux
-        resolution_data : 3D[nspec, ndiag, nwave] ...
+    Args:
+        frame (desispec.Frame): input Frame object with attributes
+            wave, flux, ivar, resolution_data
         nsig_clipping : [optional] sigma clipping value for outlier rejection
+        accuracy : [optional] accuracy of fiberflat (end test for the iterative loop)
+    Returns:
+        desispec.FiberFlat object with attributes
+            wave, fiberflat, ivar, mask, meanspec
 
-    returns tuple (fiberflat, ivar, mask, meanspec):
-        fiberflat : 2D[nwave, nflux] fiberflat (data have to be divided by this to be flatfielded)
-        ivar : inverse variance of that fiberflat
-        mask : 0=ok >0 if problems
-        meanspec : deconvolved mean spectrum
-
+    Notes:
     - we first iteratively :
+
        - compute a deconvolved mean spectrum
        - compute a fiber flat using the resolution convolved mean spectrum for each fiber
        - smooth the fiber flat along wavelength
@@ -77,28 +75,41 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     # (it's faster that way, and we try to use sparse matrices as much as possible)
     #
 
-
-    nwave=wave.size
-    nfibers=flux.shape[0]
-
+    #- Shortcuts
+    nwave=frame.nwave
+    nfibers=frame.nspec
+    wave = frame.wave.copy()  #- this will become part of output too
+    flux = frame.flux
+    ivar = frame.ivar
 
 
     # iterative fitting and clipping to get precise mean spectrum
     current_ivar=ivar.copy()
 
 
-    smooth_fiberflat=np.ones((flux.shape))
+    smooth_fiberflat=np.ones((frame.flux.shape))
+    
+    # allocate memory for keeping a copy of the previous iteration fiberflat
+    previous_smooth_fiberflat=np.ones((frame.flux.shape)) 
+    
     chi2=np.zeros((flux.shape))
 
 
-    sqrtwflat=np.sqrt(current_ivar)*smooth_fiberflat
+    # this is to go a bit faster
     sqrtwflux=np.sqrt(current_ivar)*flux
 
 
-    # test
-    #nfibers=20
+    # we first need to iterate to converge on a solution of mean spectrum
+    # and smooth fiber flat. several interations are needed when
+    # throughput AND resolution vary from fiber to fiber.
+    # the end test is that the fiber flat has varied by less than 0.1*accuracy
+    # of previous iteration for all wavelength
+    # we also have a max. number of iterations for this code
+    max_iterations = 100
     nout_tot=0
-    for iteration in range(20) :
+    for iteration in range(max_iterations) :
+
+        
 
         # fit mean spectrum
         A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
@@ -107,13 +118,16 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         # diagonal sparse matrix with content = sqrt(ivar)*flat of a given fiber
         SD=scipy.sparse.lil_matrix((nwave,nwave))
 
+        # this is to go a bit faster
+        sqrtwflat=np.sqrt(current_ivar)*smooth_fiberflat
+
         # loop on fiber to handle resolution
         for fiber in range(nfibers) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
 
-            ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
-            R = Resolution(resolution_data[fiber])
+            ### R = Resolution(resolution_data[fiber])
+            R = frame.R[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)*flat
             SD.setdiag(sqrtwflat[fiber])
@@ -137,8 +151,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             #if fiber%10==0 :
             #    log.info("iter %d fiber %d (smoothing)"%(iteration,fiber))
 
-            ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
-            R = Resolution(resolution_data[fiber])
+            ### R = Resolution(resolution_data[fiber])
+            R = frame.R[fiber]
 
             #M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
             M = R.dot(mean_spectrum)
@@ -147,10 +161,23 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             smooth_fiberflat[fiber]=spline_fit(wave,wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
             chi2[fiber]=current_ivar[fiber]*(flux[fiber]-smooth_fiberflat[fiber]*M)**2
 
+        # normalize to get a mean fiberflat=1
+        mean=np.mean(smooth_fiberflat,axis=0)
+        smooth_fiberflat = smooth_fiberflat/mean
+        mean_spectrum    = mean_spectrum*mean
+        
+        # this is the max difference between two iterations
+        max_diff=np.max(np.abs(smooth_fiberflat-previous_smooth_fiberflat))
+        previous_smooth_fiberflat=smooth_fiberflat
+        
+        # we don't start the rejection tests until we have converged on this
+        if max_diff>0.1*accuracy :
+            continue
+
         log.info("rejecting")
 
         nout_iter=0
-        if iteration<1 :
+        if nout_tot==0 :
             # only remove worst outlier per wave
             # apply rejection iteratively, only one entry per wave among fibers
             # find waves with outlier (fastest way)
@@ -180,10 +207,7 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
             chi2pdf=sum_chi2/ndf
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter))
 
-        # normalize to get a mean fiberflat=1
-        mean=np.mean(smooth_fiberflat,axis=0)
-        smooth_fiberflat = smooth_fiberflat/mean
-        mean_spectrum    = mean_spectrum*mean
+        
 
 
 
@@ -204,8 +228,8 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     nsig_for_mask=4 # only mask out 4 sigma outliers
 
     for fiber in range(nfibers) :
-        ### R = resolution_data_to_sparse_matrix(resolution_data,fiber)
-        R = Resolution(resolution_data[fiber])
+        ### R = Resolution(resolution_data[fiber])
+        R = frame.R[fiber]
         M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
         fiberflat[fiber] = (M!=0)*flux[fiber]/(M+(M==0)) + (M==0)
         fiberflat_ivar[fiber] = ivar[fiber]*M**2
@@ -214,21 +238,31 @@ def compute_fiberflat(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         if bad.size>0 :
             mask[fiber,bad] += fiberflat_mask
 
-    return fiberflat,fiberflat_ivar,mask,mean_spectrum
+    return FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum)    
 
 
+def apply_fiberflat(frame, fiberflat):
+    """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar
+    
+    Args:
+        frame : `desispec.Frame` object
+        fiberflat : `desispec.FiberFlat` object
+        
+    The frame is divided by the fiberflat, except where the fiberflat=0.
 
-def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
-    """No documentation yet.
+    frame.mask gets bit specmask.BADFIBERFLAT set where
+      * fiberflat.fiberflat == 0
+      * fiberflat.ivar == 0
+      * fiberflat.mask != 0
     """
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    mval=np.max(np.abs(wave-ffwave))
-    if mval > 0.00001 :
-        log.critical("error in apply_fiberflat, not same wavelength (should raise an error instead)")
-        sys.exit(12)
+    if not np.allclose(frame.wave, fiberflat.wave):
+        message = "frame and fiberflat do not have the same wavelength arrays"
+        log.critical(message)
+        raise ValueError(message)
 
     """
      F'=F/C
@@ -237,9 +271,106 @@ def apply_fiberflat(flux,ivar,wave,fiberflat,ffivar,ffmask,ffwave):
              = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
              = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
     """
+    #- shorthand
+    ff = fiberflat
+    sp = frame  #- sp=spectra for this frame
+    
+    #- update sp.ivar first since it depends upon the original sp.flux
+    sp.ivar=(sp.ivar>0)*(ff.ivar>0)*(ff.fiberflat>0)/( 1./((sp.ivar+(sp.ivar==0))*(ff.fiberflat**2+(ff.fiberflat==0))) + sp.flux**2/(ff.ivar*ff.fiberflat**4+(ff.ivar*ff.fiberflat==0)) )
 
-    flux=flux*(fiberflat>0)/(fiberflat+(fiberflat==0))
-    ivar=(ivar>0)*(ffivar>0)*(fiberflat>0)/(   1./((ivar+(ivar==0))*(fiberflat**2+(fiberflat==0))) + flux**2/(ffivar*fiberflat**4+(ffivar*fiberflat==0))   )
+    #- Then update sp.flux, taking care not to divide by 0
+    ii = np.where(ff.fiberflat > 0)
+    sp.flux[ii] = sp.flux[ii] / ff.fiberflat[ii]
 
+    badff = (ff.fiberflat == 0.0) | (ff.ivar == 0) | (ff.mask != 0)
+    sp.mask[badff] |= specmask.BADFIBERFLAT
 
     log.info("done")
+
+
+class FiberFlat(object):
+    def __init__(self, wave, fiberflat, ivar, mask=None, meanspec=None,
+            header=None, fibers=None, spectrograph=0):
+        """
+        Creates a lightweight data wrapper for fiber flats
+
+        Args:
+            wave: 1D[nwave] wavelength in Angstroms
+            fiberflat: 2D[nspec, nwave]
+            ivar: 2D[nspec, nwave] inverse variance of fiberflat
+            
+        Optional inputs:
+            mask: 2D[nspec, nwave] mask where 0=good; default ivar==0
+            meanspec: 1D[nwave] mean deconvolved average flat lamp spectrum
+            header: (optional) FITS header from HDU0
+            fibers: (optional) fiber indices
+            spectrograph: (optional) spectrograph number [0-9]       
+        """
+        if wave.ndim != 1:
+            raise ValueError("wave should be 1D")
+
+        if fiberflat.ndim != 2:
+            raise ValueError("fiberflat should be 2D[nspec, nwave]")
+
+        if ivar.ndim != 2:
+            raise ValueError("ivar should be 2D")
+
+        if fiberflat.shape != ivar.shape:
+            raise ValueError("fiberflat and ivar must have the same shape")
+
+        if mask is not None and mask.ndim != 2:
+            raise ValueError("mask should be 2D")
+
+        if meanspec is not None and meanspec.ndim != 1:
+            raise ValueError("meanspec should be 1D")
+
+        if mask is not None and fiberflat.shape != mask.shape:
+            raise ValueError("fiberflat and mask must have the same shape")
+        
+        if meanspec is not None and wave.shape != meanspec.shape:
+            raise ValueError("wrong size/shape for meanspec {}".format(meanspec.shape))
+        
+        if wave.shape[0] != fiberflat.shape[1]:
+            raise ValueError("nwave mismatch between wave.shape[0] and flux.shape[1]")
+
+        if mask is None:
+            mask = (ivar == 0)
+
+        if meanspec is None:
+            meanspec = np.ones_like(wave)
+
+        self.wave = wave
+        self.fiberflat = fiberflat
+        self.ivar = ivar
+        self.mask = mask
+        self.meanspec = meanspec
+
+        self.nspec, self.nwave = self.fiberflat.shape
+        self.header = header
+        
+        self.spectrograph = spectrograph
+        if fibers is None:
+            self.fibers = self.spectrograph + np.arange(self.nspec, dtype=int)
+        else:
+            if len(fibers) != self.nspec:
+                raise ValueError("len(fibers) != nspec ({} != {})".format(len(fibers), self.nspec))
+            self.fibers = fibers
+            
+    def __getitem__(self, index):
+        """
+        Return a subset of the spectra as a new FiberFlat object
+        
+        index can be anything that can index or slice a numpy array
+        """
+        #- convert index to 1d array to maintain dimentionality of sliced arrays
+        if not isinstance(index, slice):
+            index = np.atleast_1d(index)
+
+        result = FiberFlat(self.wave, self.fiberflat[index], self.ivar[index],
+                    self.mask[index], self.meanspec, header=self.header,
+                    fibers=self.fibers[index], spectrograph=self.spectrograph)
+        
+        #- TODO:
+        #- if we define fiber ranges in the fits headers, correct header
+        
+        return result

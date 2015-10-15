@@ -4,13 +4,22 @@ desispec.io.fluxcalibration
 
 IO routines for flux calibration.
 """
+from __future__ import absolute_import
 import os
 from astropy.io import fits
-from desispec.io.util import fitsheader, native_endian, makepath
 import numpy,scipy
+from .util import fitsheader, native_endian, makepath
 
 def write_stdstar_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
     """Writes the normalized flux for the best model.
+    
+    Args:
+        norm_modelfile : output file path
+        normalizedFlux : 2D array of flux[nstdstars, nwave]
+        wave : 1D array of wavelengths[nwave] in Angstroms
+        fibers : 1D array of fiberids for these spectra
+        data : meta data table about which templates best fit; should include
+            BESTMODELINDEX, TEMPLATEID, CHI2DOF
     """
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
@@ -52,49 +61,58 @@ def read_stdstar_models(filename):
     return flux,wave,fibers
 
 
-def write_flux_calibration(outfile,calibration, calibration_ivar, mask, convolved_calibration, convolved_calibration_ivar,wave,header=None):
+def write_flux_calibration(outfile, fluxcalib, header=None):
     """Writes  flux calibration.
+    
+    Args:
+        outfile : output file name
+        fluxcalib : FluxCalib object
+        
+    Options:
+        header : dict-like object of key/value pairs to include in header
     """
     hdr = fitsheader(header)
-    hdr['EXTNAME'] = ('CALIB', 'CHECK UNIT')
-    fits.writeto(outfile,calibration,header=hdr, clobber=True)
+    hdr['EXTNAME'] = ('FLUXCALIB', 'CHECK UNIT')
+    fits.writeto(outfile,fluxcalib.calib,header=hdr, clobber=True)
 
     hdr['EXTNAME'] = ('IVAR', 'CHECK UNIT')
-    hdu = fits.ImageHDU(calibration_ivar, header=hdr)
+    hdu = fits.ImageHDU(fluxcalib.ivar, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
 
     hdr['EXTNAME'] = ('MASK', 'no dimension')
-    hdu = fits.ImageHDU(mask, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-
-    hdr['EXTNAME'] = ('CCALIB', 'CHECK UNIT')
-    hdu = fits.ImageHDU(convolved_calibration, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('CIVAR', 'CHECK UNIT')
-    hdu = fits.ImageHDU(convolved_calibration_ivar, header=hdr)
+    hdu = fits.ImageHDU(fluxcalib.mask, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
 
     hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
-    hdu = fits.ImageHDU(wave, header=hdr)
+    hdu = fits.ImageHDU(fluxcalib.wave, header=hdr)
     fits.append(outfile, hdu.data, header=hdu.header)
 
 def read_flux_calibration(filename):
-    """Read flux calibration.
+    """Read flux calibration file; returns a FluxCalib object
     """
-    calibration=native_endian(fits.getdata(filename, 0))
-    calib_ivar=native_endian(fits.getdata(filename, "IVAR"))
-    mask=native_endian(fits.getdata(filename, "MASK"))
-    convolved_calibration=native_endian(fits.getdata(filename, "CCALIB"))
-    convolved_calib_ivar=native_endian(fits.getdata(filename, "CIVAR"))
+    # Avoid a circular import conflict at package install/build_sphinx time.
+    from ..fluxcalibration import FluxCalib
+    calib=native_endian(fits.getdata(filename, 0))
+    ivar=native_endian(fits.getdata(filename, "IVAR"))
+    mask=native_endian(fits.getdata(filename, "MASK", uint=True))
     wave=native_endian(fits.getdata(filename, "WAVELENGTH"))
 
-    return calibration,calib_ivar,mask,convolved_calibration,convolved_calib_ivar,wave
+    fluxcalib = FluxCalib(wave, calib, ivar, mask)
+    fluxcalib.header = fits.getheader(filename, 0)
+    return fluxcalib
 
 
 def read_stdstar_templates(stellarmodelfile):
-    """No documentation yet.
+    """
+    Reads an input stellar model file
+    
+    Args:
+        stellarmodelfile : input filename
+    
+    Returns (wave, flux, templateid) tuple:
+        wave : 1D[nwave] array of wavelengths [Angstroms]
+        flux : 2D[nmodel, nwave] array of model fluxes
+        templateid : 1D[nmodel] array of template IDs for each spectrum
     """
     phdu=fits.open(stellarmodelfile)
     hdr0=phdu[0].header
@@ -114,21 +132,3 @@ def read_stdstar_templates(stellarmodelfile):
     phdu.close()
 
     return wavebins,fluxData,templateid
-
-# reading filter quantum efficiency
-def read_filter_response(given_filter,basepath):
-    """No documentation yet.
-    """
-    filterNameMap={}
-
-    filttype=str.split(given_filter,'_')
-    if filttype[0]=='SDSS':
-        filterNameMap=given_filter.lower()+"0.txt"
-    else: #if breakfilt[0]=='DECAM':
-        filterNameMap=given_filter.lower()+".txt"
-    filter_response={}
-    fileName=basepath+filterNameMap
-    filt=numpy.loadtxt(fileName,unpack=True)
-    tck=scipy.interpolate.splrep(filt[0],filt[1],s=0)
-    filter_response=(filt[0],filt[1],tck)
-    return filter_response

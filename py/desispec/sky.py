@@ -12,11 +12,12 @@ from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.log import get_logger
+from desispec import util
 
-import scipy,scipy.sparse
+import scipy,scipy.sparse,scipy.stats
 import sys
 
-def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
+def compute_sky(frame, fibermap, nsig_clipping=4.) :
     """Compute a sky model.
 
     Input has to correspond to sky fibers only.
@@ -24,26 +25,33 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     We don't check this in this routine.
 
     args:
-        wave : 1D wavelength grid in Angstroms
-        flux : 2D flux[nspec, nwave] density (only sky fibers)
-        ivar : 2D inverse variance of flux (only sky fibers)
-        resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
+        frame : Frame object, which includes attributes
+          - wave : 1D wavelength grid in Angstroms
+          - flux : 2D flux[nspec, nwave] density
+          - ivar : 2D inverse variance of flux
+          - mask : 2D inverse mask flux (0=good)
+          - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
+        fibermap : numpy table including OBJTYPE to know which fibers are SKY
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
-    returns tuple (skyflux, ivar, mask, cskyflux, cskyivar):
-        skyflux : 1D[nwave] deconvolved skyflux
-        ivar : inverse variance of that skyflux
-        mask : 0=ok >0 if problems
-        cskyflux :  1D[nwave] convolved skyflux at average resolution
-        cskyivar :  1D[nwave] convolved skyflux inverse variance
+    returns SkyModel object with attributes wave, flux, ivar, mask
     """
 
     log=get_logger()
     log.info("starting")
 
-    nwave=wave.size
-    nfibers=flux.shape[0]
-    current_ivar=ivar.copy()
+    # Grab sky fibers on this frame
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
+    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
+        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
+    assert np.max(skyfibers) < 500
+
+    nwave=frame.nwave
+    nfibers=len(skyfibers)
+    
+    current_ivar=frame.ivar[skyfibers].copy()
+    flux = frame.flux[skyfibers]
+    Rsky = frame.R[skyfibers]
 
     sqrtw=np.sqrt(current_ivar)
     sqrtwflux=sqrtw*flux
@@ -64,7 +72,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
         for fiber in range(nfibers) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
-            R = Resolution(resolution_data[fiber])
+            R = Rsky[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)
             SD.setdiag(sqrtw[fiber])
@@ -82,8 +90,7 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
 
         for fiber in range(nfibers) :
 
-            R = Resolution(resolution_data[fiber])
-            S = R.dot(skyflux)
+            S = Rsky[fiber].dot(skyflux)
             chi2[fiber]=current_ivar[fiber]*(flux[fiber]-S)**2
 
         log.info("rejecting")
@@ -128,60 +135,133 @@ def compute_sky(wave,flux,ivar,resolution_data,nsig_clipping=4.) :
     # solve once again to get deconvolved sky variance
     skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
 
-    skyvar=np.diagonal(skycovar)
-    skyivar=(skyvar>0)/(skyvar+(skyvar==0))
+    #- sky inverse variance, but incomplete and not needed anyway
+    # skyvar=np.diagonal(skycovar)
+    # skyivar=(skyvar>0)/(skyvar+(skyvar==0))
 
-    # we also want to save the convolved sky and sky variance
-    # this might be handy
-
+    # Use diagonal of skycovar convolved with mean resolution of all fibers
     # first compute average resolution
-    mean_res_data=np.mean(resolution_data,axis=0)
+    mean_res_data=np.mean(frame.resolution_data,axis=0)
     R = Resolution(mean_res_data)
     # compute convolved sky and ivar
-    cskyflux=R.dot(skyflux)
     cskycovar=R.dot(skycovar).dot(R.T.todense())
     cskyvar=np.diagonal(cskycovar)
     cskyivar=(cskyvar>0)/(cskyvar+(cskyvar==0))
+    
+    # convert cskyivar to 2D; today it is the same for all spectra,
+    # but that may not be the case in the future
+    cskyivar = np.tile(cskyivar, frame.nspec).reshape(frame.nspec, nwave)
 
-
+    # Convolved sky
+    cskyflux = np.zeros(frame.flux.shape)
+    for i in range(frame.nspec):
+        cskyflux[i] = frame.R[i].dot(skyflux)
 
     # need to do better here
-    mask=(skyvar>0).astype(long)  # SOMEONE CHECK THIS !
+    mask = (cskyivar==0).astype(np.uint32)
 
-    return skyflux, skyivar, mask, cskyflux, cskyivar
+    return SkyModel(frame.wave.copy(), cskyflux, cskyivar, mask)
+
+class SkyModel(object):
+    def __init__(self, wave, flux, ivar, mask, header=None):
+        """Create SkyModel object
+        
+        Args:
+            wave  : 1D[nwave] wavelength in Angstroms
+            flux  : 2D[nspec, nwave] sky model to subtract
+            ivar  : 2D[nspec, nwave] inverse variance of the sky model
+            mask  : 2D[nspec, nwave] 0=ok or >0 if problems
+            header : (optional) header from FITS file HDU0
+            
+        All input arguments become attributes
+        """
+        assert wave.ndim == 1
+        assert flux.ndim == 2
+        assert ivar.shape == flux.shape
+        assert mask.shape == flux.shape
+        
+        self.nspec, self.nwave = flux.shape
+        self.wave = wave
+        self.flux = flux
+        self.ivar = ivar
+        self.mask = mask
+        self.header = header
 
 
-
-
-def subtract_sky(flux,ivar,resolution_data,wave,skyflux,convolved_skyivar,skymask,skywave) :
-    """No documentation yet.
+def subtract_sky(frame, skymodel) :
+    """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
+    
+    Args:
+        frame : desispec.Frame object
+        skymodel : desispec.SkyModel object
     """
+    assert frame.nspec == skymodel.nspec
+    assert frame.nwave == skymodel.nwave
+
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    mval=np.max(np.abs(wave-skywave))
-    if mval > 0.00001 :
-        log.error("not same wavelength (should raise an error instead)")
-        sys.exit(12)
+    if not np.allclose(frame.wave, skymodel.wave):
+        message = "frame and sky not on same wavelength grid"
+        log.error(message)
+        raise ValueError(message)
 
-    nwave=wave.size
-    nfibers=flux.shape[0]
-
-    for fiber in range(nfibers) :
-
-        #if fiber%10==0 :
-        #    log.info("fiber %d"%fiber)
-
-        R = Resolution(resolution_data[fiber])
-        S = R.dot(skyflux)
-        flux[fiber] -= S
-
-        # deal with variance
-        selection=np.where((ivar[fiber]>0)&(convolved_skyivar>0))[0]
-        if selection.size==0 :
-            continue
-
-        ivar[fiber,selection]=1./(1./ivar[fiber,selection]+1./convolved_skyivar[selection])
+    frame.flux -= skymodel.flux
+    frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
+    frame.mask |= skymodel.mask
 
     log.info("done")
+
+def qa_skysub(param, frame, fibermap, skymodel) :
+    """Calculate QA on SkySubtraction
+    Note: Pixels rejected in generating the SkyModel (as above), are  
+      not rejected in the stats calcualted here.  Would need to carry
+      along current_ivar to do so.
+
+    Args:
+        param : dict of QA parameters
+        frame : desispec.Frame object
+        fibermap : numpy table including OBJTYPE to know which fibers are SKY
+        skymodel : desispec.SkyModel object
+    Returns:
+        qadict: dict of QA outputs
+          Need to record simple Python objects for yaml (str, float, int)
+    """
+    log=get_logger()
+
+    # Output dict
+    qadict = {}
+
+    # Grab sky fibers on this frame
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
+    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
+        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
+    assert np.max(skyfibers) < 500
+    nfibers=len(skyfibers)
+    qadict['NSKY_FIB'] = int(nfibers)
+
+    current_ivar=frame.ivar[skyfibers].copy()
+    flux = frame.flux[skyfibers]
+
+    # Subtract
+    res = flux - skymodel.flux[skyfibers] # Residuals
+    res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers]) 
+
+    # Chi^2 and Probability
+    chi2_fiber = np.sum(res_ivar*(res**2),1) 
+    chi2_prob = np.zeros(nfibers)
+    for ii in range(nfibers):
+        # Stats
+        dof = np.sum(res_ivar[ii,:] > 0.)
+        chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
+    # Bad models
+    qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
+
+    # Median residual
+    qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
+    log.info("Median residual for sky fibers = {:g}".format(
+        qadict['MED_RESID'])) 
+
+    # Return
+    return qadict

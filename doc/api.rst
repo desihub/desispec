@@ -41,6 +41,12 @@ The desispec API
 .. automodule:: desispec.io.brick
     :members:
 
+.. automodule:: desispec.io.database
+    :members:
+
+.. automodule:: desispec.io.download
+    :members:
+
 .. automodule:: desispec.io.fiberflat
     :members:
 

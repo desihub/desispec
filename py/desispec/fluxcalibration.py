@@ -4,17 +4,14 @@ desispec.fluxcalibration
 
 Flux calibration routines.
 """
-
+from __future__ import absolute_import
 import numpy as np
-from desispec.resolution import Resolution
-from desispec.linalg import cholesky_solve
-from desispec.linalg import cholesky_solve_and_invert
-from desispec.linalg import spline_fit
-from desispec.interpolation import resample_flux
-from desispec.log import get_logger
-from desispec.io.fluxcalibration import read_filter_response
-from desispec.resolution import Resolution
-import scipy,scipy.sparse, scipy.ndimage
+from .resolution import Resolution
+from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
+from .interpolation import resample_flux
+from .log import get_logger
+from .io.filters import read_filter_response
+import scipy, scipy.sparse, scipy.ndimage
 import sys
 #debug
 #import pylab
@@ -23,9 +20,9 @@ import sys
 #But should move from here anyway.
 
 def rebinSpectra(spectra,oldWaveBins,newWaveBins):
-        tck=scipy.interpolate.splrep(oldWaveBins,spectra,s=0,k=5)
-        specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
-        return specnew
+    tck=scipy.interpolate.splrep(oldWaveBins,spectra,s=0,k=5)
+    specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
+    return specnew
 
 #import some global constants
 import scipy.constants as const
@@ -145,6 +142,10 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
         mags : 1D array of observed AB magnitudes
         filters : list of filter names for mags, e.g. ['SDSS_r', 'DECAM_g', ...]
 
+    Returns:
+        stdwave : same as input
+        normflux : normalized flux array
+
     Only SDSS_r band is assumed to be used for normalization for now.
     """
     log = get_logger()
@@ -183,72 +184,70 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
 
     return stdwave,normflux
 
-def convolveFlux(wave,resolution,flux):
-    """I am writing this full convolution only for sky subtraction. It will be applied to sky model.
-    """
-    diags=np.arange(10,-11,-1)
-    nwave=len(wave)
-    nspec=resolution.shape[0]
-    convolved=np.zeros((nspec,nwave))
-    for i in range(nspec):
-       R=Resolution(resolution[i])
-       convolved[i]=R.dot(flux)
 
-    return convolved
-
-
-def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,input_model_flux,nsig_clipping=4.):
-    """Compute average frame throughtput based on data (wave,flux,ivar,resolution_data)
+def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.):
+    """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
 
-    Input flux and model fiber indices have to match.
+    Args:
+      frame : Frame object with attributes wave, flux, ivar, resolution_data
+      stdfibers: 1D[nwave] array of indices of frame that are standard stars
+      input_model_wave : 1D[nwave] array of model wavelengths
+      input_model_flux : 2D[nstd, nwave] array of model fluxes
+      nsig_clipping : (optional) sigma clipping level
 
-    - we first resample the model on the input flux wave grid
-    - then convolve it to the data resolution (the input wave grid is supposed finer than the spectral resolution)
-    - then iteratively
-       - fit the mean throughput (deconvolved, this is needed because of sharp atmospheric absorption lines)
-       - compute broad band correction to fibers (to correct for small mis-alignement for instance)
-       - performe an outlier rejection
+    Returns desispec.FluxCalib object
+
+    Notes:
+      - we first resample the model on the input flux wave grid
+      - then convolve it to the data resolution (the input wave grid is supposed finer than the spectral resolution)
+      - then iteratively
+        - fit the mean throughput (deconvolved, this is needed because of sharp atmospheric absorption lines)
+        - compute broad band correction to fibers (to correct for small mis-alignement for instance)
+        - performe an outlier rejection
     """
 
     log=get_logger()
     log.info("starting")
 
-    nwave=wave.size
-    nfibers=flux.shape[0]
+    #- Pull out just the standard stars for convenience, but keep the
+    #- full frame of spectra around because we will later need to convolved
+    #- the calibration vector for each fiber individually
+    stdstars = frame[stdfibers]
 
+    nwave=stdstars.nwave
+    nstds=stdstars.flux.shape[0]
 
     # resample model to data grid and convolve by resolution
-    model_flux=np.zeros(flux.shape)
+    model_flux=np.zeros((nstds, nwave))
     for fiber in range(model_flux.shape[0]) :
-        model_flux[fiber]=resample_flux(wave,input_model_wave,input_model_flux[fiber])
+        model_flux[fiber]=resample_flux(stdstars.wave,input_model_wave,input_model_flux[fiber])
 
         # debug
         # pylab.plot(input_model_wave,input_model_flux[fiber])
         # pylab.plot(wave,model_flux[fiber],c="g")
 
-        R = Resolution(resolution_data[fiber])
-        model_flux[fiber]=R.dot(model_flux[fiber])
+        model_flux[fiber]=stdstars.R[fiber].dot(model_flux[fiber])
 
         # debug
         # pylab.plot(wave,model_flux[fiber],c="r")
         # pylab.show()
 
     # iterative fitting and clipping to get precise mean spectrum
-    current_ivar=ivar.copy()
+    current_ivar=stdstars.ivar.copy()
 
 
-    smooth_fiber_correction=np.ones((flux.shape))
-    chi2=np.zeros((flux.shape))
+    smooth_fiber_correction=np.ones((stdstars.flux.shape))
+    chi2=np.zeros((stdstars.flux.shape))
 
 
     sqrtwmodel=np.sqrt(current_ivar)*model_flux
-    sqrtwflux=np.sqrt(current_ivar)*flux
+    sqrtwflux=np.sqrt(current_ivar)*stdstars.flux
 
 
     # test
-    # nfibers=20
+    # nstds=20
     nout_tot=0
     for iteration in range(20) :
 
@@ -260,10 +259,11 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
         SD=scipy.sparse.lil_matrix((nwave,nwave))
 
         # loop on fiber to handle resolution
-        for fiber in range(nfibers) :
+        for fiber in range(nstds) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d"%(iteration,fiber))
-            R = Resolution(resolution_data[fiber])
+
+            R = stdstars.R[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)*flat
             SD.setdiag(sqrtwmodel[fiber])
@@ -283,11 +283,11 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
         # fit smooth fiberflat and compute chi2
         smoothing_res=1000. #A
 
-        for fiber in range(nfibers) :
+        for fiber in range(nstds) :
             if fiber%10==0 :
                 log.info("iter %d fiber %d(smooth)"%(iteration,fiber))
 
-            R = Resolution(resolution_data[fiber])
+            R = stdstars.R[fiber]
 
             #M = np.array(np.dot(R.todense(),mean_spectrum)).flatten()
             M = R.dot(calibration)*model_flux[fiber]
@@ -298,9 +298,9 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
             #pylab.show()
             #continue
 
-            F = flux[fiber]/(M+(M==0))
-            smooth_fiber_correction[fiber]=spline_fit(wave,wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
-            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-smooth_fiber_correction[fiber]*M)**2
+            F = stdstars.flux[fiber]/(M+(M==0))
+            smooth_fiber_correction[fiber]=spline_fit(stdstars.wave,stdstars.wave,F,smoothing_res,current_ivar[fiber]*(M!=0))
+            chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
 
             #pylab.plot(wave,F)
             #pylab.plot(wave,smooth_fiber_correction[fiber])
@@ -337,7 +337,7 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
         nout_tot += nout_iter
 
         sum_chi2=float(np.sum(chi2))
-        ndf=int(np.sum(chi2>0)-nwave-nfibers*(nwave/smoothing_res))
+        ndf=int(np.sum(chi2>0)-nwave-nstds*(nwave/smoothing_res))
         chi2pdf=0.
         if ndf>0 :
             chi2pdf=sum_chi2/ndf
@@ -371,58 +371,93 @@ def compute_flux_calibration(wave,flux,ivar,resolution_data,input_model_wave,inp
 
     # we also want to save the convolved calibration and calibration variance
     # first compute average resolution
-    mean_res_data=np.mean(resolution_data,axis=0)
+    mean_res_data=np.mean(frame.resolution_data,axis=0)
     R = Resolution(mean_res_data)
-    # compute convolved calib and ivar
-    ccalibration=R.dot(calibration)
+    # compute convolved calib
+    ccalibration = np.zeros(frame.flux.shape)
+    for i in range(frame.nspec):
+        ccalibration[i]=frame.R[i].dot(calibration)
+
+    # Use diagonal of mean calibration covariance for output.
     ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
     ccalibvar=np.array(np.diagonal(ccalibcovar))
+
     # apply the mean (as in the iterative loop)
     ccalibvar *= mean**2
     ccalibivar=(ccalibvar>0)/(ccalibvar+(ccalibvar==0))
 
-
+    # convert to 2D
+    # For now this is the same for all fibers; in the future it may not be
+    ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
 
     # need to do better here
-    mask=(calibvar>0).astype(long)  # SOMEONE CHECK THIS !
+    mask=(ccalibivar>0).astype(int)
 
-    return calibration, calibivar, mask, ccalibration, ccalibivar
+    # return calibration, calibivar, mask, ccalibration, ccalibivar
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask)
 
-def apply_flux_calibration(flux,ivar,resolution_data,wave,calibration,civar,cmask,cwave):
+class FluxCalib(object):
+    def __init__(self, wave, calib, ivar, mask):
+        """Lightweight wrapper object for flux calibration vectors
+
+        Args:
+            wave : 1D[nwave] input wavelength (Angstroms)
+            calib: 2D[nspec, nwave] calibration vectors for each spectrum
+            ivar : 2D[nspec, nwave] inverse variance of calib
+            mask : 2D[nspec, nwave] mask of calib (0=good)
+
+        All arguments become attributes, plus nspec,nwave = calib.shape
+
+        The calib vector should be such that
+        
+            [erg/s/cm^2/A] = [photons/A] / calib
+        """
+        assert wave.ndim == 1
+        assert calib.ndim == 2
+        assert calib.shape == ivar.shape
+        assert calib.shape == mask.shape
+        assert np.all(ivar >= 0)
+
+        self.nspec, self.nwave = calib.shape
+        self.wave = wave
+        self.calib = calib
+        self.ivar = ivar
+        self.mask = mask
+
+def apply_flux_calibration(frame, fluxcalib):
     """
     Applies flux calibration to input flux and ivar
 
     Args:
-        flux : input flux[nspec, nwave] -- WILL BE MODIFIED IN-PLACE
-        ivar : input ivar[nspec, nwave] -- WILL BE MODIFIED IN-PLACE
-        resolution_data : 3D[nspec, ndiag, nwave] sparse resolution matrix data
-        wave : 1D[nwave] wavelength of flux
-        calibration, civar, cmask, cwave : from compute_flux_calibration()
+        frame: Spectra object with attributes wave, flux, ivar, resolution_data
+        fluxcalib : FluxCalib object with wave, calib, ...
+        
+    Modifies frame.flux and frame.ivar
     """
     log=get_logger()
     log.info("starting")
 
     # check same wavelength, die if not the case
-    mval=np.max(np.abs(wave-cwave))
+    mval=np.max(np.abs(frame.wave-fluxcalib.wave))
     if mval > 0.00001 :
         log.error("not same wavelength (should raise an error instead)")
         sys.exit(12)
 
-    nwave=wave.size
-    nfibers=flux.shape[0]
+    nwave=frame.nwave
+    nfibers=frame.nspec
 
-    for fiber in range(nfibers) :
+    """
+    F'=F/C
+    Var(F') = Var(F)/C**2 + F**2*(  d(1/C)/dC )**2*Var(C)
+    = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
+    = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
+    = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
+    """
+    # for fiber in range(nfibers) :
+    #     C = fluxcalib.calib[fiber]
+    #     flux[fiber]=frame.flux[fiber]*(C>0)/(C+(C==0))
+    #     ivar[fiber]=(ivar[fiber]>0)*(civar[fiber]>0)*(C>0)/(   1./((ivar[fiber]+(ivar[fiber]==0))*(C**2+(C==0))) + flux[fiber]**2/(civar[fiber]*C**4+(civar[fiber]*(C==0)))   )
 
-        R = Resolution(resolution_data[fiber])
-        C = R.dot(calibration)
-
-        """
-        F'=F/C
-        Var(F') = Var(F)/C**2 + F**2*(  d(1/C)/dC )**2*Var(C)
-        = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
-        = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
-        = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
-        """
-
-        flux[fiber]=flux[fiber]*(C>0)/(C+(C==0))
-        ivar[fiber]=(ivar[fiber]>0)*(civar[fiber]>0)*(C>0)/(   1./((ivar[fiber]+(ivar[fiber]==0))*(C**2+(C==0))) + flux[fiber]**2/(civar[fiber]*C**4+(civar[fiber]*(C==0)))   )
+    C = fluxcalib.calib
+    frame.flux = frame.flux * (C>0) / (C+(C==0))
+    frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
