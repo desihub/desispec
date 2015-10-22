@@ -27,7 +27,7 @@ class RedMonsterZfind(ZfindBase):
         try:
             from redmonster.physics.zfinder import Zfinder
             from redmonster.physics.zfitter import Zfitter
-            from redmonster.physics.zpicker import Zpicker
+            from redmonster.physics.zpicker2 import Zpicker
         except ImportError:
             get_logger().error("You are attempting to use RedMonster, but it is not available for import!")
             raise
@@ -74,7 +74,7 @@ class RedMonsterZfind(ZfindBase):
             zfind = Zfinder(self.template_dir+template, npoly=2, zmin=zmin, zmax=zmax)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
             zfit = Zfitter(zfind.zchi2arr, zfind.zbase)
-            zfit.z_refine()
+            zfit.z_refine2()
 
             self.zfinders.append(zfind)
             self.zfitters.append(zfit)
@@ -87,18 +87,15 @@ class RedMonsterZfind(ZfindBase):
                          self.zfitters[i].zwarning.astype(int))
 
         #- Zpicker
-        self.zpicker = Zpicker(specobj,
-            self.zfinders[0], self.zfitters[0], flags[0],
-            self.zfinders[1], self.zfitters[1], flags[1],
-            self.zfinders[2], self.zfitters[2], flags[2])
+        self.zpicker = Zpicker(specobj, self.zfinders, self.zfitters, flags)
 
         #- Fill in outputs
-        self.type = np.asarray(self.zpicker.type, dtype='S20')
-        self.subtype = np.asarray(self.zpicker.subtype, dtype='S20')
-        self.z = np.array([self.zpicker.z[i,0] for i in range(nspec)])
-        self.zerr = np.array([self.zpicker.z_err[i,0] for i in range(nspec)])
+        self.type = np.asarray(self.zpicker.type)
+        self.subtype = np.asarray(self.zpicker.subtype)
+        self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
+        self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
         self.zwarn = np.array([self.zpicker.zwarning[i].astype(int) for i in range(nspec)])
-        self.model = self.zpicker.models
+        self.model = self.zpicker.models[:,0]
 
 
 #- This is a container class needed by Redmonster zpicker
