@@ -44,6 +44,6 @@ def read_qa_frame(filename) :
         qa_data = yaml.load(infile)
 
     # Instantiate
-    qaframe = QA_Frame(qa_data['flavor'], qa_data['camera'], in_data=qa_data)
+    qaframe = QA_Frame(flavor=qa_data['flavor'], camera=qa_data['camera'], in_data=qa_data)
 
     return qaframe

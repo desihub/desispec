@@ -90,7 +90,7 @@ install:
     - export CONDA_INSTALL="conda install -c astropy-ci-extras --yes python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION"
 
     # CORE DEPENDENCIES
-    - if [[ $SETUP_CMD != egg_info ]]; then $CONDA_INSTALL numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION pyyaml pip Cython jinja2 requests; fi
+    - if [[ $SETUP_CMD != egg_info ]]; then $CONDA_INSTALL numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION pyyaml pip Cython jinja2 requests matplotlib; fi
     - if [[ $SETUP_CMD != egg_info ]]; then $PIP_INSTALL pytest-xdist; fi
 
     # ASTROPY

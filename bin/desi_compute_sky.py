@@ -17,6 +17,7 @@ from desispec.io import write_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.qa.qa_exposure import QA_Frame
+from desispec.qa import qa_plots
 from desispec.log import get_logger
 import argparse
 import numpy as np
@@ -36,6 +37,8 @@ def main() :
                         help = 'path of DESI sky fits file')
     parser.add_argument('--qafile', type = str, default = None, required=False,
                         help = 'path of QA file. Will calculate for Sky Subtraction')
+    parser.add_argument('--qafig', type = str, default = None, required=False,
+                        help = 'path of QA figure file')
     #parser.add_argument('--qafig', type = str, default = None, required=False)
 
     args = parser.parse_args()
@@ -64,18 +67,32 @@ def main() :
     skymodel = compute_sky(frame, fibermap)
 
     # QA
-    if args.qafile is not None: 
+    if (args.qafile is not None) or (args.qafig is not None): 
         log.info("performing skysub QA")
-        # Load (read from file, if it exists)
-        if os.path.isfile(args.qafile):
+        # Load 
+        if os.path.isfile(args.qafile): # Read from file, if it exists
             qaframe = read_qa_frame(args.qafile)
-        else: 
-            qaframe = QA_Frame(flavor='science') # Would prefer to get flavor from Frame
+            # Check camera
+            try: 
+                camera = frame.meta['CAMERA']
+            except:
+                pass # 
+            else:
+                if qaframe.camera != frame.meta['CAMERA']:
+                    raise ValueError('Wrong QA file!')
+        else:  # Init
+            qaframe = QA_Frame(frame)
+            if qaframe.flavor == 'none': # Was not set in frame
+                qaframe.flavor='science' # Forcing to science
         # Run
         qaframe.run_qa('SKYSUB', (frame, fibermap, skymodel))
         # Write
-        write_qa_frame(args.qafile, qaframe)
-        log.info("successfully wrote {:s}".format(args.qafile))
+        if args.qafile is not None:
+            write_qa_frame(args.qafile, qaframe)
+            log.info("successfully wrote {:s}".format(args.qafile))
+        # Figure(s)
+        if args.qafig is not None:
+            qa_plots.frame_skyres(args.qafig, frame, fibermap, skymodel, qaframe)
 
     # write result
     write_sky(args.outfile, skymodel, frame.meta)

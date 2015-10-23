@@ -14,14 +14,14 @@ class TestQA(unittest.TestCase):
     
     def test_init_qa_frame(self):        
         #- Simple Init calls
-        qafrm1 = QA_Frame('arc')
-        qafrm2 = QA_Frame('flat')
-        qafrm3 = QA_Frame('science')
+        qafrm1 = QA_Frame(flavor='arc')
+        qafrm2 = QA_Frame(flavor='flat')
+        qafrm3 = QA_Frame(flavor='science')
         assert qafrm3.flavor == 'science'
 
     def test_init_qa_skysub(self):        
         #- Init SkySub dict
-        qafrm = QA_Frame('science')
+        qafrm = QA_Frame(flavor='science')
         qafrm.init_skysub()
         assert qafrm.data['SKYSUB']['PARAM']['PCHI_RESID'] > 0.
 
