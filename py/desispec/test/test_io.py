@@ -229,7 +229,7 @@ class TestIO(unittest.TestCase):
 
     def test_io_qa_frame(self):        
         #- Init 
-        qaframe = QA_Frame('science')
+        qaframe = QA_Frame(flavor='science')
         qaframe.init_skysub()
         # Write
         desio_qa.write_qa_frame(self.testyfile, qaframe)

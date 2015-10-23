@@ -9,13 +9,14 @@ import numpy as np
 from desispec.sky import qa_skysub
 
 class QA_Frame(object):
-    def __init__(self, flavor='none', camera='none', in_data=None):
+    def __init__(self, frame=None, flavor='none', camera='none', in_data=None):
         """
         Class to organize and execute QA for a DESI frame
 
         x.flavor, x.data, x.camera
         
         Args:
+            frame: Frame object, optional (should contain meta data)
             flavor: str, optional exposure type (e.g. flat, arc, science)
             camera: str, optional camera (e.g. 'b0')
             in_data: dict, optional -- Input data 
@@ -26,8 +27,12 @@ class QA_Frame(object):
         Attributes:
             All input args become object attributes.
         """
-        assert flavor in ['none', 'flat', 'arc', 'science']
+        # Parse from frame.meta
+        if frame is not None:
+            flavor = frame.meta['FLAVOR']
+            camera = frame.meta['CAMERA']
 
+        assert flavor in ['none', 'flat', 'arc', 'science']
         self.flavor = flavor
         self.camera = camera
         
@@ -113,8 +118,8 @@ class QA_Frame(object):
         """
         Print formatting
         """
-        return ('{:s}: flavor={:s}'.format(
-                self.__class__.__name__, self.flavor))
+        return ('{:s}: camera={:s}, flavor={:s}'.format(
+                self.__class__.__name__, self.camera, self.flavor))
 
 class QA_Exposure(object):
     def __init__(self, flavor='none', in_data=None):
