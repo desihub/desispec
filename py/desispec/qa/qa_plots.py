@@ -8,6 +8,8 @@ from scipy import signal
 import scipy
 import sys, os
 
+import matplotlib
+matplotlib.use('Agg') 
 from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 
