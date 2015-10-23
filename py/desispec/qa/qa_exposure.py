@@ -18,7 +18,9 @@ class QA_Frame(object):
         Args:
             frame: Frame object, optional (should contain meta data)
             flavor: str, optional exposure type (e.g. flat, arc, science)
+              Will use value in frame.meta, if present
             camera: str, optional camera (e.g. 'b0')
+              Will use value in frame.meta, if present
             in_data: dict, optional -- Input data 
               Mainly for reading from disk
 
@@ -29,8 +31,13 @@ class QA_Frame(object):
         """
         # Parse from frame.meta
         if frame is not None:
-            flavor = frame.meta['FLAVOR']
-            camera = frame.meta['CAMERA']
+            # Parse from meta, if possible
+            try:
+                flavor = frame.meta['FLAVOR']
+            except:
+                pass
+            else:
+                camera = frame.meta['CAMERA']
 
         assert flavor in ['none', 'flat', 'arc', 'science']
         self.flavor = flavor

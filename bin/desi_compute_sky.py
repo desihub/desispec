@@ -69,13 +69,21 @@ def main() :
     # QA
     if (args.qafile is not None) or (args.qafig is not None): 
         log.info("performing skysub QA")
-        # Load (read from file, if it exists)
-        if os.path.isfile(args.qafile):
+        # Load 
+        if os.path.isfile(args.qafile): # Read from file, if it exists
             qaframe = read_qa_frame(args.qafile)
-            if qaframe.camera != frame.meta['CAMERA']:
-                raise ValueError('Wrong QA file!')
-        else: 
-            qaframe = QA_Frame(frame)#flavor='science') # Would prefer to get flavor from Frame
+            # Check camera
+            try: 
+                camera = frame.meta['CAMERA']
+            except:
+                pass # 
+            else:
+                if qaframe.camera != frame.meta['CAMERA']:
+                    raise ValueError('Wrong QA file!')
+        else:  # Init
+            qaframe = QA_Frame(frame)
+            if qaframe.flavor == 'none': # Was not set in frame
+                qaframe.flavor='science' # Forcing to science
         # Run
         qaframe.run_qa('SKYSUB', (frame, fibermap, skymodel))
         # Write
