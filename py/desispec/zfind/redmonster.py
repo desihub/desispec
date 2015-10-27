@@ -97,7 +97,6 @@ class RedMonsterZfind(ZfindBase):
         self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
         self.model = self.zpicker.models[:,0]
 
-
 #- This is a container class needed by Redmonster zpicker
 class _RedMonsterSpecObj(object):
     def __init__(self, wave, flux, ivar, dof=None):
