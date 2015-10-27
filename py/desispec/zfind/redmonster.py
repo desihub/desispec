@@ -59,7 +59,7 @@ class RedMonsterZfind(ZfindBase):
         self.nspec = nspec
 
         #- list of (templatename, zmin, zmax) to fix
-        self.template_dir = os.getenv('REDMONSTER_TEMPLATES_DIR')
+        self.template_dir = os.getenv('REDMONSTER_TEMPLATES_DIR') + '/'
         self.templates = [
             ('ndArch-spEigenStar-55734.fits', -0.005, 0.005),
             ('ndArch-ssp_em_galaxy-v000.fits', 0.6, 1.6),
@@ -94,7 +94,7 @@ class RedMonsterZfind(ZfindBase):
         self.subtype = np.asarray(self.zpicker.subtype)
         self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
         self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
-        self.zwarn = np.array([self.zpicker.zwarning[i].astype(int) for i in range(nspec)])
+        self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
         self.model = self.zpicker.models[:,0]
 
 
