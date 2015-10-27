@@ -59,7 +59,7 @@ class RedMonsterZfind(ZfindBase):
         self.nspec = nspec
 
         #- list of (templatename, zmin, zmax) to fix
-        self.template_dir = os.getenv('REDMONSTER')+'/templates/'
+        self.template_dir = os.getenv('REDMONSTER_TEMPLATES_DIR')
         self.templates = [
             ('ndArch-spEigenStar-55734.fits', -0.005, 0.005),
             ('ndArch-ssp_em_galaxy-v000.fits', 0.6, 1.6),
