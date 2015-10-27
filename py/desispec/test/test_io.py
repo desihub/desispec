@@ -302,6 +302,7 @@ class TestIO(unittest.TestCase):
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
             x = desispec.io.findfile('brick', brickid='0000p123', band='r1')
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
             
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
