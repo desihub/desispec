@@ -59,7 +59,7 @@ class RedMonsterZfind(ZfindBase):
         self.nspec = nspec
 
         #- list of (templatename, zmin, zmax) to fix
-        self.template_dir = os.getenv('REDMONSTER_TEMPLATES_DIR') + '/'
+        self.template_dir = os.getenv('REDMONSTER_TEMPLATES_DIR')
         self.templates = [
             ('ndArch-spEigenStar-55734.fits', -0.005, 0.005),
             ('ndArch-ssp_em_galaxy-v000.fits', 0.6, 1.6),
@@ -71,7 +71,7 @@ class RedMonsterZfind(ZfindBase):
         self.zfinders = list()
         self.zfitters = list()
         for template, zmin, zmax in self.templates:
-            zfind = Zfinder(self.template_dir+template, npoly=2, zmin=zmin, zmax=zmax)
+            zfind = Zfinder(os.path.join(self.template_dir, template), npoly=2, zmin=zmin, zmax=zmax)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
             zfit = Zfitter(zfind.zchi2arr, zfind.zbase)
             zfit.z_refine2()
@@ -91,7 +91,7 @@ class RedMonsterZfind(ZfindBase):
 
         #- Fill in outputs
         self.type = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
-        self.subtype = np.asarray([self.zpicker.subtype[i][0] for i in range(nspec)])
+        self.subtype = np.asarray([repr(self.zpicker.subtype[i][0]) for i in range(nspec)])
         self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
         self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
         self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
@@ -109,13 +109,14 @@ class _RedMonsterSpecObj(object):
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
+        self.npix = flux.shape[-1]
         if dof is None:
             self.dof = np.ones(nspec) * nwave
         else:
             self.dof = dof
 
         #- Leftover BOSS-isms
-        self.plate = self.mjd = self.fiberid = self.npix = 0
+        self.plate = self.mjd = self.fiberid = 0
         self.hdr = None
         self.plugmap = None
 
