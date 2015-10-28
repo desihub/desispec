@@ -9,14 +9,21 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 import numpy as np
 import copy, pdb
 
+from astropy.modeling import models, fitting
+
+from matplotlib import pyplot as plt
+
+from xastropy.xutils import afits as xafits
 from xastropy.xutils import xdebug as xdb
 
-def fiber_gauss(flat, xtrc, box_radius=2):
+def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False):
     """Find the PSF sigma for each fiber
     This serves as an initial guess to what follows
 
     args:
         flat : ndarray of fiber flat image 
+        xtrc: ndarray of fiber traces
+        xerr: ndarray of error in fiber traces
         box_radius: int, optinal 
           Radius of boxcar extraction in pixels
 
@@ -26,21 +33,60 @@ def fiber_gauss(flat, xtrc, box_radius=2):
     # Init
     nfiber = xtrc.shape[1]
     ny = xtrc.shape[0]
-    mask = np.zeros_like(flat,dtype=int)
     iy = np.arange(ny).astype(int)
+    # Mask
+    mask = np.zeros_like(flat,dtype=int)
+    bad_mask = np.ones_like(flat,dtype=int)
+    badx = np.any([xerr > 900.,xerr < 0.],axis=0)
+    bad_mask[badx] = 0
+    nbox = box_radius*2 + 1
+    # Sub images
+    dx_img = np.zeros((ny,nbox))
+    nrm_img = np.zeros((ny,nbox))
+    # Gaussian fit
+    g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=1.)
+    g_init.amplitude.fixed = True
+    g_init.mean.fixed = True
+    fitter = fitting.LevMarLSQFitter()
 
     # Loop on fibers
     for ii in xrange(nfiber):
-        # Extract boxcar to normalize
-        mask[*] = 0
+        # Reset
+        mask[:] = 0
+        dx_img[:] = 0
         # Generate mask
         ixt = np.round(xtrc[:,ii]).astype(int)
-        for ibox in range(-box_radius,box_radius+1):
+        for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
-            mask[iy:ix] = 1
+            mask[iy,ix] = 1
+            dx_img[:,jj] = ix-xtrc[:,ii]
+            nrm_img[:,jj] = flat[iy,ix]
         # Sum
         flux = np.sum(mask*flat,axis=1)
-        xdb.set_trace()
+        # Normalize
+        nrm_img /= np.outer(flux,np.ones(nbox))
+        # Gaussian
+        amp = np.median(nrm_img[np.where(np.abs(dx_img)<0.05)])
+        g_init.amplitude.value = amp # Fixed
+        fdimg = dx_img.flatten()
+        fnimg = nrm_img.flatten()
+        all_sig =  np.abs(fdimg) / np.sqrt(
+            np.log(amp)-np.log(fnimg) )
+        g_init.stddev.value = np.median(
+            all_sig[np.where((np.abs(fdimg)>1) & (np.abs(fdimg)<1.5))])
+
+        # Initial fit (need to mask!)
+        parm = fitter(g_init, fdimg, fnimg)
+        # Iterate
+        debug = False
+        if debug:
+            plt.clf()
+            plt.scatter(fdimg, nrm_img.flatten())
+            x= np.linspace(-box_radius, box_radius, 200)
+            plt.plot(x, parm(x), 'r-')
+            plt.show()
+            plt.close()
+            xdb.set_trace()
 
 
     #
@@ -134,7 +180,6 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     fits: list
       List of the fit dicts
     '''
-    from xastropy.xutils import afits as xafits
     reload(xafits)
 
     ny = xset.shape[0]
@@ -303,6 +348,18 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
     # Return
     return xnew, xerr
 
+#####################################################################            
+#####################################################################            
+# Utilities
+#####################################################################            
+
+
+#####################################################################            
+#####################################################################            
+#####################################################################            
+# QA
+#####################################################################            
+
 def fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
     ''' Generate a QA plot for the traces.  Bundle by bundle
     Parameters:
@@ -319,7 +376,6 @@ def fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
       Normalize the flat?  If not, use zscale for output
     '''
     import matplotlib
-    from matplotlib import pyplot as plt
     import matplotlib.gridspec as gridspec
     import matplotlib.cm as cm
     from matplotlib.backends.backend_pdf import PdfPages
