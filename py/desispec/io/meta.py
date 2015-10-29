@@ -52,19 +52,27 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
     if filetype not in location:
         raise IOError("Unknown filetype {}; known types are {}".format(filetype, location.keys()))
 
-    if specprod is None:
-        specprod = specprod_root()
-
     #- Check for missing inputs
     required_inputs = [i[0] for i in re.findall(r'\{([a-z]+)(|[:0-9d]+)\}',location[filetype])]
+
+    if specprod is None and 'specprod' in required_inputs:
+        specprod = specprod_root()
+
     actual_inputs = {
-        'rawdatadir':rawdata_root(), 'specprod':specprod,
+        'specprod':specprod,
         'night':night, 'expid':expid, 'camera':camera, 'brickid':brickid,
         'band':band, 'spectrograph':spectrograph
         }
+
+    #- check rawdata_root() but only if needed
+    if 'rawdatadir' in required_inputs:
+        actual_inputs['rawdatadir'] = rawdata_root()
+
     for i in required_inputs:
         if actual_inputs[i] is None:
             raise ValueError("Required input '{0}' is not set for type '{1}'!".format(i,filetype))
+    
+            
     #- normpath to remove extraneous double slashes /a/b//c/d
     filepath = os.path.normpath(location[filetype].format(**actual_inputs))
 
