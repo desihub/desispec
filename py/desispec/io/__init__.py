@@ -22,7 +22,7 @@ from .qa import read_qa_frame, write_qa_frame
 from .zfind import read_zbest, write_zbest
 from .image import read_image, write_image
 from .util import (header2wave, fitsheader, native_endian, makepath,
-    write_bintable)
+    write_bintable, iterfiles)
 from .fluxcalibration import (
     read_stdstar_templates, write_stdstar_model,
     read_flux_calibration, write_flux_calibration)
