@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# See top-level LICENSE.rst file for Copyright information
 
 """
 Fit redshifts and classifications on DESI bricks
@@ -71,11 +72,11 @@ for i, targetid in enumerate(targetids):
         #- Average multiple exposures on the same wavelength grid for each channel
         xflux.extend(np.average(exp_flux[:,ii], weights=exp_ivar[:,ii], axis=0))
         xivar.extend(weights[ii])
-            
+
     xwave = np.array(xwave)
     xivar = np.array(xivar)
     xflux = np.array(xflux)
-            
+
     ii = np.argsort(xwave)
     flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
 
@@ -88,4 +89,3 @@ if opts.outfile is None:
 
 log.info("Writing "+opts.outfile)
 io.write_zbest(opts.outfile, opts.brick, targetids, zf, zspec=opts.zspec)
-    

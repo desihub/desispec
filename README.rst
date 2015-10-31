@@ -31,16 +31,36 @@ If you have tagged a version and wish to set the package version based on your c
 
     $>  python setup.py version
 
-And then install as usual
+And then install as usual.
 
-Status
-------
+Full Documentation
+------------------
 
-.. image:: https://travis-ci.org/desihub/desispec.png
+Please visit `desispec on Read the Docs`_
+
+.. image:: https://readthedocs.org/projects/desispec/badge/?version=latest
+    :target: http://desispec.readthedocs.org/en/latest/
+    :alt: Documentation Status
+
+.. _`desispec on Read the Docs`: http://desispec.readthedocs.org/en/latest/
+
+Travis Build Status
+-------------------
+
+.. image:: https://img.shields.io/travis/desihub/desispec.svg
     :target: https://travis-ci.org/desihub/desispec
     :alt: Travis Build Status
+
+
+Test Coverage Status
+--------------------
+
+.. image:: https://coveralls.io/repos/desihub/desispec/badge.svg?service=github
+    :target: https://coveralls.io/github/desihub/desispec
+    :alt: Test Coverage Status
 
 License
 -------
 
-Please see the ``LICENSE`` file.
+desispec is free software licensed under a 3-clause BSD-style license. For details see
+the ``LICENSE.rst`` file.

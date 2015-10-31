@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# See top-level LICENSE file for Copyright information
+# See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
 
@@ -27,7 +27,7 @@ def main() :
 
     args = parser.parse_args()
     log=get_logger()
-    
+
     log.info("starting")
 
     frame = read_frame(args.infile)

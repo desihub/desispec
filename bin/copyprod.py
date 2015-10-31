@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# See top-level LICENSE.rst file for Copyright information
 
 """
 Copy a DESI production from one directory to another

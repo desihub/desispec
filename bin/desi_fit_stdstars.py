@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# See top-level LICENSE.rst file for Copyright information
 
 """
 Get the normalized best template to do flux calibration.
