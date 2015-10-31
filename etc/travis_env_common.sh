@@ -21,7 +21,7 @@ fi
 conda install --yes pytest Cython jinja2 psutil pyyaml requests
 
 # NUMPY scipy
-conda install --yes numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION
+conda install --yes numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION matplotlib
 
 # ASTROPY
 if [[ $ASTROPY_VERSION == development ]]
@@ -39,7 +39,7 @@ fi
 # OPTIONAL DEPENDENCIES
 if $OPTIONAL_DEPS
 then
-  $CONDA_INSTALL h5py matplotlib pyyaml scikit-image pandas
+  $CONDA_INSTALL h5py scikit-image pandas
   $PIP_INSTALL beautifulsoup4
 fi
 
