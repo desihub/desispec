@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# See top-level LICENSE file for Copyright information
+# See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
 
@@ -67,16 +67,16 @@ def main() :
     skymodel = compute_sky(frame, fibermap)
 
     # QA
-    if (args.qafile is not None) or (args.qafig is not None): 
+    if (args.qafile is not None) or (args.qafig is not None):
         log.info("performing skysub QA")
-        # Load 
+        # Load
         if os.path.isfile(args.qafile): # Read from file, if it exists
             qaframe = read_qa_frame(args.qafile)
             # Check camera
-            try: 
+            try:
                 camera = frame.meta['CAMERA']
             except:
-                pass # 
+                pass #
             else:
                 if qaframe.camera != frame.meta['CAMERA']:
                     raise ValueError('Wrong QA file!')
