@@ -25,9 +25,9 @@ class RedMonsterZfind(ZfindBase):
         TODO: document redmonster specific output variables
         """
         try:
-            from redmonster.physics.zfinder import Zfinder
-            from redmonster.physics.zfitter import Zfitter
-            from redmonster.physics.zpicker2 import Zpicker
+            from redmonster.physics.zfinder import ZFinder
+            from redmonster.physics.zfitter import ZFitter
+            from redmonster.physics.zpicker2 import ZPicker
         except ImportError:
             get_logger().error("You are attempting to use RedMonster, but it is not available for import!")
             raise
@@ -71,9 +71,9 @@ class RedMonsterZfind(ZfindBase):
         self.zfinders = list()
         self.zfitters = list()
         for template, zmin, zmax in self.templates:
-            zfind = Zfinder(os.path.join(self.template_dir, template), npoly=2, zmin=zmin, zmax=zmax)
+            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=2, zmin=zmin, zmax=zmax)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
-            zfit = Zfitter(zfind.zchi2arr, zfind.zbase)
+            zfit = ZFitter(zfind.zchi2arr, zfind.zbase)
             zfit.z_refine2()
 
             self.zfinders.append(zfind)
@@ -87,7 +87,7 @@ class RedMonsterZfind(ZfindBase):
                          self.zfitters[i].zwarning.astype(int))
 
         #- Zpicker
-        self.zpicker = Zpicker(specobj, self.zfinders, self.zfitters, flags)
+        self.zpicker = ZPicker(specobj, self.zfinders, self.zfitters, flags)
 
         #- Fill in outputs
         self.type = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
