@@ -31,7 +31,7 @@ If you have tagged a version and wish to set the package version based on your c
 
     $>  python setup.py version
 
-And then install as usual
+And then install as usual.
 
 Status
 ------
@@ -43,4 +43,4 @@ Status
 License
 -------
 
-Please see the ``LICENSE`` file.
+Please see the ``LICENSE.rst`` file.
