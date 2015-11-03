@@ -38,10 +38,10 @@ def main():
     bricks = { }
     try:
         # Loop over exposures available for this night.
-        for exposure in desispec.io.get_exposures(args.night,specprod = args.specprod):
+        for exposure in desispec.io.get_exposures(args.night,specprod_dir = args.specprod):
             # Ignore exposures with no fibermap, assuming they are calibration data.
             fibermap_path = desispec.io.findfile(filetype = 'fibermap',night = args.night,
-                expid = exposure,specprod = args.specprod)
+                expid = exposure, specprod_dir = args.specprod)
             if not os.path.exists(fibermap_path):
                 log.debug('Skipping exposure %08d with no fibermap.' % exposure)
                 continue
@@ -49,8 +49,9 @@ def main():
             fibermap_data = desispec.io.read_fibermap(fibermap_path)
             brick_ids = set(fibermap_data['BRICKNAME'])
             # Loop over per-camera cframes available for this exposure.
-            cframes = desispec.io.get_files(filetype = 'cframe',night = args.night,
-                expid = exposure,specprod = args.specprod)
+            cframes = desispec.io.get_files(
+                    filetype = 'cframe', night = args.night,
+                    expid = exposure, specprod_dir = args.specprod)
             log.debug('Exposure %08d covers %d bricks and has cframes for %s.' % (
                 exposure,len(brick_ids),','.join(cframes.keys())))
             for camera,cframe_path in cframes.iteritems():
