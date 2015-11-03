@@ -173,14 +173,16 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
 
     for i,v in enumerate(filters):
         #Normalizing using only SDSS_R band magnitude
-        if v=='SDSS_R':
+        if v.upper() == 'SDSS_R' or v.upper() =='DECAM_R' :
             refmag=mags[i]
             filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
             rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
             apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
-            log.info('scaling SDSS_r mag {0:f} to {1:f}.'.format(apMag,refmag))
+            log.info('scaling {} mag {:f} to {:f}.'.format(v, apMag,refmag))
             scalefac=10**((apMag-refmag)/2.5)
             normflux=stdflux*scalefac
+
+            break  #- found SDSS_R or DECAM_R; we can stop now
 
     return stdwave,normflux
 
