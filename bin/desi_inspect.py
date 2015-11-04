@@ -68,7 +68,7 @@ def main():
         wlen_min,wlen_max = 1e8,0.
 
         brick_path = desispec.io.meta.findfile('brick',brickid = args.brick,
-            band = band,specprod = args.specprod)
+            band = band, specprod_dir = args.specprod)
         if not os.path.exists(brick_path):
             log.warning('No %s-band brick file found for brick %s.' % (band,args.brick))
         else:
@@ -94,7 +94,7 @@ def main():
             brick_file.close()
 
         coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,
-            band = band,specprod = args.specprod)
+            band = band, specprod_dir = args.specprod)
         if not os.path.exists(coadd_path):
             log.warning('No %s-band coadd file found for brick %s.' % (band,args.brick))
         else:
@@ -126,7 +126,7 @@ def main():
 
             coadd_file.close()
 
-    coadd_all_path = desispec.io.meta.findfile('coadd_all',brickid = args.brick,specprod = args.specprod)
+    coadd_all_path = desispec.io.meta.findfile('coadd_all',brickid = args.brick,specprod_dir = args.specprod)
     if not os.path.exists(coadd_all_path):
         log.warning('No global coadd available for brick %s.' % (args.brick))
     else:
