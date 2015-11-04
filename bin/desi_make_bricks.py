@@ -38,7 +38,7 @@ def main():
     bricks = { }
     try:
         # Loop over exposures available for this night.
-        for exposure in desispec.io.get_exposures(args.night,specprod_dir = args.specprod):
+        for exposure in desispec.io.get_exposures(args.night, specprod_dir = args.specprod):
             # Ignore exposures with no fibermap, assuming they are calibration data.
             fibermap_path = desispec.io.findfile(filetype = 'fibermap',night = args.night,
                 expid = exposure, specprod_dir = args.specprod)
