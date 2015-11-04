@@ -18,12 +18,13 @@ module load redmonster/master
 module switch desimodel/trunk
 
 #- Update software packages
-echo 'updating desispec'; cd $DESISPEC; git pull
-echo 'updating desisim'; cd $DESISIM; git pull
-echo 'updating specter'; cd $SPECTER_DIR; git pull
-echo 'updating desimodel'; cd $DESIMODEL; svn update
-#- TODO: Requires password
-### cd $REDMONSTER; git pull
+echo 'updating desispec'; cd $DESISPEC; git pull; fix_permissions.sh .
+echo 'updating desisim'; cd $DESISIM; git pull; fix_permissions.sh .
+echo 'updating specter'; cd $SPECTER_DIR; git pull; fix_permissions.sh .
+echo 'updating desimodel'; cd $DESIMODEL; svn update; fix_permissions.sh .
+echo 'updating redmonster'; cd $REDMONSTER; git pull; fix_permissions.sh .
+
+exit 0
 
 #- Environment variables necessary for production
 export DESI_TEMPLATE_ROOT=$DESI_ROOT/datachallenge/dc2/templates
