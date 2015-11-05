@@ -24,8 +24,6 @@ echo 'updating specter'; cd $SPECTER_DIR; git pull; fix_permissions.sh .
 echo 'updating desimodel'; cd $DESIMODEL; svn update; fix_permissions.sh .
 echo 'updating redmonster'; cd $REDMONSTER; git pull; fix_permissions.sh .
 
-exit 0
-
 #- Environment variables necessary for production
 export DESI_TEMPLATE_ROOT=$DESI_ROOT/datachallenge/dc2/templates
 export DESI_ELG_TEMPLATES=$DESI_TEMPLATE_ROOT/elg_templates.fits
