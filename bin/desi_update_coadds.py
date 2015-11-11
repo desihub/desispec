@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# See top-level LICENSE file for Copyright information
+# See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
 """
@@ -46,7 +46,7 @@ def main():
         return -1
 
     # Open the combined coadd file for this brick, for updating.
-    coadd_all_path = desispec.io.meta.findfile('coadd_all',brickid = args.brick,specprod = args.specprod)
+    coadd_all_path = desispec.io.meta.findfile('coadd_all',brickid = args.brick,specprod_dir = args.specprod)
     coadd_all_file = desispec.io.brick.CoAddedBrick(coadd_all_path,mode = 'update')
 
     # Initialize dictionaries of co-added spectra for each object ID.
@@ -62,7 +62,7 @@ def main():
     # Loop over bands for this brick.
     for band in args.bands:
         # Open this band's brick file for reading.
-        brick_path = desispec.io.meta.findfile('brick',brickid = args.brick,band = band,specprod = args.specprod)
+        brick_path = desispec.io.meta.findfile('brick',brickid = args.brick,band = band,specprod_dir = args.specprod)
         if not os.path.exists(brick_path):
             log.info('Skipping non-existent brick file {0}.'.format(brick_path))
             continue
@@ -77,7 +77,7 @@ def main():
             brick_file.close()
             continue
         # Open this band's coadd file for updating.
-        coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,band = band,specprod = args.specprod)
+        coadd_path = desispec.io.meta.findfile('coadd',brickid = args.brick,band = band, specprod_dir = args.specprod)
         coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'update')
         # Copy the input fibermap info for each exposure into memory.
         coadd_info = np.copy(brick_file.hdu_list[4].data)

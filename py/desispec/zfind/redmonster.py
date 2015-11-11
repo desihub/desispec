@@ -25,9 +25,9 @@ class RedMonsterZfind(ZfindBase):
         TODO: document redmonster specific output variables
         """
         try:
-            from redmonster.physics.zfinder import Zfinder
-            from redmonster.physics.zfitter import Zfitter
-            from redmonster.physics.zpicker import Zpicker
+            from redmonster.physics.zfinder import ZFinder
+            from redmonster.physics.zfitter import ZFitter
+            from redmonster.physics.zpicker2 import ZPicker
         except ImportError:
             get_logger().error("You are attempting to use RedMonster, but it is not available for import!")
             raise
@@ -59,7 +59,7 @@ class RedMonsterZfind(ZfindBase):
         self.nspec = nspec
 
         #- list of (templatename, zmin, zmax) to fix
-        self.template_dir = os.getenv('REDMONSTER')+'/templates/'
+        self.template_dir = os.getenv('REDMONSTER_TEMPLATES_DIR')
         self.templates = [
             ('ndArch-spEigenStar-55734.fits', -0.005, 0.005),
             ('ndArch-ssp_em_galaxy-v000.fits', 0.6, 1.6),
@@ -71,10 +71,10 @@ class RedMonsterZfind(ZfindBase):
         self.zfinders = list()
         self.zfitters = list()
         for template, zmin, zmax in self.templates:
-            zfind = Zfinder(self.template_dir+template, npoly=2, zmin=zmin, zmax=zmax)
+            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=2, zmin=zmin, zmax=zmax)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
-            zfit = Zfitter(zfind.zchi2arr, zfind.zbase)
-            zfit.z_refine()
+            zfit = ZFitter(zfind.zchi2arr, zfind.zbase)
+            zfit.z_refine2()
 
             self.zfinders.append(zfind)
             self.zfitters.append(zfit)
@@ -87,19 +87,15 @@ class RedMonsterZfind(ZfindBase):
                          self.zfitters[i].zwarning.astype(int))
 
         #- Zpicker
-        self.zpicker = Zpicker(specobj,
-            self.zfinders[0], self.zfitters[0], flags[0],
-            self.zfinders[1], self.zfitters[1], flags[1],
-            self.zfinders[2], self.zfitters[2], flags[2])
+        self.zpicker = ZPicker(specobj, self.zfinders, self.zfitters, flags)
 
         #- Fill in outputs
-        self.type = np.asarray(self.zpicker.type, dtype='S20')
-        self.subtype = np.asarray(self.zpicker.subtype, dtype='S20')
-        self.z = np.array([self.zpicker.z[i,0] for i in range(nspec)])
-        self.zerr = np.array([self.zpicker.z_err[i,0] for i in range(nspec)])
-        self.zwarn = np.array([self.zpicker.zwarning[i].astype(int) for i in range(nspec)])
-        self.model = self.zpicker.models
-
+        self.type = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
+        self.subtype = np.asarray([repr(self.zpicker.subtype[i][0]) for i in range(nspec)])
+        self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
+        self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
+        self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
+        self.model = self.zpicker.models[:,0]
 
 #- This is a container class needed by Redmonster zpicker
 class _RedMonsterSpecObj(object):
@@ -112,13 +108,14 @@ class _RedMonsterSpecObj(object):
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
+        self.npix = flux.shape[-1]
         if dof is None:
             self.dof = np.ones(nspec) * nwave
         else:
             self.dof = dof
 
         #- Leftover BOSS-isms
-        self.plate = self.mjd = self.fiberid = self.npix = 0
+        self.plate = self.mjd = self.fiberid = 0
         self.hdr = None
         self.plugmap = None
 

@@ -1,8 +1,35 @@
-language: python
+#
+# IMPORTANT.  OS X support is so experimental that you have to specifically
+# request to have it enabled, on a per-repository basis.  See
+# http://docs.travis-ci.com/user/multi-os/#Manual-intervention-required
+#
+# This file will still work, without OS X enabled, it just won't run those
+# tests.
+#
+# We set the language to c because python isn't supported on the MacOS X nodes
+# on Travis. However, the language ends up being irrelevant anyway, since we
+# install Python ourselves using conda.
+# language: python
+language: c
 
-python:
+os:
+    - linux
+    # - osx
+
+# Setting sudo to false opts in to Travis-CI container-based builds.
+sudo: false
+
+# The apt packages below are needed for sphinx builds, which can no longer
+# be installed with sudo apt-get.
+addons:
+    apt:
+        packages:
+            - graphviz
+            - texlive-latex-extra
+            - dvipng
+# python:
     # - 2.6
-    - 2.7
+    # - 2.7
     # - 3.3
     # - 3.4
     # This is just for "egg_info".  All other builds are explicitly given in the matrix
@@ -13,33 +40,44 @@ env:
         # to repeat them for all configurations.
         - NUMPY_VERSION=1.9
         - SCIPY_VERSION=0.14
-        - ASTROPY_VERSION=stable
+        - ASTROPY_VERSION=1.0.4
         - SPHINX_VERSION=1.3
+        - DESIUTIL_VERSION=1.0.0
         - CONDA_INSTALL='conda install -c astropy-ci-extras --yes'
         - PIP_INSTALL='pip install'
         - OPTIONAL_DEPS=false
         - MAIN_CMD='python setup.py'
     matrix:
-        - SETUP_CMD='egg_info'
+        - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
 
 matrix:
+    # Don't wait for allowed failures.
+    fast_finish: true
+
+    # OS X support is still experimental, so don't penalize failuures.
+    allow_failures:
+        - os: osx
+
     include:
 
         # Check for sphinx doc build warnings - we do this first because it
         # runs for a long time
-        - python: 2.7
-          env: SETUP_CMD='build_sphinx'
+        - os: linux
+          env: PYTHON_VERSION=2.7 SETUP_CMD='build_sphinx'
           # OPTIONAL_DEPS needed because the plot_directive in sphinx needs them
           # -w is an astropy extension
 
         # Do a bdist_egg compile.  This will catch things like syntax errors
         # without needing to do a full python setup.py test
-        - python: 2.7
-          env: SETUP_CMD='bdist_egg'
+        - os: linux
+          env: PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
 
         # Try all python versions with the latest numpy
-        - python: 2.7
-          env: SETUP_CMD='test'
+        - os: linux
+          env: PYTHON_VERSION=2.7 SETUP_CMD='test --coverage'
+
+        # - os: osx
+        #   env: PYTHON_VERSION=2.7 SETUP_CMD='test'
         # - python: 3.3
         #   env: SETUP_CMD='test --open-files'
         # - python: 3.4
@@ -64,57 +102,11 @@ matrix:
         # - python: 2.7
         #   env: MAIN_CMD='pep8 astropy --count' SETUP_CMD=''
 
-before_install:
-
-    # Use utf8 encoding. Should be default, but this is insurance against
-    # future changes
-    - export PYTHONIOENCODING=UTF8
-    - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
-    - chmod +x miniconda.sh
-    - ./miniconda.sh -b
-    - export PATH=/home/travis/miniconda/bin:$PATH
-    - conda update --yes conda
-
-    # UPDATE APT-GET LISTINGS
-    - sudo apt-get update
-
-    # DOCUMENTATION DEPENDENCIES
-    - if [[ $SETUP_CMD == build_sphinx* ]]; then sudo apt-get install graphviz texlive-latex-extra dvipng; fi
-
 install:
-
-    # CONDA
-    - conda create --yes -n test -c astropy-ci-extras python=$TRAVIS_PYTHON_VERSION
-    - source activate test
-
-    - export CONDA_INSTALL="conda install -c astropy-ci-extras --yes python=$TRAVIS_PYTHON_VERSION numpy=$NUMPY_VERSION"
-
-    # CORE DEPENDENCIES
-    - if [[ $SETUP_CMD != egg_info ]]; then $CONDA_INSTALL numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION pyyaml pip Cython jinja2 requests matplotlib; fi
-    - if [[ $SETUP_CMD != egg_info ]]; then $PIP_INSTALL pytest-xdist; fi
-
-    # ASTROPY
-    - if [[ $SETUP_CMD != egg_info ]] && [[ $ASTROPY_VERSION == development ]]; then $PIP_INSTALL git+http://github.com/astropy/astropy.git#egg=astropy; fi
-    - if [[ $SETUP_CMD != egg_info ]] && [[ $ASTROPY_VERSION == stable ]]; then $CONDA_INSTALL numpy=$NUMPY_VERSION scipy=$SCIPY_VERSION astropy; fi
-
-    # OPTIONAL DEPENDENCIES
-    # - if $OPTIONAL_DEPS; then $CONDA_INSTALL h5py matplotlib; fi
-    # - if $OPTIONAL_DEPS; then pip install beautifulsoup4; fi
-
-    # DOCUMENTATION DEPENDENCIES
-    # build_sphinx needs sphinx and matplotlib (for plot_directive). Note that
-    # this matplotlib will *not* work with py 3.x, but our sphinx build is
-    # currently 2.7, so that's fine
-    - if [[ $SETUP_CMD == build_sphinx* ]]; then $CONDA_INSTALL Sphinx=$SPHINX_VERSION matplotlib; fi
-
-    # COVERAGE DEPENDENCIES
-    # - if [[ $SETUP_CMD == 'test --coverage' ]]; then pip install coverage coveralls; fi
-
-    # PEP8 DEPENDENCIES
-    # - if [[ $MAIN_CMD == pep8* ]]; then pip install pep8; fi
+    - source etc/travis_env_$TRAVIS_OS_NAME.sh
 
 script:
     - $MAIN_CMD $SETUP_CMD
 
 after_success:
-    # - if [[ $SETUP_CMD == 'test --coverage' ]]; then coveralls --rcfile='astropy/tests/coveragerc'; fi
+    - if [[ $SETUP_CMD == 'test --coverage' ]]; then coveralls; fi

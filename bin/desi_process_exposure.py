@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# See top-level LICENSE file for Copyright information
+# See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
 
@@ -46,7 +46,7 @@ def main() :
         sys.exit(12)
 
     frame = read_frame(args.infile)
-    
+
     if args.fiberflat!=None :
         log.info("apply fiberflat")
         # read fiberflat
