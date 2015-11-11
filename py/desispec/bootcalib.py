@@ -10,13 +10,14 @@ import numpy as np
 import copy, pdb
 
 from astropy.modeling import models, fitting
+from astropy.stats import sigma_clip
 
 from matplotlib import pyplot as plt
 
 from xastropy.xutils import afits as xafits
 from xastropy.xutils import xdebug as xdb
 
-def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False):
+def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
     This serves as an initial guess to what follows
 
@@ -50,7 +51,10 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False):
     fitter = fitting.LevMarLSQFitter()
 
     # Loop on fibers
+    gauss = []
     for ii in xrange(nfiber):
+        if verbose:
+            print("Working on fiber {:d}".format(ii))
         # Reset
         mask[:] = 0
         dx_img[:] = 0
@@ -78,18 +82,38 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False):
         # Initial fit (need to mask!)
         parm = fitter(g_init, fdimg, fnimg)
         # Iterate
-        debug = False
+        iterate = True
+        nrej = 0
+        niter = 0
+        while iterate:
+            # Clip
+            resid = parm(fdimg) - fnimg
+            resid_mask = sigma_clip(resid,sig=4.)
+            # Fit
+            gdp = ~resid_mask.mask
+            parm = fitter(g_init, fdimg[gdp], fnimg[gdp])
+            # Again?
+            if np.sum(resid_mask.mask) <= nrej:
+                iterate = False
+            else:
+                nrej = np.sum(resid_mask.mask)
+                niter += 1
+        if verbose:
+            print("Rejected {:d} in {:d} iterations".format(nrej,niter))
+
+        #debug = False
         if debug:
             plt.clf()
-            plt.scatter(fdimg, nrm_img.flatten())
+            plt.scatter(fdimg[gdp], fnimg[gdp])
             x= np.linspace(-box_radius, box_radius, 200)
             plt.plot(x, parm(x), 'r-')
             plt.show()
             plt.close()
             xdb.set_trace()
-
-
+        # Save
+        gauss.append(parm.stddev.value)
     #
+    return np.array(gauss)
 
 def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     """Find the peaks of the fiber flat spectra
@@ -100,9 +124,11 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
         ypos : int [optional] Row for finding peaks
            Default is half-way up the image
         nwidth : int [optional] Width of peak (end-to-end)
+        debug: bool, optional
 
-    returns xpk, ypos
+    returns xpk, ypos, cut
       list of xpk (nearest pixel) at ypos
+      ndarray of cut through the image
     """
     # Init
     Nbundle = 20
@@ -155,7 +181,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
         raise ValueError('Wrong number of fibers in a bundle')
 
     # Return
-    return xpk, ypos
+    return xpk, ypos, cut
 
 
 def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
@@ -224,6 +250,10 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
       Initial guesses for trace peak at ypass
     ypass: int
       Row for initial guesses
+    Returns:
+    ---------
+    xset: Trace for each fiber
+    xerr: Estimated error in that trace
     '''
     # Init
     xinit = xinit0.astype(float)
@@ -438,4 +468,5 @@ def fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
         pp.savefig(bbox_inches='tight')
         plt.close()
     # Finish
+    print('Writing {:s} QA for fiber trace'.format(outfil))
     pp.close()
