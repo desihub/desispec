@@ -8,6 +8,7 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 
 import numpy as np
 import copy, pdb
+import warnings
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -16,6 +17,17 @@ from matplotlib import pyplot as plt
 
 from xastropy.xutils import afits as xafits
 from xastropy.xutils import xdebug as xdb
+
+def xpos_image(shape, xtrc, box_radius):
+    """Generates an xpos image which is the offset from a given trace of each pixel
+    Parameters:
+    ----------
+    shape: tuple
+    xtrc: trace
+    box_radius: float
+    """
+    # Generate mask
+
 
 def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
@@ -31,6 +43,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
     returns gauss
       list of Gaussian sigma
     """
+    warnings.warn("fiber_gauss uses astropy.modeling.  Consider an alternative")
     # Init
     nfiber = xtrc.shape[1]
     ny = xtrc.shape[0]
@@ -42,8 +55,9 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
     bad_mask[badx] = 0
     nbox = box_radius*2 + 1
     # Sub images
-    dx_img = np.zeros((ny,nbox))
-    nrm_img = np.zeros((ny,nbox))
+    #dx_img = np.zeros((ny,nbox))
+    #nrm_img = np.zeros((ny,nbox))
+    xpix_img = np.outer(np.ones(flat.shape[0]),np.arange(flat.shape[1]))
     # Gaussian fit
     g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=1.)
     g_init.amplitude.fixed = True
@@ -55,25 +69,27 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
     for ii in xrange(nfiber):
         if verbose:
             print("Working on fiber {:d}".format(ii))
-        # Reset
         mask[:] = 0
-        dx_img[:] = 0
-        # Generate mask
+        #dx_img[:] = 0
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
             mask[iy,ix] = 1
-            dx_img[:,jj] = ix-xtrc[:,ii]
-            nrm_img[:,jj] = flat[iy,ix]
+            #dx_img[:,jj] = ix-xtrc[:,ii]
+            #nrm_img[:,jj] = flat[iy,ix]
+        dx_img = xpix_img - np.outer(xtrc[:,ii],np.ones(flat.shape[1]))
         # Sum
         flux = np.sum(mask*flat,axis=1)
         # Normalize
-        nrm_img /= np.outer(flux,np.ones(nbox))
+        #nrm_img /= np.outer(flux,np.ones(nbox))
+        nrm_img = flat / np.outer(flux,np.ones(flat.shape[1]))
         # Gaussian
         amp = np.median(nrm_img[np.where(np.abs(dx_img)<0.05)])
         g_init.amplitude.value = amp # Fixed
-        fdimg = dx_img.flatten()
-        fnimg = nrm_img.flatten()
+        #fdimg = dx_img.flatten()
+        #fnimg = nrm_img.flatten()
+        fdimg = dx_img[mask==1].flatten()
+        fnimg = nrm_img[mask==1].flatten()
         all_sig =  np.abs(fdimg) / np.sqrt(
             np.log(amp)-np.log(fnimg) )
         g_init.stddev.value = np.median(
