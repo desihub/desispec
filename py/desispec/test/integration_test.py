@@ -115,7 +115,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             pixfile = io.findfile('pix', night, expid, camera)
             psffile = '{}/data/specpsf/psf-{}.fits'.format(os.getenv('DESIMODEL'), channel)
             framefile = io.findfile('frame', night, expid, camera)
-            cmd = "exspec -i {pix} -p {psf} --specrange 0,{nspec} -w {wave} -o {frame}".format(
+            cmd = "exspec -i {pix} -p {psf} --specmin 0 --nspec {nspec} -w {wave} -o {frame}".format(
                 pix=pixfile, psf=psffile, wave=waverange[channel], frame=framefile, **params)
 
             inputs = [pixfile, psffile]
