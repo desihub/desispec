@@ -25,17 +25,16 @@ def check_env():
     """
     log = get_logger()
     #- template locations
-    missing_template_env = False
-    for objtype in ('ELG', 'LRG', 'STD', 'QSO'):
-        name = 'DESI_'+objtype+'_TEMPLATES'
-        if name not in os.environ:
-            log.warning('missing ${0} needed for simulating spectra'.format(name))
-            missing_template_env = True
-
-    if missing_template_env:
-        log.warning('    e.g. see NERSC:/project/projectdirs/desi/datachallenge/dc2/templates/')
-
     missing_env = False
+    if 'DESI_BASIS_TEMPLATES' not in os.environ:
+        log.warning('missing $DESI_BASIS_TEMPLATES needed for simulating spectra'.format(name))
+        missing_env = True
+
+    if not os.path.isdir(os.getenv('DESI_BASIS_TEMPLATES')):
+        log.warning('missing $DESI_BASIS_TEMPLATES directory')
+        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v1.0')
+        missing_env = True
+
     for name in (
         'DESI_SPECTRO_SIM', 'DESI_SPECTRO_DATA', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'PRODNAME'):
         if name not in os.environ:
@@ -47,10 +46,11 @@ def check_env():
         log.warning("    Simulations written to $DESI_SPECTRO_SIM/$PIXPROD/")
         log.warning("    Raw data read from $DESI_SPECTRO_DATA/")
         log.warning("    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$PRODNAME/")
+        log.warning("    Templates are read from $DESI_BASIS_TEMPLATES")
 
     #- Wait until end to raise exception so that we report everything that
     #- is missing before actually failing
-    if missing_env or missing_template_env:
+    if missing_env:
         log.critical("missing env vars; exiting without running pipeline")
         sys.exit(1)
 
