@@ -11,7 +11,7 @@ import datetime
 import glob
 import re
 
-def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
+def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
     band=None, spectrograph=None, specprod_dir=None, download=False):
     """Returns location where file should be
 
@@ -20,7 +20,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
         night : [optional] YEARMMDD string
         expid : [optional] integer exposure id
         camera : [optional] 'b0' 'r1' .. 'z9'
-        brickid : [optional] brick ID string
+        brickname : [optional] brick name string
         band : [optional] one of 'b','r','z' identifying the camera band
         spectrograph : [optional] spectrograph number, 0-9
         specprod_dir : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
@@ -44,11 +44,11 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
         ### psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
         psf = '{specprod_dir}/calib2d/{night}/psf-{camera}-{expid:08d}.fits',
         fibermap = '{rawdata_dir}/{night}/fibermap-{expid:08d}.fits',
-        brick = '{specprod_dir}/bricks/{brickid}/brick-{band}-{brickid}.fits',
-        coadd = '{specprod_dir}/bricks/{brickid}/coadd-{band}-{brickid}.fits',
-        coadd_all = '{specprod_dir}/bricks/{brickid}/coadd-{brickid}.fits',
-        zbest = '{specprod_dir}/bricks/{brickid}/zbest-{brickid}.fits',
-        zspec = '{specprod_dir}/bricks/{brickid}/zspec-{brickid}.fits',
+        brick = '{specprod_dir}/bricks/{brickname}/brick-{band}-{brickname}.fits',
+        coadd = '{specprod_dir}/bricks/{brickname}/coadd-{band}-{brickname}.fits',
+        coadd_all = '{specprod_dir}/bricks/{brickname}/coadd-{brickname}.fits',
+        zbest = '{specprod_dir}/bricks/{brickname}/zbest-{brickname}.fits',
+        zspec = '{specprod_dir}/bricks/{brickname}/zspec-{brickname}.fits',
         zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
     )
     location['desi'] = location['raw']
@@ -71,7 +71,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
 
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod,
-        'night':night, 'expid':expid, 'camera':camera, 'brickid':brickid,
+        'night':night, 'expid':expid, 'camera':camera, 'brickname':brickname,
         'band':band, 'spectrograph':spectrograph
         }
 

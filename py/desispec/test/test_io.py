@@ -284,13 +284,13 @@ class TestIO(unittest.TestCase):
         the_exception = cm.exception
         self.assertEqual(the_exception.message, "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
-            foo = desispec.io.findfile('brick',brickid='3338p190')
+            foo = desispec.io.findfile('brick',brickname='3338p190')
         the_exception = cm.exception
         self.assertEqual(the_exception.message, "Required input 'band' is not set for type 'brick'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']
-        x = desispec.io.findfile('brick', brickid='0000p123', band='r1')
+        x = desispec.io.findfile('brick', brickname='0000p123', band='r1')
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
             x = desispec.io.findfile('fibermap', night='20150101', expid=123)
@@ -301,7 +301,7 @@ class TestIO(unittest.TestCase):
         x = desispec.io.findfile('fibermap', night='20150101', expid=123)
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
-            x = desispec.io.findfile('brick', brickid='0000p123', band='r1')
+            x = desispec.io.findfile('brick', brickname='0000p123', band='r1')
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
             
 
