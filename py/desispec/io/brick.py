@@ -13,11 +13,25 @@ for general information about the coaddition dataflow and algorithms.
 
 import os
 import os.path
+import re
 
 import numpy as np
 import astropy.io.fits
 
 import desispec.io.util
+
+#- For backwards compatibility, derive brickname from filename
+def _parse_brick_filename(filepath):
+    """return (channel, brickname) from /path/to/brick-[brz]-{brickname}.fits
+    """
+    import warnings
+    filename = os.path.basename(filepath)
+    warnings.warn('Deriving channel and brickname from filename {} instead of contents'.format(filename))
+    m = re.match('brick-([brz])-(\w+).fits', filename)
+    if m is None:
+        raise ValueError('Unable to derive channel and brickname from '+filename)
+    else:
+        return m.groups()  #- (channel, brickname)
 
 class BrickBase(object):
     """Represents objects in a single brick and possibly also a single band b,r,z.
@@ -44,6 +58,16 @@ class BrickBase(object):
         self.mode = mode
         # Create a new file if necessary.
         if self.mode == 'update' and not os.path.exists(self.path):
+            # BRICKNAM must be in header if creating the file for the first time
+            if header is None or 'BRICKNAM' not in header:
+                raise ValueError('header must have BRICKNAM when creating new brick file')
+
+            self.brickname = header['BRICKNAM']
+            if 'CHANNEL' in header:
+                self.channel = header['CHANNEL']
+            else:
+                self.channel = 'brz'  #- could be any spectrograph channel
+                
             # Create the parent directory, if necessary.
             head,tail = os.path.split(self.path)
             if not os.path.exists(head):
@@ -82,6 +106,11 @@ class BrickBase(object):
             self.hdu_list = astropy.io.fits.HDUList([hdu0,hdu1,hdu2,hdu3,hdu4])
         else:
             self.hdu_list = astropy.io.fits.open(path,mode = self.mode)
+            try:
+                self.brickname = self.hdu_list[0].header['BRICKNAM']
+                self.channel = self.hdu_list[0].header['CHANNEL']
+            except KeyError:
+                self.channel, self.brickname = _parse_brick_filename(path)
 
     def add_objects(self,flux,ivar,wave,resolution):
         """Add a list of objects to this brick file from the same night and exposure.
