@@ -14,6 +14,7 @@ for general information about the coaddition dataflow and algorithms.
 import os
 import os.path
 import re
+import warnings
 
 import numpy as np
 import astropy.io.fits
@@ -24,7 +25,6 @@ import desispec.io.util
 def _parse_brick_filename(filepath):
     """return (channel, brickname) from /path/to/brick-[brz]-{brickname}.fits
     """
-    import warnings
     filename = os.path.basename(filepath)
     warnings.warn('Deriving channel and brickname from filename {} instead of contents'.format(filename))
     m = re.match('brick-([brz])-(\w+).fits', filename)
@@ -91,7 +91,13 @@ class BrickBase(object):
                 ])
             data = np.empty(shape = (0,),dtype = columns)
             hdr = desispec.io.util.fitsheader(header)
-            hdu4 = astropy.io.fits.BinTableHDU(data=data, header=hdr, name='FIBERMAP')
+
+            #- ignore incorrect and harmless fits TDIM7 warning for
+            #- FILTER column that is a 2D array of strings
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                hdu4 = astropy.io.fits.BinTableHDU(data=data, header=hdr, name='FIBERMAP')
+
             # Add comments for fibermap columns.
             num_fibermap_columns = len(desispec.io.fibermap.fibermap_comments)
             for i in range(1,1+num_fibermap_columns):
