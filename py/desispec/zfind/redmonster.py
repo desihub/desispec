@@ -17,20 +17,21 @@ from desispec.log import get_logger
 class RedMonsterZfind(ZfindBase):
     """Class documentation goes here.
     """
-    def __init__(self, wave, flux, ivar, R=None, dloglam=1e-4):
+    def __init__(self, wave, flux, ivar, R=None, dloglam=1e-4, objtype=None):
         """Uses Redmonster to classify and find redshifts.
 
         See :class:`desispec.zfind.zfind.ZfindBase` class for inputs/outputs.
 
+        optional:
+            objtype : list or string of template object types to try
+                [ELG, LRG, QSO, GALAXY, STAR]
+
         TODO: document redmonster specific output variables
         """
-        try:
-            from redmonster.physics.zfinder import ZFinder
-            from redmonster.physics.zfitter import ZFitter
-            from redmonster.physics.zpicker2 import ZPicker
-        except ImportError:
-            get_logger().error("You are attempting to use RedMonster, but it is not available for import!")
-            raise
+        from redmonster.physics.zfinder import ZFinder
+        from redmonster.physics.zfitter import ZFitter
+        from redmonster.physics.zpicker2 import ZPicker
+
         #- RedMonster templates don't quite go far enough into the blue,
         #- so chop off some data
         ii, = np.where(wave>3965)
@@ -58,14 +59,35 @@ class RedMonsterZfind(ZfindBase):
         self.nwave = nwave
         self.nspec = nspec
 
+        #- Standardize objtype, converting ELG,LRG -> GALAXY, make upper case
+        templatetypes = set()
+        if objtype is None:
+            templatetypes = set(['GALAXY', 'STAR', 'QSO'])
+        else:
+            if isinstance(objtype, str):
+                objtype = [objtype,]
+                
+            objtype = [x.upper() for x in objtype]
+            for x in objtype:
+                if x in ['ELG', 'LRG']:
+                    templatetypes.add('GALAXY')
+                elif x in ['QSO', 'GALAXY', 'STAR']:
+                    templatetypes.add(x)
+                else:
+                    raise ValueError('Unknown objtype '+x)
+            
         #- list of (templatename, zmin, zmax) to fix
         self.template_dir = os.getenv('REDMONSTER_TEMPLATES_DIR')
-        self.templates = [
-            ('ndArch-spEigenStar-55734.fits', -0.005, 0.005),
-            ('ndArch-ssp_em_galaxy-v000.fits', 0.6, 1.6),
-            # ('ndArch-ssp_em_galaxy_quickdesi-v000.fits', 0.6, 1.6),
-            ('ndArch-QSO-V003.fits', 0.0, 3.5),
-        ]
+        self.templates = list()
+        for x in templatetypes:
+            if x == 'GALAXY':
+                self.templates.append(('ndArch-ssp_em_galaxy-v000.fits', 0.6, 1.6))
+            elif x == 'STAR':
+                self.templates.append(('ndArch-spEigenStar-55734.fits', -0.005, 0.005))
+            elif x == 'QSO':
+                self.templates.append(('ndArch-QSO-V003.fits', 0.0, 3.5))
+            else:
+                raise ValueError("Bad template type "+x)
 
         #- Find and refine best redshift per template
         self.zfinders = list()

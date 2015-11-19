@@ -20,11 +20,15 @@ parser = optparse.OptionParser(usage = "%prog [options] [brickfile-b brickfile-r
 parser.add_option("-b", "--brick", type=str,  help="input brickname")
 parser.add_option("-n", "--nspec", type=int,  help="number of spectra to fit [default: all]")
 parser.add_option("-o", "--outfile", type=str,  help="output file name")
+parser.add_option(      "--objtype", type=str,  help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
 parser.add_option("--zspec",   help="also include spectra in output file", action="store_true")
 
 opts, brickfiles = parser.parse_args()
 
 log = get_logger()
+
+if opts.objtype is not None:
+    opts.objtype = opts.objtype.split(',')
 
 #- Read brick files for each channel
 log.info("Reading bricks")
@@ -96,7 +100,7 @@ for i, targetid in enumerate(targetids):
     flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
 
 #- Do the redshift fit
-zf = RedMonsterZfind(wave, flux, ivar)
+zf = RedMonsterZfind(wave, flux, ivar, objtype=opts.objtype)
 
 #- Write some output
 if opts.outfile is None:
