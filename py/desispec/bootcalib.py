@@ -18,16 +18,174 @@ from matplotlib import pyplot as plt
 from xastropy.xutils import afits as xafits
 from xastropy.xutils import xdebug as xdb
 
-def xpos_image(shape, xtrc, box_radius):
-    """Generates an xpos image which is the offset from a given trace of each pixel
-    Parameters:
-    ----------
-    shape: tuple
-    xtrc: trace
-    box_radius: float
-    """
-    # Generate mask
 
+########################################################
+# Arc/Wavelength Routines
+########################################################
+
+def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
+    """Find and centroid arc lines in an input spectrum
+
+    Parameters
+    ----------
+    spec : ndarray
+      Arc line spectrum
+    thresh : float
+      RMS threshold
+    nwidth : int
+      Line width to test over
+    """
+    # Threshold criterion
+    npix = spec.size
+    spec_mask = sigma_clip(spec,sigma=4.)
+    rms = np.std(spec_mask)
+    thresh = 10*rms
+    #print("thresh = {:g}".format(thresh))
+    gdp = spec > thresh
+
+    # Avoid edges
+    gdp = gdp & (np.arange(npix) > 2.*nwidth) & (np.arange(npix) < (npix-2.*nwidth))
+
+    # Roll to find peaks (simple algorithm)
+    nwidth = 5
+    nstep = nwidth // 2
+    for kk in xrange(-nstep,nstep):
+        if kk < 0:
+            test = np.roll(spec,kk) < np.roll(spec,kk+1)
+        else:
+            test = np.roll(spec,kk) > np.roll(spec,kk+1)
+        # Compare
+        gdp = gdp & test
+
+    # Center
+    gdpix = np.where(gdp)[0]
+    ngd = gdpix.size
+    xpk = np.zeros(ngd)
+    for jj,igdpix in enumerate(gdpix):
+        # Simple flux-weight
+        pix = np.arange(igdpix-nstep,igdpix+nstep+1,dtype=int)
+        xpk[jj] = np.sum(pix*spec[pix]) / np.sum(spec[pix])
+
+    # Finish
+    return xpk
+
+def load_gdarc_lines(camera):
+    """Loads a select set of arc lines for initial calibrating
+
+    Parameters
+    ----------
+    cameara : str
+      Camera ('b', 'g', 'r')
+
+    Returns
+    -------
+    dlamb : float
+      Dispersion for input camera
+    gd_lines : ndarray
+      Array of lines expected to be recorded and good for ID
+    """
+    if camera == 'b':
+        HgI = [4046.57, 4077.84, 4358.34, 5460.75, 5769.598]
+        CdI = [3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
+        NeI = [5881.895, 5944.834]
+        dlamb = 0.589
+        gd_lines = np.array(HgI + CdI + NeI)
+    else:
+        raise ValueError('Bad camera')
+
+    # Sort and return
+    gd_lines.sort()
+    return dlamb, gd_lines
+
+def id_arc_lines(spec,gd_lines):
+    """Match (as best possible), the input list of expected arc lines to the detected list
+
+    Parameters
+    ----------
+    spec : ndarray
+      Arc line spectrum
+    gd_lines : ndarray
+      array of expected arc lines to be detected and identified
+    """
+    rms_dicts = []
+    ## Assign a line to focus on
+    wmark = 4799.91
+    #wmark = 5085.822
+    icen = np.where(np.abs(gd_lines-wmark)<1e-3)[0]
+    icen = icen[0]
+    ##
+    guesses = 8 + np.arange(-4,7)
+    for guess in guesses:
+        # Setup
+        tc = float(tcent[guess])
+        print('tc = {:g}'.format(tc))
+        rms_dict = dict(tc=tc,guess=guess)
+        ## Match to i-2 line
+        line_m2 = gd_lines[icen-2]
+        Dm2 = wmark-line_m2
+        mtm2 = np.where(np.abs((tc-tcent)*dlamb - Dm2)/Dm2 < toler)[0]
+        if len(mtm2) == 0:
+                print('No im2 lines found for guess={:g}'.format(tc))
+                continue
+            # Match to i+2 line
+            line_p2 = gd_lines[icen+2]
+            Dp2 = line_p2-wmark
+            mtp2 = np.where(np.abs((tcent-tc)*dlamb - Dp2)/Dp2 < toler)[0]
+            if len(mtp2) == 0:
+                print('No ip2 lines found for guess={:g}'.format(tc))
+                continue
+                #
+                all_guess_rms = [] # One per set of guess, of course
+                # Loop on i-2 line
+                for imtm2 in mtm2:
+                    #
+                    if imtm2==(icen-1):
+                        print('No im1 lines found for guess={:g}'.format(tc))
+                        continue
+                    # Setup
+                    tcm2 = float(tcent[imtm2])
+                    xm1_wv = (gd_lines[icen-1]-gd_lines[icen-2])/(wmark-gd_lines[icen-2])
+                    # Best match
+                    xm1 = (tcent-tcm2)/(tc-tcm2)
+                    itm1 = np.argmin(np.abs(xm1-xm1_wv))
+                    # Now loop on ip2
+                    for imtp2 in mtp2:
+                        guess_rms = dict(guess=guess, im1=itm1,im2=imtm2, rms=999., ip1=None, ip2=imtp2)
+                        all_guess_rms.append(guess_rms)
+                        if imtp2==(icen-1):
+                            print('No ip1 lines found for guess={:g}'.format(tc))
+                            continue
+                        #
+                        tcp2 = float(tcent[imtp2])
+                        xp1_wv = (gd_lines[icen+2]-gd_lines[icen+1])/(gd_lines[icen+2]-wmark)
+                        # Best match
+                        xp1 = (tcp2-tcent)/(tcp2-tc)
+                        itp1 = np.argmin(np.abs(xp1-xp1_wv))
+                        guess_rms['ip1'] = itp1
+                        # Time to fit
+                        xval = np.array([tcm2,float(tcent[itm1]),tc,float(tcent[itp1]),tcp2])
+                        wvval = gd_lines[icen-2:icen+3]
+                        pfit = xafits.func_fit(wvval,xval,'polynomial',2,xmin=0.,xmax=1.)
+                        #parm = fitter(poly,wvval,xval)
+                        # Clip one here and refit
+                        # RMS (in pixel space)
+                        rms = np.sqrt(np.sum((xval-xafits.func_val(wvval,pfit))**2)/xval.size)
+                        guess_rms['rms'] = rms
+                        # Save fit too
+                        guess_rms['fit'] = pfit
+                        #print('rms = {:g}'.format(rms))
+                        #if np.abs(rms-4.93) < 1e-1:
+                        #    xdb.set_trace()
+                # Take best RMS
+                if len(all_guess_rms) > 0:
+                    all_rms = np.array([idict['rms'] for idict in all_guess_rms])
+                    imn = np.argmin(all_rms)
+                    rms_dicts.append(all_guess_rms[imn])
+                #xdb.set_trace()
+
+########################################################
+# Fiber routines
+########################################################
 
 def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
@@ -50,10 +208,10 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
     iy = np.arange(ny).astype(int)
     # Mask
     mask = np.zeros_like(flat,dtype=int)
-    bad_mask = np.ones_like(flat,dtype=int)
-    badx = np.any([xerr > 900.,xerr < 0.],axis=0)
-    bad_mask[badx] = 0
-    nbox = box_radius*2 + 1
+    #bad_mask = np.ones_like(flat,dtype=int)
+    #badx = np.any([xerr > 900.,xerr < 0.],axis=0)
+    #bad_mask[badx] = 0
+    #nbox = box_radius*2 + 1
     # Sub images
     #dx_img = np.zeros((ny,nbox))
     #nrm_img = np.zeros((ny,nbox))
@@ -80,6 +238,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
         dx_img = xpix_img - np.outer(xtrc[:,ii],np.ones(flat.shape[1]))
         # Sum
         flux = np.sum(mask*flat,axis=1)
+        flux = np.maximum(flux,1.)
         # Normalize
         #nrm_img /= np.outer(flux,np.ones(nbox))
         nrm_img = flat / np.outer(flux,np.ones(flat.shape[1]))
@@ -90,10 +249,9 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
         #fnimg = nrm_img.flatten()
         fdimg = dx_img[mask==1].flatten()
         fnimg = nrm_img[mask==1].flatten()
-        all_sig =  np.abs(fdimg) / np.sqrt(
-            np.log(amp)-np.log(fnimg) )
-        g_init.stddev.value = np.median(
-            all_sig[np.where((np.abs(fdimg)>1) & (np.abs(fdimg)<1.5))])
+        # Guess at sigma
+        all_sig = np.abs(fdimg) / np.sqrt( np.log(amp)-np.log(fnimg) )
+        g_init.stddev.value = np.median(all_sig[np.where((np.abs(fdimg)>1) & (np.abs(fdimg)<1.5) & (np.isfinite(all_sig)))])
 
         # Initial fit (need to mask!)
         parm = fitter(g_init, fdimg, fnimg)
@@ -104,7 +262,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
         while iterate:
             # Clip
             resid = parm(fdimg) - fnimg
-            resid_mask = sigma_clip(resid,sig=4.)
+            resid_mask = sigma_clip(resid,sigma=4.)
             # Fit
             gdp = ~resid_mask.mask
             parm = fitter(g_init, fdimg[gdp], fnimg[gdp])
@@ -199,7 +357,6 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     # Return
     return xpk, ypos, cut
 
-
 def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     RMS_TOLER=0.02, verbose=False):
     '''Fit the traces
@@ -254,23 +411,70 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     # Return
     return xnew, fits
 
+def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2):
+    """Extract spectrum for fibers one-by-one using a Gaussian PSF
+
+    Parameters
+    ----------
+    img : ndarray
+      Image
+    xtrc : ndarray
+      fiber trace
+    sigma : float
+      Gaussian sigma for PSF
+    box_radius : int, optional
+      Radius for extraction (+/-)
+
+    Returns
+    -------
+    spec : ndarray
+      Extracted spectrum
+    """
+    # Init
+    xpix_img = np.outer(np.ones(img.shape[0]),np.arange(img.shape[1]))
+    mask = np.zeros_like(img,dtype=int)
+    iy = np.arange(img.shape[0],dtype=int)
+    #
+    all_spec = np.zeros_like(xtrc)
+    for qq in range(xtrc.shape[1]):
+        if qq%10 == 0:
+            print(qq)
+        # Mask
+        mask[:,:] = 0
+        ixt = np.round(xtrc[:,qq]).astype(int)
+        for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
+            ix = ixt + ibox
+            mask[iy,ix] = 1
+
+        # Generate PSF
+        dx_img = xpix_img - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
+        g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
+        psf = mask * g_init(dx_img)
+        # Extract
+        all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
+    # Return
+    return all_spec
 
 def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
     maxshift0=0.5, maxshift=0.2, maxerr=0.2):
 #                   xset, xerr, maxerr, maxshift, maxshift0
-    '''Python port of trace_crude_idl.pro from IDLUTILS
+    """Python port of trace_crude_idl.pro from IDLUTILS
+
     Modified for initial guess
-    image: 2D ndarray
+    Parameters
+    ----------
+    image : 2D ndarray
       Image for tracing
-    xinit: ndarray
+    xinit : ndarray
       Initial guesses for trace peak at ypass
-    ypass: int
+    ypass : int
       Row for initial guesses
-    Returns:
-    ---------
-    xset: Trace for each fiber
-    xerr: Estimated error in that trace
-    '''
+
+    Returns
+    -------
+    xset : Trace for each fiber
+    xerr : Estimated error in that trace
+    """
     # Init
     xinit = xinit0.astype(float)
     #xinit = xinit[0:3]
