@@ -89,99 +89,115 @@ def load_gdarc_lines(camera):
         CdI = [3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
         NeI = [5881.895, 5944.834]
         dlamb = 0.589
+        wmark = 4358.34 # Hg
         gd_lines = np.array(HgI + CdI + NeI)
     else:
         raise ValueError('Bad camera')
 
     # Sort and return
     gd_lines.sort()
-    return dlamb, gd_lines
+    return dlamb, wmark, gd_lines
 
-def id_arc_lines(spec,gd_lines):
-    """Match (as best possible), the input list of expected arc lines to the detected list
+def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=True):
+    """Match (as best possible), a set of the input list of expected arc lines to the detected list
 
     Parameters
     ----------
-    spec : ndarray
-      Arc line spectrum
+    pixpk : ndarray
+      Pixel locations of detected arc lines
     gd_lines : ndarray
       array of expected arc lines to be detected and identified
+    dlamb : float
+      Average disperion in the spectrum
+    wmark : float
+      Center of 5 gd_lines to key on (camera dependent)
+    toler : float, optional
+      Tolerance for matching (20%)
     """
+    # List of dicts for diagnosis
     rms_dicts = []
-    ## Assign a line to focus on
-    wmark = 4799.91
-    #wmark = 5085.822
+    ## Assign a line to center on
     icen = np.where(np.abs(gd_lines-wmark)<1e-3)[0]
     icen = icen[0]
     ##
-    guesses = 8 + np.arange(-4,7)
+    ndet = pixpk.size
+    # Set up detected lines to search over
+    guesses = ndet//2 + np.arange(-4,7)
     for guess in guesses:
         # Setup
-        tc = float(tcent[guess])
-        print('tc = {:g}'.format(tc))
+        tc = pixpk[guess]
+        if verbose:
+            print('tc = {:g}'.format(tc))
         rms_dict = dict(tc=tc,guess=guess)
-        ## Match to i-2 line
+        # Match to i-2 line
         line_m2 = gd_lines[icen-2]
         Dm2 = wmark-line_m2
-        mtm2 = np.where(np.abs((tc-tcent)*dlamb - Dm2)/Dm2 < toler)[0]
+        mtm2 = np.where(np.abs((tc-pixpk)*dlamb - Dm2)/Dm2 < toler)[0]
         if len(mtm2) == 0:
+            if verbose:
                 print('No im2 lines found for guess={:g}'.format(tc))
-                continue
-            # Match to i+2 line
-            line_p2 = gd_lines[icen+2]
-            Dp2 = line_p2-wmark
-            mtp2 = np.where(np.abs((tcent-tc)*dlamb - Dp2)/Dp2 < toler)[0]
-            if len(mtp2) == 0:
+            continue
+        # Match to i+2 line
+        line_p2 = gd_lines[icen+2]
+        Dp2 = line_p2-wmark
+        mtp2 = np.where(np.abs((pixpk-tc)*dlamb - Dp2)/Dp2 < toler)[0]
+        if len(mtp2) == 0:
+            if verbose:
                 print('No ip2 lines found for guess={:g}'.format(tc))
+            continue
+            #
+        all_guess_rms = [] # One per set of guesses, of course
+        # Loop on i-2 line
+        for imtm2 in mtm2:
+            if imtm2==(icen-1):
+                if verbose:
+                    print('No im1 lines found for guess={:g}'.format(tc))
                 continue
+            # Setup
+            tcm2 = pixpk[imtm2]
+            xm1_wv = (gd_lines[icen-1]-gd_lines[icen-2])/(wmark-gd_lines[icen-2])
+            # Best match
+            xm1 = (pixpk-tcm2)/(tc-tcm2)
+            itm1 = np.argmin(np.abs(xm1-xm1_wv))
+            # Now loop on ip2
+            for imtp2 in mtp2:
+                guess_rms = dict(guess=guess, im1=itm1,im2=imtm2, rms=999., ip1=None, ip2=imtp2)
+                all_guess_rms.append(guess_rms)
+                if imtp2==(icen-1):
+                    if verbose:
+                        print('No ip1 lines found for guess={:g}'.format(tc))
+                    continue
                 #
-                all_guess_rms = [] # One per set of guess, of course
-                # Loop on i-2 line
-                for imtm2 in mtm2:
-                    #
-                    if imtm2==(icen-1):
-                        print('No im1 lines found for guess={:g}'.format(tc))
-                        continue
-                    # Setup
-                    tcm2 = float(tcent[imtm2])
-                    xm1_wv = (gd_lines[icen-1]-gd_lines[icen-2])/(wmark-gd_lines[icen-2])
-                    # Best match
-                    xm1 = (tcent-tcm2)/(tc-tcm2)
-                    itm1 = np.argmin(np.abs(xm1-xm1_wv))
-                    # Now loop on ip2
-                    for imtp2 in mtp2:
-                        guess_rms = dict(guess=guess, im1=itm1,im2=imtm2, rms=999., ip1=None, ip2=imtp2)
-                        all_guess_rms.append(guess_rms)
-                        if imtp2==(icen-1):
-                            print('No ip1 lines found for guess={:g}'.format(tc))
-                            continue
-                        #
-                        tcp2 = float(tcent[imtp2])
-                        xp1_wv = (gd_lines[icen+2]-gd_lines[icen+1])/(gd_lines[icen+2]-wmark)
-                        # Best match
-                        xp1 = (tcp2-tcent)/(tcp2-tc)
-                        itp1 = np.argmin(np.abs(xp1-xp1_wv))
-                        guess_rms['ip1'] = itp1
-                        # Time to fit
-                        xval = np.array([tcm2,float(tcent[itm1]),tc,float(tcent[itp1]),tcp2])
-                        wvval = gd_lines[icen-2:icen+3]
-                        pfit = xafits.func_fit(wvval,xval,'polynomial',2,xmin=0.,xmax=1.)
-                        #parm = fitter(poly,wvval,xval)
-                        # Clip one here and refit
-                        # RMS (in pixel space)
-                        rms = np.sqrt(np.sum((xval-xafits.func_val(wvval,pfit))**2)/xval.size)
-                        guess_rms['rms'] = rms
-                        # Save fit too
-                        guess_rms['fit'] = pfit
-                        #print('rms = {:g}'.format(rms))
-                        #if np.abs(rms-4.93) < 1e-1:
-                        #    xdb.set_trace()
-                # Take best RMS
-                if len(all_guess_rms) > 0:
-                    all_rms = np.array([idict['rms'] for idict in all_guess_rms])
-                    imn = np.argmin(all_rms)
-                    rms_dicts.append(all_guess_rms[imn])
-                #xdb.set_trace()
+                tcp2 = float(pixpk[imtp2])
+                xp1_wv = (gd_lines[icen+2]-gd_lines[icen+1])/(gd_lines[icen+2]-wmark)
+                # Best match
+                xp1 = (tcp2-pixpk)/(tcp2-tc)
+                itp1 = np.argmin(np.abs(xp1-xp1_wv))
+                guess_rms['ip1'] = itp1
+                # Time to fit
+                xval = np.array([tcm2,pixpk[itm1],tc,pixpk[itp1],tcp2])
+                wvval = gd_lines[icen-2:icen+3]
+                pfit = xafits.func_fit(wvval,xval,'polynomial',2,xmin=0.,xmax=1.)
+                # Clip one here and refit
+                #   NOT IMPLEMENTED YET
+                # RMS (in pixel space)
+                rms = np.sqrt(np.sum((xval-xafits.func_val(wvval,pfit))**2)/xval.size)
+                guess_rms['rms'] = rms
+                # Save fit too
+                guess_rms['fit'] = pfit
+        # Take best RMS
+        if len(all_guess_rms) > 0:
+            all_rms = np.array([idict['rms'] for idict in all_guess_rms])
+            imn = np.argmin(all_rms)
+            rms_dicts.append(all_guess_rms[imn])
+    # Find the best one
+    all_rms = np.array([idict['rms'] for idict in rms_dicts])
+    imin = np.argmin(all_rms)
+    best_dict = rms_dicts[imin]
+    # Finish
+    best_dict['wmark'] = wmark
+    best_dict['gdlines'] = wvval
+    return best_dict
 
 ########################################################
 # Fiber routines
