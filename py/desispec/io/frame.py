@@ -79,7 +79,7 @@ def read_frame(filename, nspec=None):
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
 
-    fx = fits.open(filename, uint=True)
+    fx = fits.open(filename, uint=True, memmap=False)
     hdr = fx[0].header
     flux = native_endian(fx['FLUX'].data)
     ivar = native_endian(fx['IVAR'].data)
@@ -96,6 +96,10 @@ def read_frame(filename, nspec=None):
         flux = flux[0:nspec]
         ivar = ivar[0:nspec]
         resolution_data = resolution_data[0:nspec]
+
+    # fill in SPECMIN=0 if it is missing
+    if 'SPECMIN' not in hdr:
+        hdr['SPECMIN'] = 0
 
     # return flux,ivar,wave,resolution_data, hdr
     return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr)
