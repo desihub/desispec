@@ -98,7 +98,81 @@ def load_gdarc_lines(camera):
     gd_lines.sort()
     return dlamb, wmark, gd_lines
 
-def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=True):
+def add_arc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=True):
+    """Attempt to identify and add additionally detected lines
+
+    Parameters
+    ----------
+    id_dict : dict
+      dict of ID info
+    pixpk : ndarray
+      Pixel locations of detected arc lines
+    gd_lines : ndarray
+      array of expected arc lines to be detected and identified
+    npoly : int, optional
+      Order of polynomial for fitting
+
+    Returns
+    -------
+    id_dict : dict
+      Filled with complete set of IDs and the final polynomial fit
+    """
+    # Init
+    ilow = id_dict['icen']-(len(id_dict['first_id_pix'])//2)
+    ihi = id_dict['icen']+(len(id_dict['first_id_pix'])//2)
+    pos=True
+    idx = list(id_dict['first_id_idx'])
+    wvval = list(id_dict['first_id_wave'])
+    xval = list(id_dict['first_id_pix'])
+    if 'first_fit' not in id_dict.keys():
+        id_dict['first_fit'] = copy.deepcopy(id_dict['fit'])
+
+    # Loop on additional lines for identification
+    while ((ilow > 0) or (ihi < gd_lines.size-1)):
+        # index to add (step on each side)
+        if pos:
+            ihi += 1
+            inew = ihi
+            pos=False
+        else:
+            ilow -= 1
+            inew = ilow
+            pos=True
+        if ilow < 0:
+            continue
+        if ihi > (gd_lines.size-1):
+            continue
+        # New line
+        new_wv = gd_lines[inew]
+        wvval.append(new_wv)
+        wvval.sort()
+        # newx
+        newx = xafits.func_val(new_wv,id_dict['fit'])
+        # Match and add
+        imin = np.argmin(np.abs(pixpk-newx))
+        newtc = pixpk[imin]
+        idx.append(imin)
+        idx.sort()
+        xval.append(newtc)
+        xval.sort()
+        # Fit
+        # Should reject 1
+        if len(xval) > 7:
+            npoly = 3
+        new_fit = xafits.func_fit(np.array(wvval),np.array(xval),'polynomial',npoly,xmin=0.,xmax=1.)
+        id_dict['fit'] = new_fit
+    # RMS
+    resid2 = (np.array(xval)-xafits.func_val(np.array(wvval),id_dict['fit']))**2
+    rms = np.sqrt(np.sum(resid2)/len(xval))
+    id_dict['rms'] = rms
+    if verbose:
+        print('rms = {:g}'.format(rms))
+    # Finish
+    id_dict['id_idx'] = idx
+    id_dict['id_pix'] = xval
+    id_dict['id_wave'] = wvval
+
+def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
     """Match (as best possible), a set of the input list of expected arc lines to the detected list
 
     Parameters
@@ -113,6 +187,11 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=True):
       Center of 5 gd_lines to key on (camera dependent)
     toler : float, optional
       Tolerance for matching (20%)
+
+    Returns
+    -------
+    id_dict : dict
+      dict of identified lines
     """
     # List of dicts for diagnosis
     rms_dicts = []
@@ -193,11 +272,20 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=True):
     # Find the best one
     all_rms = np.array([idict['rms'] for idict in rms_dicts])
     imin = np.argmin(all_rms)
-    best_dict = rms_dicts[imin]
+    id_dict = rms_dicts[imin]
     # Finish
-    best_dict['wmark'] = wmark
-    best_dict['gdlines'] = wvval
-    return best_dict
+    id_dict['wmark'] = wmark
+    id_dict['icen'] = icen
+    id_dict['first_id_wave'] = wvval
+    id_idx = []
+    id_pix = []
+    for key in ['im2','im1','guess','ip1','ip2']:
+        id_idx.append(id_dict[key])
+        id_pix.append(pixpk[id_dict[key]])
+    id_dict['first_id_idx'] = id_idx
+    id_dict['first_id_pix'] = np.array(id_pix)
+    # Return
+    return id_dict
 
 ########################################################
 # Fiber routines
