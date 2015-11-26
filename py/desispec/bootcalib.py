@@ -171,7 +171,7 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
     rms = np.sqrt(np.sum(resid2)/len(xval))
     id_dict['rms'] = rms
     if verbose:
-        print('rms = {:g}'.format(rms))
+        log.info('rms = {:g}'.format(rms))
     # Finish
     id_dict['id_idx'] = idx
     id_dict['id_pix'] = xval
@@ -204,7 +204,7 @@ def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
         mt = np.where(np.abs(llist['wave']-wv_pk)<wv_toler)[0]
         if len(mt) == 1:
             if verbose:
-                print('Matched {:g} to {:g}'.format(ixpk,llist['wave'][mt[0]]))
+                log.info('Matched {:g} to {:g}'.format(ixpk,llist['wave'][mt[0]]))
             id_dict['id_idx'].append(ii)
             id_dict['id_pix'].append(ixpk)
             id_dict['id_wave'].append(llist['wave'][mt[0]])
@@ -248,7 +248,7 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
         # Setup
         tc = pixpk[guess]
         if verbose:
-            print('tc = {:g}'.format(tc))
+            log.info('tc = {:g}'.format(tc))
         rms_dict = dict(tc=tc,guess=guess)
         # Match to i-2 line
         line_m2 = gd_lines[icen-2]
@@ -256,7 +256,7 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
         mtm2 = np.where(np.abs((tc-pixpk)*dlamb - Dm2)/Dm2 < toler)[0]
         if len(mtm2) == 0:
             if verbose:
-                print('No im2 lines found for guess={:g}'.format(tc))
+                log.info('No im2 lines found for guess={:g}'.format(tc))
             continue
         # Match to i+2 line
         line_p2 = gd_lines[icen+2]
@@ -264,7 +264,7 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
         mtp2 = np.where(np.abs((pixpk-tc)*dlamb - Dp2)/Dp2 < toler)[0]
         if len(mtp2) == 0:
             if verbose:
-                print('No ip2 lines found for guess={:g}'.format(tc))
+                log.info('No ip2 lines found for guess={:g}'.format(tc))
             continue
             #
         all_guess_rms = [] # One per set of guesses, of course
@@ -272,7 +272,7 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
         for imtm2 in mtm2:
             if imtm2==(icen-1):
                 if verbose:
-                    print('No im1 lines found for guess={:g}'.format(tc))
+                    log.info('No im1 lines found for guess={:g}'.format(tc))
                 continue
             # Setup
             tcm2 = pixpk[imtm2]
@@ -347,11 +347,12 @@ def parse_nist(ion):
     ion : str
       Name of ion
     """
+    log=get_logger()
     # Find file
     srch_file = desispec_path + '/data/arc_lines/'+ion+'_air.ascii'
     nist_file = glob.glob(srch_file)
     if len(nist_file) != 1:
-        raise IOError("Cannot find NIST file {:s}".format(srch_file))
+        log.error("Cannot find NIST file {:s}".format(srch_file))
     # Read
     nist_tbl = Table.read(nist_file[0], format='ascii.fixed_width')
     gdrow = nist_tbl['Observed'] > 0.  # Eliminate dummy lines
