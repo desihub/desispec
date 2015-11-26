@@ -1,26 +1,30 @@
 """
-desispec.sky
-============
+desispec.bootcalib
+==================
 
-Utility functions to compute a sky model and subtract it.
+Utility functions to perform a quick calibration of DESI data
 """
 from __future__ import print_function, absolute_import, division, unicode_literals
 
 import numpy as np
 import copy, pdb
-import warnings
+import imp, yaml, glob
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
+from astropy.table import Table, Column, vstack
 
 from matplotlib import pyplot as plt
 
-from xastropy.xutils import afits as xafits
+from desispec.log import get_logger
+from desiutil import funcfits as dufits
+
 from xastropy.xutils import xdebug as xdb
 
+desispec_path = imp.find_module('desispec')[1]+'/../../'
 
 ########################################################
-# Arc/Wavelength Routines
+# Arc/Wavelength Routines (Linelists come next)
 ########################################################
 
 def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
@@ -84,7 +88,8 @@ def load_gdarc_lines(camera):
     gd_lines : ndarray
       Array of lines expected to be recorded and good for ID
     """
-    if camera == 'b':
+    log=get_logger()
+    if camera[0] == 'b':
         HgI = [4046.57, 4077.84, 4358.34, 5460.75, 5769.598]
         CdI = [3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
         NeI = [5881.895, 5944.834]
@@ -92,13 +97,13 @@ def load_gdarc_lines(camera):
         wmark = 4358.34 # Hg
         gd_lines = np.array(HgI + CdI + NeI)
     else:
-        raise ValueError('Bad camera')
+        log.error('Bad camera')
 
     # Sort and return
     gd_lines.sort()
     return dlamb, wmark, gd_lines
 
-def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=True):
+def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
     """Attempt to identify and add additional goodlines
 
     Parameters
@@ -147,7 +152,7 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=True):
         wvval.append(new_wv)
         wvval.sort()
         # newx
-        newx = xafits.func_val(new_wv,id_dict['fit'])
+        newx = dufits.func_val(new_wv,id_dict['fit'])
         # Match and add
         imin = np.argmin(np.abs(pixpk-newx))
         newtc = pixpk[imin]
@@ -159,10 +164,10 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=True):
         # Should reject 1
         if len(xval) > 7:
             npoly = 3
-        new_fit = xafits.func_fit(np.array(wvval),np.array(xval),'polynomial',npoly,xmin=0.,xmax=1.)
+        new_fit = dufits.func_fit(np.array(wvval),np.array(xval),'polynomial',npoly,xmin=0.,xmax=1.)
         id_dict['fit'] = new_fit
     # RMS
-    resid2 = (np.array(xval)-xafits.func_val(np.array(wvval),id_dict['fit']))**2
+    resid2 = (np.array(xval)-dufits.func_val(np.array(wvval),id_dict['fit']))**2
     rms = np.sqrt(np.sum(resid2)/len(xval))
     id_dict['rms'] = rms
     if verbose:
@@ -172,7 +177,7 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=True):
     id_dict['id_pix'] = xval
     id_dict['id_wave'] = wvval
 
-def id_remainder(id_dict, pixpk, llist, toler=3., verbose=True):
+def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
     """Attempt to identify the remainder of detected lines
     Parameters
     ----------
@@ -187,14 +192,14 @@ def id_remainder(id_dict, pixpk, llist, toler=3., verbose=True):
     """
     wv_toler = 3.*id_dict['dlamb'] # Ang
     # Generate a fit for pixel to wavelength
-    pixwv_fit = xafits.func_fit(np.array(id_dict['id_pix']),np.array(id_dict['id_wave']),'polynomial',3,xmin=0.,xmax=1.)
+    pixwv_fit = dufits.func_fit(np.array(id_dict['id_pix']),np.array(id_dict['id_wave']),'polynomial',3,xmin=0.,xmax=1.)
     # Loop on detected lines, skipping those with an ID
     for ii,ixpk in enumerate(pixpk):
         # Already ID?
         if ii in id_dict['id_idx']:
             continue
         # Predict wavelength
-        wv_pk = xafits.func_val(ixpk,pixwv_fit)
+        wv_pk = dufits.func_val(ixpk,pixwv_fit)
         # Search for a match
         mt = np.where(np.abs(llist['wave']-wv_pk)<wv_toler)[0]
         if len(mt) == 1:
@@ -219,7 +224,7 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
     gd_lines : ndarray
       array of expected arc lines to be detected and identified
     dlamb : float
-      Average disperion in the spectrum
+      Average dispersion in the spectrum
     wmark : float
       Center of 5 gd_lines to key on (camera dependent)
     toler : float, optional
@@ -293,11 +298,11 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
                 # Time to fit
                 xval = np.array([tcm2,pixpk[itm1],tc,pixpk[itp1],tcp2])
                 wvval = gd_lines[icen-2:icen+3]
-                pfit = xafits.func_fit(wvval,xval,'polynomial',2,xmin=0.,xmax=1.)
+                pfit = dufits.func_fit(wvval,xval,'polynomial',2,xmin=0.,xmax=1.)
                 # Clip one here and refit
                 #   NOT IMPLEMENTED YET
                 # RMS (in pixel space)
-                rms = np.sqrt(np.sum((xval-xafits.func_val(wvval,pfit))**2)/xval.size)
+                rms = np.sqrt(np.sum((xval-dufits.func_val(wvval,pfit))**2)/xval.size)
                 guess_rms['rms'] = rms
                 # Save fit too
                 guess_rms['fit'] = pfit
@@ -326,37 +331,216 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
     return id_dict
 
 ########################################################
+# Linelist routines
+########################################################
+
+def parse_nist(ion):
+    """Parse a NIST ASCII table.
+
+    Note that the long ---- should have
+    been commented out and also the few lines at the start.
+
+    Taken from PYPIT
+
+    Parameters
+    ----------
+    ion : str
+      Name of ion
+    """
+    # Find file
+    srch_file = desispec_path + '/data/arc_lines/'+ion+'_air.ascii'
+    nist_file = glob.glob(srch_file)
+    if len(nist_file) != 1:
+        raise IOError("Cannot find NIST file {:s}".format(srch_file))
+    # Read
+    nist_tbl = Table.read(nist_file[0], format='ascii.fixed_width')
+    gdrow = nist_tbl['Observed'] > 0.  # Eliminate dummy lines
+    nist_tbl = nist_tbl[gdrow]
+    # Now unique values only (no duplicates)
+    uniq, indices = np.unique(nist_tbl['Observed'],return_index=True)
+    nist_tbl = nist_tbl[indices]
+    # Deal with Rel
+    agdrel = []
+    for row in nist_tbl:
+        try:
+            gdrel = int(row['Rel.'])
+        except:
+            try:
+                gdrel = int(row['Rel.'][:-1])
+            except:
+                gdrel = 0
+        agdrel.append(gdrel)
+    agdrel = np.array(agdrel)
+    # Remove and add
+    nist_tbl.remove_column('Rel.')
+    nist_tbl.remove_column('Ritz')
+    nist_tbl.add_column(Column(agdrel,name='RelInt'))
+    nist_tbl.add_column(Column([ion]*len(nist_tbl), name='Ion', dtype='S5'))
+    nist_tbl.rename_column('Observed','wave')
+    # Return
+    return nist_tbl
+
+def load_arcline_list(camera):
+    """Loads arc line list from NIST files
+    Parses and rejects
+
+    Taken from PYPIT
+
+    Parameters
+    ----------
+    lines : list
+      List of ions to load
+
+    Returns
+    -------
+    alist : Table
+      Table of arc lines
+    """
+    log=get_logger()
+    wvmnx = None
+    if camera[0] == 'b':
+        lamps = ['CdI','ArI','HgI','NeI']
+    else:
+        log.error("Not ready for this camera")
+    # Get the parse dict
+    parse_dict = load_parse_dict()
+    # Read rejection file
+    with open(desispec_path+'/data/arc_lines/rejected_lines.yaml', 'r') as infile:
+        rej_dict = yaml.load(infile)
+    # Loop through the NIST Tables
+    tbls = []
+    for iline in lamps:
+        # Load
+        tbl = parse_nist(iline)
+        # Parse
+        if iline in parse_dict.keys():
+            tbl = parse_nist_tbl(tbl,parse_dict[iline])
+        # Reject
+        if iline in rej_dict.keys():
+            log.info("Rejecting select {:s} lines".format(iline))
+            tbl = reject_lines(tbl,rej_dict[iline])
+        tbls.append(tbl[['Ion','wave','RelInt']])
+    # Stack
+    alist = vstack(tbls)
+
+    # wvmnx?
+    if wvmnx is not None:
+        print('Cutting down line list by wvmnx: {:g},{:g}'.format(wvmnx[0],wvmnx[1]))
+        gdwv = (alist['wave'] >= wvmnx[0]) & (alist['wave'] <= wvmnx[1])
+        alist = alist[gdwv]
+    # Return
+    return alist
+
+
+def reject_lines(tbl,rej_dict):
+    """Parses a NIST table using various criteria
+
+    Taken from PYPIT
+
+    Parameters
+    ----------
+    tbl : Table
+      Read previously from NIST ASCII file
+    rej_dict : dict
+      Dict of rejected lines
+
+    Returns
+    -------
+    tbl : Table
+      Rows not rejected
+    """
+    msk = tbl['wave'] == tbl['wave']
+    # Loop on rejected lines
+    for wave in rej_dict.keys():
+        close = np.where(np.abs(wave-tbl['wave']) < 0.1)[0]
+        if rej_dict[wave] == 'all':
+            msk[close] = False
+        else:
+            raise ValueError('Not ready for this')
+    # Return
+    return tbl[msk]
+
+def parse_nist_tbl(tbl,parse_dict):
+    """Parses a NIST table using various criteria
+    Parameters
+    ----------
+    tbl : Table
+      Read previously from NIST ASCII file
+    parse_dict : dict
+      Dict of parsing criteria.  Read from load_parse_dict
+
+    Returns
+    -------
+    tbl : Table
+      Rows meeting the criteria
+    """
+    # Parse
+    gdI = tbl['RelInt'] >= parse_dict['min_intensity']
+    gdA = tbl['Aki'] >= parse_dict['min_Aki']
+    gdw = tbl['wave'] >= parse_dict['min_wave']
+    # Combine
+    allgd = gdI & gdA & gdw
+    # Return
+    return tbl[allgd]
+
+def load_parse_dict():
+    """Dicts for parsing Arc line lists from NIST
+
+    Rejected lines are in the rejected_lines.yaml file
+    """
+    dict_parse = dict(min_intensity=0., min_Aki=0., min_wave=0.)
+    arcline_parse = {}
+    # ArI
+    arcline_parse['ArI'] = copy.deepcopy(dict_parse)
+    arcline_parse['ArI']['min_intensity'] = 1000. # NOT PICKING UP REDDEST LINES
+    # HgI
+    arcline_parse['HgI'] = copy.deepcopy(dict_parse)
+    arcline_parse['HgI']['min_intensity'] = 800.
+    # HeI
+    arcline_parse['HeI'] = copy.deepcopy(dict_parse)
+    arcline_parse['HeI']['min_intensity'] = 20.
+    # NeI
+    arcline_parse['NeI'] = copy.deepcopy(dict_parse)
+    arcline_parse['NeI']['min_intensity'] = 500.
+    arcline_parse['NeI']['min_Aki']  = 1. # NOT GOOD FOR DEIMOS, DESI
+    #arcline_parse['NeI']['min_wave'] = 5700.
+    arcline_parse['NeI']['min_wave'] = 5850. # NOT GOOD FOR DEIMOS?
+    # ZnI
+    arcline_parse['ZnI'] = copy.deepcopy(dict_parse)
+    arcline_parse['ZnI']['min_intensity'] = 50.
+    #
+    return arcline_parse
+
+########################################################
 # Fiber routines
 ########################################################
 
-def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
+def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
     This serves as an initial guess to what follows
 
-    args:
-        flat : ndarray of fiber flat image 
-        xtrc: ndarray of fiber traces
-        xerr: ndarray of error in fiber traces
-        box_radius: int, optinal 
+    Parameters
+    ----------
+    flat : ndarray of fiber flat image
+    xtrc: ndarray of fiber traces
+    xerr: ndarray of error in fiber traces
+    box_radius: int, optinal
           Radius of boxcar extraction in pixels
+    max_iter : int, optional
+      Maximum number of iterations for rejection
 
     returns gauss
       list of Gaussian sigma
     """
-    warnings.warn("fiber_gauss uses astropy.modeling.  Consider an alternative")
+    log=get_logger()
+    log.warn("fiber_gauss uses astropy.modeling.  Consider an alternative")
     # Init
     nfiber = xtrc.shape[1]
     ny = xtrc.shape[0]
     iy = np.arange(ny).astype(int)
     # Mask
     mask = np.zeros_like(flat,dtype=int)
-    #bad_mask = np.ones_like(flat,dtype=int)
-    #badx = np.any([xerr > 900.,xerr < 0.],axis=0)
-    #bad_mask[badx] = 0
-    #nbox = box_radius*2 + 1
     # Sub images
-    #dx_img = np.zeros((ny,nbox))
-    #nrm_img = np.zeros((ny,nbox))
     xpix_img = np.outer(np.ones(flat.shape[0]),np.arange(flat.shape[1]))
     # Gaussian fit
     g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=1.)
@@ -367,33 +551,28 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
     # Loop on fibers
     gauss = []
     for ii in xrange(nfiber):
-        if verbose:
-            print("Working on fiber {:d}".format(ii))
+        if (ii % 25 == 0): # & verbose:
+            log.info("Working on fiber {:d}".format(ii))
         mask[:] = 0
-        #dx_img[:] = 0
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
             mask[iy,ix] = 1
-            #dx_img[:,jj] = ix-xtrc[:,ii]
-            #nrm_img[:,jj] = flat[iy,ix]
         dx_img = xpix_img - np.outer(xtrc[:,ii],np.ones(flat.shape[1]))
         # Sum
         flux = np.sum(mask*flat,axis=1)
         flux = np.maximum(flux,1.)
         # Normalize
-        #nrm_img /= np.outer(flux,np.ones(nbox))
         nrm_img = flat / np.outer(flux,np.ones(flat.shape[1]))
         # Gaussian
         amp = np.median(nrm_img[np.where(np.abs(dx_img)<0.05)])
         g_init.amplitude.value = amp # Fixed
-        #fdimg = dx_img.flatten()
-        #fnimg = nrm_img.flatten()
         fdimg = dx_img[mask==1].flatten()
         fnimg = nrm_img[mask==1].flatten()
         # Guess at sigma
-        all_sig = np.abs(fdimg) / np.sqrt( np.log(amp)-np.log(fnimg) )
-        g_init.stddev.value = np.median(all_sig[np.where((np.abs(fdimg)>1) & (np.abs(fdimg)<1.5) & (np.isfinite(all_sig)))])
+        gdfn = (fnimg < amp) & (fnimg > 0.)
+        all_sig = np.abs(fdimg[gdfn]) / np.sqrt( np.log(amp)-np.log(fnimg[gdfn]) )
+        g_init.stddev.value = np.median(all_sig[np.where((np.abs(fdimg[gdfn])>1) & (np.abs(fdimg[gdfn])<1.5) & (np.isfinite(all_sig)))])
 
         # Initial fit (need to mask!)
         parm = fitter(g_init, fdimg, fnimg)
@@ -401,7 +580,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
         iterate = True
         nrej = 0
         niter = 0
-        while iterate:
+        while iterate & (niter < max_iter):
             # Clip
             resid = parm(fdimg) - fnimg
             resid_mask = sigma_clip(resid,sigma=4.)
@@ -415,7 +594,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, debug=False, verbose=False):
                 nrej = np.sum(resid_mask.mask)
                 niter += 1
         if verbose:
-            print("Rejected {:d} in {:d} iterations".format(nrej,niter))
+            log.info("Rejected {:d} in {:d} iterations".format(nrej,niter))
 
         #debug = False
         if debug:
@@ -446,6 +625,8 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
       list of xpk (nearest pixel) at ypos
       ndarray of cut through the image
     """
+    log=get_logger()
+    log.info("starting")
     # Init
     Nbundle = 20
     Nfiber = 25 # Fibers per bundle
@@ -482,7 +663,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     if len(xpk) != Nbundle*Nfiber:
         raise ValueError('Found the wrong number of total fibers: {:d}'.format(len(xpk)))
     else:
-        print('Found {:d} fibers'.format(len(xpk)))
+        log.info('Found {:d} fibers'.format(len(xpk)))
     # Find bundles
     xsep = np.roll(xpk,-1) - xpk
     medsep = np.median(xsep)
@@ -490,7 +671,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     if len(bundle_ends) != Nbundle:
         raise ValueError('Found the wrong number of bundles: {:d}'.format(len(bundle_ends)))
     else:
-        print('Found {:d} bundles'.format(len(bundle_ends)))
+        log.info('Found {:d} bundles'.format(len(bundle_ends)))
     # Confirm correct number of fibers per bundle
     bad = ((bundle_ends+1) % Nfiber) != 0
     if np.sum(bad) > 0:
@@ -521,8 +702,6 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     fits: list
       List of the fit dicts
     '''
-    reload(xafits)
-
     ny = xset.shape[0]
     ntrace = xset.shape[1]
     xnew = np.zeros_like(xset)
@@ -532,14 +711,14 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
         mask = xerr[:,ii] > 900.
         nmask = np.sum(mask)
         # Fit with rejection
-        dfit, mask = xafits.iter_fit(yval, xset[:,ii], func, order, sig_rej=sigrej,
+        dfit, mask = dufits.iter_fit(yval, xset[:,ii], func, order, sig_rej=sigrej,
             weights=1./xerr[:,ii], initialmask=mask, maxone=True)#, sigma=xerr[:,ii])
         # Stats on residuals
         nmask_new = np.sum(mask)-nmask 
         if nmask_new > 10:
             raise ValueError('Rejected too many points: {:d}'.format(nmask_new))
         # Save
-        xnew[:,ii] = xafits.func_val(yval,dfit)
+        xnew[:,ii] = dufits.func_val(yval,dfit)
         fits.append(dfit)
         # Residuas
         gdval = mask==0
