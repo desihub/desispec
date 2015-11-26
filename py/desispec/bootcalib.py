@@ -74,7 +74,7 @@ def load_gdarc_lines(camera):
 
     Parameters
     ----------
-    cameara : str
+    camera : str
       Camera ('b', 'g', 'r')
 
     Returns
@@ -98,8 +98,8 @@ def load_gdarc_lines(camera):
     gd_lines.sort()
     return dlamb, wmark, gd_lines
 
-def add_arc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=True):
-    """Attempt to identify and add additionally detected lines
+def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=True):
+    """Attempt to identify and add additional goodlines
 
     Parameters
     ----------
@@ -171,6 +171,43 @@ def add_arc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=True):
     id_dict['id_idx'] = idx
     id_dict['id_pix'] = xval
     id_dict['id_wave'] = wvval
+
+def id_remainder(id_dict, pixpk, llist, toler=3., verbose=True):
+    """Attempt to identify the remainder of detected lines
+    Parameters
+    ----------
+    id_dict : dict
+      dict of ID info
+    pixpk : ndarray
+      Pixel locations of detected arc lines
+    llist : Table
+      Line list
+    toler : float
+      Tolerance for matching
+    """
+    wv_toler = 3.*id_dict['dlamb'] # Ang
+    # Generate a fit for pixel to wavelength
+    pixwv_fit = xafits.func_fit(np.array(id_dict['id_pix']),np.array(id_dict['id_wave']),'polynomial',3,xmin=0.,xmax=1.)
+    # Loop on detected lines, skipping those with an ID
+    for ii,ixpk in enumerate(pixpk):
+        # Already ID?
+        if ii in id_dict['id_idx']:
+            continue
+        # Predict wavelength
+        wv_pk = xafits.func_val(ixpk,pixwv_fit)
+        # Search for a match
+        mt = np.where(np.abs(llist['wave']-wv_pk)<wv_toler)[0]
+        if len(mt) == 1:
+            if verbose:
+                print('Matched {:g} to {:g}'.format(ixpk,llist['wave'][mt[0]]))
+            id_dict['id_idx'].append(ii)
+            id_dict['id_pix'].append(ixpk)
+            id_dict['id_wave'].append(llist['wave'][mt[0]])
+    # Sort
+    id_dict['id_idx'].sort()
+    id_dict['id_pix'].sort()
+    id_dict['id_wave'].sort()
+
 
 def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
     """Match (as best possible), a set of the input list of expected arc lines to the detected list
@@ -275,6 +312,7 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
     id_dict = rms_dicts[imin]
     # Finish
     id_dict['wmark'] = wmark
+    id_dict['dlamb'] = dlamb
     id_dict['icen'] = icen
     id_dict['first_id_wave'] = wvval
     id_idx = []
