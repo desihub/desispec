@@ -25,19 +25,18 @@ def check_env():
     """
     log = get_logger()
     #- template locations
-    missing_template_env = False
-    for objtype in ('ELG', 'LRG', 'STD', 'QSO'):
-        name = 'DESI_'+objtype+'_TEMPLATES'
-        if name not in os.environ:
-            log.warning('missing ${0} needed for simulating spectra'.format(name))
-            missing_template_env = True
-
-    if missing_template_env:
-        log.warning('    e.g. see NERSC:/project/projectdirs/desi/datachallenge/dc2/templates/')
-
     missing_env = False
+    if 'DESI_BASIS_TEMPLATES' not in os.environ:
+        log.warning('missing $DESI_BASIS_TEMPLATES needed for simulating spectra'.format(name))
+        missing_env = True
+
+    if not os.path.isdir(os.getenv('DESI_BASIS_TEMPLATES')):
+        log.warning('missing $DESI_BASIS_TEMPLATES directory')
+        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v1.0')
+        missing_env = True
+
     for name in (
-        'DESI_SPECTRO_SIM', 'DESI_SPECTRO_DATA', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'PRODNAME'):
+        'DESI_SPECTRO_SIM', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'PRODNAME'):
         if name not in os.environ:
             log.warning("missing ${0}".format(name))
             missing_env = True
@@ -47,12 +46,16 @@ def check_env():
         log.warning("    Simulations written to $DESI_SPECTRO_SIM/$PIXPROD/")
         log.warning("    Raw data read from $DESI_SPECTRO_DATA/")
         log.warning("    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$PRODNAME/")
+        log.warning("    Templates are read from $DESI_BASIS_TEMPLATES")
 
     #- Wait until end to raise exception so that we report everything that
     #- is missing before actually failing
-    if missing_env or missing_template_env:
+    if missing_env:
         log.critical("missing env vars; exiting without running pipeline")
         sys.exit(1)
+
+    #- Override $DESI_SPECTRO_DATA to match $DESI_SPECTRO_SIM/$PIXPROD
+    os.environ['DESI_SPECTRO_DATA'] = os.path.join(os.getenv('DESI_SPECTRO_SIM'), os.getenv('PIXPROD'))
 
 
 #- TODO: fix usage of night to be something other than today
@@ -115,7 +118,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             pixfile = io.findfile('pix', night, expid, camera)
             psffile = '{}/data/specpsf/psf-{}.fits'.format(os.getenv('DESIMODEL'), channel)
             framefile = io.findfile('frame', night, expid, camera)
-            cmd = "exspec -i {pix} -p {psf} --specrange 0,{nspec} -w {wave} -o {frame}".format(
+            cmd = "exspec -i {pix} -p {psf} --specmin 0 --nspec {nspec} -w {wave} -o {frame}".format(
                 pix=pixfile, psf=psffile, wave=waverange[channel], frame=framefile, **params)
 
             inputs = [pixfile, psffile]
@@ -220,7 +223,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     bricks = set(fibermap['BRICKNAME'])
     for b in bricks:
         for channel in ['b', 'r', 'z']:
-            outputs.append( io.findfile('brick', brickid=b, band=channel))
+            outputs.append( io.findfile('brick', brickname=b, band=channel))
 
     cmd = "desi_make_bricks.py --night "+night
     if runcmd(cmd, inputs, outputs, clobber) != 0:
@@ -229,8 +232,8 @@ def integration_test(night=None, nspec=5, clobber=False):
     #-----
     #- Redshifts!
     for b in bricks:
-        inputs = [io.findfile('brick', brickid=b, band=channel) for channel in ['b', 'r', 'z']]
-        zbestfile = io.findfile('zbest', brickid=b)
+        inputs = [io.findfile('brick', brickname=b, band=channel) for channel in ['b', 'r', 'z']]
+        zbestfile = io.findfile('zbest', brickname=b)
         outputs = [zbestfile, ]
         cmd = "desi_zfind.py --brick {} -o {}".format(b, zbestfile)
         if runcmd(cmd, inputs, outputs, clobber) != 0:
@@ -248,7 +251,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Brick     True  z        ->  Class  z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for b in bricks:
-        zbest = io.read_zbest(io.findfile('zbest', brickid=b))
+        zbest = io.read_zbest(io.findfile('zbest', brickname=b))
         for i in range(len(zbest.z)):
             if zbest.type[i] == 'ssp_em_galaxy':
                 objtype = 'GAL'
@@ -275,9 +278,9 @@ def integration_test(night=None, nspec=5, clobber=False):
                 elif truetype == 'STD' and objtype == 'STAR':
                     status = 'ok'
                 else:
-                    status = 'oops'
+                    status = 'OOPS'
             else:
-                status = 'oops'
+                status = 'OOPS'
             print('{0}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
                 b, truetype, truez, objtype, z, zwarn, status))
 

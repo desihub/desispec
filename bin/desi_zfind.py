@@ -16,22 +16,41 @@ from desispec.zfind.redmonster import RedMonsterZfind
 
 import optparse
 
-parser = optparse.OptionParser(usage = "%prog [options]")
+parser = optparse.OptionParser(usage = "%prog [options] [brickfile-b brickfile-r brickfile-z]")
 parser.add_option("-b", "--brick", type=str,  help="input brickname")
 parser.add_option("-n", "--nspec", type=int,  help="number of spectra to fit [default: all]")
 parser.add_option("-o", "--outfile", type=str,  help="output file name")
+parser.add_option(      "--objtype", type=str,  help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
 parser.add_option("--zspec",   help="also include spectra in output file", action="store_true")
 
-opts, args = parser.parse_args()
+opts, brickfiles = parser.parse_args()
 
 log = get_logger()
+
+if opts.objtype is not None:
+    opts.objtype = opts.objtype.split(',')
 
 #- Read brick files for each channel
 log.info("Reading bricks")
 brick = dict()
-for channel in ('b', 'r', 'z'):
-    filename = io.findfile('brick', band=channel, brickid=opts.brick)
-    brick[channel] = io.Brick(filename)
+if opts.brick is not None:
+    if len(brickfiles) != 0:
+        log.error('Give -b/--brick or input brickfiles but not both')
+        sys.exit(1)
+        
+    for channel in ('b', 'r', 'z'):
+        filename = io.findfile('brick', band=channel, brickname=opts.brick)
+        brick[channel] = io.Brick(filename)
+else:
+    for filename in brickfiles:
+        bx = io.Brick(filename)
+        if bx.channel not in brick:
+            brick[bx.channel] = bx
+        else:
+            log.error('Channel {} in multiple input files'.format(bx.channel))
+            sys.exit(2)
+            
+assert set(brick.keys()) == set(['b', 'r', 'z'])
 
 #- Assume all channels have the same number of targets
 #- TODO: generalize this to allow missing channels
@@ -81,11 +100,11 @@ for i, targetid in enumerate(targetids):
     flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
 
 #- Do the redshift fit
-zf = RedMonsterZfind(wave, flux, ivar)
+zf = RedMonsterZfind(wave, flux, ivar, objtype=opts.objtype)
 
 #- Write some output
 if opts.outfile is None:
-    opts.outfile = io.findfile('zbest', brickid=opts.brick)
+    opts.outfile = io.findfile('zbest', brickname=opts.brick)
 
 log.info("Writing "+opts.outfile)
 io.write_zbest(opts.outfile, opts.brick, targetids, zf, zspec=opts.zspec)
