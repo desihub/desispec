@@ -183,6 +183,11 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
             normflux=stdflux*scalefac
 
             break  #- found SDSS_R or DECAM_R; we can stop now
+    
+    ii,=np.where((np.asarray(filters) == 'SDSS_R')+(np.asarray(filters)=='DECAM_R'))
+    if (ii.shape[0]==0):
+        print "No magnitudes other than SDSS_R or DECAM_R is implemented yet"
+        sys.exit(0)      
 
     return stdwave,normflux
 
