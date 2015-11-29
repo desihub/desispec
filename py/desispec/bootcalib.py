@@ -572,7 +572,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
         cpix = np.where(np.abs(dx_img)<0.10)
         if len(cpix[0]) < 50:
             cpix = np.where(np.abs(dx_img)<0.40)
-        amp = np.median(nrm_img[np.where(np.abs(dx_img)<0.10)])
+        amp = np.median(nrm_img[cpix])
         g_init.amplitude.value = amp # Fixed
         fdimg = dx_img[mask==1].flatten()
         fnimg = nrm_img[mask==1].flatten()
