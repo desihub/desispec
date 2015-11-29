@@ -19,7 +19,10 @@ from matplotlib import pyplot as plt
 from desispec.log import get_logger
 from desiutil import funcfits as dufits
 
-from xastropy.xutils import xdebug as xdb
+try:
+    from xastropy.xutils import xdebug as xdb
+except:
+    pass
 
 desispec_path = imp.find_module('desispec')[1]+'/../../'
 
@@ -553,7 +556,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
     gauss = []
     for ii in xrange(nfiber):
         if (ii % 25 == 0): # & verbose:
-            log.info("Working on fiber {:d}".format(ii))
+            log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
         mask[:] = 0
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
@@ -566,7 +569,10 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
         # Normalize
         nrm_img = flat / np.outer(flux,np.ones(flat.shape[1]))
         # Gaussian
-        amp = np.median(nrm_img[np.where(np.abs(dx_img)<0.05)])
+        cpix = np.where(np.abs(dx_img)<0.10)
+        if len(cpix[0]) < 50:
+            cpix = np.where(np.abs(dx_img)<0.40)
+        amp = np.median(nrm_img[np.where(np.abs(dx_img)<0.10)])
         g_init.amplitude.value = amp # Fixed
         fdimg = dx_img[mask==1].flatten()
         fnimg = nrm_img[mask==1].flatten()
