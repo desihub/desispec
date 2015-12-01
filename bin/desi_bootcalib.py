@@ -43,6 +43,7 @@ def main() :
     flat_hdu = fits.open(args.fiberflat)
     header = flat_hdu[0].header
     flat = flat_hdu[0].data
+    ny = flat.shape[0]
 
     ###########
     # Find fibers
@@ -110,18 +111,27 @@ def main() :
         desiboot.id_remainder(id_dict, pixpk, llist)
         if (ii % 20) == 0:
             log.warning("should do QA here..")
-        # Final fit
+        # Final fit wave vs. pix too
         final_fit,mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']),'polynomial',3,xmin=0.,xmax=1.)
+        final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',4, niter=5)
         if (ii % 20) == 0:
             log.warning("and QA here..")
         # Save
         id_dict['final_fit'] = final_fit
+        id_dict['final_fit_pix'] = final_fit_pix
+        id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
+        id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
         id_dict['mask'] = mask
         all_wv_soln.append(id_dict)
 
     ###########
+    # Write PSF file
+    log.info("writing PSF file")
+    desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln)
+
+    ###########
     # All done
-    #log.info("successfully wrote %s"%args.outfile)
+    log.info("successfully wrote {:s}".format(args.outfile))
     log.info("finishing..")
 
 

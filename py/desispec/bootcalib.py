@@ -13,6 +13,7 @@ import imp, yaml, glob
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
 from astropy.table import Table, Column, vstack
+from astropy.io import fits
 
 from matplotlib import pyplot as plt
 
@@ -174,6 +175,7 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
     rms = np.sqrt(np.sum(resid2)/len(xval))
     id_dict['rms'] = rms
     if verbose:
+        log=get_logger()
         log.info('rms = {:g}'.format(rms))
     # Finish
     id_dict['id_idx'] = idx
@@ -207,6 +209,7 @@ def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
         mt = np.where(np.abs(llist['wave']-wv_pk)<wv_toler)[0]
         if len(mt) == 1:
             if verbose:
+                log=get_logger()
                 log.info('Matched {:g} to {:g}'.format(ixpk,llist['wave'][mt[0]]))
             id_dict['id_idx'].append(ii)
             id_dict['id_pix'].append(ixpk)
@@ -238,6 +241,7 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
     id_dict : dict
       dict of identified lines
     """
+    log=get_logger()
     # List of dicts for diagnosis
     rms_dicts = []
     ## Assign a line to center on
@@ -533,7 +537,9 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
     max_iter : int, optional
       Maximum number of iterations for rejection
 
-    returns gauss
+    Returns
+    -------
+    gauss
       list of Gaussian sigma
     """
     log=get_logger()
@@ -926,7 +932,63 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
     # Return
     return xnew, xerr
 
-#####################################################################            
+#####################################################################
+#####################################################################
+# Output
+#####################################################################
+
+def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
+    """ Write the output to a Base PSF format
+
+    Parameters
+    ----------
+    outfile : str
+      Output file
+    xfit : ndarray
+      Traces
+    gauss : list
+      List of gaussian sigmas
+    fdicts : list
+      List of trace fits
+    wv_solns : list
+      List of wavelength calibrations
+    ncoeff : int
+      Number of Legendre coefficients in fits
+    """
+    #
+    ny = xfit.shape[0]
+    nfiber = xfit.shape[1]
+    XCOEFF = np.zeros((nfiber, ncoeff))
+    YCOEFF = np.zeros((nfiber, ncoeff))
+    # Find WAVEMIN, WAVEMAX
+    WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
+    WAVEMAX = np.min([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
+    wv_array = np.linspace(WAVEMIN, WAVEMAX, num=ny)
+    # Fit Legendre to y vs. wave
+    for ii,id_dict in enumerate(wv_solns):
+        # Fit y vs. wave
+        yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+        YCOEFF[ii, :] = yleg_fit['coeff']
+        # Fit x vs. wave
+        yval = dufits.func_val(wv_array, yleg_fit)
+        xtrc = dufits.func_val(yval, fdicts[ii])
+        xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+        XCOEFF[ii, :] = xleg_fit['coeff']
+
+    # Write the FITS file
+    prihdu = fits.PrimaryHDU(XCOEFF)
+    prihdu.header['WAVEMIN'] = WAVEMIN
+    prihdu.header['WAVEMAX'] = WAVEMAX
+
+    yhdu = fits.ImageHDU(YCOEFF)
+    gausshdu = fits.ImageHDU(np.array(gauss))
+
+    hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
+    hdulist.writeto(outfile, clobber=True)
+
+
+
+#####################################################################
 #####################################################################            
 # Utilities
 #####################################################################            
