@@ -131,7 +131,9 @@ def resample_flux(xout, x, flux, ivar=None):
     else:
         a = _unweighted_resample(xout, x, flux*ivar)
         b = _unweighted_resample(xout, x, ivar)
-        outflux = a / b
+        mask = (b>0)
+        outflux = np.zeros(a.shape)
+        outflux[mask] = a[mask] / b[mask]
         dx = np.gradient(x)
         dxout = np.gradient(xout)
         outivar = _unweighted_resample(xout, x, ivar/dx)*dxout
