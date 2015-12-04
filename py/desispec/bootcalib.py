@@ -3,6 +3,11 @@ desispec.bootcalib
 ==================
 
 Utility functions to perform a quick calibration of DESI data
+
+TODO:
+1. Expand to r, i cameras
+2. QA plots
+3. Test with CR data
 """
 from __future__ import print_function, absolute_import, division, unicode_literals
 
@@ -16,6 +21,10 @@ from astropy.table import Table, Column, vstack
 from astropy.io import fits
 
 from matplotlib import pyplot as plt
+import matplotlib
+import matplotlib.gridspec as gridspec
+import matplotlib.cm as cm
+from matplotlib.backends.backend_pdf import PdfPages
 
 from desispec.log import get_logger
 from desiutil import funcfits as dufits
@@ -26,6 +35,7 @@ except:
     pass
 
 desispec_path = imp.find_module('desispec')[1]+'/../../'
+glbl_figsz = (16,9)
 
 ########################################################
 # Arc/Wavelength Routines (Linelists come next)
@@ -1000,10 +1010,198 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
 # QA
 #####################################################################            
 
-def fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
-    ''' Generate a QA plot for the traces.  Bundle by bundle
-    Parameters:
-    ------------
+def qa_fiber_peaks(xpk, cut, pp, figsz=None, nper=100):
+    """ Generate a QA plot for the fiber peaks
+
+    Args:
+        xpk: x positions on the CCD of the fiber peaks at a ypos
+        cut: Spatial cut through the detector
+        pp: PDF file pointer
+        figsz: figure size, optional
+        nper: number of fibers per row in the plot, optional
+
+    """
+    # Init
+    if figsz is None:
+        figsz = glbl_figsz
+
+    nfiber = xpk.size
+    nrow = (nfiber // nper) + ((nfiber % nper) > 0)
+    xplt = np.arange(cut.size)
+    # Plots
+    gs = gridspec.GridSpec(nrow, 1)
+    plt.figure(figsize=figsz)
+    # Loop
+    for ii in range(nrow):
+        ax = plt.subplot(gs[ii])
+        i0 = ii*nper
+        i1 = i0 + nper
+        ax.plot(xplt,cut, 'k-')
+        ax.plot(xpk, cut[xpk],'go')
+        xmin = np.min(xpk[i0:i1])-10.
+        xmax = np.max(xpk[i0:i1])+10.
+        ax.set_xlim(xmin,xmax)
+    # Save and close
+    pp.savefig(bbox_inches='tight')
+    plt.close()
+
+
+def qa_fiber_Dx(xfit, fdicts, pp, figsz=None):
+    """ Show the spread in the trace per fiber
+
+    Used to diagnose the traces
+
+    Args:
+        xfit: traces
+        fdicts: dict of the traces
+        pp: PDF file pointer
+        figsz: figure size, optional
+
+    """
+    #
+    if figsz is None:
+        figsz = glbl_figsz
+    # Calculate Dx
+    nfiber = xfit.shape[1]
+    Dx = []
+    for ii in range(nfiber):
+        Dx.append(np.max(xfit[:, ii])-np.min(xfit[:, ii]))
+    # Plot
+    plt.figure(figsize=figsz)
+    plt.scatter(np.arange(nfiber), np.array(Dx))
+    # Label
+    plt.xlabel('Fiber', fontsize=17.)
+    plt.ylabel(r'$\Delta x$ (pixels)', fontsize=17.)
+    # Save and close
+    pp.savefig(bbox_inches='tight')
+    plt.close()
+
+def qa_fiber_gauss(gauss, pp, figsz=None):
+    """ Show the Gaussian (sigma) fits to each fiber
+
+    Args:
+        gauss: Gaussian of each fiber
+        pp: PDF file pointer
+        figsz: figure size, optional
+
+    """
+    #
+    if figsz is None:
+        figsz = glbl_figsz
+    # Calculate Dx
+    nfiber = gauss.size
+    # Plot
+    plt.figure(figsize=figsz)
+    plt.scatter(np.arange(nfiber), gauss)
+    # Label
+    plt.xlabel('Fiber', fontsize=17.)
+    plt.ylabel('Gaussian sigma (pixels)', fontsize=17.)
+    # Save and close
+    pp.savefig(bbox_inches='tight')
+    plt.close()
+
+def qa_arc_spec(all_spec, all_soln, pp, figsz=None):
+    """ Generate QA plots of the arc spectra with IDs
+
+    Args:
+        all_spec: Arc 1D fiber spectra
+        all_soln: Wavelength solutions
+        pp: PDF file pointer
+        figsz: figure size, optional
+
+    """
+    # Init
+    if figsz is None:
+        figsz = glbl_figsz
+    nfiber = len(all_soln)
+    npix = all_spec.shape[0]
+    #
+    nrow = 2
+    ncol = 3
+    # Plots
+    gs = gridspec.GridSpec(nrow, ncol)
+    plt.figure(figsize=figsz)
+    # Loop
+    for ii in range(nrow*ncol):
+        ax = plt.subplot(gs[ii])
+        idx = ii * (nfiber//(nrow*ncol))
+        yspec = np.log10(np.maximum(all_spec[:,idx],1))
+        ax.plot(np.arange(npix), yspec, 'k-')
+        ax.set_xlabel('Pixel')
+        ax.set_ylabel('log Flux')
+        # ID
+        id_dict = all_soln[idx]
+        for jj,xpixpk in enumerate(id_dict['id_pix']):
+            ax.text(xpixpk, yspec[int(np.round(xpixpk))], '{:g}'.format(id_dict['id_wave'][jj]), ha='center',color='red', rotation=90.)
+
+    # Save and close
+    pp.savefig(bbox_inches='tight')
+    plt.close()
+
+
+def qa_fiber_arcrms(all_soln, pp, figsz=None):
+    """ Show the RMS of the wavelength solutions vs. fiber
+
+    Args:
+        all_soln: Wavelength solutions
+        pp: PDF file pointer
+        figsz: figure size, optional
+
+    """
+    #
+    if figsz is None:
+        figsz = glbl_figsz
+    # Calculate Dx
+    nfiber = len(all_soln)
+    rms = [id_dict['rms'] for id_dict in all_soln]
+    # Plot
+    plt.figure(figsize=figsz)
+    plt.scatter(np.arange(nfiber), np.array(rms))
+    # Label
+    plt.xlabel('Fiber', fontsize=17.)
+    plt.ylabel('RMS (pixels)', fontsize=17.)
+    # Save and close
+    pp.savefig(bbox_inches='tight')
+    plt.close()
+
+
+def qa_fiber_dlamb(all_spec, all_soln, pp, figsz=None):
+    """ Show the Dlamb of the wavelength solutions vs. fiber
+
+    Args:
+        all_soln: Wavelength solutions
+        pp: PDF file pointer
+        figsz: figure size, optional
+
+    """
+    #
+    if figsz is None:
+        figsz = glbl_figsz
+    # Calculate Dx
+    nfiber = len(all_soln)
+    npix = all_spec.shape[0]
+    xval = np.arange(npix)
+    dlamb = []
+    for ii in range(nfiber):
+        idict = all_soln[ii]
+        wave = dufits.func_val(xval,idict['final_fit_pix'])
+        dlamb.append(np.median(np.abs(wave-np.roll(wave,1))))
+    # Plot
+    plt.figure(figsize=figsz)
+    plt.scatter(np.arange(nfiber), np.array(dlamb))
+    # Label
+    plt.xlabel('Fiber', fontsize=17.)
+    plt.ylabel(r'$\Delta \lambda$ (Ang)', fontsize=17.)
+    # Save and close
+    pp.savefig(bbox_inches='tight')
+    plt.close()
+
+
+def qa_fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
+    ''' Generate a QA plot for the fiber traces
+
+    Parameters
+    ----------
     flat: ndarray
       image
     xtrc: ndarray
@@ -1015,10 +1213,6 @@ def fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
     normalize: bool, optional
       Normalize the flat?  If not, use zscale for output
     '''
-    import matplotlib
-    import matplotlib.gridspec as gridspec
-    import matplotlib.cm as cm
-    from matplotlib.backends.backend_pdf import PdfPages
 
     ticks_font = matplotlib.font_manager.FontProperties(family='times new roman', 
        style='normal', size=16, weight='normal', stretch='normal')
