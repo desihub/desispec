@@ -13,6 +13,7 @@ import numpy as np
 from desispec.log import get_logger
 from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
+from matplotlib.backends.backend_pdf import PdfPages
 
 import argparse
 
@@ -28,7 +29,7 @@ def main() :
                         help = 'path of DESI fiberflat fits file')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
-    parser.add_argument('--qafig', type = str, default = None, required=False,
+    parser.add_argument('--qafile', type = str, default = None, required=False,
                         help = 'path of QA figure file')
     parser.add_argument("--test", help="Debug?", default=False, action="store_true")
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
@@ -37,6 +38,14 @@ def main() :
     log=get_logger()
 
     log.info("starting")
+
+    # Start QA
+    try:
+        pp = PdfPages(args.qafile)
+    except ValueError:
+        QA = False
+    else:
+        QA = True
 
     ###########
     # Read flat
@@ -49,7 +58,10 @@ def main() :
     # Find fibers
     log.info("finding the fibers")
     xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
-    log.warning("insert QA (see notebook)")
+    if QA:
+        desiboot.qa_fiber_peaks(xpk, cut, pp)
+
+    ##
 
     # Test?
     if args.test:
@@ -65,14 +77,15 @@ def main() :
     log.info("fitting the traces")
     xfit, fdicts = desiboot.fit_traces(xset,xerr)
     # QA
-    log.warning("insert QA here (see module)")
-    #desiboot.fiber_trace_qa(flat,xfit)
+    if QA:
+        desiboot.qa_fiber_Dx(xfit, fdicts, pp)
 
     ###########
     # Model the PSF with Gaussian
     log.info("modeling the PSF with a Gaussian, be patient..")
     gauss = desiboot.fiber_gauss(flat,xfit,xerr)
-    log.warning("insert QA here (see notebook)")
+    if QA:
+        desiboot.qa_fiber_gauss(gauss, pp)
 
     ###########
     # Read arc
@@ -103,26 +116,27 @@ def main() :
         pixpk = desiboot.find_arc_lines(spec)
         # Match a set of 5 gd_lines to detected lines
         id_dict = desiboot.id_arc_lines(pixpk,gd_lines,dlamb,wmark)
-        if (ii % 20) == 0:
-            log.warning("could do QA here..")
         # Find the other good ones
         desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines)
         # Now the rest
         desiboot.id_remainder(id_dict, pixpk, llist)
-        if (ii % 20) == 0:
-            log.warning("should do QA here..")
         # Final fit wave vs. pix too
-        final_fit,mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']),'polynomial',3,xmin=0.,xmax=1.)
+        final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
+        rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
         final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',4, niter=5)
-        if (ii % 20) == 0:
-            log.warning("and QA here..")
         # Save
         id_dict['final_fit'] = final_fit
+        id_dict['rms'] = rms
         id_dict['final_fit_pix'] = final_fit_pix
         id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
         id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
         id_dict['mask'] = mask
         all_wv_soln.append(id_dict)
+
+    if QA:
+        desiboot.qa_arc_spec(all_spec, all_wv_soln, pp)
+        desiboot.qa_fiber_arcrms(all_wv_soln, pp)
+        desiboot.qa_fiber_dlamb(all_spec, all_wv_soln, pp)
 
     ###########
     # Write PSF file
@@ -132,6 +146,9 @@ def main() :
     ###########
     # All done
     log.info("successfully wrote {:s}".format(args.outfile))
+    if QA:
+        log.info("successfully wrote {:s}".format(args.qafile))
+        pp.close()
     log.info("finishing..")
 
 
