@@ -12,8 +12,11 @@ TODO:
 from __future__ import print_function, absolute_import, division, unicode_literals
 
 import numpy as np
-import copy, pdb
-import imp, yaml, glob
+import copy
+import pdb
+import imp
+import yaml
+import glob
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -684,7 +687,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
 
     # Book-keeping and some error checking
     if len(xpk) != Nbundle*Nfiber:
-        raise ValueError('Found the wrong number of total fibers: {:d}'.format(len(xpk)))
+        log.warn('Found the wrong number of total fibers: {:d}'.format(len(xpk)))
     else:
         log.info('Found {:d} fibers'.format(len(xpk)))
     # Find bundles
@@ -692,7 +695,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     medsep = np.median(xsep)
     bundle_ends = np.where(np.abs(xsep-medsep) > 0.5*medsep)[0]
     if len(bundle_ends) != Nbundle:
-        raise ValueError('Found the wrong number of bundles: {:d}'.format(len(bundle_ends)))
+        log.warn('Found the wrong number of bundles: {:d}'.format(len(bundle_ends)))
     else:
         log.info('Found {:d} bundles'.format(len(bundle_ends)))
     # Confirm correct number of fibers per bundle
