@@ -6,12 +6,10 @@ import unittest
 
 import numpy as np
 import urllib2
-import pdb
 import glob
 
 from astropy.io import fits
 
-from desispec.qa.qa_exposure import QA_Frame
 from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
 
@@ -35,9 +33,7 @@ class TestBoot(unittest.TestCase):
     
     def test_fiber_peaks(self):
         flat_hdu = fits.open(flat_fil)
-        header = flat_hdu[0].header
         flat = flat_hdu[0].data
-        ny = flat.shape[0]
         ###########
         # Find fibers
         xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
@@ -45,9 +41,7 @@ class TestBoot(unittest.TestCase):
 
     def test_tracing(self):
         flat_hdu = fits.open(flat_fil)
-        header = flat_hdu[0].header
         flat = flat_hdu[0].data
-        ny = flat.shape[0]
         # Find fibers (necessary)
         xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
         # Trace
@@ -56,9 +50,7 @@ class TestBoot(unittest.TestCase):
 
     def test_gauss(self):
         flat_hdu = fits.open(flat_fil)
-        header = flat_hdu[0].header
         flat = flat_hdu[0].data
-        ny = flat.shape[0]
         # Find fibers (necessary)
         xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
         # Trace
