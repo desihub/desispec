@@ -58,7 +58,7 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     """
     # Threshold criterion
     npix = spec.size
-    spec_mask = sigma_clip(spec, sigma=4.)
+    spec_mask = sigma_clip(spec, sig=4.)
     rms = np.std(spec_mask)
     thresh = 10*rms
     #print("thresh = {:g}".format(thresh))
