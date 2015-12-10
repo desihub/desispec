@@ -609,7 +609,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
         while iterate & (niter < max_iter):
             # Clip
             resid = parm(fdimg) - fnimg
-            resid_mask = sigma_clip(resid,sigma=4.)
+            resid_mask = sigma_clip(resid, sig=4.)
             # Fit
             gdp = ~resid_mask.mask
             parm = fitter(g_init, fdimg[gdp], fnimg[gdp])
