@@ -113,6 +113,8 @@ def load_gdarc_lines(camera):
         dlamb = 0.589
         wmark = 4358.34 # Hg
         gd_lines = np.array(HgI + CdI + NeI)
+    if camera[0] == 'r':
+        NeI = [5881.895, 5944.834]
     else:
         log.error('Bad camera')
 
@@ -661,10 +663,10 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
         ypos = flat.shape[0]//2
 
     # Cut image
-    cutimg = flat[ypos-15:ypos+15,:]
+    cutimg = flat[ypos-15:ypos+15, :]
 
     # Smash
-    cut = np.median(cutimg,axis=0)
+    cut = np.median(cutimg, axis=0)
 
     # Set flux threshold
     srt = np.sort(cutimg.flatten())
@@ -741,8 +743,9 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
             weights=1./xerr[:,ii], initialmask=mask, maxone=True)#, sigma=xerr[:,ii])
         # Stats on residuals
         nmask_new = np.sum(mask)-nmask 
-        if nmask_new > 10:
-            raise ValueError('Rejected too many points: {:d}'.format(nmask_new))
+        if nmask_new > 50:
+            pdb.set_trace()
+            raise ValueError('Rejected too many points [may need to increase for z camera with CRs: {:d}'.format(nmask_new))
         # Save
         xnew[:,ii] = dufits.func_val(yval,dfit)
         fits.append(dfit)
@@ -1013,7 +1016,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
 # QA
 #####################################################################            
 
-def qa_fiber_peaks(xpk, cut, pp, figsz=None, nper=100):
+def qa_fiber_peaks(xpk, cut, pp=None, figsz=None, nper=100):
     """ Generate a QA plot for the fiber peaks
 
     Args:
@@ -1045,11 +1048,14 @@ def qa_fiber_peaks(xpk, cut, pp, figsz=None, nper=100):
         xmax = np.max(xpk[i0:i1])+10.
         ax.set_xlim(xmin,xmax)
     # Save and close
-    pp.savefig(bbox_inches='tight')
+    if pp is not None:
+        pp.savefig(bbox_inches='tight')
+    else:
+        plt.show()
     plt.close()
 
 
-def qa_fiber_Dx(xfit, fdicts, pp, figsz=None):
+def qa_fiber_Dx(xfit, fdicts, pp=None, figsz=None):
     """ Show the spread in the trace per fiber
 
     Used to diagnose the traces
@@ -1076,10 +1082,13 @@ def qa_fiber_Dx(xfit, fdicts, pp, figsz=None):
     plt.xlabel('Fiber', fontsize=17.)
     plt.ylabel(r'$\Delta x$ (pixels)', fontsize=17.)
     # Save and close
-    pp.savefig(bbox_inches='tight')
+    if pp is None:
+        plt.show()
+    else:
+        pp.savefig(bbox_inches='tight')
     plt.close()
 
-def qa_fiber_gauss(gauss, pp, figsz=None):
+def qa_fiber_gauss(gauss, pp=None, figsz=None):
     """ Show the Gaussian (sigma) fits to each fiber
 
     Args:
@@ -1100,7 +1109,10 @@ def qa_fiber_gauss(gauss, pp, figsz=None):
     plt.xlabel('Fiber', fontsize=17.)
     plt.ylabel('Gaussian sigma (pixels)', fontsize=17.)
     # Save and close
-    pp.savefig(bbox_inches='tight')
+    if pp is None:
+        plt.show()
+    else:
+        pp.savefig(bbox_inches='tight')
     plt.close()
 
 def qa_arc_spec(all_spec, all_soln, pp, figsz=None):
