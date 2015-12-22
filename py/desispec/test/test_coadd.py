@@ -47,6 +47,7 @@ class TestCoadd(unittest.TestCase):
         self.assertEqual(s1.flux, None)
         s1.finalize()
         self.assertTrue(s1.flux is not None)
+        flux = self._getdata(n)[1]
         self.assertTrue(s1.flux.shape == flux.shape)
         
     def test_nonuniform_coadd(self):
