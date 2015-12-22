@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# See top-level LICENSE.rst file for Copyright information
 
 """
 Get the normalized best template to do flux calibration.
@@ -117,7 +118,7 @@ def main() :
        frameIvar[i] = frame.ivar
        frameWave[i] = frame.wave
        frameResolution[i] = frame.resolution_data
-       framehdr[i] = frame.header
+       framehdr[i] = frame.meta
 
        ff = io.read_fiberflat(fiberflatfile[i])
        fiberFlat[i] = ff.fiberflat

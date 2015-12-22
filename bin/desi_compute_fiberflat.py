@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# See top-level LICENSE file for Copyright information
+# See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
 
@@ -27,12 +27,12 @@ def main() :
 
     args = parser.parse_args()
     log=get_logger()
-    
+
     log.info("starting")
 
     frame = read_frame(args.infile)
     fiberflat = compute_fiberflat(frame)
-    write_fiberflat(args.outfile, fiberflat, frame.header)
+    write_fiberflat(args.outfile, fiberflat, frame.meta)
 
     log.info("successfully wrote %s"%args.outfile)
 

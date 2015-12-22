@@ -12,10 +12,9 @@ from desispec.log import get_logger
 #import time # for debugging
 
 def bin_bounds(x):
-    """
-    Calculates the bin boundaries of an array x
+    """Calculates the bin boundaries of an array `x`.
 
-    Returns tuple of lower and upper bounds, each with same length as x
+    Returns tuple of lower and upper bounds, each with same length as `x`.
     """
     if x.size<2 :
         get_logger().error("bin_bounds, x.size={0:d}".format(x.size))
@@ -132,7 +131,9 @@ def resample_flux(xout, x, flux, ivar=None):
     else:
         a = _unweighted_resample(xout, x, flux*ivar)
         b = _unweighted_resample(xout, x, ivar)
-        outflux = a / b
+        mask = (b>0)
+        outflux = np.zeros(a.shape)
+        outflux[mask] = a[mask] / b[mask]
         dx = np.gradient(x)
         dxout = np.gradient(xout)
         outivar = _unweighted_resample(xout, x, ivar/dx)*dxout
@@ -163,11 +164,13 @@ def _unweighted_resample(output_x,input_x,input_flux_density) :
     so flux density is zero for x<x[0]-(x[1]-x[0])/2 and x>x[-1]+(x[-1]-x[-2])/2
 
     The input is interpreted as the nodes positions and node values of
-    a piece-wise linear function.
-    y(x) = sum_i y_i * f_i(x)
-    with
-    f_i(x) =    (x_{i-1}<x<=x_{i})*(x-x_{i-1})/(x_{i}-x_{i-1})
-              + (x_{i}<x<=x_{i+1})*(x-x_{i+1})/(x_{i}-x_{i+1})
+    a piece-wise linear function::
+
+        y(x) = sum_i y_i * f_i(x)
+
+    with::
+        f_i(x) =    (x_{i-1}<x<=x_{i})*(x-x_{i-1})/(x_{i}-x_{i-1})
+                + (x_{i}<x<=x_{i+1})*(x-x_{i+1})/(x_{i}-x_{i+1})
 
     the output value is the average flux density in a bin
     flux_out(j) = int_{x>(x_{j-1}+x_j)/2}^{x<(x_j+x_{j+1})/2} y(x) dx /  0.5*(x_{j+1}+x_{j-1})
@@ -210,12 +213,20 @@ def _unweighted_resample(output_x,input_x,input_flux_density) :
     # (last entry, which is not used, is wrong, because of the np.roll)
     trapeze_integrals=(np.roll(ty,-1)+ty)*(np.roll(tx,-1)-tx)/2.
 
-    # output flux
-    of=np.zeros((ox.size))
-    for i in range(ox.size) :
-        # for each bin, we sum the trapeze_integrals that belong to that bin
-        # IGNORING those that are outside of the range [ixmin,ixmax]
-        # and we divide by the full output bin size (even if outside of [ixmin,ixmax])
-        of[i] = np.sum(trapeze_integrals[(tx>=max(oxm[i],ixmin))&(tx<min(oxp[i],ixmax))])/(oxp[i]-oxm[i])
+    #- output flux
+    #- for each bin, we sum the trapeze_integrals that belong to that bin
+    #- IGNORING those that are outside of the range [ixmin,ixmax]
+    #- and we divide by the full output bin size (even if outside of [ixmin,ixmax])
+
+    # of=np.zeros((ox.size))
+    # for i in range(ox.size) :
+    #     of[i] = np.sum(trapeze_integrals[(tx>=max(oxm[i],ixmin))&(tx<min(oxp[i],ixmax))])/(oxp[i]-oxm[i])
+
+    #- A faster version of the above loop:
+    #- histogram while not including elements exactly on the rightmost edge;
+    #- np.histogram will include those by default so shift edge by 1e-12 binsize
+    binsize = oxp - oxm
+    edges = np.concatenate([oxm, oxp[-1:]]).clip(ixmin, ixmax-1e-12*binsize[-1])
+    of = np.histogram(tx, edges, weights=trapeze_integrals)[0] / binsize
 
     return of

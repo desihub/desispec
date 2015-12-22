@@ -13,7 +13,13 @@ Example::
 
     from desispec.maskbits import ccdmask
 
-    ccdmask.COSMIC | specmask.SATURATED
+    #- bit operations
+    mask |= ccdmask.COSMIC     #- set ccdmask.COSMIC in integer/array `mask`
+    mask & ccdmask.COSMIC      #- get ccdmask.COSMIC from integer/array `mask`
+    (mask & ccdmask.COSMIC) != 0  #- test boolean status of ccdmask.COSMIC in integer/array `mask`
+    ccdmask.COSMIC | specmask.SATURATED  #- Combine two bitmasks.
+    
+    #- bit attributes
     ccdmask.mask('COSMIC')     #- 2**0, same as ccdmask.COSMIC
     ccdmask.mask(0)            #- 2**0, same as ccdmask.COSMIC
     ccdmask.COSMIC             #- 2**0, same as ccdmask.mask('COSMIC')
@@ -23,6 +29,8 @@ Example::
     ccdmask.names(3)           #- ['COSMIC', 'HOT']
     ccdmask.comment(0)         #- "Cosmic ray"
     ccdmask.comment('BADPIX')  #- "Cosmic ray"
+
+
 """
 
 #- Move these definitions into a separate yaml file
@@ -30,10 +38,11 @@ import yaml
 _bitdefs = yaml.load("""
 #- CCD pixel mask
 ccdmask:
-    - [COSMIC,    0, "Cosmic ray"]
+    - [BAD,       0, "Pre-determined bad pixel (any reason)"]
     - [HOT,       1, "Hot pixel"]
     - [DEAD,      2, "Dead pixel"]
     - [SATURATED, 3, "Saturated pixel from object"]
+    - [COSMIC,    4, "Cosmic ray"]
 
 #- Mask bits that apply to an entire fiber
 fibermask:
@@ -45,7 +54,7 @@ fibermask:
     - [MANYREJECTED, 5, ">10% of pixels rejected in extraction"]
 
 #- Spectral pixel mask: bits that apply to individual spectral bins
-spmask:
+specmask:
     - [SOMEBADPIX,   0, "Some input pixels were masked or ivar=0"]
     - [ALLBADPIX,    1, "All input pixels were masked or ivar=0"]
     - [COSMIC,       2, "Input pixels included a masked cosmic"]
@@ -69,7 +78,7 @@ class BitMask(object):
 
         Users are not expected to create BitMask objects directly.
 
-        See maskbits.ccdmask, maskbits.spmask, maskbits.fibermask, ...
+        See maskbits.ccdmask, maskbits.specmask, maskbits.fibermask, ...
         """
         self._name = name
         self._bitname = dict()  #- key num -> value name
@@ -140,6 +149,6 @@ class BitMask(object):
 
 #-------------------------------------------------------------------------
 #- The actual masks
-spmask = BitMask('spmask', _bitdefs)
+specmask = BitMask('specmask', _bitdefs)
 ccdmask = BitMask('ccdmask', _bitdefs)
 fibermask = BitMask('fibermask', _bitdefs)

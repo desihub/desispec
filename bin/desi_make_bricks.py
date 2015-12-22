@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# See top-level LICENSE file for Copyright information
+# See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
 """
@@ -38,40 +38,42 @@ def main():
     bricks = { }
     try:
         # Loop over exposures available for this night.
-        for exposure in desispec.io.get_exposures(args.night,specprod = args.specprod):
+        for exposure in desispec.io.get_exposures(args.night, specprod_dir = args.specprod):
             # Ignore exposures with no fibermap, assuming they are calibration data.
             fibermap_path = desispec.io.findfile(filetype = 'fibermap',night = args.night,
-                expid = exposure,specprod = args.specprod)
+                expid = exposure, specprod_dir = args.specprod)
             if not os.path.exists(fibermap_path):
                 log.debug('Skipping exposure %08d with no fibermap.' % exposure)
                 continue
             # Open the fibermap.
             fibermap_data = desispec.io.read_fibermap(fibermap_path)
-            brick_ids = set(fibermap_data['BRICKNAME'])
+            brick_names = set(fibermap_data['BRICKNAME'])
             # Loop over per-camera cframes available for this exposure.
-            cframes = desispec.io.get_files(filetype = 'cframe',night = args.night,
-                expid = exposure,specprod = args.specprod)
+            cframes = desispec.io.get_files(
+                    filetype = 'cframe', night = args.night,
+                    expid = exposure, specprod_dir = args.specprod)
             log.debug('Exposure %08d covers %d bricks and has cframes for %s.' % (
-                exposure,len(brick_ids),','.join(cframes.keys())))
+                exposure,len(brick_names),','.join(cframes.keys())))
             for camera,cframe_path in cframes.iteritems():
                 band,spectro_id = camera[0],int(camera[1:])
                 this_camera = (fibermap_data['SPECTROID'] == spectro_id)
                 # Read this cframe file.
-                ### flux,ivar,wave,resolution,hdr = desispec.io.read_frame(cframe_path)
                 frame = desispec.io.read_frame(cframe_path)
                 # Loop over bricks.
-                for brick_id in brick_ids:
+                for brick_name in brick_names:
                     # Lookup the fibers belong to this brick.
-                    this_brick = (fibermap_data['BRICKNAME'] == brick_id)
+                    this_brick = (fibermap_data['BRICKNAME'] == brick_name)
                     brick_data = fibermap_data[this_camera & this_brick]
                     fibers = np.mod(brick_data['FIBER'],500)
                     if len(fibers) == 0:
                         continue
-                    brick_key = '%s_%s' % (band,brick_id)
+                    brick_key = '%s_%s' % (band,brick_name)
                     # Open the brick file if this is the first time we are using it.
                     if brick_key not in bricks:
-                        brick_path = desispec.io.findfile('brick',brickid = brick_id,band = band)
-                        bricks[brick_key] = desispec.io.brick.Brick(brick_path,mode = 'update')
+                        brick_path = desispec.io.findfile('brick',brickname = brick_name,band = band)
+                        header = dict(BRICKNAM=(brick_name, 'Imaging brick name'),
+                                      CHANNEL=(band, 'Spectrograph channel [b,r,z]'), )
+                        bricks[brick_key] = desispec.io.brick.Brick(brick_path,mode = 'update',header = header)
                     # Add these fibers to the brick file. Note that the wavelength array is
                     # not per-fiber, so we do not slice it before passing it to add_objects().
                     bricks[brick_key].add_objects(frame.flux[fibers], frame.ivar[fibers],

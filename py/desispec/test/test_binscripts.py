@@ -1,3 +1,4 @@
+
 import os, sys
 import unittest
 from uuid import uuid4
@@ -21,6 +22,8 @@ class TestBinScripts(unittest.TestCase):
         cls.fiberflatfile = 'fiberflat-'+id+'.fits'
         cls.fibermapfile = 'fibermap-'+id+'.fits'
         cls.skyfile = 'sky-'+id+'.fits'
+        cls.qafile = 'qa-'+id+'.yaml'
+        cls.qafig = 'qa-'+id+'.pdf'
         cls.topDir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         cls.binDir = os.path.join(cls.topDir,'bin')
         try:
@@ -33,7 +36,7 @@ class TestBinScripts(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
-        for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, cls.skyfile]:
+        for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, cls.skyfile, cls.qafile, cls.qafig]:
             if os.path.exists(filename):
                 os.remove(filename)
         if cls.origPath is None:
@@ -48,7 +51,7 @@ class TestBinScripts(unittest.TestCase):
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        frame = Frame(wave, flux, ivar, mask, Rdata)
+        frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0)
         io.write_frame(self.framefile, frame)
 
     def _write_fiberflat(self):
@@ -98,11 +101,11 @@ class TestBinScripts(unittest.TestCase):
         self._write_fiberflat()
         self._write_fibermap()
 
-        cmd = "{} {}/desi_compute_sky.py --infile {} --fibermap {} --fiberflat {} --outfile {}".format(
-            sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile)
+        cmd = "{} {}/desi_compute_sky.py --infile {} --fibermap {} --fiberflat {} --outfile {} --qafile {} --qafig {}".format(
+            sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.qafile, self.qafig)
         err = runcmd(cmd,
                 inputs  = [self.framefile, self.fiberflatfile, self.fibermapfile],
-                outputs = [self.skyfile,], clobber=True )
+                outputs = [self.skyfile,self.qafile,self.qafig,], clobber=True )
         self.assertEqual(err, 0)
 
 

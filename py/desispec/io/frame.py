@@ -2,7 +2,7 @@
 desispec.io.frame
 =================
 
-IO routines for frame.
+I/O routines for Frame objects
 """
 import os.path
 
@@ -37,7 +37,8 @@ def write_frame(outfile, frame, header=None):
     if header is not None:
         hdr = fitsheader(header)
     else:
-        hdr = fitsheader(frame.header)
+        #hdr = fitsheader(frame.header)
+        hdr = fitsheader(frame.meta)
 
     if 'SPECMIN' not in hdr:
         hdr['SPECMIN'] = 0
@@ -97,4 +98,4 @@ def read_frame(filename, nspec=None):
         resolution_data = resolution_data[0:nspec]
 
     # return flux,ivar,wave,resolution_data, hdr
-    return Frame(wave, flux, ivar, mask, resolution_data, hdr)
+    return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr)

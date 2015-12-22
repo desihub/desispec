@@ -14,7 +14,7 @@ from desispec.linalg import spline_fit
 from desispec.log import get_logger
 from desispec import util
 
-import scipy,scipy.sparse
+import scipy,scipy.sparse,scipy.stats
 import sys
 
 def compute_sky(frame, fibermap, nsig_clipping=4.) :
@@ -40,7 +40,11 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
     log=get_logger()
     log.info("starting")
 
-    skyfibers = np.where(fibermap["OBJTYPE"]=="SKY")[0]
+    # Grab sky fibers on this frame
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
+    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
+        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
+    assert np.max(skyfibers) < 500
 
     nwave=frame.nwave
     nfibers=len(skyfibers)
@@ -186,6 +190,10 @@ class SkyModel(object):
 
 def subtract_sky(frame, skymodel) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
+    
+    Args:
+        frame : desispec.Frame object
+        skymodel : desispec.SkyModel object
     """
     assert frame.nspec == skymodel.nspec
     assert frame.nwave == skymodel.nwave
@@ -204,3 +212,56 @@ def subtract_sky(frame, skymodel) :
     frame.mask |= skymodel.mask
 
     log.info("done")
+
+def qa_skysub(param, frame, fibermap, skymodel) :
+    """Calculate QA on SkySubtraction
+    Note: Pixels rejected in generating the SkyModel (as above), are  
+      not rejected in the stats calcualted here.  Would need to carry
+      along current_ivar to do so.
+
+    Args:
+        param : dict of QA parameters
+        frame : desispec.Frame object
+        fibermap : numpy table including OBJTYPE to know which fibers are SKY
+        skymodel : desispec.SkyModel object
+    Returns:
+        qadict: dict of QA outputs
+          Need to record simple Python objects for yaml (str, float, int)
+    """
+    log=get_logger()
+
+    # Output dict
+    qadict = {}
+
+    # Grab sky fibers on this frame
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
+    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
+        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
+    assert np.max(skyfibers) < 500
+    nfibers=len(skyfibers)
+    qadict['NSKY_FIB'] = int(nfibers)
+
+    current_ivar=frame.ivar[skyfibers].copy()
+    flux = frame.flux[skyfibers]
+
+    # Subtract
+    res = flux - skymodel.flux[skyfibers] # Residuals
+    res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers]) 
+
+    # Chi^2 and Probability
+    chi2_fiber = np.sum(res_ivar*(res**2),1) 
+    chi2_prob = np.zeros(nfibers)
+    for ii in range(nfibers):
+        # Stats
+        dof = np.sum(res_ivar[ii,:] > 0.)
+        chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
+    # Bad models
+    qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
+
+    # Median residual
+    qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
+    log.info("Median residual for sky fibers = {:g}".format(
+        qadict['MED_RESID'])) 
+
+    # Return
+    return qadict

@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+
+"""
+Combine individual zbest files into a single zcatalog
+
+NOTE: this could get factored out into script vs. algorithm vs. I/O, but
+that would obfuscate the current short simplicity of this script.  Do that
+refactor if we find that we have to generate zcatalog data outside of the
+context of this script.
+
+Stephen Bailey
+Lawrence Berkeley National Lab
+Fall 2015
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import sys, os
+import numpy as np
+from astropy.table import Table, vstack
+
+from desispec import io
+
+import optparse
+
+parser = optparse.OptionParser(usage = "%prog [options]")
+parser.add_option("-i", "--indir",   type=str,  help="input directory")
+parser.add_option("-o", "--outfile", type=str,  help="output file")
+parser.add_option("-v", "--verbose", action="store_true", help="some flag")
+opts, args = parser.parse_args()
+
+if opts.indir is None:
+    print('ERROR: --input directory required')
+    sys.exit(1)
+    
+if opts.outfile is None:
+    opts.outfile = io.findfile('zcatalog')
+
+#- Collect individual zbest tables into a list
+data = list()
+for zbestfile in io.iterfiles(opts.indir, 'zbest'):
+    zbest = Table.read(zbestfile, format='fits')
+    if opts.verbose:
+        print(zbestfile, len(zbest))
+    data.append(zbest)
+    
+#- Combine those into a single table and write it out
+zcat = vstack(data)
+zcat.meta['EXTNAME'] = 'ZCATALOG'
+
+if os.path.exists(opts.outfile):
+    os.remove(opts.outfile)
+
+if opts.verbose:
+    print("Writing", opts.outfile)
+    
+zcat.write(opts.outfile, format='fits')
+    
+
+
+
+
+

@@ -1,5 +1,5 @@
 #
-# See top-level LICENSE file for Copyright information
+# See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
 """
@@ -116,7 +116,7 @@ class MachineLocal( Machine ):
         pass
 
     def job_run( self, com, nodes, ppn, log ):
-        """No documentation yet.
+        """Placeholder
         """
         return jobid
 
@@ -131,11 +131,9 @@ class MachineLocal( Machine ):
         return False
 
 """
-Not sure why this stuff is here.
+Notes to keep handy while editing:
 
 class MachineEdison
-
-
 
 PBS_VERSION=TORQUE-4.2.7
 PBS_JOBNAME=STDIN

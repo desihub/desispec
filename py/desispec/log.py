@@ -38,8 +38,6 @@ def get_logger(level=None) :
 
     global desi_logger
 
-
-
     desi_level=os.getenv("DESI_LOGLEVEL")
     if desi_level is not None and (desi_level != "" ) :
         # forcing the level to the value of DESI_LOGLEVEL, ignoring the requested logging level.

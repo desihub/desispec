@@ -8,6 +8,15 @@ import os
 import astropy.io
 import numpy as np
 
+def iterfiles(root, prefix):
+    '''
+    Returns iterator over files starting with `prefix` found under `root` dir
+    '''
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=True):
+        for filename in filenames:
+            if filename.startswith(prefix):
+                yield os.path.join(dirpath, filename)
+
 def header2wave(header):
     """Converts header keywords into a wavelength grid.
 

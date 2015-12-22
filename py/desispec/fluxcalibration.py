@@ -4,17 +4,14 @@ desispec.fluxcalibration
 
 Flux calibration routines.
 """
-
+from __future__ import absolute_import
 import numpy as np
-from desispec.resolution import Resolution
-from desispec.linalg import cholesky_solve
-from desispec.linalg import cholesky_solve_and_invert
-from desispec.linalg import spline_fit
-from desispec.interpolation import resample_flux
-from desispec.log import get_logger
-from desispec.io.filters import read_filter_response
-from desispec.resolution import Resolution
-import scipy,scipy.sparse, scipy.ndimage
+from .resolution import Resolution
+from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
+from .interpolation import resample_flux
+from .log import get_logger
+from .io.filters import read_filter_response
+import scipy, scipy.sparse, scipy.ndimage
 import sys
 #debug
 #import pylab
@@ -145,6 +142,10 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
         mags : 1D array of observed AB magnitudes
         filters : list of filter names for mags, e.g. ['SDSS_r', 'DECAM_g', ...]
 
+    Returns:
+        stdwave : same as input
+        normflux : normalized flux array
+
     Only SDSS_r band is assumed to be used for normalization for now.
     """
     log = get_logger()
@@ -172,14 +173,16 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
 
     for i,v in enumerate(filters):
         #Normalizing using only SDSS_R band magnitude
-        if v=='SDSS_R':
+        if v.upper() == 'SDSS_R' or v.upper() =='DECAM_R' :
             refmag=mags[i]
             filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
             rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
             apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
-            log.info('scaling SDSS_r mag {0:f} to {1:f}.'.format(apMag,refmag))
+            log.info('scaling {} mag {:f} to {:f}.'.format(v, apMag,refmag))
             scalefac=10**((apMag-refmag)/2.5)
             normflux=stdflux*scalefac
+
+            break  #- found SDSS_R or DECAM_R; we can stop now
 
     return stdwave,normflux
 
@@ -188,13 +191,15 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
-    
+
     Args:
       frame : Frame object with attributes wave, flux, ivar, resolution_data
       stdfibers: 1D[nwave] array of indices of frame that are standard stars
       input_model_wave : 1D[nwave] array of model wavelengths
       input_model_flux : 2D[nstd, nwave] array of model fluxes
       nsig_clipping : (optional) sigma clipping level
+
+    Returns desispec.FluxCalib object
 
     Notes:
       - we first resample the model on the input flux wave grid
@@ -374,7 +379,7 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
     ccalibration = np.zeros(frame.flux.shape)
     for i in range(frame.nspec):
         ccalibration[i]=frame.R[i].dot(calibration)
-        
+
     # Use diagonal of mean calibration covariance for output.
     ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
     ccalibvar=np.array(np.diagonal(ccalibcovar))
@@ -382,7 +387,7 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
     # apply the mean (as in the iterative loop)
     ccalibvar *= mean**2
     ccalibivar=(ccalibvar>0)/(ccalibvar+(ccalibvar==0))
-    
+
     # convert to 2D
     # For now this is the same for all fibers; in the future it may not be
     ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
@@ -396,25 +401,25 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
 class FluxCalib(object):
     def __init__(self, wave, calib, ivar, mask):
         """Lightweight wrapper object for flux calibration vectors
-        
+
         Args:
             wave : 1D[nwave] input wavelength (Angstroms)
             calib: 2D[nspec, nwave] calibration vectors for each spectrum
             ivar : 2D[nspec, nwave] inverse variance of calib
             mask : 2D[nspec, nwave] mask of calib (0=good)
-            
+
         All arguments become attributes, plus nspec,nwave = calib.shape
-        
+
         The calib vector should be such that
         
-        [erg/s/cm^2/A] = [photons/A] / calib
+            [erg/s/cm^2/A] = [photons/A] / calib
         """
         assert wave.ndim == 1
         assert calib.ndim == 2
         assert calib.shape == ivar.shape
         assert calib.shape == mask.shape
         assert np.all(ivar >= 0)
-        
+
         self.nspec, self.nwave = calib.shape
         self.wave = wave
         self.calib = calib
@@ -426,8 +431,10 @@ def apply_flux_calibration(frame, fluxcalib):
     Applies flux calibration to input flux and ivar
 
     Args:
-        frame: Spectra objects with attributes wave, flux, ivar, resolution_data
+        frame: Spectra object with attributes wave, flux, ivar, resolution_data
         fluxcalib : FluxCalib object with wave, calib, ...
+        
+    Modifies frame.flux and frame.ivar
     """
     log=get_logger()
     log.info("starting")
@@ -456,5 +463,3 @@ def apply_flux_calibration(frame, fluxcalib):
     C = fluxcalib.calib
     frame.flux = frame.flux * (C>0) / (C+(C==0))
     frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
-        
-

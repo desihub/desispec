@@ -1,9 +1,13 @@
 # Compiled files
 *.py[co]
 
+# Other generated files
+htmlcov
+.coverage
+
 # Sphinx
-docs/api
-docs/_build
+doc/api
+doc/_build
 
 # iPython
 docs/nb/.ipynb_checkpoints

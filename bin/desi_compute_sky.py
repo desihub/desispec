@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# See top-level LICENSE file for Copyright information
+# See top-level LICENSE.rst file for Copyright information
 #
 # -*- coding: utf-8 -*-
 
@@ -12,12 +12,16 @@ from desispec.io import read_frame
 from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import write_sky
+from desispec.io import read_qa_frame
+from desispec.io import write_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
+from desispec.qa.qa_exposure import QA_Frame
+from desispec.qa import qa_plots
 from desispec.log import get_logger
 import argparse
 import numpy as np
-import sys
+import sys, os
 
 def main() :
 
@@ -31,7 +35,11 @@ def main() :
                         help = 'path of DESI fiberflat fits file')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
-
+    parser.add_argument('--qafile', type = str, default = None, required=False,
+                        help = 'path of QA file. Will calculate for Sky Subtraction')
+    parser.add_argument('--qafig', type = str, default = None, required=False,
+                        help = 'path of QA figure file')
+    #parser.add_argument('--qafig', type = str, default = None, required=False)
 
     args = parser.parse_args()
     log=get_logger()
@@ -40,8 +48,7 @@ def main() :
 
     # read exposure to load data and get range of spectra
     frame = read_frame(args.infile)
-    specmin=frame.header["SPECMIN"]
-    specmax=frame.header["SPECMAX"]
+    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
 
     # read fibermap to locate sky fibers
     fibermap = read_fibermap(args.fibermap)
@@ -59,9 +66,36 @@ def main() :
     # compute sky model
     skymodel = compute_sky(frame, fibermap)
 
-    # write result
-    write_sky(args.outfile, skymodel, frame.header)
+    # QA
+    if (args.qafile is not None) or (args.qafig is not None):
+        log.info("performing skysub QA")
+        # Load
+        if os.path.isfile(args.qafile): # Read from file, if it exists
+            qaframe = read_qa_frame(args.qafile)
+            # Check camera
+            try:
+                camera = frame.meta['CAMERA']
+            except:
+                pass #
+            else:
+                if qaframe.camera != frame.meta['CAMERA']:
+                    raise ValueError('Wrong QA file!')
+        else:  # Init
+            qaframe = QA_Frame(frame)
+            if qaframe.flavor == 'none': # Was not set in frame
+                qaframe.flavor='science' # Forcing to science
+        # Run
+        qaframe.run_qa('SKYSUB', (frame, fibermap, skymodel))
+        # Write
+        if args.qafile is not None:
+            write_qa_frame(args.qafile, qaframe)
+            log.info("successfully wrote {:s}".format(args.qafile))
+        # Figure(s)
+        if args.qafig is not None:
+            qa_plots.frame_skyres(args.qafig, frame, fibermap, skymodel, qaframe)
 
+    # write result
+    write_sky(args.outfile, skymodel, frame.meta)
     log.info("successfully wrote %s"%args.outfile)
 
 

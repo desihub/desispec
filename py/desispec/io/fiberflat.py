@@ -16,6 +16,7 @@ def write_fiberflat(outfile,fiberflat,header=None):
 
     Args:
         outfile: filepath string or (night, expid, camera) tuple
+        fiberflat: FiberFlat object
         header: (optional) dict or fits.Header object to use as HDU 0 header
 
     Returns:
@@ -48,10 +49,12 @@ def read_fiberflat(filename):
         filename (str): Name of fiberflat file, or (night, expid, camera) tuple
 
     Returns:
-        read_fiberflat (tuple): fiberflat, ivar, mask, meanspec, wave, header
+        FiberFlat object with attributes
+            fiberflat, ivar, mask, meanspec, wave, header
 
-    fiberflat, ivar, mask are 2D [nspec, nwave]
-    meanspec and wave are 1D [nwave]
+    Notes:
+        fiberflat, ivar, mask are 2D [nspec, nwave]
+        meanspec and wave are 1D [nwave]
     """
     #- check if outfile is (night, expid, camera) tuple instead
     if isinstance(filename, (tuple, list)) and len(filename) == 3:

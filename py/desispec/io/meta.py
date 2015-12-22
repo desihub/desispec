@@ -11,8 +11,8 @@ import datetime
 import glob
 import re
 
-def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
-    band=None, spectrograph=None, specprod=None):
+def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
+    band=None, spectrograph=None, specprod_dir=None, download=False):
     """Returns location where file should be
 
     Args:
@@ -20,31 +20,36 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
         night : [optional] YEARMMDD string
         expid : [optional] integer exposure id
         camera : [optional] 'b0' 'r1' .. 'z9'
-        brickid : [optional] brick ID string
+        brickname : [optional] brick name string
         band : [optional] one of 'b','r','z' identifying the camera band
         spectrograph : [optional] spectrograph number, 0-9
-        specprod : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
-        fetch : [optional, not yet implemented]
+        specprod_dir : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
+        download : [optional, not yet implemented]
             if not found locally, try to fetch remotely
     """
+
+    #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$PRODNAME,
+    #-       specprod is just the environment variable $PRODNAME
+
     location = dict(
-        raw = '{data}/{night}/desi-{expid:08d}.fits',
-        pix = '{data}/{night}/pix-{camera}-{expid:08d}.fits',
-        ### fiberflat = '{specprod}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
-        fiberflat = '{specprod}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits',
-        frame = '{specprod}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
-        cframe = '{specprod}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
-        sky = '{specprod}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
-        stdstars = '{specprod}/exposures/{night}/{expid:08d}/stdstars-sp{spectrograph:d}-{expid:08d}.fits',
-        calib = '{specprod}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
-        ### psf = '{specprod}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
-        psf = '{specprod}/calib2d/{night}/psf-{camera}-{expid:08d}.fits',
-        fibermap = '{data}/{night}/fibermap-{expid:08d}.fits',
-        brick = '{specprod}/bricks/{brickid}/brick-{band}-{brickid}.fits',
-        coadd = '{specprod}/bricks/{brickid}/coadd-{band}-{brickid}.fits',
-        coadd_all = '{specprod}/bricks/{brickid}/coadd-{brickid}.fits',
-        zbest = '{specprod}/bricks/{brickid}/zbest-{brickid}.fits',
-        zspec = '{specprod}/bricks/{brickid}/zspec-{brickid}.fits',
+        raw = '{rawdata_dir}/{night}/desi-{expid:08d}.fits',
+        pix = '{rawdata_dir}/{night}/pix-{camera}-{expid:08d}.fits',
+        ### fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
+        fiberflat = '{specprod_dir}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits',
+        frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
+        cframe = '{specprod_dir}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
+        sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
+        stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-sp{spectrograph:d}-{expid:08d}.fits',
+        calib = '{specprod_dir}/exposures/{night}/{expid:08d}/fluxcalib-{camera}-{expid:08d}.fits',
+        ### psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
+        psf = '{specprod_dir}/calib2d/{night}/psf-{camera}-{expid:08d}.fits',
+        fibermap = '{rawdata_dir}/{night}/fibermap-{expid:08d}.fits',
+        brick = '{specprod_dir}/bricks/{brickname}/brick-{band}-{brickname}.fits',
+        coadd = '{specprod_dir}/bricks/{brickname}/coadd-{band}-{brickname}.fits',
+        coadd_all = '{specprod_dir}/bricks/{brickname}/coadd-{brickname}.fits',
+        zbest = '{specprod_dir}/bricks/{brickname}/zbest-{brickname}.fits',
+        zspec = '{specprod_dir}/bricks/{brickname}/zspec-{brickname}.fits',
+        zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
     )
     location['desi'] = location['raw']
 
@@ -52,17 +57,42 @@ def findfile(filetype, night=None, expid=None, camera=None, brickid=None,
     if filetype not in location:
         raise IOError("Unknown filetype {}; known types are {}".format(filetype, location.keys()))
 
-    if specprod is None:
-        specprod = specprod_root()
+    #- Check for missing inputs
+    required_inputs = [i[0] for i in re.findall(r'\{([a-z_]+)(|[:0-9d]+)\}',location[filetype])]
 
-    filepath = location[filetype].format(data=data_root(), specprod=specprod,
-        night=night, expid=expid, camera=camera, brickid = brickid, band = band,
-        spectrograph=spectrograph)
+    if specprod_dir is None and 'specprod_dir' in required_inputs:
+        specprod_dir = specprod_root()
 
+    if 'specprod' in required_inputs:
+        #- Replace / with _ in $PRODNAME so we can use it in a filename
+        specprod = os.getenv('PRODNAME').replace('/', '_')
+    else:
+        specprod = None
+
+    actual_inputs = {
+        'specprod_dir':specprod_dir, 'specprod':specprod,
+        'night':night, 'expid':expid, 'camera':camera, 'brickname':brickname,
+        'band':band, 'spectrograph':spectrograph
+        }
+
+    #- check rawdata_root() but only if needed
+    if 'rawdata_dir' in required_inputs:
+        actual_inputs['rawdata_dir'] = rawdata_root()
+
+    for i in required_inputs:
+        if actual_inputs[i] is None:
+            raise ValueError("Required input '{0}' is not set for type '{1}'!".format(i,filetype))
+    
+            
     #- normpath to remove extraneous double slashes /a/b//c/d
-    return os.path.normpath(filepath)
+    filepath = os.path.normpath(location[filetype].format(**actual_inputs))
 
-def get_files(filetype,night,expid,specprod = None):
+    if download:
+        from .download import download
+        filepath = download(filepath,single_thread=True)[0]
+    return filepath
+
+def get_files(filetype,night,expid,specprod_dir = None):
     """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified type.
@@ -73,7 +103,7 @@ def get_files(filetype,night,expid,specprod = None):
         filetype(str): Type of files to get. Valid choices are 'frame','cframe','psf'.
         night(str): Date string for the requested night in the format YYYYMMDD.
         expid(int): Exposure number to get files for.
-        specprod(str): Path containing the exposures/ directory to use. If the value
+        specprod_dir(str): Path containing the exposures/ directory to use. If the value
             is None, then the value of :func:`specprod_root` is used instead. Ignored
             when raw is True.
 
@@ -81,7 +111,7 @@ def get_files(filetype,night,expid,specprod = None):
         dict: Dictionary of found file names using camera id strings as keys, which are
             guaranteed to match the regular expression [brz][0-9].
     """
-    glob_pattern = findfile(filetype,night,expid,camera = '*',specprod = specprod)
+    glob_pattern = findfile(filetype,night,expid,camera = '*',specprod_dir = specprod_dir)
     literals = map(re.escape,glob_pattern.split('*'))
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
@@ -107,7 +137,7 @@ def validate_night(night):
     except ValueError:
         raise RuntimeError('Badly formatted night %s' % night)
 
-def get_exposures(night,raw = False,specprod = None):
+def get_exposures(night,raw = False,specprod_dir = None):
     """Get a list of available exposures for the specified night.
 
     Exposures are identified as correctly formatted subdirectory names within the
@@ -117,7 +147,7 @@ def get_exposures(night,raw = False,specprod = None):
     Args:
         night(str): Date string for the requested night in the format YYYYMMDD.
         raw(bool): Returns raw exposures if set, otherwise returns processed exposures.
-        specprod(str): Path containing the exposures/ directory to use. If the value
+        specprod_dir(str): Path containing the exposures/ directory to use. If the value
             is None, then the value of :func:`specprod_root` is used instead. Ignored
             when raw is True.
 
@@ -132,11 +162,11 @@ def get_exposures(night,raw = False,specprod = None):
     date = validate_night(night)
 
     if raw:
-        night_path = os.path.join(data_root(),'exposures',night)
+        night_path = os.path.join(rawdata_root(),'exposures',night)
     else:
-        if specprod is None:
-            specprod = specprod_root()
-        night_path = os.path.join(specprod,'exposures',night)
+        if specprod_dir is None:
+            specprod_dir = specprod_root()
+        night_path = os.path.join(specprod_dir,'exposures',night)
 
     if not os.path.exists(night_path):
         raise RuntimeError('Non-existent night %s' % night)
@@ -154,16 +184,18 @@ def get_exposures(night,raw = False,specprod = None):
 
     return exposures
 
-def data_root():
-    """No documentation yet.
+def rawdata_root():
+    """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
+
+    Raises:
+        AssertionError: if these environment variables aren't set.
     """
-    dir = os.environ[ 'DESI_SPECTRO_DATA' ]
-    if dir == None:
-        raise RuntimeError('DESI_SPECTRO_DATA environment variable not set')
-    return dir
+    assert 'DESI_SPECTRO_DATA' in os.environ, 'Missing $DESI_SPECTRO_DATA environment variable'
+    return os.environ['DESI_SPECTRO_DATA']
 
 def specprod_root():
-    """Return ``$DESI_SPECTRO_REDUX/$PRODNAME``.
+    """Return directory root for spectro production, i.e.
+    ``$DESI_SPECTRO_REDUX/$PRODNAME``.
 
     Raises:
         AssertionError: if these environment variables aren't set.
