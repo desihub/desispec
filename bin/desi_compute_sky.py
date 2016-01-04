@@ -12,7 +12,7 @@ from desispec.io import read_frame
 from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import write_sky
-from desispec.io import read_qa_frame
+from desispec.io import load_qa_frame
 from desispec.io import write_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
@@ -70,20 +70,7 @@ def main() :
     if (args.qafile is not None) or (args.qafig is not None):
         log.info("performing skysub QA")
         # Load
-        if os.path.isfile(args.qafile): # Read from file, if it exists
-            qaframe = read_qa_frame(args.qafile)
-            # Check camera
-            try:
-                camera = frame.meta['CAMERA']
-            except:
-                pass #
-            else:
-                if qaframe.camera != frame.meta['CAMERA']:
-                    raise ValueError('Wrong QA file!')
-        else:  # Init
-            qaframe = QA_Frame(frame)
-            if qaframe.flavor == 'none': # Was not set in frame
-                qaframe.flavor='science' # Forcing to science
+        qaframe = load_qa_frame(args.qafile, frame, flavor='science')
         # Run
         qaframe.run_qa('SKYSUB', (frame, fibermap, skymodel))
         # Write

@@ -8,7 +8,10 @@ import os, yaml
 
 from desispec.qa.qa_exposure import QA_Frame
 from desispec.io import findfile
-from desispec.io.util import fitsheader, native_endian, makepath
+from desispec.io.util import makepath
+from desispec.log import get_logger
+
+log=get_logger()
 
 def write_qa_frame(outfile, qaframe):
     """Write QA for a given exposure
@@ -28,6 +31,7 @@ def write_qa_frame(outfile, qaframe):
 
     return outfile
 
+
 def read_qa_frame(filename) :
     """Read qa_exposure and return QA_Frame object with attributes
     wave, flux, ivar, mask, header.
@@ -46,4 +50,34 @@ def read_qa_frame(filename) :
     # Instantiate
     qaframe = QA_Frame(flavor=qa_data['flavor'], camera=qa_data['camera'], in_data=qa_data)
 
+    return qaframe
+
+
+def load_qa_frame(filename, frame, flavor='none'):
+    """ Load an existing QA_Frame or generate one, as needed
+    Args:
+        filename: str
+        frame: Frame object
+        flavor: str, optional
+          Type of QA_Frame
+
+    Returns:
+    qa_frame: QA_Frame object
+    """
+    if os.path.isfile(filename): # Read from file, if it exists
+        qaframe = read_qa_frame(filename)
+        log.info("Loaded QA file {:s}".format(filename))
+        # Check camera
+        try:
+            camera = frame.meta['CAMERA']
+        except:
+            pass #
+        else:
+            if qaframe.camera != camera:
+                raise ValueError('Wrong QA file!')
+    else:  # Init
+        qaframe = QA_Frame(frame)
+        if qaframe.flavor == 'none':
+            qaframe.flavor = flavor
+    # Return
     return qaframe
