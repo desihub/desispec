@@ -109,7 +109,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
     nout_tot=0
     ##
     #nfibers = 20
-    max_iterations = 5
+    #max_iterations = 5
     ##
     for iteration in range(max_iterations) :
 

@@ -12,7 +12,7 @@ from desispec.io import read_frame
 from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import write_sky
-from desispec.io import load_qa_frame
+from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
