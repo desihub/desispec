@@ -53,7 +53,7 @@ def read_qa_frame(filename) :
     return qaframe
 
 
-def load_qa_frame(filename, frame, flavor='none'):
+def load_qa_frame(filename, frame, flavor=None):
     """ Load an existing QA_Frame or generate one, as needed
     Args:
         filename: str
@@ -77,7 +77,8 @@ def load_qa_frame(filename, frame, flavor='none'):
                 raise ValueError('Wrong QA file!')
     else:  # Init
         qaframe = QA_Frame(frame)
-        if qaframe.flavor == 'none':
-            qaframe.flavor = flavor
+    # Set flavor?
+    if flavor is not None:
+        qaframe.flavor = flavor
     # Return
     return qaframe
