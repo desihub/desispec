@@ -17,8 +17,6 @@ from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
 import argparse
 
-from xastropy.xutils import xdebug as xdb
-
 def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
