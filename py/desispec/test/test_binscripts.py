@@ -84,10 +84,13 @@ class TestBinScripts(unittest.TestCase):
         """
         self._write_frame()
         #- run the command and confirm error code = 0
-        cmd = '{} {}/desi_compute_fiberflat.py --infile {} --outfile {}'.format(
-            sys.executable, self.binDir, self.framefile, self.fiberflatfile)
+        cmd = '{} {}/desi_compute_fiberflat.py --infile {} --outfile {} --qafile {}'.format(
+            sys.executable, self.binDir, self.framefile, self.fiberflatfile, self.qafile)
         # self.assertTrue(os.path.exists(os.path.join(self.binDir,'desi_compute_fiberflat.py')))
-        err = runcmd(cmd, [self.framefile,], [self.fiberflatfile,], clobber=True)
+        #err = runcmd(cmd, [self.framefile,], [self.fiberflatfile,], clobber=True)
+        err = runcmd(cmd,
+                     inputs  = [self.framefile],
+                     outputs = [self.fiberflatfile,self.qafile,], clobber=True )
         self.assertEqual(err, 0)
 
         #- Confirm that the output file can be read as a fiberflat
