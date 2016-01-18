@@ -19,6 +19,8 @@ import argparse
 
 from astropy.io import fits
 
+#from xastropy.xutils import xdebug as xdb
+
 def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -60,8 +62,6 @@ def main() :
     xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
     if QA:
         desiboot.qa_fiber_peaks(xpk, cut, pp)
-
-    ##
 
     # Test?
     if args.test:
