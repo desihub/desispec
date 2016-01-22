@@ -1,16 +1,16 @@
-from desispec.qlpipeline import QLLogger
-from desispec.qlpipeline import QLExceptions
+from desispec.quicklook import qllogger
+from desispec.quicklook import qlexceptions
 
 class PipelineAlg:
     """ Simple base class for Pipeline algorithms """
-    def __init__(self,name,inpType,outType,config,logger=None):
+    def __init__(self,name,inptype,outtype,config,logger=None):
         if logger is None:
-            qll=QLLogger.QLLogger()
-            self.m_log=qll.getLog(name)
+            qll=qllogger.QLLogger()
+            self.m_log=qll.getlog(name)
         else:
             self.m_log=logger
-        self.__inpType__=type(inpType)
-        self.__outType__=type(outType)
+        self.__inpType__=type(inptype)
+        self.__outType__=type(outtype)
         self.name=name
         self.config=config
         self.m_log.debug("initializing Monitoring alg %s"%name)

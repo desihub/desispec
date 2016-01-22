@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+
+"""
+Run the quicklook pipeline for DESI, given a quicklook configuration file
+
+
+S. Kama, G. Dhungana 
+SMU
+Spring 2016
+"""
+
+from __future__ import absolute_import, division, print_function
+
+from desispec.quicklook import quicklook,qllogger
+import os,sys
+import yaml,pickle
+
+import optparse as op
+
+def main():
+
+    p = op.OptionParser(usage = "%")
+    p.add_option("-c", "--config_file", type=str, help="yaml/pickel file containing config dictionary",dest="config")
+    p.add_option("-g", "--gen_testconfig", type=str, help="generate test configuration",dest="dotest")
+    qlog=qllogger.QLLogger("QuickLook",20)
+    log=qlog.getlog()
+    opts, args = p.parse_args()
+
+    if opts.dotest is not None:
+        quicklook.testconfig(opts.dotest)
+    if opts.config is None:
+        log.critical("Need config file")
+        sys.exit("Missing config parameter")
+    if os.path.exists(opts.config):
+        if "yaml" in opts.config:
+            configdict=yaml.load(open(opts.config,'rb'))
+        elif "pkl" in opts.config:
+            configdict=pickle.load(open(opts.config,'rb'))
+    else:
+        log.critical("Can't open config file %s"%(opts.config))
+        sys.exit("Can't open config file")
+        #basic_pipeline(configdict)
+
+
+    quicklook.setup_pipeline(configdict)
+
+if __name__=='__main__':
+    main()

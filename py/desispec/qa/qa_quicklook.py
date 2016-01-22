@@ -5,8 +5,8 @@ Monitoring algorithms for Quicklook pipeline
 
 import numpy as np
 import scipy.ndimage
-from desispec.qlpipeline.MAs import MonitoringAlg
-from desispec.qlpipeline import QLExceptions
+from desispec.quicklook.qas import MonitoringAlg
+from desispec.quicklook import qlexceptions
 # Evaluate rms of pixel values after dark subtraction
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -16,9 +16,9 @@ class Get_RMS(MonitoringAlg):
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise QLExceptions.ParameterException("Missing input parameter")
+            raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise QLExceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
         return self.get_rms(args[0])
     def get_default_config(self):
         return {}
@@ -33,11 +33,11 @@ class Get_RMS(MonitoringAlg):
     #TODO might need to use mask to filter?
         vals=value.ravel()
         rms=np.std(vals)
-        retVal={}
-        retVal["OBSERVER"]={"RMS":rms}
-        retVal["EXPERT"]={"RMS":rms}
-        retVal["USER"]={"RMS":rms}
-        return retVal
+        retval={}
+        retval["OBSERVER"]={"RMS":rms}
+        retval["EXPERT"]={"RMS":rms}
+        retval["USER"]={"RMS":rms}
+        return retval
 
 class Count_Pixels(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -47,9 +47,9 @@ class Count_Pixels(MonitoringAlg):
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise QLExceptions.ParameterException("Missing input parameter")
+            raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise QLExceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         return self.count_pixels(args[0],**kwargs)
     def get_default_config(self):
         return {("Width",3.,"Width in sigmas")}
@@ -70,11 +70,11 @@ class Count_Pixels(MonitoringAlg):
         sigma=np.sqrt(values+darknoise**2+rdnoise**2)
         cut=np.where(values > n*sigma)
         count=cut[0].shape
-        retVal={}
-        retVal["OBSERVER"]={"COUNT":count}
-        retVal["EXPERT"]={"COUNT":count}
-        retVal["USER"]={"COUNT":count}
-        return retVal
+        retval={}
+        retval["OBSERVER"]={"COUNT":count}
+        retval["EXPERT"]={"COUNT":count}
+        retval["USER"]={"COUNT":count}
+        return retval
 
 class Find_Sky_Continuum(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -84,11 +84,11 @@ class Find_Sky_Continuum(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise QLExceptions.ParameterException("Missing input parameter")
+            raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise QLExceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         if "FiberMap" not in kwargs:
-            raise QLExceptions.ParameterException("Missing fibermap")
+            raise qlexceptions.ParameterException("Missing fibermap")
         return self.find_continuum(args[0],**kwargs)
     def get_default_config(self):
         return {("FiberMap","%%fibermap","Fibermap object"),
@@ -120,18 +120,18 @@ class Find_Sky_Continuum(MonitoringAlg):
         ## should average multiple sky fibers?
         contin=np.zeros((len(skyfiber)))
         print "No of skyfibers", len(skyfiber)
-        def applySmoothingFilter(flux):
+        def applysmoothingfilter(flux):
             return scipy.ndimage.filters.median_filter(flux,200) # bin range has to be optimized
         for i in range(len(skyfiber)):
             select,=np.where((wave > wmin)&(wave < wmax))
-            contin[i]=np.mean(applySmoothingFilter(sky_spectra[i,select])) # smooth and mean from all ith sky spectra
-        retVal={}
-        retVal["OBSERVER"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
-        retVal["EXPERT"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
-        retVal["USER"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
+            contin[i]=np.mean(applysmoothingfilter(sky_spectra[i,select])) # smooth and mean from all ith sky spectra
+        retval={}
+        retval["OBSERVER"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
+        retval["EXPERT"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
+        retval["USER"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
 
     
-        return retVal
+        return retval
 
 class Count_Fibers(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -141,9 +141,9 @@ class Count_Fibers(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise QLExceptions.ParameterException("Missing input parameter")
+            raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise QLExceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         return self.count_fibers(args[0])
     def get_default_config(self):
         return {}
@@ -155,11 +155,11 @@ class Count_Fibers(MonitoringAlg):
     
         good=np.where(frame['MASK'].data[:,1]==0) # Although this seems to be bin mask ?? 
         count=good.shape[0]
-        retVal={}
-        retVal["OBSERVER"]={"Count":count}
-        retVal["EXPERT"]={"Count":count}
-        retVal["USER"]={"Count":count}
-        return retVal
+        retval={}
+        retval["OBSERVER"]={"Count":count}
+        retval["EXPERT"]={"Count":count}
+        retval["USER"]={"Count":count}
+        return retval
 
 
 class Bias_From_Overscan(MonitoringAlg):
@@ -170,9 +170,9 @@ class Bias_From_Overscan(MonitoringAlg):
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise QLExceptions.ParameterException("Missing input parameter")
+            raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise QLExceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         return self.bias_from_overscan(args[0],**kwargs)
     def get_default_config(self):
         return {("Quadrant",None,"CCD quadrant to work on (1-4)")}
@@ -205,12 +205,12 @@ class Bias_From_Overscan(MonitoringAlg):
         biasval = mean(biasreg[ii])
    # also calculate readnoise
         rdnoise=biasreg[ii].std()
-        retVal={}
-        retVal["OBSERVER"]={"Bias Value":biasval,"Read Noise":rdnoise}
-        retVal["EXPERT"]={"Bias Value":biasval,"Read Noise":rdnoise}
-        retVal["USER"]={"Bias Value":biasval,"Read Noise":rdnoise}
+        retval={}
+        retval["OBSERVER"]={"Bias Value":biasval,"Read Noise":rdnoise}
+        retval["EXPERT"]={"Bias Value":biasval,"Read Noise":rdnoise}
+        retval["USER"]={"Bias Value":biasval,"Read Noise":rdnoise}
         
-        return retVal
+        return retval
 
 class Calculate_SNR(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -220,14 +220,14 @@ class Calculate_SNR(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise QLExceptions.ParameterException("Missing input parameter")
+            raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise QLExceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         return self.calculate_snr(args[0])
     def get_default_config(self):
         return {}
 
-    def calculate_snr(self,frame): #after extraction, boxcar
+    def calculate_snr(self,frame): #on the extracted frame extraction
         """ input is desispec.frame like object
         output: median of S/N (bin) for each fiber
         total snr calculated considering bin by bin uncorrelated S/N 
@@ -242,8 +242,8 @@ class Calculate_SNR(MonitoringAlg):
             snr=flux[ii,signalmask]*np.sqrt(ivar[ii,signalmask]) # actually flux should be sky subtracted for true S/N?
             medsnr[ii]=np.median(snr)
             snrtot[ii]=np.sqrt(np.sum(snr**2))
-        retVal={}
-        retVal["OBSERVER"]={"Median SNR":medsnr,"Total SNR":snrtot}
-        retVal["EXPERT"]={"Median SNR":medsnr,"Total SNR":snrtot}
-        retVal["USER"]={"Median SNR":medsnr,"Total SNR":snrtot}
-        return retVal
+        retval={}
+        retval["OBSERVER"]={"Median SNR":medsnr,"Total SNR":snrtot}
+        retval["EXPERT"]={"Median SNR":medsnr,"Total SNR":snrtot}
+        retval["USER"]={"Median SNR":medsnr,"Total SNR":snrtot}
+        return retval

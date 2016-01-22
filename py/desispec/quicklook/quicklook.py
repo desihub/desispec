@@ -7,12 +7,13 @@ import cPickle as pickle
 import yaml
 # import logging
 # from datetime import datetime
-from desispec.qlpipeline import QLLogger
+from desispec.quicklook import qllogger
 
-def testConfig(outFileName="QLConfig.yaml"):
+
+def testconfig(outfilename="qlconfig.yaml"):
     # make a test Config file, should be provided by the QL framework
-    QLog=QLLogger.QLLogger("QuickLook",20)
-    log=QLog.getLog()
+    qlog=qllogger.QLLogger("QuickLook",20)
+    log=qlog.getlog()
 
     conf={'BiasImage':'/home/govinda/Desi/simulate/spectro/sim/exposures/20151127/quicklook/bias-r0.fits',# path to bias image
           'DarkImage':'/home/govinda/Desi/simulate/spectro/sim/exposures/20151127/quicklook/dark-r0.fits',# path to dark image
@@ -26,68 +27,67 @@ def testConfig(outFileName="QLConfig.yaml"):
           'PixelFlat':'/home/govinda/Desi/simulate/spectro/sim/exposures/20151127/quicklook/pixflat-r0.fits', #path to pixel flat image
           'PSFFile':'/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits',
           'OutputFile':'boxframe_new-r0-00000004.fits',
-          'PipeLine':[{'PA':{"ModuleName":"desispec.ProcAlgs",
+          'PipeLine':[{'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"BiasSubtraction",
                              "Name":"Bias Subtraction",
                              "kwargs":{"BiasImage":"%%BiasImage"}
                              },
-                       'MAs':[{"ModuleName":"desispec.qa.MonAlgs",
+                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Get_RMS",
                                "Name":"Get RMS",
                                "kwargs":{},
                                },
-                              {"ModuleName":"desispec.qa.MonAlgs",
+                              {"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Count_Pixels",
                                "Name":"Count Pixels",
                                "kwargs":{'Width':3.}
                                }
                               ],
                        "StepName":"Preprocessing-Bias Subtraction",
-                       "OutputFile":"step1.yaml"
+                       "OutputFile":"newstep1.yaml"
                        },
-                      {'PA':{"ModuleName":"desispec.ProcAlgs",
+                      {'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"DarkSubtraction",
                              "Name":"Dark Subtraction",
                              "kwargs":{"DarkImage":"%%DarkImage"}
                              },
-                       'MAs':[{"ModuleName":"desispec.qa.MonAlgs",
+                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Get_RMS",
                                "Name":"Get RMS",
                                "kwargs":{},
                                },
-                              {"ModuleName":"desispec.qa.MonAlgs",
+                              {"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Count_Pixels",
                                "Name":"Count Pixels",
                                "kwargs":{'Width':3.},
                                }
                               ],
                        "StepName":"Preprocessing-Dark Subtraction",
-                       "OutputFile":"step2.yaml"
+                       "OutputFile":"newstep2.yaml"
                        },
-                      {'PA':{"ModuleName":"desispec.ProcAlgs",
+                      {'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"PixelFlattening",
                              "Name":"Pixel Flattening",
                              "kwargs":{"PixelFlat":"%%PixelFlat"}
                              },
-                       'MAs':[{"ModuleName":"desispec.qa.MonAlgs",
+                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Get_RMS",
                                "Name":"Get RMS",
                                "kwargs":{},
                                },
-                              {"ModuleName":"desispec.qa.MonAlgs",
+                              {"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Count_Pixels",
                                "Name":"Count Pixels",
                                "kwargs":{'Width':3.},
                                }
                               ],
                        "StepName":"Preprocessing-Pixel Flattening",
-                       "OutputFile":"step3.yaml"
+                       "OutputFile":"newstep3.yaml"
                        },
-                      {'PA':{"ModuleName":"desispec.ProcAlgs",
+                      {'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"BoxcarExtraction",
                              "Name":"Boxcar Extraction",
-                             "kwargs":{"FiberMap":"%%FiberMap",
-                                       "PSFFile":"%%PSFFile",
+                             "kwargs":{"PSFFile":"%%PSFFile",
                                        #"Band":"z",
                                        "Band":"r",
                                        #"Band":"b",
@@ -102,45 +102,45 @@ def testConfig(outFileName="QLConfig.yaml"):
                                        "DeltaW":0.5
                                        }
                              },
-                       'MAs':[{"ModuleName":"desispec.qa.MonAlgs",
+                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Find_Sky_Continuum",
                                "Name":"Find Sky Continuum",
                                "kwargs":{"FiberMap":"%%FiberMap",
                                          "Wmin":None,
                                          "Wmax":None},
                                },
-                              {"ModuleName":"desispec.qa.MonAlgs",
+                              {"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Calculate_SNR",
                                "Name":"Calculate Signal-to-Noise ratio",
                                "kwargs":{},
                               },
                               ],
                        "StepName":"Boxcar Extration",
-                       "OutputFile":"step4.yaml"
+                       "OutputFile":"newstep4.yaml"
                        }
                       ]
           }
     
-    if "pkl" in outFileName:
-        pickle.dump(conf,open(outFileName,"wb"))
-    elif "yaml" in outFileName:
-        yaml.dump(conf,open(outFileName,"wb"))
+    if "pkl" in outfilename:
+        pickle.dump(conf,open(outfilename,"wb"))
+    elif "yaml" in outfilename:
+        yaml.dump(conf,open(outfilename,"wb"))
 
-def getChanCamExp(inpName):
-    baseName=os.path.basename(inpName)
-    if baseName =="":
+def get_chan_cam_exp(inpname):
+    basename=os.path.basename(inpname)
+    if basename =="":
         print "can't parse input file name"
-        sys.exit("can't parse input file name %s"%inpName)
-    mod,cid,expid=string.split(baseName,'-')
+        sys.exit("can't parse input file name %s"%inpname)
+    mod,cid,expid=string.split(basename,'-')
 
     expid=int(string.replace(expid,".fits",""))
     chan=cid[0]
     cam=int(cid[1:])
     return (chan,cam,expid)
 
-def getObject(conf,log):
-    # QLog=QLLogger("QuickLook",20)
-    # log=QLog.getLog()
+def getobject(conf,log):
+     #qlog=qllogger("QuickLook",20)
+     #log=qlog.getlog()
     log.debug("Running for %s %s %s"%(conf["ModuleName"],conf["ClassName"],conf))
     try:
         mod=__import__(conf["ModuleName"],fromlist=[conf["ClassName"]])
@@ -150,232 +150,238 @@ def getObject(conf,log):
         log.error("Failed to import %s from %s. Error was '%s'"%(conf["ClassName"],conf["ModuleName"],e))
         return None
 
-def replaceKeywords(kw,kwmap):
-    newMap={}
-    QLog=QLLogger.QLLogger("QuickLook",20)
-    log=QLog.getLog()
+def replacekeywords(kw,kwmap):
+    newmap={}
+    qlog=qllogger.QLLogger("QuickLook",20)
+    log=qlog.getlog()
     for k,v in kw.iteritems():
         if isinstance(v,basestring) and len(v)>=3 and  v[0:2]=="%%":
             if v[2:] in kwmap:
-                newMap[k]=kwmap[v[2:]]
+                newmap[k]=kwmap[v[2:]]
             else:
                 log.warning("Can't find key %s in conversion map. Skipping"%(v[2:]))
         else:
-            newMap[k]=v
-    return newMap
+            newmap[k]=v
+    return newmap
 
-def runPipeline(pl,convDict,conf,hb):
-    inp=convDict["Input"]
+def runpipeline(pl,convdict,conf,hb):
+    inp=convdict["Input"]
     paconf=conf["PipeLine"]
-    QLog=QLLogger.QLLogger("QuickLook",0)
-    log=QLog.getLog()
+    qlog=qllogger.QLLogger("QuickLook",0)
+    log=qlog.getlog()
     for s,step in enumerate(pl):
         log.info("Starting to run step %s"%(paconf[s]["StepName"]))
-        PA=step[0]
-        pargs=replaceKeywords(step[0].config["kwargs"],convDict)
+        pa=step[0]
+        pargs=replacekeywords(step[0].config["kwargs"],convdict)
+        #print "Check",pa.name
+        #inp=pa(inp,**pargs)
+        #print inp
         try:
             hb.start("Running %s"%(step[0].name))
-            inp=PA(inp,**pargs)
+            inp=pa(inp,**pargs)
+            print inp
         except Exception as e:
             log.critical("Failed to run PA %s error was %s"%(step[0].name,e))
             sys.exit("Failed to run PA %s"%(step[0].name))
-        maResult={}
-        for ma in step[1]:
+        qaresult={}
+        for qa in step[1]:
             try:
-                margs=replaceKeywords(ma.config["kwargs"],convDict)
-                hb.start("Running %s"%(ma.name))
-                res=ma(inp,**margs)
-                log.debug("%s %s"%(ma.name,inp))
-                maResult[ma.name]=res
+                qargs=replacekeywords(qa.config["kwargs"],convdict)
+                hb.start("Running %s"%(qa.name))
+                res=qa(inp,**qargs)
+                log.debug("%s %s"%(qa.name,inp))
+                qaresult[qa.name]=res
             except Exception as e:
-                log.warning("Failed to run MA %s error was %s"%(ma.name,e))
-        if len(maResult):
-            pickle.dump(maResult,open(paconf[s]["OutputFile"],"wb"))
+                log.warning("Failed to run QA %s error was %s"%(qa.name,e))
+        if len(qaresult):
+            pickle.dump(qaresult,open(paconf[s]["OutputFile"],"wb"))
             hb.stop("Step %s finished. Output is in %s "%(paconf[s]["StepName"],paconf[s]["OutputFile"]))
         else:
             hb.stop("Step %s finished."%(paconf[s]["StepName"]))
     hb.stop("Pipeline processing finished. Serializing result")
     return inp
 
-def setupPipeLine(config):
+def setup_pipeline(config):
     import desispec.io.fibermap as fibIO
     import desispec.io.image as imIO
     import desispec.image as im
     import desispec.io.frame as frIO
     import desispec.frame as dframe
-    import desispec.ProcAlgs as ProcAlgs
-    from desispec.qlpipeline import QLHeartbeat as QLHB
+    import desispec.procalgs as procalgs
+    from desispec.boxcar import do_boxcar
+    from desispec.quicklook import qlheartbeat as QLHB
 
-    QLog=QLLogger.QLLogger("QuickLook",20)
-    log=QLog.getLog()
+    qlog=qllogger.QLLogger("QuickLook",20)
+    log=qlog.getlog()
     if config is None:
         return None
     log.info("Reading Configuration")
     if "Input" not in config:
         log.critical("Config is missing \"Input\" key.")
         sys.exit("Missing \"Input\" key.")
-    inpName=config["Input"]
+    inpname=config["Input"]
     if "FiberMap" not in config:
         log.critical("Config is missing \"FiberMap\" key.")
         sys.exit("Missing \"FiberMap\" key.")
-    fibName=config["FiberMap"]
-    procType="Exposure"
+    fibname=config["FiberMap"]
+    proctype="Exposure"
     if "DataType" in config:
-        procType=config["DataType"]
-    debugLevel=20
+        proctype=config["DataType"]
+    debuglevel=20
     if "DebugLevel" in config:
-        debugLevel=config["DebugLevel"]
-        log.setLevel(debugLevel)
+        debuglevel=config["DebugLevel"]
+        log.setLevel(debuglevel)
     hbeat=QLHB.QLHeartbeat(log,5.0,120.0)
-    dumpIntermediates=False
+    dumpintermediates=False
     if "DumpIntermediates" in config:
-        dumpIntermediates=config["DumpIntermediates"]
-    biasImage=None
-    biasFile=None
+        dumpintermediates=config["DumpIntermediates"]
+    biasimage=None
+    biasfile=None
     if "BiasImage" in config:
-        biasFile=config["BiasImage"]
-    darkImage=None
-    darkFile=None
+        biasfile=config["BiasImage"]
+    darkimage=None
+    darkfile=None
     if "DarkImage" in config:
-        darkFile=config["DarkImage"]
-    pixelFlatFile=None
-    pixFlatImage=None
+        darkfile=config["DarkImage"]
+    pixelflatfile=None
+    pixflatimage=None
     if "PixelFlat" in config:
-        pixelFlatFile=config["PixelFlat"]
-    fiberFlatFile=None
-    fiberFlatImage=None
+        pixelflatfile=config["PixelFlat"]
+    fiberflatfile=None
+    fiberflatimage=None
     if "FiberFlat" in config:
-        fiberFlatFile=config["FiberFlat"]
-    psfFileName=None
-    psfFile=None
+        fiberflatfile=config["FiberFlat"]
+    psffilename=None
+    psffile=None
     if "PSFFile" in config:
         from specter.psf import load_psf
-        psfFile=load_psf(config["PSFFile"])
-    hbeat.start("Reading input file %s"%inpName)
-    inp=imIO.read_image(inpName)
+        psf=load_psf(config["PSFFile"])
+    hbeat.start("Reading input file %s"%inpname)
+    inp=imIO.read_image(inpname)
     #log.info("Reading fiberMap file %s"%fibName)
-    hbeat.start("Reading fiberMap file %s"%fibName)
-    fibFile,fibHdr=fibIO.read_fibermap(fibName,header=True)
-    convDict={"FiberMap":fibFile,"PSFFile":psfFile}
-    if biasFile is not None:
-        hbeat.start("Reading Bias Image %s"%biasFile)
-        biasImage=imIO.read_image(biasFile)
-        convDict["BiasImage"]=biasImage
-    if darkFile is not None:
-        hbeat.start("Reading Dark Image %s"%darkFile)
-        darkImage=imIO.read_image(darkFile)
-        convDict["DarkImage"]=darkImage
-    if pixelFlatFile:
-        hbeat.start("Reading PixelFlat Image %s"%pixelFlatFile)
-        pixFlatImage=imIO.read_image(pixelFlatFile)
-        convDict["PixelFlat"]=pixFlatImage        
-    if fiberFlatFile:
-        hbeat.start("Reading FiberFlat Image %s"%fiberFlatFile)
-        fiberFlatImage=imIO.read_image(fiberFlatFile)
-        convDict["FiberFlat"]=fiberFlatImage        
+    hbeat.start("Reading fiberMap file %s"%fibname)
+    fibfile,fibhdr=fibIO.read_fibermap(fibname,header=True)
+    convdict={"FiberMap":fibfile,"PSFFile":psf}
+    if biasfile is not None:
+        hbeat.start("Reading Bias Image %s"%biasfile)
+        biasimage=imIO.read_image(biasfile)
+        convdict["BiasImage"]=biasimage
+    if darkfile is not None:
+        hbeat.start("Reading Dark Image %s"%darkfile)
+        darkimage=imIO.read_image(darkfile)
+        convdict["DarkImage"]=darkimage
+    if pixelflatfile:
+        hbeat.start("Reading PixelFlat Image %s"%pixelflatfile)
+        pixflatimage=imIO.read_image(pixelflatfile)
+        convdict["PixelFlat"]=pixflatimage        
+    if fiberflatfile:
+        hbeat.start("Reading FiberFlat Image %s"%fiberflatfile)
+        fiberflatimage=imIO.read_image(fiberflatfile)
+        convdict["FiberFlat"]=fiberflatimage        
     img=inp
-    convDict["Input"]=img
+    convdict["Input"]=img
     pipeline=[]
     for step in config["PipeLine"]:
-        PA=getObject(step["PA"],log)
+        pa=getobject(step["PA"],log)
         if len(pipeline) == 0:
-            if not PA.is_compatible(type(img)):
-                log.critical("Pipeline configuration is incorrect! check configuration %s %s"%(img,PA.is_compatible(img)))
+            if not pa.is_compatible(type(img)):
+                log.critical("Pipeline configuration is incorrect! check configuration %s %s"%(img,pa.is_compatible(img)))
                 sys.exit("Wrong pipeline configuration")
         else:
-            if not PA.is_compatible(pipeline[-1][0].get_output_type()):
+            if not pa.is_compatible(pipeline[-1][0].get_output_type()):
                 log.critical("Pipeline configuration is incorrect! check configuration")
-                log.critical("Can't connect input of %s to output of %s. Incompatible types"%(PA.name,pipeline[-1][0].name))
+                log.critical("Can't connect input of %s to output of %s. Incompatible types"%(pa.name,pipeline[-1][0].name))
                 sys.exit("Wrong pipeline configuration")
-        mas=[]
-        for m in step["MAs"]:
-            MA=getObject(m,log)
-            if not MA.is_compatible(PA.get_output_type()):
-                log.warning("MA %s can not be used for output of %s. Skipping expecting %s got %s %s"%(MA.name,PA.name,MA.__inpType__,PA.get_output_type(),MA.is_compatible(PA.get_output_type())))
+        qas=[]
+        for q in step["QAs"]:
+            qa=getobject(q,log)
+            if not qa.is_compatible(pa.get_output_type()):
+                log.warning("QA %s can not be used for output of %s. Skipping expecting %s got %s %s"%(qa.name,pa.name,qa.__inpType__,pa.get_output_type(),qa.is_compatible(pa.get_output_type())))
             else:
-                mas.append(MA)
-        pipeline.append([PA,mas])
+                qas.append(qa)
+        pipeline.append([pa,qas])
     
-    chan,cam,expid=getChanCamExp(inpName)
-    res=runPipeline(pipeline,convDict,config,hbeat)
+    chan,cam,expid=get_chan_cam_exp(inpname)
+    res=runpipeline(pipeline,convdict,config,hbeat)
     if isinstance(res,im.Image):
-        finalName="image-%s%d-%08d.fits"%(chan,cam,expid)
-        imIO.write_image(finalName,res,meta=None)        
+        finalname="image-%s%d-%08d.fits"%(chan,cam,expid)
+        imIO.write_image(finalname,res,meta=None)        
     elif isinstance(res,dframe.Frame):
-        finalName="frame-%s%d-%08d.fits"%(chan,cam,expid)
-        frIO.write_frame(finalName,res,header=None)
+        finalname="frame-%s%d-%08d.fits"%(chan,cam,expid)
+        frIO.write_frame(finalname,res,header=None)
     else:
         log.error("Result of pipeline is in unkown type %s. Don't know how to write"%(type(res)))
         sys.exit("Unknown pipeline result type %s."%(type(res)))
-    log.info("Pipeline completed final result is in %s"%finalName)
+    log.info("Pipeline completed final result is in %s"%finalname)
     return 
     #
     # start processing pipeline 
     # 
     
     # find channel from input name
-    if biasImage:
+    if biasimage:
         hbeat.start("Running Bias subtraction")
-        img=do_biasSubtract(img,biasImage)
+        img=do_biasSubtract(img,biasimage)
         hbeat.stop("Bias subtraction done")
-        if dumpIntermediates:
+        if dumpintermediates:
             imIO.write_image("AfterBias-%s%d-%08d.fits"%(chan,cam,expid),img,meta=None)
-    if darkImage:
+    if darkimage:
         hbeat.start("Running Dark subtraction")
-        img=do_darkSubtract(img,darkImage)
+        img=do_darkSubtract(img,darkimage)
         hbeat.stop("Dark subtraction done")
-        if dumpIntermediates:
+        if dumpintermediates:
             imIO.write_image("AfterDark-%s%d-%08d.fits"%(chan,cam,expid),img,meta=None)
         # Apply Monitoring
-        hbeat.start("Running MAs after Dark subtraction")
+        hbeat.start("Running QAs after Dark subtraction")
         res={}
         res["get_rms"]=get_rms(img)
-        fnam="DarkMon-%s%d-%08d.pkl"%(chan,cam,expid)
-        pickle.dump(res,open(fnam,"wb"))
-        hbeat.stop("Dark subtraction monitoring finished. Output is written to %s"%(fnam))
+        fnam="Dark_qa-%s%d-%08d.yaml"%(chan,cam,expid)
+        yaml.dump(res,open(fnam,"wb"))
+        hbeat.stop("Dark subtraction quality assurance finished. Output is written to %s"%(fnam))
     # do pixel flat
        #do count_pixels
-    if pixFlatImage:
+    if pixflatimage:
         hbeat.start("Applying Pixel Flat ")
-        img=do_pixelFlat(img,pixFlatImage)
+        img=do_pixelFlat(img,pixflatimage)
         hbeat.stop("Pixel Flat application done")
-        if dumpIntermediates:
+        if dumpintermediates:
             imIO.write_image("AfterPixelFlat-%s%d-%08d.fits"%(chan,cam,expid),img,meta=None)
         # Apply Monitoring
-        hbeat.start("Running MAs after Pixel Flat")
+        hbeat.start("Running QAs after Pixel Flat")
         res={}
         res["count_pixels"]=count_pixels(img)
-        fnam="PixelFlatMon-%s%d-%08d.pkl"%(chan,cam,expid)
-        pickle.dump(res,open(fnam,"wb"))
-        hbeat.stop("PixelFlat monitoring finished. Output is written to %s"%(fnam))
+        fnam="PixelFlat_qa-%s%d-%08d.yaml"%(chan,cam,expid)
+        yaml.dump(res,open(fnam,"wb"))
+        hbeat.stop("PixelFlat quality assurance finished. Output is written to %s"%(fnam))
     hbeat.start("Running Boxcar Extraction ")
-    frame=do_boxcar(img,chan,cam)
+    frame=do_boxcar(img,chan,psf,cam,boxwidth=2.5,dw=0.5,nspec=500)
     hbeat.stop("Boxcar Extraction Finished")
-    if(dumpIntermediates):
+    if(dumpintermediates):
         frIO.write_frame("AfterBoxcar-%s%d-%08d.fits"%(chan,cam,expid),frame,header=None)
-    hbeat.start("Running MAs after Boxcar Extraction")
+    hbeat.start("Running QAs after Boxcar Extraction")
     # Apply Monitoring
     res={}
     res["find_continuum"]=find_continuum(frame,fibFile)
     res["calculate_snr"]=calculate_snr(frame)
-    fnam="BoxcarExtractionMon-%s%d-%08d.pkl"%(chan,cam,expid)
-    pickle.dump(res,open(fnam,"wb"))
+    fnam="BoxcarExtraction_qa-%s%d-%08d.yaml"%(chan,cam,expid)
+    yaml.dump(res,open(fnam,"wb"))
     hbeat.stop("Boxcar monitoring finished. Output is written to %s"%(fnam))
-    finalName="frame-%s%d-%08d.fits"%(chan,cam,expid)
-    frIO.write_frame(finalName,frame,header=None)
-    log.info("QuickLook pipeline finished. Final output is written to %s"%finalName)
+    finalname="frame-%s%d-%08d.fits"%(chan,cam,expid)
+    frIO.write_frame(finalname,frame,header=None)
+    log.info("QuickLook pipeline finished. Final output is written to %s"%finalname)
 
-def basicPipeline(config):
+def basic_pipeline(config):
     import desispec.io.fibermap as fibIO
     import desispec.io.image as imIO
     import desispec.image as im
     import desispec.io.frame as frIO
-    from desispec.qa.MonAlgs import get_rms,count_pixels,find_continuum,count_fibers,calculate_snr
-    from desispec.ProcAlgs import do_darkSubtract,do_biasSubtract,do_pixelFlat,do_boxcar
-    from desispec.QLHeartbeat import QLHeartbeat as QLHB
+    from desispec.qa.qa_quicklook import get_rms,count_pixels,find_continuum,count_fibers,calculate_snr
+    from desispec.procalgs import do_darkSubtract,do_biasSubtract,do_pixelFlat,boxcar_extract
+    #from desispec.boxcar import do_boxcar
+    from desispec.qlheartbeat import QLHeartbeat as QLHB
 
-    QLog=QLLogger.QLLogger("QuickLook",20)
-    log=QLog.getLog()
+    qlog=qllogger.QLLogger("QuickLook",20)
+    log=qlog.getlog()
     if config is None:
         return None
     log.info("Reading Configuration")
@@ -386,131 +392,133 @@ def basicPipeline(config):
     if "FiberMap" not in config:
         log.critical("Config is missing \"FiberMap\" key.")
         sys.exit("Missing \"FiberMap\" key.")
-    fibName=config["FiberMap"]
-    procType="Exposure"
+    fibname=config["FiberMap"]
+    proctype="Exposure"
     if "DataType" in config:
-        procType=config["DataType"]
-    debugLevel=20
+        proctype=config["DataType"]
+    debuglevel=20
     if "DebugLevel" in config:
-        debugLevel=config["DebugLevel"]
-        log.setLevel(debugLevel)
+        debuglevel=config["DebugLevel"]
+        log.setlevel(debuglevel)
     hbeat=QLHB.QLHeartbeat(log,5.0,120.0)
-    dumpIntermediates=False
+    dumpintermediates=False
     if "DumpIntermediates" in config:
-        dumpIntermediates=config["DumpIntermediates"]
-    biasImage=None
-    biasFile=None
+        dumpintermediates=config["DumpIntermediates"]
+    biasimage=None
+    biasfile=None
     if "BiasImage" in config:
-        biasFile=config["BiasImage"]
-    darkImage=None
-    darkFile=None
+        biasfile=config["BiasImage"]
+    darkimage=None
+    darkfile=None
     if "DarkImage" in config:
-        darkFile=config["DarkImage"]
-    pixelFlatFile=None
-    pixFlatImage=None
+        darkfile=config["DarkImage"]
+    pixelflatfile=None
+    pixFlatimage=None
     if "PixelFlat" in config:
-        pixelFlatFile=config["PixelFlat"]
-    fiberFlatFile=None
-    fiberFlatImage=None
+        pixelflatfile=config["PixelFlat"]
+    fiberflatfile=None
+    fiberflatimage=None
     if "FiberFlat" in config:
-        fiberFlatFile=config["FiberFlat"]
-    hbeat.start("Reading input file %s"%inpName)
+        fiberflatfile=config["FiberFlat"]
+    hbeat.start("Reading input file %s"%inpname)
     inp=imIO.read_image(inpName)
     #log.info("Reading fiberMap file %s"%fibName)
-    hbeat.start("Reading fiberMap file %s"%fibName)
-    fibFile,fibHdr=fibIO.read_fibermap(fibName,header=True)
-    if biasFile is not None:
-        hbeat.start("Reading Bias Image %s"%biasFile)
-        biasImage=imIO.read_image(biasFile)
-    if darkFile is not None:
-        hbeat.start("Reading Dark Image %s"%darkFile)
-        darkImage=imIO.read_image(darkFile)
-    if pixelFlatFile:
-        hbeat.start("Reading PixelFlat Image %s"%pixelFlatFile)
-        pixFlatImage=imIO.read_image(pixelFlatFile)
-    if fiberFlatFile:
-        hbeat.start("Reading FiberFlat Image %s"%fiberFlatFile)
-        fiberFlatImage=imIO.read_image(fiberFlatFile)
+    hbeat.start("Reading fiberMap file %s"%fibname)
+    fibfile,fibHdr=fibIO.read_fibermap(fibname,header=True)
+    if biasfile is not None:
+        hbeat.start("Reading Bias Image %s"%biasfile)
+        biasimage=imIO.read_image(biasfile)
+    if darkfile is not None:
+        hbeat.start("Reading Dark Image %s"%darkfile)
+        darkimage=imIO.read_image(darkfile)
+    if pixelflatfile:
+        hbeat.start("Reading PixelFlat Image %s"%pixelflatfile)
+        pixflatimage=imIO.read_image(pixelflatfile)
+    if fiberflatfile:
+        hbeat.start("Reading FiberFlat Image %s"%fiberflatfile)
+        fiberflatimage=imIO.read_image(fiberflatfile)
     img=inp
     #
     # start processing pipeline 
     # 
 
     # find channel from input name
-    chan,cam,expid=getChanCamExp(inpName)
-    if biasImage:
+    chan,cam,expid=get_chan_cam_exp(inpname)
+    if biasimage:
         hbeat.start("Running Bias subtraction")
-        img=do_biasSubtract(img,biasImage)
+        img=do_biasSubtract(img,biasimage)
         hbeat.stop("Bias subtraction done")
-        if dumpIntermediates:
+        if dumpintermediates:
             imIO.write_image("AfterBias-%s%d-%08d.fits"%(chan,cam,expid),img,meta=None)
-    if darkImage:
+    if darkimage:
         hbeat.start("Running Dark subtraction")
-        img=do_darkSubtract(img,darkImage)
+        img=do_darkSubtract(img,darkimage)
         hbeat.stop("Dark subtraction done")
-        if dumpIntermediates:
+        if dumpintermediates:
             imIO.write_image("AfterDark-%s%d-%08d.fits"%(chan,cam,expid),img,meta=None)
         # Apply Monitoring
-        hbeat.start("Running MAs after Dark subtraction")
+        hbeat.start("Running QAs after Dark subtraction")
         res={}
         res["get_rms"]=get_rms(img)
-        fnam="DarkMon-%s%d-%08d.pkl"%(chan,cam,expid)
-        pickle.dump(res,open(fnam,"wb"))
-        hbeat.stop("Dark subtraction monitoring finished. Output is written to %s"%(fnam))
+        fnam="Dark_qa-%s%d-%08d.yaml"%(chan,cam,expid)
+        yaml.dump(res,open(fnam,"wb"))
+        hbeat.stop("Dark subtraction QA finished. Output is written to %s"%(fnam))
     # do pixel flat
        #do count_pixels
-    if pixFlatImage:
+    if pixflatimage:
         hbeat.start("Applying Pixel Flat ")
-        img=do_pixelFlat(img,pixFlatImage)
+        img=do_pixelFlat(img,pixflatimage)
         hbeat.stop("Pixel Flat application done")
-        if dumpIntermediates:
+        if dumpintermediates:
             imIO.write_image("AfterPixelFlat-%s%d-%08d.fits"%(chan,cam,expid),img,meta=None)
         # Apply Monitoring
-        hbeat.start("Running MAs after Pixel Flat")
+        hbeat.start("Running QAs after Pixel Flat")
         res={}
         res["count_pixels"]=count_pixels(img)
-        fnam="PixelFlatMon-%s%d-%08d.pkl"%(chan,cam,expid)
-        pickle.dump(res,open(fnam,"wb"))
+        fnam="PixelFlat_qa-%s%d-%08d.yaml"%(chan,cam,expid)
+        yaml.dump(res,open(fnam,"wb"))
         hbeat.stop("PixelFlat monitoring finished. Output is written to %s"%(fnam))
     hbeat.start("Running Boxcar Extraction ")
-    frame=do_boxcar(img,chan,cam)
+    frame=boxcar_extract(img,chan,psf,cam,boxwidth=2.5,dw=0.5,nspec=500)
     hbeat.stop("Boxcar Extraction Finished")
-    if(dumpIntermediates):
+    if(dumpintermediates):
         frIO.write_frame("AfterBoxcar-%s%d-%08d.fits"%(chan,cam,expid),frame,header=None)
-    hbeat.start("Running MAs after Boxcar Extraction")
+    hbeat.start("Running QAs after Boxcar Extraction")
     # Apply Monitoring
     res={}
-    res["find_continuum"]=find_continuum(frame,fibFile)
+    res["find_continuum"]=find_continuum(frame,fibfile)
     res["calculate_snr"]=calculate_snr(frame)
-    fnam="BoxcarExtractionMon-%s%d-%08d.pkl"%(chan,cam,expid)
-    pickle.dump(res,open(fnam,"wb"))
-    hbeat.stop("Boxcar monitoring finished. Output is written to %s"%(fnam))
-    finalName="frame-%s%d-%08d.fits"%(chan,cam,expid)
-    frIO.write_frame(finalName,frame,header=None)
-    log.info("QuickLook pipeline finished. Final output is written to %s"%finalName)
+    fnam="BoxcarExtractionMon-%s%d-%08d.yaml"%(chan,cam,expid)
+    yaml.dump(res,open(fnam,"wb"))
+    hbeat.stop("Boxcar QA finished. Output is written to %s"%(fnam))
+    finalname="frame-%s%d-%08d.fits"%(chan,cam,expid)
+    frIO.write_frame(finalname,frame,header=None)
+    log.info("QuickLook extraction finished. Final frame output is written to %s"%finalname)
 
 # This should go to desispec/bin?
+"""
 if __name__ == '__main__':
     import optparse as op
     p = op.OptionParser(usage = "%")
     p.add_option("-c", "--config_file", type=str, help="Pickle file containing config dictionary",dest="config")
     p.add_option("-g", "--gen_testconfig", type=str, help="generate test configuration",dest="dotest")
-    QLog=QLLogger.QLLogger("QuickLook",20)
-    log=QLog.getLog()
+    qlog=qllogger.QLLogger("QuickLook",20)
+    log=qlog.getlog()
     opts, args = p.parse_args()
 
     if opts.dotest is not None:
-        testConfig(opts.dotest)
+        testconfig(opts.dotest)
     if opts.config is None:
         log.critical("Need config file")
         sys.exit("Missing config parameter")
     if os.path.exists(opts.config):
         if "yaml" in opts.config:
-            configDict=yaml.load(open(opts.config,'rb'))
+            configdict=yaml.load(open(opts.config,'rb'))
         elif "pkl" in opts.config:
-            configDict=pickle.load(open(opts.config,'rb'))
+            configdict=pickle.load(open(opts.config,'rb'))
     else:
         log.critical("Can't open config file %s"%(opts.config))
         sys.exit("Can't open config file")
-    #basicPipeline(configDict)
-    setupPipeLine(configDict)
+    #basic_pipeline(configdict)
+    setup_pipeline(configdict)
+"""
