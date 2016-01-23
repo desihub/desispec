@@ -121,6 +121,15 @@ def load_gdarc_lines(camera):
         wmark = 6717.043  # 6402.246  # Ne
         line_guess = 24
         gd_lines = np.array(HgI + NeI)# + ArI)
+    elif camera[0] == 'z':
+        NeI = [7438.898, 7488.8712, 7535.7739,
+               8136.4061, 8300.3248,
+               8377.6070, 8495.3591, 8591.2583, 8634.6472, 8654.3828,
+               8783.7539, 9148.6720, 9201.7588]
+        dlamb = 0.599  # Ang
+        gd_lines = np.array(NeI)# + ArI)
+        line_guess = None
+        wmark = 8591.2583
     else:
         log.error('Bad camera')
 
@@ -437,7 +446,9 @@ def load_arcline_list(camera):
     if camera[0] == 'b':
         lamps = ['CdI','ArI','HgI','NeI']
     if camera[0] == 'r':
-        lamps = ['ArI','HgI','NeI']
+        lamps = ['HgI','NeI']
+    if camera[0] == 'z':
+        lamps = ['HgI','NeI']
     else:
         log.error("Not ready for this camera")
     # Get the parse dict
@@ -539,8 +550,8 @@ def load_parse_dict():
     arcline_parse['HeI']['min_intensity'] = 20.
     # NeI
     arcline_parse['NeI'] = copy.deepcopy(dict_parse)
-    arcline_parse['NeI']['min_intensity'] = 500.
-    arcline_parse['NeI']['min_Aki']  = 1. # NOT GOOD FOR DEIMOS, DESI
+    arcline_parse['NeI']['min_intensity'] = 999.
+    #arcline_parse['NeI']['min_Aki']  = 1. # NOT GOOD FOR DEIMOS, DESI
     #arcline_parse['NeI']['min_wave'] = 5700.
     arcline_parse['NeI']['min_wave'] = 5850. # NOT GOOD FOR DEIMOS?
     # ZnI
