@@ -106,22 +106,27 @@ def load_gdarc_lines(camera):
         CdI = [3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
         NeI = [5881.895, 5944.834]
         dlamb = 0.589
-        wmark = 4358.34 # Hg
+        wmark = 4358.34  # Hg
         gd_lines = np.array(HgI + CdI + NeI)
+        line_guess = None
     elif camera[0] == 'r':
         HgI = [5769.598]
-        NeI = [5881.895, 5944.834, 6143.062, 6402.246, 6506.528, 6717.043,
-               7032.413, 7438.898]
+        NeI = [5852.4878, 5944.834, 6143.062, 6402.246, 6506.528,
+               #6532.8824, #6598.9528,
+               6678.2766, 6717.043, 6929.4672, 7032.4128,
+               7173.9380, 7245.1665, 7438.898]
         ArI = [6965.431]#, 7635.106, 7723.761]
         dlamb = 0.527
-        wmark = 6402.246 # Ne
-        gd_lines = np.array(HgI + NeI + ArI)
+        #wmark = 6598.9528 # 6678.2766  # 6717.043  # 6402.246  # Ne
+        wmark = 6717.043  # 6402.246  # Ne
+        line_guess = 24
+        gd_lines = np.array(HgI + NeI)# + ArI)
     else:
         log.error('Bad camera')
 
     # Sort and return
     gd_lines.sort()
-    return dlamb, wmark, gd_lines
+    return dlamb, wmark, gd_lines, line_guess
 
 def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
     """Attempt to identify and add additional goodlines
@@ -200,6 +205,7 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
 
 def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
     """Attempt to identify the remainder of detected lines
+
     Parameters
     ----------
     id_dict : dict
@@ -236,7 +242,8 @@ def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
     id_dict['id_wave'].sort()
 
 
-def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
+def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
+                 line_guess=None, verbose=False):
     """Match (as best possible), a set of the input list of expected arc lines to the detected list
 
     Parameters
@@ -266,7 +273,9 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
     ##
     ndet = pixpk.size
     # Set up detected lines to search over
-    guesses = ndet//2 + np.arange(-4,7)
+    if line_guess is None:
+        line_guess = ndet//2
+    guesses = line_guess + np.arange(-4, 7)
     for guess in guesses:
         # Setup
         tc = pixpk[guess]
@@ -305,9 +314,10 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
             itm1 = np.argmin(np.abs(xm1-xm1_wv))
             # Now loop on ip2
             for imtp2 in mtp2:
-                guess_rms = dict(guess=guess, im1=itm1,im2=imtm2, rms=999., ip1=None, ip2=imtp2)
+                guess_rms = dict(guess=guess, im1=itm1, im2=imtm2,
+                                 rms=999., ip1=None, ip2=imtp2)
                 all_guess_rms.append(guess_rms)
-                if imtp2==(icen-1):
+                if imtp2 == (icen-1):
                     if verbose:
                         print('No ip1 lines found for guess={:g}'.format(tc))
                     continue
@@ -327,6 +337,8 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
                 # RMS (in pixel space)
                 rms = np.sqrt(np.sum((xval-dufits.func_val(wvval,pfit))**2)/xval.size)
                 guess_rms['rms'] = rms
+                #if guess == 22:
+                #    pdb.set_trace()
                 # Save fit too
                 guess_rms['fit'] = pfit
         # Take best RMS
