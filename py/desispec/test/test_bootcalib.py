@@ -57,7 +57,7 @@ class TestBoot(unittest.TestCase):
         xset, xerr = desiboot.trace_crude_init(flat, xpk, ypos)
         xfit, fdicts = desiboot.fit_traces(xset, xerr)
         # Gaussian
-        gauss = desiboot.fiber_gauss(flat, xfit, xerr)
+        gauss = desiboot.fiber_gauss(flat, xfit, xerr)        
         np.testing.assert_allclose(np.median(gauss), 1.142540313858601)
 
     def test_wavelengths(self):
@@ -112,7 +112,8 @@ class TestBoot(unittest.TestCase):
             id_dict['wave_max'] = dufits.func_val(ny-1, final_fit_pix)
             id_dict['mask'] = mask
             all_wv_soln.append(id_dict)
-        assert all_wv_soln[0]['rms'] < 0.2
+
+        self.assertLess(all_wv_soln[0]['rms'], 0.2)
 
     def runTest(self):
         pass
