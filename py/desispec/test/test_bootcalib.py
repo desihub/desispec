@@ -81,7 +81,7 @@ class TestBoot(unittest.TestCase):
         # Line list
         camera = header['CAMERA']
         llist = desiboot.load_arcline_list(camera)
-        dlamb, wmark, gd_lines = desiboot.load_gdarc_lines(camera)
+        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
         #
         all_wv_soln = []
         for ii in range(1):
@@ -89,7 +89,8 @@ class TestBoot(unittest.TestCase):
             # Find Lines
             pixpk = desiboot.find_arc_lines(spec)
             # Match a set of 5 gd_lines to detected lines
-            id_dict = desiboot.id_arc_lines(pixpk,gd_lines,dlamb,wmark)
+            id_dict = desiboot.id_arc_lines(pixpk,gd_lines,dlamb,wmark,
+                                            line_guess=line_guess)
             # Find the other good ones
             desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines)
             # Now the rest
@@ -113,7 +114,7 @@ class TestBoot(unittest.TestCase):
             id_dict['mask'] = mask
             all_wv_soln.append(id_dict)
 
-        self.assertLess(all_wv_soln[0]['rms'], 0.2)
+        self.assertLess(all_wv_soln[0]['rms'], 0.25)
 
     def runTest(self):
         pass
