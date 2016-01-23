@@ -32,11 +32,6 @@ from matplotlib.backends.backend_pdf import PdfPages
 from desispec.log import get_logger
 from desiutil import funcfits as dufits
 
-try:
-    from xastropy.xutils import xdebug as xdb
-except:
-    pass
-
 desispec_path = imp.find_module('desispec')[1]+'/../../'
 glbl_figsz = (16,9)
 
@@ -113,8 +108,14 @@ def load_gdarc_lines(camera):
         dlamb = 0.589
         wmark = 4358.34 # Hg
         gd_lines = np.array(HgI + CdI + NeI)
-    if camera[0] == 'r':
-        NeI = [5881.895, 5944.834]
+    elif camera[0] == 'r':
+        HgI = [5769.598]
+        NeI = [5881.895, 5944.834, 6143.062, 6402.246, 6506.528, 6717.043,
+               7032.413, 7438.898]
+        ArI = [6965.431]#, 7635.106, 7723.761]
+        dlamb = 0.527
+        wmark = 6402.246 # Ne
+        gd_lines = np.array(HgI + NeI + ArI)
     else:
         log.error('Bad camera')
 
@@ -423,6 +424,8 @@ def load_arcline_list(camera):
     wvmnx = None
     if camera[0] == 'b':
         lamps = ['CdI','ArI','HgI','NeI']
+    if camera[0] == 'r':
+        lamps = ['ArI','HgI','NeI']
     else:
         log.error("Not ready for this camera")
     # Get the parse dict
@@ -611,10 +614,10 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
         while iterate & (niter < max_iter):
             # Clip
             resid = parm(fdimg) - fnimg
-            resid_mask = sigma_clip(resid, sig=4.)
+            resid_mask = sigma_clip(resid, sig=4., iters=5)
             # Fit
             gdp = ~resid_mask.mask
-            parm = fitter(g_init, fdimg[gdp], fnimg[gdp])
+            parm = fitter(g_init, fdimg[gdp], fnimg[gdp])                        
             # Again?
             if np.sum(resid_mask.mask) <= nrej:
                 iterate = False
@@ -632,7 +635,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
             plt.plot(x, parm(x), 'r-')
             plt.show()
             plt.close()
-            xdb.set_trace()
+            pdb.set_trace()
         # Save
         gauss.append(parm.stddev.value)
     #
@@ -684,8 +687,8 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
         gdp = gdp & test
     xpk = np.where(gdp)[0]
     if debug:
-        xdb.xplot(cut, xtwo=xpk, ytwo=cut[xpk],mtwo='o')
-        xdb.set_trace()
+        #pdb.xplot(cut, xtwo=xpk, ytwo=cut[xpk],mtwo='o')
+        pdb.set_trace()
 
     # Book-keeping and some error checking
     if len(xpk) != Nbundle*Nfiber:
@@ -743,9 +746,8 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
             weights=1./xerr[:,ii], initialmask=mask, maxone=True)#, sigma=xerr[:,ii])
         # Stats on residuals
         nmask_new = np.sum(mask)-nmask 
-        if nmask_new > 50:
-            pdb.set_trace()
-            raise ValueError('Rejected too many points [may need to increase for z camera with CRs: {:d}'.format(nmask_new))
+        if nmask_new > 10:
+            raise ValueError('Rejected too many points: {:d}'.format(nmask_new))
         # Save
         xnew[:,ii] = dufits.func_val(yval,dfit)
         fits.append(dfit)
@@ -756,12 +758,12 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
         if verbose:
             print('RMS of FIT= {:g}'.format(rms))
         if rms > RMS_TOLER:
-            #xdb.xplot(yval, xnew[:,ii], xtwo=yval[gdval],ytwo=xset[:,ii][gdval], mtwo='o')
+            #pdb.xplot(yval, xnew[:,ii], xtwo=yval[gdval],ytwo=xset[:,ii][gdval], mtwo='o')
             pdb.set_trace()
     # Return
     return xnew, fits
 
-def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2):
+def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     """Extract spectrum for fibers one-by-one using a Gaussian PSF
 
     Parameters
@@ -787,7 +789,7 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2):
     #
     all_spec = np.zeros_like(xtrc)
     for qq in range(xtrc.shape[1]):
-        if qq%10 == 0:
+        if verbose & (qq%10 == 0):
             print(qq)
         # Mask
         mask[:,:] = 0
@@ -1212,7 +1214,7 @@ def qa_fiber_dlamb(all_spec, all_soln, pp, figsz=None):
     plt.close()
 
 
-def qa_fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
+def qa_fiber_trace(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
     ''' Generate a QA plot for the fiber traces
 
     Parameters
@@ -1263,14 +1265,12 @@ def qa_fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
         sclmax = srt[int(sub_flat.size*0.9)]
         sclmin = isclmin * sclmax
         # Plot
-        #xdb.set_trace()
-        mplt = plt.imshow(sub_flat,origin='lower', cmap=cmm, 
+        mplt = plt.imshow(sub_flat,origin='lower', cmap=cmm,
             extent=(0., sub_flat.shape[1]-1, x0,x1-1), aspect='auto')
             #extent=(0., sub_flat.shape[1]-1, x0,x1))
         #mplt.set_clim(vmin=sclmin, vmax=sclmax)
 
         # Axes
-        #xdb.set_trace()
         #plt.xlim(0., sub_flat.shape[1]-1)
         plt.xlim(0., sub_flat.shape[1]-1)
         plt.ylim(x0,x1)
