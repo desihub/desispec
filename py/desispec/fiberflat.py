@@ -20,7 +20,7 @@ from desispec.log import get_logger
 
 def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
-    Input data are expected to be on the same wavelenght grid, with uncorrelated noise.
+    Input data are expected to be on the same wavelength grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
 
     Args:
@@ -107,6 +107,10 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
     # we also have a max. number of iterations for this code
     max_iterations = 100
     nout_tot=0
+    ##
+    #nfibers = 20
+    #max_iterations = 5
+    ##
     for iteration in range(max_iterations) :
 
         
@@ -374,3 +378,69 @@ class FiberFlat(object):
         #- if we define fiber ranges in the fits headers, correct header
         
         return result
+
+    def __repr__(self):
+        """ Print formatting
+        """
+        return ('{:s}: nspec={:d}, spectrograph={:s}'.format(
+                self.__class__.__name__, self.nspec, self.spectrograph))
+
+
+def qa_fiberflat(param, frame, fiberflat):
+    """ Calculate QA on FiberFlat object
+
+    Args:
+        param: dict of QA parameters
+        frame: Frame
+        fiberflat: FiberFlat
+
+    Returns:
+        qadict: dict of QA outputs
+          Need to record simple Python objects for yaml (str, float, int)
+    """
+    log = get_logger()
+
+    # Output dict
+    qadict = {}
+
+    # Check amplitude of the meanspectrum
+    qadict['MAX_MEANSPEC'] = float(np.max(fiberflat.meanspec))
+    if qadict['MAX_MEANSPEC'] < 100000:
+        log.warn("Low counts in meanspec = {:g}".format(qadict['MAX_MEANSPEC']))
+
+    # N mask
+    qadict['N_MASK'] = int(np.sum(fiberflat.mask > 0))
+    if qadict['N_MASK'] > param['MAX_N_MASK']:  # Arbitrary
+        log.warn("High rejection rate: {:d}".format(qadict['N_MASK']))
+
+    # Scale (search for low/high throughput)
+    gdp = fiberflat.mask == 0
+    rtio = frame.flux / np.outer(np.ones(fiberflat.nspec),fiberflat.meanspec)
+    scale = np.median(rtio*gdp,axis=1)
+    qadict['MAX_SCALE_OFF'] = float(np.max(np.abs(scale-1.)))
+    if qadict['MAX_SCALE_OFF'] > param['MAX_SCALE_OFF']:
+        log.warn("Discrepant flux in fiberflat: {:g}".format(qadict['MAX_SCALE_OFF']))
+
+    # Offset in fiberflat
+    qadict['MAX_OFF'] = float(np.max(np.abs(fiberflat.fiberflat-1.)))
+    if qadict['MAX_OFF'] > param['MAX_OFF']:
+        log.warn("Large offset in fiberflat: {:g}".format(qadict['MAX_OFF']))
+
+    # Offset in mean of fiberflat
+    mean = np.mean(fiberflat.fiberflat*gdp,axis=1)
+    qadict['MAX_MEAN_OFF'] = float(np.max(np.abs(mean-1.)))
+    if qadict['MAX_MEAN_OFF'] > param['MAX_MEAN_OFF']:
+        log.warn("Discrepant mean in fiberflat: {:g}".format(qadict['MAX_MEAN_OFF']))
+
+    # RMS in individual fibers
+    rms = np.std(gdp*(fiberflat.fiberflat-
+                      np.outer(mean, np.ones(fiberflat.nwave))),axis=1)
+    qadict['MAX_RMS'] = float(np.max(rms))
+    if qadict['MAX_RMS'] > param['MAX_RMS']:
+        log.warn("Large RMS in fiberflat: {:g}".format(qadict['MAX_RMS']))
+
+    # Return
+    return qadict
+
+
+

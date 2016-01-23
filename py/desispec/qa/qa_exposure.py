@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 import numpy as np
 
 from desispec.sky import qa_skysub
+from desispec.fiberflat import qa_fiberflat
 
 class QA_Frame(object):
     def __init__(self, frame=None, flavor='none', camera='none', in_data=None):
@@ -71,6 +72,28 @@ class QA_Frame(object):
             if key not in self.data[qatype]['PARAM'].keys():
                 self.data[qatype]['PARAM'][key] = param[key]
 
+    def init_fiberflat(self, re_init=False):
+        """Initialize parameters for FIBERFLAT QA
+        QA method is desispec.fiberflat.qa_fiberflat
+
+        Parameters:
+        ------------
+        re_init: bool, (optional)
+          Re-initialize FIBERFLAT parameter dict
+        """
+        #
+        assert self.flavor in ['science']
+
+        # Standard FIBERFLAT input parameters
+        fflat_dict = dict(MAX_N_MASK=20000,  # Maximum number of pixels to mask
+                          MAX_SCALE_OFF=0.05,  # Maximum offset in counts (fraction)
+                          MAX_OFF=0.15,       # Maximum offset from unity
+                          MAX_MEAN_OFF=0.05,  # Maximum offset in fiberflat (fraction)
+                          MAX_RMS=0.02,      # Maximum RMS in fiberflat
+                          )
+        # Init
+        self.init_qatype('FIBERFLAT', fflat_dict, re_init=re_init)
+
     def init_skysub(self, re_init=False):
         """Initialize parameters for SkySub QA 
         QA method is desispec.sky.qa_skysub
@@ -115,11 +138,17 @@ class QA_Frame(object):
             # Run
             qadict = qa_skysub(self.data[qatype]['PARAM'],
                 inputs[0], inputs[1], inputs[2])
+        elif qatype == 'FIBERFLAT':
+            # Expecting: frame, fiberflat
+            assert len(inputs) == 2
+            # Init parameters (as necessary)
+            self.init_fiberflat()
+            # Run
+            qadict = qa_fiberflat(self.data[qatype]['PARAM'], inputs[0], inputs[1])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update
         self.data[qatype]['QA'] = qadict
-
 
     def __repr__(self):
         """
