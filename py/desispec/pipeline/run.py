@@ -13,11 +13,13 @@ import errno
 import sys
 import subprocess as sp
 
+from desispec.log import get_logger
+
 
 def pid_exists( pid ):
     """Check whether pid exists in the current process table.
 
-    **UNIX only.**
+    **UNIX only.**  Should work the same as psutil.pid_exists().
 
     Args:
         pid (int): A process ID.
@@ -50,116 +52,106 @@ def pid_exists( pid ):
         return True
 
 
+def subprocess_list(tasks, rank=0):
+    log = get_logger()
+    pids = []
+    for tsk in tasks:
+        runcom = True
+        for dep in tsk['inputs']:
+            if not os.path.isfile(dep):
+                # USE LOGGING HERE!
+                log.error("dependency {} missing, cannot run task {}".format(dep, " ".join(tsk['command'])))
+                runcom = False
+        proc = None
+        if runcom:
+            proc = sp.Popen(tsk['command'], env=env, stderr=sp.STDOUT, stdin=None)
+            log.debug("  spawn[{}]: {}".format(proc.pid, " ".join(tsk['command'])))
+            pids.append(proc.pid)
+    # wait for all our local tasks to finish
+    for p in pids:
+        log.debug("  wait for {}".format(p))
+        os.wait(p)
+    return
 
-class Machine( object ):
-    """This class represents the properties of a single machine.  This includes
-    the node configuration, etc.
+
+class Machine(object):
     """
-
-    def __init__( self ):
+    Class representing the number nodes and cores available to us,
+    and also the commands needed to run jobs.
+    """
+    def __init__(self):
         pass
 
-    def nodes( self ):
-        """Returns the maximum number of nodes to use on this machine.
+    def nodes(self):
+        """
+        The number of available nodes.
         """
         return 1
 
-    def cores_per_node( self ):
-        """Returns the number of cores per node on this machine.
+    def node_cores(self):
+        """
+        The number of cores per node.
         """
         return 1
 
-    def proc_spawn( self, com, logfile ):
-        """Spawn a process and redirect output to a log file.
+    def run(self, command, logfile, nodes=1, ppn=1, nthread=1):
         """
-        proc = sp.Popen( com, stdout=open ( logfile, "w" ), stderr=sp.STDOUT, stdin=None, close_fds=True )
-        return proc.pid
+        Run the command on the specified number of nodes,
+        processes per node, and OMP_NUM_THREADS.  Write
+        output to logfile.
+        """
+        if (nodes != 1) or (ppn != 1):
+            raise RuntimeError("Machine base class only supports a single process.")
+        env = os.environ.copy()
+        env['OMP_NUM_THREADS'] = nthread
+        proc = sp.Popen(command, env=env, stdout=open(logfile, "w"), stderr=sp.STDOUT, stdin=None, close_fds=True)
+        return proc
 
-    def proc_wait( self, pid ):
-        """Wait for a process to finish.
+
+class MachineSlurm(object):
+    """
+    Machine class which runs jobs using the srun command from SLURM.
+    """
+    def __init__(self, max_nodes, cores_per_node, shared_nodes=False):
+        self._max_nodes = max_nodes
+        self._max_ppn = cores_per_node
+        self._max_proc = max_nodes * cores_per_node
+        self._avail = self._max_proc
+        self._shared = shared_nodes
+
+    def nodes(self):
+        """ 
+        The number of total nodes.
         """
-        if pid_exists( pid ):
-            ex = os.wait( pid )
-            return ex[1]
+        return self._max_nodes
+
+    def node_cores(self):
+        """
+        The number of cores per node.
+        """
+        return self._max_ppn
+
+    def run(self, command, logfile, nodes=1, ppn=1, nthread=1, use_multiprocess=False):
+        """
+        Run the command on the specified number of nodes,
+        processes per node, and OpenMP threads.  Write
+        output to logfile.  If use_multiprocess is True,
+        disable CPU binding.
+        """
+        if use_multiprocess:
+            nthread = 1
+        if self._shared:
+            requested = nodes * ppn * nthread
         else:
-            return 0
+            requested = nodes * self._max_ppn
+        if requested > self._avail:
+            raise RuntimeError("Requested {} cores, but only {} are available".format(requested, self._avail))
+        env = os.environ.copy()
+        env['OMP_NUM_THREADS'] = nthread
+        scom = ['srun', '-n', '{}'.format(nodes * ppn), '-c', '{}'.format(nthread)]
+        if use_multiprocess:
+            scom.extend(['--cpu_bind=no'])
+        scom.extend(command)
+        proc = sp.Popen(scom, env=env, stdout=open(logfile, "w"), stderr=sp.STDOUT, stdin=None, close_fds=True)
+        return proc
 
-    def proc_poll( self, pid ):
-        """Check if specified process is still running.
-        """
-        return pid_exists( pid )
-
-    def job_run( self, com, nodes, ppn, log ):
-        """Runs a command on a specified number of nodes, and a specified number
-        of processes per node.
-        """
-        jobid = 0
-        return jobid
-
-    def job_wait( self, jobid ):
-        """Wait for a job to finish before returning.
-        """
-        return
-
-    def job_complete( self, jobid ):
-        """Is the speficied jobid still running?
-        """
-        return False
-
-
-class MachineLocal( Machine ):
-    """Local machine definition.  We use one node and one process, and use
-    subprocess to run jobs.
-    """
-
-    def __init__( self ):
-        pass
-
-    def job_run( self, com, nodes, ppn, log ):
-        """Placeholder
-        """
-        return jobid
-
-    def job_wait( self, jobid ):
-        """Wait for a job to finish before returning.
-        """
-        return
-
-    def job_complete( self, jobid ):
-        """Is the speficied jobid still running?
-        """
-        return False
-
-"""
-Notes to keep handy while editing:
-
-class MachineEdison
-
-PBS_VERSION=TORQUE-4.2.7
-PBS_JOBNAME=STDIN
-PBS_ENVIRONMENT=PBS_INTERACTIVE
-PBS_O_WORKDIR=/global/u1/k/kisner
-PBS_TASKNUM=1
-PBS_O_HOME=/global/homes/k/kisner
-PBSCOREDUMP=True
-PBS_WALLTIME=1800
-PBS_GPUFILE=/var/spool/torque/aux//2153436.edique02gpu
-PBS_MOMPORT=15003
-PBS_O_QUEUE=debug
-PBS_O_LOGNAME=kisner
-PBS_JOBCOOKIE=C2EA813B2802321F3DF6015972F33122
-PBS_NODENUM=0
-PBS_NUM_NODES=1
-PBS_O_SHELL=/bin/bash
-PBS_JOBID=2153436.edique02
-PBS_O_HOST=edison07
-PBS_VNODENUM=0
-PBS_QUEUE=debug
-PBS_MICFILE=/var/spool/torque/aux//2153436.edique02mic
-PBS_O_SUBMIT_FILTER=/usr/syscom/nsg/sbin/submit_filter
-PBS_O_MAIL=/var/mail/kisner
-PBS_NP=48
-PBS_NUM_PPN=1
-PBS_O_SERVER=edique02
-PBS_NODEFILE=/var/spool/torque/aux//2153436.edique02
-"""
