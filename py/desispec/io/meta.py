@@ -11,8 +11,9 @@ import datetime
 import glob
 import re
 
+
 def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
-    band=None, spectrograph=None, specprod_dir=None, download=False):
+    band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None, download=False):
     """Returns location where file should be
 
     Args:
@@ -23,6 +24,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
         brickname : [optional] brick name string
         band : [optional] one of 'b','r','z' identifying the camera band
         spectrograph : [optional] spectrograph number, 0-9
+        rawdata_dir : [optional] overrides $DESI_SPECTRO_DATA
         specprod_dir : [optional] overrides $DESI_SPECTRO_REDUX/$PRODNAME/
         download : [optional, not yet implemented]
             if not found locally, try to fetch remotely
@@ -60,6 +62,9 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
     #- Check for missing inputs
     required_inputs = [i[0] for i in re.findall(r'\{([a-z_]+)(|[:0-9d]+)\}',location[filetype])]
 
+    if rawdata_dir is None and 'rawdata_dir' in required_inputs:
+        rawdata_dir = rawdata_root()
+
     if specprod_dir is None and 'specprod_dir' in required_inputs:
         specprod_dir = specprod_root()
 
@@ -75,15 +80,13 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
         'band':band, 'spectrograph':spectrograph
         }
 
-    #- check rawdata_root() but only if needed
     if 'rawdata_dir' in required_inputs:
-        actual_inputs['rawdata_dir'] = rawdata_root()
+        actual_inputs['rawdata_dir'] = rawdata_dir
 
     for i in required_inputs:
         if actual_inputs[i] is None:
             raise ValueError("Required input '{0}' is not set for type '{1}'!".format(i,filetype))
     
-            
     #- normpath to remove extraneous double slashes /a/b//c/d
     filepath = os.path.normpath(location[filetype].format(**actual_inputs))
 
@@ -92,7 +95,37 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
         filepath = download(filepath,single_thread=True)[0]
     return filepath
 
-def get_files(filetype,night,expid,specprod_dir = None):
+
+def get_raw_files(filetype, night, expid, rawdata_dir=None):
+    """Get files for a specified exposure.
+
+    Uses :func:`findfile` to determine the valid file names for the specified type.
+    Any camera identifiers not matching the regular expression [brz][0-9] will be
+    silently ignored.
+
+    Args:
+        filetype(str): Type of files to get. Valid choices are 'frame','cframe','psf'.
+        night(str): Date string for the requested night in the format YYYYMMDD.
+        expid(int): Exposure number to get files for.
+        rawdata_dir(str): [optional] overrides $DESI_SPECTRO_DATA
+
+    Returns:
+        The file that is uniquely specified by the type, night, and exposure.
+    """
+    glob_pattern = findfile(filetype, night, expid, camera='*', rawdata_dir=rawdata_dir)
+    literals = map(re.escape,glob_pattern.split('*'))
+    re_pattern = re.compile('([brz][0-9])'.join(literals))
+    listing = glob.glob(glob_pattern)
+    if len(listing) == 1:
+        return listing[0]
+    files = {}
+    for entry in listing:
+        found = re_pattern.match(entry)
+        files[found.group(1)] = entry
+    return files
+
+
+def get_files(filetype, night, expid, specprod_dir=None):
     """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified type.
@@ -111,7 +144,7 @@ def get_files(filetype,night,expid,specprod_dir = None):
         dict: Dictionary of found file names using camera id strings as keys, which are
             guaranteed to match the regular expression [brz][0-9].
     """
-    glob_pattern = findfile(filetype,night,expid,camera = '*',specprod_dir = specprod_dir)
+    glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
     literals = map(re.escape,glob_pattern.split('*'))
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
@@ -119,6 +152,7 @@ def get_files(filetype,night,expid,specprod_dir = None):
         found = re_pattern.match(entry)
         files[found.group(1)] = entry
     return files
+
 
 def validate_night(night):
     """Validates a night string and converts to a date.
@@ -137,7 +171,8 @@ def validate_night(night):
     except ValueError:
         raise RuntimeError('Badly formatted night %s' % night)
 
-def get_exposures(night,raw = False,specprod_dir = None):
+
+def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
     """Get a list of available exposures for the specified night.
 
     Exposures are identified as correctly formatted subdirectory names within the
@@ -147,6 +182,7 @@ def get_exposures(night,raw = False,specprod_dir = None):
     Args:
         night(str): Date string for the requested night in the format YYYYMMDD.
         raw(bool): Returns raw exposures if set, otherwise returns processed exposures.
+        rawdata_dir(str): [optional] overrides $DESI_SPECTRO_DATA
         specprod_dir(str): Path containing the exposures/ directory to use. If the value
             is None, then the value of :func:`specprod_root` is used instead. Ignored
             when raw is True.
@@ -162,7 +198,9 @@ def get_exposures(night,raw = False,specprod_dir = None):
     date = validate_night(night)
 
     if raw:
-        night_path = os.path.join(rawdata_root(),'exposures',night)
+        if rawdata_dir is None:
+            rawdata_dir = rawdata_root()
+        night_path = os.path.join(rawdata_dir, night)
     else:
         if specprod_dir is None:
             specprod_dir = specprod_root()
@@ -171,18 +209,29 @@ def get_exposures(night,raw = False,specprod_dir = None):
     if not os.path.exists(night_path):
         raise RuntimeError('Non-existent night %s' % night)
 
-    exposures = [ ]
-    for entry in glob.glob(os.path.join(night_path,'*')):
-        head,tail = os.path.split(entry)
-        try:
-            exposure = int(tail)
-            assert tail == ('%08d' % exposure)
-            exposures.append(exposure)
-        except (ValueError,AssertionError):
-            # Silently ignore entries that are not exposure subdirectories.
-            pass
+    exposures = []
 
-    return exposures
+    if raw:
+        fpat = re.compile(r'.*fibermap-(.*).fits')
+        for entry in glob.glob(os.path.join(night_path,'fibermap-*.fits')):
+            mat = fpat.match(entry)
+            if mat is not None:
+                iexp = int(mat.group(1))
+                assert mat.group(1) == "{:08d}".format(iexp)
+                exposures.append(iexp)
+    else:
+        for entry in glob.glob(os.path.join(night_path,'*')):
+            head,tail = os.path.split(entry)
+            try:
+                exposure = int(tail)
+                assert tail == "{:08d}".format(exposure)
+                exposures.append(exposure)
+            except (ValueError,AssertionError):
+                # Silently ignore entries that are not exposure subdirectories.
+                pass
+
+    return sorted(exposures)
+
 
 def rawdata_root():
     """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
@@ -192,6 +241,7 @@ def rawdata_root():
     """
     assert 'DESI_SPECTRO_DATA' in os.environ, 'Missing $DESI_SPECTRO_DATA environment variable'
     return os.environ['DESI_SPECTRO_DATA']
+
 
 def specprod_root():
     """Return directory root for spectro production, i.e.
