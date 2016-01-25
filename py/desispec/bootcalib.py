@@ -1023,8 +1023,15 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
     prihdu.header['WAVEMAX'] = WAVEMAX
 
     yhdu = fits.ImageHDU(YCOEFF)
-    gausshdu = fits.ImageHDU(np.array(gauss))
 
+    # also save wavemin wavemax in yhdu
+    yhdu.header['WAVEMIN'] = WAVEMIN
+    yhdu.header['WAVEMAX'] = WAVEMAX
+    
+    gausshdu = fits.ImageHDU(np.array(gauss))
+    
+    
+    
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
     hdulist.writeto(outfile, clobber=True)
 
