@@ -28,6 +28,7 @@ import numpy as np
 import argparse
 import re
 
+import desispec.io as io
 from desispec.log import get_logger
 import desispec.pipeline as pipe
 
@@ -37,8 +38,8 @@ def main():
     parser.add_argument( '--raw', required=False, default=None, help='raw data directory' )
     parser.add_argument( '--redux', required=False, default=None, help='output directory' )
     parser.add_argument( '--night', required=True, default=None, help='night (YYYYMMDD)' )
-    parser.add_argument( '--expid', required=false, default=None, help='only process this exposure ID' )
-    parser.add_argument( '--simraw', required=false, default=False, action='store_true', help='raw data is simulated' )
+    parser.add_argument( '--expid', required=False, default=None, help='only process this exposure ID' )
+    parser.add_argument( '--simraw', required=False, default=False, action='store_true', help='raw data is simulated' )
     args = parser.parse_args()
 
     log = get_logger()
@@ -79,7 +80,7 @@ def main():
     (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, simraw=args.simraw)
     if rank == 0:
         for ex in expid:
-            if exptype[ex] == 'arc'
+            if exptype[ex] == 'arc':
                 log.info("  {:08d}".format(ex))
 
     # if requested, restrict the exposure list to a single ID
@@ -99,12 +100,12 @@ def main():
         simpix = {}
         for ex in raw.keys():
             simpix[ex] = {}
-                for cam in raw[ex].keys():
-                    mat = simpat.match(raw[ex][cam])
-                    if mat is not None:
-                        simpix[ex][cam] = "{}simpix-{}".format(mat.group(1), mat.group(2))
-                    else:
-                        raise RuntimeError("Raw data file does not match simulated pixel naming")
+            for cam in raw[ex].keys():
+                mat = simpat.match(raw[ex][cam])
+                if mat is not None:
+                    simpix[ex][cam] = "{}simpix-{}".format(mat.group(1), mat.group(2))
+                else:
+                    raise RuntimeError("Raw data file does not match simulated pixel naming")
     else:
         raise RuntimeError("Specex currently only works with simulated raw data")
 
@@ -120,7 +121,7 @@ def main():
     pipe.subprocess_list(work[rank])
 
     # now wait for all processes to finish
-    if comm is not None
+    if comm is not None:
         comm.barrier()
 
     # do all the merging tasks
@@ -131,7 +132,7 @@ def main():
     pipe.subprocess_list(work[rank])
 
     # now wait for all processes to finish
-    if comm is not None
+    if comm is not None:
         comm.barrier()
 
 

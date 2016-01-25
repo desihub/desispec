@@ -8,6 +8,9 @@ desispec.pipeline.run
 
 Tools for running the pipeline.
 """
+
+from __future__ import absolute_import, division, print_function
+
 import os
 import errno
 import sys
@@ -59,12 +62,15 @@ def subprocess_list(tasks, rank=0):
         runcom = True
         for dep in tsk['inputs']:
             if not os.path.isfile(dep):
-                # USE LOGGING HERE!
-                log.error("dependency {} missing, cannot run task {}".format(dep, " ".join(tsk['command'])))
+                print("missing ", dep)
+                err = "dependency {} missing, cannot run task {}".format(dep, " ".join(tsk['command']))
+                print(err)
+                log.error(err)
                 runcom = False
         proc = None
         if runcom:
-            proc = sp.Popen(tsk['command'], env=env, stderr=sp.STDOUT, stdin=None)
+            print(tsk['command'])
+            proc = sp.Popen(tsk['command'])
             log.debug("  spawn[{}]: {}".format(proc.pid, " ".join(tsk['command'])))
             pids.append(proc.pid)
     # wait for all our local tasks to finish

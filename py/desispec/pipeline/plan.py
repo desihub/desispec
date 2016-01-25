@@ -15,12 +15,14 @@ import os
 import time
 import glob
 
+import astropy.io.fits as af
+
 import desispec.io as io
 import desispec.log as log
 
 
 def find_raw(rawdir, rawnight, simraw=False):
-    expid = io.get_exposures(rawnight, raw=True, rawprod_dir=rawdir):
+    expid = io.get_exposures(rawnight, raw=True, rawdata_dir=rawdir)
     fibermap = {}
     raw = {}
     exptype = {}
@@ -52,16 +54,18 @@ def psf_newest(specdir):
                 if cam not in newest.keys():
                     newest[cam] = expid
                 else:
-                    if expid > newest[cam]
+                    if expid > newest[cam]:
                         newest[cam] = expid
         break
     return newest
 
 
 def tasks_exspec_exposure(id, raw, wrange, psf_select):
+    # These are fixed for DESI
     spec_per_bundle = 25
     nbundle = 20
     nspec = nbundle * spec_per_bundle
+
     tasks_extract = []
     tasks_merge = []
 
@@ -84,8 +88,8 @@ def tasks_exspec_exposure(id, raw, wrange, psf_select):
             com.extend(['-i', raw[cam]])
             com.extend(['-p', psffile])
             com.extend(['-o', outb])
-            com.extend(['--specmin', b*spec_per_bundle])
-            com.extend(['--nspec', spec_per_bundle])
+            com.extend(['--specmin', "{}".format(b*spec_per_bundle)])
+            com.extend(['--nspec', "{}".format(spec_per_bundle)])
             com.extend(['-w', "{},{},{}".format(wmin,wmax,dw)])
 
             task = {}
@@ -123,9 +127,15 @@ def tasks_exspec(expid, exptype, raw, wrange, psf_select):
     return [tasks_extract, tasks_merge]
 
 
-def tasks_specex_exposure(id, raw_files, simpix=None):
+def tasks_specex_exposure(id, raw, simpix=None):
+    # These are fixed for DESI
+    spec_per_bundle = 25
+    nbundle = 20
+    nspec = nbundle * spec_per_bundle
+
     tasks_bundle = []
     tasks_merge = []
+
     cameras = sorted(raw.keys())
     for cam in cameras:
         outbase = os.path.join("{:08d}".format(id), "psf-{}-{:08d}".format(cam, id))
@@ -147,8 +157,8 @@ def tasks_specex_exposure(id, raw_files, simpix=None):
             com.extend(['--out_xml', outxmlb])
             com.extend(['--out_spots', outspotb])
             com.extend(['--out_fits', outfitsb])
-            com.extend(['--first_bundle', b])
-            com.extend(['--last_bundle', b])
+            com.extend(['--first_bundle', "{}".format(b)])
+            com.extend(['--last_bundle', "{}".format(b)])
             com.extend(['--gauss_hermite_deg', '8'])
             com.extend(['--psfmodel', 'GAUSSHERMITE'])
             com.extend(['--half_size_x', '14'])
@@ -206,7 +216,7 @@ def task_dist(tasklist, nworker):
     for i in range(nworker):
         myn = ntask // nworker
         off = 0
-        leftover = totalsize % groups
+        leftover = ntask % nworker
         if ( i < leftover ):
             myn = myn + 1
             off = i * myn
