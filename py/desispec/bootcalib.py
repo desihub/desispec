@@ -787,6 +787,7 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     # Return
     return xnew, fits
 
+
 def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     """Extract spectrum for fibers one-by-one using a Gaussian PSF
 
@@ -806,30 +807,42 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     spec : ndarray
       Extracted spectrum
     """
+    import time
     # Init
     xpix_img = np.outer(np.ones(img.shape[0]),np.arange(img.shape[1]))
     mask = np.zeros_like(img,dtype=int)
     iy = np.arange(img.shape[0],dtype=int)
     #
     all_spec = np.zeros_like(xtrc)
+    cst = 1./np.sqrt(2*np.pi)
     for qq in range(xtrc.shape[1]):
-        if verbose & (qq%10 == 0):
-            print(qq)
+        if verbose & (qq % 25 == 0):
+            print(qq, time.asctime( time.localtime(time.time()) ))
+
         # Mask
         mask[:,:] = 0
         ixt = np.round(xtrc[:,qq]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
             mask[iy,ix] = 1
+        # Sub-image (for speed, not convenience)
+        gdp = np.where(mask == 1)
+        minx = np.min(gdp[1])
+        maxx = np.max(gdp[1])
+        nx = (maxx-minx)+1
 
         # Generate PSF
-        dx_img = xpix_img - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
-        g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
-        psf = mask * g_init(dx_img)
+        dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq], np.ones(nx))
+        psf = cst*np.exp(-0.5 * (dx_img/sigma[qq])**2)/sigma[qq]
+        #dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
+        #g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
+        #psf = mask * g_init(dx_img)
         # Extract
-        all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
+        #all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
+        all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
     # Return
     return all_spec
+
 
 def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
     maxshift0=0.5, maxshift=0.2, maxerr=0.2):
@@ -979,7 +992,8 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
 # Output
 #####################################################################
 
-def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
+def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=False,
+              XCOEFF=None):
     """ Write the output to a Base PSF format
 
     Parameters
@@ -1000,22 +1014,36 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
     #
     ny = xfit.shape[0]
     nfiber = xfit.shape[1]
-    XCOEFF = np.zeros((nfiber, ncoeff))
+    if XCOEFF is None:
+        XCOEFF = np.zeros((nfiber, ncoeff))
     YCOEFF = np.zeros((nfiber, ncoeff))
+
     # Find WAVEMIN, WAVEMAX
-    WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
-    WAVEMAX = np.min([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
+    if without_arc:
+        WAVEMIN = 0.
+        WAVEMAX = ny-1.
+        wv_solns = [None]*nfiber
+    else:
+        WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
+        WAVEMAX = np.min([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
     wv_array = np.linspace(WAVEMIN, WAVEMAX, num=ny)
     # Fit Legendre to y vs. wave
     for ii,id_dict in enumerate(wv_solns):
         # Fit y vs. wave
-        yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+        if without_arc:
+            yleg_fit, mask = dufits.iter_fit(wv_array, np.arange(ny), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=1)
+        else:
+            yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
         YCOEFF[ii, :] = yleg_fit['coeff']
         # Fit x vs. wave
         yval = dufits.func_val(wv_array, yleg_fit)
-        xtrc = dufits.func_val(yval, fdicts[ii])
-        xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
-        XCOEFF[ii, :] = xleg_fit['coeff']
+        if fdicts is None:
+            if XCOEFF is None:
+                raise IOError("Need to set either fdicts or XCOEFF!")
+        else:
+            xtrc = dufits.func_val(yval, fdicts[ii])
+            xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+            XCOEFF[ii, :] = xleg_fit['coeff']
 
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)
@@ -1029,8 +1057,6 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
     yhdu.header['WAVEMAX'] = WAVEMAX
     
     gausshdu = fits.ImageHDU(np.array(gauss))
-    
-    
     
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
     hdulist.writeto(outfile, clobber=True)
