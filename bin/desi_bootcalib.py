@@ -19,6 +19,8 @@ import argparse
 
 from astropy.io import fits
 
+#from xastropy.xutils import xdebug as xdb
+
 def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -61,8 +63,6 @@ def main() :
     if QA:
         desiboot.qa_fiber_peaks(xpk, cut, pp)
 
-    ##
-
     # Test?
     if args.test:
         log.warning("cutting down fibers for testing..")
@@ -103,7 +103,7 @@ def main() :
     camera = header['CAMERA']
     log.info("Loading line list")
     llist = desiboot.load_arcline_list(camera)
-    dlamb, wmark, gd_lines = desiboot.load_gdarc_lines(camera)
+    dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
 
     #####################################
     # Loop to solve for wavelengths
@@ -115,7 +115,8 @@ def main() :
         # Find Lines
         pixpk = desiboot.find_arc_lines(spec)
         # Match a set of 5 gd_lines to detected lines
-        id_dict = desiboot.id_arc_lines(pixpk,gd_lines,dlamb,wmark)
+        id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb,
+                                        wmark, line_guess=line_guess)
         # Find the other good ones
         desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines)
         # Now the rest

@@ -42,7 +42,7 @@ env:
         - SCIPY_VERSION=0.14
         - ASTROPY_VERSION=1.0.4
         - SPHINX_VERSION=1.3
-        - DESIUTIL_VERSION=1.0.0
+        - DESIUTIL_VERSION=1.3.2
         - CONDA_INSTALL='conda install -c astropy-ci-extras --yes'
         - PIP_INSTALL='pip install'
         - OPTIONAL_DEPS=false
@@ -72,10 +72,14 @@ matrix:
         - os: linux
           env: PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
 
-        # Try all python versions with the latest numpy
+        # Default versions
         - os: linux
           env: PYTHON_VERSION=2.7 SETUP_CMD='test --coverage'
 
+        # More recent versions
+        - os: linux
+          env: PYTHON_VERSION=2.7 ASTROPY_VERSION=1.1 NUMPY_VERSION=1.10.2 SCIPY_VERSION=0.16.0 SETUP_CMD='test'
+            
         # - os: osx
         #   env: PYTHON_VERSION=2.7 SETUP_CMD='test'
         # - python: 3.3

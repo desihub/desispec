@@ -213,10 +213,11 @@ def subtract_sky(frame, skymodel) :
 
     log.info("done")
 
-def qa_skysub(param, frame, fibermap, skymodel) :
+
+def qa_skysub(param, frame, fibermap, skymodel):
     """Calculate QA on SkySubtraction
     Note: Pixels rejected in generating the SkyModel (as above), are  
-      not rejected in the stats calcualted here.  Would need to carry
+      not rejected in the stats calculated here.  Would need to carry
       along current_ivar to do so.
 
     Args:

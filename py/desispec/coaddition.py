@@ -107,13 +107,13 @@ class Spectrum(object):
         
         # Accumulate weighted deconvolved fluxes.
         if np.array_equal(self.wave,other.wave):
-            self.Cinv += other.Cinv
+            self.Cinv = self.Cinv + other.Cinv
             self.Cinv_f += other.Cinv_f
             if (self.mask is not None) and (other.mask is not None):
                 self.mask |= other.mask
         else:
             resampler = get_resampling_matrix(self.wave,other.wave)
-            self.Cinv += resampler.T.dot(other.Cinv.dot(resampler))
+            self.Cinv = self.Cinv + resampler.T.dot(other.Cinv.dot(resampler))
             self.Cinv_f += resampler.T.dot(other.Cinv_f)
             if (self.mask is not None) and (other.mask is not None):
                 mask_resampler = (resampler != 0).T
