@@ -38,6 +38,7 @@ def main() :
     parser.add_argument("--test", help="Debug?", default=False, action="store_true")
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
+    parser.add_argument("--legendre-degree", type = int, default=6, required=False, help="Legendre polynomial degree for traces")
 
     args = parser.parse_args()
     log=get_logger()
@@ -162,7 +163,7 @@ def main() :
             # Final fit wave vs. pix too
             final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
             rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
-            final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',4, niter=5)
+            final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',args.legendre_degree , niter=5)
             # Save
             id_dict['final_fit'] = final_fit
             id_dict['rms'] = rms
@@ -182,7 +183,7 @@ def main() :
     ###########
     # Write PSF file
     log.info("writing PSF file")
-    desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, without_arc=args.trace_only,
+    desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, ncoeff=args.legendre_degree , without_arc=args.trace_only,
                        XCOEFF=XCOEFF)
     log.info("successfully wrote {:s}".format(args.outfile))
 
