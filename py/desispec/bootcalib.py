@@ -18,6 +18,7 @@ import imp
 import yaml
 import glob
 import math
+import time
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -564,7 +565,6 @@ def load_parse_dict():
 ########################################################
 # Fiber routines
 ########################################################
-import time
 
 def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False) :
     return fiber_gauss_new(flat, xtrc, xerr, box_radius, max_iter)
@@ -911,18 +911,27 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     spec : ndarray
       Extracted spectrum
     """
-    import time
+    
     # Init
     xpix_img = np.outer(np.ones(img.shape[0]),np.arange(img.shape[1]))
     mask = np.zeros_like(img,dtype=int)
     iy = np.arange(img.shape[0],dtype=int)
+    
+    log = get_logger()
+
     #
     all_spec = np.zeros_like(xtrc)
     cst = 1./np.sqrt(2*np.pi)
+    start=0
     for qq in range(xtrc.shape[1]):
         if verbose & (qq % 25 == 0):
-            print(qq, time.asctime( time.localtime(time.time()) ))
-
+            stop=time.time()
+            if start>0 :
+                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(qq,xtrc.shape[1],stop-start))
+            else :
+                log.info("Working on fiber %d of %d"%(qq,xtrc.shape[1]))
+            start=stop
+        
         # Mask
         mask[:,:] = 0
         ixt = np.round(xtrc[:,qq]).astype(int)
