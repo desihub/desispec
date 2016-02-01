@@ -106,14 +106,36 @@ def load_gdarc_lines(camera):
         CdI = [3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
         NeI = [5881.895, 5944.834]
         dlamb = 0.589
-        wmark = 4358.34 # Hg
+        wmark = 4358.34  # Hg
         gd_lines = np.array(HgI + CdI + NeI)
+        line_guess = None
+    elif camera[0] == 'r':
+        HgI = [5769.598]
+        NeI = [5852.4878, 5944.834, 6143.062, 6402.246, 6506.528,
+               #6532.8824, #6598.9528,
+               6678.2766, 6717.043, 6929.4672, 7032.4128,
+               7173.9380, 7245.1665, 7438.898]
+        ArI = [6965.431]#, 7635.106, 7723.761]
+        dlamb = 0.527
+        #wmark = 6598.9528 # 6678.2766  # 6717.043  # 6402.246  # Ne
+        wmark = 6717.043  # 6402.246  # Ne
+        line_guess = 24
+        gd_lines = np.array(HgI + NeI)# + ArI)
+    elif camera[0] == 'z':
+        NeI = [7438.898, 7488.8712, 7535.7739,
+               8136.4061, 8300.3248,
+               8377.6070, 8495.3591, 8591.2583, 8634.6472, 8654.3828,
+               8783.7539, 9148.6720, 9201.7588]
+        dlamb = 0.599  # Ang
+        gd_lines = np.array(NeI)# + ArI)
+        line_guess = None
+        wmark = 8591.2583
     else:
         log.error('Bad camera')
 
     # Sort and return
     gd_lines.sort()
-    return dlamb, wmark, gd_lines
+    return dlamb, wmark, gd_lines, line_guess
 
 def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
     """Attempt to identify and add additional goodlines
@@ -192,6 +214,7 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
 
 def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
     """Attempt to identify the remainder of detected lines
+
     Parameters
     ----------
     id_dict : dict
@@ -228,7 +251,8 @@ def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
     id_dict['id_wave'].sort()
 
 
-def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
+def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
+                 line_guess=None, verbose=False):
     """Match (as best possible), a set of the input list of expected arc lines to the detected list
 
     Parameters
@@ -258,7 +282,9 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
     ##
     ndet = pixpk.size
     # Set up detected lines to search over
-    guesses = ndet//2 + np.arange(-4,7)
+    if line_guess is None:
+        line_guess = ndet//2
+    guesses = line_guess + np.arange(-4, 7)
     for guess in guesses:
         # Setup
         tc = pixpk[guess]
@@ -297,9 +323,10 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
             itm1 = np.argmin(np.abs(xm1-xm1_wv))
             # Now loop on ip2
             for imtp2 in mtp2:
-                guess_rms = dict(guess=guess, im1=itm1,im2=imtm2, rms=999., ip1=None, ip2=imtp2)
+                guess_rms = dict(guess=guess, im1=itm1, im2=imtm2,
+                                 rms=999., ip1=None, ip2=imtp2)
                 all_guess_rms.append(guess_rms)
-                if imtp2==(icen-1):
+                if imtp2 == (icen-1):
                     if verbose:
                         print('No ip1 lines found for guess={:g}'.format(tc))
                     continue
@@ -319,6 +346,8 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2, verbose=False):
                 # RMS (in pixel space)
                 rms = np.sqrt(np.sum((xval-dufits.func_val(wvval,pfit))**2)/xval.size)
                 guess_rms['rms'] = rms
+                #if guess == 22:
+                #    pdb.set_trace()
                 # Save fit too
                 guess_rms['fit'] = pfit
         # Take best RMS
@@ -416,6 +445,10 @@ def load_arcline_list(camera):
     wvmnx = None
     if camera[0] == 'b':
         lamps = ['CdI','ArI','HgI','NeI']
+    elif camera[0] == 'r':
+        lamps = ['HgI','NeI']
+    elif camera[0] == 'z':
+        lamps = ['HgI','NeI']
     else:
         log.error("Not ready for this camera")
     # Get the parse dict
@@ -517,8 +550,8 @@ def load_parse_dict():
     arcline_parse['HeI']['min_intensity'] = 20.
     # NeI
     arcline_parse['NeI'] = copy.deepcopy(dict_parse)
-    arcline_parse['NeI']['min_intensity'] = 500.
-    arcline_parse['NeI']['min_Aki']  = 1. # NOT GOOD FOR DEIMOS, DESI
+    arcline_parse['NeI']['min_intensity'] = 999.
+    #arcline_parse['NeI']['min_Aki']  = 1. # NOT GOOD FOR DEIMOS, DESI
     #arcline_parse['NeI']['min_wave'] = 5700.
     arcline_parse['NeI']['min_wave'] = 5850. # NOT GOOD FOR DEIMOS?
     # ZnI
@@ -657,10 +690,10 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
         ypos = flat.shape[0]//2
 
     # Cut image
-    cutimg = flat[ypos-15:ypos+15,:]
+    cutimg = flat[ypos-15:ypos+15, :]
 
     # Smash
-    cut = np.median(cutimg,axis=0)
+    cut = np.median(cutimg, axis=0)
 
     # Set flux threshold
     srt = np.sort(cutimg.flatten())
@@ -754,7 +787,8 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     # Return
     return xnew, fits
 
-def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2):
+
+def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     """Extract spectrum for fibers one-by-one using a Gaussian PSF
 
     Parameters
@@ -773,30 +807,42 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2):
     spec : ndarray
       Extracted spectrum
     """
+    import time
     # Init
     xpix_img = np.outer(np.ones(img.shape[0]),np.arange(img.shape[1]))
     mask = np.zeros_like(img,dtype=int)
     iy = np.arange(img.shape[0],dtype=int)
     #
     all_spec = np.zeros_like(xtrc)
+    cst = 1./np.sqrt(2*np.pi)
     for qq in range(xtrc.shape[1]):
-        if qq%10 == 0:
-            print(qq)
+        if verbose & (qq % 25 == 0):
+            print(qq, time.asctime( time.localtime(time.time()) ))
+
         # Mask
         mask[:,:] = 0
         ixt = np.round(xtrc[:,qq]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
             mask[iy,ix] = 1
+        # Sub-image (for speed, not convenience)
+        gdp = np.where(mask == 1)
+        minx = np.min(gdp[1])
+        maxx = np.max(gdp[1])
+        nx = (maxx-minx)+1
 
         # Generate PSF
-        dx_img = xpix_img - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
-        g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
-        psf = mask * g_init(dx_img)
+        dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq], np.ones(nx))
+        psf = cst*np.exp(-0.5 * (dx_img/sigma[qq])**2)/sigma[qq]
+        #dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
+        #g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
+        #psf = mask * g_init(dx_img)
         # Extract
-        all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
+        #all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
+        all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
     # Return
     return all_spec
+
 
 def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
     maxshift0=0.5, maxshift=0.2, maxerr=0.2):
@@ -946,7 +992,8 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
 # Output
 #####################################################################
 
-def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
+def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=False,
+              XCOEFF=None):
     """ Write the output to a Base PSF format
 
     Parameters
@@ -967,22 +1014,36 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
     #
     ny = xfit.shape[0]
     nfiber = xfit.shape[1]
-    XCOEFF = np.zeros((nfiber, ncoeff))
+    if XCOEFF is None:
+        XCOEFF = np.zeros((nfiber, ncoeff))
     YCOEFF = np.zeros((nfiber, ncoeff))
+
     # Find WAVEMIN, WAVEMAX
-    WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
-    WAVEMAX = np.min([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
+    if without_arc:
+        WAVEMIN = 0.
+        WAVEMAX = ny-1.
+        wv_solns = [None]*nfiber
+    else:
+        WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
+        WAVEMAX = np.min([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
     wv_array = np.linspace(WAVEMIN, WAVEMAX, num=ny)
     # Fit Legendre to y vs. wave
     for ii,id_dict in enumerate(wv_solns):
         # Fit y vs. wave
-        yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+        if without_arc:
+            yleg_fit, mask = dufits.iter_fit(wv_array, np.arange(ny), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=1)
+        else:
+            yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
         YCOEFF[ii, :] = yleg_fit['coeff']
         # Fit x vs. wave
         yval = dufits.func_val(wv_array, yleg_fit)
-        xtrc = dufits.func_val(yval, fdicts[ii])
-        xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
-        XCOEFF[ii, :] = xleg_fit['coeff']
+        if fdicts is None:
+            if XCOEFF is None:
+                raise IOError("Need to set either fdicts or XCOEFF!")
+        else:
+            xtrc = dufits.func_val(yval, fdicts[ii])
+            xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+            XCOEFF[ii, :] = xleg_fit['coeff']
 
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)
@@ -990,8 +1051,13 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
     prihdu.header['WAVEMAX'] = WAVEMAX
 
     yhdu = fits.ImageHDU(YCOEFF)
-    gausshdu = fits.ImageHDU(np.array(gauss))
 
+    # also save wavemin wavemax in yhdu
+    yhdu.header['WAVEMIN'] = WAVEMIN
+    yhdu.header['WAVEMAX'] = WAVEMAX
+    
+    gausshdu = fits.ImageHDU(np.array(gauss))
+    
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
     hdulist.writeto(outfile, clobber=True)
 
@@ -1009,7 +1075,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
 # QA
 #####################################################################            
 
-def qa_fiber_peaks(xpk, cut, pp, figsz=None, nper=100):
+def qa_fiber_peaks(xpk, cut, pp=None, figsz=None, nper=100):
     """ Generate a QA plot for the fiber peaks
 
     Args:
@@ -1041,11 +1107,14 @@ def qa_fiber_peaks(xpk, cut, pp, figsz=None, nper=100):
         xmax = np.max(xpk[i0:i1])+10.
         ax.set_xlim(xmin,xmax)
     # Save and close
-    pp.savefig(bbox_inches='tight')
+    if pp is not None:
+        pp.savefig(bbox_inches='tight')
+    else:
+        plt.show()
     plt.close()
 
 
-def qa_fiber_Dx(xfit, fdicts, pp, figsz=None):
+def qa_fiber_Dx(xfit, fdicts, pp=None, figsz=None):
     """ Show the spread in the trace per fiber
 
     Used to diagnose the traces
@@ -1072,10 +1141,13 @@ def qa_fiber_Dx(xfit, fdicts, pp, figsz=None):
     plt.xlabel('Fiber', fontsize=17.)
     plt.ylabel(r'$\Delta x$ (pixels)', fontsize=17.)
     # Save and close
-    pp.savefig(bbox_inches='tight')
+    if pp is None:
+        plt.show()
+    else:
+        pp.savefig(bbox_inches='tight')
     plt.close()
 
-def qa_fiber_gauss(gauss, pp, figsz=None):
+def qa_fiber_gauss(gauss, pp=None, figsz=None):
     """ Show the Gaussian (sigma) fits to each fiber
 
     Args:
@@ -1096,7 +1168,10 @@ def qa_fiber_gauss(gauss, pp, figsz=None):
     plt.xlabel('Fiber', fontsize=17.)
     plt.ylabel('Gaussian sigma (pixels)', fontsize=17.)
     # Save and close
-    pp.savefig(bbox_inches='tight')
+    if pp is None:
+        plt.show()
+    else:
+        pp.savefig(bbox_inches='tight')
     plt.close()
 
 def qa_arc_spec(all_spec, all_soln, pp, figsz=None):
@@ -1196,7 +1271,7 @@ def qa_fiber_dlamb(all_spec, all_soln, pp, figsz=None):
     plt.close()
 
 
-def qa_fiber_trace_qa(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
+def qa_fiber_trace(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
     ''' Generate a QA plot for the fiber traces
 
     Parameters
