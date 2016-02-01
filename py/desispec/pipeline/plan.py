@@ -127,7 +127,7 @@ def tasks_exspec(expid, exptype, raw, wrange, psf_select):
     return [tasks_extract, tasks_merge]
 
 
-def tasks_specex_exposure(id, raw, simpix=None):
+def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
     # These are fixed for DESI
     spec_per_bundle = 25
     nbundle = 20
@@ -138,6 +138,7 @@ def tasks_specex_exposure(id, raw, simpix=None):
 
     cameras = sorted(raw.keys())
     for cam in cameras:
+        band = cam[0]
         outbase = os.path.join("{:08d}".format(id), "psf-{}-{:08d}".format(cam, id))
         outxml = "{}.xml".format(outbase)
         outfits = "{}.fits".format(outbase)
@@ -147,34 +148,37 @@ def tasks_specex_exposure(id, raw, simpix=None):
             outspotb = "{}-{:02}-spots.xml".format(outbase, b)
             outfitsb = "{}-{:02}.fits".format(outbase, b)
             mergeinputs.append(outxmlb)
-            com = ['specex_desi_psf']
+            com = ['specex_desi_psf_fit']
             com.extend(['-a', raw[cam]])
-            if simpix is not None:
-                com.extend(['--xcoord-file', simpix[cam]])
-                com.extend(['--xcoord-hdu', '2'])
-                com.extend(['--ycoord-file', simpix[cam]])
-                com.extend(['--ycoord-hdu', '3'])
+            if bootcal is not None:
+                com.extend(['--xcoord-file', bootcal[band]])
+                com.extend(['--xcoord-hdu', '1'])
+                com.extend(['--ycoord-file', bootcal[band]])
+                com.extend(['--ycoord-hdu', '2'])
+            com.extend(['--lamplines', lamplines])
             com.extend(['--out_xml', outxmlb])
             com.extend(['--out_spots', outspotb])
             com.extend(['--out_fits', outfitsb])
             com.extend(['--first_bundle', "{}".format(b)])
             com.extend(['--last_bundle', "{}".format(b)])
-            com.extend(['--gauss_hermite_deg', '8'])
+            com.extend(['--gauss_hermite_deg', '6'])
             com.extend(['--psfmodel', 'GAUSSHERMITE'])
-            com.extend(['--half_size_x', '14'])
-            com.extend(['--half_size_y', '8'])
+            com.extend(['--half_size_x', '7'])
+            com.extend(['--half_size_y', '4'])
             com.extend(['--fit_psf_tails'])
             com.extend(['--fit_continuum'])
             com.extend(['-v'])
             com.extend(['--core'])
-            com.extend(['--no_trace_fit'])
+            #com.extend(['--no_trace_fit'])
+            com.extend(['--trace_deg_x', '6'])
+            com.extend(['--trace_deg_wave', '6'])
             com.extend(['--legendre_deg_x', '1'])
             com.extend(['--legendre_deg_wave', '4'])
 
             task = {}
             task['command'] = com
             task['parallelism'] = 'node'
-            task['inputs'] = [raw[cam], simpix[cam]]
+            task['inputs'] = [raw[cam], xyguess[cam]]
             task['outputs'] = [outxmlb, outspotb, outfitsb]
 
             tasks_bundle.append(task)
@@ -195,19 +199,53 @@ def tasks_specex_exposure(id, raw, simpix=None):
     return [tasks_bundle, tasks_merge]
 
 
-def tasks_specex(expid, exptype, raw, simpix=None):
+def tasks_specex(expid, exptype, raw, lamplines, bootcal=None):
     tasks_bundle = []
     tasks_merge = []
     for ex in expid:
         if exptype[ex] != "arc":
             continue
-        exp_simpix = None
-        if simpix is not None:
-            exp_simpix = simpix[ex]
-        [exp_tasks_bundle, exp_tasks_merge] = tasks_specex_exposure(ex, raw[ex], simpix=exp_simpix)
+        exp_xyguess = None
+        if xyguess is not None:
+            exp_xyguess = xyguess[ex]
+        [exp_tasks_bundle, exp_tasks_merge] = tasks_specex_exposure(ex, raw[ex], lamplines, bootcal=bootcal)
         tasks_bundle.extend(exp_tasks_bundle)
         tasks_merge.extend(exp_tasks_merge)
     return [tasks_bundle, tasks_merge]
+
+
+# def tasks_calboot_exposure(id, raw, flat):
+#     tasks = []
+#     bands = ['b', 'r', 'z']
+
+#     for b in bands:
+#         cam = "{}0".format(b)
+#         outfile = os.path.join("{:08d}".format(id), "psfboot-{}-{:08d}.fits".format(b, id))
+#         com = ['desi_bootcalib.py']
+#         com.extend(['--arcfile', raw[cam]])
+#         com.extend(['--outfile', outfile])
+#         com.extend(['--flatfile', flat[b]])        
+
+#         task = {}
+#         task['command'] = com
+#         task['parallelism'] = 'core'
+#         task['inputs'] = [flat[b], raw[cam]]
+#         task['outputs'] = [outfile]
+
+#         tasks_bundle.append(task)
+
+#     return tasks
+
+
+# def tasks_calboot(expid, exptype, raw, flat):
+#     tasks = []
+#     for ex in expid:
+#         if exptype[ex] != "arc":
+#             continue
+#         exp_flat = flat[ex]
+#         exp_tasks = tasks_calboot_exposure(ex, raw[ex], exp_flat)
+#         tasks.extend([exp_tasks])
+#     return tasks
 
 
 def task_dist(tasklist, nworker):

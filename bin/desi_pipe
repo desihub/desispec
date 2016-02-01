@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Run full processing for some number of nights
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import sys
+import os
+import numpy as np
+import argparse
+import re
+
+import desispec.io as io
+from desispec.log import get_logger
+import desispec.pipeline as pipe
+
+
+def main():
+    parser = argparse.ArgumentParser( description='Run full pipeline for one or more nights.' )
+    parser.add_argument( '--raw', required=False, default=None, help='raw data directory' )
+    parser.add_argument( '--redux', required=False, default=None, help='output directory' )
+    parser.add_argument( '--nights', required=True, default=None, help='comma separated (YYYYMMDD) or regex pattern' )
+    parser.add_argument( '--datamodel', required=False, default=None, help='datamodel checkout to use' )
+    parser.add_argument( '--machine', required=False, default='local', help='machine type (local or slurm)' )
+    parser.add_argument( '--nodes', required=False, default='1', help='number of nodes' )
+    parser.add_argument( '--ppn', required=False, default='1', help='processes per node' )
+    args = parser.parse_args()
+
+    log = get_logger()
+
+    # If data directories are not given, get them from environment
+    # variables.
+
+    rawdir = args.raw
+    if rawdir is None:
+        rawdir = io.rawdata_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_DATA'] = os.path.abspath(rawdir)
+    rawdir = os.path.abspath(rawdir)
+
+    specdir = args.redux
+    if specdir is None:
+        specdir = io.specprod_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_REDUX'] = os.path.abspath(specdir)
+    specdir = os.path.abspath(specdir)
+
+    # FIXME: get this from the data model
+
+    range_b = "3579.0,5939.0,0.8"
+    range_r = "5635.0,7731.0,0.8"
+    range_z = "7445.0,9824.0,0.8"
+
+    log.info("using raw data directory: {}".format(rawdir))
+    log.info("using spectro redux dir {}".format(specdir))
+
+    mach = None
+    if args.machine == 'slurm':
+        mach = pipe.Machine()
+    else:
+        mach = pipe.MachineSlurm(int(args.))
+
+
+
+
+if __name__ == "__main__":
+    main()
+
