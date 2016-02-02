@@ -17,6 +17,8 @@ import pdb
 import imp
 import yaml
 import glob
+import math
+import time
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -564,7 +566,102 @@ def load_parse_dict():
 # Fiber routines
 ########################################################
 
-def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
+def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False) :
+    return fiber_gauss_new(flat, xtrc, xerr, box_radius, max_iter)
+
+def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
+    """Find the PSF sigma for each fiber
+    This serves as an initial guess to what follows
+    
+    Parameters
+    ----------
+    flat : ndarray of fiber flat image
+    xtrc: ndarray of fiber traces
+    xerr: ndarray of error in fiber traces
+    box_radius: int, optinal
+          Radius of boxcar extraction in pixels
+    max_iter : int, optional
+      Maximum number of iterations for rejection
+    
+    Returns
+    -------
+    gauss
+    list of Gaussian sigma
+    """
+    log=get_logger()
+
+    npix_y  = flat.shape[0]
+    npix_x  = flat.shape[1]
+    ny      = xtrc.shape[0] # number of ccd rows in trace
+    assert(ny==npix_y)
+    
+    nfiber = xtrc.shape[1]
+    
+    minflux=1. # minimal flux in a row to include in the fit
+    
+    # Loop on fibers
+    gauss = []
+    start = 0
+    for ii in xrange(nfiber):
+        if (ii % 25 == 0): # & verbose:
+            stop=time.time()
+            if start==0 :
+                log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
+            else :
+                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(ii,nfiber,stop-start))
+            start=stop
+        
+        # collect data
+        central_xpix=np.floor(xtrc[:,ii]+0.5)
+        begin_xpix=central_xpix-box_radius
+        end_xpix=central_xpix+box_radius+1
+        dx=[]
+        flux=[]
+        for y in xrange(ny) :            
+            yflux=flat[y,begin_xpix[y]:end_xpix[y]]
+            syflux=np.sum(yflux)
+            if syflux<minflux :
+                continue
+            dx.append(np.arange(begin_xpix[y],end_xpix[y])-(xtrc[y,ii]))
+            flux.append(yflux/syflux)
+        dx=np.array(dx)
+        flux=np.array(flux)
+        
+        # compute profile
+        # one way to get something robust is to compute median in bins
+        # it's a bit biasing but the PSF is not a Gaussian anyway
+        bins=np.linspace(-box_radius,box_radius,100)
+        bstep=bins[1]-bins[0]
+        bdx=[]
+        bflux=[]
+        for b in bins :
+            ok=(dx>=b)&(dx<(b+bstep))
+            if np.sum(ok)>0 :
+                bdx.append(np.mean(dx[ok]))
+                bflux.append(np.median(flux[ok]))
+        if len(bdx)<10 :
+            log.error("sigma fit failed for fiber #%02d"%ii)
+            gauss.append(0.)
+            continue
+        # this is the profile :
+        bdx=np.array(bdx)
+        bflux=np.array(bflux)
+        
+        # fast iterative gaussian fit 
+        sigma = 1.0
+        sq2 = math.sqrt(2.)
+        for i in xrange(10) :
+            nsigma = sq2*np.sqrt(np.mean(bdx**2*bflux*np.exp(-bdx**2/2/sigma**2))/np.mean(bflux*np.exp(-bdx**2/2/sigma**2)))
+            if abs(nsigma-sigma)<0.001 :
+                break
+            sigma = nsigma
+        gauss.append(sigma)
+    
+    return np.array(gauss)   
+            
+            
+
+def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
     This serves as an initial guess to what follows
 
@@ -601,9 +698,16 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
 
     # Loop on fibers
     gauss = []
+    start = 0
     for ii in xrange(nfiber):
         if (ii % 25 == 0): # & verbose:
-            log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
+            stop=time.time()
+            if start==0 :
+                log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
+            else :
+                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(ii,nfiber,stop-start))
+            start=stop
+        
         mask[:] = 0
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
@@ -807,18 +911,27 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     spec : ndarray
       Extracted spectrum
     """
-    import time
+    
     # Init
     xpix_img = np.outer(np.ones(img.shape[0]),np.arange(img.shape[1]))
     mask = np.zeros_like(img,dtype=int)
     iy = np.arange(img.shape[0],dtype=int)
+    
+    log = get_logger()
+
     #
     all_spec = np.zeros_like(xtrc)
     cst = 1./np.sqrt(2*np.pi)
+    start=0
     for qq in range(xtrc.shape[1]):
         if verbose & (qq % 25 == 0):
-            print(qq, time.asctime( time.localtime(time.time()) ))
-
+            stop=time.time()
+            if start>0 :
+                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(qq,xtrc.shape[1],stop-start))
+            else :
+                log.info("Working on fiber %d of %d"%(qq,xtrc.shape[1]))
+            start=stop
+        
         # Mask
         mask[:,:] = 0
         ixt = np.round(xtrc[:,qq]).astype(int)
