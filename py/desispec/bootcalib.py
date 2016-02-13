@@ -55,7 +55,7 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     """
     # Threshold criterion
     npix = spec.size
-    spec_mask = sigma_clip(spec, sig=4., iters=5)
+    spec_mask = sigma_clip(spec, sigma=4., iters=5)
     rms = np.std(spec_mask)
     thresh = 10*rms
     #print("thresh = {:g}".format(thresh))
@@ -742,7 +742,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         while iterate & (niter < max_iter):
             # Clip
             resid = parm(fdimg) - fnimg
-            resid_mask = sigma_clip(resid, sig=4., iters=5)
+            resid_mask = sigma_clip(resid, sigma=4., iters=5)
             # Fit
             gdp = ~resid_mask.mask
             parm = fitter(g_init, fdimg[gdp], fnimg[gdp])                        
