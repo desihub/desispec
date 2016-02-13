@@ -39,7 +39,7 @@ env:
         # overidden underneath. They are defined here in order to save having
         # to repeat them for all configurations.
         - NUMPY_VERSION=1.10
-        - SCIPY_VERSION=0.15
+        - SCIPY_VERSION=0.16
         - ASTROPY_VERSION=1.1.1
         - SPHINX_VERSION=1.3
         - DESIUTIL_VERSION=1.3.2
