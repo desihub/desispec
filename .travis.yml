@@ -38,9 +38,9 @@ env:
         # The following versions are the 'default' for tests, unless
         # overidden underneath. They are defined here in order to save having
         # to repeat them for all configurations.
-        - NUMPY_VERSION=1.9
-        - SCIPY_VERSION=0.14
-        - ASTROPY_VERSION=1.1
+        - NUMPY_VERSION=1.10
+        - SCIPY_VERSION=0.15
+        - ASTROPY_VERSION=1.1.1
         - SPHINX_VERSION=1.3
         - DESIUTIL_VERSION=1.3.2
         - CONDA_INSTALL='conda install -c astropy-ci-extras --yes'
