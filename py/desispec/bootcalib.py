@@ -17,6 +17,8 @@ import pdb
 import imp
 import yaml
 import glob
+import math
+import time
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -53,7 +55,7 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     """
     # Threshold criterion
     npix = spec.size
-    spec_mask = sigma_clip(spec, sig=4., iters=5)
+    spec_mask = sigma_clip(spec, sigma=4., iters=5)
     rms = np.std(spec_mask)
     thresh = 10*rms
     #print("thresh = {:g}".format(thresh))
@@ -564,7 +566,102 @@ def load_parse_dict():
 # Fiber routines
 ########################################################
 
-def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
+def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False) :
+    return fiber_gauss_new(flat, xtrc, xerr, box_radius, max_iter)
+
+def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
+    """Find the PSF sigma for each fiber
+    This serves as an initial guess to what follows
+    
+    Parameters
+    ----------
+    flat : ndarray of fiber flat image
+    xtrc: ndarray of fiber traces
+    xerr: ndarray of error in fiber traces
+    box_radius: int, optinal
+          Radius of boxcar extraction in pixels
+    max_iter : int, optional
+      Maximum number of iterations for rejection
+    
+    Returns
+    -------
+    gauss
+    list of Gaussian sigma
+    """
+    log=get_logger()
+
+    npix_y  = flat.shape[0]
+    npix_x  = flat.shape[1]
+    ny      = xtrc.shape[0] # number of ccd rows in trace
+    assert(ny==npix_y)
+    
+    nfiber = xtrc.shape[1]
+    
+    minflux=1. # minimal flux in a row to include in the fit
+    
+    # Loop on fibers
+    gauss = []
+    start = 0
+    for ii in xrange(nfiber):
+        if (ii % 25 == 0): # & verbose:
+            stop=time.time()
+            if start==0 :
+                log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
+            else :
+                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(ii,nfiber,stop-start))
+            start=stop
+        
+        # collect data
+        central_xpix=np.floor(xtrc[:,ii]+0.5)
+        begin_xpix=central_xpix-box_radius
+        end_xpix=central_xpix+box_radius+1
+        dx=[]
+        flux=[]
+        for y in xrange(ny) :            
+            yflux=flat[y,begin_xpix[y]:end_xpix[y]]
+            syflux=np.sum(yflux)
+            if syflux<minflux :
+                continue
+            dx.append(np.arange(begin_xpix[y],end_xpix[y])-(xtrc[y,ii]))
+            flux.append(yflux/syflux)
+        dx=np.array(dx)
+        flux=np.array(flux)
+        
+        # compute profile
+        # one way to get something robust is to compute median in bins
+        # it's a bit biasing but the PSF is not a Gaussian anyway
+        bins=np.linspace(-box_radius,box_radius,100)
+        bstep=bins[1]-bins[0]
+        bdx=[]
+        bflux=[]
+        for b in bins :
+            ok=(dx>=b)&(dx<(b+bstep))
+            if np.sum(ok)>0 :
+                bdx.append(np.mean(dx[ok]))
+                bflux.append(np.median(flux[ok]))
+        if len(bdx)<10 :
+            log.error("sigma fit failed for fiber #%02d"%ii)
+            gauss.append(0.)
+            continue
+        # this is the profile :
+        bdx=np.array(bdx)
+        bflux=np.array(bflux)
+        
+        # fast iterative gaussian fit 
+        sigma = 1.0
+        sq2 = math.sqrt(2.)
+        for i in xrange(10) :
+            nsigma = sq2*np.sqrt(np.mean(bdx**2*bflux*np.exp(-bdx**2/2/sigma**2))/np.mean(bflux*np.exp(-bdx**2/2/sigma**2)))
+            if abs(nsigma-sigma)<0.001 :
+                break
+            sigma = nsigma
+        gauss.append(sigma)
+    
+    return np.array(gauss)   
+            
+            
+
+def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
     This serves as an initial guess to what follows
 
@@ -601,9 +698,16 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
 
     # Loop on fibers
     gauss = []
+    start = 0
     for ii in xrange(nfiber):
         if (ii % 25 == 0): # & verbose:
-            log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
+            stop=time.time()
+            if start==0 :
+                log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
+            else :
+                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(ii,nfiber,stop-start))
+            start=stop
+        
         mask[:] = 0
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
@@ -638,7 +742,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
         while iterate & (niter < max_iter):
             # Clip
             resid = parm(fdimg) - fnimg
-            resid_mask = sigma_clip(resid, sig=4., iters=5)
+            resid_mask = sigma_clip(resid, sigma=4., iters=5)
             # Fit
             gdp = ~resid_mask.mask
             parm = fitter(g_init, fdimg[gdp], fnimg[gdp])                        
@@ -787,6 +891,7 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     # Return
     return xnew, fits
 
+
 def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     """Extract spectrum for fibers one-by-one using a Gaussian PSF
 
@@ -806,30 +911,51 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     spec : ndarray
       Extracted spectrum
     """
+    
     # Init
     xpix_img = np.outer(np.ones(img.shape[0]),np.arange(img.shape[1]))
     mask = np.zeros_like(img,dtype=int)
     iy = np.arange(img.shape[0],dtype=int)
+    
+    log = get_logger()
+
     #
     all_spec = np.zeros_like(xtrc)
+    cst = 1./np.sqrt(2*np.pi)
+    start=0
     for qq in range(xtrc.shape[1]):
-        if verbose & (qq%10 == 0):
-            print(qq)
+        if verbose & (qq % 25 == 0):
+            stop=time.time()
+            if start>0 :
+                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(qq,xtrc.shape[1],stop-start))
+            else :
+                log.info("Working on fiber %d of %d"%(qq,xtrc.shape[1]))
+            start=stop
+        
         # Mask
         mask[:,:] = 0
         ixt = np.round(xtrc[:,qq]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
             ix = ixt + ibox
             mask[iy,ix] = 1
+        # Sub-image (for speed, not convenience)
+        gdp = np.where(mask == 1)
+        minx = np.min(gdp[1])
+        maxx = np.max(gdp[1])
+        nx = (maxx-minx)+1
 
         # Generate PSF
-        dx_img = xpix_img - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
-        g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
-        psf = mask * g_init(dx_img)
+        dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq], np.ones(nx))
+        psf = cst*np.exp(-0.5 * (dx_img/sigma[qq])**2)/sigma[qq]
+        #dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
+        #g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
+        #psf = mask * g_init(dx_img)
         # Extract
-        all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
+        #all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
+        all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
     # Return
     return all_spec
+
 
 def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
     maxshift0=0.5, maxshift=0.2, maxerr=0.2):
@@ -979,7 +1105,8 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
 # Output
 #####################################################################
 
-def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
+def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=False,
+              XCOEFF=None):
     """ Write the output to a Base PSF format
 
     Parameters
@@ -1000,22 +1127,36 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
     #
     ny = xfit.shape[0]
     nfiber = xfit.shape[1]
-    XCOEFF = np.zeros((nfiber, ncoeff))
+    if XCOEFF is None:
+        XCOEFF = np.zeros((nfiber, ncoeff))
     YCOEFF = np.zeros((nfiber, ncoeff))
+
     # Find WAVEMIN, WAVEMAX
-    WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
-    WAVEMAX = np.min([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
+    if without_arc:
+        WAVEMIN = 0.
+        WAVEMAX = ny-1.
+        wv_solns = [None]*nfiber
+    else:
+        WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
+        WAVEMAX = np.min([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
     wv_array = np.linspace(WAVEMIN, WAVEMAX, num=ny)
     # Fit Legendre to y vs. wave
     for ii,id_dict in enumerate(wv_solns):
         # Fit y vs. wave
-        yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+        if without_arc:
+            yleg_fit, mask = dufits.iter_fit(wv_array, np.arange(ny), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=1)
+        else:
+            yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
         YCOEFF[ii, :] = yleg_fit['coeff']
         # Fit x vs. wave
         yval = dufits.func_val(wv_array, yleg_fit)
-        xtrc = dufits.func_val(yval, fdicts[ii])
-        xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
-        XCOEFF[ii, :] = xleg_fit['coeff']
+        if fdicts is None:
+            if XCOEFF is None:
+                raise IOError("Need to set either fdicts or XCOEFF!")
+        else:
+            xtrc = dufits.func_val(yval, fdicts[ii])
+            xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+            XCOEFF[ii, :] = xleg_fit['coeff']
 
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)
@@ -1029,8 +1170,6 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5):
     yhdu.header['WAVEMAX'] = WAVEMAX
     
     gausshdu = fits.ImageHDU(np.array(gauss))
-    
-    
     
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
     hdulist.writeto(outfile, clobber=True)
