@@ -22,7 +22,7 @@ class Get_RMS(MonitoringAlg):
         return self.get_rms(args[0])
     def get_default_config(self):
         return {}
-    def get_rms(self,image): #after dark
+    def get_rms(self,image): 
         """ 
         image: desispec.image.Image like object
         attributes: image(image, ivar, mask, readnoise,
@@ -34,9 +34,8 @@ class Get_RMS(MonitoringAlg):
         vals=value.ravel()
         rms=np.std(vals)
         retval={}
-        retval["OBSERVER"]={"RMS":rms}
-        retval["EXPERT"]={"RMS":rms}
-        retval["USER"]={"RMS":rms}
+        retval["VALUE"]={"RMS":rms}
+        retval["EXPERT_LEVEL"]={"EXPERT_LEVEL":"OBSERVER"}
         return retval
 
 class Count_Pixels(MonitoringAlg):
@@ -71,9 +70,8 @@ class Count_Pixels(MonitoringAlg):
         cut=np.where(values > n*sigma)
         count=cut[0].shape
         retval={}
-        retval["OBSERVER"]={"COUNT":count}
-        retval["EXPERT"]={"COUNT":count}
-        retval["USER"]={"COUNT":count}
+        retval["VALUE"]={"COUNT":count}
+        retval["EXPERT_LEVEL"]={"EXPERT_LEVEL":"OBSERVER"}
         return retval
 
 class Find_Sky_Continuum(MonitoringAlg):
@@ -126,10 +124,8 @@ class Find_Sky_Continuum(MonitoringAlg):
             select,=np.where((wave > wmin)&(wave < wmax))
             contin[i]=np.mean(applysmoothingfilter(sky_spectra[i,select])) # smooth and mean from all ith sky spectra
         retval={}
-        retval["OBSERVER"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
-        retval["EXPERT"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
-        retval["USER"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
-
+        retval["VALUE"]={"SkyContinuum":contin,"SkyFiber":skyfiber}
+        retval["EXPERT_LEVEL"]={"EXPERT_LEVEL":"EXPERT"}
     
         return retval
 
@@ -156,9 +152,8 @@ class Count_Fibers(MonitoringAlg):
         good=np.where(frame['MASK'].data[:,1]==0) # Although this seems to be bin mask ?? 
         count=good.shape[0]
         retval={}
-        retval["OBSERVER"]={"Count":count}
-        retval["EXPERT"]={"Count":count}
-        retval["USER"]={"Count":count}
+        retval["VALUE"]={"Count":count}
+        retval["EXPERT_LEVEL"]={"EXPERT_LEVEL":"OBSERVER"}
         return retval
 
 
@@ -206,9 +201,8 @@ class Bias_From_Overscan(MonitoringAlg):
    # also calculate readnoise
         rdnoise=biasreg[ii].std()
         retval={}
-        retval["OBSERVER"]={"Bias Value":biasval,"Read Noise":rdnoise}
-        retval["EXPERT"]={"Bias Value":biasval,"Read Noise":rdnoise}
-        retval["USER"]={"Bias Value":biasval,"Read Noise":rdnoise}
+        retval["VALUE"]={"Bias Value":biasval,"Read Noise":rdnoise}
+        retval["EXPERT_LEVEL"]={"EXPERT_LEVEL":"EXPERT"}
         
         return retval
 
@@ -243,7 +237,6 @@ class Calculate_SNR(MonitoringAlg):
             medsnr[ii]=np.median(snr)
             snrtot[ii]=np.sqrt(np.sum(snr**2))
         retval={}
-        retval["OBSERVER"]={"Median SNR":medsnr,"Total SNR":snrtot}
-        retval["EXPERT"]={"Median SNR":medsnr,"Total SNR":snrtot}
-        retval["USER"]={"Median SNR":medsnr,"Total SNR":snrtot}
+        retval["VALUE"]={"Median SNR":medsnr,"Total SNR":snrtot}
+        retval["EXPERT_LEVEL"]={"EXPERT LEVEL":"OBSERVER"}
         return retval

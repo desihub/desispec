@@ -5,12 +5,8 @@ Pipeline Preprocessing algorithms for Quicklook
 import numpy as np
 import os
 from desispec.quicklook import pas
-
-#rimage=read_image(filename) # image object 
-#dark=read_dark(filename) # dark object
-
-#def dark_subtract(rawimage,darkimage):
 from desispec.quicklook import qlexceptions
+
 class DarkSubtraction(pas.PipelineAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -33,8 +29,6 @@ class DarkSubtraction(pas.PipelineAlg):
         rawimage: raw DESI object Should come from Read_rawimage
         darkimage: DESI dark onject Should come from Read_darkframe
         """
-    #rimage=fits.open(rawimage) # this should be read from desispec.io routine once exist
-    #dark=fits.open(darkimage)
 
         # subtract pixel by pixel dark # may need to subtract separately each quadrant. For now assuming 
         # a single set.
@@ -48,15 +42,12 @@ class DarkSubtraction(pas.PipelineAlg):
     # check dimensionality:
         assert rx ==dimage.shape[0]
         assert ry==dimage.shape[1]
-    #for ii in range(rx):
-    #    for jj in range(ry):
         value=rimage-dimage
         dknoise=dimage.std()  # or some values read from somewhere?
         ivar_new=1./(rimage+dimage+dknoise**2)
         mask=rawimage.mask
         from desispec.image import Image as im
         return im(value,ivar_new,mask)
-    # Should save as an image?       
 
 class PixelFlattening(pas.PipelineAlg):
     from desispec.image import Image as im
@@ -90,12 +81,6 @@ class PixelFlattening(pas.PipelineAlg):
     # check dimensionality
         assert rx ==image.pix.shape[0]
         assert ry==image.pix.shape[1]
-        
-        
-    #value=np.zeros((rx,ry))
-        
-    #for ii in range(rx):
-    #    for jj in range(ry):
         value=image.pix/pflat
         ivar=image.ivar 
         #TODO ivar from pixel flat need to be propagated
@@ -137,19 +122,19 @@ class BiasSubtraction(pas.PipelineAlg):
     # check dimensionality:
         assert rx ==bimage.shape[0]
         assert ry==bimage.shape[1]
-    #for ii in range(rx):
-    #    for jj in range(ry):
         value=rimage-bimage
         dknoise=bimage.std()  # or some values read from somewhere?
         ivar_new=1./(rimage+bimage+dknoise**2)
         mask=rawimage.mask
         from desispec.image import Image as im
         return im(value,ivar_new,mask)
-        #return rawimage
 
 class BoxcarExtraction(pas.PipelineAlg):
     from desispec.image import Image as im
-    from  desispec.frame import Frame as fr
+    from desispec.frame import Frame as fr
+    from desispec.boxcar import do_boxcar
+
+    
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="Boxcar Extraction"
@@ -180,12 +165,11 @@ class BoxcarExtraction(pas.PipelineAlg):
     def boxcar_extract(self,image,**kwargs):
         from desispec.boxcar import do_boxcar
         from specter.psf import load_psf
-        psf=kwargs["PSFFile"]
-        #psf=load_psf(psffile)
+        psf=kwargs["PSFFile"] # TODO This is confusing, PSFFile should be a file not an object. 
         band=kwargs["Band"]
         camera=kwargs["Spectrograph"]
         boxwidth=kwargs["BoxWidth"]
-        
+       
         return do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500)
 
 

@@ -17,7 +17,7 @@ import yaml,pickle
 
 import optparse as op
 
-def main():
+def ql_main():
 
     p = op.OptionParser(usage = "%")
     p.add_option("-c", "--config_file", type=str, help="yaml/pickel file containing config dictionary",dest="config")
@@ -39,10 +39,9 @@ def main():
     else:
         log.critical("Can't open config file %s"%(opts.config))
         sys.exit("Can't open config file")
-        #basic_pipeline(configdict)
 
 
     quicklook.setup_pipeline(configdict)
 
 if __name__=='__main__':
-    main()
+    ql_main()
