@@ -1,0 +1,79 @@
+BiasImage: /home/govinda/Desi/simulate/spectro/sim/exposures/20151127/quicklook/bias-r0.fits
+DarkImage: /home/govinda/Desi/simulate/spectro/sim/exposures/20151127/quicklook/dark-r0.fits
+DataType: Exposure
+DebugLevel: 20
+DumpIntermediates: false
+FiberFlat: null
+FiberMap: /home/govinda/Desi/simulate/spectro/sim/exposures/20151127/fibermap-00000004.fits
+Input: /home/govinda/Desi/simulate/spectro/sim/exposures/20151127/pix-r0-00000004.fits
+OutputFile: lastframe_QL-r0-00000004.fits
+PSFFile: /home/govinda/Desi/desimodel/data/specpsf/psf-r.fits
+Period: 5.0
+PipeLine:
+- OutputFile: QA_biassubtraction.yaml
+  PA:
+    ClassName: BiasSubtraction
+    ModuleName: desispec.procalgs
+    Name: Bias Subtraction
+    kwargs: {BiasImage: '%%BiasImage'}
+  QAs:
+  - ClassName: Get_RMS
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Get RMS
+    kwargs: {}
+  - ClassName: Count_Pixels
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Count Pixels
+    kwargs: {Width: 3.0}
+  StepName: Preprocessing-Bias Subtraction
+- OutputFile: QA_darksubtraction.yaml
+  PA:
+    ClassName: DarkSubtraction
+    ModuleName: desispec.procalgs
+    Name: Dark Subtraction
+    kwargs: {DarkImage: '%%DarkImage'}
+  QAs:
+  - ClassName: Get_RMS
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Get RMS
+    kwargs: {}
+  - ClassName: Count_Pixels
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Count Pixels
+    kwargs: {Width: 3.0}
+  StepName: Preprocessing-Dark Subtraction
+- OutputFile: QA_pixelflattening.yaml
+  PA:
+    ClassName: PixelFlattening
+    ModuleName: desispec.procalgs
+    Name: Pixel Flattening
+    kwargs: {PixelFlat: '%%PixelFlat'}
+  QAs:
+  - ClassName: Get_RMS
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Get RMS
+    kwargs: {}
+  - ClassName: Count_Pixels
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Count Pixels
+    kwargs: {Width: 3.0}
+  StepName: Preprocessing-Pixel Flattening
+- OutputFile: QA_boxcarextraction.yaml
+  PA:
+    ClassName: BoxcarExtraction
+    ModuleName: desispec.procalgs
+    Name: Boxcar Extraction
+    kwargs: {Band: r, BoxWidth: 2.5, DeltaW: 0.5, PSFFile: '%%PSFFile', Spectrograph: 0,
+      Wmax: 7741, Wmin: 5625}
+  QAs:
+  - ClassName: Find_Sky_Continuum
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Find Sky Continuum
+    kwargs: {FiberMap: '%%FiberMap', Wmax: null, Wmin: null}
+  - ClassName: Calculate_SNR
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Calculate Signal-to-Noise ratio
+    kwargs: {}
+  StepName: Boxcar Extration
+PixelFlat: /home/govinda/Desi/simulate/spectro/sim/exposures/20151127/quicklook/pixflat-r0.fits
+Timeout: 120.0

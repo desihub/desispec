@@ -11,8 +11,6 @@ def do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500):
          psf: psf object respective of given band
          camera : camera ID
          boxwidth: HW box size in pixels
-         wmin: minimum wavelength for extraction
-         wmax: maximum wavelength for extraction
          dw: wavelength binning in output spectra, Default= 0.5A
          nspec: number of spectra to extract from the given image object
 
@@ -20,29 +18,18 @@ def do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500):
     """
     from desispec.frame import Frame
     import math
-    #psf=kwargs["PSFFile"]
-    #band=kwargs["Band"] #must arg
-    #camera=kwargs["Spectrograph"] #must arg
-    #boxwidth=2.5
-    #fiberMap=None
-    #if "FiberMap" in kwargs:fiberMap=kwargs["FiberMap"]
-    #if "BoxWidth" in kwargs:boxWidth=kwargs["BoxWidth"]
-    #dw=0.5
-    #if "DeltaW" in kwargs:dw=kwargs["DeltaW"]
+
     if band == "r":
-        #if psffile is None:psffile=os.getenv('DESIMODEL')+"/data/specpsf/psf-r.fits"
         wmin=5625
         wmax=7741
         waves=np.arange(wmin,wmax,0.25)
         mask=np.zeros((4114,4128))
     elif band == "b":
-        #if psffile is None:psffile=os.getenv('DESIMODEL')+"/data/specpsf/psf-b.fits"
         wmin=3569
         wmax=5949
         waves=np.arange(wmin,wmax,0.25)
         mask=np.zeros((4096,4096))
     elif band == "z":
-        #if psffile is None:psffile=os.getenv('DESIMODEL')+"/data/specpsf/psf-z.fits"
         wmin=7435
         wmax=9834
         waves=np.arange(wmin,wmax,0.25)
@@ -98,9 +85,6 @@ def do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500):
                 ranges[ypos][sp]=lastval
             lastval=ranges[ypos][sp]
     
-        #if "Wmin" in kwargs:wmin=kwargs["Wmin"]
-        #if "Wmax" in kwargs:wmax=kwargs["Wmax"]
-        #if "DeltaW" in kwargs:dw=kwargs["DeltaW"]
 
     maskedimg=(image.pix*mask.T)
     flux=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))
@@ -121,6 +105,5 @@ def do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500):
     fflux/=dwave
     ivar*=dwave**2
     #Extracted the full image but write frame in [nspec,nwave]
-    #nspec=500 # keeping all 500 spectra for now
             
     return Frame(wtarget,fflux[:nspec],ivar[:nspec],resolution_data=resolution[:nspec],spectrograph=camera)

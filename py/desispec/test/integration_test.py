@@ -84,7 +84,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     #-----
     #- Input fibermaps, spectra, and pixel-level raw data
-    for expid, flavor in zip([0,1,2], ['flat', 'arc', 'science']):
+    for expid, flavor in zip([0,1,2], ['flat', 'arc', 'dark']):
         cmd = "newexp-desi --flavor {flavor} --nspec {nspec} --night {night} --expid {expid}".format(
             expid=expid, flavor=flavor, **params)
         fibermap = io.findfile('fibermap', night, expid)
