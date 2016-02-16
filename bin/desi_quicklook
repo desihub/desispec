@@ -20,7 +20,7 @@ import optparse as op
 def ql_main():
 
     p = op.OptionParser(usage = "%")
-    p.add_option("-c", "--config_file", type=str, help="yaml/pickel file containing config dictionary",dest="config")
+    p.add_option("-c", "--config_file", type=str, help="yaml/pickle file containing config dictionary",dest="config")
     p.add_option("-g", "--gen_testconfig", type=str, help="generate test configuration",dest="dotest")
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()

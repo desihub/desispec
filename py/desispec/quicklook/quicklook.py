@@ -11,7 +11,12 @@ from desispec.quicklook import qllogger
 
 
 def testconfig(outfilename="qlconfig.yaml"):
-    # make a test Config file, should be provided by the QL framework
+
+    """ 
+    Make a test Config file, should be provided by the QL framework
+    Below the %% variables are replaced by actual object when the respective
+    algorithm is executed.
+    """
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
 
@@ -19,13 +24,15 @@ def testconfig(outfilename="qlconfig.yaml"):
           'DarkImage':os.environ['DARKIMAGE'],# path to dark image
           'DataType':'Exposure',#type of input ['Exposure','Arc','Dark']
           'DebugLevel':20, #debug level
+          'Period':5.0, # Heartbeat Period (Secs)
+          'Timeout': 120.0, # Heartbeat Timeout (Secs)
           'DumpIntermediates':False, #whether to dump output of each step
           'FiberFlat':None, #path to fiber flat image (frame?)
           'FiberMap':os.environ['FIBERMAP'],#path to fiber map
           'Input':os.environ['PIXIMAGE'],#path to input image
           'PixelFlat':os.environ['PIXELFLAT'], #path to pixel flat image
           'PSFFile':os.environ['PSFFILE'],  # .../desimodel/data/specpsf/psf-r.fits
-          'OutputFile':'boxframe_new-r0-00000004.fits',
+          'OutputFile':'lastframe_QL-r0-00000004.fits', # output file from last pipeline step. Need to output intermediate steps? Most likely after boxcar extraction?
           'PipeLine':[{'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"BiasSubtraction",
                              "Name":"Bias Subtraction",
@@ -43,7 +50,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                }
                               ],
                        "StepName":"Preprocessing-Bias Subtraction",
-                       "OutputFile":"newstep1.yaml"
+                       "OutputFile":"QA_biassubtraction.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"DarkSubtraction",
@@ -62,7 +69,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                }
                               ],
                        "StepName":"Preprocessing-Dark Subtraction",
-                       "OutputFile":"newstep2.yaml"
+                       "OutputFile":"QA_darksubtraction.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"PixelFlattening",
@@ -81,23 +88,17 @@ def testconfig(outfilename="qlconfig.yaml"):
                                }
                               ],
                        "StepName":"Preprocessing-Pixel Flattening",
-                       "OutputFile":"newstep3.yaml"
+                       "OutputFile":"QA_pixelflattening.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"BoxcarExtraction",
                              "Name":"Boxcar Extraction",
                              "kwargs":{"PSFFile":"%%PSFFile",
-                                       #"Band":"z",
-                                       "Band":"r",
-                                       #"Band":"b",
+                                       "Band":"r", # Band can be one of ["b","r","z"]
+                                       "Wmin":5625, # Wmin=[3569,5625,7435]
+                                       "Wmax":7741, # Wmax=[5949,7741,9834]
                                        "Spectrograph":0,
                                        "BoxWidth":2.5,
-                                       "Wmin":5625, 
-                                       "Wmax":7741, 
-                                       #"Wmin":7435,
-                                       #"Wmax":9834,
-                                       #"Wmin":3569,
-                                       #"Wmax":5949,
                                        "DeltaW":0.5
                                        }
                              },
@@ -115,7 +116,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                               },
                               ],
                        "StepName":"Boxcar Extration",
-                       "OutputFile":"newstep4.yaml"
+                       "OutputFile":"QA_boxcarextraction.yaml"
                        }
                       ]
           }
@@ -228,7 +229,9 @@ def setup_pipeline(config):
     if "DebugLevel" in config:
         debuglevel=config["DebugLevel"]
         log.setLevel(debuglevel)
-    hbeat=QLHB.QLHeartbeat(log,5.0,120.0)
+    hbeat=QLHB.QLHeartbeat(log,config["Period"],config["Timeout"])
+    if config["Timeout"]> 200.0:
+        log.warning("Heartbeat timeout exceeding 200.0 seconds")
     dumpintermediates=False
     if "DumpIntermediates" in config:
         dumpintermediates=config["DumpIntermediates"]
@@ -301,14 +304,16 @@ def setup_pipeline(config):
     chan,cam,expid=get_chan_cam_exp(inpname)
     res=runpipeline(pipeline,convdict,config,hbeat)
     if isinstance(res,im.Image):
-        finalname="image-%s%d-%08d.fits"%(chan,cam,expid)
+        if config["OutputFile"]: finalname=config["OutputFile"]
+        else: finalname="image-%s%d-%08d.fits"%(chan,cam,expid)
         imIO.write_image(finalname,res,meta=None)        
     elif isinstance(res,dframe.Frame):
-        finalname="frame-%s%d-%08d.fits"%(chan,cam,expid)
+        if config["OutputFile"]: finalname=config["OutputFile"]
+        else: finalname="frame-%s%d-%08d.fits"%(chan,cam,expid)
         frIO.write_frame(finalname,res,header=None)
     else:
         log.error("Result of pipeline is in unkown type %s. Don't know how to write"%(type(res)))
         sys.exit("Unknown pipeline result type %s."%(type(res)))
-    log.info("Pipeline completed final result is in %s"%finalname)
+    log.info("Pipeline completed. Final result is in %s"%finalname)
     return 
 
