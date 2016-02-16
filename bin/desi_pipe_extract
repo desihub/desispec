@@ -42,6 +42,7 @@ def main():
     parser.add_argument( '--range_b', required=False, default="3579.0,5939.0,0.8", help='B band wavelength range \"wmin,wmax,dw\"' )
     parser.add_argument( '--range_r', required=False, default="5635.0,7731.0,0.8", help='R band wavelength range \"wmin,wmax,dw\"' )
     parser.add_argument( '--range_z', required=False, default="7445.0,9824.0,0.8", help='Z band wavelength range \"wmin,wmax,dw\"' )
+    parser.add_argument( '--simraw', required=False, action='store_true', help='if set, raw data is simulated' )
     args = parser.parse_args()
 
     log = get_logger()
@@ -113,6 +114,10 @@ def main():
     if rank == 0:
         log.info("computing exspec tasks")
     [tasks_bundle, tasks_merge] = pipe.tasks_exspec(expid, exptype, raw, wrange, psf)
+
+    # change to the redux directory
+
+    os.chdir(os.path.join(specdir, args.night))
 
     # do all the per-bundle tasks now
 

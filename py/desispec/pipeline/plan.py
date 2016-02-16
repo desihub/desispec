@@ -159,17 +159,17 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
             com.extend(['--out_xml', outxmlb])
             com.extend(['--out_spots', outspotb])
             com.extend(['--out_fits', outfitsb])
-            com.extend(['--first_bundle', "{}".format(b)])
-            com.extend(['--last_bundle', "{}".format(b)])
+            com.extend(['--first_bundle', "{}".format(b+1)])
+            com.extend(['--last_bundle', "{}".format(b+1)])
             com.extend(['--gauss_hermite_deg', '6'])
             com.extend(['--psfmodel', 'GAUSSHERMITE'])
-            com.extend(['--half_size_x', '7'])
+            com.extend(['--half_size_x', '4'])
             com.extend(['--half_size_y', '4'])
             com.extend(['--fit_psf_tails'])
             com.extend(['--fit_continuum'])
             com.extend(['-v'])
             com.extend(['--core'])
-            #com.extend(['--no_trace_fit'])
+            com.extend(['--no_trace_fit'])
             com.extend(['--trace_deg_x', '6'])
             com.extend(['--trace_deg_wave', '6'])
             com.extend(['--legendre_deg_x', '1'])
@@ -178,7 +178,7 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
             task = {}
             task['command'] = com
             task['parallelism'] = 'node'
-            task['inputs'] = [raw[cam], xyguess[cam]]
+            task['inputs'] = [raw[cam], bootcal[band]]
             task['outputs'] = [outxmlb, outspotb, outfitsb]
 
             tasks_bundle.append(task)
@@ -205,9 +205,6 @@ def tasks_specex(expid, exptype, raw, lamplines, bootcal=None):
     for ex in expid:
         if exptype[ex] != "arc":
             continue
-        exp_xyguess = None
-        if xyguess is not None:
-            exp_xyguess = xyguess[ex]
         [exp_tasks_bundle, exp_tasks_merge] = tasks_specex_exposure(ex, raw[ex], lamplines, bootcal=bootcal)
         tasks_bundle.extend(exp_tasks_bundle)
         tasks_merge.extend(exp_tasks_merge)

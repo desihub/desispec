@@ -57,7 +57,7 @@ def pid_exists( pid ):
 
 def subprocess_list(tasks, rank=0):
     log = get_logger()
-    pids = []
+    #pids = []
     for tsk in tasks:
         runcom = True
         for dep in tsk['inputs']:
@@ -69,14 +69,14 @@ def subprocess_list(tasks, rank=0):
                 runcom = False
         proc = None
         if runcom:
-            print(tsk['command'])
+            # for each output file, make sure that the directory exists
+            for f in tsk['outputs']:
+                dr = os.path.dirname(f)
+                if not os.path.isdir(dr):
+                    os.makedirs(dr)
             proc = sp.Popen(tsk['command'])
-            log.debug("  spawn[{}]: {}".format(proc.pid, " ".join(tsk['command'])))
-            pids.append(proc.pid)
-    # wait for all our local tasks to finish
-    for p in pids:
-        log.debug("  wait for {}".format(p))
-        os.wait(p)
+            log.info("  spawn[{}]: {}".format(proc.pid, " ".join(tsk['command'])))
+            proc.wait()
     return
 
 
