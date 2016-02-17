@@ -10,7 +10,7 @@ from .resolution import Resolution
 from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
 from .interpolation import resample_flux
 from .log import get_logger
-from .io.filters import read_filter_response
+from .io.filters import load_filter_response
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 #debug
@@ -133,7 +133,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     #Should we skip those stars with very bad Chisq?
 
 
-def normalize_templates(stdwave, stdflux, mags, filters, basepath):
+def normalize_templates(stdwave, stdflux, mags, filters):
     """Returns spectra normalized to input magnitudes.
 
     Args:
@@ -175,7 +175,7 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
         #Normalizing using only SDSS_R band magnitude
         if v.upper() == 'SDSS_R' or v.upper() =='DECAM_R' :
             refmag=mags[i]
-            filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
+            filter_response=load_filter_response(v) # outputs wavelength,qe
             rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
             apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
             log.info('scaling {} mag {:f} to {:f}.'.format(v, apMag,refmag))

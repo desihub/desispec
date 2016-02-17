@@ -79,7 +79,6 @@ def main() :
     filters=fibers["FILTER"]
     if 'DESISIM' not in os.environ:
         raise RuntimeError('Set environment DESISIM. Can not find filter response files')
-    basepath=DESISIM+"/data/"
 
     #now load all the skyfiles, framefiles, fiberflatfiles etc
     # all three channels files are simultaneously treated for model fitting
@@ -199,7 +198,7 @@ def main() :
 
         log.info('Star Fiber: {0}; Best Model Fiber: {1}; TemplateID: {2}; Chisq/dof: {3}'.format(l[0],bestModelIndex[k],templateid[bestModelIndex[k]],chi2dof[k]))
         # Normalize the best model using reported magnitude
-        modelwave,normalizedflux=normalize_templates(stdwave,stdflux[bestModelIndex[k]],mags,filters,basepath)
+        modelwave,normalizedflux=normalize_templates(stdwave,stdflux[bestModelIndex[k]],mags,filters)
         normflux.append(normalizedflux)
 
     # Now write the normalized flux for all best models to a file
