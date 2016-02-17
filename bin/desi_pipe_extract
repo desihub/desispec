@@ -107,9 +107,9 @@ def main():
         wrange['z{}'.format(c)] = (float(wrange_z[0]), float(wrange_z[1]), float(wrange_z[2]))
 
     if rank == 0:
-        log.info("using B range {}".format(",".join(wrange['b0'])))
-        log.info("using R range {}".format(",".join(wrange['r0'])))
-        log.info("using Z range {}".format(",".join(wrange['z0'])))
+        log.info("using B range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
+        log.info("using R range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
+        log.info("using Z range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
 
     if rank == 0:
         log.info("computing exspec tasks")

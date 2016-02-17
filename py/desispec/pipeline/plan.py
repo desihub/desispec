@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import time
 import glob
+import re
 
 import astropy.io.fits as af
 
@@ -56,7 +57,7 @@ def psf_newest(specdir):
                 else:
                     if expid > newest[cam]:
                         newest[cam] = expid
-        break
+    print(newest)
     return newest
 
 
@@ -73,7 +74,7 @@ def tasks_exspec_exposure(id, raw, wrange, psf_select):
     for cam in cameras:
         outbase = os.path.join("{:08d}".format(id), "frame-{}-{:08d}".format(cam, id))
         outfile = "{}.fits".format(outbase)
-        psffile = os.path.join("{:08d}".format(id), "psf-{}-{:08d}".format(cam, id))
+        psffile = os.path.join("{:08d}".format(psf_select[cam]), "psf-{}-{:08d}.fits".format(cam, psf_select[cam]))
         mergeinputs = []
 
         # select wavelength range based on camera
