@@ -10,7 +10,7 @@ from .resolution import Resolution
 from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
 from .interpolation import resample_flux
 from .log import get_logger
-from .io.filters import read_filter_response
+from .io.filters import load_filter
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 #debug
@@ -133,7 +133,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     #Should we skip those stars with very bad Chisq?
 
 
-def normalize_templates(stdwave, stdflux, mags, filters, basepath):
+def normalize_templates(stdwave, stdflux, mags, filters):
     """Returns spectra normalized to input magnitudes.
 
     Args:
@@ -149,41 +149,29 @@ def normalize_templates(stdwave, stdflux, mags, filters, basepath):
     Only SDSS_r band is assumed to be used for normalization for now.
     """
     log = get_logger()
-    def ergs2photons(flux,wave):
-        return flux*wave/hc
-
-    def findappMag(flux,wave,filt):
-
-
-        flux_in_photons=ergs2photons(flux,wave)
-        flux_filt_integrated=np.dot(flux_in_photons,filt)
-
-        ab_spectrum = 2.99792458 * 10**(18-48.6/2.5)/hc/wave #in photons/cm^2/s/A, taken from specex_flux_calibration.py)
-        # Does this relation hold for all SDSS filters or there is some relative zero point adjustment? What about other filters?
-        ab_spectrum_filt_integrated=np.dot(ab_spectrum,filt)
-
-        if flux_filt_integrated <=0:
-           appMag=99.
-        else:
-           appMag=-2.5*np.log10(flux_filt_integrated/ab_spectrum_filt_integrated)
-        return appMag
 
     nstdwave=stdwave.size
     normflux=np.array(nstdwave)
 
     for i,v in enumerate(filters):
         #Normalizing using only SDSS_R band magnitude
-        if v.upper() == 'SDSS_R' or v.upper() =='DECAM_R' :
+        if v.upper() == 'SDSS_R' or v.upper() =='DECAM_R' or v.upper()=='DECAM_G' :
+            #-TODO: Add more filters for calibration. Which one should be used if multiple mag available?
             refmag=mags[i]
-            filter_response=read_filter_response(v,basepath) # outputs wavelength,qe
-            rebinned_model_flux=rebinSpectra(stdflux,stdwave,filter_response[0])
-            apMag=findappMag(rebinned_model_flux,filter_response[0],filter_response[1])
+            filter_response=load_filter(v)
+            apMag=filter_response.get_ab_magnitude(stdflux,stdwave)
             log.info('scaling {} mag {:f} to {:f}.'.format(v, apMag,refmag))
             scalefac=10**((apMag-refmag)/2.5)
             normflux=stdflux*scalefac
 
             break  #- found SDSS_R or DECAM_R; we can stop now
-
+        count=0
+        for k,f in enumerate(['SDSS_R','DECAM_R','DECAM_G']):
+            ii,=np.where((np.asarray(filters)==f))
+            count=count+ii.shape[0]
+        if (count==0):
+            log.error("No magnitude given for SDSS_R, DECAM_R or DECAM_G filters")
+            sys.exit(0)
     return stdwave,normflux
 
 
