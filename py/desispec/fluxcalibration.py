@@ -165,9 +165,13 @@ def normalize_templates(stdwave, stdflux, mags, filters):
             normflux=stdflux*scalefac
 
             break  #- found SDSS_R or DECAM_R; we can stop now
-        else:
+        count=0
+        for k,f in enumerate(['SDSS_R','DECAM_R','DECAM_G']):
+            ii,=np.where((np.asarray(filters)==f))
+            count=count+ii.shape[0]
+        if (count==0):
             log.error("No magnitude given for SDSS_R, DECAM_R or DECAM_G filters")
-            sys.exit(12)
+            sys.exit(0)
     return stdwave,normflux
 
 

@@ -126,13 +126,12 @@ class TestFluxCalibration(unittest.TestCase):
         Test for normalization to a given magnitude for calibration
         """
         
-        stdwave=np.linspace(5000,6000,2000)
+        stdwave=np.linspace(3000,11000,10000)
         stdflux=np.cos(stdwave)+100.
         mags=np.array((20,21))
         filters=['SDSS_I','SDSS_R']
-        basepath=os.getenv('DESISIM')+'/data/'
         #This should use SDSS_R for calibration
-        stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters,basepath)
+        stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
         apmag=-50.00 #calculated, instead add a test for apmag and scale factor
         refmag=21
         scalefac=10**((apmag-refmag)/2.5)
@@ -145,20 +144,19 @@ class TestFluxCalibration(unittest.TestCase):
         filterlist=['SDSS_U','SDSS_G','SDSS_R','SDSS_I','SDSS_Z','DECAM_U','DECAM_G','DECAM_R',
 'DECAM_I','DECAM_Z','DECAM_Y','WISE_W1','WISE_W2']
         filters=['XXXX','YYYY','ZZZZ']
-        stdwave=np.linspace(5000,6000,2000)
+        stdwave=np.linspace(3000,11000,10000)
         stdflux=np.cos(stdwave)+100.
         mags=np.array([20,21,22])
-        basepath=os.getenv('DESISIM')+'/data/'
         
         # No correct filters
         with self.assertRaises(SystemExit):
-            stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters,basepath)
+            stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
 
         filters=filters+['DECAM_R']
         #This should use DECAM_R for calibration
         mags=np.concatenate([mags,np.array([23])])
         #check dimensionality
-        stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters,basepath)
+        stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
         self.assertEqual(stwave.shape, normflux.shape)
         
     def test_compute_fluxcalibration(self):
