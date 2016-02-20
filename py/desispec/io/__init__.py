@@ -26,7 +26,7 @@ from .util import (header2wave, fitsheader, native_endian, makepath,
 from .fluxcalibration import (
     read_stdstar_templates, write_stdstar_model,
     read_flux_calibration, write_flux_calibration)
-from .filters import read_filter_response
+from .filters import load_filter
 from .download import download, filepath2url
 from .crc import memcrc, cksum
 from .database import (load_brick, is_night, load_night, is_flavor, load_flavor,
