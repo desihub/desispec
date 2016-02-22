@@ -11,6 +11,7 @@ set -e
 echo `date` Running dailytest on `hostname`
 
 #- Load our code
+module load speclite/master
 module load desispec/master
 module load desisim/master
 module load specter/master
@@ -18,6 +19,8 @@ module load redmonster/master
 module switch desimodel/trunk
 
 #- Update software packages
+echo 'updating speclite'; cd $SPECLITE;
+git pull; fix_permissions.sh .; python setup.py build
 echo 'updating desispec'; cd $DESISPEC; git pull; fix_permissions.sh .
 echo 'updating desisim'; cd $DESISIM; git pull; fix_permissions.sh .
 echo 'updating specter'; cd $SPECTER_DIR; git pull; fix_permissions.sh .
