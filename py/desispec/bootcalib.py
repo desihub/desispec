@@ -608,16 +608,16 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
             if start==0 :
                 log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
             else :
-                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(ii,nfiber,stop-start))
+                log.info("Working on fiber %d of %d (25 done in %3.2f sec)"%(ii,nfiber,stop-start))
             start=stop
-        
+
         # collect data
         central_xpix=np.floor(xtrc[:,ii]+0.5)
         begin_xpix=central_xpix-box_radius
         end_xpix=central_xpix+box_radius+1
         dx=[]
         flux=[]
-        for y in xrange(ny) :            
+        for y in xrange(ny) :
             yflux=flat[y,begin_xpix[y]:end_xpix[y]]
             syflux=np.sum(yflux)
             if syflux<minflux :
@@ -626,7 +626,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
             flux.append(yflux/syflux)
         dx=np.array(dx)
         flux=np.array(flux)
-        
+
         # compute profile
         # one way to get something robust is to compute median in bins
         # it's a bit biasing but the PSF is not a Gaussian anyway
@@ -641,7 +641,9 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
                 bflux.append(np.median(flux[ok]))
         if len(bdx)<10 :
             log.error("sigma fit failed for fiber #%02d"%ii)
-            gauss.append(0.)
+            log.error("this should only occur for the fiber at the center of the detector (if at all)")
+            log.error("using the sigma value from the previous fiber")
+            gauss.append(gauss[-1])
             continue
         # this is the profile :
         bdx=np.array(bdx)
