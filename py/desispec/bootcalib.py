@@ -608,7 +608,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
             if start==0 :
                 log.info("Working on fiber {:d} of {:d}".format(ii,nfiber))
             else :
-                log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(ii,nfiber,stop-start))
+                log.info("Working on fiber %d of %d (25 done in %3.2f sec)"%(ii,nfiber,stop-start))
             start=stop
         
         # collect data
@@ -641,7 +641,9 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
                 bflux.append(np.median(flux[ok]))
         if len(bdx)<10 :
             log.error("sigma fit failed for fiber #%02d"%ii)
-            gauss.append(0.)
+            log.error("this should only occur for the fiber at the center of the detector (if at all)")
+            log.error("using the sigma value from the previous fiber")
+            gauss.append(gauss[-1])
             continue
         # this is the profile :
         bdx=np.array(bdx)

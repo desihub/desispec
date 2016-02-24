@@ -45,6 +45,7 @@ fi
 
 # DESI DEPENDENCIES
 $PIP_INSTALL git+https://github.com/desihub/desiutil.git@${DESIUTIL_VERSION}#egg=desiutil
+$PIP_INSTALL speclite==$SPECLITE_VERSION
 
 # DOCUMENTATION DEPENDENCIES
 # build_sphinx needs sphinx and matplotlib (for plot_directive). Note that
