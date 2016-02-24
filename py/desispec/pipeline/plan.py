@@ -57,7 +57,6 @@ def psf_newest(specdir):
                 else:
                     if expid > newest[cam]:
                         newest[cam] = expid
-    print(newest)
     return newest
 
 
@@ -210,6 +209,28 @@ def tasks_specex(expid, exptype, raw, lamplines, bootcal=None):
         tasks_bundle.extend(exp_tasks_bundle)
         tasks_merge.extend(exp_tasks_merge)
     return [tasks_bundle, tasks_merge]
+
+
+def tasks_fiberflat(expid, exptype, raw):
+    tasks = []
+    for ex in expid:
+        cameras = sorted(raw.keys())
+        for cam in cameras:
+            outbase = os.path.join("{:08d}".format(id), "frame-{}-{:08d}".format(cam, id))
+            outfile = "{}.fits".format(outbase)
+            psffile = os.path.join("{:08d}".format(psf_select[cam]), "psf-{}-{:08d}.fits".format(cam, psf_select[cam]))
+            com = ['desi_compute_fiberflat.py']
+            com.extend(['--infile', infile])
+            com.extend(['--outfile', outfile])
+
+            task = {}
+            task['command'] = com
+            task['parallelism'] = 'core'
+            task['inputs'] = [infile]
+            task['outputs'] = [outfile]
+
+            tasks.append(task)
+
 
 
 # def tasks_calboot_exposure(id, raw, flat):

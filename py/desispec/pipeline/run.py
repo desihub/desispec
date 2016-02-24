@@ -69,14 +69,14 @@ def subprocess_list(tasks, rank=0):
                 runcom = False
         proc = None
         if runcom:
-            # for each output file, make sure that the directory exists
-            for f in tsk['outputs']:
-                dr = os.path.dirname(f)
-                if not os.path.isdir(dr):
-                    os.makedirs(dr)
-            proc = sp.Popen(tsk['command'])
-            log.info("  spawn[{}]: {}".format(proc.pid, " ".join(tsk['command'])))
-            proc.wait()
+            # proc = sp.Popen(tsk['command'], stdout=sp.PIPE, stderr=sp.STDOUT)
+            # log.info("subproc[{}]: {}".format(proc.pid, " ".join(tsk['command'])))
+            # outs, errs = proc.communicate()
+            # for line in outs:
+            #     log.debug("subproc[{}]:   {}".format(proc.pid, line.rstrip()))
+            # proc.wait()
+            log.info("subproc: {}".format(" ".join(tsk['command'])))
+            ret = sp.call(tsk['command'])
     return
 
 

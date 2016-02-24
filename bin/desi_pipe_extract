@@ -119,6 +119,18 @@ def main():
 
     os.chdir(os.path.join(specdir, args.night))
 
+    # create any output directories
+
+    if rank == 0:
+        for tsk in tasks_bundle:
+            for f in tsk['outputs']:
+                dr = os.path.dirname(f)
+                if not os.path.isdir(dr):
+                    print("makedirs {}".format(dr))
+                    os.makedirs(dr)
+    if comm is not None:
+        comm.barrier()
+
     # do all the per-bundle tasks now
 
     if rank == 0:
