@@ -12,5 +12,5 @@ Tools for pipeline creation and running.
 from .core import runcmd
 from .plan import (find_raw, tasks_exspec_exposure, tasks_exspec, 
     tasks_specex_exposure, tasks_specex, task_dist, psf_newest)
-from .run import (pid_exists, subprocess_list, Machine,
-    MachineSlurm)
+from .run import (pid_exists, subprocess_list, shell_job,
+	nersc_job)

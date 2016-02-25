@@ -80,84 +80,55 @@ def subprocess_list(tasks, rank=0):
     return
 
 
-class Machine(object):
-    """
-    Class representing the number nodes and cores available to us,
-    and also the commands needed to run jobs.
-    """
-    def __init__(self):
-        pass
-
-    def nodes(self):
-        """
-        The number of available nodes.
-        """
-        return 1
-
-    def node_cores(self):
-        """
-        The number of cores per node.
-        """
-        return 1
-
-    def run(self, command, logfile, nodes=1, ppn=1, nthread=1):
-        """
-        Run the command on the specified number of nodes,
-        processes per node, and OMP_NUM_THREADS.  Write
-        output to logfile.
-        """
-        if (nodes != 1) or (ppn != 1):
-            raise RuntimeError("Machine base class only supports a single process.")
-        env = os.environ.copy()
-        env['OMP_NUM_THREADS'] = nthread
-        proc = sp.Popen(command, env=env, stdout=open(logfile, "w"), stderr=sp.STDOUT, stdin=None, close_fds=True)
-        return proc
+def shell_job(path, logroot, envsetup, commands):
+    with open(path, 'w') as f:
+        f.write("#!/bin/bash\n\n")
+        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write("log={}_${{now}}\n\n".format(logroot))
+        for com in envsetup:
+            f.write("{}\n".format(com))
+        f.write("\n")
+        for com in commands:
+            f.write("{} >${{log}} 2>&1\n\n".format(com))
+    return
 
 
-class MachineSlurm(object):
-    """
-    Machine class which runs jobs using the srun command from SLURM.
-    """
-    def __init__(self, max_nodes, cores_per_node, shared_nodes=False):
-        self._max_nodes = max_nodes
-        self._max_ppn = cores_per_node
-        self._max_proc = max_nodes * cores_per_node
-        self._avail = self._max_proc
-        self._shared = shared_nodes
-
-    def nodes(self):
-        """ 
-        The number of total nodes.
-        """
-        return self._max_nodes
-
-    def node_cores(self):
-        """
-        The number of cores per node.
-        """
-        return self._max_ppn
-
-    def run(self, command, logfile, nodes=1, ppn=1, nthread=1, use_multiprocess=False):
-        """
-        Run the command on the specified number of nodes,
-        processes per node, and OpenMP threads.  Write
-        output to logfile.  If use_multiprocess is True,
-        disable CPU binding.
-        """
-        if use_multiprocess:
-            nthread = 1
-        if self._shared:
-            requested = nodes * ppn * nthread
-        else:
-            requested = nodes * self._max_ppn
-        if requested > self._avail:
-            raise RuntimeError("Requested {} cores, but only {} are available".format(requested, self._avail))
-        env = os.environ.copy()
-        env['OMP_NUM_THREADS'] = nthread
-        scom = ['srun', '-n', '{}'.format(nodes * ppn), '-c', '{}'.format(nthread)]
-        if use_multiprocess:
-            scom.extend(['--cpu_bind=no'])
-        scom.extend(command)
-        proc = sp.Popen(scom, env=env, stdout=open(logfile, "w"), stderr=sp.STDOUT, stdin=None, close_fds=True)
-        return proc
+def nersc_job(path, logroot, envsetup, commands, nodes=1, nodeproc=1, minutes=10, openmp=False, multiproc=False):
+    hours = int(minutes/60)
+    fullmin = int(minutes - 60*hours)
+    timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
+    with open(path, 'w') as f:
+        f.write("#!/bin/bash -l\n\n")
+        f.write("#SBATCH --partition=regular\n")
+        f.write("#SBATCH --account=desi\n")
+        f.write("#SBATCH --nodes={}\n".format(nodes))
+        f.write("#SBATCH --time={}\n".format(timestr))
+        f.write("#SBATCH --job-name=desipipe\n")
+        f.write("#SBATCH --export=NONE\n\n")
+        for com in envsetup:
+            f.write("{}\n".format(com))
+        f.write("\n")
+        f.write("node_cores=0\n")
+        f.write("if [ ${{NERSC_HOST}} = edison ]; then\n")
+        f.write("  node_cores=24\n")
+        f.write("else\n")
+        f.write("  node_cores=32\n")
+        f.write("fi\n")
+        f.write("\n")
+        f.write("nodes={}\n".format(nodes))
+        f.write("node_proc={}\n".format(nodeproc))
+        f.write("node_thread=$(( node_cores / node_proc ))\n")
+        f.write("procs=$(( nodes * node_proc ))\n\n")
+        if openmp:
+            f.write("export OMP_NUM_THREADS=${{node_thread}}\n")
+            f.write("\n")
+        runstr = "srun --export=ALL"
+        if multiproc:
+            runstr = "{} --cpu_bind=no".format(runstr)
+        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}}\"\n\n".format(runstr))
+        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write("log={}_${{now}}\n\n".format(logroot))
+        for com in commands:
+            f.write("${{run}} {} >${{log}} 2>&1\n\n".format(com))
+    return
 
