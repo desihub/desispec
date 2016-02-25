@@ -125,9 +125,9 @@ def load_gdarc_lines(camera):
         gd_lines = np.array(HgI + NeI)# + ArI)
     elif camera[0] == 'z':
         NeI = [7438.898, 7488.8712, 7535.7739,
-               8136.4061, 8300.3248,
+               7943.1805, 8136.4061, 8300.3248,
                8377.6070, 8495.3591, 8591.2583, 8634.6472, 8654.3828,
-               8783.7539, 9148.6720, 9201.7588]
+               8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
         dlamb = 0.599  # Ang
         gd_lines = np.array(NeI)# + ArI)
         line_guess = None
@@ -139,7 +139,8 @@ def load_gdarc_lines(camera):
     gd_lines.sort()
     return dlamb, wmark, gd_lines, line_guess
 
-def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
+
+def add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=2, toler=10., verbose=False, debug=False):
     """Attempt to identify and add additional goodlines
 
     Parameters
@@ -148,16 +149,19 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
       dict of ID info
     pixpk : ndarray
       Pixel locations of detected arc lines
+    toler : float
+      Tolerance for a match (pixels)
     gd_lines : ndarray
       array of expected arc lines to be detected and identified
-    npoly : int, optional
-      Order of polynomial for fitting
+    inpoly : int, optional
+      Order of polynomial for fitting for initial set of lines
 
     Returns
     -------
     id_dict : dict
       Filled with complete set of IDs and the final polynomial fit
     """
+    log=get_logger()
     # Init
     ilow = id_dict['icen']-(len(id_dict['first_id_pix'])//2)
     ihi = id_dict['icen']+(len(id_dict['first_id_pix'])//2)
@@ -185,21 +189,29 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, npoly=2, verbose=False):
             continue
         # New line
         new_wv = gd_lines[inew]
+        # newx
+        newx = dufits.func_val(new_wv, id_dict['fit'])
+        # Match
+        mnm = np.min(np.abs(pixpk-newx))
+        if mnm > toler:
+            log.warn("No match for {:g} in fiber {:d}".format(new_wv, id_dict['fiber']))
+            continue
+        imin = np.argmin(np.abs(pixpk-newx))
+        if debug:
+            print(new_wv, np.min(np.abs(pixpk-newx)))
+        # Append and sort
         wvval.append(new_wv)
         wvval.sort()
-        # newx
-        newx = dufits.func_val(new_wv,id_dict['fit'])
-        # Match and add
-        imin = np.argmin(np.abs(pixpk-newx))
         newtc = pixpk[imin]
         idx.append(imin)
         idx.sort()
         xval.append(newtc)
         xval.sort()
-        # Fit
-        # Should reject 1
+        # Fit (should reject 1 someday)
         if len(xval) > 7:
-            npoly = 3
+            npoly = inpoly+1
+        else:
+            npoly = inpoly
         new_fit = dufits.func_fit(np.array(wvval),np.array(xval),'polynomial',npoly,xmin=0.,xmax=1.)
         id_dict['fit'] = new_fit
     # RMS
@@ -641,7 +653,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
                 bflux.append(np.median(flux[ok]))
         if len(bdx)<10 :
             log.error("sigma fit failed for fiber #%02d"%ii)
-            log.error("this should only occur for the fiber at the center of the detector (if at all)")
+            log.error("this should only occur for the fiber near the center of the detector (if at all)")
             log.error("using the sigma value from the previous fiber")
             gauss.append(gauss[-1])
             continue
@@ -654,7 +666,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         sq2 = math.sqrt(2.)
         for i in xrange(10) :
             nsigma = sq2*np.sqrt(np.mean(bdx**2*bflux*np.exp(-bdx**2/2/sigma**2))/np.mean(bflux*np.exp(-bdx**2/2/sigma**2)))
-            if abs(nsigma-sigma)<0.001 :
+            if abs(nsigma-sigma) < 0.001 :
                 break
             sigma = nsigma
         gauss.append(sigma)
@@ -1140,7 +1152,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=Fals
         wv_solns = [None]*nfiber
     else:
         WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
-        WAVEMAX = np.min([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
+        WAVEMAX = np.max([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
     wv_array = np.linspace(WAVEMIN, WAVEMAX, num=ny)
     # Fit Legendre to y vs. wave
     for ii,id_dict in enumerate(wv_solns):
@@ -1170,7 +1182,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=Fals
     # also save wavemin wavemax in yhdu
     yhdu.header['WAVEMIN'] = WAVEMIN
     yhdu.header['WAVEMAX'] = WAVEMAX
-    
+
     gausshdu = fits.ImageHDU(np.array(gauss))
     
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
