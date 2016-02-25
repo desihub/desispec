@@ -20,10 +20,10 @@ import desispec.io as io
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Set up pipeline runs for one or more nights.')
+    parser = argparse.ArgumentParser(description='Set up pipeline runs for a production.')
     parser.add_argument('--raw', required=False, default=None, help='raw data directory')
     parser.add_argument('--redux', required=False, default=None, help='output directory')
-    parser.add_argument('--redux-prod', required=False, default=None, help='output production name')
+    parser.add_argument('--prod', required=False, default='test', help='output production name')
     parser.add_argument('--nights', required=False, default=None, help='comma separated (YYYYMMDD) or regex pattern')
     parser.add_argument('--desimodel', required=False, default='/project/projectdirs/desi/software/edison/desimodel/trunk', help='desimodel checkout to use')
     parser.add_argument('--aux', required=False, default='/project/projectdirs/desi', help='root directory containing auxiliary data files')
@@ -53,11 +53,65 @@ def main():
         os.environ['DESI_SPECTRO_REDUX'] = os.path.abspath(specdir)
     specdir = os.path.abspath(specdir)
 
-    # Create the output directory if needed
+    # Create the output directories if needed
 
     if not os.path.isdir(specdir):
         os.makedirs(specdir)
-        
+
+    proddir = os.path.join(specdir, args.prod)
+    if not os.path.isdir(proddir):
+        os.makedirs(proddir)
+    
+    cal2d = os.path.join(proddir, 'calib2d')
+    if not os.path.isdir(cal2d):
+        os.makedirs(cal2d)
+
+    expdir = os.path.join(proddir, 'exposures')
+    if not os.path.isdir(expdir):
+        os.makedirs(expdir)
+
+    # Get full list of nights
+
+    allnights = []
+    nightpat = re.compile(r'\d{8}')
+    for root, dirs, files in os.walk(rawdir, topdown=True):
+        for f in files:
+            nightmat = nightpat.match(f)
+            if nightmat is not None:
+                allnights.append(f)
+        break
+
+    # Trim list of nights based on set of patterns
+
+    nights = []
+    if args.nights is not None:
+        nightsel = args.nights.split(',')
+        for sel in nightsel:
+            pat = re.compile(sel)
+            for nt in allnights:
+                mat = pat.match(nt)
+                if mat is not None:
+                    if nt not in nights:
+                        nights.append(nt)
+        nights = sorted(nights)
+    else:
+        nights = sorted(allnights)
+
+    # create per-night directories
+
+    for nt in nights:
+        ndir = os.path.join(expdir, nt)
+        if not os.path.isdir(ndir):
+            os.makedirs(ndir)
+        ndir = os.path.join(cal2d, nt)
+        if not os.path.isdir(ndir):
+            os.makedirs(ndir)
+
+    # create scripts for processing
+
+    scrdir = os.path.join(specdir, 'scripts')
+    if not os.path.isdir(scrdir):
+        os.makedirs(scrdir)
 
 
 
