@@ -19,7 +19,7 @@ import argparse
 
 from astropy.io import fits
 
-#from xastropy.xutils import xdebug as xdb
+from xastropy.xutils import xdebug as xdb
 
 def main() :
 
@@ -74,7 +74,8 @@ def main() :
         # Test?
         if args.test:
             log.warning("cutting down fibers for testing..")
-            xpk = xpk[0:5]
+            xpk = xpk[261:270]
+            #xpk = xpk[0:5]
 
         ###########
         # Trace the fiber flat spectra
@@ -147,6 +148,7 @@ def main() :
         #####################################
         # Loop to solve for wavelengths
         all_wv_soln = []
+        debug=False
         for ii in range(all_spec.shape[1]):
             spec = all_spec[:,ii]
             if (ii % 20) == 0:
@@ -156,8 +158,13 @@ def main() :
             # Match a set of 5 gd_lines to detected lines
             id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb,
                                             wmark, line_guess=line_guess)
+            id_dict['fiber'] = ii
             # Find the other good ones
-            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines)
+            if camera == 'z':
+                inpoly = 3  # The solution in the z-camera has greater curvature
+            else:
+                inpoly = 2
+            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=inpoly, debug=debug)
             # Now the rest
             desiboot.id_remainder(id_dict, pixpk, llist)
             # Final fit wave vs. pix too

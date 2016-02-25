@@ -15,6 +15,7 @@ module load speclite/master
 module load desispec/master
 module load desisim/master
 module load specter/master
+module load desitarget/master
 module load redmonster/master
 module switch desimodel/trunk
 
@@ -24,6 +25,7 @@ git pull; fix_permissions.sh .; python setup.py build
 echo 'updating desispec'; cd $DESISPEC; git pull; fix_permissions.sh .
 echo 'updating desisim'; cd $DESISIM; git pull; fix_permissions.sh .
 echo 'updating specter'; cd $SPECTER_DIR; git pull; fix_permissions.sh .
+echo 'updating desitarget'; cd $DESITARGET; git pull; fix_permissions.sh .
 echo 'updating desimodel'; cd $DESIMODEL; svn update; fix_permissions.sh .
 echo 'updating redmonster'; cd $REDMONSTER; git pull; fix_permissions.sh .
 
