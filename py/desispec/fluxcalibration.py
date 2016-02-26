@@ -176,7 +176,7 @@ def normalize_templates(stdwave, stdflux, mags, filters):
         if (count==0):
             log.error("No magnitude given for SDSS_R, DECAM_R or DECAM_G filters")
             sys.exit(0)
-    return stdwave,normflux
+    return normflux
 
 
 def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.):

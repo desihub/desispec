@@ -19,6 +19,8 @@ from desispec.fluxcalibration import FluxCalib
 from desispec.fluxcalibration import compute_flux_calibration, apply_flux_calibration
 from desispec.log import get_logger
 
+import speclite.filters
+
 # set up a resolution matrix
 
 def set_resolmatrix(nspec,nwave):
@@ -131,14 +133,13 @@ class TestFluxCalibration(unittest.TestCase):
         mags=np.array((20,21))
         filters=['SDSS_I','SDSS_R']
         #This should use SDSS_R for calibration
-        stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
-        apmag=-50.00 #calculated, instead add a test for apmag and scale factor
-        refmag=21
-        scalefac=10**((apmag-refmag)/2.5)
-        # assert output
-        self.assertEqual(stwave.shape, stdwave.shape)
-        self.assertEqual(stwave.shape, normflux.shape)
-        self.assertTrue(np.allclose(normflux,stdflux*scalefac))
+        normflux=normalize_templates(stdwave,stdflux,mags,filters)
+
+        self.assertEqual(stdflux.shape, normflux.shape)
+
+        r = speclite.filters.load_filter('sdss2010-r')
+        rmag = r.get_ab_magnitude(1e-17*normflux, stdwave)
+        self.assertAlmostEqual(rmag, mags[1])
 
     def test_check_filters(self):
         filterlist=['SDSS_U','SDSS_G','SDSS_R','SDSS_I','SDSS_Z','DECAM_U','DECAM_G','DECAM_R',
@@ -150,14 +151,18 @@ class TestFluxCalibration(unittest.TestCase):
         
         # No correct filters
         with self.assertRaises(SystemExit):
-            stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
+            normflux=normalize_templates(stdwave,stdflux,mags,filters)
 
         filters=filters+['DECAM_R']
         #This should use DECAM_R for calibration
         mags=np.concatenate([mags,np.array([23])])
+        normflux=normalize_templates(stdwave,stdflux,mags,filters)
+        r = speclite.filters.load_filter('decam2014-r')
+        rmag = r.get_ab_magnitude(1e-17*normflux, stdwave)
+        self.assertAlmostEqual(rmag, mags[-1])
+        
         #check dimensionality
-        stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
-        self.assertEqual(stwave.shape, normflux.shape)
+        self.assertEqual(stdflux.shape, normflux.shape)
         
     def test_compute_fluxcalibration(self):
         """ Test compute_fluxcalibration interface
