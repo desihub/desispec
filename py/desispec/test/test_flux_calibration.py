@@ -89,15 +89,19 @@ class TestFluxCalibration(unittest.TestCase):
         modelwave,modelflux=get_models()
         # say there are 3 stdstars
         stdfibers=np.random.choice(9,3,replace=False)
-        #pick fluxes etc for stdstars
-        stdflux={"b":flux["b"][stdfibers],"r":flux["r"][stdfibers],"z":flux["z"][stdfibers]}
-        stdivar={"b":ivar["b"][stdfibers],"r":ivar["r"][stdfibers],"z":ivar["z"][stdfibers]}
-        stdresol_data={"b":resol_data["b"][stdfibers],"r":resol_data["r"][stdfibers],"z":resol_data["z"][stdfibers]}
-        bestid=np.zeros(len(stdfibers))
+
+        #pick fluxes etc for each stdstars find the best match
+        bestid=-np.ones(len(stdfibers))
         bestwave=np.zeros((bestid.shape[0],modelflux.shape[1]))
         bestflux=np.zeros((bestid.shape[0],modelflux.shape[1]))
         red_chisq=np.zeros(len(stdfibers))
+        
         for i in xrange(len(stdfibers)):
+
+            stdflux={"b":flux["b"][i],"r":flux["r"][i],"z":flux["z"][i]}
+            stdivar={"b":ivar["b"][i],"r":ivar["r"][i],"z":ivar["z"][i]}
+            stdresol_data={"b":resol_data["b"][i],"r":resol_data["r"][i],"z":resol_data["z"][i]}
+
             bestid[i],bestwave[i],bestflux[i],red_chisq[i]=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux)
         
         # Now assert the outputs
