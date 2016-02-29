@@ -13,6 +13,8 @@ from .log import get_logger
 from .io.filters import load_filter
 import scipy, scipy.sparse, scipy.ndimage
 import sys
+from astropy import units
+
 #debug
 #import pylab
 
@@ -153,13 +155,15 @@ def normalize_templates(stdwave, stdflux, mags, filters):
     nstdwave=stdwave.size
     normflux=np.array(nstdwave)
 
+    fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
+
     for i,v in enumerate(filters):
         #Normalizing using only SDSS_R band magnitude
         if v.upper() == 'SDSS_R' or v.upper() =='DECAM_R' or v.upper()=='DECAM_G' :
             #-TODO: Add more filters for calibration. Which one should be used if multiple mag available?
             refmag=mags[i]
             filter_response=load_filter(v)
-            apMag=filter_response.get_ab_magnitude(stdflux,stdwave)
+            apMag=filter_response.get_ab_magnitude(stdflux*fluxunits,stdwave)
             log.info('scaling {} mag {:f} to {:f}.'.format(v, apMag,refmag))
             scalefac=10**((apMag-refmag)/2.5)
             normflux=stdflux*scalefac
@@ -172,7 +176,7 @@ def normalize_templates(stdwave, stdflux, mags, filters):
         if (count==0):
             log.error("No magnitude given for SDSS_R, DECAM_R or DECAM_G filters")
             sys.exit(0)
-    return stdwave,normflux
+    return normflux
 
 
 def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.):

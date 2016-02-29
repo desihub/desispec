@@ -19,6 +19,8 @@ from desispec.fluxcalibration import FluxCalib
 from desispec.fluxcalibration import compute_flux_calibration, apply_flux_calibration
 from desispec.log import get_logger
 
+import speclite.filters
+
 # set up a resolution matrix
 
 def set_resolmatrix(nspec,nwave):
@@ -87,15 +89,19 @@ class TestFluxCalibration(unittest.TestCase):
         modelwave,modelflux=get_models()
         # say there are 3 stdstars
         stdfibers=np.random.choice(9,3,replace=False)
-        #pick fluxes etc for stdstars
-        stdflux={"b":flux["b"][stdfibers],"r":flux["r"][stdfibers],"z":flux["z"][stdfibers]}
-        stdivar={"b":ivar["b"][stdfibers],"r":ivar["r"][stdfibers],"z":ivar["z"][stdfibers]}
-        stdresol_data={"b":resol_data["b"][stdfibers],"r":resol_data["r"][stdfibers],"z":resol_data["z"][stdfibers]}
-        bestid=np.zeros(len(stdfibers))
+
+        #pick fluxes etc for each stdstars find the best match
+        bestid=-np.ones(len(stdfibers))
         bestwave=np.zeros((bestid.shape[0],modelflux.shape[1]))
         bestflux=np.zeros((bestid.shape[0],modelflux.shape[1]))
         red_chisq=np.zeros(len(stdfibers))
+        
         for i in xrange(len(stdfibers)):
+
+            stdflux={"b":flux["b"][i],"r":flux["r"][i],"z":flux["z"][i]}
+            stdivar={"b":ivar["b"][i],"r":ivar["r"][i],"z":ivar["z"][i]}
+            stdresol_data={"b":resol_data["b"][i],"r":resol_data["r"][i],"z":resol_data["z"][i]}
+
             bestid[i],bestwave[i],bestflux[i],red_chisq[i]=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux)
         
         # Now assert the outputs
@@ -131,14 +137,13 @@ class TestFluxCalibration(unittest.TestCase):
         mags=np.array((20,21))
         filters=['SDSS_I','SDSS_R']
         #This should use SDSS_R for calibration
-        stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
-        apmag=-50.00 #calculated, instead add a test for apmag and scale factor
-        refmag=21
-        scalefac=10**((apmag-refmag)/2.5)
-        # assert output
-        self.assertEqual(stwave.shape, stdwave.shape)
-        self.assertEqual(stwave.shape, normflux.shape)
-        self.assertTrue(np.allclose(normflux,stdflux*scalefac))
+        normflux=normalize_templates(stdwave,stdflux,mags,filters)
+
+        self.assertEqual(stdflux.shape, normflux.shape)
+
+        r = speclite.filters.load_filter('sdss2010-r')
+        rmag = r.get_ab_magnitude(1e-17*normflux, stdwave)
+        self.assertAlmostEqual(rmag, mags[1])
 
     def test_check_filters(self):
         filterlist=['SDSS_U','SDSS_G','SDSS_R','SDSS_I','SDSS_Z','DECAM_U','DECAM_G','DECAM_R',
@@ -150,14 +155,18 @@ class TestFluxCalibration(unittest.TestCase):
         
         # No correct filters
         with self.assertRaises(SystemExit):
-            stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
+            normflux=normalize_templates(stdwave,stdflux,mags,filters)
 
         filters=filters+['DECAM_R']
         #This should use DECAM_R for calibration
         mags=np.concatenate([mags,np.array([23])])
+        normflux=normalize_templates(stdwave,stdflux,mags,filters)
+        r = speclite.filters.load_filter('decam2014-r')
+        rmag = r.get_ab_magnitude(1e-17*normflux, stdwave)
+        self.assertAlmostEqual(rmag, mags[-1])
+        
         #check dimensionality
-        stwave,normflux=normalize_templates(stdwave,stdflux,mags,filters)
-        self.assertEqual(stwave.shape, normflux.shape)
+        self.assertEqual(stdflux.shape, normflux.shape)
         
     def test_compute_fluxcalibration(self):
         """ Test compute_fluxcalibration interface
