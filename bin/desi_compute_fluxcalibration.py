@@ -12,8 +12,10 @@ from desispec.io import read_frame
 from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
+from desispec.io import write_qa_frame
 from desispec.io.fluxcalibration import read_stdstar_models
 from desispec.io.fluxcalibration import write_flux_calibration
+from desispec.io.qa import load_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.fluxcalibration import compute_flux_calibration
@@ -24,6 +26,7 @@ import os
 import os.path
 import numpy as np
 import sys
+
 
 def main() :
 
@@ -41,6 +44,8 @@ def main() :
                         help = 'path of spetro-photometric stellar spectra fits file')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
+    parser.add_argument('--qafile', type=str, default=None, required=False,
+                        help='path of QA file.')
 
 
     args = parser.parse_args()
@@ -86,7 +91,19 @@ def main() :
             log.error("inconsistency with fiber %d, OBJTYPE='%s' in fibermap"%(fiber,table["OBJTYPE"][fiber]))
         sys.exit(12)
 
-    fluxcalib = compute_flux_calibration(frame, fibers, model_wave, model_flux)
+    fluxcalib, indiv_stars = compute_flux_calibration(frame, fibers, model_wave, model_flux)
+
+    # QA
+    if (args.qafile is not None):
+        log.info("performing fluxcalib QA")
+        # Load
+        qaframe = load_qa_frame(args.qafile, frame, flavor='science')
+        # Run
+        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, indiv_stars))
+        # Write
+        if args.qafile is not None:
+            write_qa_frame(args.qafile, qaframe)
+            log.info("successfully wrote {:s}".format(args.qafile))
 
     # write result
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)
