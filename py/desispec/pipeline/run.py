@@ -80,7 +80,7 @@ def subprocess_list(tasks, rank=0):
     return
 
 
-def shell_job(path, logroot, envsetup, commands):
+def shell_job(path, logroot, envsetup, desisetup, commands):
     with open(path, 'w') as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
@@ -88,12 +88,13 @@ def shell_job(path, logroot, envsetup, commands):
         for com in envsetup:
             f.write("{}\n".format(com))
         f.write("\n")
+        f.write("source {}\n\n".format(desisetup))
         for com in commands:
             f.write("{} >${{log}} 2>&1\n\n".format(com))
     return
 
 
-def nersc_job(path, logroot, envsetup, commands, nodes=1, nodeproc=1, minutes=10, openmp=False, multiproc=False):
+def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1, minutes=10, openmp=False, multiproc=False):
     hours = int(minutes/60)
     fullmin = int(minutes - 60*hours)
     timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
@@ -108,8 +109,9 @@ def nersc_job(path, logroot, envsetup, commands, nodes=1, nodeproc=1, minutes=10
         for com in envsetup:
             f.write("{}\n".format(com))
         f.write("\n")
+        f.write("source {}\n\n".format(desisetup))
         f.write("node_cores=0\n")
-        f.write("if [ ${{NERSC_HOST}} = edison ]; then\n")
+        f.write("if [ ${NERSC_HOST} = edison ]; then\n")
         f.write("  node_cores=24\n")
         f.write("else\n")
         f.write("  node_cores=32\n")
@@ -120,7 +122,7 @@ def nersc_job(path, logroot, envsetup, commands, nodes=1, nodeproc=1, minutes=10
         f.write("node_thread=$(( node_cores / node_proc ))\n")
         f.write("procs=$(( nodes * node_proc ))\n\n")
         if openmp:
-            f.write("export OMP_NUM_THREADS=${{node_thread}}\n")
+            f.write("export OMP_NUM_THREADS=${node_thread}\n")
             f.write("\n")
         runstr = "srun --export=ALL"
         if multiproc:

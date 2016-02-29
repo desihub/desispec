@@ -30,7 +30,8 @@ def main():
     parser.add_argument('--desimodel', required=False, default='/project/projectdirs/desi/software/edison/desimodel/trunk', help='desimodel checkout to use')
     parser.add_argument('--aux', required=False, default='/project/projectdirs/desi', help='root directory containing auxiliary data files')
     parser.add_argument('--basis', required=False, default='spectro/templates/basis_templates/v1.1', help='basis template directory, relative to the aux root')
-    parser.add_argument( '--simraw', required=False, action='store_true', help='if set, raw data is simulated' )
+    parser.add_argument('--env', required=False, default=None, help='text file with environment setup commands')
+    parser.add_argument('--simraw', required=False, action='store_true', help='if set, raw data is simulated')
 
     args = parser.parse_args()
 
@@ -60,6 +61,8 @@ def main():
         os.makedirs(expdir)
 
     # Get full list of nights
+
+    print("Selecting nights for processing")
 
     allnights = []
     nightpat = re.compile(r'\d{8}')
@@ -111,7 +114,17 @@ def main():
         s.write("export PRODNAME={}\n".format(args.prod))
         s.write("\n")
 
+    # read in the environment setup, if needed
+
+    envcom = []
+    if args.env is not None:
+        with open(args.env, 'r') as f:
+            for line in f:
+                envcom.append(line.rstrip())
+
     # create scripts for processing
+
+    print("Generating nightly scripts")
 
     scrdir = os.path.join(proddir, 'scripts')
     if not os.path.isdir(scrdir):
@@ -125,6 +138,9 @@ def main():
         pixroot = "pix"
     else:
         pixroot = "raw"
+
+    com_master_shell = []
+    com_master_nersc = []
 
     for nt in nights:
         # get the list of exposures and their types
@@ -159,12 +175,64 @@ def main():
             outfile = os.path.join(calpsf, nt, outname)
             commands.append("desi_bootcalib.py --fiberflat {} --arcfile {} --outfile {}".format(flatfile, arcfile, outfile))
         shell_file = os.path.join(nsdir, "bootcalib.sh")
-        nersc_file = os.path.join(nsdir, "bootcalib.slurm")
+        nersc_file = os.path.join(nsdir, "bootcalib.nersc")
         shell_log = os.path.join(nldir, "bootcalib_sh")
-        nersc_log = os.path.join(nldir, "bootcalib_slurm")
-        pipe.shell_job(shell_file, shell_log, [], commands)
-        pipe.nersc_job(nersc_file, nersc_log, [], commands, nodes=1, nodeproc=1, minutes=30, openmp=False, multiproc=False)
+        nersc_log = os.path.join(nldir, "bootcalib_nersc")
+        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=1, nodeproc=1, minutes=30, openmp=False, multiproc=False)
 
+        com_master_shell.append("bash {}".format(shell_file))
+
+        # Create scripts to run specex
+
+        lamplines = "/project/projectdirs/desi/software/edison/specex/specex-0.3.4/data/lamplines-specex.par"
+        bootr = os.path.join(calpsf, nt, "psfboot-r.fits")
+        bootb = os.path.join(calpsf, nt, "psfboot-b.fits")
+        bootz = os.path.join(calpsf, nt, "psfboot-z.fits")
+        optsim = ""
+        if args.simraw:
+            optsim = "--simraw "
+        commands = ["desi_pipe_psf {}--lamplines {} --bootcalib_r {} --bootcalib_b {} --bootcalib_z {} --night {}".format(optsim, lamplines, bootr, bootb, bootz, nt)]
+        shell_file = os.path.join(nsdir, "specex.sh")
+        nersc_file = os.path.join(nsdir, "specex.nersc")
+        shell_log = os.path.join(nldir, "specex_sh")
+        nersc_log = os.path.join(nldir, "specex_nersc")
+        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
+        # for one exposure, there are 600 bundles.  If we run 8 per node (which works
+        # well for 24 or 32 cores per node), then we want 75 nodes.  Specex
+        # is OpenMP parallel.
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=75, nodeproc=8, minutes=30, openmp=True, multiproc=False)
+
+        com_master_shell.append("bash {}".format(shell_file))
+
+        # Create scripts to run exspec
+
+        optsim = ""
+        if args.simraw:
+            optsim = "--simraw "
+        commands = ["desi_pipe_extract {}--night {}".format(optsim, nt)]
+        shell_file = os.path.join(nsdir, "exspec.sh")
+        nersc_file = os.path.join(nsdir, "exspec.nersc")
+        shell_log = os.path.join(nldir, "exspec_sh")
+        nersc_log = os.path.join(nldir, "exspec_nersc")
+        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
+        # for one exposure, there are 600 bundles.  If we run 8 per node (which works
+        # well for 24 or 32 cores per node), then we want 75 nodes.  This is python,
+        # so no threads, but multiprocessing might be used.
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=75, nodeproc=8, minutes=30, openmp=False, multiproc=True)
+
+        com_master_shell.append("bash {}".format(shell_file))
+
+    # Create master scripts with job dependencies
+    shell_master = os.path.join(scrdir, 'run.sh')
+    with open(shell_master, 'w') as f:
+        for com in com_master_shell:
+            f.write("{}\n".format(com))
+
+    shell_nersc = os.path.join(scrdir, 'run.nersc')
+    with open(shell_nersc, 'w') as f:
+        for com in com_master_nersc:
+            f.write("{}\n".format(com))
 
 
 if __name__ == "__main__":
