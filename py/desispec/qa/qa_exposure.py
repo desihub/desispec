@@ -89,7 +89,7 @@ class QA_Frame(object):
         fflat_dict = dict(MAX_N_MASK=20000,  # Maximum number of pixels to mask
                           MAX_SCALE_OFF=0.05,  # Maximum offset in counts (fraction)
                           MAX_OFF=0.15,       # Maximum offset from unity
-                          MAX_MEAN_OFF=0.05,  # Maximum offset in fiberflat (fraction)
+                          MAX_MEAN_OFF=0.05,  # Maximum offset in mean of fiberflat
                           MAX_RMS=0.02,      # Maximum RMS in fiberflat
                           )
         # Init
@@ -133,6 +133,7 @@ class QA_Frame(object):
         # Standard SKYSUB input parameters
         sky_dict = dict(
             PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+            PER_RESID=95.,   # Percentile for residual distribution
             )
         # Init
         self.init_qatype('SKYSUB', sky_dict, re_init=re_init)

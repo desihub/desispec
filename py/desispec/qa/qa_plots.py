@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 import numpy as np
 from scipy import signal
 import scipy
-import sys, os
+import pdb
 
 import matplotlib
 matplotlib.use('Agg') 
@@ -174,3 +174,86 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
     Returns:
 
     """
+
+def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
+    """ QA plots for fiber flat
+    Args:
+        outfil:
+        qaframe:
+        frame:
+        fibermap:
+        fiberflat:
+
+    Returns:
+
+    """
+    # Setup
+    gdp = fiberflat.mask == 0
+    nfiber = len(frame.fibers)
+    xfiber = np.zeros(nfiber)
+    yfiber = np.zeros(nfiber)
+    for ii,fiber in enumerate(frame.fibers):
+        mt = np.where(fiber == fibermap['FIBER'])[0]
+        xfiber[ii] = fibermap['X_TARGET'][mt]
+        yfiber[ii] = fibermap['Y_TARGET'][mt]
+
+    jet = cm = plt.get_cmap('jet')
+
+    # Tile plot(s)
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2,2)
+
+    # Mean Flatfield flux in each fiber
+    ax = plt.subplot(gs[0,0])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
+
+    mean_flux = np.mean(frame.flux*gdp, axis=1)
+    rms_mean = np.std(mean_flux)
+    med_mean = np.median(mean_flux)
+    #from xastropy.xutils import xdebug as xdb
+    #pdb.set_trace()
+    mplt = ax.scatter(xfiber, yfiber, marker='o', s=9., c=mean_flux, cmap=jet)
+    mplt.set_clim(vmin=med_mean-2*rms_mean, vmax=med_mean+2*rms_mean)
+    cb = fig.colorbar(mplt)
+    cb.set_label('Mean Flux')
+
+    # Mean
+    ax = plt.subplot(gs[0,1])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
+    mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1)
+    m2plt = ax.scatter(xfiber, yfiber, marker='o', s=9., c=mean_norm, cmap=jet)
+    m2plt.set_clim(vmin=0.98, vmax=1.02)
+    cb = fig.colorbar(m2plt)
+    cb.set_label('Mean of Fiberflat')
+
+    # RMS
+    ax = plt.subplot(gs[1,0])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
+    rms = np.std(gdp*(fiberflat.fiberflat-
+                      np.outer(mean_norm, np.ones(fiberflat.nwave))),axis=1)
+    rplt = ax.scatter(xfiber, yfiber, marker='o', s=9., c=rms, cmap=jet)
+    #rplt.set_clim(vmin=0.98, vmax=1.02)
+    cb = fig.colorbar(rplt)
+    cb.set_label('RMS in Fiberflat')
+
+    # Meta text
+    ax2 = plt.subplot(gs[1,1])
+    ax2.set_axis_off()
+    xlbl = 0.05
+    ylbl = 0.85
+    i0 = outfil.rfind('/')
+    ax2.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax2.transAxes, ha='left')
+    yoff=0.10
+    for key in sorted(qaframe.data['FIBERFLAT']['QA'].keys()):
+        if key in ['QA_FIG']:
+            continue
+        # Show
+        ylbl -= yoff
+        ax2.text(xlbl+0.05, ylbl, key+': '+str(qaframe.data['FIBERFLAT']['QA'][key]),
+            transform=ax2.transAxes, ha='left', fontsize='x-small')
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    plt.savefig(outfil)
+    plt.close()
+    print('Wrote QA SkyRes file: {:s}'.format(outfil))

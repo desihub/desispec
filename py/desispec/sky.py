@@ -14,6 +14,8 @@ from desispec.linalg import spline_fit
 from desispec.log import get_logger
 from desispec import util
 
+from desiutil import stats as dustat
+
 import scipy,scipy.sparse,scipy.stats
 import sys
 
@@ -160,10 +162,11 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
     # need to do better here
     mask = (cskyivar==0).astype(np.uint32)
 
-    return SkyModel(frame.wave.copy(), cskyflux, cskyivar, mask)
+    return SkyModel(frame.wave.copy(), cskyflux, cskyivar, mask,
+                    nrej=nout_tot)
 
 class SkyModel(object):
-    def __init__(self, wave, flux, ivar, mask, header=None):
+    def __init__(self, wave, flux, ivar, mask, header=None, nrej=None):
         """Create SkyModel object
         
         Args:
@@ -186,6 +189,7 @@ class SkyModel(object):
         self.ivar = ivar
         self.mask = mask
         self.header = header
+        self.nrej = nrej
 
 
 def subtract_sky(frame, skymodel) :
@@ -233,6 +237,7 @@ def qa_skysub(param, frame, fibermap, skymodel):
 
     # Output dict
     qadict = {}
+    qadict['NREJ'] = int(skymodel.nrej)
 
     # Grab sky fibers on this frame
     specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
@@ -258,11 +263,20 @@ def qa_skysub(param, frame, fibermap, skymodel):
         chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
     # Bad models
     qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
+    if qadict['NBAD_PCHI'] > 0:
+        log.warn("Bad Sky Subtraction in {:d} fibers".format(
+                qadict['NBAD_PCHI']))
 
     # Median residual
     qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
     log.info("Median residual for sky fibers = {:g}".format(
-        qadict['MED_RESID'])) 
+        qadict['MED_RESID']))
+
+    # Residual percentiles
+    perc = dustat.perc(res, per=param['PER_RESID'])
+    qadict['PER_RESID'] = [float(iperc) for iperc in perc]
+    #import pdb
+    #pdb.set_trace()
 
     # Return
     return qadict

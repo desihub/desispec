@@ -5,6 +5,13 @@
 \usepackage{hyperref}
 \usepackage[margin=1.2in]{geometry}
 
+\newenvironment{myitemize}
+{ \begin{itemize}
+    \setlength{\itemsep}{0pt}
+    \setlength{\parskip}{0pt}
+    \setlength{\parsep}{0pt}     }
+{ \end{itemize}                  } 
+
 \providecommand{\eqn}[1]{eqn.~(\ref{eqn:#1})}
 \providecommand{\tab}[1]{Table~\ref{tab:#1}}
 \providecommand{\fig}[1]{Figure~\ref{fig:#1}}
@@ -63,37 +70,53 @@ This is not yet implemented.
 
 The primary goals of QA for flat fielding are:
 
-\begin{itemize}
+\begin{myitemize}
 \item Crudely assess system throughput (i.e.\ sufficient counts)
-\item Assess flat field model
+\item Assess flat field variation in fibers
 \item Identify bad fibers
 \item Assess flat field within and across tiles
 \item Assess flat field versus time
-\end{itemize}
+\end{myitemize}
 
-\subsection{Metrics}
+\subsection{Single Frame}
 
-The QA analysis for the fiberflat step is guided by a set of 
+The {\tt computer\_fiberflat} routine calculates a 
+deconvolved, mean fiber spectrum from all of the fibers in a given 
+flat field frame. 
+The routine then calculates (and saves) a fiberflat spectrum for each 
+fiber, which is that fiber's flux normalized by the mean spectrum 
+convolved with that fiber's resolution.  These fiberflat spectra
+may then be used to correct for pixel-to-pixel variations 
+for data from a given fiber.
+
+The fiberflat QA analysis on a single frame (one tile and one camera, e.g. b0)
+is guided by a set of 
 parameters defined in {\tt qa\_exposure.QA\_Frame.init\_fiberflat}.
-In the case of fiberflat analysis, these parameters are used 
+These parameters are used 
 to raise warnings if the QA metrics exceed these pre-defined values.
-Table~\ref{tabl:flat_param} summarizes the parameters.
+Table~\ref{tab:flat_param} summarizes the parameters.
 
 \begin{table}[h]
 \begin{center}
 \caption{Fiberflat QA Parameters}
 \label{tab:flat_param}
-\begin{tabular}{lcl}
+\begin{tabular}{p{3.5cm}p{1.2cm}p{8.3cm}}
 \hline
 {\bf Name} & {\bf Value} & {\bf Brief Description}\\
 \hline
 MAX\_N\_MASK    & 20000 & Maximum number of pixels masked in fit \\
-MAX\_SCALE\_OFF & 0.05  & Maximum fractional offset between model and individual fibers \\ 
+MAX\_SCALE\_OFF & 0.05  & Maximum fractional offset between mean spectrum and individual fiber flux \\ 
+MAX\_OFF        & 0.15  & Maximum allowed offset from unity of any fiberflat \\
+MAX\_MEAN\_OFF  & 0.05  & Maximum allowed offset from unity for the mean of any fiberflat \\
+MAX\_RMS        & 0.02  & Maximum allowed RMS in any fiberflat (off unity) \\
 \hline
 \end{tabular}
 \end{center}
 \end{table}
 
+
+
+\subsubsection{Metrics}
 
 Table~\ref{tab:flat_metrics} summarizes the QA metrics measured
 for the fiberflat step.  
@@ -102,40 +125,226 @@ for the fiberflat step.
 \begin{center}
 \caption{Fiberflat QA Metrics}
 \label{tab:flat_metrics}
-\begin{tabular}{ll}
+\begin{tabular}{p{3.5cm}p{9.0cm}}
 \hline
 {\bf Name} & {\bf Brief Description}\\
 \hline
-N\_MASK    & Number of pixels masked in fit for all fibers \\
+MAX\_MEANSPEC   & Maximum flux (counts) in the mean fiber flat spectrum \\ 
+CHI2PDF         & Reduced $\chi^2$ for fit to mean spectrum \\
+N\_MASK         & Number of pixels masked in fit (all fibers) \\
+MAX\_SCALE\_OFF & Maximum difference between the ratio of the fiber flux and 
+  the mean spectrum \\
+MAX\_OFF        & Maximum offset from unity in all of the fiberflats \\
+MAX\_MEAN\_OFF  & Maximum offset from unity for the mean of all fiberflats \\
+MAX\_RMS        & Maximum RMS in the fiberflats (from unity) \\
 \hline
 \end{tabular}
 \end{center}
 \end{table}
 
 
-Here is an summary of each:
+\noindent
+Here is a summary of each:
 
-
+\vskip 0.2in
 
 \noindent
 {\tt N\_MASK}:  This metric records the number of pixels that were
-masked during the fiberflat fit.  It is the total over all fibers.
+masked during the fiberflat fit.  It is the sum over all fibers.
+
+\noindent
+{\tt CHI2PDF}:  This metric records the reduced $\chi^2$ value 
+for the fit that generated the mean spectrum.
+
+\noindent
+{\tt MAX\_SCALE\_OFF}:  This metric records the maximum offset 
+in the ratio of the flux in each fiber to the mean spectrum.
+The median ratio of flux/mean
+is calculated for each fiber and the maximum
+deviation from unity is recorded together with the fiber number.  
+This metric is useful for
+identifying whether one (or more) fibers have abnormal flux.
+
+\noindent
+{\tt MAX\_OFF}:  This metric records the maximum offset from
+unity for all the fiberflats at all wavelengths.  
+This may identify if one or more fibers have abnormal response.
+
+\noindent
+{\tt MAX\_MEAN\_OFF}:  This metric records the maximum offset from
+unity of the mean of each of the fiberflats together with the
+fiber number.  May also be used
+to identify one or more fibers with abnormal response.
+
+\noindent
+{\tt MAX\_RMS}:  This metric records the maximum RMS amongst
+all the fiberflats (from unity) and the fiber number.
+
+\subsubsection{Figure(s)}
+
+A series of plots of the fiber flux, mean of the fiberflat, and
+RMS in the fiberflats are shown in each tile.
+These are most useful for identifying outlier flat field
+fibers in a given frame, but also to identify gradients 
+in the flat field flux.
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=5in]{fig/qa-b0-00000001}
+\caption{Example figure for fiberflat QA
+for a single frame.  
+}
+\label{fig:fiberflat_frame}
+\end{center}
+\end{figure}
 
 
-\subsection{Plots}
+\subsection{Exposure}
+
+QA code will be written to:
+
+\begin{myitemize}
+\item Compare the mean spectra across tiles 
+\item Compare the CHI2PDF across tiles
+\item Assess the RMS in the fiberflats across tiles
+\end{myitemize}
+
+\subsection{Time}
+
+QA code will be written to:
+
+\begin{myitemize}
+\item Assess the flat field flux with time
+\item Assess the CHI2PDF values with time
+\item Assess the RMS in the fiberflats with time
+\end{myitemize}
 
 %%%%%%%%%%%%%%%%
 \section{Sky Subtraction}
 
-The primary goals of QA for sky subtraction are:
+\subsection{Overview}
 
-\begin{itemize}
+The primary goals of QA for sky subtraction are to:
+
+\begin{myitemize}
 \item Assess residuals (global)
 \item Assess residuals (on sky lines)
-\item Assess outliers
+\item Identify bad sky fibers
 \item Examine performance within and across tiles
 \item Examine performance vs.\ time
-\end{itemize}
+\end{myitemize}
+
+\subsection{Single Frame}
+
+The {\tt compute\_sky} method calculates a deconvolved sky model
+from the set of sky fibers in a given tile+camera.  
+A sky model for each fiber is then calculated from the 
+mean sky model by convolving it with the fiber resolution.
+
+The sky subtraction QA analysis on a single 
+frame (one tile and one camera, e.g. b0)
+examines the residuals of sky-subtracted flux in each sky fiber 
+and the $\chi^2$ probability of the residuals.
+The parameters listed in Table~\ref{tab:sky_param}
+are used to raise warnings if the QA metrics exceed 
+these pre-defined values.
+
+\begin{table}[h]
+\begin{center}
+\caption{Sky Subtraction QA Parameters}
+\label{tab:sky_param}
+\begin{tabular}{p{3.5cm}p{1.2cm}p{8.3cm}}
+\hline
+{\bf Name} & {\bf Value} & {\bf Brief Description}\\
+\hline
+PCHI\_RESID    & 0.05 & Minimum $P(\chi^2)$ allowed for sky fiber residuals \\ 
+RESID\_PER     & 5,95 & Percentile values for residual distribution \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Metrics}
+
+Table~\ref{tab:sky_metrics} summarizes the QA metrics measured
+for the sky subtraction step.  
+
+\begin{table}[h]
+\begin{center}
+\caption{Sky Subtraction QA Metrics}
+\label{tab:sky_metrics}
+\begin{tabular}{p{4.3cm}p{9.0cm}}
+\hline
+{\bf Name} & {\bf Brief Description}\\
+\hline
+NSKY\_FIBER           & Number of sky fibers in the frame \\
+NBAD\_PCHI            & Number of sky fibers with $P(\chi^2) < $PCHI\_RESID \\
+MED\_RESID            & Median residuals from all sky fibers \\
+PER\_RESID            & 5\% and 95\% percentile of residuals from all sky fibers [not yet implemented] \\
+MED\_SKYLINE\_RESID   & Median residuals on sky lines from all sky fibers [not yet implemented]\\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\noindent
+Here is a summary of each:
+
+\vskip 0.2in
+
+\noindent
+{\tt NSKY\_FIBER}:  Records the number of sky fibers in the frame.
+
+\noindent
+{\tt NBAD\_PCHI}:  Records the number of sky fibers with a 
+$\chi^2$ probability in the residuals less than PCHI\_RESID.  
+Variance in the sky model is included.
+A warning is thrown if NBAD\_PCHI~$>0$.
+
+\noindent
+{\tt MED\_RESID}:  Median of the residuals of the sky-subtracted
+sky fibers.  Ideally, this will be very close to 0.
+
+\noindent
+{\tt PER\_RESID}:  Residual values at PER\_RESID percentiles for
+ the sky-subtracted sky fibers.  
+
+\subsubsection{Figure(s)}
+
+The figure for QA on a sky-subtracted frame shows the
+residuals versus wavelength and a histogram of 
+the residuals relative to the estimated uncertainty. 
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=5in]{fig/qa-b0-00000002}
+\caption{Example figure for sky subtraction QA
+for a single frame.  
+}
+\label{fig:skysub_frame}
+\end{center}
+\end{figure}
+
+
+\subsection{Exposure}
+
+QA code will be written to:
+
+\begin{myitemize}
+\item Compare the sky model across tiles 
+\item Compare the residuals (median and percentiles) across tiles
+\item Compare the $P(\chi^2)$ vaules across tiles
+\end{myitemize}
+
+\subsection{Time}
+
+QA code will be written to:
+
+\begin{myitemize}
+\item Assess the residuals with time
+\end{myitemize}
+
 
 %\begin{figure}[htb]
 %\begin{center}
