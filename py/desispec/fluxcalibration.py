@@ -467,12 +467,29 @@ def apply_flux_calibration(frame, fluxcalib):
     frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
 
 
+def ZP_from_calib(wave, calib):
+    """ Calculate the ZP in AB magnitudes given the calibration and the wavelength arrays
+    Args:
+        wave:  1D array (A)
+        calib:  1D array (converts erg/s/A to photons/s/A)
+
+    Returns:
+      ZP_AB: 1D array of ZP values in AB magnitudes
+
+    """
+    ZP_flambda = 1. / calib  # erg/s/cm^2/A
+    ZP_fnu = ZP_flambda * wave / (2.9979e18)  # c in A/s
+    ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
+    # Return
+    return ZP_AB
+
 def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
     """
     Args:
         param: dict of QA parameters
         frame: Frame
         fluxcalib: FluxCalib
+        indiv_stars : tuple of data on individual star fibers
 
     Returns:
         qadict: dict of QA outputs
@@ -484,7 +501,7 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
     qadict = {}
 
     # Calculate ZP for mean spectrum
-    ZP_flambda = 1. / fluxcalib.meancalib # erg/s/cm^2/A
+    ZP_flambda = 1. / fluxcalib.meancalib  # erg/s/cm^2/A
     ZP_fnu = ZP_flambda * fluxcalib.wave / (2.9979e18)  # c in A/s
     ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
 
@@ -497,20 +514,16 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
 
     # RMS
     nstars = sqrtwflux.shape[0]
-    ZP_stars = np.zeros(nstars)
+    ZP_stars = np.zeros_like(sqrtwflux)
+    ZP_fiducial = np.zeros(nstars)
     for ii in range(nstars):
         # Good pixels
         gdp = current_ivar[ii, :] > 0.
         icalib_flambda = sqrtwmodel[ii, gdp] / sqrtwflux[ii, gdp]
         icalib_fnu = icalib_flambda * fluxcalib.wave / (2.9979e18)  # c in A/s
-        icalib_ZP = -2.5 * np.log10(icalib_fnu) - 48.6
-        ZP_stars[ii] = float(np.median(icalib_ZP[iZP-10:iZP+10]))
-    qadict['RMS_ZP'] = float(np.std(ZP_stars))
-
-
-    # Plot(s)
-    #import pdb
-    #pdb.set_trace()
+        ZP_stars[ii,:] = -2.5 * np.log10(icalib_fnu) - 48.6
+        ZP_fiducial[ii] = float(np.median(ZP_stars[ii, iZP-10:iZP+10]))
+    qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # Return
     return qadict

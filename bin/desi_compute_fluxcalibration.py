@@ -20,6 +20,7 @@ from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.fluxcalibration import compute_flux_calibration
 from desispec.log import get_logger
+from desispec.qa import qa_plots
 
 import argparse
 import os
@@ -46,6 +47,8 @@ def main() :
                         help = 'path of DESI flux calbration fits file')
     parser.add_argument('--qafile', type=str, default=None, required=False,
                         help='path of QA file.')
+    parser.add_argument('--qafig', type = str, default = None, required=False,
+                        help = 'path of QA figure file')
 
 
     args = parser.parse_args()
@@ -104,6 +107,9 @@ def main() :
         if args.qafile is not None:
             write_qa_frame(args.qafile, qaframe)
             log.info("successfully wrote {:s}".format(args.qafile))
+        # Figure(s)
+        if args.qafig is not None:
+            qa_plots.frame_fluxcalib(args.qafig, qaframe, fluxcalib, indiv_stars)
 
     # write result
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)

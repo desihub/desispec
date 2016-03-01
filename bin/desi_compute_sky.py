@@ -39,7 +39,6 @@ def main() :
                         help = 'path of QA file. Will calculate for Sky Subtraction')
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file')
-    #parser.add_argument('--qafig', type = str, default = None, required=False)
 
     args = parser.parse_args()
     log=get_logger()
