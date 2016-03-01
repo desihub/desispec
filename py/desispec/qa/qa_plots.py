@@ -116,6 +116,8 @@ def frame_skyres(outfil, frame, fibermap, skymodel, qaframe):
     # Meta text
     ax2 = plt.subplot(gs[1,1])
     ax2.set_axis_off()
+    show_meta(ax2, qaframe, 'SKYSUB', outfil)
+    """
     # Meta
     xlbl = 0.1
     ylbl = 0.85
@@ -129,8 +131,7 @@ def frame_skyres(outfil, frame, fibermap, skymodel, qaframe):
         ylbl -= yoff
         ax2.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data['SKYSUB']['QA'][key]), 
             transform=ax2.transAxes, ha='left', fontsize='small')
-    #import pdb
-    #pdb.set_trace()
+    """
 
 
     '''
@@ -191,7 +192,6 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
 
     # Simple residual plot
     ax0 = plt.subplot(gs[0,:])
-    ax0.plot(fluxcalib.wave, ZP_AB, label='Mean ZP')
     #ax0.plot(frame.wave, signal.medfilt(med_res,51), color='black', label='Median**2 Res')
     #ax0.plot(frame.wave, signal.medfilt(wavg_res,51), color='red', label='Med WAvgRes')
     #ax_flux.plot(wave, sky_sig, label='Model Error')
@@ -202,16 +202,38 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
     #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
     #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
     ax0.set_ylabel('ZP_AB')
-    ax0.set_xlim(xmin,xmax)
+    ax0.set_xlim(xmin, xmax)
     ax0.set_xlabel('Wavelength')
     #med0 = np.maximum(np.abs(np.median(med_res)), 1.)
     #ax0.set_ylim(-5.*med0, 5.*med0)
     #ax0.text(0.5, 0.85, 'Sky Meanspec',
     #    transform=ax_flux.transAxes, ha='center')
 
+    # Other stars
+    nstars = sqrtwflux.shape[0]
+    for ii in range(nstars):
+        # Good pixels
+        gdp = current_ivar[ii, :] > 0.
+        icalib = sqrtwflux[ii, gdp] / sqrtwmodel[ii, gdp]
+        i_wave = fluxcalib.wave[gdp]
+        ZP_star = dsflux.ZP_from_calib(i_wave, icalib)
+        # Plot
+        if ii == 0:
+            lbl ='Individual stars'
+        else:
+            lbl = None
+        ax0.plot(i_wave, ZP_star, ':', label=lbl)
+    ax0.plot(fluxcalib.wave, ZP_AB, color='black', label='Mean ZP')
+
     # Legend
-    legend = ax0.legend(loc='upper right', borderpad=0.3,
+    legend = ax0.legend(loc='lower left', borderpad=0.3,
                         handletextpad=0.3, fontsize='small')
+
+    # Meta text
+    ax2 = plt.subplot(gs[1,1])
+    ax2.set_axis_off()
+    show_meta(ax2, qaframe, 'FLUXCALIB', outfil)
+
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
@@ -284,6 +306,8 @@ def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
     # Meta text
     ax2 = plt.subplot(gs[1,1])
     ax2.set_axis_off()
+    show_meta(ax2, qaframe, 'FIBERFLAT', outfil)
+    """
     xlbl = 0.05
     ylbl = 0.85
     i0 = outfil.rfind('/')
@@ -296,9 +320,33 @@ def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
         ylbl -= yoff
         ax2.text(xlbl+0.05, ylbl, key+': '+str(qaframe.data['FIBERFLAT']['QA'][key]),
             transform=ax2.transAxes, ha='left', fontsize='x-small')
+    """
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     plt.savefig(outfil)
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
+
+def show_meta(ax, qaframe, qaflavor, outfil):
+    """ Show meta data on the figure
+    Args:
+        ax:
+        qadict:
+
+    Returns:
+
+    """
+    # Meta
+    xlbl = 0.05
+    ylbl = 0.85
+    i0 = outfil.rfind('/')
+    ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
+    yoff=0.10
+    for key in sorted(qaframe.data[qaflavor]['QA'].keys()):
+        if key in ['QA_FIG']:
+            continue
+        # Show
+        ylbl -= yoff
+        ax.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data[qaflavor]['QA'][key]),
+            transform=ax.transAxes, ha='left', fontsize='x-small')

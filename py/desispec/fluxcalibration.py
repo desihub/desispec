@@ -478,7 +478,7 @@ def ZP_from_calib(wave, calib):
 
     """
     ZP_flambda = 1. / calib  # erg/s/cm^2/A
-    ZP_fnu = ZP_flambda * wave / (2.9979e18)  # c in A/s
+    ZP_fnu = ZP_flambda * wave**2 / (2.9979e18)  # c in A/s
     ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
     # Return
     return ZP_AB
