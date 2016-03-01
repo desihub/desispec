@@ -94,16 +94,6 @@ class QA_Frame(object):
         # Init
         self.init_qatype('FIBERFLAT', fflat_dict, re_init=re_init)
 
-    def init_fiberflat(self, re_init=False):
-        """ Initialize parameters for FLUXCALIB QA
-        Args:
-            re_init:
-
-        Returns:
-
-        """
-        pass
-    
     def init_skysub(self, re_init=False):
         """Initialize parameters for SkySub QA 
         QA method is desispec.sky.qa_skysub
