@@ -108,8 +108,8 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
     max_iterations = 100
     nout_tot=0
     ##
-    nfibers = 20
-    max_iterations = 5
+    #nfibers = 20
+    #max_iterations = 5
     chi2pdf = 0.
     ##
     for iteration in range(max_iterations) :
@@ -424,9 +424,12 @@ def qa_fiberflat(param, frame, fiberflat):
     gdp = fiberflat.mask == 0
     rtio = frame.flux / np.outer(np.ones(fiberflat.nspec),fiberflat.meanspec)
     scale = np.median(rtio*gdp,axis=1)
-    qadict['MAX_SCALE_OFF'] = float(np.max(np.abs(scale-1.)))
+    MAX_SCALE_OFF = float(np.max(np.abs(scale-1.)))
+    fiber = int(np.argmax(np.abs(scale-1.)))
+    qadict['MAX_SCALE_OFF'] = [MAX_SCALE_OFF, fiber]
     if qadict['MAX_SCALE_OFF'] > param['MAX_SCALE_OFF']:
-        log.warn("Discrepant flux in fiberflat: {:g}".format(qadict['MAX_SCALE_OFF']))
+        log.warn("Discrepant flux in fiberflat: {:g}, {:d}".format(
+                qadict['MAX_SCALE_OFF'][0], qadict['MAX_SCALE_OFF'][1]))
 
     # Offset in fiberflat
     qadict['MAX_OFF'] = float(np.max(np.abs(fiberflat.fiberflat-1.)))
@@ -435,16 +438,20 @@ def qa_fiberflat(param, frame, fiberflat):
 
     # Offset in mean of fiberflat
     mean = np.mean(fiberflat.fiberflat*gdp,axis=1)
-    qadict['MAX_MEAN_OFF'] = float(np.max(np.abs(mean-1.)))
+    fiber = int(np.argmax(np.abs(mean-1.)))
+    qadict['MAX_MEAN_OFF'] = [float(np.max(np.abs(mean-1.))), fiber]
     if qadict['MAX_MEAN_OFF'] > param['MAX_MEAN_OFF']:
-        log.warn("Discrepant mean in fiberflat: {:g}".format(qadict['MAX_MEAN_OFF']))
+        log.warn("Discrepant mean in fiberflat: {:g}, {:d}".format(
+                qadict['MAX_MEAN_OFF'][0], qadict['MAX_MEAN_OFF'][1]))
 
     # RMS in individual fibers
     rms = np.std(gdp*(fiberflat.fiberflat-
                       np.outer(mean, np.ones(fiberflat.nwave))),axis=1)
-    qadict['MAX_RMS'] = float(np.max(rms))
+    fiber = int(np.argmax(rms))
+    qadict['MAX_RMS'] = [float(np.max(rms)), fiber]
     if qadict['MAX_RMS'] > param['MAX_RMS']:
-        log.warn("Large RMS in fiberflat: {:g}".format(qadict['MAX_RMS']))
+        log.warn("Large RMS in fiberflat: {:g}, {:d}".format(
+                qadict['MAX_RMS'][0], qadict['MAX_RMS'][1]))
 
     # Return
     return qadict

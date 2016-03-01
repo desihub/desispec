@@ -236,6 +236,22 @@ def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
     cb = fig.colorbar(rplt)
     cb.set_label('RMS in Fiberflat')
 
+    # Meta text
+    ax2 = plt.subplot(gs[1,1])
+    ax2.set_axis_off()
+    xlbl = 0.05
+    ylbl = 0.85
+    i0 = outfil.rfind('/')
+    ax2.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax2.transAxes, ha='left')
+    yoff=0.10
+    for key in sorted(qaframe.data['FIBERFLAT']['QA'].keys()):
+        if key in ['QA_FIG']:
+            continue
+        # Show
+        ylbl -= yoff
+        ax2.text(xlbl+0.05, ylbl, key+': '+str(qaframe.data['FIBERFLAT']['QA'][key]),
+            transform=ax2.transAxes, ha='left', fontsize='x-small')
+
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     plt.savefig(outfil)

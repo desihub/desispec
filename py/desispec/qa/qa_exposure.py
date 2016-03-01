@@ -133,6 +133,7 @@ class QA_Frame(object):
         # Standard SKYSUB input parameters
         sky_dict = dict(
             PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+            PER_RESID=95.,   # Percentile for residual distribution
             )
         # Init
         self.init_qatype('SKYSUB', sky_dict, re_init=re_init)

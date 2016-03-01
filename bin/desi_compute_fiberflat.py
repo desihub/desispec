@@ -32,7 +32,7 @@ def main() :
     parser.add_argument('--fibermap', type = str, default = None, required=False,
                         help = 'path of DESI exposure fiber map file')
     parser.add_argument('--qafig', type = str, default = None, required=False,
-                        help = 'path of QA figure file')
+                        help = 'path of QA figure file (requires fiber map file)')
 
 
     args = parser.parse_args()
