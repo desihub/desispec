@@ -108,8 +108,9 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
     max_iterations = 100
     nout_tot=0
     ##
-    #nfibers = 20
-    #max_iterations = 5
+    nfibers = 20
+    max_iterations = 5
+    chi2pdf = 0.
     ##
     for iteration in range(max_iterations) :
 
@@ -168,7 +169,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
         # normalize to get a mean fiberflat=1
         mean=np.mean(smooth_fiberflat,axis=0)
         smooth_fiberflat = smooth_fiberflat/mean
-        mean_spectrum    = mean_spectrum*mean
+        mean_spectrum = mean_spectrum*mean
         
         # this is the max difference between two iterations
         max_diff=np.max(np.abs(smooth_fiberflat-previous_smooth_fiberflat))
@@ -242,7 +243,8 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=1.e-4) :
         if bad.size>0 :
             mask[fiber,bad] += fiberflat_mask
 
-    return FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum)    
+    return FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
+                     chi2pdf=chi2pdf)
 
 
 def apply_fiberflat(frame, fiberflat):
@@ -294,7 +296,7 @@ def apply_fiberflat(frame, fiberflat):
 
 class FiberFlat(object):
     def __init__(self, wave, fiberflat, ivar, mask=None, meanspec=None,
-            header=None, fibers=None, spectrograph=0):
+            chi2pdf=None, header=None, fibers=None, spectrograph=0):
         """
         Creates a lightweight data wrapper for fiber flats
 
@@ -305,7 +307,8 @@ class FiberFlat(object):
             
         Optional inputs:
             mask: 2D[nspec, nwave] mask where 0=good; default ivar==0
-            meanspec: 1D[nwave] mean deconvolved average flat lamp spectrum
+            meanspec: (optional) 1D[nwave] mean deconvolved average flat lamp spectrum
+            chi2pdf: (optional) Normalized chi^2 for fit to mean spectrum
             header: (optional) FITS header from HDU0
             fibers: (optional) fiber indices
             spectrograph: (optional) spectrograph number [0-9]       
@@ -348,6 +351,7 @@ class FiberFlat(object):
         self.ivar = ivar
         self.mask = mask
         self.meanspec = meanspec
+        self.chi2pdf = chi2pdf
 
         self.nspec, self.nwave = self.fiberflat.shape
         self.header = header
@@ -407,6 +411,9 @@ def qa_fiberflat(param, frame, fiberflat):
     qadict['MAX_MEANSPEC'] = float(np.max(fiberflat.meanspec))
     if qadict['MAX_MEANSPEC'] < 100000:
         log.warn("Low counts in meanspec = {:g}".format(qadict['MAX_MEANSPEC']))
+
+    # Record chi2pdf
+    qadict['CHI2PDF'] = float(fiberflat.chi2pdf)
 
     # N mask
     qadict['N_MASK'] = int(np.sum(fiberflat.mask > 0))

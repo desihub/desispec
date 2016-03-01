@@ -65,34 +65,50 @@ The primary goals of QA for flat fielding are:
 
 \begin{itemize}
 \item Crudely assess system throughput (i.e.\ sufficient counts)
-\item Assess flat field model
+\item Assess flat field variation in fibers
 \item Identify bad fibers
 \item Assess flat field within and across tiles
 \item Assess flat field versus time
 \end{itemize}
 
-\subsection{Metrics}
+\subsection{Single Frame}
 
-The QA analysis for the fiberflat step is guided by a set of 
+For context, the {\tt computer\_fiberflat} routine calculates a 
+deconvolved, mean fiber spectrum from all of the fibers in a given frame. 
+The routine then calculates (and saves) a fiberflat spectrum for each 
+fiber, which is that fiber's flux normalized by the mean spectrum 
+convolved with that fiber's resolution.  This may then be 
+used to correct for pixel-to-pixel variations for data from 
+a given fiber.
+
+The fiberflat QA analysis on a single frame (one tile and one camera, e.g. b0)
+is guided by a set of 
 parameters defined in {\tt qa\_exposure.QA\_Frame.init\_fiberflat}.
-In the case of fiberflat analysis, these parameters are used 
+These parameters are used 
 to raise warnings if the QA metrics exceed these pre-defined values.
-Table~\ref{tabl:flat_param} summarizes the parameters.
+Table~\ref{tab:flat_param} summarizes the parameters.
 
 \begin{table}[h]
 \begin{center}
 \caption{Fiberflat QA Parameters}
 \label{tab:flat_param}
-\begin{tabular}{lcl}
+\begin{tabular}{p{3.5cm}p{1.2cm}p{8.3cm}}
 \hline
 {\bf Name} & {\bf Value} & {\bf Brief Description}\\
 \hline
 MAX\_N\_MASK    & 20000 & Maximum number of pixels masked in fit \\
-MAX\_SCALE\_OFF & 0.05  & Maximum fractional offset between model and individual fibers \\ 
+MAX\_SCALE\_OFF & 0.05  & Maximum fractional offset between mean spectrum and individual fiber flux \\ 
+MAX\_OFF        & 0.15  & Maximum allowed offset from unity of any fiberflat \\
+MAX\_MEAN\_OFF  & 0.05  & Maximum allowed offset from unity for the mean of any fiberflat \\
+MAX\_RMS        & 0.02  & Maximum allowed RMS in any fiberflat (off unity) \\
 \hline
 \end{tabular}
 \end{center}
 \end{table}
+
+
+
+\subsubsection{Metrics}
 
 
 Table~\ref{tab:flat_metrics} summarizes the QA metrics measured
@@ -102,27 +118,58 @@ for the fiberflat step.
 \begin{center}
 \caption{Fiberflat QA Metrics}
 \label{tab:flat_metrics}
-\begin{tabular}{ll}
+\begin{tabular}{p{3.5cm}p{9.0cm}}
 \hline
 {\bf Name} & {\bf Brief Description}\\
 \hline
-N\_MASK    & Number of pixels masked in fit for all fibers \\
+MAX\_MEANSPEC   & Maximum flux (counts) in the mean fiber flat spectrum \\ 
+CHI2PDF         & Reduced $\chi^2$ for fit to mean spectrum \\
+N\_MASK         & Number of pixels masked in fit (all fibers) \\
+MAX\_SCALE\_OFF & Maximum difference between the ratio of the fiber flux and 
+  the mean spectrum \\
+MAX\_OFF        & Maximum offset from unity in all of the fiberflats \\
+MAX\_MEAN\_OFF  & Maximum offset from unity for the mean of all fiberflats \\
+MAX\_RMS        & Maximum RMS in the fiberflats (from unity) \\
 \hline
 \end{tabular}
 \end{center}
 \end{table}
 
 
-Here is an summary of each:
-
-
+\noindent
+Here is a summary of each:
 
 \noindent
 {\tt N\_MASK}:  This metric records the number of pixels that were
-masked during the fiberflat fit.  It is the total over all fibers.
+masked during the fiberflat fit.  It is the sum over all fibers.
 
+\noindent
+{\tt CHI2PDF}:  This metric records the reduced $\chi^2$ value 
+for the fit that generated the mean spectrum.
 
-\subsection{Plots}
+\noindent
+{\tt MAX\_SCALE\_OFF}:  This metric records the maximum offset 
+in the ratio of the flux in each fiber to the mean spectrum.
+The median ratio of flux/mean
+is calculated for each fiber and the maximum
+deviation from unity is recorded.  This metric is useful for
+identifying whether one (or more) fibers have abnormal flux.
+
+\noindent
+{\tt MAX\_OFF}:  This metric records the maximum offset from
+unity for all the fiberflats at all wavelengths.  
+This may identify if one or more fibers have abnormal response.
+
+\noindent
+{\tt MAX\_MEAN\_OFF}:  This metric records the maximum offset from
+unity of the mean of each of the fiberflats.  May also be used
+to identify one or more fibers with abnormal response.
+
+\noindent
+{\tt MAX\_RMS}:  This metric records the maximum RMS amongst
+all the fiberflats (from unity).
+
+\subsubsection{Figures}
 
 %%%%%%%%%%%%%%%%
 \section{Sky Subtraction}
