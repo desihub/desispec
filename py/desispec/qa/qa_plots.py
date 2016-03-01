@@ -8,6 +8,8 @@ from scipy import signal
 import scipy
 import pdb
 
+from desispec import fluxcalibration as dsflux
+
 import matplotlib
 matplotlib.use('Agg') 
 from matplotlib import pyplot as plt
@@ -174,6 +176,49 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
     Returns:
 
     """
+    # Unpack star data
+    sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
+
+    # Mean spectrum
+    ZP_AB = dsflux.ZP_from_calib(fluxcalib.wave, fluxcalib.meancalib)
+
+
+    # Plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2,2)
+
+    xmin,xmax = np.min(fluxcalib.wave), np.max(fluxcalib.wave)
+
+    # Simple residual plot
+    ax0 = plt.subplot(gs[0,:])
+    ax0.plot(fluxcalib.wave, ZP_AB, label='Mean ZP')
+    #ax0.plot(frame.wave, signal.medfilt(med_res,51), color='black', label='Median**2 Res')
+    #ax0.plot(frame.wave, signal.medfilt(wavg_res,51), color='red', label='Med WAvgRes')
+    #ax_flux.plot(wave, sky_sig, label='Model Error')
+    #ax_flux.plot(wave,true_flux*scl, label='Truth')
+    #ax_flux.get_xaxis().set_ticks([]) # Suppress labeling
+
+    #
+    #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
+    #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
+    ax0.set_ylabel('ZP_AB')
+    ax0.set_xlim(xmin,xmax)
+    ax0.set_xlabel('Wavelength')
+    #med0 = np.maximum(np.abs(np.median(med_res)), 1.)
+    #ax0.set_ylim(-5.*med0, 5.*med0)
+    #ax0.text(0.5, 0.85, 'Sky Meanspec',
+    #    transform=ax_flux.transAxes, ha='center')
+
+    # Legend
+    legend = ax0.legend(loc='upper right', borderpad=0.3,
+                        handletextpad=0.3, fontsize='small')
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    plt.savefig(outfil)
+    plt.close()
+    print('Wrote QA SkyRes file: {:s}'.format(outfil))
+
 
 def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
     """ QA plots for fiber flat

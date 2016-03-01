@@ -501,9 +501,7 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
     qadict = {}
 
     # Calculate ZP for mean spectrum
-    ZP_flambda = 1. / fluxcalib.meancalib  # erg/s/cm^2/A
-    ZP_fnu = ZP_flambda * fluxcalib.wave / (2.9979e18)  # c in A/s
-    ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
+    ZP_AB = ZP_from_calib(fluxcalib.wave, fluxcalib.meancalib)  # erg/s/cm^2/A
 
     # Mean ZP at fiducial wavelength (AB mag for 1 photon/s/A)
     iZP = np.argmin(np.abs(fluxcalib.wave-param['ZP_WAVE']))
@@ -514,15 +512,17 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
 
     # RMS
     nstars = sqrtwflux.shape[0]
+    qadict['NSTARS'] = int(nstars)
     ZP_stars = np.zeros_like(sqrtwflux)
     ZP_fiducial = np.zeros(nstars)
     for ii in range(nstars):
         # Good pixels
         gdp = current_ivar[ii, :] > 0.
-        icalib_flambda = sqrtwmodel[ii, gdp] / sqrtwflux[ii, gdp]
-        icalib_fnu = icalib_flambda * fluxcalib.wave / (2.9979e18)  # c in A/s
-        ZP_stars[ii,:] = -2.5 * np.log10(icalib_fnu) - 48.6
-        ZP_fiducial[ii] = float(np.median(ZP_stars[ii, iZP-10:iZP+10]))
+        icalib = sqrtwflux[ii, gdp] / sqrtwmodel[ii, gdp]
+        i_wave = fluxcalib.wave[gdp]
+        ZP_stars = ZP_from_calib(i_wave, icalib)
+        iZP = np.argmin(np.abs(i_wave-param['ZP_WAVE']))
+        ZP_fiducial[ii] = float(np.median(ZP_stars[iZP-10:iZP+10]))
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # Return
