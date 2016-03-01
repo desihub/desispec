@@ -112,7 +112,7 @@ def frame_skyres(outfil, frame, fibermap, skymodel, qaframe):
 
 
     # Meta text
-    ax2= plt.subplot(gs[1,1])
+    ax2 = plt.subplot(gs[1,1])
     ax2.set_axis_off()
     # Meta
     xlbl = 0.1
@@ -164,3 +164,13 @@ def frame_skyres(outfil, frame, fibermap, skymodel, qaframe):
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
+
+def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
+    """ QA plots for Flux calibration
+    Args:
+        outfil:
+        qaframe:
+
+    Returns:
+
+    """

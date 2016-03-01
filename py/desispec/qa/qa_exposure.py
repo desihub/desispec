@@ -8,6 +8,7 @@ import numpy as np
 
 from desispec.sky import qa_skysub
 from desispec.fiberflat import qa_fiberflat
+from desispec.fluxcalibration import qa_fluxcalib
 
 class QA_Frame(object):
     def __init__(self, frame=None, flavor='none', camera='none', in_data=None):
@@ -94,6 +95,29 @@ class QA_Frame(object):
         # Init
         self.init_qatype('FIBERFLAT', fflat_dict, re_init=re_init)
 
+    def init_fluxcalib(self, re_init=False):
+        """ Initialize parameters for FLUXCALIB QA
+        Args:
+            re_init: bool, (optional)
+              Re-initialize  parameter dict
+
+        Returns:
+
+        """
+        assert self.flavor in ['science']
+
+        # Standard FLUXCALIB input parameters
+        flux_dict = dict(ZP_WAVE=0.,          # Wavelength for ZP evaluation (camera dependent)
+                         )
+
+        if self.camera[0] == 'b':
+            flux_dict['ZP_WAVE'] = 4800.  # Ang
+        else:
+            raise ValueError("Not ready for this camera!")
+
+        # Init
+        self.init_qatype('FLUXCALIB', flux_dict, re_init=re_init)
+
     def init_skysub(self, re_init=False):
         """Initialize parameters for SkySub QA 
         QA method is desispec.sky.qa_skysub
@@ -145,6 +169,13 @@ class QA_Frame(object):
             self.init_fiberflat()
             # Run
             qadict = qa_fiberflat(self.data[qatype]['PARAM'], inputs[0], inputs[1])
+        elif qatype == 'FLUXCALIB':
+            # Expecting: frame, fluxcalib, individual_outputs (star by star)
+            assert len(inputs) == 3
+            # Init parameters (as necessary)
+            self.init_fluxcalib()
+            # Run
+            qadict = qa_fluxcalib(self.data[qatype]['PARAM'], inputs[0], inputs[1], inputs[2])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update

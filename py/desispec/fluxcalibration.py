@@ -15,6 +15,8 @@ import scipy, scipy.sparse, scipy.ndimage
 import sys
 from astropy import units
 
+from xastropy.xutils import xdebug as xdb
+
 #debug
 #import pylab
 
@@ -191,7 +193,9 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
       input_model_flux : 2D[nstd, nwave] array of model fluxes
       nsig_clipping : (optional) sigma clipping level
 
-    Returns desispec.FluxCalib object
+    Returns:
+         desispec.FluxCalib object
+         calibration: mean calibration (without resolution)
 
     Notes:
       - we first resample the model on the input flux wave grid
@@ -338,6 +342,7 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
 
         # normalize to get a mean fiberflat=1
         mean=np.mean(smooth_fiber_correction,axis=0)
+        sv_smooth = smooth_fiber_correction
         smooth_fiber_correction = smooth_fiber_correction/mean
         calibration *= mean
 
@@ -388,10 +393,13 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
     mask=(ccalibivar>0).astype(int)
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask)
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration)), (
+        sqrtwmodel, sqrtwflux, current_ivar, chi2)
+
+
 
 class FluxCalib(object):
-    def __init__(self, wave, calib, ivar, mask):
+    def __init__(self, wave, calib, ivar, mask, meancalib=None):
         """Lightweight wrapper object for flux calibration vectors
 
         Args:
@@ -399,6 +407,7 @@ class FluxCalib(object):
             calib: 2D[nspec, nwave] calibration vectors for each spectrum
             ivar : 2D[nspec, nwave] inverse variance of calib
             mask : 2D[nspec, nwave] mask of calib (0=good)
+            meancalib : 1D[nwave] mean convolved calibration (optional)
 
         All arguments become attributes, plus nspec,nwave = calib.shape
 
@@ -417,6 +426,7 @@ class FluxCalib(object):
         self.calib = calib
         self.ivar = ivar
         self.mask = mask
+        self.meancalib = meancalib
 
 def apply_flux_calibration(frame, fluxcalib):
     """
@@ -455,3 +465,66 @@ def apply_flux_calibration(frame, fluxcalib):
     C = fluxcalib.calib
     frame.flux = frame.flux * (C>0) / (C+(C==0))
     frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
+
+
+def ZP_from_calib(wave, calib):
+    """ Calculate the ZP in AB magnitudes given the calibration and the wavelength arrays
+    Args:
+        wave:  1D array (A)
+        calib:  1D array (converts erg/s/A to photons/s/A)
+
+    Returns:
+      ZP_AB: 1D array of ZP values in AB magnitudes
+
+    """
+    ZP_flambda = 1. / calib  # erg/s/cm^2/A
+    ZP_fnu = ZP_flambda * wave / (2.9979e18)  # c in A/s
+    ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
+    # Return
+    return ZP_AB
+
+def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
+    """
+    Args:
+        param: dict of QA parameters
+        frame: Frame
+        fluxcalib: FluxCalib
+        indiv_stars : tuple of data on individual star fibers
+
+    Returns:
+        qadict: dict of QA outputs
+          Need to record simple Python objects for yaml (str, float, int)
+
+    """
+    log = get_logger()
+
+    qadict = {}
+
+    # Calculate ZP for mean spectrum
+    ZP_flambda = 1. / fluxcalib.meancalib  # erg/s/cm^2/A
+    ZP_fnu = ZP_flambda * fluxcalib.wave / (2.9979e18)  # c in A/s
+    ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
+
+    # Mean ZP at fiducial wavelength (AB mag for 1 photon/s/A)
+    iZP = np.argmin(np.abs(fluxcalib.wave-param['ZP_WAVE']))
+    qadict['MEAN_ZP'] = float(np.median(ZP_AB[iZP-10:iZP+10]))
+
+    # Unpack star data
+    sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
+
+    # RMS
+    nstars = sqrtwflux.shape[0]
+    ZP_stars = np.zeros_like(sqrtwflux)
+    ZP_fiducial = np.zeros(nstars)
+    for ii in range(nstars):
+        # Good pixels
+        gdp = current_ivar[ii, :] > 0.
+        icalib_flambda = sqrtwmodel[ii, gdp] / sqrtwflux[ii, gdp]
+        icalib_fnu = icalib_flambda * fluxcalib.wave / (2.9979e18)  # c in A/s
+        ZP_stars[ii,:] = -2.5 * np.log10(icalib_fnu) - 48.6
+        ZP_fiducial[ii] = float(np.median(ZP_stars[ii, iZP-10:iZP+10]))
+    qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
+
+    # Return
+    return qadict
+
