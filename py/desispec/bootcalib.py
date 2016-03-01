@@ -130,7 +130,7 @@ def load_gdarc_lines(camera):
                8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
         dlamb = 0.599  # Ang
         gd_lines = np.array(NeI)# + ArI)
-        line_guess = None
+        line_guess = 17
         wmark = 8591.2583
     else:
         log.error('Bad camera')
