@@ -287,5 +287,21 @@ def qa_skysub(param, frame, fibermap, skymodel):
         mean_continuum[ii]=np.mean(continuum[:,ii])
     qadict['MEAN_CONTIN'] = mean_continuum
 
+    # Median Signal to Noise on sky subtracted spectra
+    # first do the subtraction:
+    fframe=frame # make a copy
+    sskymodel=skymodel # make a copy
+    subtract_sky(fframe,sskymodel)
+    medsnr=np.zeros(fframe.flux.shape[0])
+    totsnr=np.zeros(fframe.flux.shape[0])
+    for ii in range(fframe.flux.shape[0]):
+        signalmask=fframe.flux[ii,:]>0
+        # total snr considering bin by bin uncorrelated S/N
+        snr=fframe.flux[ii,signalmask]*np.sqrt(fframe.ivar[ii,signalmask])
+        medsnr[ii]=np.median(snr)
+        totsnr[ii]=np.sqrt(np.sum(snr**2))
+    qadict['MED_SNR']=medsnr  # for each fiber
+    qadict['TOT_SNR']=totsnr  # for each fiber
+     
     # Return
     return qadict
