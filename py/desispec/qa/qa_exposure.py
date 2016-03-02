@@ -41,7 +41,7 @@ class QA_Frame(object):
             else:
                 camera = frame.meta['CAMERA']
 
-        assert flavor in ['none', 'flat', 'arc', 'science']
+        assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
         self.flavor = flavor
         self.camera = camera
         
@@ -83,7 +83,7 @@ class QA_Frame(object):
           Re-initialize FIBERFLAT parameter dict
         """
         #
-        assert self.flavor in ['science']
+        assert self.flavor in ['flat'] 
 
         # Standard FIBERFLAT input parameters
         fflat_dict = dict(MAX_N_MASK=20000,  # Maximum number of pixels to mask
@@ -104,7 +104,8 @@ class QA_Frame(object):
         Returns:
 
         """
-        assert self.flavor in ['science']
+        
+        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso']
 
         # Standard FLUXCALIB input parameters
         flux_dict = dict(ZP_WAVE=0.,        # Wavelength for ZP evaluation (camera dependent)
@@ -128,8 +129,8 @@ class QA_Frame(object):
         re_init: bool, (optional)
           Re-initialize SKYSUB parameter dict
         """
-        # 
-        assert self.flavor in ['science']
+        #
+        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso']
 
         # Standard SKYSUB input parameters
         sky_dict = dict(
@@ -207,7 +208,7 @@ class QA_Exposure(object):
         Attributes:
             All input args become object attributes.
         """
-        assert flavor in ['none', 'flat', 'arc', 'science']
+        assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
 
         self.flavor = flavor
         
