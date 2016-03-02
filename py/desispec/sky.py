@@ -16,7 +16,7 @@ from desispec import util
 
 from desiutil import stats as dustat
 
-import scipy,scipy.sparse,scipy.stats
+import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
 def compute_sky(frame, fibermap, nsig_clipping=4.) :
@@ -243,7 +243,7 @@ def qa_skysub(param, frame, fibermap, skymodel):
     specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
     skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
         (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
-    assert np.max(skyfibers) < 500
+    assert np.max(skyfibers) < 500 # only spectrograph 0??
     nfibers=len(skyfibers)
     qadict['NSKY_FIB'] = int(nfibers)
 
@@ -277,6 +277,15 @@ def qa_skysub(param, frame, fibermap, skymodel):
     qadict['PER_RESID'] = [float(iperc) for iperc in perc]
     #import pdb
     #pdb.set_trace()
+
+    # Mean Sky Continuum from all skyfibers
+    # need to limit in wavelength?
+
+    continuum=scipy.ndimage.filters.median_filter(flux,200) # taking 200 bins (somewhat arbitrarily)
+    mean_continuum=np.zeros(flux.shape[1])
+    for ii in range(flux.shape[1]):
+        mean_continuum[ii]=np.mean(continuum[:,ii])
+    qadict['MEAN_CONTIN'] = mean_continuum
 
     # Return
     return qadict
