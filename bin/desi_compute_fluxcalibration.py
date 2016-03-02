@@ -100,7 +100,7 @@ def main() :
     if (args.qafile is not None):
         log.info("performing fluxcalib QA")
         # Load
-        qaframe = load_qa_frame(args.qafile, frame, flavor='science')
+        qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
         # Run
         qaframe.run_qa('FLUXCALIB', (frame, fibers, fluxcalib, indiv_stars))
         # Write
