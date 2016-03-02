@@ -22,7 +22,7 @@
 
 \title{Tech Note on Quality Assurance for DESI Spectroscopic Reduction \\
 \vspace{5mm}{\large\bf DESI-doc-XXX-v1}}
-\author{J. Xavier Prochaska, others}
+\author{J. Xavier Prochaska, Govinda Dhungana}
 
 \begin{document}
 \maketitle
@@ -30,57 +30,77 @@
 \section{Introduction}
 
 This technical note summarizes the Quality Assurance outputs for the
-{\tt desispec} package, including both the full spectroscopic pipeline
-and the Quicklook pipeline (run on mountain).
+{\tt desispec} package, including both the full (offline)
+spectroscopic pipeline and the Quicklook pipeline 
+(run on mountain).
 
 This document is maintained in the {\tt desispec} package\footnote{Maintained in the public github repository at \url{https://github.com/desihub/desispec}} under {\tt doc/tex/}
 and is also summarized on the DESI Wiki at 
 \url{https://desi.lbl.gov/trac/wiki/Pipeline/QualityAssurance}. 
-This document, however, supersedes any discussion on 
-the Wiki.
+This document supersedes the Wiki.
 
 \section{General Architecture}
 
-The QA analysis is performed within the scripts for each
-of the primary spectroscopic pipeline steps (e.g.\ fiberflat,
-sky subtraction, fluxing).   The QA code is located within 
-the individual modules and called from within the individual
-scripts.  A basic framework for controlling and packaging
+A basic framework for controlling and packaging
 QA analysis is provided in {\tt qa\_exposure.py}
 within the {\tt desispec/py/qa} folder.
-All plotting codes will be kept within the module
+This includes defining parameters that guide the QA
+algorithms, set thresholds for raising warnings, etc.
+All QA plotting codes will be kept within the module
 {\tt qa\_plots.py} in the same folder.
 
-QA metrics are stored
-in a YAML file, one per exposure/camera/tile to allow for
-multi-processing.  Likewise, QA figures are stored in a 
-PDF file per exposure/camera/tile combination.
-The naming convention for these files is 
-{\tt qa}-{\tt camera tile}-{\tt exposure}.yaml or
-{\tt qa}-{\tt camera tile}-{\tt exposure}.pdf, 
-e.g. {\tt qa-b0-00000002.pdf}.
+The QA analysis is performed as part of the scripts for each
+of the primary spectroscopic pipeline steps (e.g.\ fiberflat,
+sky subtraction, fluxing).   The QA algorithms are located 
+within the modules that perform each step (e.g.\ {\tt sky.py}).
+These evaluate a set of QA metrics that are stored
+in a QA dict.
 
-For compactness, it is likely that these files will be collated
-once the processing of all tiles of a given exposure is complete.
-This is not yet implemented.
+To allow for multi-processing the QA metrics are stored
+on the hard-drive in a YAML file, one per science frame.
+QA figures are stored in a PDF file, 
+currently several per frame.
+
+The naming convention for the QA frame files is 
+{\tt qa}-{\tt spectrograph}-{\tt exposure}.yaml or
+{\tt qa}-{\tt sky}-{\tt spectrograph}-{\tt exposure}.pdf, 
+e.g. {\tt qa-b0-00000002.yaml}.
+
+It is likely that the QA files will be collated
+once the processing of all frames for 
+a given exposure is complete.
+[not yet implemented]
 
 \section{Pre-Processing}
 
+This section will describe the QA related to
+pre-processing steps, e.g.\ identifying 
+calibration frames, checking meta data.
+
 \section{Image Processing}
 
+This section will describe the QA related to
+image processing, e.g.\ bias subtraction, 
+cosmic rays.
+
 \section{PSF}
+
+This section will describe the QA related to
+point spread function (PSF) evaluation, 
+wavelength calibration, and extraction.
 
 \section{Flat Fielding}
 
 \subsection{Overview}
 
-The primary goals of QA for flat fielding are:
+The primary goals of QA related to flat fielding are:
 
 \begin{myitemize}
 \item Crudely assess system throughput (i.e.\ sufficient counts)
 \item Assess flat field variation in fibers
 \item Identify bad fibers
-\item Assess flat field within and across tiles
+\item Assess flat field within a frame (wedge) 
+\item Assess flat field throughout an exposure
 \item Assess flat field versus time
 \end{myitemize}
 
@@ -93,13 +113,13 @@ The routine then calculates (and saves) a fiberflat spectrum for each
 fiber, which is that fiber's flux normalized by the mean spectrum 
 convolved with that fiber's resolution.  These fiberflat spectra
 may then be used to correct for pixel-to-pixel variations 
-for data from a given fiber.
+and a mean offset.
 
-The fiberflat QA analysis on a single frame (one tile and one camera, e.g. b0)
-is guided by a set of 
+The fiberflat QA analysis on a single flat field frame 
+is guided by the set of
 parameters defined in {\tt qa\_exposure.QA\_Frame.init\_fiberflat}.
-These parameters are used 
-to raise warnings if the QA metrics exceed these pre-defined values.
+These parameters are primarily used 
+to raise warnings if the QA metrics exceed the parameter values.
 Table~\ref{tab:flat_param} summarizes the parameters.
 
 \begin{table}[h]
@@ -110,9 +130,9 @@ Table~\ref{tab:flat_param} summarizes the parameters.
 \hline
 {\bf Name} & {\bf Value} & {\bf Brief Description}\\
 \hline
-MAX\_N\_MASK    & 20000 & Maximum number of pixels masked in fit \\
-MAX\_SCALE\_OFF & 0.05  & Maximum fractional offset between mean spectrum and individual fiber flux \\ 
-MAX\_OFF        & 0.15  & Maximum allowed offset from unity of any fiberflat \\
+MAX\_N\_MASK    & 20000 & Maximum allowed number of pixels masked in fit \\
+MAX\_SCALE\_OFF & 0.05  & Maximum allowed fractional offset between mean spectrum and individual fiber flux \\ 
+MAX\_OFF        & 0.15  & Maximum allowed offset from unity for any pixel in the fiberflat spectra\\
 MAX\_MEAN\_OFF  & 0.05  & Maximum allowed offset from unity for the mean of any fiberflat \\
 MAX\_RMS        & 0.02  & Maximum allowed RMS in any fiberflat (off unity) \\
 \hline
@@ -155,12 +175,16 @@ Here is a summary of each:
 \vskip 0.2in
 
 \noindent
-{\tt N\_MASK}:  This metric records the number of pixels that were
-masked during the fiberflat fit.  It is the sum over all fibers.
+{\tt MAX\_MEANSPEC}:  Peak flux in the mean fiber flat spectrum 
+(counts).  Assesses system throughput and flat field lamp.
 
 \noindent
 {\tt CHI2PDF}:  This metric records the reduced $\chi^2$ value 
 for the fit that generated the mean spectrum.
+
+\noindent
+{\tt N\_MASK}:  This metric records the number of pixels that were
+masked during the fiberflat fit.  It is the sum over all fibers.
 
 \noindent
 {\tt MAX\_SCALE\_OFF}:  This metric records the maximum offset 
@@ -173,7 +197,7 @@ identifying whether one (or more) fibers have abnormal flux.
 
 \noindent
 {\tt MAX\_OFF}:  This metric records the maximum offset from
-unity for all the fiberflats at all wavelengths.  
+unity for all the fiberflats at all pixels.
 This may identify if one or more fibers have abnormal response.
 
 \noindent
@@ -184,7 +208,7 @@ to identify one or more fibers with abnormal response.
 
 \noindent
 {\tt MAX\_RMS}:  This metric records the maximum RMS amongst
-all the fiberflats (from unity) and the fiber number.
+all the fiberflats (relative to unity) and the fiber number.
 
 \subsubsection{Figure(s)}
 
@@ -196,8 +220,8 @@ in the flat field flux.
 
 \begin{figure}[htb]
 \begin{center}
-\includegraphics[width=5in]{fig/qa-b0-00000001}
-\caption{Example figure for fiberflat QA
+\includegraphics[width=5in]{fig/qa-flat}
+\caption{Example figure of fiberflat QA
 for a single frame.  
 }
 \label{fig:fiberflat_frame}
@@ -210,9 +234,9 @@ for a single frame.
 QA code will be written to:
 
 \begin{myitemize}
-\item Compare the mean spectra across tiles 
-\item Compare the CHI2PDF across tiles
-\item Assess the RMS in the fiberflats across tiles
+\item Compare the mean spectra across an exposure (per camera)
+\item Compare the CHI2PDF across an exposure (per camera)
+\item Assess the RMS in the fiberflats across an exposure (per camera)
 \end{myitemize}
 
 \subsection{Time}
@@ -236,24 +260,24 @@ The primary goals of QA for sky subtraction are to:
 \item Assess residuals (global)
 \item Assess residuals (on sky lines)
 \item Identify bad sky fibers
-\item Examine performance within and across tiles
+\item Examine performance within an exposure
+\item Examine performance across the sky (e.g.\ tiles)
 \item Examine performance vs.\ time
 \end{myitemize}
 
 \subsection{Single Frame}
 
 The {\tt compute\_sky} method calculates a deconvolved sky model
-from the set of sky fibers in a given tile+camera.  
+from the set of sky fibers in a given frame.
 A sky model for each fiber is then calculated from the 
 mean sky model by convolving it with the fiber resolution.
 
 The sky subtraction QA analysis on a single 
-frame (one tile and one camera, e.g. b0)
-examines the residuals of sky-subtracted flux in each sky fiber 
+frame examines the residuals of sky-subtracted flux in each sky fiber
 and the $\chi^2$ probability of the residuals.
-The parameters listed in Table~\ref{tab:sky_param}
-are used to raise warnings if the QA metrics exceed 
-these pre-defined values.
+If the QA metrics exceed the 
+parameter values listed in Table~\ref{tab:sky_param},
+warnings are raised.
 
 \begin{table}[h]
 \begin{center}
@@ -264,7 +288,7 @@ these pre-defined values.
 {\bf Name} & {\bf Value} & {\bf Brief Description}\\
 \hline
 PCHI\_RESID    & 0.05 & Minimum $P(\chi^2)$ allowed for sky fiber residuals \\ 
-RESID\_PER     & 95   & Percentile value for residual distribution \\
+PER\_RESID     & 95   & Percentile value for residual distribution calculation\\
 \hline
 \end{tabular}
 \end{center}
@@ -287,7 +311,7 @@ NSKY\_FIBER           & Number of sky fibers in the frame \\
 NREJ                  & Number of pixels rejected in sky model fit \\
 NBAD\_PCHI            & Number of sky fibers with $P(\chi^2) < $PCHI\_RESID \\
 MED\_RESID            & Median residuals from all sky fibers \\
-PER\_RESID            & Percentiles of residuals from all sky fibers [not yet implemented] \\
+RESID\_PER            & Percentiles of residuals from all sky fibers \\
 MED\_SKYLINE\_RESID   & Median residuals on sky lines from all sky fibers [not yet implemented]\\
 \hline
 \end{tabular}
@@ -314,8 +338,8 @@ A warning is thrown if NBAD\_PCHI~$>0$.
 sky fibers.  Ideally, this will be very close to 0.
 
 \noindent
-{\tt PER\_RESID}:  Residual values at PER\_RESID percentiles for
- the sky-subtracted sky fibers.  
+{\tt RESID\_PER}:  Percentile residual values corresponding to the
+PER\_RESID parameter for the sky-subtracted sky fibers.
 
 \subsubsection{Figure(s)}
 
@@ -325,9 +349,9 @@ the residuals relative to the estimated uncertainty.
 
 \begin{figure}[htb]
 \begin{center}
-\includegraphics[width=5in]{fig/qa-sky-b0-0000002}
-\caption{Example figure for sky subtraction QA
-for a single frame.  
+\includegraphics[width=5in]{fig/qa-skyres}
+\caption{Example figure for sky subtraction 
+residual QA, for a single frame.
 }
 \label{fig:skysub_frame}
 \end{center}
@@ -373,6 +397,8 @@ The {\tt compute\_flux\_calibration} method generates
 a calibration sensitivity function.  It is derived
 from the model and measured fluxes for
 a set of observed standard stars ($\sim 5$ per frame).
+The parameters guiding the QA analysis for flux
+calibration are given in Table~\ref{fig:flux_param}.
 
 \begin{table}[h]
 \begin{center}
@@ -382,15 +408,57 @@ a set of observed standard stars ($\sim 5$ per frame).
 \hline
 {\bf Name} & {\bf Value} & {\bf Brief Description}\\
 \hline
-PCHI\_RESID    & 0.05 & Minimum $P(\chi^2)$ allowed for sky fiber residuals \\ 
-RESID\_PER     & 95   & Percentile value for residual distribution \\
+ZP\_WAVE       & 4800/xx/xx & Wavelength for ZP evaluation (camera dependent) \\
+MAX\_ZP\_OFF   & 0.2        & Maximum allowed offset in ZP for an individual standard star \\
 \hline
 \end{tabular}
 \end{center}
 \end{table}
 
+\subsubsection{Metrics}
 
-\subsection{Plot(s)}
+Table~\ref{tab:flux_metrics} summarizes the QA metrics measured
+for the flux calibration step. 
+
+\begin{table}[h]
+\begin{center}
+\caption{Flux Calibration QA Metrics}
+\label{tab:flux_metrics}
+\begin{tabular}{p{4.3cm}p{9.0cm}}
+\hline
+{\bf Name} & {\bf Brief Description}\\
+\hline
+NSTARS\_FIBER         & Number of standard star fibers in the frame \\
+ZP                    & ZP of the mean calibration at ZP\_WAVE \\
+RMS\_ZP               & RMS in the ZP for the set of stars\\
+MAX\_ZP\_OFF          & Maximum offset in the ZP for the stars from the mean \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\noindent
+Here is a summary of each:
+
+\vskip 0.2in
+
+\noindent
+{\tt NSTARS\_FIBER}:  Records the number of standard star fibers in the frame.
+
+\noindent
+{\tt ZP}:  Records the ZP calculated from the mean calibration.
+Evaluated at the ZP\_WAVE parameter.
+
+\noindent
+{\tt RMS\_ZP}:  Records the RMS in the ZP values calculated from individual
+standard stars (also at ZP\_WAVE).
+
+\noindent
+{\tt MAX\_ZP\_OFF}:  Records maximum offset between the mean ZP and the ZP
+values of the individual stars.  The standard star 
+fiber for the largest offset is also recorded.
+
+\subsubsection{Plot(s)}
 
 A plot may be generated to show the calibration function,
 expressed as the ZP in AB magnitudes.
@@ -400,7 +468,7 @@ Figure~\ref{fig:fluxcalib_frame} shows an example.
 
 \begin{figure}[htb]
 \begin{center}
-\includegraphics[width=5in]{fig/qa-flux-b0-0000002}
+\includegraphics[width=5in]{fig/qa-fluxZP}
 \caption{Example figure for flux calibration QA
 for a single frame.  
 }

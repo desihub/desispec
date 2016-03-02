@@ -102,7 +102,7 @@ def main() :
         # Load
         qaframe = load_qa_frame(args.qafile, frame, flavor='science')
         # Run
-        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, indiv_stars))
+        qaframe.run_qa('FLUXCALIB', (frame, fibers, fluxcalib, indiv_stars))
         # Write
         if args.qafile is not None:
             write_qa_frame(args.qafile, qaframe)

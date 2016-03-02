@@ -6,9 +6,6 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 
 import numpy as np
 
-from desispec.sky import qa_skysub
-from desispec.fiberflat import qa_fiberflat
-from desispec.fluxcalibration import qa_fluxcalib
 
 class QA_Frame(object):
     def __init__(self, frame=None, flavor='none', camera='none', in_data=None):
@@ -83,7 +80,7 @@ class QA_Frame(object):
           Re-initialize FIBERFLAT parameter dict
         """
         #
-        assert self.flavor in ['science']
+        assert self.flavor in ['flat']
 
         # Standard FIBERFLAT input parameters
         fflat_dict = dict(MAX_N_MASK=20000,  # Maximum number of pixels to mask
@@ -150,6 +147,10 @@ class QA_Frame(object):
         clobber: bool, optional [True]
           Over-write previous QA 
         """
+        from desispec.sky import qa_skysub
+        from desispec.fiberflat import qa_fiberflat
+        from desispec.fluxcalibration import qa_fluxcalib
+
         # Check for previous QA if clobber==False
         if not clobber:
             # QA previously performed?
@@ -172,12 +173,13 @@ class QA_Frame(object):
             # Run
             qadict = qa_fiberflat(self.data[qatype]['PARAM'], inputs[0], inputs[1])
         elif qatype == 'FLUXCALIB':
-            # Expecting: frame, fluxcalib, individual_outputs (star by star)
-            assert len(inputs) == 3
+            # Expecting: frame, fibers, fluxcalib, individual_outputs (star by star)
+            assert len(inputs) == 4
             # Init parameters (as necessary)
             self.init_fluxcalib()
             # Run
-            qadict = qa_fluxcalib(self.data[qatype]['PARAM'], inputs[0], inputs[1], inputs[2])
+            qadict = qa_fluxcalib(self.data[qatype]['PARAM'],
+                                  inputs[0], inputs[1], inputs[2], inputs[3])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update

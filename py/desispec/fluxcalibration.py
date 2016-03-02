@@ -483,11 +483,12 @@ def ZP_from_calib(wave, calib):
     # Return
     return ZP_AB
 
-def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
+def qa_fluxcalib(param, frame, stdfibers, fluxcalib, indiv_stars):
     """
     Args:
         param: dict of QA parameters
         frame: Frame
+        stdfibers: list of standard star fibers
         fluxcalib: FluxCalib
         indiv_stars : tuple of data on individual star fibers
 
@@ -503,16 +504,16 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
     # Calculate ZP for mean spectrum
     ZP_AB = ZP_from_calib(fluxcalib.wave, fluxcalib.meancalib)  # erg/s/cm^2/A
 
-    # Mean ZP at fiducial wavelength (AB mag for 1 photon/s/A)
+    # ZP at fiducial wavelength (AB mag for 1 photon/s/A)
     iZP = np.argmin(np.abs(fluxcalib.wave-param['ZP_WAVE']))
-    qadict['MEAN_ZP'] = float(np.median(ZP_AB[iZP-10:iZP+10]))
+    qadict['ZP'] = float(np.median(ZP_AB[iZP-10:iZP+10]))
 
     # Unpack star data
     sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
 
     # RMS
     nstars = sqrtwflux.shape[0]
-    qadict['NSTARS'] = int(nstars)
+    qadict['NSTARS_FIBER'] = int(nstars)
     ZP_stars = np.zeros_like(sqrtwflux)
     ZP_fiducial = np.zeros(nstars)
     for ii in range(nstars):
@@ -524,6 +525,14 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
         iZP = np.argmin(np.abs(i_wave-param['ZP_WAVE']))
         ZP_fiducial[ii] = float(np.median(ZP_stars[iZP-10:iZP+10]))
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
+
+    # MAX ZP Offset
+    ZPoffset = np.abs(ZP_fiducial-qadict['ZP'])
+    qadict['MAX_ZP_OFF'] = [float(np.max(ZPoffset)),
+                            int(stdfibers[np.argmax(ZPoffset)])]
+    if qadict['MAX_ZP_OFF'] > param['MAX_ZP_OFF']:
+        log.warn("Bad standard star ZP {:g}, in fiber {:d}".format(
+                qadict['MAX_ZP_OFF'][0], qadict['MAX_ZP_OFF'][1]))
 
     # Return
     return qadict

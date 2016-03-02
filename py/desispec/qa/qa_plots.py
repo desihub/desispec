@@ -223,7 +223,7 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
         else:
             lbl = None
         ax0.plot(i_wave, ZP_star, ':', label=lbl)
-    ax0.plot(fluxcalib.wave, ZP_AB, color='black', label='Mean ZP')
+    ax0.plot(fluxcalib.wave, ZP_AB, color='black', label='Mean Calib')
 
     # Legend
     legend = ax0.legend(loc='lower left', borderpad=0.3,

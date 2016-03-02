@@ -166,7 +166,7 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
                     nrej=nout_tot)
 
 class SkyModel(object):
-    def __init__(self, wave, flux, ivar, mask, header=None, nrej=None):
+    def __init__(self, wave, flux, ivar, mask, header=None, nrej=0):
         """Create SkyModel object
         
         Args:
@@ -175,6 +175,7 @@ class SkyModel(object):
             ivar  : 2D[nspec, nwave] inverse variance of the sky model
             mask  : 2D[nspec, nwave] 0=ok or >0 if problems
             header : (optional) header from FITS file HDU0
+            nrej : (optional) Number of rejected pixels in fit
             
         All input arguments become attributes
         """
@@ -274,7 +275,7 @@ def qa_skysub(param, frame, fibermap, skymodel):
 
     # Residual percentiles
     perc = dustat.perc(res, per=param['PER_RESID'])
-    qadict['PER_RESID'] = [float(iperc) for iperc in perc]
+    qadict['RESID_PER'] = [float(iperc) for iperc in perc]
     #import pdb
     #pdb.set_trace()
 
