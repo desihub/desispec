@@ -107,7 +107,8 @@ class QA_Frame(object):
         assert self.flavor in ['science']
 
         # Standard FLUXCALIB input parameters
-        flux_dict = dict(ZP_WAVE=0.,          # Wavelength for ZP evaluation (camera dependent)
+        flux_dict = dict(ZP_WAVE=0.,        # Wavelength for ZP evaluation (camera dependent)
+                         MAX_ZP_OFF=0.2,    # Max offset in ZP for individual star
                          )
 
         if self.camera[0] == 'b':

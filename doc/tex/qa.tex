@@ -34,8 +34,10 @@ This technical note summarizes the Quality Assurance outputs for the
 and the Quicklook pipeline (run on mountain).
 
 This document is maintained in the {\tt desispec} package\footnote{Maintained in the public github repository at \url{https://github.com/desihub/desispec}} under {\tt doc/tex/}
-and also summarizes on the DESI Wiki at 
+and is also summarized on the DESI Wiki at 
 \url{https://desi.lbl.gov/trac/wiki/Pipeline/QualityAssurance}. 
+This document, however, supersedes any discussion on 
+the Wiki.
 
 \section{General Architecture}
 
@@ -61,6 +63,10 @@ e.g. {\tt qa-b0-00000002.pdf}.
 For compactness, it is likely that these files will be collated
 once the processing of all tiles of a given exposure is complete.
 This is not yet implemented.
+
+\section{Pre-Processing}
+
+\section{Image Processing}
 
 \section{PSF}
 
@@ -258,7 +264,7 @@ these pre-defined values.
 {\bf Name} & {\bf Value} & {\bf Brief Description}\\
 \hline
 PCHI\_RESID    & 0.05 & Minimum $P(\chi^2)$ allowed for sky fiber residuals \\ 
-RESID\_PER     & 5,95 & Percentile values for residual distribution \\
+RESID\_PER     & 95   & Percentile value for residual distribution \\
 \hline
 \end{tabular}
 \end{center}
@@ -278,9 +284,10 @@ for the sky subtraction step.
 {\bf Name} & {\bf Brief Description}\\
 \hline
 NSKY\_FIBER           & Number of sky fibers in the frame \\
+NREJ                  & Number of pixels rejected in sky model fit \\
 NBAD\_PCHI            & Number of sky fibers with $P(\chi^2) < $PCHI\_RESID \\
 MED\_RESID            & Median residuals from all sky fibers \\
-PER\_RESID            & 5\% and 95\% percentile of residuals from all sky fibers [not yet implemented] \\
+PER\_RESID            & Percentiles of residuals from all sky fibers [not yet implemented] \\
 MED\_SKYLINE\_RESID   & Median residuals on sky lines from all sky fibers [not yet implemented]\\
 \hline
 \end{tabular}
@@ -318,7 +325,7 @@ the residuals relative to the estimated uncertainty.
 
 \begin{figure}[htb]
 \begin{center}
-\includegraphics[width=5in]{fig/qa-b0-00000002}
+\includegraphics[width=5in]{fig/qa-sky-b0-0000002}
 \caption{Example figure for sky subtraction QA
 for a single frame.  
 }
@@ -334,7 +341,7 @@ QA code will be written to:
 \begin{myitemize}
 \item Compare the sky model across tiles 
 \item Compare the residuals (median and percentiles) across tiles
-\item Compare the $P(\chi^2)$ vaules across tiles
+\item Compare the $P(\chi^2)$ values across tiles
 \end{myitemize}
 
 \subsection{Time}
@@ -344,6 +351,62 @@ QA code will be written to:
 \begin{myitemize}
 \item Assess the residuals with time
 \end{myitemize}
+
+%%%%%%%%%%%%%%%%
+\section{Flux Calibration}
+
+\subsection{Overview}
+
+The primary goals of QA for flux calibration are to:
+
+\begin{myitemize}
+\item Record the zeropoint (ZP) 
+\item Assess RMS in ZP
+\item Identify bad standard stars
+\item Examine performance across an exposure
+\item Examine performance with time
+\end{myitemize}
+
+\subsection{Single Frame}
+
+The {\tt compute\_flux\_calibration} method generates
+a calibration sensitivity function.  It is derived
+from the model and measured fluxes for
+a set of observed standard stars ($\sim 5$ per frame).
+
+\begin{table}[h]
+\begin{center}
+\caption{Flux Calibration QA Parameters}
+\label{tab:flux_param}
+\begin{tabular}{p{3.5cm}p{1.2cm}p{8.3cm}}
+\hline
+{\bf Name} & {\bf Value} & {\bf Brief Description}\\
+\hline
+PCHI\_RESID    & 0.05 & Minimum $P(\chi^2)$ allowed for sky fiber residuals \\ 
+RESID\_PER     & 95   & Percentile value for residual distribution \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\subsection{Plot(s)}
+
+A plot may be generated to show the calibration function,
+expressed as the ZP in AB magnitudes.
+It allows a visual assessment of the throughput
+and the identification of anomalous standard stars.
+Figure~\ref{fig:fluxcalib_frame} shows an example.
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=5in]{fig/qa-flux-b0-0000002}
+\caption{Example figure for flux calibration QA
+for a single frame.  
+}
+\label{fig:fluxcalib_frame}
+\end{center}
+\end{figure}
 
 
 %\begin{figure}[htb]
