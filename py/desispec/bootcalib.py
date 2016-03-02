@@ -101,6 +101,8 @@ def load_gdarc_lines(camera):
       Dispersion for input camera
     gd_lines : ndarray
       Array of lines expected to be recorded and good for ID
+    line_guess : int or None
+      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
     """
     log=get_logger()
     if camera[0] == 'b':
@@ -130,7 +132,7 @@ def load_gdarc_lines(camera):
                8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
         dlamb = 0.599  # Ang
         gd_lines = np.array(NeI)# + ArI)
-        line_guess = None
+        line_guess = 17
         wmark = 8591.2583
     else:
         log.error('Bad camera')
@@ -281,6 +283,8 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
       Center of 5 gd_lines to key on (camera dependent)
     toler : float, optional
       Tolerance for matching (20%)
+    line_guess : int, optional
+      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
 
     Returns
     -------
