@@ -15,8 +15,6 @@ import scipy, scipy.sparse, scipy.ndimage
 import sys
 from astropy import units
 
-from xastropy.xutils import xdebug as xdb
-
 #debug
 #import pylab
 
