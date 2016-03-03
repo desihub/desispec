@@ -51,7 +51,7 @@ class Frame(object):
                              diagonals of resolution matrix data
             fibers: ndarray of which fibers these spectra are
             spectrograph: integer, which spectrograph [0-9]
-            meta: dict-like object (e.g. FITS header); must include SPECMIN
+            meta: dict-like object (e.g. FITS header)
             fibermap: fibermap table
 
         Notes:

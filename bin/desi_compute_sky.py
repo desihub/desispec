@@ -39,7 +39,6 @@ def main() :
                         help = 'path of QA file. Will calculate for Sky Subtraction')
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file')
-    #parser.add_argument('--qafig', type = str, default = None, required=False)
 
     args = parser.parse_args()
     log=get_logger()
@@ -70,7 +69,7 @@ def main() :
     if (args.qafile is not None) or (args.qafig is not None):
         log.info("performing skysub QA")
         # Load
-        qaframe = load_qa_frame(args.qafile, frame, flavor='science')
+        qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
         # Run
         qaframe.run_qa('SKYSUB', (frame, fibermap, skymodel))
         # Write

@@ -5,9 +5,12 @@ from uuid import uuid4
 
 import numpy as np
 
+from astropy.io import fits
+
 from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
+from desispec.sky import SkyModel
 from desispec import io
 from desispec.pipeline.core import runcmd
 
@@ -15,13 +18,15 @@ class TestBinScripts(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.nspec = 5
+        cls.nspec = 6
         cls.nwave = 20
         id = uuid4().hex
+        cls.calibfile = 'calib-'+id+'.fits'
         cls.framefile = 'frame-'+id+'.fits'
         cls.fiberflatfile = 'fiberflat-'+id+'.fits'
         cls.fibermapfile = 'fibermap-'+id+'.fits'
         cls.skyfile = 'sky-'+id+'.fits'
+        cls.stdfile = 'std-'+id+'.fits'
         cls.qafile = 'qa-'+id+'.yaml'
         cls.qafig = 'qa-'+id+'.pdf'
         cls.topDir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -44,14 +49,15 @@ class TestBinScripts(unittest.TestCase):
         else:
             os.environ['PYTHONPATH'] = cls.origPath
 
-    def _write_frame(self):
+    def _write_frame(self, flavor='none', camera='b'):
         """Write a fake frame"""
         wave = 5000+np.arange(self.nwave)
         flux = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0)
+        frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0,
+                      meta=dict(flavor=flavor, camera=camera))
         io.write_frame(self.framefile, frame)
 
     def _write_fiberflat(self):
@@ -65,42 +71,77 @@ class TestBinScripts(unittest.TestCase):
         io.write_fiberflat(self.fiberflatfile, ff)
 
     def _write_fibermap(self):
-        """Write a fake fiberflat"""
+        """Write a fake fibermap"""
         fibermap = io.empty_fibermap(self.nspec)
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
-
+            fibermap['OBJTYPE'][i+1] = 'STD'
+        fibermap['FIBER'] = np.arange(self.nspec).astype(int)
         io.write_fibermap(self.fibermapfile, fibermap)
 
     def _write_skymodel(self):
-        pass
+        """Write a fake SkyModel"""
+        wave = 5000+np.arange(self.nwave)
+        skyflux = np.ones((self.nspec, self.nwave))*0.1  # Must be less 1
+        ivar = np.ones((self.nspec, self.nwave))
+        mask = np.zeros((self.nspec, self.nwave), dtype=int)
+        sky = SkyModel(wave, skyflux, ivar, mask, nrej=1)
+        io.write_sky(self.skyfile, sky)
 
     def _write_stdstars(self):
-        pass
+        """Write a fake StdStar model file"""
+        # First generation is very simple
+        wave = 5000+np.arange(self.nwave)
+        stdflux = np.ones((self.nspec, self.nwave))
+        fibers = np.array([1,4]).astype(int)
+        hdu1=fits.PrimaryHDU(stdflux)
+        hdu2=fits.ImageHDU(wave)
+        hdu3=fits.ImageHDU(fibers)
+        hdulist=fits.HDUList([hdu1,hdu2,hdu3])
+        hdulist.writeto(self.stdfile,clobber=True)
 
     def test_compute_fiberflat(self):
         """
         Tests desi_compute_fiberflat.py --infile frame.fits --outfile fiberflat.fits
         """
-        self._write_frame()
-        #- run the command and confirm error code = 0
-        cmd = '{} {}/desi_compute_fiberflat.py --infile {} --outfile {} --qafile {}'.format(
-            sys.executable, self.binDir, self.framefile, self.fiberflatfile, self.qafile)
-        # self.assertTrue(os.path.exists(os.path.join(self.binDir,'desi_compute_fiberflat.py')))
-        #err = runcmd(cmd, [self.framefile,], [self.fiberflatfile,], clobber=True)
+        self._write_frame(flavor='flat')
+        self._write_fibermap()
+
+        # QA fig requires fibermapfile
+        cmd = '{} {}/desi_compute_fiberflat.py --infile {} --fibermap {} --outfile {} --qafile {} --qafig {}'.format(
+                sys.executable, self.binDir, self.framefile, self.fibermapfile,
+                self.fiberflatfile, self.qafile, self.qafig)
         err = runcmd(cmd,
-                     inputs  = [self.framefile],
-                     outputs = [self.fiberflatfile,self.qafile,], clobber=True )
+                     inputs = [self.framefile, self.fibermapfile],
+                     outputs = [self.fiberflatfile,self.qafile,self.qafig], clobber=True)
         self.assertEqual(err, 0)
 
         #- Confirm that the output file can be read as a fiberflat
         ff = io.read_fiberflat(self.fiberflatfile)
 
+    def test_compute_fluxcalib(self):
+        """
+        Tests desi_compute_sky.py --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        """
+        self._write_frame(flavor='dark', camera='b')
+        self._write_fiberflat()
+        self._write_fibermap()
+        self._write_skymodel()
+        self._write_stdstars()
+
+        cmd = "{} {}/desi_compute_fluxcalibration.py --infile {} --fibermap {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {}".format(
+            sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.stdfile,
+                self.calibfile, self.qafile, self.qafig)
+        err = runcmd(cmd,
+                inputs  = [self.framefile, self.fiberflatfile, self.fibermapfile, self.skyfile, self.stdfile],
+                outputs = [self.calibfile,self.qafile,self.qafig,], clobber=True )
+        self.assertEqual(err, 0)
+
     def test_compute_sky(self):
         """
         Tests desi_compute_sky.py --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
-        self._write_frame()
+        self._write_frame(flavor='dark')
         self._write_fiberflat()
         self._write_fibermap()
 
