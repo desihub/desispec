@@ -108,6 +108,17 @@ class TestIO(unittest.TestCase):
             self.assertTrue(np.all(mask == frame.mask))
             self.assertTrue(np.all(R == frame.resolution_data))
             self.assertTrue(frame.resolution_data.dtype.isnative)
+            
+        #- with and without fibermap
+        self.assertEqual(frame.fibermap, None)
+        fibermap = desispec.io.empty_fibermap(nspec)
+        fibermap['TARGETID'] = np.arange(nspec)*2
+        frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap)
+        desispec.io.write_frame(self.testfile, frx)
+        frame = desispec.io.read_frame(self.testfile)
+        for name in fibermap.dtype.names:
+            match = np.all(fibermap[name] == frame.fibermap[name])
+            self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
     def test_sky_rw(self):
         nspec, nwave = 5,10

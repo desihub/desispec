@@ -46,13 +46,13 @@ class TestFrame(unittest.TestCase):
         for i in range(3):
             frame = Frame(wave, flux, ivar, spectrograph=i)
             self.assertEqual(len(frame.fibers), nspec)
-            self.assertEqual(frame.fibers[0], i*nspec)
+            self.assertEqual(frame.fibers[0], i*500)
 
         # Check multi-mode assignment of fibers
         frame = Frame(wave, flux, ivar, fibers=fibers, meta=meta)
         meta = dict(SPECMIN=1)
         fibers = np.arange(nspec)
-        self.assertRaises(AssertionError, lambda x: Frame(*x), (wave, flux, ivar, None, None, fibers, 1, meta))
+        self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar, None, None, fibers, 1, meta))
 
         #- Check a fiber-assigning method is required
         self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar))

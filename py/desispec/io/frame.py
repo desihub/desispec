@@ -17,17 +17,20 @@ from desispec.log import get_logger
 
 log = get_logger()
 
-def write_frame(outfile, frame, header=None):
+def write_frame(outfile, frame, header=None, fibermap=None):
     """Write a frame fits file and returns path to file written.
 
     Args:
         outfile: full path to output file, or tuple (night, expid, channel)
         frame:  desispec.frame.Frame object with wave, flux, ivar...
-        header: optional astropy.io.fits.Header or dict to override frame.header
-        
+
+    Optional:
+        header: astropy.io.fits.Header or dict to override frame.header
+        fibermap: table to store as FIBERMAP HDU
+
     Returns:
         full filepath of output file that was written
-        
+
     Note:
         to create a Frame object to pass into write_frame,
         frame = Frame(wave, flux, ivar, resolution_data)
@@ -54,6 +57,11 @@ def write_frame(outfile, frame, header=None):
     hdus.append( fits.ImageHDU(frame.mask, name='MASK') )
     hdus.append( fits.ImageHDU(frame.wave, name='WAVELENGTH') )
     hdus.append( fits.ImageHDU(frame.resolution_data, name='RESOLUTION' ) )
+    
+    if fibermap is not None:
+        hdus.append( fits.BinTableHDU(np.asarray(fibermap), name='FIBERMAP' ) )
+    elif frame.fibermap is not None:
+        hdus.append( fits.BinTableHDU(np.asarray(frame.fibermap), name='FIBERMAP' ) )
     
     hdus.writeto(outfile, clobber=True)
 
@@ -90,6 +98,12 @@ def read_frame(filename, nspec=None):
         mask = None   #- let the Frame object create the default mask
         
     resolution_data = native_endian(fx['RESOLUTION'].data)
+    
+    if 'FIBERMAP' in fx:
+        fibermap = fx['FIBERMAP'].data
+    else:
+        fibermap = None
+    
     fx.close()
 
     if nspec is not None:
@@ -103,4 +117,4 @@ def read_frame(filename, nspec=None):
         hdr['SPECMIN'] = 0
 
     # return flux,ivar,wave,resolution_data, hdr
-    return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr)
+    return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap)
