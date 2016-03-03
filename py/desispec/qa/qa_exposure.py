@@ -6,8 +6,6 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 
 import numpy as np
 
-from desispec.sky import qa_skysub
-from desispec.fiberflat import qa_fiberflat
 
 class QA_Frame(object):
     def __init__(self, frame=None, flavor='none', camera='none', in_data=None):
@@ -38,9 +36,12 @@ class QA_Frame(object):
             except:
                 pass
             else:
-                camera = frame.meta['CAMERA']
+                try:
+                    camera = frame.meta['CAMERA']
+                except KeyError:
+                    pass
 
-        assert flavor in ['none', 'flat', 'arc', 'science']
+        assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
         self.flavor = flavor
         self.camera = camera
         
@@ -82,17 +83,42 @@ class QA_Frame(object):
           Re-initialize FIBERFLAT parameter dict
         """
         #
-        assert self.flavor in ['science']
+        assert self.flavor in ['flat']
 
         # Standard FIBERFLAT input parameters
         fflat_dict = dict(MAX_N_MASK=20000,  # Maximum number of pixels to mask
                           MAX_SCALE_OFF=0.05,  # Maximum offset in counts (fraction)
                           MAX_OFF=0.15,       # Maximum offset from unity
-                          MAX_MEAN_OFF=0.05,  # Maximum offset in fiberflat (fraction)
+                          MAX_MEAN_OFF=0.05,  # Maximum offset in mean of fiberflat
                           MAX_RMS=0.02,      # Maximum RMS in fiberflat
                           )
         # Init
         self.init_qatype('FIBERFLAT', fflat_dict, re_init=re_init)
+
+    def init_fluxcalib(self, re_init=False):
+        """ Initialize parameters for FLUXCALIB QA
+        Args:
+            re_init: bool, (optional)
+              Re-initialize  parameter dict
+
+        Returns:
+
+        """
+
+        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso']
+
+        # Standard FLUXCALIB input parameters
+        flux_dict = dict(ZP_WAVE=0.,        # Wavelength for ZP evaluation (camera dependent)
+                         MAX_ZP_OFF=0.2,    # Max offset in ZP for individual star
+                         )
+
+        if self.camera[0] == 'b':
+            flux_dict['ZP_WAVE'] = 4800.  # Ang
+        else:
+            raise ValueError("Not ready for this camera!")
+
+        # Init
+        self.init_qatype('FLUXCALIB', flux_dict, re_init=re_init)
 
     def init_skysub(self, re_init=False):
         """Initialize parameters for SkySub QA 
@@ -103,12 +129,13 @@ class QA_Frame(object):
         re_init: bool, (optional)
           Re-initialize SKYSUB parameter dict
         """
-        # 
-        assert self.flavor in ['science']
+        #
+        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso']
 
         # Standard SKYSUB input parameters
         sky_dict = dict(
             PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+            PER_RESID=95.,   # Percentile for residual distribution
             )
         # Init
         self.init_qatype('SKYSUB', sky_dict, re_init=re_init)
@@ -124,6 +151,10 @@ class QA_Frame(object):
         clobber: bool, optional [True]
           Over-write previous QA 
         """
+        from desispec.sky import qa_skysub
+        from desispec.fiberflat import qa_fiberflat
+        from desispec.fluxcalibration import qa_fluxcalib
+
         # Check for previous QA if clobber==False
         if not clobber:
             # QA previously performed?
@@ -145,6 +176,14 @@ class QA_Frame(object):
             self.init_fiberflat()
             # Run
             qadict = qa_fiberflat(self.data[qatype]['PARAM'], inputs[0], inputs[1])
+        elif qatype == 'FLUXCALIB':
+            # Expecting: frame, fibers, fluxcalib, individual_outputs (star by star)
+            assert len(inputs) == 4
+            # Init parameters (as necessary)
+            self.init_fluxcalib()
+            # Run
+            qadict = qa_fluxcalib(self.data[qatype]['PARAM'],
+                                  inputs[0], inputs[1], inputs[2], inputs[3])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update
@@ -174,7 +213,7 @@ class QA_Exposure(object):
         Attributes:
             All input args become object attributes.
         """
-        assert flavor in ['none', 'flat', 'arc', 'science']
+        assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
 
         self.flavor = flavor
         

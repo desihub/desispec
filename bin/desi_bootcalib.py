@@ -19,8 +19,6 @@ import argparse
 
 from astropy.io import fits
 
-from xastropy.xutils import xdebug as xdb
-
 def main() :
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
