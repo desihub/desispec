@@ -1,6 +1,7 @@
 import unittest
 
 import numpy as np
+import desispec.io
 from desispec.frame import Frame, Spectrum
 from desispec.resolution import Resolution
 
@@ -65,6 +66,7 @@ class TestFrame(unittest.TestCase):
         ivar = np.ones(flux.shape)
         mask = np.zeros(flux.shape, dtype=int)
         rdata = np.ones((nspec, 5, nwave))
+        fibermap = desispec.io.fibermap.empty_fibermap(nspec)
 
         frame = Frame(wave, flux, ivar, mask, rdata, spectrograph=0)
         x = frame[1]
@@ -75,6 +77,13 @@ class TestFrame(unittest.TestCase):
         self.assertEqual(type(x), Frame)
         x = frame[frame.fibers<3]
         self.assertEqual(type(x), Frame)
+        
+        #- Slice fibermap too
+        frame = Frame(wave, flux, ivar, mask, rdata, spectrograph=0, fibermap=fibermap)
+        x = frame[frame.fibers<3]
+        self.assertEqual(len(x.fibers), len(x.fibermap))
+        x = frame[[1,2,3]]
+        self.assertTrue(np.all(x.fibers == x.fibermap['FIBER']))
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

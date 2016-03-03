@@ -157,10 +157,15 @@ class Frame(object):
         else:
             rdata = None
         
+        if self.fibermap is not None:
+            fibermap = self.fibermap[index]
+        else:
+            fibermap = None
+        
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
-                    meta=self.meta)
+                    meta=self.meta, fibermap=fibermap)
         
         #- TODO:
         #- if we define fiber ranges in the fits headers, correct header
