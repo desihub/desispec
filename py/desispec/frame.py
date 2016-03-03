@@ -50,7 +50,6 @@ class Frame(object):
             fibers: (optional) ndarray of which fibers these spectra are
             spectrograph: (optional) integer, which spectrograph [0-9]        
             meta: (optional) dict-like object (e.g. FITS header from HDU0) 
-                  Must include SPECMIN
 
         Notes:
             spectrograph input is used only if fibers is None.  In this case,

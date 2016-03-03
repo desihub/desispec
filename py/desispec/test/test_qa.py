@@ -14,8 +14,8 @@ class TestQA(unittest.TestCase):
         #- Simple Init calls
         qafrm1 = QA_Frame(flavor='arc')
         qafrm2 = QA_Frame(flavor='flat')
-        qafrm3 = QA_Frame(flavor='science')
-        assert qafrm3.flavor == 'science'
+        qafrm3 = QA_Frame(flavor='dark')
+        assert qafrm3.flavor == 'dark'
 
     def test_init_qa_fiberflat(self):
         #- Init FiberFlat dict
@@ -29,7 +29,7 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_fluxcalib(self):
         #- Init FluxCalib dict
-        qafrm = QA_Frame(camera='b', flavor='science')
+        qafrm = QA_Frame(camera='b', flavor='dark')
         qafrm.init_fluxcalib()
         assert qafrm.data['FLUXCALIB']['PARAM']['MAX_ZP_OFF'] > 0.
 
@@ -39,7 +39,7 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_skysub(self):
         #- Init SkySub dict
-        qafrm = QA_Frame(flavor='science')
+        qafrm = QA_Frame(flavor='dark')
         qafrm.init_skysub()
         assert qafrm.data['SKYSUB']['PARAM']['PCHI_RESID'] > 0.
 

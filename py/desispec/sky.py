@@ -276,8 +276,6 @@ def qa_skysub(param, frame, fibermap, skymodel):
     # Residual percentiles
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
-    #import pdb
-    #pdb.set_trace()
 
     # Mean Sky Continuum from all skyfibers
     # need to limit in wavelength?

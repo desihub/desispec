@@ -36,7 +36,10 @@ class QA_Frame(object):
             except:
                 pass
             else:
-                camera = frame.meta['CAMERA']
+                try:
+                    camera = frame.meta['CAMERA']
+                except KeyError:
+                    pass
 
         assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
         self.flavor = flavor
