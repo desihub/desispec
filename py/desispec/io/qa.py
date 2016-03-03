@@ -6,7 +6,7 @@ IO routines for QA
 """
 import os, yaml
 
-from desispec.qa.qa_exposure import QA_Frame
+from desispec.qa import QA_Frame
 from desispec.io import findfile
 from desispec.io.util import makepath
 from desispec.log import get_logger
