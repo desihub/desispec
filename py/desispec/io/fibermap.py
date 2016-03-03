@@ -59,10 +59,14 @@ fibermap_comments = dict(
     FILTER       = "SDSS_R, DECAM_Z, WISE1, etc."
 )
 
-def empty_fibermap(nspec):
+def empty_fibermap(nspec, specmin=0):
     """Return an empty fibermap ndarray to be filled in.
     """
-    return np.zeros(nspec, dtype=fibermap_columns)
+    fibermap = np.zeros(nspec, dtype=fibermap_columns)
+    fibermap['FIBER'] = np.arange(specmin, specmin+nspec)
+    fibers_per_spectrograph = 500
+    fibermap['SPECTROID'] = fibermap['FIBER'] // fibers_per_spectrograph
+    return fibermap
 
 def write_fibermap(outfile, fibermap, header=None):
     """Write fibermap binary table to outfile.

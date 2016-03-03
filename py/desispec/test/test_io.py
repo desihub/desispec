@@ -167,6 +167,17 @@ class TestIO(unittest.TestCase):
         self.assertTrue(xff.meanspec.dtype.isnative)
         self.assertTrue(xff.wave.dtype.isnative)
 
+    def test_empty_fibermap(self):
+        fibermap = desispec.io.fibermap.empty_fibermap(10)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == 0))
+        fibermap = desispec.io.fibermap.empty_fibermap(10, specmin=20)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)+20))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == 0))
+        fibermap = desispec.io.fibermap.empty_fibermap(10, specmin=495)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)+495))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == [0,0,0,0,0,1,1,1,1,1]))
+
     def test_fibermap_rw(self):
         fibermap = desispec.io.fibermap.empty_fibermap(10)
         for key in fibermap.dtype.names:
