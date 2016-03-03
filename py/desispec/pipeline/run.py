@@ -105,6 +105,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         f.write("#SBATCH --nodes={}\n".format(nodes))
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name=desipipe\n")
+        f.write("#SBATCH --output={}_slurm_%j\n".format(logroot))
         f.write("#SBATCH --export=NONE\n\n")
         for com in envsetup:
             f.write("{}\n".format(com))
@@ -129,6 +130,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
             runstr = "{} --cpu_bind=no".format(runstr)
         f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}}\"\n\n".format(runstr))
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write("echo \"job datestamp = ${now}\"\n")
         f.write("log={}_${{now}}\n\n".format(logroot))
         for com in commands:
             f.write("${{run}} {} >${{log}} 2>&1\n\n".format(com))

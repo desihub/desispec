@@ -86,7 +86,7 @@ def main():
             if exptype[ex] != 'arc':
                 log.info("  {:08d}".format(ex))
 
-    psf = pipe.psf_newest(specdir)
+    psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night)
 
     # if requested, restrict the exposure list to a single ID
     if args.expid is not None:
@@ -117,7 +117,7 @@ def main():
 
     # change to the redux directory
 
-    os.chdir(os.path.join(specdir, args.night))
+    os.chdir(os.path.join(specdir, 'exposures', args.night))
 
     # create any output directories
 

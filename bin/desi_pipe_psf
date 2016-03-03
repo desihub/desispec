@@ -107,7 +107,7 @@ def main():
 
     # change to the redux directory
 
-    os.chdir(os.path.join(specdir, args.night))
+    os.chdir(os.path.join(specdir, 'exposures', args.night))
 
     # create any output directories
 
