@@ -108,6 +108,17 @@ class TestIO(unittest.TestCase):
             self.assertTrue(np.all(mask == frame.mask))
             self.assertTrue(np.all(R == frame.resolution_data))
             self.assertTrue(frame.resolution_data.dtype.isnative)
+            
+        #- with and without fibermap
+        self.assertEqual(frame.fibermap, None)
+        fibermap = desispec.io.empty_fibermap(nspec)
+        fibermap['TARGETID'] = np.arange(nspec)*2
+        frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap)
+        desispec.io.write_frame(self.testfile, frx)
+        frame = desispec.io.read_frame(self.testfile)
+        for name in fibermap.dtype.names:
+            match = np.all(fibermap[name] == frame.fibermap[name])
+            self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
     def test_sky_rw(self):
         nspec, nwave = 5,10
@@ -155,6 +166,17 @@ class TestIO(unittest.TestCase):
         self.assertTrue(xff.mask.dtype.isnative)
         self.assertTrue(xff.meanspec.dtype.isnative)
         self.assertTrue(xff.wave.dtype.isnative)
+
+    def test_empty_fibermap(self):
+        fibermap = desispec.io.fibermap.empty_fibermap(10)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == 0))
+        fibermap = desispec.io.fibermap.empty_fibermap(10, specmin=20)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)+20))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == 0))
+        fibermap = desispec.io.fibermap.empty_fibermap(10, specmin=495)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)+495))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == [0,0,0,0,0,1,1,1,1,1]))
 
     def test_fibermap_rw(self):
         fibermap = desispec.io.fibermap.empty_fibermap(10)
