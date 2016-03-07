@@ -88,6 +88,14 @@ class TestIO(unittest.TestCase):
         #- Can't convert and int into a fits Header
         self.assertRaises(ValueError, desispec.io.util.fitsheader, (1,))
 
+    def _make_frame(self, nspec=5, nwave=10, ndiag=3):
+        wave = np.arange(nwave)
+        flux = np.random.uniform(size=(nspec, nwave))
+        ivar = np.random.uniform(size=(nspec, nwave))
+        mask = np.zeros((nspec, nwave), dtype=int)
+        R = np.random.uniform( size=(nspec, ndiag, nwave) )
+        return Frame(wave, flux, ivar, mask, R)
+
     def test_frame_rw(self):
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
@@ -103,15 +111,30 @@ class TestIO(unittest.TestCase):
             desispec.io.write_frame(self.testfile, frx)
             frame = desispec.io.read_frame(self.testfile)
 
-            self.assertTrue(np.all(flux == frame.flux))
-            self.assertTrue(np.all(ivar == frame.ivar))
-            self.assertTrue(np.all(wave == frame.wave))
+            flux2 = flux.astype('f4').astype('f8')
+            ivar2 = ivar.astype('f4').astype('f8')
+            wave2 = wave.astype('f4').astype('f8')
+            R2    = R.astype('f4').astype('f8')
+
+            self.assertTrue(frame.wave.dtype == np.float64)
+            self.assertTrue(frame.flux.dtype == np.float64)
+            self.assertTrue(frame.ivar.dtype == np.float64)
+            self.assertTrue(frame.resolution_data.dtype == np.float64)
+
+            self.assertTrue(np.all(flux2 == frame.flux))
+            self.assertTrue(np.all(ivar2 == frame.ivar))
+            self.assertTrue(np.all(wave2 == frame.wave))
             self.assertTrue(np.all(mask == frame.mask))
-            self.assertTrue(np.all(R == frame.resolution_data))
+            self.assertTrue(np.all(R2 == frame.resolution_data))
             self.assertTrue(frame.resolution_data.dtype.isnative)
             self.assertEqual(frame.meta['BLAT'], meta['BLAT'])
             self.assertEqual(frame.meta['FOO'], meta['FOO'])
-            
+
+        #- Test float32 on disk vs. float64 in memory
+        for extname in ['FLUX', 'IVAR', 'WAVELENGTH', 'RESOLUTION']:
+            data = fits.getdata(self.testfile, extname)
+            self.assertEqual(data.dtype, np.dtype('>f4'), '{} not type >f4'.format(extname))
+
         #- with and without fibermap
         self.assertEqual(frame.fibermap, None)
         fibermap = desispec.io.empty_fibermap(nspec)
