@@ -113,7 +113,7 @@ def main():
 
     if rank == 0:
         log.info("computing exspec tasks")
-    [tasks_bundle, tasks_merge] = pipe.tasks_exspec(expid, exptype, raw, wrange, psf)
+    [tasks_bundle, tasks_merge, tasks_clean] = pipe.tasks_exspec(expid, exptype, raw, wrange, psf)
 
     # change to the redux directory
 
@@ -147,6 +147,17 @@ def main():
     if rank == 0:
         log.info("merging per-bundle extractions")
     work = pipe.task_dist(tasks_merge, nproc)
+    pipe.subprocess_list(work[rank])
+
+    # now wait for all processes to finish
+    if comm is not None:
+        comm.barrier()
+
+    # do all the cleaning tasks
+
+    if rank == 0:
+        log.info("cleaning per-bundle files")
+    work = pipe.task_dist(tasks_clean, nproc)
     pipe.subprocess_list(work[rank])
 
     # now wait for all processes to finish

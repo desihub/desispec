@@ -68,6 +68,7 @@ def tasks_exspec_exposure(id, raw, wrange, psf_select):
 
     tasks_extract = []
     tasks_merge = []
+    tasks_clean = []
 
     cameras = sorted(raw.keys())
     for cam in cameras:
@@ -87,7 +88,7 @@ def tasks_exspec_exposure(id, raw, wrange, psf_select):
             com = ['exspec']
             com.extend(['-i', raw[cam]])
             com.extend(['-p', psffile])
-            com.extend(['-o', outb])
+            com.extend(['-o', '{}.part'.format(outb)])
             com.extend(['--specmin', "{}".format(b*spec_per_bundle)])
             com.extend(['--nspec', "{}".format(spec_per_bundle)])
             com.extend(['-w', "{},{},{}".format(wmin,wmax,dw)])
@@ -101,30 +102,39 @@ def tasks_exspec_exposure(id, raw, wrange, psf_select):
             tasks_extract.append(task)
 
         com = ['merge_bundles']
-        com.extend(['-o', outfile])
+        com.extend(['-o', '{}.part'.format(outfile)])
         com.extend(mergeinputs)
-
         task = {}
         task['command'] = com
         task['parallelism'] = 'core'
         task['inputs'] = mergeinputs
         task['outputs'] = [outfile]
-
         tasks_merge.append(task)
 
-    return [tasks_extract, tasks_merge]
+        com = ['rm', '-f']
+        com.extend(mergeinputs)
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = [outfile]
+        task['outputs'] = []
+        tasks_clean.append(task)
+
+    return [tasks_extract, tasks_merge, tasks_clean]
 
 
 def tasks_exspec(expid, exptype, raw, wrange, psf_select):
     tasks_extract = []
     tasks_merge = []
+    tasks_clean = []
     for ex in expid:
         if exptype[ex] == "arc":
             continue
-        [exp_tasks_extract, exp_tasks_merge] = tasks_exspec_exposure(ex, raw[ex], wrange, psf_select)
+        [exp_tasks_extract, exp_tasks_merge, exp_tasks_clean] = tasks_exspec_exposure(ex, raw[ex], wrange, psf_select)
         tasks_extract.extend(exp_tasks_extract)
         tasks_merge.extend(exp_tasks_merge)
-    return [tasks_extract, tasks_merge]
+        tasks_clean.extend(exp_tasks_clean)
+    return [tasks_extract, tasks_merge, tasks_clean]
 
 
 def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
@@ -135,6 +145,7 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
 
     tasks_bundle = []
     tasks_merge = []
+    tasks_clean = []
 
     cameras = sorted(raw.keys())
     for cam in cameras:
@@ -143,11 +154,15 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
         outxml = "{}.xml".format(outbase)
         outfits = "{}.fits".format(outbase)
         mergeinputs = []
+        cleanfiles = []
         for b in range(nbundle):
             outxmlb = "{}-{:02}.xml".format(outbase, b)
             outspotb = "{}-{:02}-spots.xml".format(outbase, b)
             outfitsb = "{}-{:02}.fits".format(outbase, b)
             mergeinputs.append(outxmlb)
+            cleanfiles.append(outxmlb)
+            cleanfiles.append(outfitsb)
+            cleanfiles.append(outspotb)
             com = ['specex_desi_psf_fit']
             com.extend(['-a', raw[cam]])
             if bootcal is not None:
@@ -156,11 +171,11 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
                 com.extend(['--ycoord-file', bootcal[band]])
                 com.extend(['--ycoord-hdu', '2'])
             com.extend(['--lamplines', lamplines])
-            com.extend(['--out_xml', outxmlb])
-            com.extend(['--out_spots', outspotb])
-            com.extend(['--out_fits', outfitsb])
-            com.extend(['--first_bundle', "{}".format(b+1)])
-            com.extend(['--last_bundle', "{}".format(b+1)])
+            com.extend(['--out_xml', '{}.part'.format(outxmlb)])
+            com.extend(['--out_spots', '{}.part'.format(outspotb)])
+            com.extend(['--out_fits', '{}.part'.format(outfitsb)])
+            com.extend(['--first_bundle', "{}".format(b)])
+            com.extend(['--last_bundle', "{}".format(b)])
             com.extend(['--gauss_hermite_deg', '6'])
             com.extend(['--psfmodel', 'GAUSSHERMITE'])
             com.extend(['--half_size_x', '4'])
@@ -184,31 +199,40 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
             tasks_bundle.append(task)
 
         com = ['specex_merge_psf']
-        com.extend(['--out-fits', outfits])
-        com.extend(['--out-xml', outxml])
+        com.extend(['--out-fits', '{}.part'.format(outfits)])
+        com.extend(['--out-xml', '{}.part'.format(outxml)])
         com.extend(mergeinputs)
-
         task = {}
         task['command'] = com
-        task['parallelism'] = 'node'
+        task['parallelism'] = 'core'
         task['inputs'] = mergeinputs
         task['outputs'] = [outfits, outxml]
-
         tasks_merge.append(task)
 
-    return [tasks_bundle, tasks_merge]
+        com = ['rm', '-f']
+        com.extend(cleanfiles)
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = [outfits, outxml]
+        task['outputs'] = []
+        tasks_clean.append(task)
+
+    return [tasks_bundle, tasks_merge, tasks_clean]
 
 
 def tasks_specex(expid, exptype, raw, lamplines, bootcal=None):
     tasks_bundle = []
     tasks_merge = []
+    tasks_clean = []
     for ex in expid:
         if exptype[ex] != "arc":
             continue
-        [exp_tasks_bundle, exp_tasks_merge] = tasks_specex_exposure(ex, raw[ex], lamplines, bootcal=bootcal)
+        [exp_tasks_bundle, exp_tasks_merge, exp_tasks_clean] = tasks_specex_exposure(ex, raw[ex], lamplines, bootcal=bootcal)
         tasks_bundle.extend(exp_tasks_bundle)
         tasks_merge.extend(exp_tasks_merge)
-    return [tasks_bundle, tasks_merge]
+        tasks_clean.extend(exp_tasks_clean)
+    return [tasks_bundle, tasks_merge, tasks_clean]
 
 
 def tasks_fiberflat(expid, exptype, raw):

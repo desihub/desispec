@@ -77,6 +77,9 @@ def subprocess_list(tasks, rank=0):
             # proc.wait()
             log.info("subproc: {}".format(" ".join(tsk['command'])))
             ret = sp.call(tsk['command'])
+            for outf in tsk['outputs']:
+                ret = sp.call(['mv', '{}.part'.format(outf), outf])
+
     return
 
 
@@ -100,7 +103,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
     timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
     with open(path, 'w') as f:
         f.write("#!/bin/bash -l\n\n")
-        f.write("#SBATCH --partition=regular\n")
+        f.write("#SBATCH --partition=debug\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(nodes))
         f.write("#SBATCH --time={}\n".format(timestr))
