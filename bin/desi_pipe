@@ -161,10 +161,10 @@ def main():
                 firstflat = ex
                 break
         commands = []
-        for band in ['r', 'b', 'z']:
-            flatname = "{}-{}0-{:08d}.fits".format(pixroot, band, firstflat)
+        for cam in sorted(fullraw.keys())
+            flatname = "{}-{}-{:08d}.fits".format(pixroot, cam, firstflat)
             flatfile = os.path.join(rawdir, nt, flatname)
-            arcname = "{}-{}0-{:08d}.fits".format(pixroot, band, firstarc)
+            arcname = "{}-{}-{:08d}.fits".format(pixroot, cam, firstarc)
             arcfile = os.path.join(rawdir, nt, arcname)
             outname = "psfboot-{}.fits".format(band)
             outfile = os.path.join(calpsf, nt, outname)
@@ -174,7 +174,7 @@ def main():
         shell_log = os.path.join(nldir, "bootcalib_sh")
         nersc_log = os.path.join(nldir, "bootcalib_nersc")
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=1, nodeproc=1, minutes=30, openmp=False, multiproc=False)
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=15, nodeproc=2, minutes=30, openmp=False, multiproc=False)
 
         com_master_shell.append("bash {}".format(shell_file))
 

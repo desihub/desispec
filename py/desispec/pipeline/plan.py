@@ -155,13 +155,16 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
         outbase = os.path.join("{:08d}".format(id), "psf-{}-{:08d}".format(cam, id))
         outxml = "{}.xml".format(outbase)
         outfits = "{}.fits".format(outbase)
+        outspot = "{}-spots.xml".format(outbase)
         mergeinputs = []
+        mergespotinputs = []
         cleanfiles = []
         for b in range(nbundle):
             outxmlb = "{}-{:02}.xml".format(outbase, b)
             outspotb = "{}-{:02}-spots.xml".format(outbase, b)
             outfitsb = "{}-{:02}.fits".format(outbase, b)
             mergeinputs.append(outxmlb)
+            mergespotinputs.append(outspotb)
             cleanfiles.append(outxmlb)
             cleanfiles.append(outfitsb)
             cleanfiles.append(outspotb)
@@ -210,6 +213,16 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
         task['parallelism'] = 'core'
         task['inputs'] = mergeinputs
         task['outputs'] = [outfits, outxml]
+        tasks_merge.append(task)
+
+        com = ['specex_merge_spot']
+        com.extend(['--out', '{}.part'.format(outspot)])
+        com.extend(mergespotinputs)
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = mergespotinputs
+        task['outputs'] = [outspot]
         tasks_merge.append(task)
 
         com = ['rm', '-f']
