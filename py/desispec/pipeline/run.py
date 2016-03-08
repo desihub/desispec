@@ -99,7 +99,9 @@ def shell_job(path, logroot, envsetup, desisetup, commands):
         f.write("\n")
         f.write("source {}\n\n".format(desisetup))
         for com in commands:
-            f.write("{} >${{log}} 2>&1\n\n".format(com))
+            executable = com.split(' ')[0]
+            f.write("which {}\n".format(executable))
+            f.write("time {} >${{log}} 2>&1\n\n".format(com))
     return
 
 
@@ -142,6 +144,8 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         f.write("echo \"job datestamp = ${now}\"\n")
         f.write("log={}_${{now}}\n\n".format(logroot))
         for com in commands:
-            f.write("${{run}} {} >${{log}} 2>&1\n\n".format(com))
+            executable = com.split(' ')[0]
+            f.write("which {}\n".format(executable))
+            f.write("time ${{run}} {} >${{log}} 2>&1\n\n".format(com))
     return
 
