@@ -6,6 +6,7 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 
 import numpy as np
 
+from . import qa_plots
 
 class QA_Frame(object):
     def __init__(self, frame=None, flavor='none', camera='none', in_data=None):
@@ -255,6 +256,8 @@ class QA_Exposure(object):
                 self.data['FLUXCALIB'][channel]['ZP_RMS'] = np.std(ZPval)
 
         # Figure
+        outfil = self.specprod_dir+'/qa-flux-{:08d}.pdf'.format(self.expid)
+        qa_plots.exposure_fluxcalib(outfil, self.data)
 
     def load_qa_data(self):
         """ Load the QA data files for a given exposure (currently yaml)

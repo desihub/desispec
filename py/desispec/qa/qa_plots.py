@@ -168,8 +168,57 @@ def frame_skyres(outfil, frame, fibermap, skymodel, qaframe):
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
 
+
+def exposure_fluxcalib(outfil, qa_data):
+    """ QA plots for Flux calibration in an Exposure
+    Args:
+        outfil: str -- Name of PDF file
+        qa_data: dict -- QA data, including that of the individual frames
+    """
+    # Init
+    cameras = qa_data['frames'].keys()
+    # Plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2, 2)
+
+    # Loop on channel
+    clrs = dict(b='blue', r='red', z='purple')
+    for qq, channel in enumerate(['b','r','z']):
+
+        ax = plt.subplot(gs[qq % 2, qq // 2])
+        for camera in cameras:
+            if camera[0] == channel:
+                ax.errorbar([int(camera[1])],
+                            [qa_data['frames'][camera]['FLUXCALIB']['QA']['ZP']],
+                            yerr=[qa_data['frames'][camera]['FLUXCALIB']['QA']['RMS_ZP']],
+                            capthick=2, fmt='o', color=clrs[channel])
+
+
+    #
+    #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
+    #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
+        ax.set_ylabel('ZP_AB')
+        #ax.set_xlim(xmin, xmax)
+        ax.set_xlabel('Spectrograph')
+    #med0 = np.maximum(np.abs(np.median(med_res)), 1.)
+    #ax0.set_ylim(-5.*med0, 5.*med0)
+    #ax0.text(0.5, 0.85, 'Sky Meanspec',
+    #    transform=ax_flux.transAxes, ha='center')
+
+    # Meta text
+    #ax2 = plt.subplot(gs[1,1])
+    #ax2.set_axis_off()
+    #show_meta(ax2, qaframe, 'FLUXCALIB', outfil)
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    plt.savefig(outfil)
+    plt.close()
+    print('Wrote QA FluxCalib Exposure file: {:s}'.format(outfil))
+
+
 def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
-    """ QA plots for Flux calibration
+    """ QA plots for Flux calibration in a Frame
     Args:
         outfil:
         qaframe:
