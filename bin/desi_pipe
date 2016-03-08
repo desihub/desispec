@@ -27,7 +27,6 @@ def main():
     parser.add_argument('--redux', required=True, default=None, help='output directory')
     parser.add_argument('--prod', required=False, default='test', help='output production name')
     parser.add_argument('--nights', required=False, default=None, help='comma separated (YYYYMMDD) or regex pattern')
-    parser.add_argument('--desimodel', required=False, default='/project/projectdirs/desi/software/edison/desimodel/trunk', help='desimodel checkout to use')
     parser.add_argument('--aux', required=False, default='/project/projectdirs/desi', help='root directory containing auxiliary data files')
     parser.add_argument('--basis', required=False, default='spectro/templates/basis_templates/v1.1', help='basis template directory, relative to the aux root')
     parser.add_argument('--env', required=False, default=None, help='text file with environment setup commands')

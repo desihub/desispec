@@ -67,6 +67,12 @@ def subprocess_list(tasks, rank=0):
                 print(err)
                 log.error(err)
                 runcom = False
+        alldone = True
+        for outf in tsk['outputs']:
+            if not os.path.isfile(outf):
+                alldone = False
+        if alldone:
+            runcom = False
         proc = None
         if runcom:
             # proc = sp.Popen(tsk['command'], stdout=sp.PIPE, stderr=sp.STDOUT)
