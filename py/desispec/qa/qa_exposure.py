@@ -197,13 +197,17 @@ class QA_Frame(object):
                 self.__class__.__name__, self.camera, self.flavor))
 
 class QA_Exposure(object):
-    def __init__(self, flavor='none', in_data=None):
+    def __init__(self, expid, night, specprod_dir=None, flavor='none', in_data=None):
         """
         Class to organize and execute QA for a DESI Exposure
 
         x.flavor, x.data
         
         Args:
+            expid: int -- Exposure ID
+            night: str -- YYYYMMDD
+            specprod_dir(str): Path containing the exposures/ directory to use. If the value
+                is None, then the value of :func:`specprod_root` is used instead.
             flavor: str, optional exposure type (e.g. flat, arc, science)
             in_data: dict, optional -- Input data 
               Mainly for reading from disk
@@ -215,11 +219,53 @@ class QA_Exposure(object):
         """
         assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
 
+        self.expid = expid
+        self.night = night
+        self.specprod_dir = specprod_dir
         self.flavor = flavor
         
         if in_data is None:
-            self.data = dict(flavor=self.flavor)
-            self.init_data()
+            self.data = dict(flavor=self.flavor, expid=self.expid,
+                             night=self.night, frames={})
+            self.load_qa_data()
         else:
             assert isinstance(in_data,dict)
             self.data = in_data
+
+    def fluxcalib(self):
+        """ Perform QA on fluxcalib results for an Exposure
+        Independent results for each channel
+        """
+        # Init
+        if 'FLUXCALIB' not in self.data.keys():
+            self.data['FLUXCALIB'] = {}
+        # Loop on channel
+        cameras = self.data['frames'].keys()
+        for channel in ['b','r','z']:
+            # Init
+            if channel not in self.data['FLUXCALIB'].keys():
+                self.data['FLUXCALIB'][channel] = {}
+            # Load
+            ZPval = []
+            for camera in cameras:
+                if camera[0] == channel:
+                    ZPval.append(self.data['frames'][camera]['FLUXCALIB']['QA']['ZP'])
+            # Measure RMS
+            if len(ZPval) > 0:
+                self.data['FLUXCALIB'][channel]['ZP_RMS'] = np.std(ZPval)
+
+        # Figure
+
+    def load_qa_data(self):
+        """ Load the QA data files for a given exposure (currently yaml)
+        """
+        from desispec import io as desiio
+        qadata = desiio.get_files(filetype='qa_data', night=self.night,
+                expid=self.expid, specprod_dir=self.specprod_dir)
+        # Load into frames
+        for camera,qadata_path in qadata.iteritems():
+            qa_data = desiio.read_qa_data(qadata_path)
+            #assert qa_data['flavor'] == self.flavor
+            # Save
+            self.data['frames'][camera] = qa_data
+            self.data['frames'][camera]['file'] = qadata_path
