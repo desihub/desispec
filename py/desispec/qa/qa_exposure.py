@@ -235,6 +235,7 @@ class QA_Exposure(object):
 
     def fluxcalib(self):
         """ Perform QA on fluxcalib results for an Exposure
+        
         Independent results for each channel
         """
         # Init
