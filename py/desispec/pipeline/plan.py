@@ -60,7 +60,7 @@ def psf_newest(specdir):
     return newest
 
 
-def tasks_exspec_exposure(id, raw, wrange, psf_select):
+def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
     # These are fixed for DESI
     spec_per_bundle = 25
     nbundle = 20
@@ -85,9 +85,10 @@ def tasks_exspec_exposure(id, raw, wrange, psf_select):
         for b in range(nbundle):
             outb = "{}-{:02d}.fits".format(outbase, b)
             mergeinputs.append(outb)
-            com = ['exspec']
+            com = ['desi_extract_spectra.py']
             com.extend(['-i', raw[cam]])
             com.extend(['-p', psffile])
+            com.extend(['-f', fibermap[id]])
             com.extend(['-o', '{}.part'.format(outb)])
             com.extend(['--specmin', "{}".format(b*spec_per_bundle)])
             com.extend(['--nspec', "{}".format(spec_per_bundle)])
@@ -101,8 +102,9 @@ def tasks_exspec_exposure(id, raw, wrange, psf_select):
 
             tasks_extract.append(task)
 
-        com = ['merge_bundles']
+        com = ['desi_merge_bundles.py']
         com.extend(['-o', '{}.part'.format(outfile)])
+        com.extend(['-f', fibermap[id]])
         com.extend(mergeinputs)
         task = {}
         task['command'] = com
@@ -123,14 +125,14 @@ def tasks_exspec_exposure(id, raw, wrange, psf_select):
     return [tasks_extract, tasks_merge, tasks_clean]
 
 
-def tasks_exspec(expid, exptype, raw, wrange, psf_select):
+def tasks_exspec(expid, exptype, raw, fibermap, wrange, psf_select):
     tasks_extract = []
     tasks_merge = []
     tasks_clean = []
     for ex in expid:
         if exptype[ex] == "arc":
             continue
-        [exp_tasks_extract, exp_tasks_merge, exp_tasks_clean] = tasks_exspec_exposure(ex, raw[ex], wrange, psf_select)
+        [exp_tasks_extract, exp_tasks_merge, exp_tasks_clean] = tasks_exspec_exposure(ex, raw[ex], fibermap, wrange, psf_select)
         tasks_extract.extend(exp_tasks_extract)
         tasks_merge.extend(exp_tasks_merge)
         tasks_clean.extend(exp_tasks_clean)
@@ -176,19 +178,20 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
             com.extend(['--out_fits', '{}.part'.format(outfitsb)])
             com.extend(['--first_bundle', "{}".format(b)])
             com.extend(['--last_bundle', "{}".format(b)])
-            com.extend(['--gauss_hermite_deg', '8'])
-            com.extend(['--psfmodel', 'GAUSSHERMITE'])
-            com.extend(['--half_size_x', '14'])
-            com.extend(['--half_size_y', '8'])
-            com.extend(['--fit_psf_tails'])
-            com.extend(['--fit_continuum'])
-            com.extend(['-v'])
-            com.extend(['--core'])
-            com.extend(['--no_trace_fit'])
-            com.extend(['--trace_deg_x', '6'])
-            com.extend(['--trace_deg_wave', '6'])
-            com.extend(['--legendre_deg_x', '1'])
-            com.extend(['--legendre_deg_wave', '4'])
+            # For now, we use specex defaults...
+            # com.extend(['--gauss_hermite_deg', '8'])
+            # com.extend(['--psfmodel', 'GAUSSHERMITE'])
+            # com.extend(['--half_size_x', '14'])
+            # com.extend(['--half_size_y', '8'])
+            # com.extend(['--fit_psf_tails'])
+            # com.extend(['--fit_continuum'])
+            # com.extend(['-v'])
+            # com.extend(['--core'])
+            # com.extend(['--no_trace_fit'])
+            # com.extend(['--trace_deg_x', '6'])
+            # com.extend(['--trace_deg_wave', '6'])
+            # com.extend(['--legendre_deg_x', '1'])
+            # com.extend(['--legendre_deg_wave', '4'])
 
             task = {}
             task['command'] = com

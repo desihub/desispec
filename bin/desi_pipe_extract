@@ -113,7 +113,7 @@ def main():
 
     if rank == 0:
         log.info("computing exspec tasks")
-    [tasks_bundle, tasks_merge, tasks_clean] = pipe.tasks_exspec(expid, exptype, raw, wrange, psf)
+    [tasks_bundle, tasks_merge, tasks_clean] = pipe.tasks_exspec(expid, exptype, raw, fibermap, wrange, psf)
 
     # change to the redux directory
 
