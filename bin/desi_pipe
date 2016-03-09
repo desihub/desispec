@@ -161,7 +161,7 @@ def main():
                 firstflat = ex
                 break
         commands = []
-        for cam in sorted(fullraw.keys()):
+        for cam in sorted(fullraw[firstarc].keys()):
             flatname = "{}-{}-{:08d}.fits".format(pixroot, cam, firstflat)
             flatfile = os.path.join(rawdir, nt, flatname)
             arcname = "{}-{}-{:08d}.fits".format(pixroot, cam, firstarc)
@@ -181,13 +181,10 @@ def main():
         # Create scripts to run specex
 
         lamplines = "/project/projectdirs/desi/software/edison/specex/specex-0.3.4/data/lamplines-specex.par"
-        bootr = os.path.join(calpsf, nt, "psfboot-r.fits")
-        bootb = os.path.join(calpsf, nt, "psfboot-b.fits")
-        bootz = os.path.join(calpsf, nt, "psfboot-z.fits")
         optsim = ""
         if args.simraw:
             optsim = "--simraw "
-        commands = ["desi_pipe_psf {}--lamplines {} --bootcalib_r {} --bootcalib_b {} --bootcalib_z {} --night {}".format(optsim, lamplines, bootr, bootb, bootz, nt)]
+        commands = ["desi_pipe_psf {}--lamplines {} --night {}".format(optsim, lamplines, nt)]
         shell_file = os.path.join(nsdir, "specex.sh")
         nersc_file = os.path.join(nsdir, "specex.nersc")
         shell_log = os.path.join(nldir, "specex_sh")
@@ -196,7 +193,7 @@ def main():
         # for one exposure, there are 600 bundles.  If we run 8 per node (which works
         # well for 24 or 32 cores per node), then we want 75 nodes.  Specex
         # is OpenMP parallel.
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=75, nodeproc=8, minutes=30, openmp=True, multiproc=False)
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=15, nodeproc=8, minutes=30, openmp=True, multiproc=False)
 
         com_master_shell.append("bash {}".format(shell_file))
 
@@ -214,7 +211,7 @@ def main():
         # for one exposure, there are 600 bundles.  If we run 8 per node (which works
         # well for 24 or 32 cores per node), then we want 75 nodes.  This is python,
         # so no threads, but multiprocessing might be used.
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=75, nodeproc=8, minutes=30, openmp=False, multiproc=True)
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=15, nodeproc=8, minutes=30, openmp=False, multiproc=True)
 
         com_master_shell.append("bash {}".format(shell_file))
 

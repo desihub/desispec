@@ -44,7 +44,7 @@ def find_raw(rawdir, rawnight, simraw=False):
 
 def psf_newest(specdir):
     newest = {}
-    psfpat = re.compile(r'psf-([brz][0-9])-(.*).fits')
+    psfpat = re.compile(r'psf-([brz][0-9])-([0-9]{8})\.fits')
     for root, dirs, files in os.walk(specdir, topdown=True):
         for f in files:
             psfmat = psfpat.match(f)
@@ -151,7 +151,6 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
 
     cameras = sorted(raw.keys())
     for cam in cameras:
-        band = cam[0]
         outbase = os.path.join("{:08d}".format(id), "psf-{}-{:08d}".format(cam, id))
         outxml = "{}.xml".format(outbase)
         outfits = "{}.fits".format(outbase)
@@ -171,9 +170,9 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
             com = ['specex_desi_psf_fit']
             com.extend(['-a', raw[cam]])
             if bootcal is not None:
-                com.extend(['--xcoord-file', bootcal[band]])
+                com.extend(['--xcoord-file', bootcal[cam]])
                 com.extend(['--xcoord-hdu', '1'])
-                com.extend(['--ycoord-file', bootcal[band]])
+                com.extend(['--ycoord-file', bootcal[cam]])
                 com.extend(['--ycoord-hdu', '2'])
             com.extend(['--lamplines', lamplines])
             com.extend(['--out_xml', '{}.part'.format(outxmlb)])
@@ -199,7 +198,7 @@ def tasks_specex_exposure(id, raw, lamplines, bootcal=None):
             task = {}
             task['command'] = com
             task['parallelism'] = 'node'
-            task['inputs'] = [raw[cam], bootcal[band]]
+            task['inputs'] = [raw[cam], bootcal[cam]]
             task['outputs'] = [outxmlb, outspotb, outfitsb]
 
             tasks_bundle.append(task)

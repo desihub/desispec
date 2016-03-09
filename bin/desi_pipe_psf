@@ -40,9 +40,6 @@ def main():
     parser.add_argument( '--night', required=True, default=None, help='night (YYYYMMDD)' )
     parser.add_argument( '--expid', required=False, default=None, help='only process this exposure ID' )
     parser.add_argument( '--lamplines', required=True, default=None, help='lamp lines file to use' )
-    parser.add_argument( '--bootcalib_r', required=True, default=None, help='R output of desi_bootcalib for trace first guess' )
-    parser.add_argument( '--bootcalib_b', required=True, default=None, help='B output of desi_bootcalib for trace first guess' )
-    parser.add_argument( '--bootcalib_z', required=True, default=None, help='Z output of desi_bootcalib for trace first guess' )
     parser.add_argument( '--simraw', required=False, action='store_true', help='if set, raw data is simulated' )
     args = parser.parse_args()
 
@@ -97,9 +94,8 @@ def main():
         raw = fullraw
 
     bootcal = {}
-    bootcal['r'] = args.bootcalib_r
-    bootcal['b'] = args.bootcalib_b
-    bootcal['z'] = args.bootcalib_z
+    for cam in raw[sorted(raw.keys())].keys():
+        bootcal[cam] = os.path.join(specdir, 'calib2d', 'psf', args.night, 'psfboot-{}.fits'.format(cam))
 
     if rank == 0:
         log.info("computing specex tasks")
