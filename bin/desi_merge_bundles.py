@@ -23,7 +23,6 @@ import optparse
 
 parser = optparse.OptionParser(usage = "%prog [options] bundle1.fits bundle2.fits ...")
 parser.add_option("-o", "--output", type="string",  help="output file name")
-parser.add_option("-f", "--fibermap", type="string",  help="input fibermap file")
 parser.add_option("-d", "--delete", help="delete input files when done", action="store_true")
 
 opts, args = parser.parse_args()
@@ -54,16 +53,11 @@ spectrograph = int(camera[1])
 fibermin = spectrograph*nspec
 fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
 
-if opts.fibermap is not None:
-    fibermap = desispec.io.read_fibermap(opts.fibermap)
-    fibermap = fibermap[fibermin:fibermin+nspec]
-else:
-    fibermap = None
-
 #- Output arrays to fill
 flux = np.zeros( (nspec, nwave) )
 ivar = np.zeros( (nspec, nwave) )
 R = np.zeros( (nspec, ndiag, nwave) )
+fibermap = desispec.io.empty_fibermap(nspec, specmin=fibermin)
 
 #- Fill them!
 for filename in args:
@@ -72,6 +66,7 @@ for filename in args:
     xflux = fx['FLUX'].data
     xivar = fx['IVAR'].data
     xR = fx['RESOLUTION'].data
+    xfibermap = fx['FIBERMAP'].data
     fx.close()
     
     lo = xhdr['SPECMIN']
@@ -80,6 +75,7 @@ for filename in args:
     flux[lo:hi] = xflux
     ivar[lo:hi] = xivar
     R[lo:hi] = xR
+    fibermap[lo:hi] = xfibermap
     
 #- Write it out
 print "Writing", opts.output
