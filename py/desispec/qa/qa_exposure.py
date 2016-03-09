@@ -6,7 +6,6 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 
 import numpy as np
 
-from . import qa_plots
 
 class QA_Frame(object):
     def __init__(self, frame=None, flavor='none', camera='none', in_data=None):
@@ -105,7 +104,6 @@ class QA_Frame(object):
         Returns:
 
         """
-
         assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso']
 
         # Standard FLUXCALIB input parameters
@@ -238,6 +236,7 @@ class QA_Exposure(object):
         
         Independent results for each channel
         """
+        from . import qa_plots
         # Init
         if 'FLUXCALIB' not in self.data.keys():
             self.data['FLUXCALIB'] = {}
