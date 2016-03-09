@@ -231,8 +231,11 @@ class QA_Exposure(object):
             assert isinstance(in_data,dict)
             self.data = in_data
 
-    def fluxcalib(self):
+    def fluxcalib(self, outfil):
         """ Perform QA on fluxcalib results for an Exposure
+
+        Args:
+            outfil: str -- Filename for PDF  (may automate)
 
         Independent results for each channel
         """
@@ -256,7 +259,6 @@ class QA_Exposure(object):
                 self.data['FLUXCALIB'][channel]['ZP_RMS'] = np.std(ZPval)
 
         # Figure
-        outfil = self.specprod_dir+'/qa-flux-{:08d}.pdf'.format(self.expid)
         qa_plots.exposure_fluxcalib(outfil, self.data)
 
     def load_qa_data(self):
@@ -264,11 +266,12 @@ class QA_Exposure(object):
         """
         from desispec import io as desiio
         qadata = desiio.get_files(filetype='qa_data', night=self.night,
-                expid=self.expid, specprod_dir=self.specprod_dir)
+                                  expid=self.expid,
+                                  specprod_dir=self.specprod_dir)
         # Load into frames
         for camera,qadata_path in qadata.iteritems():
             qa_data = desiio.read_qa_data(qadata_path)
-            #assert qa_data['flavor'] == self.flavor
+            assert qa_data['flavor'] == self.flavor
             # Save
             self.data['frames'][camera] = qa_data
             self.data['frames'][camera]['file'] = qadata_path

@@ -6,7 +6,7 @@ import numpy as np
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
-from desispec.qa.qa_exposure import QA_Frame
+from desispec.qa import QA_Frame
 from desispec.image import Image
 import desispec.io
 import desispec.io.qa as desio_qa
