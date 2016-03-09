@@ -81,6 +81,8 @@ def load_qa_frame(filename, frame, flavor=None):
             if qaframe.camera != camera:
                 raise ValueError('Wrong QA file!')
     else:  # Init
+        import pdb
+        pdb.set_trace()
         qaframe = QA_Frame(frame)
     # Set flavor?
     if flavor is not None:
