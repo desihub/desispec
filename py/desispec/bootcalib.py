@@ -896,7 +896,7 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
             weights=1./xerr[:,ii], initialmask=mask, maxone=True)#, sigma=xerr[:,ii])
         # Stats on residuals
         nmask_new = np.sum(mask)-nmask
-        if nmask_new > 10:
+        if nmask_new > 200 :
             raise ValueError('Rejected too many points: {:d}'.format(nmask_new))
         # Save
         xnew[:,ii] = dufits.func_val(yval,dfit)
