@@ -180,7 +180,7 @@ class TestFluxCalibration(unittest.TestCase):
         stdfibers=np.random.choice(9,3,replace=False) # take 3 std stars fibers
         input_model_wave=modelwave
         input_model_flux=modelflux[0:3] # assuming the first three to be best models,3 is exclusive here
-        fluxCalib=compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.)
+        fluxCalib, _ =compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.)
         # assert the output
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)

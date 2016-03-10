@@ -34,7 +34,7 @@ from desispec.coaddition import Spectrum
 
 class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
-                fibers=None, spectrograph=None, meta=None):
+                fibers=None, spectrograph=None, meta=None, fibermap=None):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
@@ -44,13 +44,15 @@ class Frame(object):
             wave: 1D[nwave] wavelength in Angstroms
             flux: 2D[nspec, nwave] flux
             ivar: 2D[nspec, nwave] inverse variance of flux
-            mask: (optional) 2D[nspec, nwave] integer bitmask of flux.  0=good.
-            resolution_data: (optional) 3D[nspec, ndiag, nwave]
+
+        Optional:
+            mask: 2D[nspec, nwave] integer bitmask of flux.  0=good.
+            resolution_data: 3D[nspec, ndiag, nwave]
                              diagonals of resolution matrix data
-            fibers: (optional) ndarray of which fibers these spectra are
-            spectrograph: (optional) integer, which spectrograph [0-9]        
-            meta: (optional) dict-like object (e.g. FITS header from HDU0) 
-                  Must include SPECMIN
+            fibers: ndarray of which fibers these spectra are
+            spectrograph: integer, which spectrograph [0-9]
+            meta: dict-like object (e.g. FITS header)
+            fibermap: fibermap table
 
         Notes:
             spectrograph input is used only if fibers is None.  In this case,
@@ -65,6 +67,7 @@ class Frame(object):
             specmin : minimum fiber number
             R: array of sparse Resolution matrix objects converted
                from resolution_data
+            fibermap: fibermap table if provided
         """
         assert wave.ndim == 1
         assert flux.ndim == 2
@@ -78,7 +81,10 @@ class Frame(object):
         self.flux = flux
         self.ivar = ivar
         self.meta = meta
+        self.fibermap = fibermap
         self.nspec, self.nwave = self.flux.shape
+        
+        fibers_per_spectrograph = 500   #- hardcode; could get from desimodel
         
         if mask is None:
             self.mask = np.zeros(flux.shape, dtype=np.uint32)
@@ -100,28 +106,29 @@ class Frame(object):
 
         # Deal with Fibers (these must be set!)
         if fibers is not None:
+            fibers = np.asarray(fibers)
             if len(fibers) != self.nspec:
                 raise ValueError("len(fibers) != nspec ({} != {})".format(len(fibers), self.nspec))
+            if fibermap is not None and np.any(fibers != fibermap['FIBER']):
+                raise ValueError("fibermap doesn't match fibers")
+            if (spectrograph is not None):
+                minfiber = spectrograph*fibers_per_spectrograph
+                maxfiber = (spectrograph+1)*fibers_per_spectrograph
+                if np.any(fibers < minfiber) or np.any(maxfiber <= fibers):
+                    raise ValueError('fibers inconsistent with spectrograph')
             self.fibers = fibers
         else:
-            self.fibers = None
-        # If spectrograph given and fibers set, check these are consistent
-        if self.spectrograph is not None: 
-            if self.fibers is None:
-                self.fibers = self.spectrograph*self.nspec + np.arange(self.nspec, dtype=int)
-        # If meta given, check for specmin 
+            if fibermap is not None:
+                self.fibers = fibermap['FIBER']
+            elif spectrograph is not None:
+                self.fibers = spectrograph*fibers_per_spectrograph + np.arange(self.nspec, dtype=int)
+            elif (self.meta is not None) and ('SPECMIN' in self.meta.keys()):
+                self.fibers = self.meta['SPECMIN'] + np.arange(self.nspec, dtype=int)
+            else:
+                raise ValueError("Must set fibers by one of the methods!")
+
         if self.meta is not None:
-            if 'SPECMIN' in self.meta.keys():
-                if self.fibers is None:
-                    self.fibers = self.meta['SPECMIN'] + np.arange(self.nspec, dtype=int)
-                else:
-                    assert np.min(self.fibers) >= self.meta['SPECMIN']
-
-        # Require fibers is set!
-        if self.fibers is None:
-            raise ValueError("Must set fibers by one of the methods!")
-
-
+            self.meta['SPECMIN'] = self.fibers[0]
          
     def __getitem__(self, index):
         """
@@ -150,10 +157,15 @@ class Frame(object):
         else:
             rdata = None
         
+        if self.fibermap is not None:
+            fibermap = self.fibermap[index]
+        else:
+            fibermap = None
+        
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
-                    meta=self.meta)
+                    meta=self.meta, fibermap=fibermap)
         
         #- TODO:
         #- if we define fiber ranges in the fits headers, correct header

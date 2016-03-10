@@ -42,7 +42,7 @@ env:
         - SCIPY_VERSION=0.16
         - ASTROPY_VERSION=1.1.1
         - SPHINX_VERSION=1.3
-        - DESIUTIL_VERSION=1.3.2
+        - DESIUTIL_VERSION=1.3.4
         - SPECLITE_VERSION=0.4
         - CONDA_INSTALL='conda install -c astropy-ci-extras --yes'
         - PIP_INSTALL='pip install'

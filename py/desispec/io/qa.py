@@ -6,7 +6,7 @@ IO routines for QA
 """
 import os, yaml
 
-from desispec.qa.qa_exposure import QA_Frame
+from desispec.qa import QA_Frame
 from desispec.io import findfile
 from desispec.io.util import makepath
 from desispec.log import get_logger
@@ -32,20 +32,25 @@ def write_qa_frame(outfile, qaframe):
     return outfile
 
 
-def read_qa_frame(filename) :
-    """Read qa_exposure and return QA_Frame object with attributes
-    wave, flux, ivar, mask, header.
-    
-    skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
+def read_qa_data(filename):
+    """Read data from a QA file
+    """
+    # Read yaml
+    with open(filename, 'r') as infile:
+        qa_data = yaml.load(infile)
+    # Return
+    return qa_data
+
+def read_qa_frame(filename):
+    """Generate a QA_Frame object from a data file
     """
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, basestring):
         night, expid, camera = filename
         filename = findfile('qa', night, expid, camera) 
 
-    # Read yaml
-    with open(filename, 'r') as infile:
-        qa_data = yaml.load(infile)
+    # Read
+    qa_data = read_qa_data(filename)
 
     # Instantiate
     qaframe = QA_Frame(flavor=qa_data['flavor'], camera=qa_data['camera'], in_data=qa_data)

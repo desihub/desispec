@@ -19,6 +19,7 @@ import yaml
 import glob
 import math
 import time
+import os
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -34,7 +35,10 @@ from matplotlib.backends.backend_pdf import PdfPages
 from desispec.log import get_logger
 from desiutil import funcfits as dufits
 
-desispec_path = imp.find_module('desispec')[1]+'/../../'
+try:
+    desispec_path = os.environ['DESISPEC']
+except KeyError:
+    desispec_path = os.path.abspath(os.path.join(imp.find_module('desispec')[1], '..', '..'))
 glbl_figsz = (16,9)
 
 ########################################################
@@ -101,6 +105,8 @@ def load_gdarc_lines(camera):
       Dispersion for input camera
     gd_lines : ndarray
       Array of lines expected to be recorded and good for ID
+    line_guess : int or None
+      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
     """
     log=get_logger()
     if camera[0] == 'b':
@@ -130,7 +136,7 @@ def load_gdarc_lines(camera):
                8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
         dlamb = 0.599  # Ang
         gd_lines = np.array(NeI)# + ArI)
-        line_guess = None
+        line_guess = 17
         wmark = 8591.2583
     else:
         log.error('Bad camera')
@@ -281,6 +287,8 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
       Center of 5 gd_lines to key on (camera dependent)
     toler : float, optional
       Tolerance for matching (20%)
+    line_guess : int, optional
+      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
 
     Returns
     -------
@@ -616,7 +624,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
 def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
     This serves as an initial guess to what follows
-    
+
     Parameters
     ----------
     flat : ndarray of fiber flat image
@@ -626,7 +634,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
           Radius of boxcar extraction in pixels
     max_iter : int, optional
       Maximum number of iterations for rejection
-    
+
     Returns
     -------
     gauss
@@ -638,11 +646,11 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
     npix_x  = flat.shape[1]
     ny      = xtrc.shape[0] # number of ccd rows in trace
     assert(ny==npix_y)
-    
+
     nfiber = xtrc.shape[1]
-    
+
     minflux=1. # minimal flux in a row to include in the fit
-    
+
     # Loop on fibers
     gauss = []
     start = 0
@@ -692,8 +700,8 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         # this is the profile :
         bdx=np.array(bdx)
         bflux=np.array(bflux)
-        
-        # fast iterative gaussian fit 
+
+        # fast iterative gaussian fit
         sigma = 1.0
         sq2 = math.sqrt(2.)
         for i in xrange(10) :
@@ -702,10 +710,10 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
                 break
             sigma = nsigma
         gauss.append(sigma)
-    
-    return np.array(gauss)   
-            
-            
+
+    return np.array(gauss)
+
+
 
 def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
@@ -753,7 +761,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
             else :
                 log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(ii,nfiber,stop-start))
             start=stop
-        
+
         mask[:] = 0
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
@@ -791,7 +799,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
             resid_mask = sigma_clip(resid, sigma=4., iters=5)
             # Fit
             gdp = ~resid_mask.mask
-            parm = fitter(g_init, fdimg[gdp], fnimg[gdp])                        
+            parm = fitter(g_init, fdimg[gdp], fnimg[gdp])
             # Again?
             if np.sum(resid_mask.mask) <= nrej:
                 iterate = False
@@ -820,7 +828,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     Preforms book-keeping error checking
 
     args:
-        flat : ndarray of fiber flat image 
+        flat : ndarray of fiber flat image
         ypos : int [optional] Row for finding peaks
            Default is half-way up the image
         nwidth : int [optional] Width of peak (end-to-end)
@@ -957,12 +965,12 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     spec : ndarray
       Extracted spectrum
     """
-    
+
     # Init
     xpix_img = np.outer(np.ones(img.shape[0]),np.arange(img.shape[1]))
     mask = np.zeros_like(img,dtype=int)
     iy = np.arange(img.shape[0],dtype=int)
-    
+
     log = get_logger()
 
     #
@@ -977,7 +985,7 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
             else :
                 log.info("Working on fiber %d of %d"%(qq,xtrc.shape[1]))
             start=stop
-        
+
         # Mask
         mask[:,:] = 0
         ixt = np.round(xtrc[:,qq]).astype(int)
@@ -1030,8 +1038,8 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
     ny = image.shape[0]
     xset = np.zeros((ny,ntrace))
     xerr = np.zeros((ny,ntrace))
-    if invvar is None: 
-        invvar = np.zeros_like(image) + 1. 
+    if invvar is None:
+        invvar = np.zeros_like(image) + 1.
 
     #
     #  Recenter INITIAL Row for all traces simultaneously
@@ -1058,12 +1066,12 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
         xinit = xset[iy+1, :]
         ycen = iy * np.ones(ntrace,dtype=int)
         xfit,xfiterr = trace_fweight(image, xinit, ycen, invvar=invvar, radius=radius)
-        # Shift      
+        # Shift
         xshift = np.clip(xfit-xinit, -1*maxshift, maxshift) * (xfiterr < maxerr)
         # Save
         xset[iy,:] = xinit + xshift
         xerr[iy,:] = xfiterr * (xfiterr < maxerr)  + 999.0 * (xfiterr >= maxerr)
-        
+
     return xset, xerr
 
 def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
@@ -1110,10 +1118,10 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
     sumwt = np.zeros(ncen)
     sumsx1 = np.zeros(ncen)
     sumsx2 = np.zeros(ncen)
-    qbad = np.array([False]*ncen) 
+    qbad = np.array([False]*ncen)
 
-    if invvar is None: 
-        invvar = np.zeros_like(fimage) + 1. 
+    if invvar is None:
+        invvar = np.zeros_like(fimage) + 1.
 
     # Compute
     for ii in range(0,fullpix+3):
@@ -1216,23 +1224,23 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=Fals
     yhdu.header['WAVEMAX'] = WAVEMAX
 
     gausshdu = fits.ImageHDU(np.array(gauss))
-    
+
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
     hdulist.writeto(outfile, clobber=True)
 
 
 
 #####################################################################
-#####################################################################            
+#####################################################################
 # Utilities
-#####################################################################            
+#####################################################################
 
 
-#####################################################################            
-#####################################################################            
-#####################################################################            
+#####################################################################
+#####################################################################
+#####################################################################
 # QA
-#####################################################################            
+#####################################################################
 
 def qa_fiber_peaks(xpk, cut, pp=None, figsz=None, nper=100):
     """ Generate a QA plot for the fiber peaks
@@ -1447,7 +1455,7 @@ def qa_fiber_trace(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
       Normalize the flat?  If not, use zscale for output
     '''
 
-    ticks_font = matplotlib.font_manager.FontProperties(family='times new roman', 
+    ticks_font = matplotlib.font_manager.FontProperties(family='times new roman',
        style='normal', size=16, weight='normal', stretch='normal')
     plt.rcParams['font.family']= 'times new roman'
     cmm = cm.Greys_r
