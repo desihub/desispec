@@ -94,7 +94,7 @@ def main():
         raw = fullraw
 
     bootcal = {}
-    for cam in raw[sorted(raw.keys())].keys():
+    for cam in raw[sorted(raw.keys())[0]].keys():
         bootcal[cam] = os.path.join(specdir, 'calib2d', 'psf', args.night, 'psfboot-{}.fits'.format(cam))
 
     if rank == 0:

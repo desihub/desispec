@@ -60,17 +60,26 @@ def subprocess_list(tasks, rank=0):
     #pids = []
     for tsk in tasks:
         runcom = True
+        newest_in = 0
         for dep in tsk['inputs']:
             if not os.path.isfile(dep):
-                print("missing ", dep)
                 err = "dependency {} missing, cannot run task {}".format(dep, " ".join(tsk['command']))
-                print(err)
                 log.error(err)
                 runcom = False
+            else:
+                t = os.path.getmtime(dep)
+                if t > newest_in:
+                    newest_in = t
         alldone = True
+        if len(tsk['outputs']) == 0:
+            alldone = False
         for outf in tsk['outputs']:
             if not os.path.isfile(outf):
                 alldone = False
+            else:
+                t = os.path.getmtime(outf)
+                if t < newest_in:
+                    alldone = False
         if alldone:
             runcom = False
         proc = None
