@@ -101,7 +101,7 @@ def shell_job(path, logroot, envsetup, desisetup, commands):
         for com in commands:
             executable = com.split(' ')[0]
             f.write("which {}\n".format(executable))
-            f.write("time {} >${{log}} 2>&1\n\n".format(com))
+            f.write("time {} >>${{log}} 2>&1\n\n".format(com))
     return
 
 
@@ -146,6 +146,6 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         for com in commands:
             executable = com.split(' ')[0]
             f.write("which {}\n".format(executable))
-            f.write("time ${{run}} {} >${{log}} 2>&1\n\n".format(com))
+            f.write("time ${{run}} {} >>${{log}} 2>&1\n\n".format(com))
     return
 
