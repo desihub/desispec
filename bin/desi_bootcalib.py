@@ -174,7 +174,7 @@ def main() :
             dlamb = np.median(np.abs(wave-np.roll(wave,1)))
             if ii > 0:
                 med_dlamb = np.median(all_dlamb)
-                if (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (rms > 0.5):
+                if (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (rms > 0.7):
                     log.warn('Bad wavelength solution.  Using previous to guide..')
                     # Bad solution; shifting to previous
                     desiboot.use_previous_wave(id_dict, sv_iddict, pixpk, sv_pixpk)
