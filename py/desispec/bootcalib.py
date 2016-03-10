@@ -396,6 +396,38 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
     # Return
     return id_dict
 
+
+def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
+    """ Uses the previous wavelength solution to fix the current
+    Args:
+        new_id:
+        old_id:
+        new_pix:
+        old_pix:
+
+    Returns:
+
+    """
+    # Find offset in pixels
+    min_off = []
+    for pix in new_pix:
+        imin = np.argmin(np.abs(old_pix-pix))
+        min_off.append(old_pix[imin]-pix)
+    off = np.median(min_off)
+
+    # Find closest with small tolerance
+    id_pix = []
+    id_wave = []
+    for kk,oldpix in enumerate(old_id['id_pix']):
+        mt = np.where(np.abs(new_pix-(oldpix-off)) < tol)[0]
+        if len(mt) == 1:
+            id_pix.append(new_pix[mt][0])
+            id_wave.append(old_id['id_wave'][kk])
+    # Fit
+    new_id['id_wave'] = id_wave
+    new_id['id_pix'] = id_pix
+
+
 ########################################################
 # Linelist routines
 ########################################################
@@ -895,8 +927,8 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
         dfit, mask = dufits.iter_fit(yval, xset[:,ii], func, order, sig_rej=sigrej,
             weights=1./xerr[:,ii], initialmask=mask, maxone=True)#, sigma=xerr[:,ii])
         # Stats on residuals
-        nmask_new = np.sum(mask)-nmask
-        if nmask_new > 10:
+        nmask_new = np.sum(mask)-nmask 
+        if nmask_new > 200:
             raise ValueError('Rejected too many points: {:d}'.format(nmask_new))
         # Save
         xnew[:,ii] = dufits.func_val(yval,dfit)
