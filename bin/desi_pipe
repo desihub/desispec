@@ -215,6 +215,19 @@ def main():
 
         com_master_shell.append("bash {}".format(shell_file))
 
+        # Create scripts to run calibration
+
+        commands = ["desi_pipe_calib --night {}".format(optsim, nt)]
+        shell_file = os.path.join(nsdir, "calib.sh")
+        nersc_file = os.path.join(nsdir, "calib.nersc")
+        shell_log = os.path.join(nldir, "calib_sh")
+        nersc_log = os.path.join(nldir, "calib_nersc")
+        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
+        # allocate one process per ...
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=15, nodeproc=8, minutes=30, openmp=False, multiproc=True)
+
+        com_master_shell.append("bash {}".format(shell_file))
+
     # Create master scripts with job dependencies
     shell_master = os.path.join(scrdir, 'run.sh')
     with open(shell_master, 'w') as f:

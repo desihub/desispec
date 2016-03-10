@@ -78,15 +78,21 @@ def main():
         log.info("using spectro redux dir {}".format(specdir))
 
     # get the list of raw files
+    expid = None
+    exptype = None
+    fibermap = None
+    fullraw = None
+    psf = None
     if rank == 0:
         log.info("finding exposures")
-    (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, simraw=args.simraw)
-    if rank == 0:
-        for ex in expid:
-            if exptype[ex] != 'arc':
-                log.info("  {:08d}".format(ex))
-
-    psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
+        (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, simraw=args.simraw)
+        psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
+    if comm is not None:
+        expid = comm.bcast(expid, root=0)
+        exptype = comm.bcast(exptype, root=0)
+        fibermap = comm.bcast(fibermap, root=0)
+        fullraw = comm.bcast(fullraw, root=0)
+        psf = comm.bcast(psf, root=0)
 
     # if requested, restrict the exposure list to a single ID
     if args.expid is not None:

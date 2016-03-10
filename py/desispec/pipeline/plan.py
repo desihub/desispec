@@ -42,6 +42,19 @@ def find_raw(rawdir, rawnight, simraw=False):
     return (sorted(expid), exptype, fibermap, raw)
 
 
+def find_frames(specdir, night):
+    expid = io.get_exposures(night, raw=False, specprod_dir=specdir)
+    frames = {}
+    exptype = {}
+    for ex in sorted(expid):
+        frames[ex] = io.get_files("frame", night, ex, specprod_dir=specdir)
+        # check the header for the "flavor"
+        # keyword to see what this exposure is.
+        hd = af.getheader(frames[ex], 1)
+        exptype[ex] = hd['FLAVOR']
+    return (sorted(expid), exptype, frames)
+
+
 def psf_newest(specdir):
     newest = {}
     psfpat = re.compile(r'psf-([brz][0-9])-([0-9]{8})\.fits')
@@ -104,7 +117,6 @@ def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
 
         com = ['desi_merge_bundles.py']
         com.extend(['-o', '{}.part'.format(outfile)])
-        com.extend(['-f', fibermap[id]])
         com.extend(mergeinputs)
         task = {}
         task['command'] = com
@@ -250,60 +262,37 @@ def tasks_specex(expid, exptype, raw, lamplines, bootcal=None):
     return [tasks_bundle, tasks_merge, tasks_clean]
 
 
-def tasks_fiberflat(expid, exptype, raw):
+def tasks_fiberflat_exposure(id, frames, calnight):
+    tasks = []
+    cameras = sorted(raw.keys())
+    for cam in cameras:
+        infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
+        outfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, id))
+
+        com = ['desi_compute_fiberflat.py']
+        com.extend(['--infile', infile])
+        com.extend(['--outfile', outfile])
+
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = [infile]
+        task['outputs'] = [outfile]
+        tasks.append(task)
+
+    return tasks
+
+
+def tasks_fiberflat(expid, exptype, frames, calnight):
     tasks = []
     for ex in expid:
-        cameras = sorted(raw.keys())
-        for cam in cameras:
-            outbase = os.path.join("{:08d}".format(id), "frame-{}-{:08d}".format(cam, id))
-            outfile = "{}.fits".format(outbase)
-            psffile = os.path.join("{:08d}".format(psf_select[cam]), "psf-{}-{:08d}.fits".format(cam, psf_select[cam]))
-            com = ['desi_compute_fiberflat.py']
-            com.extend(['--infile', infile])
-            com.extend(['--outfile', outfile])
-
-            task = {}
-            task['command'] = com
-            task['parallelism'] = 'core'
-            task['inputs'] = [infile]
-            task['outputs'] = [outfile]
-
-            tasks.append(task)
+        if exptype[ex] != "flat":
+            continue
+        exp_tasks = tasks_fiberflat_exposure(ex, frames[ex], calnight)
+        tasks.extend(exp_tasks)
+    return tasks
 
 
-
-# def tasks_calboot_exposure(id, raw, flat):
-#     tasks = []
-#     bands = ['b', 'r', 'z']
-
-#     for b in bands:
-#         cam = "{}0".format(b)
-#         outfile = os.path.join("{:08d}".format(id), "psfboot-{}-{:08d}.fits".format(b, id))
-#         com = ['desi_bootcalib.py']
-#         com.extend(['--arcfile', raw[cam]])
-#         com.extend(['--outfile', outfile])
-#         com.extend(['--flatfile', flat[b]])        
-
-#         task = {}
-#         task['command'] = com
-#         task['parallelism'] = 'core'
-#         task['inputs'] = [flat[b], raw[cam]]
-#         task['outputs'] = [outfile]
-
-#         tasks_bundle.append(task)
-
-#     return tasks
-
-
-# def tasks_calboot(expid, exptype, raw, flat):
-#     tasks = []
-#     for ex in expid:
-#         if exptype[ex] != "arc":
-#             continue
-#         exp_flat = flat[ex]
-#         exp_tasks = tasks_calboot_exposure(ex, raw[ex], exp_flat)
-#         tasks.extend([exp_tasks])
-#     return tasks
 
 
 def task_dist(tasklist, nworker):
