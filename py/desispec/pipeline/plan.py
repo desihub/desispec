@@ -85,6 +85,8 @@ def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
 
     cameras = sorted(raw.keys())
     for cam in cameras:
+        if cam not in psf_select.keys():
+            continue
         outbase = os.path.join("{:08d}".format(id), "frame-{}-{:08d}".format(cam, id))
         outfile = "{}.fits".format(outbase)
         psffile = os.path.join("{:08d}".format(psf_select[cam]), "psf-{}-{:08d}.fits".format(cam, psf_select[cam]))
@@ -293,6 +295,37 @@ def tasks_fiberflat(expid, exptype, frames, calnight):
     return tasks
 
 
+def tasks_sky_exposure(id, frames, calnight, fibermap):
+    tasks = []
+    cameras = sorted(raw.keys())
+    for cam in cameras:
+        infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
+        outfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, id))
+
+        com = ['desi_compute_sky.py']
+        com.extend(['--infile', infile])
+        com.extend(['--outfile', outfile])
+
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = [infile]
+        task['outputs'] = [outfile]
+        tasks.append(task)
+
+    return tasks
+
+
+def tasks_sky(expid, exptype, frames, calnight, fibermap):
+    tasks = []
+    for ex in expid:
+        if exptype[ex] == "flat":
+            continue
+        if exptype[ex] == "arc":
+            continue
+        exp_tasks = tasks_sky_exposure(ex, frames[ex], calnight, fibermap)
+        tasks.extend(exp_tasks)
+    return tasks
 
 
 def task_dist(tasklist, nworker):
