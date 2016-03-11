@@ -221,7 +221,7 @@ def main():
         shell_log = os.path.join(nldir, "exspec_sh")
         nersc_log = os.path.join(nldir, "exspec_nersc")
 
-        comopts = "--night {}".format(optsim, nt)
+        comopts = "--night {}".format(nt)
         
         complan = "desi_plan_extract {} --dump {}".format(comopts, dump_file)
         #spret = sp.call(complan, shell=True)
