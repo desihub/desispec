@@ -73,6 +73,24 @@ def psf_newest(specdir):
     return newest
 
 
+# def find_bricks(proddir):
+#     bricks = []
+#     brickpat = re.compile(r'\d{3}[pm]\d{4}')
+#     for root, dirs, files in os.walk(os.path.join(proddir, 'bricks'), topdown=True):
+#         for f in files:
+#             psfmat = psfpat.match(f)
+#             if psfmat is not None:
+#                 cam = psfmat.group(1)
+#                 expstr = psfmat.group(2)
+#                 expid = int(expstr)
+#                 if cam not in newest.keys():
+#                     newest[cam] = expid
+#                 else:
+#                     if expid > newest[cam]:
+#                         newest[cam] = expid
+#     return newest
+
+
 def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
     # These are fixed for DESI
     spec_per_bundle = 25

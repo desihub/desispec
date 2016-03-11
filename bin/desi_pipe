@@ -15,6 +15,7 @@ import os
 import numpy as np
 import argparse
 import re
+import subprocess as sp
 
 import desispec.io as io
 
@@ -187,8 +188,12 @@ def main():
         commands = ["desi_pipe_psf {}--lamplines {} --night {}".format(optsim, lamplines, nt)]
         shell_file = os.path.join(nsdir, "specex.sh")
         nersc_file = os.path.join(nsdir, "specex.nersc")
+        dump_file = os.path.join(nsdir, "specex_commands.txt")
+        #spret = sp.call("{} --dump {}".format(commands[0], dump_file), shell=True)
+
         shell_log = os.path.join(nldir, "specex_sh")
         nersc_log = os.path.join(nldir, "specex_nersc")
+
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
         # for one exposure, there are 600 bundles.  If we run 8 per node (which works
         # well for 24 or 32 cores per node), then we want 75 nodes.  Specex
@@ -205,6 +210,9 @@ def main():
         commands = ["desi_pipe_extract {}--night {}".format(optsim, nt)]
         shell_file = os.path.join(nsdir, "exspec.sh")
         nersc_file = os.path.join(nsdir, "exspec.nersc")
+        dump_file = os.path.join(nsdir, "exspec_commands.txt")
+        #spret = sp.call("{} --dump {}".format(commands[0], dump_file), shell=True)
+
         shell_log = os.path.join(nldir, "exspec_sh")
         nersc_log = os.path.join(nldir, "exspec_nersc")
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
@@ -217,9 +225,12 @@ def main():
 
         # Create scripts to run calibration
 
-        commands = ["desi_pipe_calib --night {}".format(optsim, nt)]
+        commands = ["desi_pipe_calib --night {}".format(nt)]
         shell_file = os.path.join(nsdir, "calib.sh")
         nersc_file = os.path.join(nsdir, "calib.nersc")
+        dump_file = os.path.join(nsdir, "calib_commands.txt")
+        #spret = sp.call("{} --dump {}".format(commands[0], dump_file), shell=True)
+
         shell_log = os.path.join(nldir, "calib_sh")
         nersc_log = os.path.join(nldir, "calib_nersc")
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)

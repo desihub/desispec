@@ -43,6 +43,7 @@ def main():
     parser.add_argument( '--range_r', required=False, default="5635.0,7731.0,0.8", help='R band wavelength range \"wmin,wmax,dw\"' )
     parser.add_argument( '--range_z', required=False, default="7445.0,9824.0,0.8", help='Z band wavelength range \"wmin,wmax,dw\"' )
     parser.add_argument( '--simraw', required=False, action='store_true', help='if set, raw data is simulated' )
+    parser.add_argument( '--dump', required=False, default=None, help='dump all commands to this file and exit.')
     args = parser.parse_args()
 
     log = get_logger()
@@ -124,6 +125,25 @@ def main():
     # change to the redux directory
 
     os.chdir(os.path.join(specdir, 'exposures', args.night))
+
+    # optionally dump the low-level commands that will be run
+    # and then exit.
+
+    if args.dump is not None:
+        if rank == 0:
+            with open(args.dump, 'w') as d:
+                for t in tasks_bundle:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in tasks_merge:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in tasks_clean:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+        if comm is not None:
+            comm.barrier()
+        sys.exit(0)
 
     # create any output directories
 

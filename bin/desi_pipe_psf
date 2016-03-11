@@ -41,6 +41,7 @@ def main():
     parser.add_argument( '--expid', required=False, default=None, help='only process this exposure ID' )
     parser.add_argument( '--lamplines', required=True, default=None, help='lamp lines file to use' )
     parser.add_argument( '--simraw', required=False, action='store_true', help='if set, raw data is simulated' )
+    parser.add_argument( '--dump', required=False, default=None, help='dump all commands to this file and exit.')
     args = parser.parse_args()
 
     log = get_logger()
@@ -109,6 +110,25 @@ def main():
     # change to the redux directory
 
     os.chdir(os.path.join(specdir, 'exposures', args.night))
+
+    # optionally dump the low-level commands that will be run
+    # and then exit.
+
+    if args.dump is not None:
+        if rank == 0:
+            with open(args.dump, 'w') as d:
+                for t in tasks_bundle:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in tasks_merge:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in tasks_clean:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+        if comm is not None:
+            comm.barrier()
+        sys.exit(0)
 
     # create any output directories
 
