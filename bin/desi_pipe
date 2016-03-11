@@ -182,60 +182,76 @@ def main():
         # Create scripts to run specex
 
         lamplines = "/project/projectdirs/desi/software/edison/specex/specex-0.3.4/data/lamplines-specex.par"
-        optsim = ""
-        if args.simraw:
-            optsim = "--simraw "
-        commands = ["desi_pipe_psf {}--lamplines {} --night {}".format(optsim, lamplines, nt)]
+
         shell_file = os.path.join(nsdir, "specex.sh")
         nersc_file = os.path.join(nsdir, "specex.nersc")
         dump_file = os.path.join(nsdir, "specex_commands.txt")
-        #spret = sp.call("{} --dump {}".format(commands[0], dump_file), shell=True)
-
         shell_log = os.path.join(nldir, "specex_sh")
         nersc_log = os.path.join(nldir, "specex_nersc")
 
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
-        # for one exposure, there are 600 bundles.  If we run 8 per node (which works
-        # well for 24 or 32 cores per node), then we want 75 nodes.  Specex
-        # is OpenMP parallel.
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=15, nodeproc=8, minutes=30, openmp=True, multiproc=False)
+        optsim = ""
+        if args.simraw:
+            optsim = "--simraw "
+        comopts = "{}--lamplines {} --night {}".format(optsim, lamplines, nt)
+        
+        complan = "desi_plan_psf {} --dump {}".format(comopts, dump_file)
+        spret = sp.call(complan, shell=True)
+
+        com = "desi_pipe_psf {}".format(comopts)
+
+        pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
+        # for one exposure, there are 600 bundles.  If we run 8 per node
+        # (which works well for 24 or 32 cores per node), then we want 
+        # 75 nodes.  Specex is OpenMP parallel.
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=15, nodeproc=8, minutes=30, openmp=True, multiproc=False)
 
         com_master_shell.append("bash {}".format(shell_file))
 
         # Create scripts to run exspec
 
-        optsim = ""
-        if args.simraw:
-            optsim = "--simraw "
-        commands = ["desi_pipe_extract {}--night {}".format(optsim, nt)]
         shell_file = os.path.join(nsdir, "exspec.sh")
         nersc_file = os.path.join(nsdir, "exspec.nersc")
         dump_file = os.path.join(nsdir, "exspec_commands.txt")
-        #spret = sp.call("{} --dump {}".format(commands[0], dump_file), shell=True)
-
         shell_log = os.path.join(nldir, "exspec_sh")
         nersc_log = os.path.join(nldir, "exspec_nersc")
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
-        # for one exposure, there are 600 bundles.  If we run 8 per node (which works
-        # well for 24 or 32 cores per node), then we want 75 nodes.  This is python,
-        # so no threads, but multiprocessing might be used.
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=15, nodeproc=8, minutes=30, openmp=False, multiproc=True)
+
+        optsim = ""
+        if args.simraw:
+            optsim = "--simraw "
+        comopts = "{}--night {}".format(optsim, nt)
+        
+        complan = "desi_plan_extract {} --dump {}".format(comopts, dump_file)
+        spret = sp.call(complan, shell=True)
+
+        com = "desi_pipe_extract {}".format(comopts)
+        
+        pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
+        # for one exposure, there are 600 bundles.  If we run 8 per 
+        # node (which works well for 24 or 32 cores per node), then we 
+        # want 75 nodes.  This is python, so no threads, but 
+        # multiprocessing might be used.
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=15, nodeproc=8, minutes=30, openmp=False, multiproc=True)
 
         com_master_shell.append("bash {}".format(shell_file))
 
         # Create scripts to run calibration
 
-        commands = ["desi_pipe_calib --night {}".format(nt)]
         shell_file = os.path.join(nsdir, "calib.sh")
         nersc_file = os.path.join(nsdir, "calib.nersc")
         dump_file = os.path.join(nsdir, "calib_commands.txt")
-        #spret = sp.call("{} --dump {}".format(commands[0], dump_file), shell=True)
-
         shell_log = os.path.join(nldir, "calib_sh")
         nersc_log = os.path.join(nldir, "calib_nersc")
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
+
+        comopts = "--night {}".format(nt)
+        
+        complan = "desi_plan_extract {} --dump {}".format(comopts, dump_file)
+        spret = sp.call(complan, shell=True)
+
+        com = "desi_pipe_extract {}".format(comopts)
+
+        pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
         # allocate one process per ...
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=15, nodeproc=8, minutes=30, openmp=False, multiproc=True)
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=2, nodeproc=8, minutes=30, openmp=False, multiproc=True)
 
         com_master_shell.append("bash {}".format(shell_file))
 
