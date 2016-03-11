@@ -397,12 +397,13 @@ def tasks_calcalc_exposure(id, frames, calnight, flatexp, fibermap):
         skyfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
         outfile = os.path.join("{:08d}".format(id), "calib-{}-{:08d}.fits".format(cam, id))
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
+        starfile = os.path.join("{:08d}".format(id), "stdstars-{}-{:08d}.fits".format(cam, id))
         com = ['desi_compute_fluxcalibration.py']
         com.extend(['--infile', infile])
         com.extend(['--fiberflat', flatfile])
         com.extend(['--outfile', "{}.part".format(outfile)])
         com.extend(['--fibermap', fibermap[id]])
-        com.extend(['--models', '/project/projectdirs/desi/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'])
+        com.extend(['--models', starfile])
         com.extend(['--sky', skyfile])
 
         task = {}
