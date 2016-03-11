@@ -47,8 +47,6 @@ def main():
     # If data directories are not given, get them from environment
     # variables.
 
-    date = io.validate_night(args.night)
-
     specdir = args.redux
     if specdir is None:
         specdir = io.specprod_root()
