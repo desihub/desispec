@@ -43,16 +43,16 @@ class TestSky(unittest.TestCase):
             R = Resolution(Rdata[i])
             flux[i] = R.dot(self.flux)
 
-        fibermap = desispec.io.empty_fibermap(self.nspec)
+        fibermap = desispec.io.empty_fibermap(self.nspec, 1500)
         fibermap['OBJTYPE'][0::2] = 'SKY'
 
-        return Frame(self.wave, flux, ivar, mask, Rdata, spectrograph=0), fibermap
+        return Frame(self.wave, flux, ivar, mask, Rdata, spectrograph=2, fibermap=fibermap)
                     
     def test_uniform_resolution(self):        
         #- Setup data for a Resolution matrix
-        spectra, fibermap = self._get_spectra()
+        spectra = self._get_spectra()
                         
-        sky = compute_sky(spectra, fibermap)
+        sky = compute_sky(spectra)
         self.assertEqual(sky.flux.shape, spectra.flux.shape)
         self.assertEqual(sky.ivar.shape, spectra.ivar.shape)
         self.assertEqual(sky.mask.shape, spectra.mask.shape)
@@ -66,8 +66,8 @@ class TestSky(unittest.TestCase):
         self.assertAlmostEqual(d,0.)
 
     def test_subtract_sky(self):
-        spectra, fibermap = self._get_spectra()
-        sky = compute_sky(spectra, fibermap)
+        spectra = self._get_spectra()
+        sky = compute_sky(spectra)
         subtract_sky(spectra, sky)
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-5, atol=1e-6))

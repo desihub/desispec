@@ -9,7 +9,6 @@ This script computes the fiber flat field correction from a DESI continuum lamp 
 """
 
 from desispec.io import read_frame
-from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import write_sky
 from desispec.io.qa import load_qa_frame
@@ -45,16 +44,12 @@ def main() :
 
     log.info("starting")
 
+    if args.fibermap is not None:
+        log.warn('--fibermap is deprecated (and not used at all)')
+
     # read exposure to load data and get range of spectra
     frame = read_frame(args.infile)
     specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
-
-    # read fibermap to locate sky fibers
-    fibermap = read_fibermap(args.fibermap)
-    selection=np.where((fibermap["OBJTYPE"]=="SKY")&(fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
-    if selection.size == 0 :
-        log.error("no sky fiber in fibermap %s"%args.fibermap)
-        sys.exit(12)
 
     # read fiberflat
     fiberflat = read_fiberflat(args.fiberflat)
@@ -63,7 +58,7 @@ def main() :
     apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skymodel = compute_sky(frame, fibermap)
+    skymodel = compute_sky(frame)
 
     # QA
     if (args.qafile is not None) or (args.qafig is not None):
@@ -71,14 +66,14 @@ def main() :
         # Load
         qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
         # Run
-        qaframe.run_qa('SKYSUB', (frame, fibermap, skymodel))
+        qaframe.run_qa('SKYSUB', (frame, skymodel))
         # Write
         if args.qafile is not None:
             write_qa_frame(args.qafile, qaframe)
             log.info("successfully wrote {:s}".format(args.qafile))
         # Figure(s)
         if args.qafig is not None:
-            qa_plots.frame_skyres(args.qafig, frame, fibermap, skymodel, qaframe)
+            qa_plots.frame_skyres(args.qafig, frame, skymodel, qaframe)
 
     # write result
     write_sky(args.outfile, skymodel, frame.meta)

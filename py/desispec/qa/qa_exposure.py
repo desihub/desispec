@@ -161,13 +161,13 @@ class QA_Frame(object):
                 return
         # Run
         if qatype == 'SKYSUB':
-            # Expecting: frame, fibermap, skymodel
-            assert len(inputs) == 3
+            # Expecting: frame, skymodel
+            assert len(inputs) == 2
             # Init parameters (as necessary)
             self.init_skysub()
             # Run
             qadict = qa_skysub(self.data[qatype]['PARAM'],
-                inputs[0], inputs[1], inputs[2])
+                inputs[0], inputs[1])
         elif qatype == 'FIBERFLAT':
             # Expecting: frame, fiberflat
             assert len(inputs) == 2
