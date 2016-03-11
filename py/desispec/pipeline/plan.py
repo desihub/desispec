@@ -80,10 +80,10 @@ def find_bricks(proddir):
     bricks = []
     brickpat = re.compile(r'\d{4}[pm]\d{3}')
     for root, dirs, files in os.walk(os.path.join(proddir, 'bricks'), topdown=True):
-        for f in files:
-            brickmat = brickpat.match(f)
+        for d in dirs:
+            brickmat = brickpat.match(d)
             if brickmat is not None:
-                bricks.append(f)
+                bricks.append(d)
     return bricks
 
 

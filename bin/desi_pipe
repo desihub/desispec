@@ -258,6 +258,25 @@ def main():
 
         com_master_shell.append("bash {}".format(shell_file))
 
+        # Create scripts to run zfind
+
+        shell_file = os.path.join(nsdir, "zfind.sh")
+        nersc_file = os.path.join(nsdir, "zfind.nersc")
+        dump_file = os.path.join(nsdir, "zfind_commands.txt")
+        shell_log = os.path.join(nldir, "zfind_sh")
+        nersc_log = os.path.join(nldir, "zfind_nersc")
+        
+        complan = "desi_plan_zfind --dump {}".format(dump_file)
+        #spret = sp.call(complan, shell=True)
+
+        com = "desi_pipe_zfind"
+
+        pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
+        # allocate one process per ...
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=2, nodeproc=8, minutes=30, openmp=False, multiproc=True)
+
+        com_master_shell.append("bash {}".format(shell_file))
+
     # Create master scripts with job dependencies
     shell_master = os.path.join(scrdir, 'run.sh')
     with open(shell_master, 'w') as f:
