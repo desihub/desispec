@@ -24,8 +24,8 @@ import desispec.pipeline as pipe
 
 def main():
     parser = argparse.ArgumentParser(description='Set up pipeline runs for a production.')
-    parser.add_argument('--raw', required=True, default=None, help='raw data directory')
-    parser.add_argument('--redux', required=True, default=None, help='output directory')
+    parser.add_argument('--raw', required=False, default=None, help='raw data directory')
+    parser.add_argument('--redux', required=False, default=None, help='output directory')
     parser.add_argument('--prod', required=False, default='test', help='output production name')
     parser.add_argument('--nights', required=False, default=None, help='comma separated (YYYYMMDD) or regex pattern')
     parser.add_argument('--env', required=False, default=None, help='text file with environment setup commands')
@@ -33,9 +33,15 @@ def main():
 
     args = parser.parse_args()
 
-    rawdir = os.path.abspath(args.raw)
+    rawdir = args.raw
+    if rawdir is None:
+        rawdir = io.rawdata_root()
+    rawdir = os.path.abspath(rawdir)
 
-    specdir = os.path.abspath(args.redux)
+    specdir = args.redux
+    if specdir is None:
+        specdir = io.specprod_root()
+    specdir = os.path.abspath(specdir)
 
     # Create the output directories if needed
 
@@ -109,6 +115,13 @@ def main():
         s.write("export DESI_SPECTRO_REDUX={}\n".format(specdir))
         s.write("export PRODNAME={}\n".format(args.prod))
         s.write("\n")
+
+    # load those same things into the environment, so that
+    # we can actually execute the planning scripts.
+
+    os.environ['DESI_SPECTRO_DATA'] = rawdir
+    os.environ['DESI_SPECTRO_REDUX'] = specdir
+    os.environ['PRODNAME'] = args.prod
 
     # read in the environment setup, if needed
 
@@ -195,7 +208,7 @@ def main():
         comopts = "{}--lamplines {} --night {}".format(optsim, lamplines, nt)
         
         complan = "desi_plan_psf {} --dump {}".format(comopts, dump_file)
-        spret = sp.call(complan, shell=True)
+        #spret = sp.call(complan, shell=True)
 
         com = "desi_pipe_psf {}".format(comopts)
 
@@ -221,7 +234,7 @@ def main():
         comopts = "{}--night {}".format(optsim, nt)
         
         complan = "desi_plan_extract {} --dump {}".format(comopts, dump_file)
-        spret = sp.call(complan, shell=True)
+        #spret = sp.call(complan, shell=True)
 
         com = "desi_pipe_extract {}".format(comopts)
         
@@ -245,7 +258,7 @@ def main():
         comopts = "--night {}".format(nt)
         
         complan = "desi_plan_extract {} --dump {}".format(comopts, dump_file)
-        spret = sp.call(complan, shell=True)
+        #spret = sp.call(complan, shell=True)
 
         com = "desi_pipe_extract {}".format(comopts)
 

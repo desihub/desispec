@@ -82,11 +82,6 @@ def main():
         wrange['r{}'.format(c)] = (float(wrange_r[0]), float(wrange_r[1]), float(wrange_r[2]))
         wrange['z{}'.format(c)] = (float(wrange_z[0]), float(wrange_z[1]), float(wrange_z[2]))
 
-    if rank == 0:
-        log.info("using B range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
-        log.info("using R range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
-        log.info("using Z range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
-
     [tasks_bundle, tasks_merge, tasks_clean] = pipe.tasks_exspec(expid, exptype, raw, fibermap, wrange, psf)
 
     # change to the redux directory
