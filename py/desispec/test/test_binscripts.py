@@ -41,7 +41,8 @@ class TestBinScripts(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
-        for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, cls.skyfile, cls.qafile, cls.qafig]:
+        for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, \
+            cls.skyfile, cls.calibfile, cls.stdfile, cls.qafile, cls.qafig]:
             if os.path.exists(filename):
                 os.remove(filename)
         if cls.origPath is None:
