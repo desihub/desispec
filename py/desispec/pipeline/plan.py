@@ -273,7 +273,7 @@ def tasks_fiberflat_exposure(id, frames, calnight):
 
         com = ['desi_compute_fiberflat.py']
         com.extend(['--infile', infile])
-        com.extend(['--outfile', outfile])
+        com.extend(['--outfile', '{}.part'.format(outfile)])
 
         task = {}
         task['command'] = com
@@ -295,21 +295,23 @@ def tasks_fiberflat(expid, exptype, frames, calnight):
     return tasks
 
 
-def tasks_sky_exposure(id, frames, calnight, fibermap):
+def tasks_sky_exposure(id, frames, calnight, flatexp, fibermap):
     tasks = []
     cameras = sorted(raw.keys())
     for cam in cameras:
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
-        outfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, id))
-
+        outfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
+        flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, id))
         com = ['desi_compute_sky.py']
         com.extend(['--infile', infile])
-        com.extend(['--outfile', outfile])
+        com.extend(['--outfile', "{}.part".format(outfile)])
+        com.extend(['--fibermap', fibermap[ex]])
+        com.extend(['--fiberflat', flatfile])
 
         task = {}
         task['command'] = com
         task['parallelism'] = 'core'
-        task['inputs'] = [infile]
+        task['inputs'] = [infile, fibermap[ex], flatfile]
         task['outputs'] = [outfile]
         tasks.append(task)
 
@@ -323,7 +325,138 @@ def tasks_sky(expid, exptype, frames, calnight, fibermap):
             continue
         if exptype[ex] == "arc":
             continue
-        exp_tasks = tasks_sky_exposure(ex, frames[ex], calnight, fibermap)
+        flatexp = None
+        for fex in expid:
+            if exptype[fex] == 'flat':
+                if (flatexp is None) or ((fex > flatexp) and (fex < ex)):
+                    flatexp = fex
+        exp_tasks = tasks_sky_exposure(ex, frames[ex], calnight, flatexp, fibermap)
+        tasks.extend(exp_tasks)
+    return tasks
+
+
+def tasks_star_exposure(id, frames, calnight, flatexp, fibermap):
+    tasks = []
+    cameras = sorted(raw.keys())
+    for cam in cameras:
+        flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
+        outfile = os.path.join("{:08d}".format(id), "stdstars-{}-{:08d}.fits".format(cam, id))
+        com = ['desi_fit_stdstars.py']
+        com.extend(['--fiberflatexpid', flatexp])
+        com.extend(['--outfile', "{}.part".format(outfile)])
+        com.extend(['--fibermap', fibermap[ex]])
+        com.extend(['--models', '/project/projectdirs/desi/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'])
+        com.extend(['--spectrograph', '0'])
+
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = [fibermap[ex], flatfile]
+        task['outputs'] = [outfile]
+        tasks.append(task)
+
+    return tasks
+
+
+def tasks_star(expid, exptype, frames, calnight, fibermap):
+    tasks = []
+    for ex in expid:
+        if exptype[ex] == "flat":
+            continue
+        if exptype[ex] == "arc":
+            continue
+        flatexp = None
+        for fex in expid:
+            if exptype[fex] == 'flat':
+                if (flatexp is None) or ((fex > flatexp) and (fex < ex)):
+                    flatexp = fex
+        exp_tasks = tasks_star_exposure(ex, frames[ex], calnight, flatexp, fibermap)
+        tasks.extend(exp_tasks)
+    return tasks
+
+
+def tasks_calcalc_exposure(id, frames, calnight, flatexp, fibermap):
+    tasks = []
+    cameras = sorted(raw.keys())
+    for cam in cameras:
+        flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
+        skyfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
+        outfile = os.path.join("{:08d}".format(id), "calib-{}-{:08d}.fits".format(cam, id))
+        infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
+        com = ['desi_compute_fluxcalibration.py']
+        com.extend(['--infile', infile])
+        com.extend(['--fiberflat', flatfile])
+        com.extend(['--outfile', "{}.part".format(outfile)])
+        com.extend(['--fibermap', fibermap[ex]])
+        com.extend(['--models', '/project/projectdirs/desi/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'])
+        com.extend(['--sky', skyfile])
+
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = [infile, skyfile, fibermap[ex], flatfile]
+        task['outputs'] = [outfile]
+        tasks.append(task)
+
+    return tasks
+
+
+def tasks_calcalc(expid, exptype, frames, calnight, fibermap):
+    tasks = []
+    for ex in expid:
+        if exptype[ex] == "flat":
+            continue
+        if exptype[ex] == "arc":
+            continue
+        flatexp = None
+        for fex in expid:
+            if exptype[fex] == 'flat':
+                if (flatexp is None) or ((fex > flatexp) and (fex < ex)):
+                    flatexp = fex
+        exp_tasks = tasks_calcalc_exposure(ex, frames[ex], calnight, flatexp, fibermap)
+        tasks.extend(exp_tasks)
+    return tasks
+
+
+def tasks_calapp_exposure(id, frames, calnight, flatexp):
+    tasks = []
+    cameras = sorted(raw.keys())
+    for cam in cameras:
+        flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
+        outfile = os.path.join("{:08d}".format(id), "cframe-{}-{:08d}.fits".format(cam, id))
+        calfile = os.path.join("{:08d}".format(id), "calib-{}-{:08d}.fits".format(cam, id))
+        infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
+        skyfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
+        com = ['desi_process_exposure.py']
+        com.extend(['--infile', infile])
+        com.extend(['--fiberflat', flatfile])
+        com.extend(['--outfile', "{}.part".format(outfile)])
+        com.extend(['--sky', skyfile])
+        com.extend(['--calib', calfile])
+
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = [infile, skyfile, calfile, flatfile]
+        task['outputs'] = [outfile]
+        tasks.append(task)
+
+    return tasks
+
+
+def tasks_calapp(expid, exptype, frames, calnight):
+    tasks = []
+    for ex in expid:
+        if exptype[ex] == "flat":
+            continue
+        if exptype[ex] == "arc":
+            continue
+        flatexp = None
+        for fex in expid:
+            if exptype[fex] == 'flat':
+                if (flatexp is None) or ((fex > flatexp) and (fex < ex)):
+                    flatexp = fex
+        exp_tasks = tasks_calapp_exposure(ex, frames[ex], calnight, flatexp)
         tasks.extend(exp_tasks)
     return tasks
 
