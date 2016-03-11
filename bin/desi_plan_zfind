@@ -5,22 +5,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Run redshift fitting in parallel.
+Run redshift fitting planning.
 """
 
 from __future__ import absolute_import, division, print_function
-
-comm = None
-rank = 0
-nproc = 1
-
-try:
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
-    rank = comm.rank
-    nproc = comm.size
-except ImportError:
-    print("mpi4py not found, using only one process")
 
 import sys
 import os
@@ -38,7 +26,7 @@ def main():
     parser.add_argument( '--redux', required=False, default=None, help='production directory' )
     parser.add_argument( '--objtype', required=False, default=None, help='only use templates for these objtypes (comma separated elg,lrg,qso,star)' )
     parser.add_argument( '--zspec', required=False, action='store_true', help='also include spectra in output file' )
-    parser.add_argument( '--dump', required=False, default=None, help='dump all commands to this file and exit.')
+    parser.add_argument( '--dump', required=True, default=None, help='write commands to this file.')
 
     args = parser.parse_args()
 
@@ -59,49 +47,21 @@ def main():
         os.environ['DESI_SPECTRO_REDUX'] = os.path.abspath(specdir)
     specdir = os.path.abspath(specdir)
 
-    if rank == 0:
-        log.info("using spectro redux dir {}".format(specdir))
-
     # get the list of bricks
-    bricks = None
-    if rank == 0:
-        log.info("finding bricks")
-        bricks = pipe.find_bricks(specdir)
-    if comm is not None:
-        bricks = comm.bcast(bricks, root=0)
+    bricks = pipe.find_bricks(specdir)
 
     # compute the tasks
 
-    if rank == 0:
-        log.info("computing zfind tasks")
     tasks = pipe.tasks_zfind(bricks, args.objtype, args.zspec)
-
-    # change to the redux directory
-
-    os.chdir(os.path.join(specdir, 'bricks'))
 
     # optionally dump the low-level commands that will be run
     # and then exit.
 
-    if args.dump is not None:
-        if rank == 0:
-            with open(args.dump, 'w') as d:
-                for t in tasks:
-                    com = " ".join(t['command'])
-                    d.write("{}\n".format(com))
-        if comm is not None:
-            comm.barrier()
-        sys.exit(0)
+    with open(args.dump, 'w') as d:
+        for t in tasks:
+            com = " ".join(t['command'])
+            d.write("{}\n".format(com))
 
-    # do tasks
-
-    if rank == 0:
-        log.info("executing tasks")
-    work = pipe.task_dist(tasks, nproc)
-    pipe.subprocess_list(work[rank])
-
-    if comm is not None:
-        comm.barrier()
 
 if __name__ == "__main__":
     main()

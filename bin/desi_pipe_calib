@@ -158,7 +158,7 @@ def main():
     # create any output directories
 
     if rank == 0:
-        for tsk in tasks_bundle:
+        for tsk in flat_tasks:
             for f in tsk['outputs']:
                 dr = os.path.dirname(f)
                 if not os.path.isdir(dr):

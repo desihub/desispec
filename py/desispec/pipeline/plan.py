@@ -76,22 +76,15 @@ def psf_newest(specdir):
     return newest
 
 
-# def find_bricks(proddir):
-#     bricks = []
-#     brickpat = re.compile(r'\d{3}[pm]\d{4}')
-#     for root, dirs, files in os.walk(os.path.join(proddir, 'bricks'), topdown=True):
-#         for f in files:
-#             psfmat = psfpat.match(f)
-#             if psfmat is not None:
-#                 cam = psfmat.group(1)
-#                 expstr = psfmat.group(2)
-#                 expid = int(expstr)
-#                 if cam not in newest.keys():
-#                     newest[cam] = expid
-#                 else:
-#                     if expid > newest[cam]:
-#                         newest[cam] = expid
-#     return newest
+def find_bricks(proddir):
+    bricks = []
+    brickpat = re.compile(r'\d{4}[pm]\d{3}')
+    for root, dirs, files in os.walk(os.path.join(proddir, 'bricks'), topdown=True):
+        for f in files:
+            brickmat = brickpat.match(f)
+            if brickmat is not None:
+                bricks.append(f)
+    return bricks
 
 
 def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
@@ -479,6 +472,32 @@ def tasks_calapp(expid, exptype, frames, calnight):
                     flatexp = fex
         exp_tasks = tasks_calapp_exposure(ex, frames[ex], calnight, flatexp)
         tasks.extend(exp_tasks)
+    return tasks
+
+
+def tasks_zfind(bricks, objtype, zspec):
+    tasks = []
+    for brk in bricks:
+        brick_r = os.path.join(brk, "brick-r-{}.fits".format(brk))
+        brick_b = os.path.join(brk, "brick-b-{}.fits".format(brk))
+        brick_z = os.path.join(brk, "brick-z-{}.fits".format(brk))
+        outfile = os.path.join(brk, "zbest-{}.fits".format(brk))
+
+        com = ['desi_zfind.py']
+        com.extend(['--brick', brk])
+        com.extend(['--outfile', "{}.part".format(outfile)])
+        if objtype is not None:
+            com.extend(['--objtype', objtype])
+        if zspec:
+            com.extend(['--zspec'])
+        com.extend([brick_r, brick_b, brick_z])
+
+        task = {}
+        task['command'] = com
+        task['parallelism'] = 'core'
+        task['inputs'] = [brick_r, brick_b, brick_z]
+        task['outputs'] = [outfile]
+        tasks.append(task)
     return tasks
 
 
