@@ -42,7 +42,6 @@ def main():
     parser.add_argument( '--range_b', required=False, default="3579.0,5939.0,0.8", help='B band wavelength range \"wmin,wmax,dw\"' )
     parser.add_argument( '--range_r', required=False, default="5635.0,7731.0,0.8", help='R band wavelength range \"wmin,wmax,dw\"' )
     parser.add_argument( '--range_z', required=False, default="7445.0,9824.0,0.8", help='Z band wavelength range \"wmin,wmax,dw\"' )
-    parser.add_argument( '--simraw', required=False, action='store_true', help='if set, raw data is simulated' )
     parser.add_argument( '--dump', required=False, default=None, help='dump all commands to this file and exit.')
     args = parser.parse_args()
 
@@ -86,7 +85,7 @@ def main():
     psf = None
     if rank == 0:
         log.info("finding exposures")
-        (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, simraw=args.simraw)
+        (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night)
         psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
     if comm is not None:
         expid = comm.bcast(expid, root=0)

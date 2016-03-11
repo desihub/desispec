@@ -22,7 +22,7 @@ import desispec.io as io
 import desispec.log as log
 
 
-def find_raw(rawdir, rawnight, simraw=False):
+def find_raw(rawdir, rawnight):
     expid = io.get_exposures(rawnight, raw=True, rawdata_dir=rawdir)
     fibermap = {}
     raw = {}
@@ -35,24 +35,27 @@ def find_raw(rawdir, rawnight, simraw=False):
         hd = af.getheader(fibermap[ex], 1)
         exptype[ex] = hd['flavor']
         # get the raw exposures
-        if simraw:
-            raw[ex] = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
-        else:
-            raw[ex] = io.get_raw_files("raw", rawnight, ex, rawdata_dir=rawdir)
+        raw[ex] = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
     return (sorted(expid), exptype, fibermap, raw)
 
 
 def find_frames(specdir, night):
-    expid = io.get_exposures(night, raw=False, specprod_dir=specdir)
+    fullexpid = io.get_exposures(night, raw=False, specprod_dir=specdir)
+    expid = []
     frames = {}
     exptype = {}
-    for ex in sorted(expid):
-        frames[ex] = io.get_files("frame", night, ex, specprod_dir=specdir)
+    for ex in sorted(fullexpid):
+        found = io.get_files("frame", night, ex, specprod_dir=specdir)
+        if len(found.keys()) == 0:
+            continue
+        expid.append(ex)
+        frames[ex] = found
         # check the header for the "flavor"
         # keyword to see what this exposure is.
-        hd = af.getheader(frames[ex], 1)
+        testfile = frames[ex][frames[ex].keys()[0]]
+        hd = af.getheader(testfile, 0)
         exptype[ex] = hd['FLAVOR']
-    return (sorted(expid), exptype, frames)
+    return (expid, exptype, frames)
 
 
 def psf_newest(specdir):
@@ -284,7 +287,7 @@ def tasks_specex(expid, exptype, raw, lamplines, bootcal=None):
 
 def tasks_fiberflat_exposure(id, frames, calnight):
     tasks = []
-    cameras = sorted(raw.keys())
+    cameras = sorted(frames.keys())
     for cam in cameras:
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
         outfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, id))
@@ -315,7 +318,7 @@ def tasks_fiberflat(expid, exptype, frames, calnight):
 
 def tasks_sky_exposure(id, frames, calnight, flatexp, fibermap):
     tasks = []
-    cameras = sorted(raw.keys())
+    cameras = sorted(frames.keys())
     for cam in cameras:
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
         outfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
@@ -323,13 +326,13 @@ def tasks_sky_exposure(id, frames, calnight, flatexp, fibermap):
         com = ['desi_compute_sky.py']
         com.extend(['--infile', infile])
         com.extend(['--outfile', "{}.part".format(outfile)])
-        com.extend(['--fibermap', fibermap[ex]])
+        com.extend(['--fibermap', fibermap[id]])
         com.extend(['--fiberflat', flatfile])
 
         task = {}
         task['command'] = com
         task['parallelism'] = 'core'
-        task['inputs'] = [infile, fibermap[ex], flatfile]
+        task['inputs'] = [infile, fibermap[id], flatfile]
         task['outputs'] = [outfile]
         tasks.append(task)
 
@@ -355,21 +358,21 @@ def tasks_sky(expid, exptype, frames, calnight, fibermap):
 
 def tasks_star_exposure(id, frames, calnight, flatexp, fibermap):
     tasks = []
-    cameras = sorted(raw.keys())
+    cameras = sorted(frames.keys())
     for cam in cameras:
         flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
         outfile = os.path.join("{:08d}".format(id), "stdstars-{}-{:08d}.fits".format(cam, id))
         com = ['desi_fit_stdstars.py']
-        com.extend(['--fiberflatexpid', flatexp])
+        com.extend(['--fiberflatexpid', "{}".format(flatexp)])
         com.extend(['--outfile', "{}.part".format(outfile)])
-        com.extend(['--fibermap', fibermap[ex]])
+        com.extend(['--fibermap', fibermap[id]])
         com.extend(['--models', '/project/projectdirs/desi/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'])
         com.extend(['--spectrograph', '0'])
 
         task = {}
         task['command'] = com
         task['parallelism'] = 'core'
-        task['inputs'] = [fibermap[ex], flatfile]
+        task['inputs'] = [fibermap[id], flatfile]
         task['outputs'] = [outfile]
         tasks.append(task)
 
@@ -395,7 +398,7 @@ def tasks_star(expid, exptype, frames, calnight, fibermap):
 
 def tasks_calcalc_exposure(id, frames, calnight, flatexp, fibermap):
     tasks = []
-    cameras = sorted(raw.keys())
+    cameras = sorted(frames.keys())
     for cam in cameras:
         flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
         skyfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
@@ -405,14 +408,14 @@ def tasks_calcalc_exposure(id, frames, calnight, flatexp, fibermap):
         com.extend(['--infile', infile])
         com.extend(['--fiberflat', flatfile])
         com.extend(['--outfile', "{}.part".format(outfile)])
-        com.extend(['--fibermap', fibermap[ex]])
+        com.extend(['--fibermap', fibermap[id]])
         com.extend(['--models', '/project/projectdirs/desi/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'])
         com.extend(['--sky', skyfile])
 
         task = {}
         task['command'] = com
         task['parallelism'] = 'core'
-        task['inputs'] = [infile, skyfile, fibermap[ex], flatfile]
+        task['inputs'] = [infile, skyfile, fibermap[id], flatfile]
         task['outputs'] = [outfile]
         tasks.append(task)
 
@@ -438,7 +441,7 @@ def tasks_calcalc(expid, exptype, frames, calnight, fibermap):
 
 def tasks_calapp_exposure(id, frames, calnight, flatexp):
     tasks = []
-    cameras = sorted(raw.keys())
+    cameras = sorted(frames.keys())
     for cam in cameras:
         flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
         outfile = os.path.join("{:08d}".format(id), "cframe-{}-{:08d}.fits".format(cam, id))

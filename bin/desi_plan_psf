@@ -28,7 +28,6 @@ def main():
     parser.add_argument( '--night', required=True, default=None, help='night (YYYYMMDD)' )
     parser.add_argument( '--expid', required=False, default=None, help='only process this exposure ID' )
     parser.add_argument( '--lamplines', required=True, default=None, help='lamp lines file to use' )
-    parser.add_argument( '--simraw', required=False, action='store_true', help='if set, raw data is simulated' )
     parser.add_argument( '--dump', required=True, default=None, help='write commands to this file.')
     args = parser.parse_args()
 
@@ -61,7 +60,7 @@ def main():
 
     # get the list of raw files
 
-    (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, simraw=args.simraw)
+    (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night)
 
     # if requested, restrict the exposure list to a single ID
     if args.expid is not None:
@@ -75,10 +74,6 @@ def main():
         bootcal[cam] = os.path.join(specdir, 'calib2d', 'psf', args.night, 'psfboot-{}.fits'.format(cam))
 
     [tasks_bundle, tasks_merge, tasks_clean] = pipe.tasks_specex(expid, exptype, raw, args.lamplines, bootcal=bootcal)
-
-    # change to the redux directory
-
-    os.chdir(os.path.join(specdir, 'exposures', args.night))
 
     # dump the low-level commands that will be run
     # and then exit.

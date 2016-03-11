@@ -102,7 +102,7 @@ def shell_job(path, logroot, envsetup, desisetup, commands):
     with open(path, 'w') as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
-        f.write("log={}_${{now}}\n\n".format(logroot))
+        f.write("log={}_${{now}}.log\n\n".format(logroot))
         for com in envsetup:
             f.write("{}\n".format(com))
         f.write("\n")
@@ -125,7 +125,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         f.write("#SBATCH --nodes={}\n".format(nodes))
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name=desipipe\n")
-        f.write("#SBATCH --output={}_slurm_%j\n".format(logroot))
+        f.write("#SBATCH --output={}_slurm_%j.log\n".format(logroot))
         f.write("#SBATCH --export=NONE\n\n")
         for com in envsetup:
             f.write("{}\n".format(com))
@@ -151,7 +151,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}}\"\n\n".format(runstr))
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("echo \"job datestamp = ${now}\"\n")
-        f.write("log={}_${{now}}\n\n".format(logroot))
+        f.write("log={}_${{now}}.log\n\n".format(logroot))
         for com in commands:
             executable = com.split(' ')[0]
             f.write("which {}\n".format(executable))

@@ -90,10 +90,6 @@ def main():
 
     calapp_tasks = pipe.tasks_calapp(expid, exptype, frames, calnight)
 
-    # change to the redux directory
-
-    os.chdir(os.path.join(specdir, 'exposures', args.night))
-
     # dump the low-level commands that will be run
     # and then exit.
 
