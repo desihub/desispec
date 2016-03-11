@@ -18,6 +18,7 @@ from desispec.fluxcalibration import normalize_templates
 from desispec.fluxcalibration import FluxCalib
 from desispec.fluxcalibration import compute_flux_calibration, apply_flux_calibration
 from desispec.log import get_logger
+import desispec.io
 
 import speclite.filters
 
@@ -52,8 +53,10 @@ def get_frame_data():
     ivar = np.ones(flux.shape)
     mask = np.zeros(flux.shape, dtype=int)
     resol_data=set_resolmatrix(nspec,nwave)
+    fibermap = desispec.io.empty_fibermap(nspec, 1500)
+    fibermap['OBJTYPE'] = 'QSO'
     
-    frame=Frame(wave, flux, ivar,mask,resol_data,spectrograph=0)
+    frame=Frame(wave, flux, ivar,mask,resol_data,fibermap=fibermap)
     return frame
 
 def get_models():
@@ -89,6 +92,7 @@ class TestFluxCalibration(unittest.TestCase):
         modelwave,modelflux=get_models()
         # say there are 3 stdstars
         stdfibers=np.random.choice(9,3,replace=False)
+        frame.fibermap['OBJTYPE'][stdfibers] = 'STD'
 
         #pick fluxes etc for each stdstars find the best match
         bestid=-np.ones(len(stdfibers))
@@ -178,9 +182,10 @@ class TestFluxCalibration(unittest.TestCase):
         modelwave,modelflux=get_models()
         # pick std star fibers
         stdfibers=np.random.choice(9,3,replace=False) # take 3 std stars fibers
+        frame.fibermap['OBJTYPE'][stdfibers] = 'STD'
         input_model_wave=modelwave
         input_model_flux=modelflux[0:3] # assuming the first three to be best models,3 is exclusive here
-        fluxCalib, _ =compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.)
+        fluxCalib, _ =compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipping=4.)
         # assert the output
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)

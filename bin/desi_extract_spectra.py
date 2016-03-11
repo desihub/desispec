@@ -97,8 +97,6 @@ def _trim(filepath, maxchar=40):
         return '...'+filepath[-maxchar:]
 
 #- Augment input image header for output
-img.meta['SPECMIN'] = (specmin, 'First spectrum')
-img.meta['SPECMAX'] = (specmax-1, 'Last spectrum')
 img.meta['NSPEC']   = (opts.nspec, 'Number of spectra')
 img.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
 img.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')

@@ -41,7 +41,8 @@ class TestBinScripts(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
-        for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, cls.skyfile, cls.qafile, cls.qafig]:
+        for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, \
+            cls.skyfile, cls.calibfile, cls.stdfile, cls.qafile, cls.qafig]:
             if os.path.exists(filename):
                 os.remove(filename)
         if cls.origPath is None:
@@ -56,7 +57,8 @@ class TestBinScripts(unittest.TestCase):
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
-        frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0,
+        fibermap = self._get_fibermap()
+        frame = Frame(wave, flux, ivar, mask, Rdata, fibermap=fibermap,
                       meta=dict(flavor=flavor, camera=camera))
         io.write_frame(self.framefile, frame)
 
@@ -70,13 +72,16 @@ class TestBinScripts(unittest.TestCase):
         ff = FiberFlat(wave, fiberflat, ivar, mask, meanspec)
         io.write_fiberflat(self.fiberflatfile, ff)
 
-    def _write_fibermap(self):
-        """Write a fake fibermap"""
-        fibermap = io.empty_fibermap(self.nspec)
+    def _get_fibermap(self):
+        fibermap = io.empty_fibermap(self.nspec, 1500)
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
             fibermap['OBJTYPE'][i+1] = 'STD'
-        fibermap['FIBER'] = np.arange(self.nspec).astype(int)
+        return fibermap
+
+    def _write_fibermap(self):
+        """Write a fake fibermap"""
+        fibermap = self._get_fibermap()
         io.write_fibermap(self.fibermapfile, fibermap)
 
     def _write_skymodel(self):

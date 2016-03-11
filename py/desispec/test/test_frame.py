@@ -40,8 +40,10 @@ class TestFrame(unittest.TestCase):
         self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar, None, None, manyfibers))
 
         #- Check usage of meta
-        meta = dict(SPECMIN=0)
-        frame = Frame(wave, flux, ivar, meta=meta)
+        meta = dict(BLAT=0, FOO='abc')
+        frame = Frame(wave, flux, ivar, meta=meta, spectrograph=0)
+        self.assertEqual(frame.meta['BLAT'], meta['BLAT'])
+        self.assertEqual(frame.meta['FOO'], meta['FOO'])
 
         #- Check usage of spectrograph input
         for i in range(3):
@@ -50,9 +52,6 @@ class TestFrame(unittest.TestCase):
             self.assertEqual(frame.fibers[0], i*500)
 
         # Check multi-mode assignment of fibers
-        frame = Frame(wave, flux, ivar, fibers=fibers, meta=meta)
-        meta = dict(SPECMIN=1)
-        fibers = np.arange(nspec)
         self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar, None, None, fibers, 1, meta))
 
         #- Check a fiber-assigning method is required

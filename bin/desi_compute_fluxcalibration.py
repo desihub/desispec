@@ -9,7 +9,6 @@ This script computes the flux calibration for a DESI frame using precomputed spe
 """
 
 from desispec.io import read_frame
-from desispec.io import read_fibermap
 from desispec.io import read_fiberflat
 from desispec.io import read_sky
 from desispec.io import write_qa_frame
@@ -54,6 +53,9 @@ def main() :
     args = parser.parse_args()
     log=get_logger()
 
+    if args.fibermap is not None:
+        log.warn('--fibermap is deprecated (and not used at all)')
+
     log.info("read frame")
     # read frame
     frame = read_frame(args.infile)
@@ -77,24 +79,14 @@ def main() :
     # read models
     model_flux,model_wave,model_fibers=read_stdstar_models(args.models)
 
-    # select fibers
-    SPECMIN=frame.meta["SPECMIN"]
-    SPECMAX=frame.meta["SPECMAX"]
-    selec=np.where((model_fibers>=SPECMIN)&(model_fibers<=SPECMAX))[0]
-    if selec.size == 0 :
-        log.error("no stellar models for this spectro")
-        sys.exit(12)
-    fibers=model_fibers[selec]-frame.meta["SPECMIN"]
-    log.info("star fibers= %s"%str(fibers))
-
-    table = read_fibermap(args.fibermap)
-    bad=np.where(table["OBJTYPE"][fibers]!="STD")[0]
-    if bad.size > 0 :
-        for fiber in fibers[bad] :
-            log.error("inconsistency with fiber %d, OBJTYPE='%s' in fibermap"%(fiber,table["OBJTYPE"][fiber]))
+    # check that the model_fibers are actually standard stars
+    fibermap = frame.fibermap
+    if np.any(fibermap['OBJTYPE'][model_fibers] != 'STD'):
+        for i in model_fibers:
+            log.error("inconsistency with spectrum %d, OBJTYPE='%s' in fibermap"%(i,fibermap["OBJTYPE"][i]))
         sys.exit(12)
 
-    fluxcalib, indiv_stars = compute_flux_calibration(frame, fibers, model_wave, model_flux)
+    fluxcalib, indiv_stars = compute_flux_calibration(frame, model_wave, model_flux)
 
     # QA
     if (args.qafile is not None):
@@ -102,7 +94,7 @@ def main() :
         # Load
         qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
         # Run
-        qaframe.run_qa('FLUXCALIB', (frame, fibers, fluxcalib, indiv_stars))
+        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, indiv_stars))
         # Write
         if args.qafile is not None:
             write_qa_frame(args.qafile, qaframe)

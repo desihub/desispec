@@ -43,11 +43,6 @@ def write_frame(outfile, frame, header=None, fibermap=None):
         #hdr = fitsheader(frame.header)
         hdr = fitsheader(frame.meta)
 
-    if 'SPECMIN' not in hdr:
-        hdr['SPECMIN'] = 0
-    if 'SPECMAX' not in hdr:
-        hdr['SPECMAX'] = hdr['SPECMIN'] + frame.nspec
-
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(frame.flux, header=hdr)
     x.header['EXTNAME'] = 'FLUX'
@@ -110,11 +105,6 @@ def read_frame(filename, nspec=None):
         flux = flux[0:nspec]
         ivar = ivar[0:nspec]
         resolution_data = resolution_data[0:nspec]
-
-    # fill in SPECMIN=0 if it is missing
-    if 'SPECMIN' not in hdr:
-        log.warn('SPECMIN missing from FITS header; using 0')
-        hdr['SPECMIN'] = 0
 
     # return flux,ivar,wave,resolution_data, hdr
     return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap)
