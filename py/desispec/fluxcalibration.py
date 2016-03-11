@@ -179,14 +179,13 @@ def normalize_templates(stdwave, stdflux, mags, filters):
     return normflux
 
 
-def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux,nsig_clipping=4.):
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipping=4.):
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
 
     Args:
       frame : Frame object with attributes wave, flux, ivar, resolution_data
-      stdfibers: 1D[nwave] array of indices of frame that are standard stars
       input_model_wave : 1D[nwave] array of model wavelengths
       input_model_flux : 2D[nstd, nwave] array of model fluxes
       nsig_clipping : (optional) sigma clipping level
@@ -201,7 +200,7 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
       - then iteratively
         - fit the mean throughput (deconvolved, this is needed because of sharp atmospheric absorption lines)
         - compute broad band correction to fibers (to correct for small mis-alignement for instance)
-        - performe an outlier rejection
+        - perform outlier rejection
     """
 
     log=get_logger()
@@ -210,13 +209,14 @@ def compute_flux_calibration(frame, stdfibers, input_model_wave,input_model_flux
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
     #- the calibration vector for each fiber individually
+    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
     stdstars = frame[stdfibers]
 
     nwave=stdstars.nwave
     nstds=stdstars.flux.shape[0]
 
     # resample model to data grid and convolve by resolution
-    model_flux=np.zeros((nstds, nwave))
+    model_flux=np.zeros((nstds, nwave))    
     for fiber in range(model_flux.shape[0]) :
         model_flux[fiber]=resample_flux(stdstars.wave,input_model_wave,input_model_flux[fiber])
 
@@ -481,12 +481,11 @@ def ZP_from_calib(wave, calib):
     # Return
     return ZP_AB
 
-def qa_fluxcalib(param, frame, stdfibers, fluxcalib, indiv_stars):
+def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
     """
     Args:
         param: dict of QA parameters
         frame: Frame
-        stdfibers: list of standard star fibers
         fluxcalib: FluxCalib
         indiv_stars : tuple of data on individual star fibers
 
@@ -525,6 +524,7 @@ def qa_fluxcalib(param, frame, stdfibers, fluxcalib, indiv_stars):
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # MAX ZP Offset
+    stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
     ZPoffset = np.abs(ZP_fiducial-qadict['ZP'])
     qadict['MAX_ZP_OFF'] = [float(np.max(ZPoffset)),
                             int(stdfibers[np.argmax(ZPoffset)])]

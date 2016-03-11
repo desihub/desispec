@@ -106,10 +106,5 @@ def read_frame(filename, nspec=None):
         ivar = ivar[0:nspec]
         resolution_data = resolution_data[0:nspec]
 
-    # fill in SPECMIN=0 if it is missing
-    if 'SPECMIN' not in hdr:
-        log.warn('SPECMIN missing from FITS header; using 0')
-        hdr['SPECMIN'] = 0
-
     # return flux,ivar,wave,resolution_data, hdr
     return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap)
