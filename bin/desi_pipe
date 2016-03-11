@@ -257,10 +257,10 @@ def main():
 
         comopts = "--night {}".format(nt)
         
-        complan = "desi_plan_extract {} --dump {}".format(comopts, dump_file)
+        complan = "desi_plan_calib {} --dump {}".format(comopts, dump_file)
         #spret = sp.call(complan, shell=True)
 
-        com = "desi_pipe_extract {}".format(comopts)
+        com = "desi_pipe_calib {}".format(comopts)
 
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
         # allocate one process per ...
