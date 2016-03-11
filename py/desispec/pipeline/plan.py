@@ -315,7 +315,7 @@ def tasks_sky_exposure(id, frames, calnight, flatexp, fibermap):
     for cam in cameras:
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
         outfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
-        flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, id))
+        flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
         com = ['desi_compute_sky.py']
         com.extend(['--infile', infile])
         com.extend(['--outfile', "{}.part".format(outfile)])
