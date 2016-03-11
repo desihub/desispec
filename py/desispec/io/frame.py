@@ -43,11 +43,6 @@ def write_frame(outfile, frame, header=None, fibermap=None):
         #hdr = fitsheader(frame.header)
         hdr = fitsheader(frame.meta)
 
-    if 'SPECMIN' not in hdr:
-        hdr['SPECMIN'] = 0
-    if 'SPECMAX' not in hdr:
-        hdr['SPECMAX'] = hdr['SPECMIN'] + frame.nspec
-
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(frame.flux, header=hdr)
     x.header['EXTNAME'] = 'FLUX'
