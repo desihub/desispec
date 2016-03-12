@@ -353,6 +353,7 @@ def tasks_star_exposure(id, frames, calnight, flatexp, fibermap):
     tasks = []
     cameras = sorted(frames.keys())
     for cam in cameras:
+        spectrograph = cam[1]
         flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
         outfile = os.path.join("{:08d}".format(id), "stdstars-{}-{:08d}.fits".format(cam, id))
         com = ['desi_fit_stdstars.py']
@@ -360,7 +361,7 @@ def tasks_star_exposure(id, frames, calnight, flatexp, fibermap):
         com.extend(['--outfile', "{}.part".format(outfile)])
         com.extend(['--fibermap', fibermap[id]])
         com.extend(['--models', '/project/projectdirs/desi/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'])
-        com.extend(['--spectrograph', '0'])
+        com.extend(['--spectrograph', spectrograph])
 
         task = {}
         task['command'] = com
