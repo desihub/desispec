@@ -122,13 +122,13 @@ class Frame(object):
                 self.fibers = fibermap['FIBER']
             elif spectrograph is not None:
                 self.fibers = spectrograph*fibers_per_spectrograph + np.arange(self.nspec, dtype=int)
-            elif (self.meta is not None) and ('SPECMIN' in self.meta.keys()):
-                self.fibers = self.meta['SPECMIN'] + np.arange(self.nspec, dtype=int)
+            elif (self.meta is not None) and ('FIBERMIN' in self.meta.keys()):
+                self.fibers = self.meta['FIBERMIN'] + np.arange(self.nspec, dtype=int)
             else:
                 raise ValueError("Must set fibers by one of the methods!")
 
         if self.meta is not None:
-            self.meta['SPECMIN'] = self.fibers[0]
+            self.meta['FIBERMIN'] = np.min(self.fibers)
          
     def __getitem__(self, index):
         """
@@ -166,8 +166,5 @@ class Frame(object):
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
                     meta=self.meta, fibermap=fibermap)
-        
-        #- TODO:
-        #- if we define fiber ranges in the fits headers, correct header
         
         return result

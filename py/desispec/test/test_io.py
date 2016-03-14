@@ -91,7 +91,7 @@ class TestIO(unittest.TestCase):
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        meta = dict(SPECMIN=0)
+        meta = dict(BLAT=0, FOO='abc', FIBERMIN=500)
         mask_int = np.zeros((nspec, nwave), dtype=int)
         mask_uint = np.zeros((nspec, nwave), dtype=np.uint32)
         wave = np.arange(nwave)
@@ -108,6 +108,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(np.all(mask == frame.mask))
             self.assertTrue(np.all(R == frame.resolution_data))
             self.assertTrue(frame.resolution_data.dtype.isnative)
+            self.assertEqual(frame.meta['BLAT'], meta['BLAT'])
+            self.assertEqual(frame.meta['FOO'], meta['FOO'])
             
         #- with and without fibermap
         self.assertEqual(frame.fibermap, None)

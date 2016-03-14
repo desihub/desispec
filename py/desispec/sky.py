@@ -19,7 +19,7 @@ from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
-def compute_sky(frame, fibermap, nsig_clipping=4.) :
+def compute_sky(frame, nsig_clipping=4.) :
     """Compute a sky model.
 
     Input has to correspond to sky fibers only.
@@ -33,7 +33,6 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
           - ivar : 2D inverse variance of flux
           - mask : 2D inverse mask flux (0=good)
           - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
-        fibermap : numpy table including OBJTYPE to know which fibers are SKY
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
     returns SkyModel object with attributes wave, flux, ivar, mask
@@ -43,10 +42,8 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
     log.info("starting")
 
     # Grab sky fibers on this frame
-    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
-    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
-        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
-    assert np.max(skyfibers) < 500
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
 
     nwave=frame.nwave
     nfibers=len(skyfibers)
@@ -219,7 +216,7 @@ def subtract_sky(frame, skymodel) :
     log.info("done")
 
 
-def qa_skysub(param, frame, fibermap, skymodel):
+def qa_skysub(param, frame, skymodel):
     """Calculate QA on SkySubtraction
     Note: Pixels rejected in generating the SkyModel (as above), are  
       not rejected in the stats calculated here.  Would need to carry
@@ -228,7 +225,6 @@ def qa_skysub(param, frame, fibermap, skymodel):
     Args:
         param : dict of QA parameters
         frame : desispec.Frame object
-        fibermap : numpy table including OBJTYPE to know which fibers are SKY
         skymodel : desispec.SkyModel object
     Returns:
         qadict: dict of QA outputs
@@ -241,10 +237,8 @@ def qa_skysub(param, frame, fibermap, skymodel):
     qadict['NREJ'] = int(skymodel.nrej)
 
     # Grab sky fibers on this frame
-    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
-    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
-        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
-    assert np.max(skyfibers) < 500 # only spectrograph 0??
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
     nfibers=len(skyfibers)
     qadict['NSKY_FIB'] = int(nfibers)
 

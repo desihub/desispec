@@ -18,7 +18,7 @@ import matplotlib.gridspec as gridspec
 from desispec import util
 
 
-def frame_skyres(outfil, frame, fibermap, skymodel, qaframe):
+def frame_skyres(outfil, frame, skymodel, qaframe):
     """
     Generate QA plots and files for sky residuals of a given frame
 
@@ -27,16 +27,13 @@ def frame_skyres(outfil, frame, fibermap, skymodel, qaframe):
     outfil: str
       Name of output file
     frame: Frame object 
-    fibermap: Fibermap object [needed for skyfibers]
     skymodel: SkyModel object
     qaframe: QAFrame object
     """
 
     # Sky fibers
-    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
-    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
-        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
-    assert np.max(skyfibers) < 500
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
 
     # Residuals
     res = frame.flux[skyfibers] - skymodel.flux[skyfibers] # Residuals

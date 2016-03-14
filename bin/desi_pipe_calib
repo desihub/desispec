@@ -1,0 +1,223 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Run calibration in parallel.
+"""
+
+from __future__ import absolute_import, division, print_function
+
+comm = None
+rank = 0
+nproc = 1
+
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.rank
+    nproc = comm.size
+except ImportError:
+    print("mpi4py not found, using only one process")
+
+import sys
+import os
+import numpy as np
+import argparse
+import re
+
+import desispec.io as io
+from desispec.log import get_logger
+import desispec.pipeline as pipe
+
+
+def main():
+    parser = argparse.ArgumentParser( description='Run calibration for a night of data using multiple processes.' )
+    parser.add_argument( '--raw', required=False, default=None, help='raw data directory (for fibermaps)' )
+    parser.add_argument( '--redux', required=False, default=None, help='output directory' )
+    parser.add_argument( '--night', required=True, default=None, help='night (YYYYMMDD)' )
+    parser.add_argument( '--expid', required=False, default=None, help='only process this exposure ID' )
+    parser.add_argument( '--dump', required=False, default=None, help='dump all commands to this file and exit.')
+    args = parser.parse_args()
+
+    log = get_logger()
+
+    # If data directories are not given, get them from environment
+    # variables.
+
+    date = io.validate_night(args.night)
+
+    rawdir = args.raw
+    if rawdir is None:
+        rawdir = io.rawdata_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_DATA'] = os.path.abspath(rawdir)
+    rawdir = os.path.abspath(rawdir)
+
+    specdir = args.redux
+    if specdir is None:
+        specdir = io.specprod_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_REDUX'] = os.path.abspath(specdir)
+    specdir = os.path.abspath(specdir)
+
+    cal2d = os.path.join(specdir, 'calib2d')
+    calnight = os.path.join(cal2d, args.night)
+
+    if rank == 0:
+        log.info("using night {}".format(args.night))
+        log.info("using spectro redux dir {}".format(specdir))
+
+    # get the list of exposures
+    expid = None
+    exptype = None
+    fullframes = None
+    if rank == 0:
+        log.info("finding exposures")
+        (expid, exptype, fullframes) = pipe.find_frames(specdir, args.night)
+    if comm is not None:
+        expid = comm.bcast(expid, root=0)
+        exptype = comm.bcast(exptype, root=0)
+        fullframes = comm.bcast(fullframes, root=0)
+
+    # if requested, restrict the exposure list to a single ID
+    if args.expid is not None:
+        if rank == 0:
+            log.info("processing ONLY exposure {}".format(args.expid))
+        frames = {}
+        frames[args.expid] = fullframes[args.expid]
+    else:
+        frames = fullframes
+
+    # fibermaps- this is a temporary solution until calibration
+    # codes can use the fibermap info in the frame files.
+
+    fibermap = {}
+    for ex in expid:
+        fibermap[ex] = os.path.join(rawdir, args.night, "fibermap-{:08d}.fits".format(ex))
+
+    # compute the tasks for all steps
+
+    if rank == 0:
+        log.info("computing fiberflat tasks")
+    flat_tasks = pipe.tasks_fiberflat(expid, exptype, frames, calnight)
+
+    if rank == 0:
+        log.info("computing sky tasks")
+    sky_tasks = pipe.tasks_sky(expid, exptype, frames, calnight, fibermap)
+
+    if rank == 0:
+        log.info("computing standard star tasks")
+    star_tasks = pipe.tasks_star(expid, exptype, frames, calnight, fibermap)
+
+    if rank == 0:
+        log.info("computing calibration calculation tasks")
+    calcalc_tasks = pipe.tasks_calcalc(expid, exptype, frames, calnight, fibermap)
+
+    if rank == 0:
+        log.info("computing calibration application tasks")
+    calapp_tasks = pipe.tasks_calapp(expid, exptype, frames, calnight)
+
+    # change to the redux directory
+
+    os.chdir(os.path.join(specdir, 'exposures', args.night))
+
+    # optionally dump the low-level commands that will be run
+    # and then exit.
+
+    if args.dump is not None:
+        if rank == 0:
+            with open(args.dump, 'w') as d:
+                for t in flat_tasks:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in sky_tasks:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in star_tasks:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in calcalc_tasks:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in calapp_tasks:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+        if comm is not None:
+            comm.barrier()
+        sys.exit(0)
+
+    # create any output directories
+
+    if rank == 0:
+        for tsk in flat_tasks:
+            for f in tsk['outputs']:
+                dr = os.path.dirname(f)
+                if not os.path.isdir(dr):
+                    print("makedirs {}".format(dr))
+                    os.makedirs(dr)
+    if comm is not None:
+        comm.barrier()
+
+    # do fiberflat tasks
+
+    if rank == 0:
+        log.info("executing fiberflat")
+    work = pipe.task_dist(flat_tasks, nproc)
+    pipe.subprocess_list(work[rank])
+
+    if comm is not None:
+        comm.barrier()
+
+    # do sky tasks
+
+    if rank == 0:
+        log.info("executing sky")
+    work = pipe.task_dist(sky_tasks, nproc)
+    pipe.subprocess_list(work[rank])
+
+    if comm is not None:
+        comm.barrier()
+
+    # do standard star tasks
+
+    if rank == 0:
+        log.info("executing standard stars")
+    work = pipe.task_dist(star_tasks, nproc)
+    pipe.subprocess_list(work[rank])
+
+    if comm is not None:
+        comm.barrier()
+
+    # do calibration calculation tasks
+
+    if rank == 0:
+        log.info("executing cal calculation")
+    work = pipe.task_dist(calcalc_tasks, nproc)
+    pipe.subprocess_list(work[rank])
+
+    if comm is not None:
+        comm.barrier()
+
+    # do calibration application tasks
+
+    if rank == 0:
+        log.info("executing cal application")
+    work = pipe.task_dist(calapp_tasks, nproc)
+    pipe.subprocess_list(work[rank])
+
+    if comm is not None:
+        comm.barrier()
+
+
+if __name__ == "__main__":
+    main()
+
