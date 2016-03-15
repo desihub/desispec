@@ -492,7 +492,6 @@ def tasks_zfind(bricks, objtype, zspec):
             com.extend(['--objtype', objtype])
         if zspec:
             com.extend(['--zspec'])
-        com.extend([brick_r, brick_b, brick_z])
 
         task = {}
         task['command'] = com
