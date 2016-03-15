@@ -18,7 +18,7 @@ import sys
 from desispec.log import get_logger
 import math
 
-def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4) :
+def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxval=10.) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelength grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
@@ -96,8 +96,6 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4) :
     # of previous iteration for all wavelength
     # we also have a max. number of iterations for this code
     max_iterations = 100
-    minval=0.1
-    maxval=10.
     
     nout_tot=0
     chi2pdf = 0.
@@ -173,7 +171,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4) :
             
             # not more than 5 pixels per fiber at a time
             for fiber in range(nfibers) :
-                for loop in range(100) :
+                for loop in range(max_iterations) :
                     bad=np.where(chi2[fiber]>nsig_clipping_for_this_pass**2)[0]
                     if bad.size>0 :                
                         if bad.size>5 : # not more than 5 pixels at a time
@@ -208,7 +206,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4) :
     log.info("after 1st pass : nout = %d/%d"%(np.sum(ivar==0),np.size(ivar.flatten())))
     
     # 2nd pass is full solution including deconvolved spectrum, no outlier rejection
-    for iteration in range(100) : 
+    for iteration in range(max_iterations) : 
         
         log.info("2nd pass, iter %d : mean deconvolved spectrum"%iteration)
         
@@ -326,8 +324,11 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4) :
                 break
             iteration += 1
         # replace bad by smooth fiber flat
-        bad=np.where((mask[fiber]>0)|(fiberflat_ivar[fiber]==0))[0]
+        bad=np.where((mask[fiber]>0)|(fiberflat_ivar[fiber]==0)|(fiberflat[fiber]<minval)|(fiberflat[fiber]>maxval))[0]
         if bad.size>0 :
+
+            fiberflat_ivar[fiber,bad] = 0
+
             # find max length of segment with bad pix
             length=0
             for i in range(bad.size) :
@@ -341,12 +342,15 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4) :
                     else :
                         break
                 length=max(length,ilength)
-            log.info("3rd pass : fiber #%d has a max length of bad pixels=%d"%(fiber,length))
+            if length>10 :
+                log.info("3rd pass : fiber #%d has a max length of bad pixels=%d"%(fiber,length))
             smoothing_res=float(max(100,2*length))
             x=np.arange(wave.size)
-            smooth_fiberflat=spline_fit(x,x,fiberflat[fiber],smoothing_res,fiberflat_ivar[fiber])
+            
+            ok=np.where(fiberflat_ivar[fiber]>0)[0]
+            smooth_fiberflat=spline_fit(x,x[ok],fiberflat[fiber,ok],smoothing_res,fiberflat_ivar[fiber,ok])
             fiberflat[fiber,bad] = smooth_fiberflat[bad]
-        
+                    
         if nbad_tot>0 :
             log.info("3rd pass : fiber #%d masked pixels = %d (%d iterations)"%(fiber,nbad_tot,iteration))
     
