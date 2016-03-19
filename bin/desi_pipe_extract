@@ -86,7 +86,9 @@ def main():
     if rank == 0:
         log.info("finding exposures")
         (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night)
+        log.info("found {} exposures".format(len(expid)))
         psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
+        log.info("Using {} for PSF".format(psf))
     if comm is not None:
         expid = comm.bcast(expid, root=0)
         exptype = comm.bcast(exptype, root=0)
@@ -113,8 +115,8 @@ def main():
         wrange['z{}'.format(c)] = (float(wrange_z[0]), float(wrange_z[1]), float(wrange_z[2]))
 
     if rank == 0:
-        log.info("using B range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
-        log.info("using R range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
+        log.info("using B range {},{},{}".format(wrange['b0'][0], wrange['b0'][1], wrange['b0'][2]))
+        log.info("using R range {},{},{}".format(wrange['r0'][0], wrange['r0'][1], wrange['r0'][2]))
         log.info("using Z range {},{},{}".format(wrange['z0'][0], wrange['z0'][1], wrange['z0'][2]))
 
     if rank == 0:
@@ -159,7 +161,7 @@ def main():
     # do all the per-bundle tasks now
 
     if rank == 0:
-        log.info("executing per-bundle extraction")
+        log.info("executing {} per-bundle extractions".format(len(tasks_bundle)))
     work = pipe.task_dist(tasks_bundle, nproc)
     pipe.subprocess_list(work[rank])
 
@@ -170,7 +172,8 @@ def main():
     # do all the merging tasks
 
     if rank == 0:
-        log.info("merging per-bundle extractions")
+        log.info("executing {} merges of per-bundle extractions".format(
+            len(tasks_merge)))
     work = pipe.task_dist(tasks_merge, nproc)
     pipe.subprocess_list(work[rank])
 
@@ -181,7 +184,7 @@ def main():
     # do all the cleaning tasks
 
     if rank == 0:
-        log.info("cleaning per-bundle files")
+        log.info("running {} per-bundle cleanup commands".format(len(tasks_clean)))
     work = pipe.task_dist(tasks_clean, nproc)
     pipe.subprocess_list(work[rank])
 
