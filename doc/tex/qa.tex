@@ -21,7 +21,7 @@
 \providecommand{\deltav}{\vecsymbol{\delta}}
 
 \title{Tech Note on Quality Assurance for DESI Spectroscopic Reduction \\
-\vspace{5mm}{\large\bf DESI-doc-XXX-v1}}
+\vspace{5mm}{\large\bf DESI-doc-XXX-v1.1}}
 \author{J. Xavier Prochaska, Govinda Dhungana}
 
 \begin{document}
@@ -29,12 +29,16 @@
 
 \section{Introduction}
 
-This technical note summarizes the Quality Assurance outputs for the
+This technical note is intended to summarize 
+the Quality Assurance (QA) outputs for the
 {\tt desispec} package, including both the full (offline)
 spectroscopic pipeline and the Quicklook pipeline 
-(run on mountain).
+(run on mountain).  It is a living document, to be
+updated as algorithms and outputs evolve.
 
-This document is maintained in the {\tt desispec} package\footnote{Maintained in the public github repository at \url{https://github.com/desihub/desispec}} under {\tt doc/tex/}
+This document is currently
+maintained in the {\tt desispec} 
+package\footnote{Maintained in the public github repository at \url{https://github.com/desihub/desispec}} under {\tt doc/tex/}
 and is also summarized on the DESI Wiki at 
 \url{https://desi.lbl.gov/trac/wiki/Pipeline/QualityAssurance}. 
 This document supersedes the Wiki.
@@ -42,12 +46,13 @@ This document supersedes the Wiki.
 \section{General Architecture}
 
 A basic framework for controlling and packaging
-QA analysis is provided in {\tt qa\_exposure.py}
-within the {\tt desispec/py/qa} folder.
+QA analysis is provided in the
+{\tt qa\_exposure.py} module
+within {\tt desispec/py/qa/}.
 This includes defining parameters that guide the QA
 algorithms, set thresholds for raising warnings, etc.
-All QA plotting codes will be kept within the module
-{\tt qa\_plots.py} in the same folder.
+All QA plotting codes will be kept within the separate
+module {\tt qa\_plots.py} in the same folder.
 
 The QA analysis is performed as part of the scripts for each
 of the primary spectroscopic pipeline steps (e.g.\ fiberflat,
@@ -57,37 +62,89 @@ These evaluate a set of QA metrics that are stored
 in a QA dict.
 
 To allow for multi-processing the QA metrics are stored
-on the hard-drive in a YAML file, one per science frame.
-QA figures are stored in a PDF file, 
-currently several per frame.
-
-The naming convention for the QA frame files is 
+on the hard-drive in a set of YAML files, one per frame.
+The naming convention for the QA frame files 
+will be
 {\tt qa}-{\tt spectrograph}-{\tt exposure}.yaml or
-{\tt qa}-{\tt sky}-{\tt spectrograph}-{\tt exposure}.pdf, 
 e.g. {\tt qa-b0-00000002.yaml}.
-
-It is likely that the QA files will be collated
+If multiple QA diagnostics are generated for a given
+frame (e.g. sky subtraction and flux calibration for
+a science frame), then the YAML file is updated 
+at each step.
+It is likely that these YAML files will be collated
 once the processing of all frames for 
-a given exposure is complete.
-[not yet implemented]
+a given exposure is complete
+[not yet implemented].
+
+
+There are a set of diagnostic plots that are optionally
+generated during the pipeline steps.  It is not likely that
+these will be created during routine operation of the
+pipeline.
+Currently most (but not all)
+of the plots can be generated
+from the standard files produced by the pipeline steps.  
+The team will likely write the additional data to 
+hard-drive so that all of the plots can be made without
+running the full pipeline. 
+The plots are currently written as PDF but an alternate
+framework can easily be implemented.
+The current naming convention includes the type
+of QA in the filename, e.g.
+{\tt qa}-{\tt sky}-{\tt spectrograph}-{\tt exposure}.pdf. 
+
+A primary role of the QA analysis is to identify
+data that is significantly inconsistent with 
+expectation, e.g.\ too high of a bias level in 
+a specific detector, insufficient flux in the
+flat field frames.  To enable these tests, 
+a set of reference data must be provided.
+We foresee these data being ingested from a set
+of YAML and FITS files distributed with the
+{\tt desispec} pipeline 
+[not yet implemented].
+These data will need, of course, to be updated
+as the instrument and/or software evolves.
+In addition, we may implement a warning system
+(beyond the standard logging) to notify personnel
+when specific QA metrics are far from nominal
+[not yet implemented].
+
+
 
 \section{Pre-Processing}
 
-This section will describe the QA related to
-pre-processing steps, e.g.\ identifying 
-calibration frames, checking meta data.
+[not yet implemented]
+
+QA will be generated to assess the meta data
+of the raw data files, the success/failure of 
+the pipeline to link science frames to calibration
+frames, and any other critical activities prior
+to image processing.
 
 \section{Image Processing}
 
-This section will describe the QA related to
-image processing, e.g.\ bias subtraction, 
-cosmic rays.
+[not yet implemented]
+
+QA will be generated to examine the basic
+image quality.  The image sizes, detector
+bias levels, incidence of cosmic rays will
+all be monitored and checked against reference
+values.
 
 \section{PSF}
 
-This section will describe the QA related to
-point spread function (PSF) evaluation, 
-wavelength calibration, and extraction.
+[not yet implemented]
+
+The fits to the point spread function (PSF)
+and wavelength calibration will be assessed
+and compared against reference values.
+Significant deviations between fibers will
+be assessed.     
+
+%This section will describe the QA related to
+%point spread function (PSF) evaluation, 
+%wavelength calibration, and extraction.
 
 \section{Flat Fielding}
 
@@ -106,12 +163,13 @@ The primary goals of QA related to flat fielding are:
 
 \subsection{Single Frame}
 
-The {\tt computer\_fiberflat} routine calculates a 
+The {\tt desi\_compute\_fiberflat} routine calculates a 
 deconvolved, mean fiber spectrum from all of the fibers in a given 
 flat field frame. 
 The routine then calculates (and saves) a fiberflat spectrum for each 
-fiber, which is that fiber's flux normalized by the mean spectrum 
-convolved with that fiber's resolution.  These fiberflat spectra
+fiber. This is the fiber's flux normalized by the mean spectrum 
+and convolved with the fiber's resolution.  
+These fiberflat spectra
 may then be used to correct for pixel-to-pixel variations 
 and a mean offset.
 
@@ -267,7 +325,8 @@ The primary goals of QA for sky subtraction are to:
 
 \subsection{Single Frame}
 
-The {\tt compute\_sky} method calculates a deconvolved sky model
+The {\tt desi\_compute\_sky} method calculates a 
+deconvolved sky model
 from the set of sky fibers in a given frame.
 A sky model for each fiber is then calculated from the 
 mean sky model by convolving it with the fiber resolution.
@@ -393,18 +452,18 @@ The primary goals of QA for flux calibration are to:
 
 \subsection{Single Frame}
 
-The {\tt compute\_flux\_calibration} method generates
+The {\tt desi\_compute\_flux\_calibration} method generates
 a calibration sensitivity function.  It is derived
 from the model and measured fluxes for
 a set of observed standard stars ($\sim 5$ per frame).
 The parameters guiding the QA analysis for flux
-calibration are given in Table~\ref{fig:flux_param}.
+calibration are given in Table~\ref{tab:flux_param}.
 
 \begin{table}[h]
 \begin{center}
 \caption{Flux Calibration QA Parameters}
 \label{tab:flux_param}
-\begin{tabular}{p{3.5cm}p{1.2cm}p{8.3cm}}
+\begin{tabular}{p{3.5cm}p{1.8cm}p{8.2cm}}
 \hline
 {\bf Name} & {\bf Value} & {\bf Brief Description}\\
 \hline
@@ -475,6 +534,21 @@ for a single frame.
 \label{fig:fluxcalib_frame}
 \end{center}
 \end{figure}
+
+%%%%%%%%%%%%%%%%
+\section{Redshift Assessment}
+
+QA code will be generated to assess the performance
+of the redshift fitter in yielding precisely measured
+redshifts for the targets.  
+[not yet implemented]
+
+
+Additional QA code exists to assess the performance
+of the full pipeline when run on simulated data
+(from {\tt desisim}).
+The results are compared against the high-level
+science requirements for the {\tt desispec} pipeline.
 
 
 %\begin{figure}[htb]
