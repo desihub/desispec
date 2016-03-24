@@ -91,6 +91,7 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     # Finish
     return xpk
 
+
 def load_gdarc_lines(camera):
     """Loads a select set of arc lines for initial calibrating
 
@@ -427,6 +428,51 @@ def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
     new_id['id_wave'] = id_wave
     new_id['id_pix'] = id_pix
 
+
+def fix_poor_solutions(all_wv_soln, all_dlamb, ny, ldegree):
+    """ Identify solutions with poor RMS and replace
+    Args:
+        all_wv_soln: list of solutions
+        all_dlamb: list of dispersion values
+
+    Returns:
+        Updated lists if there were poor RMS solutions
+
+    """
+    log=get_logger()
+    #
+    nfiber = len(all_dlamb)
+    med_dlamb = np.median(all_dlamb)
+    for ii,dlamb in enumerate(all_dlamb):
+        id_dict = all_wv_soln[ii]
+        if (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (id_dict['rms'] > 0.7):
+            log.warn('Bad wavelength solution.  Using closest good one to guide..')
+            if ii > nfiber/2:
+                off = -1
+            else:
+                off = +1
+            jj = ii + off
+            jdict = all_wv_soln[jj]
+            dlamb = all_dlamb[jj]
+            while (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (jdict['rms'] > 0.7):
+                jj = ii + off
+                jdict = all_wv_soln[jj]
+                dlamb = all_dlamb[jj]
+            # Bad solution; shifting to previous
+            use_previous_wave(id_dict, jdict, id_dict['pixpk'], jdict['pixpk'])
+            final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']),
+                                              np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
+            rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-
+                                   np.array(id_dict['id_pix'])[mask==0])**2))
+            final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']),
+                                                  np.array(id_dict['id_wave']),'legendre',ldegree , niter=5)
+            # Save
+            id_dict['final_fit'] = final_fit
+            id_dict['rms'] = rms
+            id_dict['final_fit_pix'] = final_fit_pix
+            id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
+            id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
+            id_dict['mask'] = mask
 
 ########################################################
 # Linelist routines
@@ -893,28 +939,30 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     # Return
     return xpk, ypos, cut
 
+
 def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
-    RMS_TOLER=0.02, verbose=False):
-    '''Fit the traces
+    RMS_TOLER=0.03, verbose=False):
+    """Fit the traces
     Default is 6th order Legendre polynomials
 
-    Parameters:
-    -----------
-    xset: ndarray
+    Parameter:
+    ----------
+    xset : ndarray
       traces
-    xerr: ndarray
+    xerr : ndarray
       Error in the trace values (999.=Bad)
-    RMS_TOLER: float, optional [0.02]
+    RMS_TOLER : float, optional [0.02]
       Tolerance on size of RMS in fit
 
-    Returns:
-    -----------
+    Returns
+    -------
     xnew, fits
-    xnew: ndarray
+    xnew : ndarray
       New fit values (without error)
-    fits: list
+    fits : list
       List of the fit dicts
-    '''
+    """
+    log=get_logger()
     ny = xset.shape[0]
     ntrace = xset.shape[1]
     xnew = np.zeros_like(xset)
@@ -940,8 +988,9 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
         if verbose:
             print('RMS of FIT= {:g}'.format(rms))
         if rms > RMS_TOLER:
-            #pdb.xplot(yval, xnew[:,ii], xtwo=yval[gdval],ytwo=xset[:,ii][gdval], mtwo='o')
-            pdb.set_trace()
+            #from xastropy.xutils import xdebug as xdb
+            #xdb.xplot(yval, xnew[:,ii], xtwo=yval[gdval],ytwo=xset[:,ii][gdval], mtwo='o')
+            log.error("RMS {:g} exceeded tolerance for fiber {:d}".format(rms, ii))
     # Return
     return xnew, fits
 
@@ -1011,8 +1060,8 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     return all_spec
 
 
-def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
-    maxshift0=0.5, maxshift=0.2, maxerr=0.2):
+def trace_crude_init(image, xinit0, ypass, invvar=None, radius=2.,
+    maxshift0=0.5, maxshift=0.15, maxerr=0.2):
 #                   xset, xerr, maxerr, maxshift, maxshift0
     """Python port of trace_crude_idl.pro from IDLUTILS
 
@@ -1070,11 +1119,14 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
         xshift = np.clip(xfit-xinit, -1*maxshift, maxshift) * (xfiterr < maxerr)
         # Save
         xset[iy,:] = xinit + xshift
-        xerr[iy,:] = xfiterr * (xfiterr < maxerr)  + 999.0 * (xfiterr >= maxerr)
+        xerr[iy,:] = xfiterr * (xfiterr < maxerr) + 999.0 * (xfiterr >= maxerr)
 
+    #from xastropy.xutils import xdebug as xdb
+    #xdb.set_trace()
     return xset, xerr
 
-def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
+
+def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=2., debug=False):
     '''Python port of trace_fweight.pro from IDLUTILS
 
     Parameters:
@@ -1138,6 +1190,9 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
         sumsx1 = sumsx1 + xdiff**2 * var_term
         #qbad = qbad or (invvar[ycen,ih] <= 0)
         qbad = np.any([qbad, invvar[ycen,ih] <= 0], axis=0)
+
+    if debug:
+        pdb.set_trace()
 
     # Fill up
     good = (sumw > 0) &  (~qbad)
