@@ -22,7 +22,7 @@ import desispec.io as io
 import desispec.log as log
 
 
-def find_raw(rawdir, rawnight):
+def find_raw(rawdir, rawnight, spectrographs=None):
     expid = io.get_exposures(rawnight, raw=True, rawdata_dir=rawdir)
     fibermap = {}
     raw = {}
@@ -35,7 +35,19 @@ def find_raw(rawdir, rawnight):
         hd = af.getheader(fibermap[ex], 1)
         exptype[ex] = hd['flavor']
         # get the raw exposures
-        raw[ex] = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
+        allraw = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
+        raw[ex] = {}
+        if spectrographs is not None:
+            # filter
+            specpat = re.compile(r'pix-[brz]([0-9])-[0-9]{8}\.fits')
+            for cam in sorted(allraw.keys()):
+                specmat = specpat.match(allraw[cam])
+                if specmat is not None:
+                    spc = int(specmat.group(1))
+                    if spc in spectrographs:
+                        raw[cam] = allraw[cam]
+        else:
+            raw[ex] = allraw
     return (sorted(expid), exptype, fibermap, raw)
 
 

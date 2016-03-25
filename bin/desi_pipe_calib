@@ -40,9 +40,19 @@ def main():
     parser.add_argument( '--night', required=True, default=None, help='night (YYYYMMDD)' )
     parser.add_argument( '--expid', required=False, default=None, help='only process this exposure ID' )
     parser.add_argument( '--dump', required=False, default=None, help='dump all commands to this file and exit.')
+    parser.add_argument( '--spectrographs', required=False, default=None, help='only process this comma-separated list of spectrographs' )
     args = parser.parse_args()
 
     log = get_logger()
+
+    spectrographs = []
+    if args.spectrographs is None:
+        for s in range(10):
+            spectrographs.append(s)
+    else:
+        spc = args.spectrographs.split(',')
+        for s in spc:
+            spectrographs.append(int(s))
 
     # If data directories are not given, get them from environment
     # variables.
@@ -82,7 +92,7 @@ def main():
     fullframes = None
     if rank == 0:
         log.info("finding exposures")
-        (expid, exptype, fullframes) = pipe.find_frames(specdir, args.night)
+        (expid, exptype, fullframes) = pipe.find_frames(specdir, args.night, spectrographs=spectrographs)
     if comm is not None:
         expid = comm.bcast(expid, root=0)
         exptype = comm.bcast(exptype, root=0)
