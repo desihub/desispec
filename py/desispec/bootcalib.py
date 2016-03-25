@@ -380,8 +380,16 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
             rms_dicts.append(all_guess_rms[imn])
     # Find the best one
     all_rms = np.array([idict['rms'] for idict in rms_dicts])
-    imin = np.argmin(all_rms)
-    id_dict = rms_dicts[imin]
+    # Allow for (very rare) failed solutions
+    try:
+        imin = np.argmin(all_rms)
+    except:
+        log.warn("No solution in id_arc_lines")
+        id_dict = dict(status='junk')
+        return id_dict
+    else:
+        id_dict = rms_dicts[imin]
+        id_dict['status'] = 'ok'
     # Finish
     id_dict['wmark'] = wmark
     id_dict['dlamb'] = dlamb
@@ -439,25 +447,36 @@ def fix_poor_solutions(all_wv_soln, all_dlamb, ny, ldegree):
         Updated lists if there were poor RMS solutions
 
     """
+    from scipy.signal import medfilt
+
     log=get_logger()
     #
     nfiber = len(all_dlamb)
-    med_dlamb = np.median(all_dlamb)
+    #med_dlamb = np.median(all_dlamb)
+    dlamb_fit, dlamb_mask = dufits.iter_fit(np.arange(nfiber), np.array(all_dlamb), 'legendre', 4, xmin=0., xmax=1., sig_reg=10., max_rej=20)
+    #med_res = np.median(np.abs(med_dlamb-np.array(all_dlamb)))
+    #xval = np.linspace(0,nfiber,num=1000)
+    #yval = dufits.func_val(xval, dlamb_fit)
+
     for ii,dlamb in enumerate(all_dlamb):
         id_dict = all_wv_soln[ii]
-        if (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (id_dict['rms'] > 0.7):
-            log.warn('Bad wavelength solution.  Using closest good one to guide..')
+        #if (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (id_dict['rms'] > 0.7):
+        #if (np.abs(dlamb - med_dlamb[ii]) > 10*med_res) or (id_dict['rms'] > 0.7):
+        if (dlamb_mask[ii] == 1) or (id_dict['rms'] > 0.7):
+            log.warn('Bad wavelength solution for fiber {:d}.  Using closest good one to guide..'.format(ii))
             if ii > nfiber/2:
                 off = -1
             else:
                 off = +1
             jj = ii + off
             jdict = all_wv_soln[jj]
-            dlamb = all_dlamb[jj]
-            while (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (jdict['rms'] > 0.7):
-                jj = ii + off
+            jdlamb = all_dlamb[jj]
+            #while (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (jdict['rms'] > 0.7):
+            #while (np.abs(jdlamb - med_dlamb[jj]) > 10*med_res) or (jdict['rms'] > 0.7):
+            while (dlamb_mask[jj] == 1) or (jdict['rms'] > 0.7):
+                jj += off
                 jdict = all_wv_soln[jj]
-                dlamb = all_dlamb[jj]
+                #jdlamb = all_dlamb[jj]
             # Bad solution; shifting to previous
             use_previous_wave(id_dict, jdict, id_dict['pixpk'], jdict['pixpk'])
             final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']),

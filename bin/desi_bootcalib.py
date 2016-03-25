@@ -72,7 +72,7 @@ def main() :
         # Test?
         if args.test:
             log.warning("cutting down fibers for testing..")
-            xpk = xpk[87:95]
+            xpk = xpk[288:301]
             #xpk = xpk[0:5]
 
         ###########
@@ -129,11 +129,9 @@ def main() :
             xfit = np.zeros((arc.shape[0], nfiber))
             # Generate a fit_dict
             fit_dict = dufits.mk_fit_dict(XCOEFF[:,0], ncoeff, 'legendre', WAVEMIN, WAVEMAX)
-            pdb.set_trace()
             for ii in range(nfiber):
                 fit_dict['coeff'] = XCOEFF[ii,:]
                 xfit[:,ii] = dufits.func_val(wv_array, fit_dict)
-
 
         all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, xfit, gauss)
 
@@ -156,10 +154,14 @@ def main() :
             # Find Lines
             pixpk = desiboot.find_arc_lines(spec)
             # Match a set of 5 gd_lines to detected lines
-            id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)
+            id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
             # Add to dict
             id_dict['fiber'] = ii
             id_dict['pixpk'] = pixpk
+            if id_dict['status'] == 'junk':
+                id_dict['rms'] = 999.
+                all_wv_soln.append(id_dict)
+                continue
             # Find the other good ones
             if camera == 'z':
                 inpoly = 3  # The solution in the z-camera has greater curvature
@@ -174,8 +176,8 @@ def main() :
             final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',args.legendre_degree , niter=5)
             # Append
             wave = dufits.func_val(np.arange(spec.size),final_fit_pix)
-            dlamb = np.median(np.abs(wave-np.roll(wave,1)))
-            all_dlamb.append(dlamb)
+            idlamb = np.median(np.abs(wave-np.roll(wave,1)))
+            all_dlamb.append(idlamb)
             # Save
             id_dict['final_fit'] = final_fit
             id_dict['rms'] = rms
