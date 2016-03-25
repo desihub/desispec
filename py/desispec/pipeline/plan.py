@@ -39,13 +39,13 @@ def find_raw(rawdir, rawnight, spectrographs=None):
         raw[ex] = {}
         if spectrographs is not None:
             # filter
-            specpat = re.compile(r'pix-[brz]([0-9])-[0-9]{8}\.fits')
+            specpat = re.compile(r'.*pix-[brz]([0-9])-[0-9]{8}\.fits')
             for cam in sorted(allraw.keys()):
                 specmat = specpat.match(allraw[cam])
                 if specmat is not None:
                     spc = int(specmat.group(1))
                     if spc in spectrographs:
-                        raw[cam] = allraw[cam]
+                        raw[ex][cam] = allraw[cam]
         else:
             raw[ex] = allraw
     return (sorted(expid), exptype, fibermap, raw)

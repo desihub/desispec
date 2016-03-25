@@ -177,7 +177,9 @@ def main():
 
     for nt in nights:
         # get the list of exposures and their types
-        (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, nt)
+        (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, nt, spectrographs=spectrographs)
+
+        print("Night {}:".format(nt))
 
         allarcs = []
         allflats = []
@@ -185,10 +187,13 @@ def main():
         for ex in expid:
             if exptype[ex] == "arc":
                 allarcs.append(ex)
+                print("  {:08d} : arc".format(ex))
             elif exptype[ex] == "flat":
                 allflats.append(ex)
+                print("  {:08d} : flat".format(ex))
             else:
                 allscience.append(ex)
+                print("  {:08d} : science".format(ex))
 
         if len(allarcs) == 0:
             raise RuntimeError("night {} has no calibration exposures".format(nt))

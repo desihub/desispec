@@ -100,10 +100,10 @@ def main():
         fullraw = comm.bcast(fullraw, root=0)
 
     # if requested, restrict the exposure list to a single ID
+    raw = {}
     if args.expid is not None:
         if rank == 0:
             log.info("processing ONLY exposure {}".format(args.expid))
-        raw = {}
         raw[args.expid] = fullraw[args.expid]
     else:
         raw = fullraw
