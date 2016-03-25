@@ -73,7 +73,17 @@ def main():
     # get the list of raw files
 
     (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, spectrographs=spectrographs)
-    psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
+    calpsf = os.path.join(specdir, 'calib2d', 'psf', args.night)
+    psf = {}
+    combine = True
+    for band in ['b', 'r', 'z']:
+        for spc in spectrographs:
+            cam = "{}{}".format(band, spc)
+            psf[cam] = os.path.join(calpsf, 'psf-{}.fits'.format(cam))
+            if not os.path.isfile(psf[cam]):
+                combine = False
+    if not combine:
+        psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
 
     # if requested, restrict the exposure list to a single ID
     raw = {}

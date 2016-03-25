@@ -216,7 +216,8 @@ def main():
                 truepsf = os.path.join(args.fakeboot, "psf-{}.fits".format(band))
                 for spec in spectrographs:
                     lnk = os.path.join(calpsf, nt, "psfboot-{}{}.fits".format(band, spec))
-                    os.symlink(truepsf, lnk)
+                    if not os.path.islink(lnk):
+                        os.symlink(truepsf, lnk)
         else:
             firstarc = allarcs[0]
             firstflat = allflats[0]
@@ -283,7 +284,7 @@ def main():
                 spc = int(cam[1])
                 if spc in spectrographs:
                     psfname = "psf-{}-{:08d}.fits".format(cam, arc)
-                    psffile = os.path.join(expdir, "{:08d}".format(arc), psfname)
+                    psffile = os.path.join(expdir, nt, "{:08d}".format(arc), psfname)
                     infiles.append(psffile)
             commands.append("specex_mean_psf.py --output {} --input {}".format(outfile, " ".join(infiles)))
         
