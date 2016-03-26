@@ -397,7 +397,7 @@ class TestIO(unittest.TestCase):
             
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
-    def _test_download(self):
+    def test_download(self):
         #
         # Test by downloading a single file.  This sidesteps any issues
         # with running multiprocessing within the unittest environment.
