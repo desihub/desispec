@@ -25,7 +25,7 @@ from .image import read_image, write_image
 from .util import (header2wave, fitsheader, native_endian, makepath,
     write_bintable, iterfiles)
 from .fluxcalibration import (
-    read_stdstar_templates, write_stdstar_model,
+    read_stdstar_templates, write_stdstar_models, read_stdstar_models,
     read_flux_calibration, write_flux_calibration)
 from .filters import load_filter
 from .download import download, filepath2url

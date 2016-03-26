@@ -11,6 +11,7 @@ from desispec.image import Image
 import desispec.io
 import desispec.io.qa as desio_qa
 from astropy.io import fits
+from astropy.table import Table
 from shutil import rmtree
 
 class TestIO(unittest.TestCase):
@@ -206,6 +207,72 @@ class TestIO(unittest.TestCase):
             self.assertEqual(c1.shape, c2.shape)
             self.assertTrue(np.all(c1 == c2))
 
+    def test_stdstar(self):
+        nstd = 5
+        nwave = 10
+        flux = np.random.uniform(size=(nstd, nwave))
+        wave = np.arange(nwave)
+        fibers = np.arange(nstd)*2
+        data = Table()
+        data['BESTMODEL'] = np.arange(nstd)
+        data['TEMPLATEID'] = np.arange(nstd)
+        data['CHI2DOF'] = np.ones(nstd)
+        desispec.io.write_stdstar_models(self.testfile, flux, wave, fibers, data)
+        
+        fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)
+        self.assertTrue(np.all(fx == flux))
+        self.assertTrue(np.all(wx == wave))
+        self.assertTrue(np.all(fibx == fibers))
+
+    def test_fluxcalib(self):
+        from desispec.fluxcalibration import FluxCalib
+        nspec = 5
+        nwave = 10
+        wave = np.arange(nwave)
+        calib = np.random.uniform(size=(nspec, nwave))
+        ivar = np.random.uniform(size=(nspec, nwave))
+        mask = np.random.uniform(0, 2, size=(nspec, nwave)).astype('i4')
+        
+        fc = FluxCalib(wave, calib, ivar, mask)
+        desispec.io.write_flux_calibration(self.testfile, fc)
+        fx = desispec.io.read_flux_calibration(self.testfile)
+        self.assertTrue(np.all(fx.wave == fc.wave))
+        self.assertTrue(np.all(fx.calib == fc.calib))
+        self.assertTrue(np.all(fx.ivar == fc.ivar))
+        self.assertTrue(np.all(fx.mask == fc.mask))
+
+    def test_brick(self):
+        from desispec.io.brick import Brick
+        nspec = 5
+        nwave = 10
+        wave = np.arange(nwave)
+        flux = np.random.uniform(size=(nspec, nwave))
+        ivar = np.random.uniform(size=(nspec, nwave))
+        resolution = np.random.uniform(size=(nspec, 5, nwave))
+        fibermap = desispec.io.fibermap.empty_fibermap(nspec)
+        fibermap['TARGETID'] = 3*np.arange(nspec)
+        night = '20101020'
+        expid = 2
+        header = dict(BRICKNAM = '0002p000', channel='b')
+        brick = Brick(self.testfile, mode='update', header=header)
+        brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid)
+        brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid+1)
+        brick.close()
+        
+        bx = Brick(self.testfile)
+        self.assertTrue(np.all(bx.get_wavelength_grid() == wave))
+        self.assertEqual(bx.get_num_targets(), nspec)
+        self.assertEqual(bx.get_num_spectra(), 2*nspec)
+        self.assertEqual(set(bx.get_target_ids()), set(fibermap['TARGETID']))
+        flux2, ivar2, resolution2, info2 = bx.get_target(0)
+        self.assertEqual(flux2.shape, (2,10))
+        self.assertEqual(ivar2.shape, (2,10))
+        self.assertEqual(resolution2.shape, (2,5,10))
+        self.assertEqual(len(info2), 2)
+        self.assertTrue( np.all(flux2[0] == flux[0]) )
+        self.assertTrue( np.all(ivar2[0] == ivar[0]) )
+        bx.close()
+
     def test_image_rw(self):
         shape = (5,5)
         pix = np.random.uniform(size=shape)
@@ -276,7 +343,7 @@ class TestIO(unittest.TestCase):
         kwargs = {
             'night':'20150510',
             'expid':2,
-            'spectrograph':0
+            'spectrograph':3
         }
         for i in ('sky', 'stdstars'):
             # kwargs['i'] = i
@@ -330,7 +397,7 @@ class TestIO(unittest.TestCase):
             
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
-    def test_download(self):
+    def _test_download(self):
         #
         # Test by downloading a single file.  This sidesteps any issues
         # with running multiprocessing within the unittest environment.

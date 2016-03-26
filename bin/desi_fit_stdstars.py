@@ -203,7 +203,7 @@ def main() :
     data['CHI2DOF']=chi2dof
     data['TEMPLATEID']=templateid[bestModelIndex]
     norm_model_file=args.outfile
-    io.write_stdstar_model(norm_model_file,normflux,stdwave,stdfibers,data)
+    io.write_stdstar_models(norm_model_file,normflux,stdwave,stdfibers,data)
 
 if "__main__" == __name__:
     main()
