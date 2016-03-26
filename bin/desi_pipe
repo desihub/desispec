@@ -315,7 +315,7 @@ def main():
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
         # we want to run all tasks at once.  we use one core per task.
         nbundle = (len(allscience) + len(allflats)) * frames_per_exp * 20
-        nodeproc = nodecores
+        nodeproc = 8
         runnodes = int(nbundle / nodeproc)
         if runnodes * nodeproc != nbundle:
             runnodes += 1
@@ -331,7 +331,7 @@ def main():
         shell_log = os.path.join(nldir, "calib_sh")
         nersc_log = os.path.join(nldir, "calib_nersc")
 
-        comopts = "--night {} --spectrographs {}".format(nt, spectrostr)
+        comopts = "--night {}".format(nt)
         
         complan = "desi_plan_calib {} --dump {}".format(comopts, dump_file)
         #spret = sp.call(complan, shell=True)
