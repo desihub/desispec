@@ -233,6 +233,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     # iterative fitting and clipping to get precise mean spectrum
     current_ivar=stdstars.ivar.copy()
 
+    #- DEBUG HACK
+    # ii = (current_ivar == 0)
+    # log.warning('{} ivar=0 values'.format(np.count_nonzero(ii)))
+    # current_ivar[ii] = np.median(current_ivar[~ii])
+    #- DEBUG HACK
 
     smooth_fiber_correction=np.ones((stdstars.flux.shape))
     chi2=np.zeros((stdstars.flux.shape))
@@ -270,10 +275,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
             B += sqrtwmodelR.T*sqrtwflux[fiber]
 
         log.info("iter %d solving"%iteration)
+
         calibration=cholesky_solve(A.todense(),B)
-        #pylab.plot(wave,calibration)
-        #pylab.show()
-        #sys.exit(12)
 
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2
@@ -359,8 +362,6 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     calibvar=np.diagonal(calibcovar)
     log.info("mean(var)={0:f}".format(np.mean(calibvar)))
 
-
-
     calibvar=np.array(np.diagonal(calibcovar))
     # apply the mean (as in the iterative loop)
     calibvar *= mean**2
@@ -388,7 +389,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
 
     # need to do better here
-    mask=(ccalibivar>0).astype(int)
+    mask=(ccalibivar==0).astype(int)
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
     return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration)), (

@@ -189,6 +189,20 @@ class TestFluxCalibration(unittest.TestCase):
         # assert the output
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)
+
+        #- nothing should be masked for this test case
+        self.assertFalse(np.any(fluxCalib.mask))
+
+    def test_masked_data(self):
+        """Test compute_fluxcalibration with some ivar=0 data
+        """
+        frame = get_frame_data()
+        modelwave, modelflux = get_models()
+        frame.fibermap['OBJTYPE'][0] = 'STD'
+        frame.ivar[0, 20:22] = 0
+        fluxCalib, _ = compute_flux_calibration(frame, modelwave, modelflux[0:3])        
+        self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
+        self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)
        
     #def test_find_appmag(self):
         
