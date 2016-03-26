@@ -129,7 +129,10 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
 
     with open(path, 'w') as f:
         f.write("#!/bin/bash -l\n\n")
-        f.write("#SBATCH --partition=debug\n")
+        if totalnodes > 512:
+            f.write("#SBATCH --partition=regular\n")
+        else:
+            f.write("#SBATCH --partition=debug\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
