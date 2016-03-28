@@ -18,6 +18,68 @@ import matplotlib.gridspec as gridspec
 from desispec import util
 
 
+def brick_zbest(outfil, zf, qabrick):
+    """ QA plots for Flux calibration in a Frame
+    Args:
+        outfil:
+        qabrick:
+        zf: ZfindBase object
+
+    Returns:
+
+    """
+    sty_otype = get_sty_otype()
+    # Convert types (this should become obsolete)
+    param = qabrick.data['ZBEST']['PARAM']
+    zftypes = []
+    for ztype in zf.type:
+        if ztype in param['ELG_TYPES']:
+            zftypes.append('ELG')
+        elif ztype in param['QSO_TYPES']:
+            zftypes.append('QSO')
+        elif ztype in param['STAR_TYPES']:
+            zftypes.append('STAR')
+        else:
+            zftypes.append('UNKNWN')
+    zftypes = np.array(zftypes)
+
+    # Plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2,2)
+
+    # Error vs. z
+    ax0 = plt.subplot(gs[0,0])
+
+    #
+    ax0.set_ylabel(r'$\delta z / (1+z)$')
+    ax0.set_ylim(0.0, 0.002)
+    ax0.set_xlabel('z')
+
+    for key in sty_otype.keys():
+        idx = np.where(zftypes == key)[0]
+        if len(idx) == 0:
+            continue
+        ax0.scatter(zf.z[idx], zf.zerr[idx]/(1+zf.z[idx]), marker='o',
+                    color=sty_otype[key]['color'], label=sty_otype[key]['lbl'])
+
+    # Legend
+    legend = ax0.legend(loc='upper left', borderpad=0.3,
+                       handletextpad=0.3, fontsize='small')
+
+    # Meta text
+    ax2 = plt.subplot(gs[1,1])
+    ax2.set_axis_off()
+    show_meta(ax2, qabrick, 'ZBEST', outfil)
+
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    plt.savefig(outfil)
+    plt.close()
+    print('Wrote QA ZBEST file: {:s}'.format(outfil))
+
+
+
 def frame_skyres(outfil, frame, skymodel, qaframe):
     """
     Generate QA plots and files for sky residuals of a given frame
@@ -396,3 +458,13 @@ def show_meta(ax, qaframe, qaflavor, outfil):
         ylbl -= yoff
         ax.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data[qaflavor]['QA'][key]),
             transform=ax.transAxes, ha='left', fontsize='x-small')
+
+def get_sty_otype():
+    """Styles for plots"""
+    sty_otype = dict(ELG={'color':'green', 'lbl':'ELG'},
+                     LRG={'color':'red', 'lbl':'LRG'},
+                     STAR={'color':'black', 'lbl':'STAR'},
+                     QSO={'color':'blue', 'lbl':'QSO'},
+                     QSO_L={'color':'blue', 'lbl':'QSO z>2.1'},
+                     QSO_T={'color':'cyan', 'lbl':'QSO z<2.1'})
+    return sty_otype
