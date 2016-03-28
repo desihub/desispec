@@ -7,8 +7,8 @@ import pdb
 
 import numpy as np
 import os
-from desispec.qa import QA_Frame, QA_Exposure
-from desispec.io import write_qa_frame
+from desispec.qa import QA_Frame, QA_Exposure, QA_Brick
+from desispec.io import write_qa_frame, write_qa_brick
 #from uuid import uuid4
 from shutil import rmtree
 
@@ -23,6 +23,7 @@ class TestQA(unittest.TestCase):
         cls.testDir = os.path.join(os.environ['HOME'],'desi_test_qa')
         cls.qafile_b0 = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-b0-{:08d}.yaml'.format(id,id)
         cls.qafile_b1 = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-b1-{:08d}.yaml'.format(id,id)
+        cls.qafile_brick = cls.testDir+'/brick/3582m005/qa-3582m005.yaml'
         cls.flux_pdf = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-flux-{:08d}.pdf'.format(id,id)
 
     @classmethod
@@ -60,6 +61,23 @@ class TestQA(unittest.TestCase):
         # WRITE
         write_qa_frame(self.qafile_b0, qafrm0)
         write_qa_frame(self.qafile_b1, qafrm1)
+
+    def _write_qabrick(self):
+        """Write a QA data brick file"""
+        qabrck = QA_Brick()
+        # ZBEST
+        qabrck.init_zbest()
+        qabrck.data['ZBEST']['QA'] = {}
+        qabrck.data['ZBEST']['QA']['NFAIL'] = 10
+        write_qa_brick(self.qafile_brick, qabrck)
+
+    def test_init_qa_brick(self):
+        #- Simple Init calls
+        qabrck = QA_Brick(name='tst_brick')
+        assert qabrck.brick_name == 'tst_brick'
+        #
+        qabrck.init_zbest()
+        assert qabrck.data['ZBEST']['PARAM']['MAX_NFAIL'] > 0
 
     def test_init_qa_frame(self):        
         #- Simple Init calls
