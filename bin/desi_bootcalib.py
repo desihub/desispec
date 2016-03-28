@@ -72,7 +72,8 @@ def main() :
         # Test?
         if args.test:
             log.warning("cutting down fibers for testing..")
-            xpk = xpk[288:301]
+            #xpk = xpk[0:100]
+            xpk = xpk[0:50]
             #xpk = xpk[0:5]
 
         ###########
@@ -154,13 +155,18 @@ def main() :
             # Find Lines
             pixpk = desiboot.find_arc_lines(spec)
             # Match a set of 5 gd_lines to detected lines
-            id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
+            try:
+                id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
+            except:
+                log.warn("ID_ARC failed on fiber {:d}".format(ii))
+                id_dict = dict(status='junk')
             # Add to dict
             id_dict['fiber'] = ii
             id_dict['pixpk'] = pixpk
             if id_dict['status'] == 'junk':
                 id_dict['rms'] = 999.
                 all_wv_soln.append(id_dict)
+                all_dlamb.append(0.)
                 continue
             # Find the other good ones
             if camera == 'z':

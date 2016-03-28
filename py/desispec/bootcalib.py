@@ -52,8 +52,8 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     ----------
     spec : ndarray
       Arc line spectrum
-    thresh : float
-      RMS threshold
+    rms_thresh : float
+      RMS threshold scale
     nwidth : int
       Line width to test over
     """
@@ -61,7 +61,7 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     npix = spec.size
     spec_mask = sigma_clip(spec, sigma=4., iters=5)
     rms = np.std(spec_mask)
-    thresh = 10*rms
+    thresh = rms*rms_thresh
     #print("thresh = {:g}".format(thresh))
     gdp = spec > thresh
 
@@ -381,15 +381,9 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
     # Find the best one
     all_rms = np.array([idict['rms'] for idict in rms_dicts])
     # Allow for (very rare) failed solutions
-    try:
-        imin = np.argmin(all_rms)
-    except:
-        log.warn("No solution in id_arc_lines")
-        id_dict = dict(status='junk')
-        return id_dict
-    else:
-        id_dict = rms_dicts[imin]
-        id_dict['status'] = 'ok'
+    imin = np.argmin(all_rms)
+    id_dict = rms_dicts[imin]
+    id_dict['status'] = 'ok'
     # Finish
     id_dict['wmark'] = wmark
     id_dict['dlamb'] = dlamb
@@ -417,6 +411,7 @@ def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
     Returns:
 
     """
+    log=get_logger()
     # Find offset in pixels
     min_off = []
     for pix in new_pix:
@@ -427,11 +422,17 @@ def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
     # Find closest with small tolerance
     id_pix = []
     id_wave = []
-    for kk,oldpix in enumerate(old_id['id_pix']):
-        mt = np.where(np.abs(new_pix-(oldpix-off)) < tol)[0]
-        if len(mt) == 1:
-            id_pix.append(new_pix[mt][0])
-            id_wave.append(old_id['id_wave'][kk])
+    # Insure enough pixels (some failures are bad extractions)
+    if len(new_pix) > len(old_pix)-5:
+        for kk,oldpix in enumerate(old_id['id_pix']):
+            mt = np.where(np.abs(new_pix-(oldpix-off)) < tol)[0]
+            if len(mt) == 1:
+                id_pix.append(new_pix[mt][0])
+                id_wave.append(old_id['id_wave'][kk])
+    else:  # Just apply offset
+        log.warn("Completely kludging this fiber wavelength")
+        id_wave = old_id['id_wave']
+        id_pix = old_id['id_pix']-off
     # Fit
     new_id['id_wave'] = id_wave
     new_id['id_pix'] = id_pix
@@ -1140,8 +1141,6 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=2.,
         xset[iy,:] = xinit + xshift
         xerr[iy,:] = xfiterr * (xfiterr < maxerr) + 999.0 * (xfiterr >= maxerr)
 
-    #from xastropy.xutils import xdebug as xdb
-    #xdb.set_trace()
     return xset, xerr
 
 
@@ -1308,6 +1307,67 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=Fals
 #####################################################################
 # Utilities
 #####################################################################
+
+def script_bootcalib(arc_idx, flat_idx, cameras=None, channels=None, nproc=10):
+    """ Runs desi_bootcalib on a series of pix files
+    Returns:
+
+    script_bootcalib([0,1,2,3,4,5,6,7,8,9], [10,11,12,13,14])
+
+    """
+    from subprocess import Popen
+    #
+    if cameras is None:
+        cameras = ['0','1','2','3','4','5','6','7','8','9']
+        #cameras = ['0']
+    if channels is None:
+        channels = ['b','r','z']
+        #channels = ['b']#,'r','z']
+    nchannels = len(channels)
+    ncameras = len(cameras)
+    #
+    narc = len(arc_idx)
+    nflat = len(flat_idx)
+    ntrial = narc*nflat*ncameras*nchannels
+
+    # Loop on the systems
+    nrun = -1
+    #nrun = 123
+    while(nrun < ntrial):
+
+        proc = []
+        ofiles = []
+        for ss in range(nproc):
+            nrun += 1
+            iarc = nrun % narc
+            jflat = (nrun//narc) % nflat
+            kcamera = (nrun//(narc*nflat)) % ncameras
+            lchannel = nrun // (narc*nflat*ncameras)
+            #pdb.set_trace()
+            if nrun == ntrial:
+                break
+            # Names
+            afile = str('pix-{:s}{:s}-{:08d}.fits'.format(channels[lchannel], cameras[kcamera], arc_idx[iarc]))
+            ffile = str('pix-{:s}{:s}-{:08d}.fits'.format(channels[lchannel], cameras[kcamera], flat_idx[jflat]))
+            ofile = str('boot_psf-{:s}{:s}-{:d}{:d}.fits'.format(channels[lchannel], cameras[kcamera],
+                                                                 arc_idx[iarc], flat_idx[jflat]))
+            qfile = str('qa_boot-{:s}{:s}-{:d}{:d}.pdf'.format(channels[lchannel], cameras[kcamera],
+                                                                 arc_idx[iarc], flat_idx[jflat]))
+            lfile = str('boot-{:s}{:s}-{:d}{:d}.log'.format(channels[lchannel], cameras[kcamera],
+                                                               arc_idx[iarc], flat_idx[jflat]))
+            ## Run
+            script = [str('desi_bootcalib.py'), str('--fiberflat={:s}'.format(ffile)),
+                      str('--arcfile={:s}'.format(afile)),
+                      str('--outfile={:s}'.format(ofile)),
+                      str('--qafile={:s}'.format(qfile))]#,
+                      #str('>'),
+                      #str('{:s}'.format(lfile))]
+            f = open(lfile, "w")
+            proc.append(Popen(script, stdout=f))
+            ofiles.append(f)
+        exit_codes = [p.wait() for p in proc]
+        for ofile in ofiles:
+            ofile.close()
 
 
 #####################################################################
