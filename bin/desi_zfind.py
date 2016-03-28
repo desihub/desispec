@@ -119,7 +119,7 @@ if (opts.qafile is not None) or (opts.qafig is not None):
     # Figure(s)
     if opts.qafig is not None:
         raise IOError("Not yet implemented")
-        qa_plots.zbest(opts.qafig, zf, qabrick)
+        qa_plots.brick_zbest(opts.qafig, zf, qabrick)
 
 
 #- Write some output

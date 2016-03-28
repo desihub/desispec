@@ -89,15 +89,15 @@ def qa_zbest(param, zf):
     if nfail > param['MAX_NFAIL']:
         log.warn("High number of failed redshifts")
 
-    # Types (ELG, QSO, LRG, Star, ??)
-    qadict['NTYPE'] = dict(ELG=0, QSO=0, LRG=0, Star=0, UNKWN=0)
+    # Types (ELG, QSO, LRG, STAR, ??)
+    qadict['NTYPE'] = dict(ELG=0, QSO=0, LRG=0, STAR=0, UNKWN=0)
     for ztype in zf.type:
-        if ztype in ['ssp_em_galaxy']:
+        if ztype in param['ELG_TYPES']:
             qadict['NTYPE']['ELG'] += 1
-        elif ztype in ['QSO']:
+        elif ztype in param['QSO_TYPES']:
             qadict['NTYPE']['QSO'] += 1
-        elif ztype in ['spEigenStar']:
-            qadict['NTYPE']['Star'] += 1
+        elif ztype in param['STAR_TYPES']:
+            qadict['NTYPE']['STAR'] += 1
         else:
             qadict['NTYPE']['UNKWN'] += 1
 

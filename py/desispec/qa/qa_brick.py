@@ -8,14 +8,14 @@ import numpy as np
 
 
 class QA_Brick(object):
-    def __init__(self, brick=None, in_data=None):
+    def __init__(self, name='None', in_data=None):
         """
         Class to organize and execute QA for a DESI brick
 
         x.flavor, x.data, x.camera
         
         Args:
-            brick: Brick object, optional
+            name: str, optional
             in_data: dict, optional
               Allows for previous data to be ingested
 
@@ -25,7 +25,7 @@ class QA_Brick(object):
             All input args become object attributes.
         """
         # Parse
-        self.brick_name = 'None'
+        self.brick_name = name
 
         # Initialize data
         if in_data is None:
@@ -68,6 +68,9 @@ class QA_Brick(object):
 
         # Standard FIBERFLAT input parameters
         zbest_dict = dict(MAX_NFAIL=10,  # Maximum number of failed redshifts
+                          ELG_TYPES=['ssp_em_galaxy'],
+                          QSO_TYPES=['QSO'],
+                          STAR_TYPES=['spEigenStar'],
                           )
         # Init
         self.init_qatype('ZBEST', zbest_dict, re_init=re_init)
