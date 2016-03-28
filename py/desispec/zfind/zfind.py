@@ -6,6 +6,7 @@ Classes for use by redshift finders.
 """
 
 import numpy as np
+from desispec.log import get_logger
 
 class ZfindBase(object):
     """Class documentation goes here.
@@ -65,3 +66,40 @@ class ZfindBase(object):
         else:
             for key in results.dtype.names:
                 self.__setattr__(key.lower(), results[key])
+
+
+def qa_zbest(param, zf):
+    """
+    Args:
+        param : dict of QA parameters
+        zf: ZfindBase object
+
+    Returns:
+        qa_zbest: dict
+
+    """
+    log = get_logger()
+
+    # Output dict
+    qadict = {}
+
+    # Failures
+    nfail = np.sum(zf.zwarn > 0)  # TBD
+    qadict['NFAIL'] = int(nfail)  # For yaml
+    if nfail > param['MAX_NFAIL']:
+        log.warn("High number of failed redshifts")
+
+    # Types (ELG, QSO, LRG, Star, ??)
+    qadict['NTYPE'] = dict(ELG=0, QSO=0, LRG=0, Star=0, UNKWN=0)
+    for ztype in zf.type:
+        if ztype in ['ssp_em_galaxy']:
+            qadict['NTYPE']['ELG'] += 1
+        elif ztype in ['QSO']:
+            qadict['NTYPE']['QSO'] += 1
+        elif ztype in ['spEigenStar']:
+            qadict['NTYPE']['Star'] += 1
+        else:
+            qadict['NTYPE']['UNKWN'] += 1
+
+    # Return
+    return qadict
