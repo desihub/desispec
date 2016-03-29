@@ -72,7 +72,8 @@ def main() :
         # Test?
         if args.test:
             log.warning("cutting down fibers for testing..")
-            xpk = xpk[87:95]
+            #xpk = xpk[0:100]
+            xpk = xpk[0:50]
             #xpk = xpk[0:5]
 
         ###########
@@ -133,7 +134,6 @@ def main() :
                 fit_dict['coeff'] = XCOEFF[ii,:]
                 xfit[:,ii] = dufits.func_val(wv_array, fit_dict)
 
-
         all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, xfit, gauss)
 
         ############################
@@ -155,8 +155,19 @@ def main() :
             # Find Lines
             pixpk = desiboot.find_arc_lines(spec)
             # Match a set of 5 gd_lines to detected lines
-            id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)
+            try:
+                id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
+            except:
+                log.warn("ID_ARC failed on fiber {:d}".format(ii))
+                id_dict = dict(status='junk')
+            # Add to dict
             id_dict['fiber'] = ii
+            id_dict['pixpk'] = pixpk
+            if id_dict['status'] == 'junk':
+                id_dict['rms'] = 999.
+                all_wv_soln.append(id_dict)
+                all_dlamb.append(0.)
+                continue
             # Find the other good ones
             if camera == 'z':
                 inpoly = 3  # The solution in the z-camera has greater curvature
@@ -169,23 +180,10 @@ def main() :
             final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
             rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
             final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',args.legendre_degree , niter=5)
-            # Check RMS and dispersion
+            # Append
             wave = dufits.func_val(np.arange(spec.size),final_fit_pix)
-            dlamb = np.median(np.abs(wave-np.roll(wave,1)))
-            if ii > 0:
-                med_dlamb = np.median(all_dlamb)
-                if (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (rms > 0.7):
-                    log.warn('Bad wavelength solution.  Using previous to guide..')
-                    # Bad solution; shifting to previous
-                    desiboot.use_previous_wave(id_dict, sv_iddict, pixpk, sv_pixpk)
-                    final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
-                    rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
-                    final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',args.legendre_degree , niter=5)
-                    wave = dufits.func_val(np.arange(spec.size),final_fit_pix)
-                    dlamb = np.median(np.abs(wave-np.roll(wave,1)))
-                    #from xastropy.xutils import xdebug as xdb
-                    #xdb.set_trace()
-            all_dlamb.append(dlamb)
+            idlamb = np.median(np.abs(wave-np.roll(wave,1)))
+            all_dlamb.append(idlamb)
             # Save
             id_dict['final_fit'] = final_fit
             id_dict['rms'] = rms
@@ -194,9 +192,9 @@ def main() :
             id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
             id_dict['mask'] = mask
             all_wv_soln.append(id_dict)
-            # Save for next fiber
-            sv_pixpk = pixpk
-            sv_iddict = id_dict
+
+        # Fix solutions with poor RMS (failures)
+        desiboot.fix_poor_solutions(all_wv_soln, all_dlamb, ny, args.legendre_degree)
 
         if QA:
             desiboot.qa_arc_spec(all_spec, all_wv_soln, pp)
