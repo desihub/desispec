@@ -275,7 +275,6 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
             B += sqrtwmodelR.T*sqrtwflux[fiber]
 
         log.info("iter %d solving"%iteration)
-
         calibration=cholesky_solve(A.todense(),B)
 
         log.info("iter %d fit smooth correction per fiber"%iteration)
