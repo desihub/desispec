@@ -179,7 +179,7 @@ def normalize_templates(stdwave, stdflux, mags, filters):
     return normflux
 
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipping=4.):
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipping=4.,debug=False):
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
@@ -233,19 +233,18 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     # iterative fitting and clipping to get precise mean spectrum
     current_ivar=stdstars.ivar.copy()
 
-    #- DEBUG HACK
-    # ii = (current_ivar == 0)
-    # log.warning('{} ivar=0 values'.format(np.count_nonzero(ii)))
-    # current_ivar[ii] = np.median(current_ivar[~ii])
-    #- DEBUG HACK
+    #- Start with a first pass median rejection
+    calib = np.median(stdstars.flux / model_flux, axis=0)
+    chi2 = stdstars.ivar * (stdstars.flux - model_flux*calib)**2
+    bad=(chi2>nsig_clipping**2)
+    current_ivar[bad] = 0
+
 
     smooth_fiber_correction=np.ones((stdstars.flux.shape))
     chi2=np.zeros((stdstars.flux.shape))
 
-
     sqrtwmodel=np.sqrt(current_ivar)*model_flux
     sqrtwflux=np.sqrt(current_ivar)*stdstars.flux
-
 
     # test
     # nstds=20
@@ -275,7 +274,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
             B += sqrtwmodelR.T*sqrtwflux[fiber]
 
         log.info("iter %d solving"%iteration)
-        calibration=cholesky_solve(A.todense(),B)
+        calibration=cholesky_solve(A.todense(),B)            
 
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2
@@ -348,7 +347,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
 
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d mean=%f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,np.mean(mean)))
 
-
+        if debug:
+            #--- DEBUG ---
+            import IPython
+            IPython.embed()
+            #--- DEBUG ---
 
         if nout_iter == 0 :
             break

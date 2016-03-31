@@ -48,9 +48,9 @@ def get_frame_data():
     nspec = 10
     nwave = 100
     wave = np.linspace(0, 10, nwave)
-    y = np.sin(wave)
+    y = np.sin(wave) + 1
     flux = np.tile(y, nspec).reshape(nspec, nwave)
-    ivar = np.ones(flux.shape)
+    ivar = 100*np.ones(flux.shape)
     mask = np.zeros(flux.shape, dtype=int)
     resol_data=set_resolmatrix(nspec,nwave)
     fibermap = desispec.io.empty_fibermap(nspec, 1500)
@@ -193,15 +193,26 @@ class TestFluxCalibration(unittest.TestCase):
         #- nothing should be masked for this test case
         self.assertFalse(np.any(fluxCalib.mask))
 
+    def test_outliers(self):
+        '''Test fluxcalib when input starts with large outliers'''
+        frame = get_frame_data()
+        modelwave, modelflux = get_models()
+        nstd = 5
+        frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
+        nstd = np.count_nonzero(frame.fibermap['OBJTYPE'] == 'STD')
+        frame.flux[0] = -frame.flux[1]
+        fluxCalib, _ = compute_flux_calibration(frame, modelwave, modelflux[0:nstd])
+
     @unittest.expectedFailure
     def test_masked_data(self):
         """Test compute_fluxcalibration with some ivar=0 data
         """
         frame = get_frame_data()
         modelwave, modelflux = get_models()
-        frame.fibermap['OBJTYPE'][0] = 'STD'
-        frame.ivar[0, 20:22] = 0
-        fluxCalib, _ = compute_flux_calibration(frame, modelwave, modelflux[0:3])        
+        nstd = 1
+        frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
+        frame.ivar[0:nstd, 20:22] = 0
+        fluxCalib, _ = compute_flux_calibration(frame, modelwave, modelflux[0:nstd])
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)
 
