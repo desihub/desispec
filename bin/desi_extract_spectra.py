@@ -7,6 +7,7 @@ Extract spectra from DESI pre-processed raw data
 import sys
 import os
 import os.path
+import time
 import numpy as np
 
 import specter
@@ -27,6 +28,7 @@ parser.add_option("-s", "--specmin", type=int,  help="first spectrum to extract"
 parser.add_option("-n", "--nspec", type=int,  help="number of spectra to extract")
 parser.add_option("-r", "--regularize", type="float",  help="regularization amount (%default)", default=0.0)
 parser.add_option("--nwavestep", type=int,  help="number of wavelength steps per divide-and-conquer extraction step", default=50)
+parser.add_option("-v", "--verbose", action="store_true", help="print more stuff")
 ### parser.add_option("-x", "--xxx",   help="some flag", action="store_true")
 
 opts, args = parser.parse_args()
@@ -38,6 +40,9 @@ img = io.read_image(opts.input)
 camera = img.meta['CAMERA']     #- b0, r1, .. z9
 spectrograph = int(camera[1])
 fibermin = spectrograph*500+opts.specmin
+
+print('Starting {} spectra {}:{} at {}'.format(os.path.basename(opts.input),
+    opts.specmin, opts.specmin+opts.nspec, time.asctime()))
 
 if opts.fibermap is not None:
     fibermap = io.read_fibermap(opts.fibermap)
@@ -89,7 +94,7 @@ regularize: {regularize}
 #- The actual extraction
 flux, ivar, Rdata = ex2d(img.pix, img.ivar, psf, opts.specmin, opts.nspec, wave,
              regularize=opts.regularize, ndecorr=True,
-             bundlesize=bundlesize, wavesize=opts.nwavestep, verbose=True)
+             bundlesize=bundlesize, wavesize=opts.nwavestep, verbose=opts.verbose)
 
 #- Util function to trim path to something that fits in a fits file (!)                            
 def _trim(filepath, maxchar=40):
@@ -111,6 +116,8 @@ frame = Frame(wave, flux, ivar, resolution_data=Rdata,
 #- Write output
 io.write_frame(opts.output, frame)
 
+print('Done {} spectra {}:{} at {}'.format(os.path.basename(opts.input),
+    opts.specmin, opts.specmin+opts.nspec, time.asctime()))
 
 
 

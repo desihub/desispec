@@ -24,6 +24,7 @@ except ImportError:
 
 import sys
 import os
+import time
 import numpy as np
 import argparse
 import re
@@ -47,6 +48,7 @@ def main():
     args = parser.parse_args()
 
     log = get_logger()
+    log.info('Rank {} starting at {}'.format(rank, time.asctime()))
 
     spectrographs = []
     if args.spectrographs is None:
