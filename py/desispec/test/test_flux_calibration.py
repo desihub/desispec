@@ -39,37 +39,44 @@ def set_resolmatrix(nspec,nwave):
 
 # make test data
 
-def get_frame_data():
+def get_frame_data(nspec=10):
 
     """
     Return basic test data for desispec.frame object:
 
     """
-    nspec = 10
     nwave = 100
-    wave = np.linspace(0, 10, nwave)
-    y = np.sin(wave) + 1
-    flux = np.tile(y, nspec).reshape(nspec, nwave)
-    ivar = 100*np.ones(flux.shape)
-    mask = np.zeros(flux.shape, dtype=int)
+
+    wave, model_flux = get_models(nspec, nwave, wavemin=0, wavemax=10)
     resol_data=set_resolmatrix(nspec,nwave)
+
+    calib = np.sin(wave * np.pi / np.max(wave))
+    flux = np.zeros((nspec, nwave))
+    for i in range(nspec):
+        flux[i] = Resolution(resol_data[i]).dot(model_flux[i] * calib)
+
+    sigma = 0.01
+    # flux += np.random.normal(scale=sigma, size=flux.shape)
+
+    ivar = np.ones(flux.shape) / sigma**2
+    mask = np.zeros(flux.shape, dtype=int)
     fibermap = desispec.io.empty_fibermap(nspec, 1500)
     fibermap['OBJTYPE'] = 'QSO'
-    
+
     frame=Frame(wave, flux, ivar,mask,resol_data,fibermap=fibermap)
     return frame
 
-def get_models():
+def get_models(nspec=10, nwave=1000, wavemin=0, wavemax=20):
     """ 
     Returns basic model data:
     - [1D] modelwave [nmodelwave]
     - [2D] modelflux [nmodel,nmodelwave]
     """
     #make 20 models
-    
-    model_wave=np.linspace(0,20,1000)
+
+    model_wave=np.linspace(wavemin, wavemax, nwave)
     y=np.sin(model_wave)+5.0
-    model_flux=np.tile(y,20).reshape(20,len(model_wave))
+    model_flux=np.tile(y,nspec).reshape(nspec,len(model_wave))
     return model_wave,model_flux
     
 
@@ -200,19 +207,18 @@ class TestFluxCalibration(unittest.TestCase):
         nstd = 5
         frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
         nstd = np.count_nonzero(frame.fibermap['OBJTYPE'] == 'STD')
-        frame.flux[0] = -frame.flux[1]
+        frame.flux[0] = np.mean(frame.flux[0])
         fluxCalib, _ = compute_flux_calibration(frame, modelwave, modelflux[0:nstd])
 
-    @unittest.expectedFailure
     def test_masked_data(self):
         """Test compute_fluxcalibration with some ivar=0 data
         """
         frame = get_frame_data()
         modelwave, modelflux = get_models()
         nstd = 1
-        frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
-        frame.ivar[0:nstd, 20:22] = 0
-        fluxCalib, _ = compute_flux_calibration(frame, modelwave, modelflux[0:nstd])
+        frame.fibermap['OBJTYPE'][2:2+nstd] = 'STD'
+        frame.ivar[2:2+nstd, 20:22] = 0
+        fluxCalib, _ = compute_flux_calibration(frame, modelwave, modelflux[2:2+nstd], debug=True)
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)
 
