@@ -130,7 +130,6 @@ def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
             outb = "{}-{:02d}.fits".format(outbase, b)
             mergeinputs.append(outb)
             com = ['desi_extract_spectra.py']
-            com.extend(['--quiet'])
             com.extend(['-i', raw[cam]])
             com.extend(['-p', psffile])
             com.extend(['-f', fibermap[id]])
