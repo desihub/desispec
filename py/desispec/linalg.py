@@ -87,7 +87,7 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
         if selection.size < 2 :
             log=get_logger()
             log.error("cannot do spline fit because only {0:d} values with ivar>0".format(selection.size))
-            raise Error
+            raise ValueError
         w1=input_wave[selection[0]]
         w2=input_wave[selection[-1]]
     else :
