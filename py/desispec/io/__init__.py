@@ -19,13 +19,13 @@ from .sky import read_sky, write_sky
 from .fiberflat import read_fiberflat, write_fiberflat
 from .fibermap import read_fibermap, write_fibermap, empty_fibermap
 from .brick import Brick
-from .qa import read_qa_frame, read_qa_data, write_qa_frame
+from .qa import read_qa_frame, read_qa_data, write_qa_frame, write_qa_brick
 from .zfind import read_zbest, write_zbest
 from .image import read_image, write_image
 from .util import (header2wave, fitsheader, native_endian, makepath,
     write_bintable, iterfiles)
 from .fluxcalibration import (
-    read_stdstar_templates, write_stdstar_model,
+    read_stdstar_templates, write_stdstar_models, read_stdstar_models,
     read_flux_calibration, write_flux_calibration)
 from .filters import load_filter
 from .download import download, filepath2url

@@ -181,7 +181,7 @@ def main():
     # do all the per-bundle tasks now
 
     if rank == 0:
-        log.info("executing per-bundle extraction")
+        log.info("executing {} per-bundle extractions".format(len(tasks_bundle)))
     work = pipe.task_dist(tasks_bundle, nproc)
     pipe.subprocess_list(work[rank])
 
@@ -192,7 +192,8 @@ def main():
     # do all the merging tasks
 
     if rank == 0:
-        log.info("merging per-bundle extractions")
+        log.info("executing {} merges of per-bundle extractions".format(
+            len(tasks_merge)))
     work = pipe.task_dist(tasks_merge, nproc)
     pipe.subprocess_list(work[rank])
 
@@ -203,7 +204,7 @@ def main():
     # do all the cleaning tasks
 
     if rank == 0:
-        log.info("cleaning per-bundle files")
+        log.info("running {} per-bundle cleanup commands".format(len(tasks_clean)))
     work = pipe.task_dist(tasks_clean, nproc)
     pipe.subprocess_list(work[rank])
 
