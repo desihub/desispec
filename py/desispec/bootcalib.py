@@ -956,7 +956,8 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     # Confirm correct number of fibers per bundle
     bad = ((bundle_ends+1) % Nfiber) != 0
     if np.sum(bad) > 0:
-        raise ValueError('Wrong number of fibers in a bundle')
+        log.warn('Wrong number of fibers in a bundle')
+        #raise ValueError('Wrong number of fibers in a bundle')
 
     # Return
     return xpk, ypos, cut
