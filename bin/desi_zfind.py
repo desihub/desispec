@@ -8,12 +8,13 @@ Fit redshifts and classifications on DESI bricks
 import sys
 import os
 import numpy as np
+import multiprocessing
 
 from desispec import io
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
 from desispec.zfind.redmonster import RedMonsterZfind
-from desispec.io.qa import load_qa_brick, write_qa_brick
+from desispec.zfind import ZfindBase
 
 import optparse
 
@@ -23,10 +24,13 @@ parser.add_option("-n", "--nspec", type=int,  help="number of spectra to fit [de
 parser.add_option("-o", "--outfile", type=str,  help="output file name")
 parser.add_option(      "--objtype", type=str,  help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
 parser.add_option("--zspec",   help="also include spectra in output file", action="store_true")
-parser.add_option('--qafile', type = str, help = 'path of QA file.')
-parser.add_option('--qafig', type = str, help = 'path of QA figure file')
+parser.add_option("--ncpu", type = int, default = 1, help = "number of cores for multiprocessing")
 
 opts, brickfiles = parser.parse_args()
+
+#- function for multiprocessing
+def _func(arg) :
+    return RedMonsterZfind(**arg)
 
 log = get_logger()
 
@@ -81,6 +85,8 @@ flux = np.zeros((nspec, nwave))
 ivar = np.zeros((nspec, nwave))
 targetids = brick['b'].get_target_ids()[0:nspec]
 
+func_args = []
+
 for i, targetid in enumerate(targetids):
     #- wave, flux, and ivar for this target; concatenate
     xwave = list()
@@ -102,30 +108,54 @@ for i, targetid in enumerate(targetids):
     ii = np.argsort(xwave)
     flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
 
+# sequence of args for multiprocessing
+for i in range(nspec):
+    arguments={"wave":wave, "flux":flux[i:i+1],"ivar":ivar[i:i+1],"objtype":opts.objtype}
+    func_args.append( arguments )
+
 #- Do the redshift fit
-zf = RedMonsterZfind(wave, flux, ivar, objtype=opts.objtype)
 
-# QA
-if (opts.qafile is not None) or (opts.qafig is not None):
-    log.info("performing skysub QA")
-    # Load
-    qabrick = load_qa_brick(opts.qafile)
-    # Run
-    qabrick.run_qa('ZBEST', (zf,))
-    # Write
-    if opts.qafile is not None:
-        write_qa_brick(opts.qafile, qabrick)
-        log.info("successfully wrote {:s}".format(opts.qafile))
-    # Figure(s)
-    if opts.qafig is not None:
-        raise IOError("Not yet implemented")
-        qa_plots.brick_zbest(opts.qafig, zf, qabrick)
+if opts.ncpu==1 : # No parallelization, simple loop over arguments
 
+    zf = list()
+    for arg in func_args:
+        zff = RedMonsterZfind(**arg)
+        zf.append(zff)
+
+else: # Multiprocessing
+    log.info("starting multiprocessing with %d cpus"%opts.ncpu)
+    
+    pool = multiprocessing.Pool(opts.ncpu)
+    zf =  pool.map(_func, func_args)
+
+# reformat results
+dtype = list()
+
+dtype = [
+    ('Z',         zf[0].z.dtype),
+    ('ZERR',      zf[0].zerr.dtype),
+    ('ZWARN',     zf[0].zwarn.dtype),
+    ('TYPE',      zf[0].type.dtype),
+    ('SUBTYPE',   zf[0].subtype.dtype),    
+]
+
+formatted_data = np.empty(len(zf), dtype=dtype)
+
+for i in range(nspec):
+    formatted_data['Z'][i]         = zf[i].z
+    formatted_data['ZERR'][i]      = zf[i].zerr
+    formatted_data['ZWARN'][i]     = zf[i].zwarn
+    formatted_data['TYPE'][i]      = zf[i].type[0]
+    formatted_data['SUBTYPE'][i]   = zf[i].subtype[0]
+
+
+# Create a ZfinBase object with formatted results
+zfi = ZfindBase(None, None, None, results=formatted_data)
+zfi.nspec = nspec
 
 #- Write some output
 if opts.outfile is None:
     opts.outfile = io.findfile('zbest', brickname=opts.brick)
 
 log.info("Writing "+opts.outfile)
-io.write_zbest(opts.outfile, opts.brick, targetids, zf, zspec=opts.zspec)
-
+io.write_zbest(opts.outfile, opts.brick, targetids, zfi, zspec=opts.zspec)
