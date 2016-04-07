@@ -111,9 +111,11 @@ def load_gdarc_lines(camera):
     line_guess : int or None
       Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
     """
+
+    # julien adds 5790.660 for Hg
     log=get_logger()
     if camera[0] == 'b':
-        HgI = [4046.57, 4077.84, 4358.34, 5460.75, 5769.598]
+        HgI = [4046.57, 4077.84, 4358.34, 5460.75, 5769.598, 5790.660]
         CdI = [3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
         NeI = [5881.895, 5944.834]
         dlamb = 0.589
@@ -221,6 +223,7 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=2, toler=10., verbose=False
             npoly = inpoly+1
         else:
             npoly = inpoly
+        npoly=min(len(xval)-1,npoly)
         new_fit = dufits.func_fit(np.array(wvval),np.array(xval),'polynomial',npoly,xmin=0.,xmax=1.)
         id_dict['fit'] = new_fit
     # RMS
@@ -234,6 +237,8 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=2, toler=10., verbose=False
     id_dict['id_idx'] = idx
     id_dict['id_pix'] = xval
     id_dict['id_wave'] = wvval
+    log.info("In fiber {:d}, number of matched lines = {:d}, rms = {:g}".format(id_dict['fiber'],len(xval),id_dict['rms']))
+
 
 def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
     """Attempt to identify the remainder of detected lines
@@ -251,7 +256,8 @@ def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
     """
     wv_toler = 3.*id_dict['dlamb'] # Ang
     # Generate a fit for pixel to wavelength
-    pixwv_fit = dufits.func_fit(np.array(id_dict['id_pix']),np.array(id_dict['id_wave']),'polynomial',3,xmin=0.,xmax=1.)
+    deg=max(1,min(len(id_dict['id_pix'])-2,3))
+    pixwv_fit = dufits.func_fit(np.array(id_dict['id_pix']),np.array(id_dict['id_wave']),'polynomial',deg,xmin=0.,xmax=1.)
     # Loop on detected lines, skipping those with an ID
     for ii,ixpk in enumerate(pixpk):
         # Already ID?
@@ -365,7 +371,8 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
                 # Time to fit
                 xval = np.array([tcm2,pixpk[itm1],tc,pixpk[itp1],tcp2])
                 wvval = gd_lines[icen-2:icen+3]
-                pfit = dufits.func_fit(wvval,xval,'polynomial',2,xmin=0.,xmax=1.)
+                deg=max(1,min(wvval.size-2,2))
+                pfit = dufits.func_fit(wvval,xval,'polynomial',deg,xmin=0.,xmax=1.)
                 # Clip one here and refit
                 #   NOT IMPLEMENTED YET
                 # RMS (in pixel space)
@@ -400,6 +407,124 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
     id_dict['first_id_pix'] = np.array(id_pix)
     # Return
     return id_dict
+
+def compute_triplets(wave) :
+    triplets=[]
+    wave=np.sort(wave)
+    for i1,wave1 in enumerate(wave[:-2]) :
+        for i2,wave2 in enumerate(wave[i1+1:-1]) :
+            for i3,wave3 in enumerate(wave[i1+i2+2:]) :
+                d21=wave2-wave1
+                d32=wave3-wave2
+                # require a minimal seperation (A or pix) to avoid meas. errors
+                mindist=50.
+                if d21<=mindist or d32<=mindist :
+                    continue
+                triplet=[wave1,wave2,wave3,math.log(d21/d32)]
+                triplets.append(triplet)
+    return np.array(triplets)
+    
+
+def id_arc_lines_alternative(pixpk, gd_lines, dlamb, wmark,
+                             toler=0.2):
+    """Match (as best possible), a set of the input list of expected arc lines to the detected list
+
+    Parameters
+    ----------
+    pixpk : ndarray
+      Pixel locations of detected arc lines
+    gd_lines : ndarray
+      array of expected arc lines to be detected and identified
+    dlamb : float
+      Average dispersion in the spectrum
+    wmark : float
+      Center of 5 gd_lines to key on (camera dependent)
+    toler : float, optional
+      Tolerance for matching (20%)
+    line_guess : int, optional
+      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
+
+    Returns
+    -------
+    id_dict : dict
+      dict of identified lines
+    """
+
+    log=get_logger()
+    
+    # test all possible lines matching wmark
+    # it fixes one parameter out of two (scale and offset)
+    wmark_index=-1
+    bestbestchi2=1e12
+    bestbestscale=1
+    
+    # loop on possible line corresponding to wmark
+    for i in xrange(pixpk.size) :
+        dp    = pixpk-pixpk[i]
+        dw = gd_lines-wmark
+        bestscale     = 1.
+        bestchi2      = 1e12
+        # loop in a range of possible scales
+        for s in np.linspace(dlamb*(1.-toler),dlamb*(1.+toler),20) :
+            sdp = s*dp # conversion of pixels to Angstrom
+            chi2=0.
+            for p in sdp :
+                chi2 += np.min((p-dw)**2) # chi2 is the sum of distance**2 to the closest known line
+            if chi2<bestchi2 :
+                bestscale=s
+                bestchi2=chi2
+        if bestchi2<bestbestchi2 :
+            bestbestchi2=bestchi2
+            bestbestscale=bestscale
+            wmark_index=i
+        #print(i,bestscale,bestchi2)
+    
+    # we have the matching line, and the best scale
+    # redo the finding of the closest matching line
+    pixpk_wave=wmark+bestbestscale*(pixpk-pixpk[wmark_index])
+    pixpk_line_index=np.zeros((pixpk_wave.size)).astype(int)
+    for i,w in enumerate(pixpk_wave) :
+        pixpk_line_index[i]=np.argmin(np.abs(gd_lines-w))
+    matched_lines=gd_lines[pixpk_line_index] 
+    
+    # now that we have a match, do a refined fit
+    # and possibly exclude outliers
+    x=matched_lines
+    y=pixpk
+    idx=np.arange(pixpk.size)
+    while True :
+        if idx.size<2 :
+            log.error("total failure")
+            raise(ValueError("total failure"))
+        deg=max(1,min(x.size-2,3))
+        transfo=np.poly1d(np.polyfit(x[idx],y[idx],deg=deg))
+        res=y[idx]-transfo(x[idx])
+        rms=np.std(res)
+        ibad=np.argmax(np.abs(res))            
+        if abs(res[ibad])>5. : # 
+            #log.warning("remove an outlier corresponding to a bad match")
+            idx = np.delete(idx,ibad)
+            had_outliers = True
+            continue
+        break
+    
+    id_dict={}
+    id_dict["status"]="ok"
+    id_dict["rms"]=rms
+    id_dict["wmark"]=wmark
+    id_dict["dlamb"]=dlamb    
+    id_dict["icen"]=np.where(np.abs(gd_lines-wmark)<1e-3)[0][0]    
+    id_dict["first_id_idx"]=idx
+    id_dict["first_id_pix"]=pixpk[idx]
+    id_dict["first_id_wave"]=matched_lines[idx]
+    
+    deg=max(1,min(3,idx.size-2))
+    id_dict["fit"]= dufits.func_fit(matched_lines[idx],pixpk[idx],'polynomial',deg,xmin=0.,xmax=1.)
+    
+    log.info("{:d} matched for {:d} detected and {:d} known as good, rms = {:g}".format(len(idx),len(pixpk),len(gd_lines),id_dict['rms']))
+    
+    return id_dict
+    
 
 
 def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
@@ -472,6 +597,7 @@ def fix_poor_solutions(all_wv_soln, all_dlamb, ny, ldegree):
             else:
                 off = +1
             jj = ii + off
+            
             jdict = all_wv_soln[jj]
             jdlamb = all_dlamb[jj]
             #while (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (jdict['rms'] > 0.7):
@@ -590,6 +716,8 @@ def load_arcline_list(camera):
         if iline in rej_dict.keys():
             log.info("Rejecting select {:s} lines".format(iline))
             tbl = reject_lines(tbl,rej_dict[iline])
+        #print("DEBUG",iline)
+        #print("DEBUG",tbl[['Ion','wave','RelInt']])
         tbls.append(tbl[['Ion','wave','RelInt']])
     # Stack
     alist = vstack(tbls)
@@ -1235,7 +1363,7 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=2., debug=False)
 # Output
 #####################################################################
 
-def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=False,
+def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_arc=False,
               XCOEFF=None):
     """ Write the output to a Base PSF format
 
@@ -1255,8 +1383,21 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=Fals
       Number of Legendre coefficients in fits
     """
     #
+
+    # check legendre degree makes sense based on number of lines
+    if not without_arc:
+        nlines=10000
+        for ii,id_dict in enumerate(wv_solns):
+            nlines_in_fiber=(np.array(id_dict['id_pix'])[id_dict['mask']==0]).size
+            #print("fiber #%d nlines=%d"%(ii,nlines_in_fiber))
+            nlines=min(nlines,nlines_in_fiber)
+        if nlines < legendre_deg+2 :
+            legendre_deg=nlines-2
+            print("reducing legendre degree to %d because the min. number of emission lines found is %d"%(legendre_deg,nlines))
+    
     ny = xfit.shape[0]
     nfiber = xfit.shape[1]
+    ncoeff=legendre_deg+1
     if XCOEFF is None:
         XCOEFF = np.zeros((nfiber, ncoeff))
     YCOEFF = np.zeros((nfiber, ncoeff))
@@ -1276,7 +1417,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=Fals
         if without_arc:
             yleg_fit, mask = dufits.iter_fit(wv_array, np.arange(ny), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=1)
         else:
-            yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+            yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave'])[id_dict['mask']==0], np.array(id_dict['id_pix'])[id_dict['mask']==0], 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, sig_rej=100000.)
         YCOEFF[ii, :] = yleg_fit['coeff']
         # Fit x vs. wave
         yval = dufits.func_val(wv_array, yleg_fit)
@@ -1285,7 +1426,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=Fals
                 raise IOError("Need to set either fdicts or XCOEFF!")
         else:
             xtrc = dufits.func_val(yval, fdicts[ii])
-            xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5)
+            xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5, sig_rej=100000.)
             XCOEFF[ii, :] = xleg_fit['coeff']
 
     # Write the FITS file

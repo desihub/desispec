@@ -14,6 +14,7 @@ from desispec.log import get_logger
 from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
 from matplotlib.backends.backend_pdf import PdfPages
+import sys
 
 import argparse
 
@@ -156,10 +157,12 @@ def main() :
             pixpk = desiboot.find_arc_lines(spec)
             # Match a set of 5 gd_lines to detected lines
             try:
-                id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
+                #id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
+                id_dict = desiboot.id_arc_lines_alternative(pixpk, gd_lines, dlamb, wmark)
             except:
                 log.warn("ID_ARC failed on fiber {:d}".format(ii))
                 id_dict = dict(status='junk')
+                
             # Add to dict
             id_dict['fiber'] = ii
             id_dict['pixpk'] = pixpk
@@ -177,9 +180,15 @@ def main() :
             # Now the rest
             desiboot.id_remainder(id_dict, pixpk, llist)
             # Final fit wave vs. pix too
-            final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
-            rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
-            final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',args.legendre_degree , niter=5)
+            id_wave=np.array(id_dict['id_wave'])
+            id_pix=np.array(id_dict['id_pix'])
+            deg=max(1,min(3,id_wave.size-2))
+            final_fit, mask = dufits.iter_fit(id_wave,id_pix, 'polynomial', deg, xmin=0., xmax=1.)
+            rms = np.sqrt(np.mean((dufits.func_val(id_wave[mask==0], final_fit)-id_pix[mask==0])**2))
+            deg=max(1,min(args.legendre_degree,(id_wave[mask==0]).size-2))
+            final_fit_pix,mask2 = dufits.iter_fit(id_pix[mask==0],id_wave[mask==0],'legendre',deg , sig_rej=100000.)
+            rms_pix = np.sqrt(np.mean((dufits.func_val(id_pix[mask==0], final_fit_pix)-id_wave[mask==0])**2))
+            
             # Append
             wave = dufits.func_val(np.arange(spec.size),final_fit_pix)
             idlamb = np.median(np.abs(wave-np.roll(wave,1)))
@@ -191,6 +200,8 @@ def main() :
             id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
             id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
             id_dict['mask'] = mask
+            log.info("Fiber #{:d} final fit rms(y->wave) = {:g} A ; rms(wave->y) = {:g} pix ; nlines = {:d}".format(ii,rms,rms_pix,id_pix[mask==0].size))
+    
             all_wv_soln.append(id_dict)
 
         # Fix solutions with poor RMS (failures)
@@ -206,7 +217,7 @@ def main() :
     ###########
     # Write PSF file
     log.info("writing PSF file")
-    desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, ncoeff=args.legendre_degree , without_arc=args.trace_only,
+    desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, legendre_deg=args.legendre_degree , without_arc=args.trace_only,
                        XCOEFF=XCOEFF)
     log.info("successfully wrote {:s}".format(args.outfile))
 
