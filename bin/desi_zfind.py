@@ -15,6 +15,7 @@ from desispec.interpolation import resample_flux
 from desispec.log import get_logger
 from desispec.zfind.redmonster import RedMonsterZfind
 from desispec.zfind import ZfindBase
+from desispec.io.qa import load_qa_brick, write_qa_brick
 
 import optparse
 
@@ -24,6 +25,8 @@ parser.add_option("-n", "--nspec", type=int,  help="number of spectra to fit [de
 parser.add_option("-o", "--outfile", type=str,  help="output file name")
 parser.add_option(      "--objtype", type=str,  help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
 parser.add_option("--zspec",   help="also include spectra in output file", action="store_true")
+parser.add_option('--qafile', type = str, help = 'path of QA file.')
+parser.add_option('--qafig', type = str, help = 'path of QA figure file')
 parser.add_option("--ncpu", type = int, default = 1, help = "number of cores for multiprocessing")
 
 opts, brickfiles = parser.parse_args()
@@ -152,6 +155,23 @@ for i in range(nspec):
 # Create a ZfinBase object with formatted results
 zfi = ZfindBase(None, None, None, results=formatted_data)
 zfi.nspec = nspec
+
+# QA
+if (opts.qafile is not None) or (opts.qafig is not None):
+    log.info("performing skysub QA")
+    # Load
+    qabrick = load_qa_brick(opts.qafile)
+    # Run
+    qabrick.run_qa('ZBEST', (zfi,))
+    # Write
+    if opts.qafile is not None:
+        write_qa_brick(opts.qafile, qabrick)
+        log.info("successfully wrote {:s}".format(opts.qafile))
+    # Figure(s)
+    if opts.qafig is not None:
+        raise IOError("Not yet implemented")
+        qa_plots.brick_zbest(opts.qafig, zfi, qabrick)
+
 
 #- Write some output
 if opts.outfile is None:
