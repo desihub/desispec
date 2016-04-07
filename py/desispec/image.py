@@ -65,6 +65,11 @@ class Image(object):
         ivar = self.ivar[xyslice]
         mask = self.mask[xyslice]        
         meta = copy.copy(self.meta)
+        
+        if np.isscalar(self.readnoise):
+            readnoise = self.readnoise
+        else:
+            readnoise = self.readnoise[xyslice]
     
         #- NAXIS1 = x, NAXIS2 = y; python slices[y,x] = [NAXIS2, NAXIS1]
         if meta is not None and (('NAXIS1' in meta) or ('NAXIS2' in meta)):
@@ -83,4 +88,4 @@ class Image(object):
                     meta['NAXIS2'] = ny
             
         return Image(pix, ivar, mask, \
-            readnoise=self.readnoise, camera=self.camera, meta=meta)
+            readnoise=readnoise, camera=self.camera, meta=meta)
