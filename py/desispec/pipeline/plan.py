@@ -22,7 +22,7 @@ import desispec.io as io
 import desispec.log as log
 
 
-def find_raw(rawdir, rawnight):
+def find_raw(rawdir, rawnight, spectrographs=None):
     expid = io.get_exposures(rawnight, raw=True, rawdata_dir=rawdir)
     fibermap = {}
     raw = {}
@@ -35,7 +35,19 @@ def find_raw(rawdir, rawnight):
         hd = af.getheader(fibermap[ex], 1)
         exptype[ex] = hd['flavor']
         # get the raw exposures
-        raw[ex] = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
+        allraw = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
+        raw[ex] = {}
+        if spectrographs is not None:
+            # filter
+            specpat = re.compile(r'.*pix-[brz]([0-9])-[0-9]{8}\.fits')
+            for cam in sorted(allraw.keys()):
+                specmat = specpat.match(allraw[cam])
+                if specmat is not None:
+                    spc = int(specmat.group(1))
+                    if spc in spectrographs:
+                        raw[ex][cam] = allraw[cam]
+        else:
+            raw[ex] = allraw
     return (sorted(expid), exptype, fibermap, raw)
 
 
@@ -60,6 +72,7 @@ def find_frames(specdir, night):
 
 def psf_newest(specdir):
     newest = {}
+    newest_id = {}
     psfpat = re.compile(r'psf-([brz][0-9])-([0-9]{8})\.fits')
     for root, dirs, files in os.walk(specdir, topdown=True):
         for f in files:
@@ -68,11 +81,13 @@ def psf_newest(specdir):
                 cam = psfmat.group(1)
                 expstr = psfmat.group(2)
                 expid = int(expstr)
-                if cam not in newest.keys():
-                    newest[cam] = expid
+                if cam not in newest_id.keys():
+                    newest_id[cam] = expid
+                    newest[cam] = os.path.join(root, f)
                 else:
-                    if expid > newest[cam]:
-                        newest[cam] = expid
+                    if expid > newest_id[cam]:
+                        newest_id[cam] = expid
+                        newest[cam] = os.path.join(root, f)
     return newest
 
 
@@ -103,7 +118,7 @@ def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
             continue
         outbase = os.path.join("{:08d}".format(id), "frame-{}-{:08d}".format(cam, id))
         outfile = "{}.fits".format(outbase)
-        psffile = os.path.join("{:08d}".format(psf_select[cam]), "psf-{}-{:08d}.fits".format(cam, psf_select[cam]))
+        psffile = psf_select[cam]
         mergeinputs = []
 
         # select wavelength range based on camera

@@ -114,15 +114,27 @@ def shell_job(path, logroot, envsetup, desisetup, commands):
     return
 
 
-def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1, minutes=10, openmp=False, multiproc=False):
+def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False):
     hours = int(minutes/60)
     fullmin = int(minutes - 60*hours)
     timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
+
+    totalnodes = nodes
+    if multisrun:
+        # we are running every command as a separate srun
+        # and backgrounding them.  In this case, the nodes
+        # given are per command, so we need to compute the
+        # total.
+        totalnodes = nodes * len(commands)
+
     with open(path, 'w') as f:
         f.write("#!/bin/bash -l\n\n")
-        f.write("#SBATCH --partition=debug\n")
+        if totalnodes > 512:
+            f.write("#SBATCH --partition=regular\n")
+        else:
+            f.write("#SBATCH --partition=debug\n")
         f.write("#SBATCH --account=desi\n")
-        f.write("#SBATCH --nodes={}\n".format(nodes))
+        f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name=desipipe\n")
         f.write("#SBATCH --output={}_slurm_%j.log\n".format(logroot))
@@ -155,7 +167,11 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         for com in commands:
             executable = com.split(' ')[0]
             f.write("which {}\n".format(executable))
-            f.write("time ${{run}} {} >>${{log}} 2>&1 &\n\n".format(com))
-        f.write("wait\n\n")
+            f.write("time ${{run}} {} >>${{log}} 2>&1".format(com))
+            if multisrun:
+                f.write(" &")
+            f.write("\n\n")
+        if multisrun:
+            f.write("wait\n\n")
     return
 
