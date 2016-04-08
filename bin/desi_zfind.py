@@ -111,9 +111,15 @@ for i, targetid in enumerate(targetids):
     ii = np.argsort(xwave)
     flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
 
-# sequence of args for multiprocessing
-for i in range(nspec):
-    arguments={"wave":wave, "flux":flux[i:i+1],"ivar":ivar[i:i+1],"objtype":opts.objtype}
+#- distribute the spectra in nspec groups
+if opts.ncpu > nspec:
+    opts.ncpu = nspec
+
+ii = np.linspace(0, nspec, opts.ncpu+1).astype(int)
+for i in range(opts.ncpu):
+    lo, hi = ii[i], ii[i+1]
+    log.debug('CPU {} spectra {}:{}'.format(i, lo, hi))
+    arguments={"wave":wave, "flux":flux[lo:hi],"ivar":ivar[lo:hi],"objtype":opts.objtype}
     func_args.append( arguments )
 
 #- Do the redshift fit
@@ -126,8 +132,7 @@ if opts.ncpu==1 : # No parallelization, simple loop over arguments
         zf.append(zff)
 
 else: # Multiprocessing
-    log.info("starting multiprocessing with %d cpus"%opts.ncpu)
-    
+    log.info("starting multiprocessing with {} cpus for {} spectra in {} groups".format(opts.ncpu, nspec, len(func_args)))
     pool = multiprocessing.Pool(opts.ncpu)
     zf =  pool.map(_func, func_args)
 
