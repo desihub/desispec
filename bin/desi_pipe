@@ -177,7 +177,7 @@ def main():
 
     for nt in nights:
         # get the list of exposures and their types
-        (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, nt, spectrographs=spectrographs)
+        (expid, exptype, fibermaps, fullraw) = pipe.find_raw(rawdir, nt, spectrographs=spectrographs)
 
         print("Night {}:".format(nt))
 
@@ -377,8 +377,10 @@ def main():
         com = "desi_pipe_zfind"
 
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
-        # use one process per core.
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=4, nodeproc=nodecores, minutes=30, openmp=False, multiproc=False)
+
+        # one process per node for each brick
+        nbricks = len(pipe.get_fibermap_bricknames(fibermaps.values()))
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=nbricks, nodeproc=1, minutes=30, openmp=False, multiproc=True)
 
         com_master_shell.append("bash {}".format(shell_file))
 
