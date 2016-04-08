@@ -378,8 +378,9 @@ def main():
 
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
 
-        # one process per node
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=10, nodeproc=1, minutes=30, openmp=False, multiproc=True)
+        # one process per node for each brick
+        nbricks = len(pipe.find_bricks(proddir))
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=nbricks, nodeproc=1, minutes=30, openmp=False, multiproc=True)
 
         com_master_shell.append("bash {}".format(shell_file))
 

@@ -51,6 +51,14 @@ def find_raw(rawdir, rawnight, spectrographs=None):
     return (sorted(expid), exptype, fibermap, raw)
 
 
+def get_fibermap_bricknames(fibermapfiles):
+    """Given a list of fibermap files, return list of unique bricknames"""
+    bricknames = set()
+    for filename in fibermapfiles:
+        fibermap = io.read_fibermap(filename)
+        bricknames.update(fibermap['BRICKNAME'])
+    return sorted(bricknames)
+
 def find_frames(specdir, night):
     fullexpid = io.get_exposures(night, raw=False, specprod_dir=specdir)
     expid = []
