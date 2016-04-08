@@ -510,7 +510,7 @@ def tasks_zfind(bricks, objtype, zspec):
 
         task = {}
         task['command'] = com
-        task['parallelism'] = 'core'
+        task['parallelism'] = 'node'
         task['inputs'] = [brick_r, brick_b, brick_z]
         task['outputs'] = [outfile]
         tasks.append(task)

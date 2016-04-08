@@ -377,8 +377,9 @@ def main():
         com = "desi_pipe_zfind"
 
         pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
-        # use one process per core.
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=4, nodeproc=nodecores, minutes=30, openmp=False, multiproc=False)
+
+        # one process per node
+        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=10, nodeproc=1, minutes=30, openmp=False, multiproc=True)
 
         com_master_shell.append("bash {}".format(shell_file))
 
