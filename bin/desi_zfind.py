@@ -19,6 +19,7 @@ from desispec.io.qa import load_qa_brick, write_qa_brick
 
 import optparse
 
+default_nproc = max(1, multiprocessing.cpu_count() // 2)
 parser = optparse.OptionParser(usage = "%prog [options] [brickfile-b brickfile-r brickfile-z]")
 parser.add_option("-b", "--brick", type=str,  help="input brickname")
 parser.add_option("-n", "--nspec", type=int,  help="number of spectra to fit [default: all]")
@@ -27,7 +28,7 @@ parser.add_option(      "--objtype", type=str,  help="only use templates for the
 parser.add_option("--zspec",   help="also include spectra in output file", action="store_true")
 parser.add_option('--qafile', type = str, help = 'path of QA file.')
 parser.add_option('--qafig', type = str, help = 'path of QA figure file')
-parser.add_option("--ncpu", type = int, default = 1, help = "number of cores for multiprocessing")
+parser.add_option("--nproc", type = int, default = default_nproc, help = "number of parallel processes for multiprocessing")
 
 opts, brickfiles = parser.parse_args()
 
@@ -112,11 +113,11 @@ for i, targetid in enumerate(targetids):
     flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
 
 #- distribute the spectra in nspec groups
-if opts.ncpu > nspec:
-    opts.ncpu = nspec
+if opts.nproc > nspec:
+    opts.nproc = nspec
 
-ii = np.linspace(0, nspec, opts.ncpu+1).astype(int)
-for i in range(opts.ncpu):
+ii = np.linspace(0, nspec, opts.nproc+1).astype(int)
+for i in range(opts.nproc):
     lo, hi = ii[i], ii[i+1]
     log.debug('CPU {} spectra {}:{}'.format(i, lo, hi))
     arguments={"wave":wave, "flux":flux[lo:hi],"ivar":ivar[lo:hi],"objtype":opts.objtype}
@@ -124,7 +125,7 @@ for i in range(opts.ncpu):
 
 #- Do the redshift fit
 
-if opts.ncpu==1 : # No parallelization, simple loop over arguments
+if opts.nproc==1 : # No parallelization, simple loop over arguments
 
     zf = list()
     for arg in func_args:
@@ -132,8 +133,8 @@ if opts.ncpu==1 : # No parallelization, simple loop over arguments
         zf.append(zff)
 
 else: # Multiprocessing
-    log.info("starting multiprocessing with {} cpus for {} spectra in {} groups".format(opts.ncpu, nspec, len(func_args)))
-    pool = multiprocessing.Pool(opts.ncpu)
+    log.info("starting multiprocessing with {} cpus for {} spectra in {} groups".format(opts.nproc, nspec, len(func_args)))
+    pool = multiprocessing.Pool(opts.nproc)
     zf =  pool.map(_func, func_args)
 
 # reformat results
@@ -147,17 +148,21 @@ dtype = [
     ('SUBTYPE',   zf[0].subtype.dtype),    
 ]
 
-formatted_data = np.empty(len(zf), dtype=dtype)
+formatted_data = np.empty(nspec, dtype=dtype)
 
-for i in range(nspec):
-    formatted_data['Z'][i]         = zf[i].z
-    formatted_data['ZERR'][i]      = zf[i].zerr
-    formatted_data['ZWARN'][i]     = zf[i].zwarn
-    formatted_data['TYPE'][i]      = zf[i].type[0]
-    formatted_data['SUBTYPE'][i]   = zf[i].subtype[0]
+i = 0
+for result in zf:
+    n = result.nspec
+    formatted_data['Z'][i:i+n]       = result.z
+    formatted_data['ZERR'][i:i+n]    = result.zerr
+    formatted_data['ZWARN'][i:i+n]   = result.zwarn
+    formatted_data['TYPE'][i:i+n]    = result.type
+    formatted_data['SUBTYPE'][i:i+n] = result.subtype
+    i += n
 
+assert i == nspec
 
-# Create a ZfinBase object with formatted results
+# Create a ZfindBase object with formatted results
 zfi = ZfindBase(None, None, None, results=formatted_data)
 zfi.nspec = nspec
 
