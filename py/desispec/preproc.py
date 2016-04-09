@@ -8,6 +8,7 @@ from desispec.image import Image
 
 from desispec import cosmics
 import desispec.io
+from desispec.maskbits import ccdmask
 from desispec.log import get_logger
 log = get_logger()
 
@@ -160,6 +161,18 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         data = rawimage[jj] - overscan
         image[kk] = data*gain
 
+    #- Load mask
+    if mask is not False and mask is not None:
+        if mask is True:
+            mask = desispec.io.preproc.read_mask(camera=camera, dateobs=dateobs)
+        elif isinstance(mask, (str, unicode)):
+            mask = desispec.io.preproc.read_mask(filename=mask)
+    else:
+        mask = np.zeros(image.shape, dtype=np.int32)
+
+    if mask.shape != image.shape:
+        raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
+
     #- Divide by pixflat image
     if pixflat is not False and pixflat is not None:
         if pixflat is True:
@@ -170,20 +183,18 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         if pixflat.shape != image.shape:
             raise ValueError('shape mismatch pixflat {} != image {}'.format(pixflat.shape, image.shape))
 
-        image /= pixflat
-        readnoise /= pixflat
-
-    #- Load mask
-    if mask is not False and mask is not None:
-        if mask is True:
-            mask = desispec.io.preproc.read_mask(camera=camera, dateobs=dateobs)
-        elif isinstance(mask, (str, unicode)):
-            mask = desispec.io.preproc.read_mask(filename=mask)
-    else:
-        mask = np.zeros(image.shape, dtype=np.int32)
-        
-    if mask.shape != image.shape:
-        raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
+        if np.all(pixflat != 0.0):
+            image /= pixflat
+            readnoise /= pixflat
+        else:
+            good = (pixflat != 0.0)
+            image[good] /= pixflat[good]
+            readnoise[good] /= pixflat[good]
+            mask[~good] |= ccdmask.PIXFLATZERO
+            
+        lowpixflat = (0 < pixflat) & (pixflat < 0.1)
+        if np.any(lowpixflat):
+            mask[lowpixflat] |= ccdmask.PIXFLATLOW
 
     #- Inverse variance, estimated directly from the data (BEWARE: biased!)
     var = image.clip(0) + readnoise**2

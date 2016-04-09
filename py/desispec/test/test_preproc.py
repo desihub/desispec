@@ -99,6 +99,34 @@ class TestPreProc(unittest.TestCase):
         with self.assertRaises(ValueError):
             image = preproc(self.rawimage, self.header, mask=mask[0:10, 0:10])
 
+    def test_pixflat_mask(self):
+        from desispec.maskbits import ccdmask
+        pixflat = np.ones((self.ny, self.nx))
+        pixflat[0:10, 0:10] = 0.0
+        pixflat[10:20, 10:20] = 0.05
+        image = preproc(self.rawimage, self.header, pixflat=pixflat)
+        self.assertTrue(np.all(image.mask[0:10,0:10] & ccdmask.PIXFLATZERO))
+        self.assertTrue(np.all(image.mask[10:20,10:20] & ccdmask.PIXFLATLOW))
+
+    #- striving for 100% coverage...
+    def test_pedantic(self):
+        with self.assertRaises(ValueError):
+            _parse_sec_keyword('blat')
+        #- should log a warning about large readnoise
+        rawimage = self.rawimage + np.random.normal(scale=2, size=self.rawimage.shape)
+        image = preproc(rawimage, self.header)
+        #- should log an error about huge readnoise
+        rawimage = self.rawimage + np.random.normal(scale=10, size=self.rawimage.shape)
+        image = preproc(rawimage, self.header)
+        #- should log a warning about small readnoise
+        rdnoise = 0.7 * np.mean(self.rdnoise.values())
+        rawimage = np.random.normal(scale=rdnoise, size=self.rawimage.shape)
+        image = preproc(rawimage, self.header)
+        #- should log a warning about tiny readnoise
+        rdnoise = 0.01 * np.mean(self.rdnoise.values())
+        rawimage = np.random.normal(scale=rdnoise, size=self.rawimage.shape)
+        image = preproc(rawimage, self.header)
+
     #- Not implemented yet, but flag these as expectedFailures instead of
     #- successful tests of raising NotImplementedError
     @unittest.expectedFailure
