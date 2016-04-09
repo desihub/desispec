@@ -126,6 +126,20 @@ class TestPreProc(unittest.TestCase):
         rdnoise = 0.01 * np.mean(self.rdnoise.values())
         rawimage = np.random.normal(scale=rdnoise, size=self.rawimage.shape)
         image = preproc(rawimage, self.header)
+        #- Missing expected RDNOISE keywords shouldn't be fatal
+        hdr = self.header.copy()
+        del hdr['RDNOISEA']
+        del hdr['RDNOISEB']
+        del hdr['RDNOISEC']
+        del hdr['RDNOISED']
+        image = preproc(self.rawimage, hdr)
+        #- Missing expected GAIN keywords should log error but not crash
+        hdr = self.header.copy()
+        del hdr['GAINA']
+        del hdr['GAINB']
+        del hdr['GAINC']
+        del hdr['GAIND']
+        image = preproc(self.rawimage, hdr)
 
     #- Not implemented yet, but flag these as expectedFailures instead of
     #- successful tests of raising NotImplementedError

@@ -128,7 +128,13 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     
     for amp in ['A', 'B', 'C', 'D']:
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
-        gain = header['GAIN'+amp]          #- gain = electrons / ADU
+        
+        #- Initial teststand data may be missing GAIN* keywords; don't crash
+        if 'GAIN'+amp in header:
+            gain = header['GAIN'+amp]          #- gain = electrons / ADU
+        else:
+            log.error('Missing keyword GAIN{}; using 1.0'.format(amp))
+            gain = 1.0
 
         overscan, rdnoise = _overscan(rawimage[ii])
         rdnoise *= gain
