@@ -6,14 +6,20 @@ import re
 import numpy as np
 from desispec.image import Image
 
-from desispec.log import get_logger()
+from desispec import cosmics
+from desispec.log import get_logger
 log = get_logger()
 
 def _parse_sec_keyword(value):
     '''
     parse keywords like BIASSECB='[7:56,51:4146]' into python slices
     
-    TODO: document FITS vs. python for 0 vs 1, x vs. y, inclusive vs. exclusive upper
+    python and FITS have almost opposite conventions,
+      * FITS 1-indexed vs. python 0-indexed
+      * FITS upperlimit-inclusive vs. python upperlimit-exclusive
+      * FITS[x,y] vs. python[y,x]
+    
+    i.e. BIASSECB='[7:56,51:4146]' -> (slice(50,4146), slice(6,56))
     '''
     m = re.search('\[(\d+):(\d+)\,(\d+):(\d+)\]', value)
     if m is None:
@@ -120,35 +126,38 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     
     for amp in ['A', 'B', 'C', 'D']:
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
+        gain = header['GAIN'+amp]          #- gain = electrons / ADU
+
         overscan, rdnoise = _overscan(rawimage[ii])
+        rdnoise *= gain
+        kk = _parse_sec_keyword(header['CCDSEC'+amp])
+        readnoise[kk] = rdnoise
+        
         header['OVERSCN'+amp] = overscan
         header['OBSRDN'+amp] = rdnoise
         
         #- Warn/error if measured readnoise is very different from expected
         if 'RDNOISE'+amp in header:
-            expected_rdnoise = header['RDNOISE'+amp]
+            expected_readnoise = header['RDNOISE'+amp]
             if rdnoise < 0.5*expected_readnoise:
-                log.error('Amp {} measured readnoise {.2f} < 0.5 * expected readnoise {.2f}'.format(
+                log.error('Amp {} measured readnoise {:.2f} < 0.5 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise < 0.9*expected_readnoise:
-                log.warn('Amp {} measured readnoise {.2f} < 0.9 * expected readnoise {.2f}'.format(
+                log.warn('Amp {} measured readnoise {:.2f} < 0.9 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise > 2.0*expected_readnoise:
-                log.error('Amp {} measured readnoise {.2f} > 2 * expected readnoise {.2f}'.format(
+                log.error('Amp {} measured readnoise {:.2f} > 2 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise > 1.2*expected_readnoise:
-                log.warn('Amp {} measured readnoise {.2f} > 1.2 * expected readnoise {.2f}'.format(
+                log.warn('Amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
         else:
             log.warn('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
         
+        #- subtract overscan from data region and apply gain
         jj = _parse_sec_keyword(header['DATASEC'+amp])
         data = rawimage[jj] - overscan
-
-        gain = header['GAIN'+amp]        
-        kk = _parse_sec_keyword(header['CCDSEC'+amp])
-        image[kk] = data*gain   #- gain = electrons / ADU
-        readnoise[kk] = rdnoise*gain
+        image[kk] = data*gain
 
     #- Divide by pixflat image
     if pixflat:
