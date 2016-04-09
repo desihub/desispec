@@ -32,3 +32,5 @@ from .download import download, filepath2url
 from .crc import memcrc, cksum
 from .database import (load_brick, is_night, load_night, is_flavor, load_flavor,
     get_bricks_by_name, get_brickid_by_name, load_data)
+
+import desispec.io.preproc

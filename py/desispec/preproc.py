@@ -7,6 +7,7 @@ import numpy as np
 from desispec.image import Image
 
 from desispec import cosmics
+import desispec.io
 from desispec.log import get_logger
 log = get_logger()
 
@@ -106,11 +107,11 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     camera = header['CAMERA']
     dateobs = header['DATE-OBS']
     
-    if bias:
+    if bias is not False and bias is not None:
         if bias is True:
             #- use default bias file for this camera/night
             bias = desispec.io.preproc.read_bias(camera=camera, dateobs=dateobs)
-        elif isinstance(biasfile, (str, unicode)):
+        elif isinstance(bias, (str, unicode)):
             #- treat as filename
             bias = desispec.io.preproc.read_bias(filename=bias)
             
@@ -160,20 +161,20 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         image[kk] = data*gain
 
     #- Divide by pixflat image
-    if pixflat:
+    if pixflat is not False and pixflat is not None:
         if pixflat is True:
             pixflat = desispec.io.preproc.read_pixflat(camera=camera, dateobs=dateobs)
         elif isinstance(pixflat, (str, unicode)):
             pixflat = desispec.io.preproc.read_pixflat(filename=pixflat)
 
-        if pixflat and pixflat.shape != image.shape:
+        if pixflat.shape != image.shape:
             raise ValueError('shape mismatch pixflat {} != image {}'.format(pixflat.shape, image.shape))
 
         image /= pixflat
         readnoise /= pixflat
 
     #- Load mask
-    if mask:
+    if mask is not False and mask is not None:
         if mask is True:
             mask = desispec.io.preproc.read_mask(camera=camera, dateobs=dateobs)
         elif isinstance(mask, (str, unicode)):

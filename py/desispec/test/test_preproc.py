@@ -1,11 +1,18 @@
 import unittest
+import os.path
+from astropy.io import fits
 import numpy as np
 
 from desispec.preproc import preproc, _parse_sec_keyword
 
 class TestPreProc(unittest.TestCase):
     
+    def tearDown(self):
+        if os.path.exists(self.calibfile):
+            os.remove(self.calibfile)
+    
     def setUp(self):
+        self.calibfile = 'test-calib-askjapqwhezcpasehadfaqp.fits'
         hdr = dict()
         hdr['CAMERA'] = 'b0'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
@@ -62,6 +69,49 @@ class TestPreProc(unittest.TestCase):
             self.assertAlmostEqual(np.median(pix), 0.0, delta=0.2)
             self.assertAlmostEqual(np.std(pix), self.rdnoise[amp], delta=0.2)
             self.assertAlmostEqual(rdnoise, self.rdnoise[amp], delta=0.2)
+
+    def test_bias(self):
+        image = preproc(self.rawimage, self.header, bias=False)
+        bias = np.zeros(self.rawimage.shape)
+        image = preproc(self.rawimage, self.header, bias=bias)
+        fits.writeto(self.calibfile, bias)
+        image = preproc(self.rawimage, self.header, bias=self.calibfile)
+        with self.assertRaises(ValueError):
+            image = preproc(self.rawimage, self.header, bias=bias[0:10, 0:10])
+
+    def test_pixflat(self):
+        image = preproc(self.rawimage, self.header, pixflat=False)
+        pixflat = np.ones((self.ny, self.nx))
+        image = preproc(self.rawimage, self.header, pixflat=pixflat)
+        fits.writeto(self.calibfile, pixflat)
+        image = preproc(self.rawimage, self.header, pixflat=self.calibfile)
+        with self.assertRaises(ValueError):
+            image = preproc(self.rawimage, self.header, pixflat=pixflat[0:10, 0:10])
+
+    def test_mask(self):
+        image = preproc(self.rawimage, self.header, mask=False)
+        mask = np.random.randint(0, 2, size=(self.ny, self.nx))
+        image = preproc(self.rawimage, self.header, mask=mask)
+        self.assertTrue(np.all(image.mask == mask))
+        fits.writeto(self.calibfile, mask)
+        image = preproc(self.rawimage, self.header, mask=self.calibfile)
+        self.assertTrue(np.all(image.mask == mask))
+        with self.assertRaises(ValueError):
+            image = preproc(self.rawimage, self.header, mask=mask[0:10, 0:10])
+
+    #- Not implemented yet, but flag these as expectedFailures instead of
+    #- successful tests of raising NotImplementedError
+    @unittest.expectedFailure
+    def test_default_bias(self):
+        image = preproc(self.rawimage, self.header, bias=True)
+
+    @unittest.expectedFailure
+    def test_default_pixflat(self):
+        image = preproc(self.rawimage, self.header, pixflat=True)
+
+    @unittest.expectedFailure
+    def test_default_mask(self):
+        image = preproc(self.rawimage, self.header, mask=True)
         
                 
 if __name__ == '__main__':
