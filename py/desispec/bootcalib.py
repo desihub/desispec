@@ -112,7 +112,9 @@ def load_gdarc_lines(camera,lamps=None):
       Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
     """
     log=get_logger()
-    known_elements=np.array(["HgI","CdI","ArI","NeI","KrI"])
+    
+    if lamps is None :
+        lamps=np.array(["HgI","CdI","ArI","NeI"])
     
     
 
@@ -272,7 +274,7 @@ def add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=2, toler=10., verbose=False
     id_dict['id_idx'] = idx
     id_dict['id_pix'] = xval
     id_dict['id_wave'] = wvval
-    log.info("In fiber {:d}, number of matched lines = {:d}, rms = {:g}".format(id_dict['fiber'],len(xval),id_dict['rms']))
+    
 
 
 def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
