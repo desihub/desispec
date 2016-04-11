@@ -92,7 +92,7 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     return xpk
 
 
-def load_gdarc_lines(camera):
+def load_gdarc_lines(camera,lamps=None):
     """Loads a select set of arc lines for initial calibrating
 
     Parameters
@@ -111,38 +111,73 @@ def load_gdarc_lines(camera):
     line_guess : int or None
       Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
     """
+    log=get_logger()
+    known_elements=np.array(["HgI","CdI","ArI","NeI","KrI"])
+    
+    
 
     # julien adds 5790.660 for Hg
-    log=get_logger()
+    
     if camera[0] == 'b':
-        HgI = [4046.57, 4077.84, 4358.34, 5460.75, 5769.598, 5790.660]
-        CdI = [3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
-        NeI = [5881.895, 5944.834]
+                
+        lines={}
+        lines["HgI"]=[4046.57, 4077.84, 4358.34, 5460.75, 5769.598, 5790.660]
+        lines["CdI"]=[3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
+        lines["NeI"]=[5881.895, 5944.834]
+        lines["ArI"]=[]
+        lines["KrI"]=[]
+        
+        gd_lines=np.array([])
+        for lamp in lamps :
+            gd_lines=np.append(gd_lines,lines[lamp])
+            
         dlamb = 0.589
         wmark = 4358.34  # Hg
-        gd_lines = np.array(HgI + CdI + NeI)
         line_guess = None
+        
     elif camera[0] == 'r':
-        HgI = [5769.598]
-        NeI = [5852.4878, 5944.834, 6143.062, 6402.246, 6506.528,
+        
+        lines={}
+        lines["HgI"] = [5769.598]
+        lines["NeI"] = [5852.4878, 5944.834, 6143.062, 6402.246, 6506.528,
                #6532.8824, #6598.9528,
                6678.2766, 6717.043, 6929.4672, 7032.4128,
                7173.9380, 7245.1665, 7438.898]
-        ArI = [6965.431]#, 7635.106, 7723.761]
+        lines["ArI"] = [6965.431]#, 7635.106, 7723.761]
+        lines["KrI"] = [7601.55,7694.54]
+        lines["CdI"] = []
+        
+        gd_lines=np.array([])
+        for lamp in lamps :
+            gd_lines=np.append(gd_lines,lines[lamp])
+        
         dlamb = 0.527
         #wmark = 6598.9528 # 6678.2766  # 6717.043  # 6402.246  # Ne
         wmark = 6717.043  # 6402.246  # Ne
-        line_guess = 24
-        gd_lines = np.array(HgI + NeI)# + ArI)
+        line_guess = None
+        
+    
     elif camera[0] == 'z':
-        NeI = [7438.898, 7488.8712, 7535.7739,
+        
+        lines={}
+        lines["NeI"] = [7438.898, 7488.8712, 7535.7739,
                7943.1805, 8136.4061, 8300.3248,
                8377.6070, 8495.3591, 8591.2583, 8634.6472, 8654.3828,
                8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
+        lines["KrI"] = [7601.55,7694.54,7854.82,8059.50,8104.36,8190.06,8298.11,8776.75,8928.69]
+        lines["ArI"] = [9122.97,9784.50]
+        lines["HgI"] = []
+        lines["CdI"] = []
+        
+        gd_lines=np.array([])
+        for lamp in lamps :
+            gd_lines=np.append(gd_lines,lines[lamp])
+        
         dlamb = 0.599  # Ang
-        gd_lines = np.array(NeI)# + ArI)
-        line_guess = 17
-        wmark = 8591.2583
+        line_guess = None
+        wmark = 8591.2583 # Ne
+        #wmark = 8104.36 # Kr
+        
     else:
         log.error('Bad camera')
 
@@ -408,42 +443,121 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
     # Return
     return id_dict
 
+def remove_duplicates(wy,w,y_id,w_id) :
+    # might be several identical w_id
+    y_id=np.array(y_id).astype(int)
+    w_id=np.array(w_id).astype(int)
+    y_id2=[]
+    w_id2=[]
+    for j in np.unique(w_id) :
+        w_id2.append(j)
+        ii=y_id[w_id==j]
+        if ii.size==1 :
+            y_id2.append(ii[0])
+        else :
+            i=np.argmin(np.abs(wy[ii]-w[j]))
+            #print("rm duplicate %d : %s -> %d"%(j,str(ii),ii[i]))
+            y_id2.append(ii[i])
+    y_id2=np.array(y_id2).astype(int)
+    w_id2=np.array(w_id2).astype(int)
+    tmp=np.argsort(w[w_id2])
+    y_id2=y_id2[tmp]
+    w_id2=w_id2[tmp]
+    return y_id2,w_id2
+
+
+def refine_solution(y,w,y_id,w_id,degmin=2,degmax=3) :
+    log=get_logger()
+    transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=degmin))
+    wy=transfo(y)
+    remove_duplicates(wy,w,y_id,w_id)
+    nmatch=len(y_id)
+    #log.info("init nmatch=%d rms=%f wave=%s"%(nmatch,np.std(wy[y_id]-w[w_id]),w[w_id]))
+    #log.info("init nmatch=%d rms=%f"%(nmatch,np.std(wy[y_id]-w[w_id])))
+    if nmatch<3 :
+        log.error("error : init nmatch too small")
+        return y_id,w_id,1000.,0
+    deg=1
+    transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=deg))
+    
+    
+    rms=0.
+    
+    # loop on fit of transfo, pairing, cleaning
+    for loop in range(200) :
+        
+        # apply transfo to measurements
+        wy=transfo(y)        
+        previous_rms = rms+0.
+        rms=np.std(wy[y_id]-w[w_id])
+        
+        # match lines
+        y_id=[]
+        w_id=[]
+        mdiff0=max(2.,rms*2.) # this is a difficult parameter to tune, either loose lever arm, or have false matches !!
+        mdiff1=10. # this is a difficult parameter to tune, either loose lever arm, or have false matches !!
+        for i,wi in enumerate(wy) :
+            dist=np.abs(wi-w)
+            jj=np.argsort(dist)
+            if dist[jj[0]]<mdiff0 or ( dist[jj[0]]<mdiff1 and dist[jj[0]]<0.3*dist[jj[1]]) : 
+                j=jj[0]
+                y_id.append(i)
+                w_id.append(j)
+        y_id,w_id = remove_duplicates(wy,w,y_id,w_id)
+        
+        previous_nmatch = nmatch+0
+        nmatch=len(y_id)
+        
+        #log.info("iter #%d nmatch=%d rms=%f"%(loop,nmatch,rms))
+        if nmatch < 3 :
+           log.error("error init nmatch too small")
+           y_id=[]
+           w_id=[]
+           rms=100000.
+           return y_id,w_id,rms,loop 
+        if loop<3 :
+            deg=min(nmatch-2,degmin)
+        elif loop<4 :
+            deg=min(nmatch-2,min(degmin+1,degmax))
+        transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=deg))
+        if nmatch==previous_nmatch and abs(rms-previous_rms)<0.01 and loop >=4 :
+            break
+    return y_id,w_id,rms,loop
+
+
 def compute_triplets(wave) :
+    
     triplets=[]
     wave=np.sort(wave)
-    for i1,wave1 in enumerate(wave[:-2]) :
-        for i2,wave2 in enumerate(wave[i1+1:-1]) :
-            for i3,wave3 in enumerate(wave[i1+i2+2:]) :
-                d21=wave2-wave1
-                d32=wave3-wave2
-                # require a minimal seperation (A or pix) to avoid meas. errors
-                mindist=50.
-                if d21<=mindist or d32<=mindist :
-                    continue
-                triplet=[wave1,wave2,wave3,math.log(d21/d32)]
+    for i1,w1 in enumerate(wave[:-1]) :
+        for i2,w2 in enumerate(wave[i1+1:]) :
+            for i3,w3 in enumerate(wave[i1+i2+2:]) :
+                triplet=[w1,w2,w3,i1,i1+1+i2,i1+i2+2+i3,w2-w1,w3-w1,w2**2-w1**2,w3**2-w1**2]
+                #print(triplet)
+                #print(wave[i1],wave[i1+1+i2],wave[i1+i2+2+i3])
                 triplets.append(triplet)
     return np.array(triplets)
+
+   
     
 
-def id_arc_lines_alternative(pixpk, gd_lines, dlamb, wmark,
-                             toler=0.2):
+def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntrack=50):
     """Match (as best possible), a set of the input list of expected arc lines to the detected list
-
+    
     Parameters
     ----------
-    pixpk : ndarray
+    y : ndarray
       Pixel locations of detected arc lines
-    gd_lines : ndarray
+    w : ndarray
       array of expected arc lines to be detected and identified
-    dlamb : float
+    dwdy : float
       Average dispersion in the spectrum
-    wmark : float
-      Center of 5 gd_lines to key on (camera dependent)
+    d2wdy2_prior : float
+      Prior on second derivative
     toler : float, optional
       Tolerance for matching (20%)
-    line_guess : int, optional
-      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
-
+    ntrack : max. number of solutions to be tracked
+    
     Returns
     -------
     id_dict : dict
@@ -451,81 +565,158 @@ def id_arc_lines_alternative(pixpk, gd_lines, dlamb, wmark,
     """
 
     log=get_logger()
-    
-    # test all possible lines matching wmark
-    # it fixes one parameter out of two (scale and offset)
-    wmark_index=-1
-    bestbestchi2=1e12
-    bestbestscale=1
-    
-    # loop on possible line corresponding to wmark
-    for i in xrange(pixpk.size) :
-        dp    = pixpk-pixpk[i]
-        dw = gd_lines-wmark
-        bestscale     = 1.
-        bestchi2      = 1e12
-        # loop in a range of possible scales
-        for s in np.linspace(dlamb*(1.-toler),dlamb*(1.+toler),20) :
-            sdp = s*dp # conversion of pixels to Angstrom
-            chi2=0.
-            for p in sdp :
-                chi2 += np.min((p-dw)**2) # chi2 is the sum of distance**2 to the closest known line
-            if chi2<bestchi2 :
-                bestscale=s
-                bestchi2=chi2
-        if bestchi2<bestbestchi2 :
-            bestbestchi2=bestchi2
-            bestbestscale=bestscale
-            wmark_index=i
-        #print(i,bestscale,bestchi2)
-    
-    # we have the matching line, and the best scale
-    # redo the finding of the closest matching line
-    pixpk_wave=wmark+bestbestscale*(pixpk-pixpk[wmark_index])
-    pixpk_line_index=np.zeros((pixpk_wave.size)).astype(int)
-    for i,w in enumerate(pixpk_wave) :
-        pixpk_line_index[i]=np.argmin(np.abs(gd_lines-w))
-    matched_lines=gd_lines[pixpk_line_index] 
-    
-    # now that we have a match, do a refined fit
-    # and possibly exclude outliers
-    x=matched_lines
-    y=pixpk
-    idx=np.arange(pixpk.size)
-    while True :
-        if idx.size<2 :
-            log.error("total failure")
-            raise(ValueError("total failure"))
-        deg=max(1,min(x.size-2,3))
-        transfo=np.poly1d(np.polyfit(x[idx],y[idx],deg=deg))
-        res=y[idx]-transfo(x[idx])
-        rms=np.std(res)
-        ibad=np.argmax(np.abs(res))            
-        if abs(res[ibad])>5. : # 
-            #log.warning("remove an outlier corresponding to a bad match")
-            idx = np.delete(idx,ibad)
-            had_outliers = True
-            continue
-        break
-    
-    id_dict={}
-    id_dict["status"]="ok"
-    id_dict["rms"]=rms
-    id_dict["wmark"]=wmark
-    id_dict["dlamb"]=dlamb    
-    id_dict["icen"]=np.where(np.abs(gd_lines-wmark)<1e-3)[0][0]    
-    id_dict["first_id_idx"]=idx
-    id_dict["first_id_pix"]=pixpk[idx]
-    id_dict["first_id_wave"]=matched_lines[idx]
-    
-    deg=max(1,min(3,idx.size-2))
-    id_dict["fit"]= dufits.func_fit(matched_lines[idx],pixpk[idx],'polynomial',deg,xmin=0.,xmax=1.)
-    
-    log.info("{:d} matched for {:d} detected and {:d} known as good, rms = {:g}".format(len(idx),len(pixpk),len(gd_lines),id_dict['rms']))
-    
-    return id_dict
+    #log.info("y=%s"%str(y))
+    #log.info("w=%s"%str(w))
     
 
+    # compute triplets of waves of y positions
+    y_triplets = compute_triplets(y)
+    w_triplets = compute_triplets(w)
+    
+    
+    # w = a*y**2+b*y+c
+    # dw_12 = a*dy2_12+b*dy_12
+    # dw_13 = a*dy2_13+b*dy_13
+    # a = (dy_13*dw_12-dy_12*dw_13)/(dy_13*dy2_12-dy_12*dy2_13)
+    # b = (dy2_13*dw_12-dy2_12*dw_13)/(dy2_13*dy_12-dy2_12*dy_13)
+    
+    # centered version
+    # w = a*(y-2000)**2+b*(y-2000)+c
+    # w = a*y**2-4000*a*y+b*y+cst
+    # w = a*(y**2-4000*y)+b*y+cst
+    # dw_12 = a*(dy2_12-4000*dy_12)+b*dy_12
+    # dw_13 = a*(dy2_13-4000*dy_13)+b*dy_12
+    # dw_12 = a*cdy2_12+b*dy_12
+    # dw_13 = a*cdy2_13+b*dy_12
+    # with cdy2_12=dy2_12-4000*dy_12
+    # and  cdy2_13=dy2_13-4000*dy_13
+    
+
+
+    #triplet=[w1,w2,w3,i1,i1+1+i2,i1+i2+2+i3,w2-w1,w3-w1,w2**2-w1**2,w3**2-w1**2]
+    
+    # in all pairs of triplets(y,w)
+    iy_pairs=np.tile(y_triplets[:,3],(len(w_triplets),1)) # index of first y of triplets
+    dy_12=np.tile(y_triplets[:,6],(len(w_triplets),1))
+    dy_13=np.tile(y_triplets[:,7],(len(w_triplets),1))
+    dy2_12=np.tile(y_triplets[:,8],(len(w_triplets),1))
+    dy2_13=np.tile(y_triplets[:,9],(len(w_triplets),1))
+
+    cdy2_12=dy2_12-4000*dy_12
+    cdy2_13=dy2_13-4000*dy_13
+    
+    iw_pairs=np.tile(w_triplets[:,3],(len(y_triplets),1)).T # index of first y of triplets
+    dw_12 = np.tile(w_triplets[:,6],(len(y_triplets),1)).T
+    dw_13 = np.tile(w_triplets[:,7],(len(y_triplets),1)).T
+    
+    # best fit second order transfo dwdy and d2wdy2 for all pairs
+    #dwdy_pairs   = (dy2_13*dw_12-dy2_12*dw_13)/(dy2_13*dy_12-dy2_12*dy_13)
+    #d2wdy2_pairs = (dy_13*dw_12-dy_12*dw_13)/(dy_13*dy2_12-dy_12*dy2_13)
+    # centered version
+    dwdy_pairs   = (cdy2_13*dw_12-cdy2_12*dw_13)/(cdy2_13*dy_12-cdy2_12*dy_13)
+    d2wdy2_pairs = (dy_13*dw_12-dy_12*dw_13)/(dy_13*cdy2_12-dy_12*cdy2_13)
+    
+    # now create and fill a 4D histogram
+    ndwdy    = 41
+    nd2wdy2  = 11
+    #print("ndwdy=%d nd2wdy2=%d ny_triplets=%d nw_triplets=%d"%(ndwdy,nd2wdy2,len(y),len(w)))
+    
+    dwdy_min = dwdy_prior*(1-toler)
+    dwdy_max = dwdy_prior*(1+toler)
+    dwdy_step = (dwdy_max-dwdy_min)/ndwdy
+    d2wdy2_min = -d2wdy2_prior
+    d2wdy2_max = +d2wdy2_prior
+    d2wdy2_step = (d2wdy2_max-d2wdy2_min)/nd2wdy2
+    histogram = np.zeros((ndwdy,nd2wdy2,len(y),len(w))) # definition of the histogram
+
+    # bins in the histogram
+    dwdy_bin   = ((dwdy_pairs-dwdy_min)/dwdy_step).ravel().astype(int)
+    d2wdy2_bin = ((d2wdy2_pairs-d2wdy2_min)/d2wdy2_step).ravel().astype(int)
+    iy_bin=iy_pairs.ravel()
+    iw_bin=iw_pairs.ravel()
+    pairs_in_histo=(dwdy_bin>=0)&(dwdy_bin<ndwdy)&(d2wdy2_bin>=0)&(d2wdy2_bin<nd2wdy2)
+     # fill histo
+    for a,b,c,d in zip(dwdy_bin[pairs_in_histo],d2wdy2_bin[pairs_in_histo],iy_bin[pairs_in_histo],iw_bin[pairs_in_histo]) :
+        histogram[a,b,c,d] += 1
+
+    # max bins in histo
+    histogram_ravel = histogram.ravel()
+    best_histo_bins = histogram_ravel.argsort()[::-1]
+    #log.info("nmatch in first bins=%s"%histogram.ravel()[best_histo_bins[:3]])
+    
+    best_y_id=[]
+    best_w_id=[]
+    best_rms=1000.
+    
+    # loop on best matches
+    count=0
+    for histo_bin in best_histo_bins[:ntrack] :
+        if  histogram_ravel[histo_bin]<4 :
+            log.warning("stopping here")
+            break
+        count += 1
+        dwdy_best_bin,d2wdy2_best_bin,iy_best_bin,iw_best_bin = np.unravel_index(histo_bin, histogram.shape) # bin coord
+        #print("bins=",dwdy_best_bin,d2wdy2_best_bin,iy_best_bin,iw_best_bin)
+        
+        # pairs of triplets in this histo bin
+        pairs_in_bin = np.where((dwdy_bin==dwdy_best_bin)&(d2wdy2_bin==d2wdy2_best_bin)&(iy_bin==iy_best_bin)&(iw_bin==iw_best_bin))[0]
+
+        # cannot use all pairs because of offset that can vary a lot 
+        # pairs_in_bin = np.where((dwdy_bin==dwdy_best_bin)&(d2wdy2_bin==d2wdy2_best_bin))[0] # all triplets with same transfo bin
+        
+        # convert to pairs of wavelength,y
+        y_id=np.array([])
+        for i in range(3,6) :
+            y_id=np.append(y_id,np.tile(y_triplets[:,i],(len(w_triplets),1)).ravel()[pairs_in_bin])
+        w_id=np.array([])
+        for i in range(3,6) :
+            w_id=np.append(w_id,np.tile(w_triplets[:,i],(len(y_triplets),1)).T.ravel()[pairs_in_bin])
+        # now need to rm duplicates
+        nw=len(w)
+        ny=len(y)
+        unique_common_id=np.unique(y_id.astype(int)*nw+w_id.astype(int))
+        y_id=(unique_common_id/nw).astype(int)
+        w_id=(unique_common_id%nw).astype(int)
+        ordering=np.argsort(y[y_id])
+        y_id=y_id[ordering]
+        w_id=w_id[ordering]
+        # refine
+        y_id,w_id,rms,niter=refine_solution(y,w,y_id,w_id)
+        #log.info("get solution with %d match and rms=%f (niter=%d)"%(len(y_id),rms,niter))
+        if (len(y_id)>len(best_y_id) and rms<max(1,best_rms)) or (len(y_id)==len(best_y_id) and rms<best_rms) or (best_rms>1 and rms<1 and len(y_id)>=8) : 
+            log.info("new best solution #%d with %d match and rms=%f (niter=%d)"%(count,len(y_id),rms,niter))
+            #log.info("previous had %d match and rms=%f"%(len(best_y_id),best_rms))
+            best_y_id = y_id
+            best_w_id = w_id
+            best_rms = rms
+            
+        # stop at some moment
+        if count>=20 and best_rms<0.5 and len(y_id)>10 :
+            #log.info("stop here because we have a correct solution")
+            break
+
+    id_dict={}
+    id_dict["status"]="ok"
+    id_dict["first_id_idx"]=best_y_id
+    id_dict["first_id_pix"]=y[best_y_id]
+    id_dict["first_id_wave"]=w[best_w_id]
+    id_dict["rms"]=best_rms
+    
+    id_dict["dlamb"]=dwdy_prior  
+    id_dict["icen"]=best_w_id[best_w_id.size/2]
+    id_dict["wmark"]=w[id_dict["icen"]]
+    
+    deg=max(1,min(3,best_y_id.size-2))
+    id_dict["fit"]= dufits.func_fit(w[best_w_id],y[best_y_id],'polynomial',deg,xmin=0.,xmax=1.)
+    
+    log.info("{:d} matched for {:d} detected and {:d} known as good, rms = {:g}".format(len(best_y_id),len(y),len(w),best_rms))
+    
+    #message="matched :"
+    #for i,j in zip(best_y_id,best_w_id) :
+    #    message += " y=%d:w=%d"%(y[i],w[j])
+    #log.info(message)
+    
+    return id_dict
 
 def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
     """ Uses the previous wavelength solution to fix the current
@@ -645,7 +836,9 @@ def parse_nist(ion):
     nist_file = glob.glob(srch_file)
     if len(nist_file) != 1:
         log.error("Cannot find NIST file {:s}".format(srch_file))
+        raise("Cannot find NIST file {:s}".format(srch_file))
     # Read
+    log.info("reading NIST file {:s}".format(nist_file[0]))
     nist_tbl = Table.read(nist_file[0], format='ascii.fixed_width')
     gdrow = nist_tbl['Observed'] > 0.  # Eliminate dummy lines
     nist_tbl = nist_tbl[gdrow]
@@ -673,7 +866,7 @@ def parse_nist(ion):
     # Return
     return nist_tbl
 
-def load_arcline_list(camera):
+def load_arcline_list(camera,lamps=None):
     """Loads arc line list from NIST files
     Parses and rejects
 
@@ -691,14 +884,15 @@ def load_arcline_list(camera):
     """
     log=get_logger()
     wvmnx = None
-    if camera[0] == 'b':
-        lamps = ['CdI','ArI','HgI','NeI']
-    elif camera[0] == 'r':
-        lamps = ['HgI','NeI']
-    elif camera[0] == 'z':
-        lamps = ['HgI','NeI']
-    else:
-        log.error("Not ready for this camera")
+    if lamps is None :
+        if camera[0] == 'b':
+            lamps = ['CdI','ArI','HgI','NeI','KrI']
+        elif camera[0] == 'r':
+            lamps = ['CdI','ArI','HgI','NeI','KrI']
+        elif camera[0] == 'z':
+            lamps = ['CdI','ArI','HgI','NeI','KrI']
+        else:
+            log.error("Not ready for this camera")
     # Get the parse dict
     parse_dict = load_parse_dict()
     # Read rejection file
@@ -807,7 +1001,9 @@ def load_parse_dict():
     # ZnI
     arcline_parse['ZnI'] = copy.deepcopy(dict_parse)
     arcline_parse['ZnI']['min_intensity'] = 50.
-    #
+    # KrI
+    arcline_parse['KrI'] = copy.deepcopy(dict_parse)
+    arcline_parse['KrI']['min_intensity'] = 50.
     return arcline_parse
 
 ########################################################
