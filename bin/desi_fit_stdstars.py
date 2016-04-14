@@ -14,7 +14,7 @@ desi_fit_stdstars.py
 """
 
 #- TODO: refactor algorithmic code into a separate module/function
-#- TODO: move filters out of desisim and remove $DESISIM dependency
+
 
 from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates
@@ -44,10 +44,6 @@ def main() :
 
     DESI_SPECTRO_REDUX=os.environ['DESI_SPECTRO_REDUX']
     PRODNAME=os.environ['PRODNAME']
-    if 'DESISIM' not in os.environ:
-        raise RuntimeError('Set environment DESISIM. It will be neede to read the filter transmission files for calibration')
-
-    DESISIM=os.environ['DESISIM']   # to read the filter transmission files
 
     if args.fibermap is None or args.models is None or \
        args.spectrograph is None or args.outfile is None or \
@@ -77,9 +73,6 @@ def main() :
     NIGHT=fiber_header['NIGHT']
     EXPID=fiber_header['EXPID']
     filters=fibers["FILTER"]
-    if 'DESISIM' not in os.environ:
-        raise RuntimeError('Set environment DESISIM. Can not find filter response files')
-    basepath=DESISIM+"/data/"
 
     #now load all the skyfiles, framefiles, fiberflatfiles etc
     # all three channels files are simultaneously treated for model fitting
@@ -154,12 +147,13 @@ def main() :
 
     stdwave,stdflux,templateid=io.read_stdstar_templates(args.models)
 
+    #- Withdrew trimming below to address filters with long tails
     #- Trim standard star wavelengths to just the range we need
-    minwave = min([min(w) for w in frameWave.values()])
-    maxwave = max([max(w) for w in frameWave.values()])
-    ii = (minwave-10 < stdwave) & (stdwave < maxwave+10)
-    stdwave = stdwave[ii]
-    stdflux = stdflux[:, ii]
+    # minwave = min([min(w) for w in frameWave.values()])
+    # maxwave = max([max(w) for w in frameWave.values()])
+    # ii = (minwave-10 < stdwave) & (stdwave < maxwave+10)
+    # stdwave = stdwave[ii]
+    # stdflux = stdflux[:, ii]
 
     log.info('Number of Standard Stars in this frame: {0:d}'.format(len(stars)))
     if len(stars) == 0:
@@ -173,12 +167,11 @@ def main() :
     templateID=np.arange(len(stars))
     chi2dof=np.zeros(len(stars))
 
-    #- TODO: don't use 'l' as a variable name.  Can look like a '1'
-    for k,l in enumerate(stars):
-        log.info("checking best model for star {0}".format(l[0]))
+    for k,j in enumerate(stars):
+        log.info("checking best model for star {0}".format(j[0]))
 
-        starindex=l[0]
-        mags=l[2]
+        starindex=j[0]
+        mags=j[2]
         filters=fibers["FILTER"][k]
         rflux=stars[k][1]["r"][0]
         bflux=stars[k][1]["b"][0]
@@ -191,15 +184,15 @@ def main() :
         zivar=ivars[k][1]["z"][0]
         ivar={"b":bivar,"r":rivar,"z":zivar}
 
-        resol_star={"r":frameResolution["r"][l[0]],"b":frameResolution["b"][l[0]],"z":frameResolution["z"][l[0]]}
+        resol_star={"r":frameResolution["r"][j[0]],"b":frameResolution["b"][j[0]],"z":frameResolution["z"][j[0]]}
 
         # Now find the best Model
 
         bestModelIndex[k],bestmodelWave,bestModelFlux,chi2dof[k]=match_templates(frameWave,flux,ivar,resol_star,stdwave,stdflux)
 
-        log.info('Star Fiber: {0}; Best Model Fiber: {1}; TemplateID: {2}; Chisq/dof: {3}'.format(l[0],bestModelIndex[k],templateid[bestModelIndex[k]],chi2dof[k]))
+        log.info('Star Fiber: {0}; Best Model Fiber: {1}; TemplateID: {2}; Chisq/dof: {3}'.format(j[0],bestModelIndex[k],templateid[bestModelIndex[k]],chi2dof[k]))
         # Normalize the best model using reported magnitude
-        modelwave,normalizedflux=normalize_templates(stdwave,stdflux[bestModelIndex[k]],mags,filters,basepath)
+        normalizedflux=normalize_templates(stdwave,stdflux[bestModelIndex[k]],mags,filters)
         normflux.append(normalizedflux)
 
     # Now write the normalized flux for all best models to a file

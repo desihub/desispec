@@ -10,19 +10,31 @@
 set -e
 echo `date` Running dailytest on `hostname`
 
+#- Configure desi environment if needed
+if [ -z "$DESIROOT" ]; then
+    source /project/projectdirs/desi/software/modules/desi_environment.sh
+fi
+
 #- Load our code
+module load speclite/master
 module load desispec/master
 module load desisim/master
 module load specter/master
+module load desitarget/master
 module load redmonster/master
-module switch desimodel/trunk
+module switch desimodel/master
 
 #- Update software packages
+echo 'updating speclite'; cd $SPECLITE; git pull; fix_permissions.sh .
 echo 'updating desispec'; cd $DESISPEC; git pull; fix_permissions.sh .
 echo 'updating desisim'; cd $DESISIM; git pull; fix_permissions.sh .
 echo 'updating specter'; cd $SPECTER_DIR; git pull; fix_permissions.sh .
-echo 'updating desimodel'; cd $DESIMODEL; svn update; fix_permissions.sh .
+echo 'updating desitarget'; cd $DESITARGET; git pull; fix_permissions.sh .
 echo 'updating redmonster'; cd $REDMONSTER; git pull; fix_permissions.sh .
+echo 'updating desimodel'; cd $DESIMODEL; git pull; fix_permissions.sh .
+
+#- Also update desimodel data from svn trunk
+svn update $DESIMODEL/data/
 
 #- Ensure that $SCRATCH is defined so that we don't accidentally clobber stuff
 if [ -z "$SCRATCH" ]; then
