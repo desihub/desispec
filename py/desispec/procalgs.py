@@ -221,7 +221,7 @@ class BootCalibration(pas.PipelineAlg):
             id_dict['mask'] = mask
             all_wv_soln.append(id_dict)
 
-        desiboot.write_psf('bootpsf.fits', xfit, fdicts, gauss,all_wv_soln)
+        desiboot.write_psf(kwargs["outputFile"], xfit, fdicts, gauss,all_wv_soln)
 
     
 
