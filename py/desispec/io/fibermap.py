@@ -14,13 +14,15 @@ from desispec.io.util import fitsheader, write_bintable, makepath
 fibermap_columns = [
     ('OBJTYPE', 'S10'),
     ('TARGETCAT', 'S20'),
-    ('BRICKNAME', 'S20'),
+    ('BRICKNAME', 'S8'),
     ('TARGETID', 'i8'),
-    ('TARGET_MASK0', 'i8'),
+    ('DESI_TARGET', 'i8'),
+    ('BGS_TARGET', 'i8'),
+    ('MWS_TARGET', 'i8'),
     ('MAG', 'f4', (5,)),
     ('FILTER', 'S10', (5,)),
-    ('SPECTROID', 'i8'),
-    ('POSITIONER', 'i8'),
+    ('SPECTROID', 'i4'),
+    ('POSITIONER', 'i4'),
     ('FIBER', 'i4'),
     ('LAMBDAREF', 'f4'),
     ('RA_TARGET', 'f8'),
@@ -40,7 +42,9 @@ fibermap_comments = dict(
     BRICKNAME    = "Brickname from target imaging",
     OBJTYPE      = "Target type [ELG, LRG, QSO, STD, STAR, SKY]",
     LAMBDAREF    = "Reference wavelength at which to align fiber",
-    TARGET_MASK0 = "Targeting bit mask",
+    DESI_TARGET  = "DESI dark+calib targeting bit mask",
+    BGS_TARGET   = "DESI Bright Galaxy Survey targeting bit mask",
+    MWS_TARGET   = "DESI Milky Way Survey targeting bit mask",
     RA_TARGET    = "Target right ascension [degrees]",
     DEC_TARGET   = "Target declination [degrees]",
     X_TARGET     = "X on focal plane derived from (RA,DEC)_TARGET",
@@ -55,10 +59,14 @@ fibermap_comments = dict(
     FILTER       = "SDSS_R, DECAM_Z, WISE1, etc."
 )
 
-def empty_fibermap(nspec):
+def empty_fibermap(nspec, specmin=0):
     """Return an empty fibermap ndarray to be filled in.
     """
-    return np.zeros(nspec, dtype=fibermap_columns)
+    fibermap = np.zeros(nspec, dtype=fibermap_columns)
+    fibermap['FIBER'] = np.arange(specmin, specmin+nspec)
+    fibers_per_spectrograph = 500
+    fibermap['SPECTROID'] = fibermap['FIBER'] // fibers_per_spectrograph
+    return fibermap
 
 def write_fibermap(outfile, fibermap, header=None):
     """Write fibermap binary table to outfile.

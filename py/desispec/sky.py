@@ -14,10 +14,12 @@ from desispec.linalg import spline_fit
 from desispec.log import get_logger
 from desispec import util
 
-import scipy,scipy.sparse,scipy.stats
+from desiutil import stats as dustat
+
+import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
-def compute_sky(frame, fibermap, nsig_clipping=4.) :
+def compute_sky(frame, nsig_clipping=4.) :
     """Compute a sky model.
 
     Input has to correspond to sky fibers only.
@@ -31,7 +33,6 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
           - ivar : 2D inverse variance of flux
           - mask : 2D inverse mask flux (0=good)
           - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
-        fibermap : numpy table including OBJTYPE to know which fibers are SKY
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
     returns SkyModel object with attributes wave, flux, ivar, mask
@@ -41,10 +42,8 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
     log.info("starting")
 
     # Grab sky fibers on this frame
-    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
-    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
-        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
-    assert np.max(skyfibers) < 500
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
 
     nwave=frame.nwave
     nfibers=len(skyfibers)
@@ -160,10 +159,11 @@ def compute_sky(frame, fibermap, nsig_clipping=4.) :
     # need to do better here
     mask = (cskyivar==0).astype(np.uint32)
 
-    return SkyModel(frame.wave.copy(), cskyflux, cskyivar, mask)
+    return SkyModel(frame.wave.copy(), cskyflux, cskyivar, mask,
+                    nrej=nout_tot)
 
 class SkyModel(object):
-    def __init__(self, wave, flux, ivar, mask, header=None):
+    def __init__(self, wave, flux, ivar, mask, header=None, nrej=0):
         """Create SkyModel object
         
         Args:
@@ -172,6 +172,7 @@ class SkyModel(object):
             ivar  : 2D[nspec, nwave] inverse variance of the sky model
             mask  : 2D[nspec, nwave] 0=ok or >0 if problems
             header : (optional) header from FITS file HDU0
+            nrej : (optional) Number of rejected pixels in fit
             
         All input arguments become attributes
         """
@@ -186,6 +187,7 @@ class SkyModel(object):
         self.ivar = ivar
         self.mask = mask
         self.header = header
+        self.nrej = nrej
 
 
 def subtract_sky(frame, skymodel) :
@@ -214,7 +216,7 @@ def subtract_sky(frame, skymodel) :
     log.info("done")
 
 
-def qa_skysub(param, frame, fibermap, skymodel):
+def qa_skysub(param, frame, skymodel):
     """Calculate QA on SkySubtraction
     Note: Pixels rejected in generating the SkyModel (as above), are  
       not rejected in the stats calculated here.  Would need to carry
@@ -223,7 +225,6 @@ def qa_skysub(param, frame, fibermap, skymodel):
     Args:
         param : dict of QA parameters
         frame : desispec.Frame object
-        fibermap : numpy table including OBJTYPE to know which fibers are SKY
         skymodel : desispec.SkyModel object
     Returns:
         qadict: dict of QA outputs
@@ -233,12 +234,11 @@ def qa_skysub(param, frame, fibermap, skymodel):
 
     # Output dict
     qadict = {}
+    qadict['NREJ'] = int(skymodel.nrej)
 
     # Grab sky fibers on this frame
-    specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
-    skyfibers=np.where((fibermap["OBJTYPE"]=="SKY")&
-        (fibermap["FIBER"]>=specmin)&(fibermap["FIBER"]<=specmax))[0]
-    assert np.max(skyfibers) < 500
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
     nfibers=len(skyfibers)
     qadict['NSKY_FIB'] = int(nfibers)
 
@@ -258,11 +258,43 @@ def qa_skysub(param, frame, fibermap, skymodel):
         chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
     # Bad models
     qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
+    if qadict['NBAD_PCHI'] > 0:
+        log.warn("Bad Sky Subtraction in {:d} fibers".format(
+                qadict['NBAD_PCHI']))
 
     # Median residual
     qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
     log.info("Median residual for sky fibers = {:g}".format(
-        qadict['MED_RESID'])) 
+        qadict['MED_RESID']))
 
+    # Residual percentiles
+    perc = dustat.perc(res, per=param['PER_RESID'])
+    qadict['RESID_PER'] = [float(iperc) for iperc in perc]
+
+    # Mean Sky Continuum from all skyfibers
+    # need to limit in wavelength?
+
+    continuum=scipy.ndimage.filters.median_filter(flux,200) # taking 200 bins (somewhat arbitrarily)
+    mean_continuum=np.zeros(flux.shape[1])
+    for ii in range(flux.shape[1]):
+        mean_continuum[ii]=np.mean(continuum[:,ii])
+    qadict['MEAN_CONTIN'] = mean_continuum
+
+    # Median Signal to Noise on sky subtracted spectra
+    # first do the subtraction:
+    fframe=frame # make a copy
+    sskymodel=skymodel # make a copy
+    subtract_sky(fframe,sskymodel)
+    medsnr=np.zeros(fframe.flux.shape[0])
+    totsnr=np.zeros(fframe.flux.shape[0])
+    for ii in range(fframe.flux.shape[0]):
+        signalmask=fframe.flux[ii,:]>0
+        # total snr considering bin by bin uncorrelated S/N
+        snr=fframe.flux[ii,signalmask]*np.sqrt(fframe.ivar[ii,signalmask])
+        medsnr[ii]=np.median(snr)
+        totsnr[ii]=np.sqrt(np.sum(snr**2))
+    qadict['MED_SNR']=medsnr  # for each fiber
+    qadict['TOT_SNR']=totsnr  # for each fiber
+     
     # Return
     return qadict

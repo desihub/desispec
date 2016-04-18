@@ -62,6 +62,10 @@ class TestBoot(unittest.TestCase):
         #pdb.set_trace()
         np.testing.assert_allclose(np.median(gauss), 1.06, rtol=0.05)
 
+    def test_load_gdarc_lines(self):
+        for camera in ['b', 'r', 'z']:
+            dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
+
     def test_wavelengths(self):
         # Read flat
         flat_hdu = fits.open(flat_fil)
@@ -73,6 +77,8 @@ class TestBoot(unittest.TestCase):
         # Trace
         xset, xerr = desiboot.trace_crude_init(flat, xpk, ypos)
         xfit, fdicts = desiboot.fit_traces(xset, xerr)
+        # Test fiber_gauss_old for coverage
+        gauss = desiboot.fiber_gauss_old(flat, xfit, xerr)
         # Gaussian
         gauss = desiboot.fiber_gauss(flat, xfit, xerr)
         # Read arc

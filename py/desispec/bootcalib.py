@@ -19,6 +19,7 @@ import yaml
 import glob
 import math
 import time
+import os
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -34,7 +35,10 @@ from matplotlib.backends.backend_pdf import PdfPages
 from desispec.log import get_logger
 from desiutil import funcfits as dufits
 
-desispec_path = imp.find_module('desispec')[1]+'/../../'
+try:
+    desispec_path = os.environ['DESISPEC']
+except KeyError:
+    desispec_path = os.path.abspath(os.path.join(imp.find_module('desispec')[1], '..', '..'))
 glbl_figsz = (16,9)
 
 ########################################################
@@ -48,8 +52,8 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     ----------
     spec : ndarray
       Arc line spectrum
-    thresh : float
-      RMS threshold
+    rms_thresh : float
+      RMS threshold scale
     nwidth : int
       Line width to test over
     """
@@ -57,7 +61,7 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     npix = spec.size
     spec_mask = sigma_clip(spec, sigma=4., iters=5)
     rms = np.std(spec_mask)
-    thresh = 10*rms
+    thresh = rms*rms_thresh
     #print("thresh = {:g}".format(thresh))
     gdp = spec > thresh
 
@@ -87,6 +91,7 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     # Finish
     return xpk
 
+
 def load_gdarc_lines(camera):
     """Loads a select set of arc lines for initial calibrating
 
@@ -99,8 +104,12 @@ def load_gdarc_lines(camera):
     -------
     dlamb : float
       Dispersion for input camera
+    wmark : float
+      wavelength to key off of [???]
     gd_lines : ndarray
       Array of lines expected to be recorded and good for ID
+    line_guess : int or None
+      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
     """
     log=get_logger()
     if camera[0] == 'b':
@@ -130,7 +139,7 @@ def load_gdarc_lines(camera):
                8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
         dlamb = 0.599  # Ang
         gd_lines = np.array(NeI)# + ArI)
-        line_guess = None
+        line_guess = 17
         wmark = 8591.2583
     else:
         log.error('Bad camera')
@@ -281,6 +290,8 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
       Center of 5 gd_lines to key on (camera dependent)
     toler : float, optional
       Tolerance for matching (20%)
+    line_guess : int, optional
+      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
 
     Returns
     -------
@@ -371,8 +382,10 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
             rms_dicts.append(all_guess_rms[imn])
     # Find the best one
     all_rms = np.array([idict['rms'] for idict in rms_dicts])
+    # Allow for (very rare) failed solutions
     imin = np.argmin(all_rms)
     id_dict = rms_dicts[imin]
+    id_dict['status'] = 'ok'
     # Finish
     id_dict['wmark'] = wmark
     id_dict['dlamb'] = dlamb
@@ -387,6 +400,101 @@ def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
     id_dict['first_id_pix'] = np.array(id_pix)
     # Return
     return id_dict
+
+
+def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
+    """ Uses the previous wavelength solution to fix the current
+    Args:
+        new_id:
+        old_id:
+        new_pix:
+        old_pix:
+
+    Returns:
+
+    """
+    log=get_logger()
+    # Find offset in pixels
+    min_off = []
+    for pix in new_pix:
+        imin = np.argmin(np.abs(old_pix-pix))
+        min_off.append(old_pix[imin]-pix)
+    off = np.median(min_off)
+
+    # Find closest with small tolerance
+    id_pix = []
+    id_wave = []
+    # Insure enough pixels (some failures are bad extractions)
+    if len(new_pix) > len(old_pix)-5:
+        for kk,oldpix in enumerate(old_id['id_pix']):
+            mt = np.where(np.abs(new_pix-(oldpix-off)) < tol)[0]
+            if len(mt) == 1:
+                id_pix.append(new_pix[mt][0])
+                id_wave.append(old_id['id_wave'][kk])
+    else:  # Just apply offset
+        log.warn("Completely kludging this fiber wavelength")
+        id_wave = old_id['id_wave']
+        id_pix = old_id['id_pix']-off
+    # Fit
+    new_id['id_wave'] = id_wave
+    new_id['id_pix'] = id_pix
+
+
+def fix_poor_solutions(all_wv_soln, all_dlamb, ny, ldegree):
+    """ Identify solutions with poor RMS and replace
+    Args:
+        all_wv_soln: list of solutions
+        all_dlamb: list of dispersion values
+
+    Returns:
+        Updated lists if there were poor RMS solutions
+
+    """
+    from scipy.signal import medfilt
+
+    log=get_logger()
+    #
+    nfiber = len(all_dlamb)
+    #med_dlamb = np.median(all_dlamb)
+    dlamb_fit, dlamb_mask = dufits.iter_fit(np.arange(nfiber), np.array(all_dlamb), 'legendre', 4, xmin=0., xmax=1., sig_reg=10., max_rej=20)
+    #med_res = np.median(np.abs(med_dlamb-np.array(all_dlamb)))
+    #xval = np.linspace(0,nfiber,num=1000)
+    #yval = dufits.func_val(xval, dlamb_fit)
+
+    for ii,dlamb in enumerate(all_dlamb):
+        id_dict = all_wv_soln[ii]
+        #if (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (id_dict['rms'] > 0.7):
+        #if (np.abs(dlamb - med_dlamb[ii]) > 10*med_res) or (id_dict['rms'] > 0.7):
+        if (dlamb_mask[ii] == 1) or (id_dict['rms'] > 0.7):
+            log.warn('Bad wavelength solution for fiber {:d}.  Using closest good one to guide..'.format(ii))
+            if ii > nfiber/2:
+                off = -1
+            else:
+                off = +1
+            jj = ii + off
+            jdict = all_wv_soln[jj]
+            jdlamb = all_dlamb[jj]
+            #while (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (jdict['rms'] > 0.7):
+            #while (np.abs(jdlamb - med_dlamb[jj]) > 10*med_res) or (jdict['rms'] > 0.7):
+            while (dlamb_mask[jj] == 1) or (jdict['rms'] > 0.7):
+                jj += off
+                jdict = all_wv_soln[jj]
+                #jdlamb = all_dlamb[jj]
+            # Bad solution; shifting to previous
+            use_previous_wave(id_dict, jdict, id_dict['pixpk'], jdict['pixpk'])
+            final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']),
+                                              np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
+            rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-
+                                   np.array(id_dict['id_pix'])[mask==0])**2))
+            final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']),
+                                                  np.array(id_dict['id_wave']),'legendre',ldegree , niter=5)
+            # Save
+            id_dict['final_fit'] = final_fit
+            id_dict['rms'] = rms
+            id_dict['final_fit_pix'] = final_fit_pix
+            id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
+            id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
+            id_dict['mask'] = mask
 
 ########################################################
 # Linelist routines
@@ -584,7 +692,7 @@ def fiber_gauss(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose
 def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
     This serves as an initial guess to what follows
-    
+
     Parameters
     ----------
     flat : ndarray of fiber flat image
@@ -594,7 +702,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
           Radius of boxcar extraction in pixels
     max_iter : int, optional
       Maximum number of iterations for rejection
-    
+
     Returns
     -------
     gauss
@@ -606,11 +714,11 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
     npix_x  = flat.shape[1]
     ny      = xtrc.shape[0] # number of ccd rows in trace
     assert(ny==npix_y)
-    
+
     nfiber = xtrc.shape[1]
-    
+
     minflux=1. # minimal flux in a row to include in the fit
-    
+
     # Loop on fibers
     gauss = []
     start = 0
@@ -660,8 +768,8 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         # this is the profile :
         bdx=np.array(bdx)
         bflux=np.array(bflux)
-        
-        # fast iterative gaussian fit 
+
+        # fast iterative gaussian fit
         sigma = 1.0
         sq2 = math.sqrt(2.)
         for i in xrange(10) :
@@ -670,10 +778,10 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
                 break
             sigma = nsigma
         gauss.append(sigma)
-    
-    return np.array(gauss)   
-            
-            
+
+    return np.array(gauss)
+
+
 
 def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, verbose=False):
     """Find the PSF sigma for each fiber
@@ -721,7 +829,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
             else :
                 log.info("Working on fiber %d of %d (done 25 in %3.2f sec)"%(ii,nfiber,stop-start))
             start=stop
-        
+
         mask[:] = 0
         ixt = np.round(xtrc[:,ii]).astype(int)
         for jj,ibox in enumerate(range(-box_radius,box_radius+1)):
@@ -759,7 +867,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
             resid_mask = sigma_clip(resid, sigma=4., iters=5)
             # Fit
             gdp = ~resid_mask.mask
-            parm = fitter(g_init, fdimg[gdp], fnimg[gdp])                        
+            parm = fitter(g_init, fdimg[gdp], fnimg[gdp])
             # Again?
             if np.sum(resid_mask.mask) <= nrej:
                 iterate = False
@@ -788,7 +896,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     Preforms book-keeping error checking
 
     args:
-        flat : ndarray of fiber flat image 
+        flat : ndarray of fiber flat image
         ypos : int [optional] Row for finding peaks
            Default is half-way up the image
         nwidth : int [optional] Width of peak (end-to-end)
@@ -853,28 +961,30 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     # Return
     return xpk, ypos, cut
 
+
 def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
-    RMS_TOLER=0.02, verbose=False):
-    '''Fit the traces
+    RMS_TOLER=0.03, verbose=False):
+    """Fit the traces
     Default is 6th order Legendre polynomials
 
-    Parameters:
-    -----------
-    xset: ndarray
+    Parameter:
+    ----------
+    xset : ndarray
       traces
-    xerr: ndarray
+    xerr : ndarray
       Error in the trace values (999.=Bad)
-    RMS_TOLER: float, optional [0.02]
+    RMS_TOLER : float, optional [0.02]
       Tolerance on size of RMS in fit
 
-    Returns:
-    -----------
+    Returns
+    -------
     xnew, fits
-    xnew: ndarray
+    xnew : ndarray
       New fit values (without error)
-    fits: list
+    fits : list
       List of the fit dicts
-    '''
+    """
+    log=get_logger()
     ny = xset.shape[0]
     ntrace = xset.shape[1]
     xnew = np.zeros_like(xset)
@@ -888,7 +998,7 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
             weights=1./xerr[:,ii], initialmask=mask, maxone=True)#, sigma=xerr[:,ii])
         # Stats on residuals
         nmask_new = np.sum(mask)-nmask 
-        if nmask_new > 10:
+        if nmask_new > 200:
             raise ValueError('Rejected too many points: {:d}'.format(nmask_new))
         # Save
         xnew[:,ii] = dufits.func_val(yval,dfit)
@@ -900,8 +1010,9 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
         if verbose:
             print('RMS of FIT= {:g}'.format(rms))
         if rms > RMS_TOLER:
-            #pdb.xplot(yval, xnew[:,ii], xtwo=yval[gdval],ytwo=xset[:,ii][gdval], mtwo='o')
-            pdb.set_trace()
+            #from xastropy.xutils import xdebug as xdb
+            #xdb.xplot(yval, xnew[:,ii], xtwo=yval[gdval],ytwo=xset[:,ii][gdval], mtwo='o')
+            log.error("RMS {:g} exceeded tolerance for fiber {:d}".format(rms, ii))
     # Return
     return xnew, fits
 
@@ -925,12 +1036,12 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     spec : ndarray
       Extracted spectrum
     """
-    
+
     # Init
     xpix_img = np.outer(np.ones(img.shape[0]),np.arange(img.shape[1]))
     mask = np.zeros_like(img,dtype=int)
     iy = np.arange(img.shape[0],dtype=int)
-    
+
     log = get_logger()
 
     #
@@ -945,7 +1056,7 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
             else :
                 log.info("Working on fiber %d of %d"%(qq,xtrc.shape[1]))
             start=stop
-        
+
         # Mask
         mask[:,:] = 0
         ixt = np.round(xtrc[:,qq]).astype(int)
@@ -971,8 +1082,8 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
     return all_spec
 
 
-def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
-    maxshift0=0.5, maxshift=0.2, maxerr=0.2):
+def trace_crude_init(image, xinit0, ypass, invvar=None, radius=2.,
+    maxshift0=0.5, maxshift=0.15, maxerr=0.2):
 #                   xset, xerr, maxerr, maxshift, maxshift0
     """Python port of trace_crude_idl.pro from IDLUTILS
 
@@ -998,8 +1109,8 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
     ny = image.shape[0]
     xset = np.zeros((ny,ntrace))
     xerr = np.zeros((ny,ntrace))
-    if invvar is None: 
-        invvar = np.zeros_like(image) + 1. 
+    if invvar is None:
+        invvar = np.zeros_like(image) + 1.
 
     #
     #  Recenter INITIAL Row for all traces simultaneously
@@ -1026,15 +1137,16 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=3.,
         xinit = xset[iy+1, :]
         ycen = iy * np.ones(ntrace,dtype=int)
         xfit,xfiterr = trace_fweight(image, xinit, ycen, invvar=invvar, radius=radius)
-        # Shift      
+        # Shift
         xshift = np.clip(xfit-xinit, -1*maxshift, maxshift) * (xfiterr < maxerr)
         # Save
         xset[iy,:] = xinit + xshift
-        xerr[iy,:] = xfiterr * (xfiterr < maxerr)  + 999.0 * (xfiterr >= maxerr)
-        
+        xerr[iy,:] = xfiterr * (xfiterr < maxerr) + 999.0 * (xfiterr >= maxerr)
+
     return xset, xerr
 
-def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
+
+def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=2., debug=False):
     '''Python port of trace_fweight.pro from IDLUTILS
 
     Parameters:
@@ -1078,10 +1190,10 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
     sumwt = np.zeros(ncen)
     sumsx1 = np.zeros(ncen)
     sumsx2 = np.zeros(ncen)
-    qbad = np.array([False]*ncen) 
+    qbad = np.array([False]*ncen)
 
-    if invvar is None: 
-        invvar = np.zeros_like(fimage) + 1. 
+    if invvar is None:
+        invvar = np.zeros_like(fimage) + 1.
 
     # Compute
     for ii in range(0,fullpix+3):
@@ -1098,6 +1210,9 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=3.):
         sumsx1 = sumsx1 + xdiff**2 * var_term
         #qbad = qbad or (invvar[ycen,ih] <= 0)
         qbad = np.any([qbad, invvar[ycen,ih] <= 0], axis=0)
+
+    if debug:
+        pdb.set_trace()
 
     # Fill up
     good = (sumw > 0) &  (~qbad)
@@ -1184,23 +1299,84 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, ncoeff=5, without_arc=Fals
     yhdu.header['WAVEMAX'] = WAVEMAX
 
     gausshdu = fits.ImageHDU(np.array(gauss))
-    
+
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
     hdulist.writeto(outfile, clobber=True)
 
 
 
 #####################################################################
-#####################################################################            
+#####################################################################
 # Utilities
-#####################################################################            
+#####################################################################
+
+def script_bootcalib(arc_idx, flat_idx, cameras=None, channels=None, nproc=10):
+    """ Runs desi_bootcalib on a series of pix files
+    Returns:
+
+    script_bootcalib([0,1,2,3,4,5,6,7,8,9], [10,11,12,13,14])
+
+    """
+    from subprocess import Popen
+    #
+    if cameras is None:
+        cameras = ['0','1','2','3','4','5','6','7','8','9']
+        #cameras = ['0']
+    if channels is None:
+        channels = ['b','r','z']
+        #channels = ['b']#,'r','z']
+    nchannels = len(channels)
+    ncameras = len(cameras)
+    #
+    narc = len(arc_idx)
+    nflat = len(flat_idx)
+    ntrial = narc*nflat*ncameras*nchannels
+
+    # Loop on the systems
+    nrun = -1
+    #nrun = 123
+    while(nrun < ntrial):
+
+        proc = []
+        ofiles = []
+        for ss in range(nproc):
+            nrun += 1
+            iarc = nrun % narc
+            jflat = (nrun//narc) % nflat
+            kcamera = (nrun//(narc*nflat)) % ncameras
+            lchannel = nrun // (narc*nflat*ncameras)
+            #pdb.set_trace()
+            if nrun == ntrial:
+                break
+            # Names
+            afile = str('pix-{:s}{:s}-{:08d}.fits'.format(channels[lchannel], cameras[kcamera], arc_idx[iarc]))
+            ffile = str('pix-{:s}{:s}-{:08d}.fits'.format(channels[lchannel], cameras[kcamera], flat_idx[jflat]))
+            ofile = str('boot_psf-{:s}{:s}-{:d}{:d}.fits'.format(channels[lchannel], cameras[kcamera],
+                                                                 arc_idx[iarc], flat_idx[jflat]))
+            qfile = str('qa_boot-{:s}{:s}-{:d}{:d}.pdf'.format(channels[lchannel], cameras[kcamera],
+                                                                 arc_idx[iarc], flat_idx[jflat]))
+            lfile = str('boot-{:s}{:s}-{:d}{:d}.log'.format(channels[lchannel], cameras[kcamera],
+                                                               arc_idx[iarc], flat_idx[jflat]))
+            ## Run
+            script = [str('desi_bootcalib.py'), str('--fiberflat={:s}'.format(ffile)),
+                      str('--arcfile={:s}'.format(afile)),
+                      str('--outfile={:s}'.format(ofile)),
+                      str('--qafile={:s}'.format(qfile))]#,
+                      #str('>'),
+                      #str('{:s}'.format(lfile))]
+            f = open(lfile, "w")
+            proc.append(Popen(script, stdout=f))
+            ofiles.append(f)
+        exit_codes = [p.wait() for p in proc]
+        for ofile in ofiles:
+            ofile.close()
 
 
-#####################################################################            
-#####################################################################            
-#####################################################################            
+#####################################################################
+#####################################################################
+#####################################################################
 # QA
-#####################################################################            
+#####################################################################
 
 def qa_fiber_peaks(xpk, cut, pp=None, figsz=None, nper=100):
     """ Generate a QA plot for the fiber peaks
@@ -1415,7 +1591,7 @@ def qa_fiber_trace(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
       Normalize the flat?  If not, use zscale for output
     '''
 
-    ticks_font = matplotlib.font_manager.FontProperties(family='times new roman', 
+    ticks_font = matplotlib.font_manager.FontProperties(family='times new roman',
        style='normal', size=16, weight='normal', stretch='normal')
     plt.rcParams['font.family']= 'times new roman'
     cmm = cm.Greys_r

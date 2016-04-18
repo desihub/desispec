@@ -136,7 +136,7 @@ def main() :
 
     stars=[]
     ivars=[]
-    for i in fibers["FIBER"]:
+    for i in fibers["FIBER"] % 500:
         #flat and sky should have same wavelength binning as data, otherwise should be rebinned.
 
         stars.append((i,{"b":[frameFlux["b"][i]/fiberFlat["b"][i]-convolvedsky["b"][i],frameWave["b"]],
@@ -203,7 +203,7 @@ def main() :
     data['CHI2DOF']=chi2dof
     data['TEMPLATEID']=templateid[bestModelIndex]
     norm_model_file=args.outfile
-    io.write_stdstar_model(norm_model_file,normflux,stdwave,stdfibers,data)
+    io.write_stdstar_models(norm_model_file,normflux,stdwave,stdfibers,data)
 
 if "__main__" == __name__:
     main()

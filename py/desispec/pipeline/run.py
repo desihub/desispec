@@ -8,16 +8,21 @@ desispec.pipeline.run
 
 Tools for running the pipeline.
 """
+
+from __future__ import absolute_import, division, print_function
+
 import os
 import errno
 import sys
 import subprocess as sp
 
+from desispec.log import get_logger
+
 
 def pid_exists( pid ):
     """Check whether pid exists in the current process table.
 
-    **UNIX only.**
+    **UNIX only.**  Should work the same as psutil.pid_exists().
 
     Args:
         pid (int): A process ID.
@@ -50,116 +55,123 @@ def pid_exists( pid ):
         return True
 
 
+def subprocess_list(tasks, rank=0):
+    log = get_logger()
+    #pids = []
+    for tsk in tasks:
+        runcom = True
+        newest_in = 0
+        for dep in tsk['inputs']:
+            if not os.path.isfile(dep):
+                err = "dependency {} missing, cannot run task {}".format(dep, " ".join(tsk['command']))
+                log.error(err)
+                runcom = False
+            else:
+                t = os.path.getmtime(dep)
+                if t > newest_in:
+                    newest_in = t
+        alldone = True
+        if len(tsk['outputs']) == 0:
+            alldone = False
+        for outf in tsk['outputs']:
+            if not os.path.isfile(outf):
+                alldone = False
+            else:
+                t = os.path.getmtime(outf)
+                if t < newest_in:
+                    alldone = False
+        if alldone:
+            runcom = False
+        proc = None
+        if runcom:
+            # proc = sp.Popen(tsk['command'], stdout=sp.PIPE, stderr=sp.STDOUT)
+            # log.info("subproc[{}]: {}".format(proc.pid, " ".join(tsk['command'])))
+            # outs, errs = proc.communicate()
+            # for line in outs:
+            #     log.debug("subproc[{}]:   {}".format(proc.pid, line.rstrip()))
+            # proc.wait()
+            log.info("subproc: {}".format(" ".join(tsk['command'])))
+            ret = sp.call(tsk['command'])
+            for outf in tsk['outputs']:
+                ret = sp.call(['mv', '{}.part'.format(outf), outf])
 
-class Machine( object ):
-    """This class represents the properties of a single machine.  This includes
-    the node configuration, etc.
-    """
+    return
 
-    def __init__( self ):
-        pass
 
-    def nodes( self ):
-        """Returns the maximum number of nodes to use on this machine.
-        """
-        return 1
+def shell_job(path, logroot, envsetup, desisetup, commands):
+    with open(path, 'w') as f:
+        f.write("#!/bin/bash\n\n")
+        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write("log={}_${{now}}.log\n\n".format(logroot))
+        for com in envsetup:
+            f.write("{}\n".format(com))
+        f.write("\n")
+        f.write("source {}\n\n".format(desisetup))
+        for com in commands:
+            executable = com.split(' ')[0]
+            f.write("which {}\n".format(executable))
+            f.write("time {} >>${{log}} 2>&1\n\n".format(com))
+    return
 
-    def cores_per_node( self ):
-        """Returns the number of cores per node on this machine.
-        """
-        return 1
 
-    def proc_spawn( self, com, logfile ):
-        """Spawn a process and redirect output to a log file.
-        """
-        proc = sp.Popen( com, stdout=open ( logfile, "w" ), stderr=sp.STDOUT, stdin=None, close_fds=True )
-        return proc.pid
+def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False):
+    hours = int(minutes/60)
+    fullmin = int(minutes - 60*hours)
+    timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
 
-    def proc_wait( self, pid ):
-        """Wait for a process to finish.
-        """
-        if pid_exists( pid ):
-            ex = os.wait( pid )
-            return ex[1]
+    totalnodes = nodes
+    if multisrun:
+        # we are running every command as a separate srun
+        # and backgrounding them.  In this case, the nodes
+        # given are per command, so we need to compute the
+        # total.
+        totalnodes = nodes * len(commands)
+
+    with open(path, 'w') as f:
+        f.write("#!/bin/bash -l\n\n")
+        if totalnodes > 512:
+            f.write("#SBATCH --partition=regular\n")
         else:
-            return 0
+            f.write("#SBATCH --partition=debug\n")
+        f.write("#SBATCH --account=desi\n")
+        f.write("#SBATCH --nodes={}\n".format(totalnodes))
+        f.write("#SBATCH --time={}\n".format(timestr))
+        f.write("#SBATCH --job-name=desipipe\n")
+        f.write("#SBATCH --output={}_slurm_%j.log\n".format(logroot))
+        f.write("#SBATCH --export=NONE\n\n")
+        for com in envsetup:
+            f.write("{}\n".format(com))
+        f.write("\n")
+        f.write("source {}\n\n".format(desisetup))
+        f.write("node_cores=0\n")
+        f.write("if [ ${NERSC_HOST} = edison ]; then\n")
+        f.write("  node_cores=24\n")
+        f.write("else\n")
+        f.write("  node_cores=32\n")
+        f.write("fi\n")
+        f.write("\n")
+        f.write("nodes={}\n".format(nodes))
+        f.write("node_proc={}\n".format(nodeproc))
+        f.write("node_thread=$(( node_cores / node_proc ))\n")
+        f.write("procs=$(( nodes * node_proc ))\n\n")
+        if openmp:
+            f.write("export OMP_NUM_THREADS=${node_thread}\n")
+            f.write("\n")
+        runstr = "srun --export=ALL"
+        if multiproc:
+            runstr = "{} --cpu_bind=no".format(runstr)
+        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}}\"\n\n".format(runstr))
+        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write("echo \"job datestamp = ${now}\"\n")
+        f.write("log={}_${{now}}.log\n\n".format(logroot))
+        for com in commands:
+            executable = com.split(' ')[0]
+            f.write("which {}\n".format(executable))
+            f.write("time ${{run}} {} >>${{log}} 2>&1".format(com))
+            if multisrun:
+                f.write(" &")
+            f.write("\n\n")
+        if multisrun:
+            f.write("wait\n\n")
+    return
 
-    def proc_poll( self, pid ):
-        """Check if specified process is still running.
-        """
-        return pid_exists( pid )
-
-    def job_run( self, com, nodes, ppn, log ):
-        """Runs a command on a specified number of nodes, and a specified number
-        of processes per node.
-        """
-        jobid = 0
-        return jobid
-
-    def job_wait( self, jobid ):
-        """Wait for a job to finish before returning.
-        """
-        return
-
-    def job_complete( self, jobid ):
-        """Is the speficied jobid still running?
-        """
-        return False
-
-
-class MachineLocal( Machine ):
-    """Local machine definition.  We use one node and one process, and use
-    subprocess to run jobs.
-    """
-
-    def __init__( self ):
-        pass
-
-    def job_run( self, com, nodes, ppn, log ):
-        """Placeholder
-        """
-        return jobid
-
-    def job_wait( self, jobid ):
-        """Wait for a job to finish before returning.
-        """
-        return
-
-    def job_complete( self, jobid ):
-        """Is the speficied jobid still running?
-        """
-        return False
-
-"""
-Notes to keep handy while editing:
-
-class MachineEdison
-
-PBS_VERSION=TORQUE-4.2.7
-PBS_JOBNAME=STDIN
-PBS_ENVIRONMENT=PBS_INTERACTIVE
-PBS_O_WORKDIR=/global/u1/k/kisner
-PBS_TASKNUM=1
-PBS_O_HOME=/global/homes/k/kisner
-PBSCOREDUMP=True
-PBS_WALLTIME=1800
-PBS_GPUFILE=/var/spool/torque/aux//2153436.edique02gpu
-PBS_MOMPORT=15003
-PBS_O_QUEUE=debug
-PBS_O_LOGNAME=kisner
-PBS_JOBCOOKIE=C2EA813B2802321F3DF6015972F33122
-PBS_NODENUM=0
-PBS_NUM_NODES=1
-PBS_O_SHELL=/bin/bash
-PBS_JOBID=2153436.edique02
-PBS_O_HOST=edison07
-PBS_VNODENUM=0
-PBS_QUEUE=debug
-PBS_MICFILE=/var/spool/torque/aux//2153436.edique02mic
-PBS_O_SUBMIT_FILTER=/usr/syscom/nsg/sbin/submit_filter
-PBS_O_MAIL=/var/mail/kisner
-PBS_NP=48
-PBS_NUM_PPN=1
-PBS_O_SERVER=edique02
-PBS_NODEFILE=/var/spool/torque/aux//2153436.edique02
-"""
