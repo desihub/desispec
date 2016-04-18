@@ -3,43 +3,30 @@ boxcar extraction for Spectra from Desi Image
 """
 import numpy as np
 
-def do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500):
-    """ 
-    Args:  
-         image  : desispec.image object
-         band: band [r,b,z]
-         psf: psf object respective of given band
-         camera : camera ID
-         boxwidth: HW box size in pixels
-         dw: wavelength binning in output spectra, Default= 0.5A
-         nspec: number of spectra to extract from the given image object
-
-    Returns a desispec.frame object
+def do_boxcar(image,psf,boxwidth=2.5,dw=0.5,nspec=500):
     """
-    from desispec.frame import Frame
+    Extracts spectra row by row, given the centroids  
+    Args:  
+         image  : desispec.image object 
+         psf: desispec.psf.PSF like object
+              Or do we just parse the traces here and write a separate wrapper to handle this? Leaving psf in the input argument now.           
+         boxwidth: HW box size in pixels
+         dw: constant wavelength grid spacing in the output spectra 
+    Returns desispec.frame.Frame object
+    """
     import math
+    from desispec.frame import Frame
 
-    if band == "r":
-        wmin=5625
-        wmax=7741
-        waves=np.arange(wmin,wmax,0.25)
-        mask=np.zeros((4114,4128))
-    elif band == "b":
-        wmin=3569
-        wmax=5949
-        waves=np.arange(wmin,wmax,0.25)
-        mask=np.zeros((4096,4096))
-    elif band == "z":
-        wmin=7435
-        wmax=9834
-        waves=np.arange(wmin,wmax,0.25)
-        mask=np.zeros((4114,4128))
-    else:
-        print "Band can be r z or b"
-        return None
+    #wavelength=psf.wavelength() # (nspec,npix_y)
+    wmin=psf.wmin
+    wmax=psf.wmax
+    waves=np.arange(wmin,wmax,0.25)
+    xs=psf.x(None,waves) #- xtraces # doing the full image here.
+    ys=psf.y(None,waves) #- ytraces 
 
-    xs=psf.x(None,waves)
-    ys=psf.y(None,waves)
+    camera=image.camera
+    spectrograph=int(camera[1:]) #- first char is "r", "b", or "z"
+    mask=np.zeros(image.pix.T.shape)
     maxx,maxy=mask.shape
     maxx=maxx-1
     maxy=maxy-1
@@ -91,12 +78,14 @@ def do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500):
     for r in xrange(flux.shape[0]):
         row=np.add.reduceat(maskedimg[r],ranges[r])[:-1]
         flux[r]=row
+
     from desispec.interpolation import resample_flux
-    wtarget=np.arange(wmin,wmax+dw/2.0,dw)
+
+    wtarget=np.arange(wmin,wmax+dw/2.0,dw) #- using same wmin and wmax.
     fflux=np.zeros((500,len(wtarget)))
     ivar=np.zeros((500,len(wtarget)))
-    resolution=np.zeros((500,21,len(wtarget)))
-    #TODO get the approximate resolution matrix. Like in specsim?
+    resolution=resolution=np.zeros((500,21,len(wtarget))) #- placeholder for online case. Offline should be usable
+    #TODO get the approximate resolution matrix for online or don't need them? How to perform fiberflat, sky subtraction etc?
     for spec in xrange(flux.shape[1]):
         ww=psf.wavelength(spec)
         fflux[spec,:]=resample_flux(wtarget,ww,flux[:,spec])
@@ -104,6 +93,6 @@ def do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500):
     dwave=np.gradient(wtarget)
     fflux/=dwave
     ivar*=dwave**2
-    #Extracted the full image but write frame in [nspec,nwave]
-            
-    return Frame(wtarget,fflux[:nspec],ivar[:nspec],resolution_data=resolution[:nspec],spectrograph=camera)
+    #- Extracted the full image but write frame in [nspec,nwave]
+    #- return a desispec.frame object
+    return Frame(wtarget,fflux[:nspec],ivar[:nspec],resolution_data=resolution[:nspec],spectrograph=spectrograph)
