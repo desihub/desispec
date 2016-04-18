@@ -145,6 +145,86 @@ class BiasSubtraction(pas.PipelineAlg):
         from desispec.image import Image as im
         return im(value,ivar_new,mask,camera=camera,meta=meta)
 
+
+class BootCalibration(pas.PipelineAlg):
+    from desispec import bootcalib as desiboot
+    
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Boot Calibration"
+        from desispec.frame import Frame as fr
+        from desispec.frame import Image as im
+        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
+        
+    def run(self,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if 'FiberFlatImage' not in kwargs:
+            raise qlexceptions.ParameterException("Need FiberFlatImage")
+        if 'ArcLampImage' not in kwargs: 
+            raise qlexceptions.ParameterException("Need ArcLampImage")
+
+        return self.do_bootcalib(**kwargs)
+
+    def do_bootcalib(self,**kwargs):
+        import numpy as np
+        from desispec import bootcalib as desiboot
+        from desiutil import funcfits as dufits
+        from desispec.io import read_image
+        if "Deg" not in kwargs:
+            deg=5 #- 5th order legendre polynomial
+        else:
+            deg=kwargs["Deg"]
+        flatimage=kwargs["FiberFlatImage"]
+        camera=flatimage.camera
+        flat=flatimage.pix
+        ny=flat.shape[0]
+        #- Somewhat inherited from desispec/bin/desi_bootcalib.py directly as needed
+
+        xpk,ypos,cut=desiboot.find_fiber_peaks(flat)
+        xset,xerr=desiboot.trace_crude_init(flat,xpk,ypos)
+        xfit,fdicts=desiboot.fit_traces(xset,xerr)
+        gauss=desiboot.fiber_gauss(flat,xfit,xerr)
+
+        #- Also need wavelength solution not just trace
+        arcimage=kwargs["ArcLampImage"]
+        arc=arcimage.pix
+        all_spec=desiboot.extract_sngfibers_gaussianpsf(arc,xfit,gauss)
+        llist=desiboot.load_arcline_list(camera)
+        dlamb,wmark,gd_lines,line_guess=desiboot.load_gdarc_lines(camera)
+        # Solve for wavelengths
+        all_wv_soln=[]
+        all_dlamb=[]
+        for ii in range(all_spec.shape[1]):
+            spec=all_spec[:,ii]
+            pixpk=desiboot.find_arc_lines(spec)
+            id_dict=desiboot.id_arc_lines(pixpk,gd_lines,dlamb,wmark,line_guess=line_guess)
+            id_dict['fiber']=ii
+            # Find the other good ones
+            if camera == 'z':
+                inpoly = 3  # The solution in the z-camera has greater curvature
+            else:
+                inpoly = 2
+            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=inpoly)
+            #- Now the rest
+            desiboot.id_remainder(id_dict, pixpk, llist)
+            # Final fit wave vs. pix too
+            final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
+            rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0],final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
+            final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',deg, niter=5)
+
+            id_dict['final_fit'] = final_fit
+            id_dict['rms'] = rms
+            id_dict['final_fit_pix'] = final_fit_pix
+            id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
+            id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
+            id_dict['mask'] = mask
+            all_wv_soln.append(id_dict)
+
+        desiboot.write_psf('bootpsf.fits', xfit, fdicts, gauss,all_wv_soln)
+
+    
+
 class BoxcarExtraction(pas.PipelineAlg):
     from desispec.image import Image as im
     from desispec.frame import Frame as fr
