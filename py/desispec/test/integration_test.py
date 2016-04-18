@@ -116,12 +116,15 @@ def integration_test(night=None, nspec=5, clobber=False):
         for channel in ['b', 'r', 'z']:
             camera = channel+'0'
             pixfile = io.findfile('pix', night, expid, camera)
+            fiberfile = io.findfile('fibermap', night, expid)
             psffile = '{}/data/specpsf/psf-{}.fits'.format(os.getenv('DESIMODEL'), channel)
             framefile = io.findfile('frame', night, expid, camera)
-            cmd = "exspec -i {pix} -p {psf} --specmin 0 --nspec {nspec} -w {wave} -o {frame}".format(
-                pix=pixfile, psf=psffile, wave=waverange[channel], frame=framefile, **params)
+            # cmd = "exspec -i {pix} -p {psf} --specmin 0 --nspec {nspec} -w {wave} -o {frame}".format(
+            #     pix=pixfile, psf=psffile, wave=waverange[channel], frame=framefile, **params)
+            cmd = "desi_extract_spectra.py -i {pix} -p {psf} -f {fibermap} --specmin 0 --nspec {nspec} -o {frame}".format(
+                pix=pixfile, psf=psffile, frame=framefile, fibermap=fiberfile, **params)
 
-            inputs = [pixfile, psffile]
+            inputs = [pixfile, psffile, fiberfile]
             outputs = [framefile,]
             if runcmd(cmd, inputs, outputs, clobber) != 0:
                 raise RuntimeError('extraction failed for {} expid {}'.format(camera, expid))

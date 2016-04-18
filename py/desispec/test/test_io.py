@@ -6,11 +6,12 @@ import numpy as np
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
-from desispec.qa.qa_exposure import QA_Frame
+from desispec.qa import QA_Frame
 from desispec.image import Image
 import desispec.io
 import desispec.io.qa as desio_qa
 from astropy.io import fits
+from astropy.table import Table
 from shutil import rmtree
 
 class TestIO(unittest.TestCase):
@@ -91,7 +92,7 @@ class TestIO(unittest.TestCase):
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        meta = dict(SPECMIN=0)
+        meta = dict(BLAT=0, FOO='abc', FIBERMIN=500)
         mask_int = np.zeros((nspec, nwave), dtype=int)
         mask_uint = np.zeros((nspec, nwave), dtype=np.uint32)
         wave = np.arange(nwave)
@@ -108,6 +109,19 @@ class TestIO(unittest.TestCase):
             self.assertTrue(np.all(mask == frame.mask))
             self.assertTrue(np.all(R == frame.resolution_data))
             self.assertTrue(frame.resolution_data.dtype.isnative)
+            self.assertEqual(frame.meta['BLAT'], meta['BLAT'])
+            self.assertEqual(frame.meta['FOO'], meta['FOO'])
+            
+        #- with and without fibermap
+        self.assertEqual(frame.fibermap, None)
+        fibermap = desispec.io.empty_fibermap(nspec)
+        fibermap['TARGETID'] = np.arange(nspec)*2
+        frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap)
+        desispec.io.write_frame(self.testfile, frx)
+        frame = desispec.io.read_frame(self.testfile)
+        for name in fibermap.dtype.names:
+            match = np.all(fibermap[name] == frame.fibermap[name])
+            self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
     def test_sky_rw(self):
         nspec, nwave = 5,10
@@ -156,6 +170,17 @@ class TestIO(unittest.TestCase):
         self.assertTrue(xff.meanspec.dtype.isnative)
         self.assertTrue(xff.wave.dtype.isnative)
 
+    def test_empty_fibermap(self):
+        fibermap = desispec.io.fibermap.empty_fibermap(10)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == 0))
+        fibermap = desispec.io.fibermap.empty_fibermap(10, specmin=20)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)+20))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == 0))
+        fibermap = desispec.io.fibermap.empty_fibermap(10, specmin=495)
+        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)+495))
+        self.assertTrue(np.all(fibermap['SPECTROID'] == [0,0,0,0,0,1,1,1,1,1]))
+
     def test_fibermap_rw(self):
         fibermap = desispec.io.fibermap.empty_fibermap(10)
         for key in fibermap.dtype.names:
@@ -181,6 +206,72 @@ class TestIO(unittest.TestCase):
             self.assertEqual(c1.dtype.itemsize, c2.dtype.itemsize)
             self.assertEqual(c1.shape, c2.shape)
             self.assertTrue(np.all(c1 == c2))
+
+    def test_stdstar(self):
+        nstd = 5
+        nwave = 10
+        flux = np.random.uniform(size=(nstd, nwave))
+        wave = np.arange(nwave)
+        fibers = np.arange(nstd)*2
+        data = Table()
+        data['BESTMODEL'] = np.arange(nstd)
+        data['TEMPLATEID'] = np.arange(nstd)
+        data['CHI2DOF'] = np.ones(nstd)
+        desispec.io.write_stdstar_models(self.testfile, flux, wave, fibers, data)
+        
+        fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)
+        self.assertTrue(np.all(fx == flux))
+        self.assertTrue(np.all(wx == wave))
+        self.assertTrue(np.all(fibx == fibers))
+
+    def test_fluxcalib(self):
+        from desispec.fluxcalibration import FluxCalib
+        nspec = 5
+        nwave = 10
+        wave = np.arange(nwave)
+        calib = np.random.uniform(size=(nspec, nwave))
+        ivar = np.random.uniform(size=(nspec, nwave))
+        mask = np.random.uniform(0, 2, size=(nspec, nwave)).astype('i4')
+        
+        fc = FluxCalib(wave, calib, ivar, mask)
+        desispec.io.write_flux_calibration(self.testfile, fc)
+        fx = desispec.io.read_flux_calibration(self.testfile)
+        self.assertTrue(np.all(fx.wave == fc.wave))
+        self.assertTrue(np.all(fx.calib == fc.calib))
+        self.assertTrue(np.all(fx.ivar == fc.ivar))
+        self.assertTrue(np.all(fx.mask == fc.mask))
+
+    def test_brick(self):
+        from desispec.io.brick import Brick
+        nspec = 5
+        nwave = 10
+        wave = np.arange(nwave)
+        flux = np.random.uniform(size=(nspec, nwave))
+        ivar = np.random.uniform(size=(nspec, nwave))
+        resolution = np.random.uniform(size=(nspec, 5, nwave))
+        fibermap = desispec.io.fibermap.empty_fibermap(nspec)
+        fibermap['TARGETID'] = 3*np.arange(nspec)
+        night = '20101020'
+        expid = 2
+        header = dict(BRICKNAM = '0002p000', channel='b')
+        brick = Brick(self.testfile, mode='update', header=header)
+        brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid)
+        brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid+1)
+        brick.close()
+        
+        bx = Brick(self.testfile)
+        self.assertTrue(np.all(bx.get_wavelength_grid() == wave))
+        self.assertEqual(bx.get_num_targets(), nspec)
+        self.assertEqual(bx.get_num_spectra(), 2*nspec)
+        self.assertEqual(set(bx.get_target_ids()), set(fibermap['TARGETID']))
+        flux2, ivar2, resolution2, info2 = bx.get_target(0)
+        self.assertEqual(flux2.shape, (2,10))
+        self.assertEqual(ivar2.shape, (2,10))
+        self.assertEqual(resolution2.shape, (2,5,10))
+        self.assertEqual(len(info2), 2)
+        self.assertTrue( np.all(flux2[0] == flux[0]) )
+        self.assertTrue( np.all(ivar2[0] == ivar[0]) )
+        bx.close()
 
     def test_image_rw(self):
         shape = (5,5)
@@ -229,7 +320,7 @@ class TestIO(unittest.TestCase):
 
     def test_io_qa_frame(self):        
         #- Init 
-        qaframe = QA_Frame(flavor='science')
+        qaframe = QA_Frame(flavor='dark')
         qaframe.init_skysub()
         # Write
         desio_qa.write_qa_frame(self.testyfile, qaframe)
@@ -252,7 +343,7 @@ class TestIO(unittest.TestCase):
         kwargs = {
             'night':'20150510',
             'expid':2,
-            'spectrograph':0
+            'spectrograph':3
         }
         for i in ('sky', 'stdstars'):
             # kwargs['i'] = i

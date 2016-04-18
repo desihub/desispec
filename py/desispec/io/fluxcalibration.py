@@ -10,8 +10,8 @@ from astropy.io import fits
 import numpy,scipy
 from .util import fitsheader, native_endian, makepath
 
-def write_stdstar_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
-    """Writes the normalized flux for the best model.
+def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
+    """Writes the normalized flux for the best models.
     
     Args:
         norm_modelfile : output file path
@@ -19,7 +19,7 @@ def write_stdstar_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=No
         wave : 1D array of wavelengths[nwave] in Angstroms
         fibers : 1D array of fiberids for these spectra
         data : meta data table about which templates best fit; should include
-            BESTMODELINDEX, TEMPLATEID, CHI2DOF
+            BESTMODEL, TEMPLATEID, CHI2DOF
     """
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
@@ -36,10 +36,10 @@ def write_stdstar_model(norm_modelfile,normalizedFlux,wave,fibers,data,header=No
 
     hdr['EXTNAME'] = ('METADATA', 'no dimension')
     from astropy.io.fits import Column
-    BESTMODELINDEX=Column(name='BESTMODELINDEX',format='K',array=data['BESTMODEL'])
+    BESTMODEL=Column(name='BESTMODEL',format='K',array=data['BESTMODEL'])
     TEMPLATEID=Column(name='TEMPLATEID',format='K',array=data['TEMPLATEID'])
     CHI2DOF=Column(name='CHI2DOF',format='D',array=data['CHI2DOF'])
-    cols=fits.ColDefs([BESTMODELINDEX,TEMPLATEID,CHI2DOF])
+    cols=fits.ColDefs([BESTMODEL,TEMPLATEID,CHI2DOF])
     tbhdu=fits.BinTableHDU.from_columns(cols,header=hdr)
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])

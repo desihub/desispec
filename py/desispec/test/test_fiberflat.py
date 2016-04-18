@@ -48,7 +48,7 @@ class TestFiberFlat(unittest.TestCase):
         
         #- Setup data for a Resolution matrix
         sigma = 4.0
-        ndiag = 21
+        ndiag = 11
         xx = np.linspace(-(ndiag-1)/2.0, +(ndiag-1)/2.0, ndiag)
         Rdata = np.zeros( (nspec, ndiag, nwave) )
         kernel = np.exp(-xx**2/(2*sigma))

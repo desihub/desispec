@@ -1,0 +1,190 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Run the specex PSF estimation in parallel.
+"""
+
+from __future__ import absolute_import, division, print_function
+
+comm = None
+rank = 0
+nproc = 1
+
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.rank
+    nproc = comm.size
+except ImportError:
+    print("mpi4py not found, using only one process")
+
+import sys
+import os
+import numpy as np
+import argparse
+import re
+
+import desispec.io as io
+from desispec.log import get_logger
+import desispec.pipeline as pipe
+
+
+def main():
+    parser = argparse.ArgumentParser( description='Run PSF estimation for a night of data using multiple processes.' )
+    parser.add_argument( '--raw', required=False, default=None, help='raw data directory' )
+    parser.add_argument( '--redux', required=False, default=None, help='output directory' )
+    parser.add_argument( '--night', required=True, default=None, help='night (YYYYMMDD)' )
+    parser.add_argument( '--expid', required=False, default=None, help='only process this exposure ID' )
+    parser.add_argument( '--lamplines', required=True, default=None, help='lamp lines file to use' )
+    parser.add_argument( '--dump', required=False, default=None, help='dump all commands to this file and exit.')
+    parser.add_argument( '--spectrographs', required=False, default=None, help='only process this comma-separated list of spectrographs' )
+    args = parser.parse_args()
+
+    log = get_logger()
+
+    spectrographs = []
+    if args.spectrographs is None:
+        for s in range(10):
+            spectrographs.append(s)
+    else:
+        spc = args.spectrographs.split(',')
+        for s in spc:
+            spectrographs.append(int(s))
+
+    # If data directories are not given, get them from environment
+    # variables.
+
+    date = io.validate_night(args.night)
+
+    rawdir = args.raw
+    if rawdir is None:
+        rawdir = io.rawdata_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_DATA'] = os.path.abspath(rawdir)
+    rawdir = os.path.abspath(rawdir)
+
+    specdir = args.redux
+    if specdir is None:
+        specdir = io.specprod_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_REDUX'] = os.path.abspath(specdir)
+    specdir = os.path.abspath(specdir)
+
+    if rank == 0:
+        log.info("using raw data directory: {}".format(rawdir))
+        log.info("using night {}".format(args.night))
+        log.info("using spectro redux dir {}".format(specdir))
+
+    # get the list of raw files
+    expid = None
+    exptype = None
+    fibermap = None
+    fullraw = None
+    if rank == 0:
+        log.info("finding arc exposures")
+        (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, spectrographs=spectrographs)
+    if comm is not None:
+        expid = comm.bcast(expid, root=0)
+        exptype = comm.bcast(exptype, root=0)
+        fibermap = comm.bcast(fibermap, root=0)
+        fullraw = comm.bcast(fullraw, root=0)
+
+    # if requested, restrict the exposure list to a single ID
+    raw = {}
+    if args.expid is not None:
+        if rank == 0:
+            log.info("processing ONLY exposure {}".format(args.expid))
+        raw[args.expid] = fullraw[args.expid]
+    else:
+        raw = fullraw
+
+    bootcal = {}
+    for cam in raw[sorted(raw.keys())[0]].keys():
+        bootcal[cam] = os.path.join(specdir, 'calib2d', 'psf', args.night, 'psfboot-{}.fits'.format(cam))
+
+    if rank == 0:
+        log.info("computing specex tasks")
+    [tasks_bundle, tasks_merge, tasks_clean] = pipe.tasks_specex(expid, exptype, raw, args.lamplines, bootcal=bootcal)
+
+    # change to the redux directory
+
+    os.chdir(os.path.join(specdir, 'exposures', args.night))
+
+    # optionally dump the low-level commands that will be run
+    # and then exit.
+
+    if args.dump is not None:
+        if rank == 0:
+            with open(args.dump, 'w') as d:
+                for t in tasks_bundle:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in tasks_merge:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+                for t in tasks_clean:
+                    com = " ".join(t['command'])
+                    d.write("{}\n".format(com))
+        if comm is not None:
+            comm.barrier()
+        sys.exit(0)
+
+    # create any output directories
+
+    if rank == 0:
+        for tsk in tasks_bundle:
+            for f in tsk['outputs']:
+                dr = os.path.dirname(f)
+                if not os.path.isdir(dr):
+                    os.makedirs(dr)
+    if comm is not None:
+        comm.barrier()
+
+    # do all the per-bundle tasks now
+
+    if rank == 0:
+        log.info("executing per-bundle PSF estimation")
+    work = pipe.task_dist(tasks_bundle, nproc)
+    pipe.subprocess_list(work[rank])
+
+    # now wait for all processes to finish
+    if comm is not None:
+        comm.barrier()
+
+    # do all the merging tasks
+
+    if rank == 0:
+        log.info("merging per-bundle PSFs")
+    work = pipe.task_dist(tasks_merge, nproc)
+    pipe.subprocess_list(work[rank])
+
+    # now wait for all processes to finish
+    if comm is not None:
+        comm.barrier()
+
+    # do all the cleaning tasks
+
+    if rank == 0:
+        log.info("cleaning up per-bundle files")
+    work = pipe.task_dist(tasks_clean, nproc)
+    pipe.subprocess_list(work[rank])
+
+    # now wait for all processes to finish
+    if comm is not None:
+        comm.barrier()
+
+
+
+if __name__ == "__main__":
+    main()
+
