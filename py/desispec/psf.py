@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Given a psf output file eg. output from bootcalib.write_psf
+Given a psf output file eg. output from bootcalib.write_psf or desimodel/data/specpsf/PSF* files
 this defines an interface that other codes can use the trace and wavelength solutions
 
 Mostly making parallel to specter.psf.PSF baseclass and inheriting as needed, but only xtrace,

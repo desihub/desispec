@@ -141,33 +141,48 @@ class BoxcarExtraction(pas.PipelineAlg):
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
     def run(self,*args,**kwargs):
+        from desispec.boxcar import do_boxcar
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "Band" not in kwargs:
-            raise qlexceptions.ParameterException("Need Band name")
-        if "Spectrograph" not in kwargs:
-            raise qlexceptions.ParameterException("Need Spectrograph ID")
         if "PSFFile" not in kwargs:
             raise qlexceptions.ParameterException("Need PSF File")
-        return self.boxcar_extract(args[0],**kwargs)
+        return do_boxcar(args[0],kwargs["PSFFile"],boxwidth=kwargs["BoxWidth"],dw=kwargs["DeltaW"],nspec=kwargs["Nspec"])
+        #return self.boxcar_extract(args[0],**kwargs)
     def get_default_config(self):
-        return {("Band","r","Which band to work on [r,b,z]"),
-                ("Spectrograph",0,"Spectrograph to use [0-9]"),
-                ("BoxWidth",2.5,"Boxcar halfwidth"),
+        return {("BoxWidth",2.5,"Boxcar halfwidth"),
                 ("PSFFile","%%PSFFile","PSFFile to use"),
                 ("DeltaW",0.5,"Binwidth of extrapolated wavelength array")
+                ("Nspec",500,"number of spectra to extract")
                 }
     def boxcar_extract(self,image,**kwargs):
         from desispec.boxcar import do_boxcar
-        from specter.psf import load_psf
-        psf=kwargs["PSFFile"] # TODO This is confusing, PSFFile looks like a file not an object. 
-        band=kwargs["Band"]
-        camera=kwargs["Spectrograph"]
+        psf=kwargs["PSFFile"] 
         boxwidth=kwargs["BoxWidth"]
+        dw=kwargs["DeltaW"]
+        nspec=kwargs["Nspec"]
        
-        return do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500)
+        return do_boxcar(image,psf,boxwidth=2.5,dw=0.5,nspec=500)
+
+class FiberFlat(pas.PipelineAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Fiber Flatfield"
+        from desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if "FiberFlatFrame" not in kwargs:
+            raise qlexceptions.ParameterException("Need Fiberflat frame file")
+        from desispec.fiberflat import compute_fiberflat,apply_fiberflat
+        fiberflat=compute_fiberflat(args[0],kwargs["FiberFlatFrame"])
+        return apply_fiberflat(args[0],fiberflat)
+
 
 class SubtractSky(pas.PipelineAlg):
     def __init__(self,name,config,logger=None):
@@ -175,36 +190,16 @@ class SubtractSky(pas.PipelineAlg):
             name="Sky Subtraction"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
-        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "FiberMap" not in kwargs:
-            raise qlexceptions.ParameterException("Need Fibermap file")
-        if "FiberFlat" not in kwargs:
-            raise qlexceptions.ParameterException("Need Fiberflat file")
-        fiber_flat=self.fiberflat(args[0],**kwargs)
-        sky_model=self.computesky(args[0],**kwargs)
-        return self.subtractsky(args[0],fiber_flat,sky_model)
 
+        return self.do_sky_subtract(args[0],**kwargs)
     
-    def fiberflat(self,frame,**kwargs):
-        from desispec.io import read_fiberflat
-        fiberflat=read_fiberflat(kwargs["FiberFlat"]) # need a fiberflat file
-        return fiberflat
-        #apply_fiberflat(frame,fiberflat)
-    
-    def computesky(self,frame,**kwargs):
-        from desispec.sky import compute_sky
-        skymodel=compute_sky(frame,kwargs["FiberMap"])
-        return skymodel
-    
-    def subtractsky(self,frame,fiberflat,skymodel):
+    def do_sky_subtract(self,frame,**kwargs):
         from desispec.sky import subtract_sky
-        from desispec.fiberflat import apply_fiberflat
-        
-        apply_fiberflat(frame,fiberflat)  
-        subtract_sky(frame,skymodel)
-        return frame
+        skymodel=compute_sky(frame)
+        return subtract_sky(frame,skymodel)

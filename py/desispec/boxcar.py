@@ -84,8 +84,8 @@ def do_boxcar(image,psf,boxwidth=2.5,dw=0.5,nspec=500):
     wtarget=np.arange(wmin,wmax+dw/2.0,dw) #- using same wmin and wmax.
     fflux=np.zeros((500,len(wtarget)))
     ivar=np.zeros((500,len(wtarget)))
-    resolution=resolution=np.zeros((500,21,len(wtarget))) #- placeholder for online case. Offline should be usable
-    #TODO get the approximate resolution matrix for online or don't need them? How to perform fiberflat, sky subtraction etc?
+    resolution=np.zeros((500,21,len(wtarget))) #- placeholder for online case. Offline should be usable
+    #TODO get the approximate resolution matrix for online purpose or don't need them? How to perform fiberflat, sky subtraction etc or should have different version of them for online?
     for spec in xrange(flux.shape[1]):
         ww=psf.wavelength(spec)
         fflux[spec,:]=resample_flux(wtarget,ww,flux[:,spec])
