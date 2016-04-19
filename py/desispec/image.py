@@ -20,9 +20,6 @@ class Image(object):
             readnoise : CCD readout noise in electrons/pixel (float)
             camera : e.g. 'b0', 'r1', 'z9'
             meta : dict-like metadata key/values, e.g. from FITS header
-            
-        Notes:
-            TODO: expand readnoise be an array instead of a single float
         """
         if pix.ndim != 2:
             raise ValueError('pix must be 2D, not {}D'.format(pix.ndim))
