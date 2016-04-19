@@ -1,0 +1,309 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Generate plans for running the pipeline on one day's worth
+of exposures.
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import sys
+import os
+import numpy as np
+import argparse
+import re
+
+import yaml
+
+import astropy.io.fits as af
+
+import desispec.io as io
+
+
+def find_raw(dir, files):
+    expid = []
+    type = {}
+    fibermap = {}
+    raw = {}
+    fmat = re.compile(r'fibermap-(.*).fits')
+    rmat = re.compile(r'pix-(.*)-(.*).fits')
+    for f in files:
+        path = os.path.abspath(os.path.join(dir, f))
+        # is this a fibermap?
+        mf = fmat.match(f)
+        if mf is not None:
+            ex = mf.group(1)
+            if ex not in expid:
+                expid.append(ex)
+            fibermap[ex] = f
+            # check the fibermap header for the "flavor"
+            # keyword to see what this exposure is.
+            hd = af.getheader(path, 1)
+            type[ex] = hd['flavor']
+        else:
+            # is this a raw file?
+            mr = rmat.match(f)
+            if mr is not None:
+                cam = mr.group(1)
+                ex = mr.group(2)
+                if ex not in expid:
+                    expid.append(ex)
+                    raw[ex] = {}
+                raw[ex][cam] = f
+    return (sorted(expid), type, fibermap, raw)
+
+
+def main():
+    parser = argparse.ArgumentParser( description='Create spectroscopic pipeline plans for one day of data.' )
+    parser.add_argument( '--raw', required=False, default=None, help='raw data directory' )
+    parser.add_argument( '--redux', required=False, default=None, help='output directory' )
+    parser.add_argument( '--night', required=True, default=None, help='night (YYYYMMDD)' )
+    parser.add_argument( '--datamodel', required=False, default=None, help='datamodel checkout to use' )
+    args = parser.parse_args()
+
+    # If data directories are not given, get them from environment
+    # variables.
+
+    date = io.validate_night(args.night)
+
+    rawdir = args.raw
+    if rawdir is None:
+        rawdir = io.rawdata_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_DATA'] = os.path.abspath(rawdir)
+
+    specdir = args.redux
+    if specdir is None:
+        specdir = io.specprod_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_REDUX'] = os.path.abspath(specdir)
+
+    # These are fixed for DESI
+
+    spec_per_bundle = 25
+    nbundle = 20
+    nspec = nbundle * spec_per_bundle
+
+    # Hard-coded for now, but we should get these from commandline
+    # arguments or maybe from the data model?
+
+    # min_b = 
+    # max_b = 
+    # res_b = 
+
+    # min_r =
+    # max_r =
+    # res_r =
+
+    # min_z =
+    # max_z =
+    # res_z =
+
+    # Look for raw exposures in the given night.  For each exposure,
+    # determine if it is an arc, a flat, or a science exposure.
+
+    rawnight = os.path.join(rawdir, args.night)
+    specnight = os.path.join(specdir, 'exposures', args.night)
+
+    fibermap = None
+    raw = None
+    expid = None
+    exptype = None
+    for root, dirs, files in os.walk(rawnight, topdown=True):
+        expid, exptype, fibermap, raw = find_raw(root, files)
+
+    # print(rawnight)
+    # for ex in expid:
+    #     print(ex,": ")
+    #     print(" ",exptype[ex])
+    #     print(" ",fibermap[ex])
+    #     for cam in sorted(raw[ex].keys()):
+    #         print("  ",cam,": ",raw[ex][cam])
+
+    # Create the plan
+
+    plan = {}
+
+    meta = {}
+    meta['workdir'] = "{}".format(specnight)
+    meta['rawdir'] = "&RAWDIR {}".format(rawnight)
+    meta['datamodel'] = args.datamodel
+
+    plan['metadata'] = meta
+
+    plan['work'] = []
+
+    # Add tasks for PSF estimation.  These are placed in the
+    # psf section.
+
+    section = {}
+    section['name'] = 'psf'
+    section['tasks'] = []
+
+    # FIXME: currently specex requires the simpix file
+    # for the starting guess of the trace locations.
+
+    newest_psf = {}    
+
+    for ex in expid:
+        if exptype[ex] != "arc":
+            continue
+        cameras = sorted(raw[ex].keys())
+        for cam in cameras:
+            pixfile = os.path.join("*RAWDIR", raw[ex][cam])
+            simpixfile = os.path.join("*RAWDIR", "sim{}".format(raw[ex][cam]))
+            outbase = os.path.join(ex, "psf-{}-{}".format(cam, ex))
+            outxml = "{}.xml".format(outbase)
+            outfits = "{}.fits".format(outbase)
+            mergeinputs = []
+            for b in range(nbundle):
+                outxmlb = "{}-{:02}.xml".format(outbase, b)
+                outspotb = "{}-{:02}-spots.xml".format(outbase, b)
+                outfitsb = "{}-{:02}.fits".format(outbase, b)
+                mergeinputs.append(outxmlb)
+                com = ['specex_desi_psf']
+                com.extend(['-a', pixfile])
+                com.extend(['--xcoord-file', simpixfile])
+                com.extend(['--xcoord-hdu', '2'])
+                com.extend(['--ycoord-file', simpixfile])
+                com.extend(['--ycoord-hdu', '3'])
+                com.extend(['--out_xml', outxmlb])
+                com.extend(['--out_spots', outspotb])
+                com.extend(['--out_fits', outfitsb])
+                com.extend(['--first_bundle', b])
+                com.extend(['--last_bundle', b])
+                com.extend(['--gauss_hermite_deg', '8'])
+                com.extend(['--psfmodel', 'GAUSSHERMITE'])
+                com.extend(['--half_size_x', '14'])
+                com.extend(['--half_size_y', '8'])
+                com.extend(['--fit_psf_tails'])
+                com.extend(['--fit_continuum'])
+                com.extend(['-v'])
+                com.extend(['--core'])
+                com.extend(['--no_trace_fit'])
+                com.extend(['--legendre_deg_x', '1'])
+                com.extend(['--legendre_deg_wave', '4'])
+
+                task = {}
+                task['command'] = com
+                task['parallelism'] = 'node'
+                task['inputs'] = [pixfile, simpixfile]
+                task['outputs'] = [outxmlb, outspotb, outfitsb]
+
+                section['tasks'].append(task)
+
+            com = ['specex_merge_psf']
+            com.extend(['--out-fits', outfits])
+            com.extend(['--out-xml', outxml])
+            com.extend(mergeinputs)
+
+            task = {}
+            task['command'] = com
+            task['parallelism'] = 'node'
+            task['inputs'] = mergeinputs
+            task['outputs'] = [outfits, outxml]
+
+            section['tasks'].append(task)
+
+            if cam not in newest_psf:
+                newest_psf[cam] = outfits
+            else:
+                mat = re.match(r'psf-.*-(.*).fits', newest_psf[cam])
+                if mat is not None:
+                    if int(mat.group(1)) > int(ex):
+                        newest_psf[cam] = outfits
+
+    plan['work'].append(section)
+
+    # Add tasks for extraction of flats and science frames
+
+    section = {}
+    section['name'] = 'extract'
+    section['tasks'] = []
+
+    for ex in expid:
+        if exptype[ex] == "arc":
+            continue
+        cameras = sorted(raw[ex].keys())
+        for cam in cameras:
+            psffile = newest_psf[cam]
+            pixfile = os.path.join("*RAWDIR", raw[ex][cam])
+            outbase = os.path.join(ex, "frame-{}-{}".format(cam, ex))
+            outfile = "{}.fits".format(outbase)
+            mergeinputs = []
+
+            # select wavelength range based on camera
+            wmin = 0.0
+            wmax = 0.0
+            dw = 0.0
+
+            for b in range(nbundle):
+                outb = "{}-{:02}.fits".format(outbase, b)
+                mergeinputs.append(outb)
+                com = ['exspec']
+                com.extend(['-i', pixfile])
+                com.extend(['-p', psffile])
+                com.extend(['-o', outb])
+                com.extend(['--specmin', b*spec_per_bundle])
+                com.extend(['--nspec', spec_per_bundle])
+                com.extend(['-w', "{},{},{}".format(wmin,wmax,dw)])
+
+                task = {}
+                task['command'] = com
+                task['parallelism'] = 'core'
+                task['inputs'] = [pixfile, psffile]
+                task['outputs'] = [outb]
+
+                section['tasks'].append(task)
+
+            com = ['merge_bundles']
+            com.extend(['-o', outfile])
+            com.extend(mergeinputs)
+
+            task = {}
+            task['command'] = com
+            task['parallelism'] = 'core'
+            task['inputs'] = mergeinputs
+            task['outputs'] = [outfile]
+
+            section['tasks'].append(task)
+
+    plan['work'].append(section)
+
+
+
+    # Add tasks to generate fiber flat
+
+
+    # Add tasks to generate calibrated frames
+
+
+    # Add tasks to create bricks
+
+
+    # Add tasks for redshift fitting
+
+
+    # Write to output
+
+    with open('plan.yaml', 'w') as f:
+        yaml.dump(plan, f)
+
+    # with open('plan.json', 'w') as f:
+    #     json.dump(plan, f)
+
+
+
+if __name__ == "__main__":
+    main()
+

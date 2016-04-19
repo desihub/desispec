@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Run exspec extraction planning.
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import sys
+import os
+import numpy as np
+import argparse
+import re
+
+import desispec.io as io
+from desispec.log import get_logger
+import desispec.pipeline as pipe
+
+
+def main():
+    parser = argparse.ArgumentParser( description='Run specter extractions for a night of data using multiple processes.' )
+    parser.add_argument( '--raw', required=False, default=None, help='raw data directory' )
+    parser.add_argument( '--redux', required=False, default=None, help='output directory' )
+    parser.add_argument( '--night', required=True, default=None, help='night (YYYYMMDD)' )
+    parser.add_argument( '--expid', required=False, default=None, help='only process this exposure ID' )
+    parser.add_argument( '--range_b', required=False, default="3579.0,5939.0,0.8", help='B band wavelength range \"wmin,wmax,dw\"' )
+    parser.add_argument( '--range_r', required=False, default="5635.0,7731.0,0.8", help='R band wavelength range \"wmin,wmax,dw\"' )
+    parser.add_argument( '--range_z', required=False, default="7445.0,9824.0,0.8", help='Z band wavelength range \"wmin,wmax,dw\"' )
+    parser.add_argument( '--dump', required=True, default=None, help='write commands to this file.')
+    parser.add_argument( '--spectrographs', required=False, default=None, help='only process this comma-separated list of spectrographs' )
+    args = parser.parse_args()
+
+    log = get_logger()
+
+    spectrographs = []
+    if args.spectrographs is None:
+        for s in range(10):
+            spectrographs.append(s)
+    else:
+        spc = args.spectrographs.split(',')
+        for s in spc:
+            spectrographs.append(int(s))
+
+    # If data directories are not given, get them from environment
+    # variables.
+
+    date = io.validate_night(args.night)
+
+    rawdir = args.raw
+    if rawdir is None:
+        rawdir = io.rawdata_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_DATA'] = os.path.abspath(rawdir)
+    rawdir = os.path.abspath(rawdir)
+
+    specdir = args.redux
+    if specdir is None:
+        specdir = io.specprod_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_REDUX'] = os.path.abspath(specdir)
+    specdir = os.path.abspath(specdir)
+
+    # get the list of raw files
+
+    (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, spectrographs=spectrographs)
+    calpsf = os.path.join(specdir, 'calib2d', 'psf', args.night)
+    psf = {}
+    combine = True
+    for band in ['b', 'r', 'z']:
+        for spc in spectrographs:
+            cam = "{}{}".format(band, spc)
+            psf[cam] = os.path.join(calpsf, 'psf-{}.fits'.format(cam))
+            if not os.path.isfile(psf[cam]):
+                combine = False
+    if not combine:
+        psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
+
+    # if requested, restrict the exposure list to a single ID
+    raw = {}
+    if args.expid is not None:
+        raw[args.expid] = fullraw[args.expid]
+    else:
+        raw = fullraw
+
+    wrange_b = args.range_b.split(',')
+    wrange_r = args.range_r.split(',')
+    wrange_z = args.range_z.split(',')
+    wrange = {}
+    for c in range(10):
+        wrange['b{}'.format(c)] = (float(wrange_b[0]), float(wrange_b[1]), float(wrange_b[2]))
+        wrange['r{}'.format(c)] = (float(wrange_r[0]), float(wrange_r[1]), float(wrange_r[2]))
+        wrange['z{}'.format(c)] = (float(wrange_z[0]), float(wrange_z[1]), float(wrange_z[2]))
+
+    [tasks_bundle, tasks_merge, tasks_clean] = pipe.tasks_exspec(expid, exptype, raw, fibermap, wrange, psf)
+
+    # optionally dump the low-level commands that will be run
+    # and then exit.
+
+    with open(args.dump, 'w') as d:
+        for t in tasks_bundle:
+            com = " ".join(t['command'])
+            d.write("{}\n".format(com))
+        for t in tasks_merge:
+            com = " ".join(t['command'])
+            d.write("{}\n".format(com))
+        for t in tasks_clean:
+            com = " ".join(t['command'])
+            d.write("{}\n".format(com))
+
+
+if __name__ == "__main__":
+    main()
+

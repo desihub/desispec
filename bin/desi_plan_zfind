@@ -1,0 +1,66 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Run redshift fitting planning.
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import sys
+import os
+import numpy as np
+import argparse
+import re
+
+import desispec.io as io
+from desispec.log import get_logger
+import desispec.pipeline as pipe
+
+
+def main():
+    parser = argparse.ArgumentParser( description='Run redshift fitting across multiple bricks in parallel.' )
+    parser.add_argument( '--redux', required=False, default=None, help='production directory' )
+    parser.add_argument( '--objtype', required=False, default=None, help='only use templates for these objtypes (comma separated elg,lrg,qso,star)' )
+    parser.add_argument( '--zspec', required=False, action='store_true', help='also include spectra in output file' )
+    parser.add_argument( '--dump', required=True, default=None, help='write commands to this file.')
+
+    args = parser.parse_args()
+
+    log = get_logger()
+
+    # If data directories are not given, get them from environment
+    # variables.
+
+    specdir = args.redux
+    if specdir is None:
+        specdir = io.specprod_root()
+    else:
+        # We are overriding the raw data directory.
+        # Set the correct environment variable so that
+        # the I/O routines work.
+        os.environ['DESI_SPECTRO_REDUX'] = os.path.abspath(specdir)
+    specdir = os.path.abspath(specdir)
+
+    # get the list of bricks
+    bricks = pipe.find_bricks(specdir)
+
+    # compute the tasks
+
+    tasks = pipe.tasks_zfind(bricks, args.objtype, args.zspec)
+
+    # optionally dump the low-level commands that will be run
+    # and then exit.
+
+    with open(args.dump, 'w') as d:
+        for t in tasks:
+            com = " ".join(t['command'])
+            d.write("{}\n".format(com))
+
+
+if __name__ == "__main__":
+    main()
+
