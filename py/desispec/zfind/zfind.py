@@ -87,7 +87,7 @@ def qa_zbest(param, zf, brick):
     qadict = {}
 
     # Failures
-    nfail = np.sum(zf.zwarn > 0)  
+    nfail = np.sum(zf.zwarn > 0)
     qadict['NFAIL'] = int(nfail)  # For yaml
     if nfail > param['MAX_NFAIL']:
         log.warn("High number of failed redshifts {:d}".format(nfail))
@@ -103,7 +103,7 @@ def qa_zbest(param, zf, brick):
     left = np.searchsorted(btbl['TARGETID'], zf.targetid,
                         side='left',sorter=srt)
 
-    # Types (ELG, QSO, LRG, STAR, ??)
+    # Types (ELG, QSO, LRG, STAR, ??) -- Need to allow for multiple of target options
     qadict['NTYPE'] = dict(ELG=0, QSO=0, LRG=0, STAR=0, UNKWN=0, MATCH=0)
     for kk,ztype in enumerate(zf.type):
         # Brick index
