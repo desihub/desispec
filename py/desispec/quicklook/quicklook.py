@@ -3,10 +3,7 @@ import sys,os,time,signal
 import threading,string
 import subprocess
 import importlib
-import cPickle as pickle
 import yaml
-# import logging
-# from datetime import datetime
 from desispec.quicklook import qllogger
 
 
@@ -22,16 +19,20 @@ def testconfig(outfilename="qlconfig.yaml"):
 
     conf={'BiasImage':os.environ['BIASIMAGE'],# path to bias image
           'DarkImage':os.environ['DARKIMAGE'],# path to dark image
-          'DataType':'Exposure',#type of input ['Exposure','Arc','Dark']
-          'DebugLevel':20, #debug level
+          'DataType':'Exposure',# type of input ['Exposure','Arc','Dark']
+          'DebugLevel':20, # debug level
           'Period':5.0, # Heartbeat Period (Secs)
           'Timeout': 120.0, # Heartbeat Timeout (Secs)
-          'DumpIntermediates':False, #whether to dump output of each step
-          'FiberFlat':None, #path to fiber flat image (frame?)
-          'FiberMap':os.environ['FIBERMAP'],#path to fiber map
-          'Input':os.environ['PIXIMAGE'],#path to input image
+          'DumpIntermediates':False, # whether to dump output of each step
+          'FiberFlatFrame':os.environ['FIBERFLATFRAME'], # path to fiber flat frame
+          'FiberFlatImage':os.environ['FIBERFLATIMAGE'], # for psf calibration
+          'ArcLampImage':os.environ['ARCLAMPIMAGE'], # for psf calibration
+          'SkyFile':os.environ['SKYFILE'], # path to Sky file
+          'FiberMap':os.environ['FIBERMAP'],# path to fiber map
+          'RawImage':os.environ['PIXIMAGE'],#path to input image
           'PixelFlat':os.environ['PIXELFLAT'], #path to pixel flat image
           'PSFFile':os.environ['PSFFILE'],  # .../desimodel/data/specpsf/psf-r.fits
+          'basePath':os.environ['DESIMODEL'],
           'OutputFile':'lastframe_QL-r0-00000004.fits', # output file from last pipeline step. Need to output intermediate steps? Most likely after boxcar extraction?
           'PipeLine':[{'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName":"BiasSubtraction",
@@ -94,37 +95,23 @@ def testconfig(outfilename="qlconfig.yaml"):
                              "ClassName":"BoxcarExtraction",
                              "Name":"Boxcar Extraction",
                              "kwargs":{"PSFFile":"%%PSFFile",
-                                       "Band":"r", # Band can be one of ["b","r","z"]
-                                       "Wmin":5625, # Wmin=[3569,5625,7435]
-                                       "Wmax":7741, # Wmax=[5949,7741,9834]
-                                       "Spectrograph":0,
                                        "BoxWidth":2.5,
-                                       "DeltaW":0.5
+                                       "DeltaW":0.5,
+                                       "Nspec":500
                                        }
                              },
-                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Find_Sky_Continuum",
-                               "Name":"Find Sky Continuum",
-                               "kwargs":{"FiberMap":"%%FiberMap",
-                                         "Wmin":None,
-                                         "Wmax":None},
-                               },
-                              {"ModuleName":"desispec.qa.qa_quicklook",
-                               "ClassName":"Calculate_SNR",
-                               "Name":"Calculate Signal-to-Noise ratio",
-                               "kwargs":{},
-                              },
-                              ],
+                       'QAs':[],
                        "StepName":"Boxcar Extration",
                        "OutputFile":"QA_boxcarextraction.yaml"
                        }
                       ]
           }
     
-    if "pkl" in outfilename:
-        pickle.dump(conf,open(outfilename,"wb"))
-    elif "yaml" in outfilename:
+    if "yaml" in outfilename:
         yaml.dump(conf,open(outfilename,"wb"))
+    else:
+        log.warning("Only yaml defined. Use yaml format in the output config file")
+        sys.exit(0)
 
 def get_chan_cam_exp(inpname):
     basename=os.path.basename(inpname)
@@ -150,7 +137,13 @@ def getobject(conf,log):
         log.error("Failed to import %s from %s. Error was '%s'"%(conf["ClassName"],conf["ModuleName"],e))
         return None
 
-def replacekeywords(kw,kwmap):
+def mapkeywords(kw,kwmap):
+    """
+    Maps the keyword in the configuration to the corresponding object 
+    returned by the desispec.io module.
+    e.g  Bias Image file is mapped to biasimage object... for the same keyword "BiasImage" 
+    """ 
+
     newmap={}
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
@@ -165,15 +158,16 @@ def replacekeywords(kw,kwmap):
     return newmap
 
 def runpipeline(pl,convdict,conf,hb):
-    inp=convdict["Input"]
+    inp=convdict["rawimage"]
     paconf=conf["PipeLine"]
     qlog=qllogger.QLLogger("QuickLook",0)
     log=qlog.getlog()
     for s,step in enumerate(pl):
         log.info("Starting to run step %s"%(paconf[s]["StepName"]))
         pa=step[0]
-        pargs=replacekeywords(step[0].config["kwargs"],convdict)
-
+        pargs=mapkeywords(step[0].config["kwargs"],convdict)
+        print inp
+        print pargs
         try:
             hb.start("Running %s"%(step[0].name))
             inp=pa(inp,**pargs)
@@ -184,7 +178,7 @@ def runpipeline(pl,convdict,conf,hb):
         qaresult={}
         for qa in step[1]:
             try:
-                qargs=replacekeywords(qa.config["kwargs"],convdict)
+                qargs=mapkeywords(qa.config["kwargs"],convdict)
                 hb.start("Running %s"%(qa.name))
                 res=qa(inp,**qargs)
                 log.debug("%s %s"%(qa.name,inp))
@@ -192,15 +186,20 @@ def runpipeline(pl,convdict,conf,hb):
             except Exception as e:
                 log.warning("Failed to run QA %s error was %s"%(qa.name,e))
         if len(qaresult):
-            pickle.dump(qaresult,open(paconf[s]["OutputFile"],"wb"))
+            yaml.dump(qaresult,open(paconf[s]["OutputFile"],"wb"))
             hb.stop("Step %s finished. Output is in %s "%(paconf[s]["StepName"],paconf[s]["OutputFile"]))
         else:
             hb.stop("Step %s finished."%(paconf[s]["StepName"]))
     hb.stop("Pipeline processing finished. Serializing result")
     return inp
 
+#- Setup pipeline from configuration
+
 def setup_pipeline(config):
     import desispec.io.fibermap as fibIO
+    import desispec.io.sky as skyIO
+    import desispec.io.fiberflat as ffIO
+    import desispec.fiberflat as ff
     import desispec.io.image as imIO
     import desispec.image as im
     import desispec.io.frame as frIO
@@ -214,10 +213,10 @@ def setup_pipeline(config):
     if config is None:
         return None
     log.info("Reading Configuration")
-    if "Input" not in config:
-        log.critical("Config is missing \"Input\" key.")
-        sys.exit("Missing \"Input\" key.")
-    inpname=config["Input"]
+    if "RawImage" not in config:
+        log.critical("Config is missing \"RawImage\" key.")
+        sys.exit("Missing \"RawImage\" key.")
+    inpname=config["RawImage"]
     if "FiberMap" not in config:
         log.critical("Config is missing \"FiberMap\" key.")
         sys.exit("Missing \"FiberMap\" key.")
@@ -235,51 +234,95 @@ def setup_pipeline(config):
     dumpintermediates=False
     if "DumpIntermediates" in config:
         dumpintermediates=config["DumpIntermediates"]
-    biasimage=None
+
+    biasimage=None #- This will be the converted dictionary key
     biasfile=None
     if "BiasImage" in config:
         biasfile=config["BiasImage"]
+
     darkimage=None
     darkfile=None
     if "DarkImage" in config:
         darkfile=config["DarkImage"]
+
     pixelflatfile=None
     pixflatimage=None
     if "PixelFlat" in config:
         pixelflatfile=config["PixelFlat"]
-    fiberflatfile=None
+
+    fiberflatimagefile=None
     fiberflatimage=None
-    if "FiberFlat" in config:
-        fiberflatfile=config["FiberFlat"]
-    psffilename=None
-    psffile=None
+    if "FiberFlatImage" in config:
+        fiberflatimagefile=config["FiberFlatImage"]
+
+    arclampimagefile=None
+    arclampimage=None
+    if "ArcLampImage" in config:
+        arclampimagefile=config["ArcLampImage"]
+
+    fiberflatframefile=None
+    fiberflatframe=None
+    if "FiberFlatFrame" in config:
+        fiberflatframefile=config["FiberFlatFrame"]
+
+    skyfile=None
+    skyimage=None
+    if "SkyFile" in config:
+        skyfile=config["SkyFile"]
+    
+
     if "PSFFile" in config:
         from specter.psf import load_psf
-        psf=load_psf(config["PSFFile"])
+        import desispec.psf
+        psf=desispec.psf.PSF(config["PSFFile"])
+        #psf=load_psf(config["PSFFile"])
+
+    if "basePath" in config:
+        basePath=config["basePath"]
+
     hbeat.start("Reading input file %s"%inpname)
     inp=imIO.read_image(inpname)
-    #log.info("Reading fiberMap file %s"%fibName)
     hbeat.start("Reading fiberMap file %s"%fibname)
     fibfile,fibhdr=fibIO.read_fibermap(fibname,header=True)
     convdict={"FiberMap":fibfile,"PSFFile":psf}
+
     if biasfile is not None:
         hbeat.start("Reading Bias Image %s"%biasfile)
         biasimage=imIO.read_image(biasfile)
         convdict["BiasImage"]=biasimage
+
     if darkfile is not None:
         hbeat.start("Reading Dark Image %s"%darkfile)
         darkimage=imIO.read_image(darkfile)
         convdict["DarkImage"]=darkimage
+
     if pixelflatfile:
         hbeat.start("Reading PixelFlat Image %s"%pixelflatfile)
-        pixflatimage=imIO.read_image(pixelflatfile)
-        convdict["PixelFlat"]=pixflatimage        
-    if fiberflatfile:
-        hbeat.start("Reading FiberFlat Image %s"%fiberflatfile)
-        fiberflatimage=imIO.read_image(fiberflatfile)
-        convdict["FiberFlat"]=fiberflatimage        
+        pixelflatimage=imIO.read_image(pixelflatfile)
+        convdict["PixelFlat"]=pixelflatimage     
+   
+    if fiberflatimagefile:
+        hbeat.start("Reading FiberFlat Image %s"%fiberflatimagefile)
+        fiberflatimage=imIO.read_image(fiberflatimagefile)
+        convdict["FiberFlatImage"]=fiberflatimage       
+ 
+    if arclampimagefile:
+        hbeat.start("Reading ArcLampImage %s"%arclampimagefile)
+        arclampimage=imIO.read_image(arclampimagefile)
+        convdict["ArcLampImage"]=arclampimage
+
+    if fiberflatframefile: 
+        hbeat.start("Reading FiberFlat frame %s"%fiberflatframefile)
+        fiberflatframe=ffIO.read_fiberflat(fiberflatframefile)
+        convdict["FiberFlatFrame"]=fiberflatframe
+
+    if skyfile:
+        hbeat.start("Reading SkyModel file %s"%skyfile)
+        skymodel=skyIO.read_sky(skyfile)
+        convdict["SkyFile"]=skymodel
+
     img=inp
-    convdict["Input"]=img
+    convdict["rawimage"]=img
     pipeline=[]
     for step in config["PipeLine"]:
         pa=getobject(step["PA"],log)

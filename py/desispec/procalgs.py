@@ -8,11 +8,13 @@ from desispec.quicklook import pas
 from desispec.quicklook import qlexceptions
 
 class DarkSubtraction(pas.PipelineAlg):
+
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="Dark Subtraction"
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,im,im,config,logger)
+
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
@@ -21,6 +23,7 @@ class DarkSubtraction(pas.PipelineAlg):
         if "DarkImage" not in kwargs:
             raise qlexceptions.ParameterException("Need Dark Image")
         return self.do_darkSubtract(args[0],**kwargs)
+
     def get_default_config(self):
         return {("DarkImage","%%DarkImage","Dark image to subtract")}
         
@@ -34,6 +37,8 @@ class DarkSubtraction(pas.PipelineAlg):
         # a single set.
         darkimage=kwargs["DarkImage"]
         rimage=rawimage.pix
+        camera=rawimage.camera
+        meta=rawimage.meta
         dimage=darkimage.pix
 
         rx=rimage.shape[0]
@@ -47,15 +52,17 @@ class DarkSubtraction(pas.PipelineAlg):
         ivar_new=1./(rimage+dimage+dknoise**2)
         mask=rawimage.mask
         from desispec.image import Image as im
-        return im(value,ivar_new,mask)
+        return im(value,ivar_new,mask,camera=camera,meta=meta)
 
 class PixelFlattening(pas.PipelineAlg):
     from desispec.image import Image as im
+
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="Pixel Flattening"
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,im,im,config,logger)
+
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
@@ -64,8 +71,10 @@ class PixelFlattening(pas.PipelineAlg):
         if "PixelFlat" not in kwargs:
             raise qlexceptions.ParameterException("Need Pixel Flat image")
         return self.do_pixelFlat(args[0],**kwargs)
+
     def get_default_config(self):
         return {("PixelFlat","%%PixelFlat","Pixel Flat image to apply")}
+
     def do_pixelFlat(self,image, **kwargs):
 
         """
@@ -74,6 +83,8 @@ class PixelFlattening(pas.PipelineAlg):
         """
         pixelflat=kwargs["PixelFlat"]
         pflat=pixelflat.pix # should be read from desispec.io
+        camera=image.camera
+        meta=image.meta
         rx=pflat.shape[0]
         ry=pflat.shape[1]
         
@@ -85,15 +96,17 @@ class PixelFlattening(pas.PipelineAlg):
         #TODO ivar from pixel flat need to be propagated
         mask=image.mask 
         from desispec.image import Image as im
-        return im(value,ivar,mask)
+        return im(value,ivar,mask,camera=camera,meta=meta)
 
 class BiasSubtraction(pas.PipelineAlg):
     from desispec.image import Image as im
+
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="Bias Subtraction"
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,im,im,config,logger)
+
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
@@ -102,8 +115,10 @@ class BiasSubtraction(pas.PipelineAlg):
         if "BiasImage" not in kwargs:
             raise qlexceptions.ParameterException("Need Bias image")
         return self.do_biasSubtract(args[0],**kwargs)
+
     def get_default_config(self):
         return {("BiasImage","%%BiasImage","Bias image to subtract")}
+
     def do_biasSubtract(self,rawimage,**kwargs):
         """ rawimage: rawimage object
         bias: bias object
@@ -113,6 +128,8 @@ class BiasSubtraction(pas.PipelineAlg):
         # a single set.
         biasimage=kwargs["BiasImage"]
         rimage=rawimage.pix
+        camera=rawimage.camera
+        meta=rawimage.meta
         bimage=biasimage.pix
 
         rx=rimage.shape[0]
@@ -126,7 +143,87 @@ class BiasSubtraction(pas.PipelineAlg):
         ivar_new=1./(rimage+bimage+dknoise**2)
         mask=rawimage.mask
         from desispec.image import Image as im
-        return im(value,ivar_new,mask)
+        return im(value,ivar_new,mask,camera=camera,meta=meta)
+
+
+class BootCalibration(pas.PipelineAlg):
+    from desispec import bootcalib as desiboot
+    
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Boot Calibration"
+        from desispec.frame import Frame as fr
+        from desispec.frame import Image as im
+        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
+        
+    def run(self,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if 'FiberFlatImage' not in kwargs:
+            raise qlexceptions.ParameterException("Need FiberFlatImage")
+        if 'ArcLampImage' not in kwargs: 
+            raise qlexceptions.ParameterException("Need ArcLampImage")
+
+        return self.do_bootcalib(**kwargs)
+
+    def do_bootcalib(self,**kwargs):
+        import numpy as np
+        from desispec import bootcalib as desiboot
+        from desiutil import funcfits as dufits
+        from desispec.io import read_image
+        if "Deg" not in kwargs:
+            deg=5 #- 5th order legendre polynomial
+        else:
+            deg=kwargs["Deg"]
+        flatimage=kwargs["FiberFlatImage"]
+        camera=flatimage.camera
+        flat=flatimage.pix
+        ny=flat.shape[0]
+        #- Somewhat inherited from desispec/bin/desi_bootcalib.py directly as needed
+
+        xpk,ypos,cut=desiboot.find_fiber_peaks(flat)
+        xset,xerr=desiboot.trace_crude_init(flat,xpk,ypos)
+        xfit,fdicts=desiboot.fit_traces(xset,xerr)
+        gauss=desiboot.fiber_gauss(flat,xfit,xerr)
+
+        #- Also need wavelength solution not just trace
+        arcimage=kwargs["ArcLampImage"]
+        arc=arcimage.pix
+        all_spec=desiboot.extract_sngfibers_gaussianpsf(arc,xfit,gauss)
+        llist=desiboot.load_arcline_list(camera)
+        dlamb,wmark,gd_lines,line_guess=desiboot.load_gdarc_lines(camera)
+        # Solve for wavelengths
+        all_wv_soln=[]
+        all_dlamb=[]
+        for ii in range(all_spec.shape[1]):
+            spec=all_spec[:,ii]
+            pixpk=desiboot.find_arc_lines(spec)
+            id_dict=desiboot.id_arc_lines(pixpk,gd_lines,dlamb,wmark,line_guess=line_guess)
+            id_dict['fiber']=ii
+            # Find the other good ones
+            if camera == 'z':
+                inpoly = 3  # The solution in the z-camera has greater curvature
+            else:
+                inpoly = 2
+            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=inpoly)
+            #- Now the rest
+            desiboot.id_remainder(id_dict, pixpk, llist)
+            # Final fit wave vs. pix too
+            final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
+            rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0],final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
+            final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',deg, niter=5)
+
+            id_dict['final_fit'] = final_fit
+            id_dict['rms'] = rms
+            id_dict['final_fit_pix'] = final_fit_pix
+            id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
+            id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
+            id_dict['mask'] = mask
+            all_wv_soln.append(id_dict)
+
+        desiboot.write_psf(kwargs["outputFile"], xfit, fdicts, gauss,all_wv_soln)
+
+    
 
 class BoxcarExtraction(pas.PipelineAlg):
     from desispec.image import Image as im
@@ -140,71 +237,62 @@ class BoxcarExtraction(pas.PipelineAlg):
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        from desispec.boxcar import do_boxcar
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if "PSFFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need PSF File")
+        return do_boxcar(args[0],kwargs["PSFFile"],boxwidth=kwargs["BoxWidth"],dw=kwargs["DeltaW"],nspec=kwargs["Nspec"])
+
+    def get_default_config(self):
+        return {("BoxWidth",2.5,"Boxcar halfwidth"),
+                ("PSFFile","%%PSFFile","PSFFile to use"),
+                ("DeltaW",0.5,"Binwidth of extrapolated wavelength array")
+                ("Nspec",500,"number of spectra to extract")
+                }
+
+class FiberFlat(pas.PipelineAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Fiber Flatfield"
+        from desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "Band" not in kwargs:
-            raise qlexceptions.ParameterException("Need Band name")
-        if "Spectrograph" not in kwargs:
-            raise qlexceptions.ParameterException("Need Spectrograph ID")
-        if "PSFFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need PSF File")
-        return self.boxcar_extract(args[0],**kwargs)
-    def get_default_config(self):
-        return {("Band","r","Which band to work on [r,b,z]"),
-                ("Spectrograph",0,"Spectrograph to use [0-9]"),
-                ("BoxWidth",2.5,"Boxcar halfwidth"),
-                ("PSFFile","%%PSFFile","PSFFile to use"),
-                ("DeltaW",0.5,"Binwidth of extrapolated wavelength array")
-                }
-    def boxcar_extract(self,image,**kwargs):
-        from desispec.boxcar import do_boxcar
-        from specter.psf import load_psf
-        psf=kwargs["PSFFile"] # TODO This is confusing, PSFFile looks like a file not an object. 
-        band=kwargs["Band"]
-        camera=kwargs["Spectrograph"]
-        boxwidth=kwargs["BoxWidth"]
-       
-        return do_boxcar(image,band,psf,camera,boxwidth=2.5,dw=0.5,nspec=500)
+        if "FiberFlatFrame" not in kwargs:
+            raise qlexceptions.ParameterException("Need Fiberflat frame file")
+        from desispec.fiberflat import compute_fiberflat,apply_fiberflat
+        fiberflat=compute_fiberflat(args[0],kwargs["FiberFlatFrame"])
+        return apply_fiberflat(args[0],fiberflat)
+
 
 class SubtractSky(pas.PipelineAlg):
+
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="Sky Subtraction"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
-        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "FiberMap" not in kwargs:
-            raise qlexceptions.ParameterException("Need Fibermap file")
-        if "FiberFlat" not in kwargs:
-            raise qlexceptions.ParameterException("Need Fiberflat file")
-        fiber_flat=self.fiberflat(args[0],**kwargs)
-        sky_model=self.computesky(args[0],**kwargs)
-        return self.subtractsky(args[0],fiber_flat,sky_model)
 
+        return self.do_sky_subtract(args[0],**kwargs)
     
-    def fiberflat(self,frame,**kwargs):
-        from desispec.io import read_fiberflat
-        fiberflat=read_fiberflat(kwargs["FiberFlat"]) # need a fiberflat file
-        return fiberflat
-        #apply_fiberflat(frame,fiberflat)
-    
-    def computesky(self,frame,**kwargs):
-        from desispec.sky import compute_sky
-        skymodel=compute_sky(frame,kwargs["FiberMap"])
-        return skymodel
-    
-    def subtractsky(self,frame,fiberflat,skymodel):
+    def do_sky_subtract(self,frame,**kwargs):
         from desispec.sky import subtract_sky
-        from desispec.fiberflat import apply_fiberflat
-        
-        apply_fiberflat(frame,fiberflat)  
-        subtract_sky(frame,skymodel)
-        return frame
+        skymodel=compute_sky(frame)
+        return subtract_sky(frame,skymodel)
