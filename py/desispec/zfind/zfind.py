@@ -68,17 +68,20 @@ class ZfindBase(object):
                 self.__setattr__(key.lower(), results[key])
 
 
-def qa_zbest(param, zf):
+def qa_zbest(param, zf, brick):
     """
     Args:
         param : dict of QA parameters
-        zf: ZfindBase object
-
+        zf : ZfindBase object
+        brick : brick dict
     Returns:
         qa_zbest: dict
-
     """
     log = get_logger()
+
+    # Parse brick table
+    key = brick.keys()[0]
+    btbl = brick[key].hdu_list[4].data
 
     # Output dict
     qadict = {}
@@ -87,17 +90,37 @@ def qa_zbest(param, zf):
     nfail = np.sum(zf.zwarn > 0)  # TBD
     qadict['NFAIL'] = int(nfail)  # For yaml
     if nfail > param['MAX_NFAIL']:
-        log.warn("High number of failed redshifts")
+        log.warn("High number of failed redshifts {:d}".format(nfail))
+
+    # Simple redshift stats
+    gdz = zf.zwarn == 0
+    qadict['MEAN_Z'] = float(np.mean(zf.z[gdz]))
+    qadict['MEDIAN_Z'] = float(np.median(zf.z[gdz]))
+    qadict['RMS_Z'] = float(np.std(zf.z[gdz]))
+
+    # Match zf ID to brick ID
+    srt = np.argsort(btbl['TARGETID'])
+    left = np.searchsorted(btbl['TARGETID'], zf.targetid,
+                        side='left',sorter=srt)
 
     # Types (ELG, QSO, LRG, STAR, ??)
-    qadict['NTYPE'] = dict(ELG=0, QSO=0, LRG=0, STAR=0, UNKWN=0)
-    for ztype in zf.type:
+    qadict['NTYPE'] = dict(ELG=0, QSO=0, LRG=0, STAR=0, UNKWN=0, MATCH=0)
+    for kk,ztype in enumerate(zf.type):
+        # Brick index
+        idx = srt[left[kk]]
+        #
         if ztype in param['ELG_TYPES']:
             qadict['NTYPE']['ELG'] += 1
+            if btbl[idx]['OBJTYPE'] in param['ELG_TYPES']:
+                qadict['NTYPE']['MATCH'] += 1
         elif ztype in param['QSO_TYPES']:
             qadict['NTYPE']['QSO'] += 1
+            if btbl[idx]['OBJTYPE'] in param['QSO_TYPES']:
+                qadict['NTYPE']['MATCH'] += 1
         elif ztype in param['STAR_TYPES']:
             qadict['NTYPE']['STAR'] += 1
+            if btbl[idx]['OBJTYPE'] in param['STAR_TYPES']:
+                qadict['NTYPE']['MATCH'] += 1
         else:
             qadict['NTYPE']['UNKWN'] += 1
 

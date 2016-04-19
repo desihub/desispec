@@ -172,7 +172,7 @@ if (opts.qafile is not None) or (opts.qafig is not None):
     # Load
     qabrick = load_qa_brick(opts.qafile)
     # Run
-    qabrick.run_qa('ZBEST', (zfi,))
+    qabrick.run_qa('ZBEST', (zfi,brick))
     # Write
     if opts.qafile is not None:
         write_qa_brick(opts.qafile, qabrick)
