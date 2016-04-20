@@ -16,6 +16,6 @@ from .plan import (find_raw, tasks_exspec_exposure, tasks_exspec,
     tasks_sky_exposure, tasks_sky, tasks_star_exposure,
     tasks_star, tasks_calcalc_exposure, tasks_calcalc,
     tasks_calapp_exposure, tasks_calapp, find_bricks, get_fibermap_bricknames,
-    tasks_zfind)
+    tasks_zfind, graph_night, graph_dot, graph_slice, graph_slice_spec)
 from .run import (pid_exists, subprocess_list, shell_job,
 	nersc_job)

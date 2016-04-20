@@ -15,11 +15,34 @@ import os
 import time
 import glob
 import re
+import copy
+import yaml
 
 import astropy.io.fits as af
 
 import desispec.io as io
 import desispec.log as log
+
+
+_graph_types = [
+    'night',
+    'fibermap',
+    'pix',
+    'psfboot',
+    'psf',
+    'psfnight',
+    'frame',
+    'fiberflat',
+    'sky',
+    'stdstars',
+    'calib'
+]
+
+_state_colors = {
+    'none': '#000000',
+    'done': '#00ff00',
+    'fail': '#ff0000',
+}
 
 
 def find_raw(rawdir, rawnight, spectrographs=None):
@@ -58,6 +81,7 @@ def get_fibermap_bricknames(fibermapfiles):
         fibermap = io.read_fibermap(filename)
         bricknames.update(fibermap['BRICKNAME'])
     return sorted(bricknames)
+
 
 def find_frames(specdir, night):
     fullexpid = io.get_exposures(night, raw=False, specprod_dir=specdir)
@@ -108,6 +132,442 @@ def find_bricks(proddir):
             if brickmat is not None:
                 bricks.append(d)
     return bricks
+
+
+# Each node of the graph is a dictionary, with required keys 'type',
+# 'in', and 'out'.  Where 'in' and 'out' are lists of other nodes.  
+# Extra keys for each type are allowed.  Some keys (band, spec, etc)
+# are technically redundant (since they could be obtained by working
+# back up the graph to the raw data properties), however this is done
+# for convenience.
+
+def graph_night(rawdir, rawnight):
+
+    grph = {}
+
+    node = {}
+    node['type'] = 'night'
+    node['in'] = []
+    node['out'] = []
+    grph[rawnight] = node
+
+    allbricks = set()
+
+    # first, insert raw data into the graph
+
+    expid = io.get_exposures(rawnight, raw=True, rawdata_dir=rawdir)
+    
+    campat = re.compile(r'([brz])([0-9])')
+
+    for ex in sorted(expid):
+        # get the fibermap for this exposure
+        fibermap = io.get_raw_files("fibermap", rawnight, ex, rawdata_dir=rawdir)
+
+        # read the fibermap to get the exposure type, and while we are at it,
+        # also accumulate the total list of bricks        
+
+        fmdata, fmheader = io.read_fibermap(fibermap, header=True)
+        flavor = fmheader['flavor']
+        bricks = set()
+        bricks.update(fmdata['BRICKNAME'])
+        allbricks.update(bricks)
+
+        node = {}
+        node['type'] = 'fibermap'
+        node['id'] = ex
+        node['flavor'] = flavor
+        node['bricks'] = bricks
+        node['in'] = [rawnight]
+        node['out'] = []
+        name = os.path.join(rawnight, "fibermap-{:08d}".format(ex))
+
+        grph[name] = node
+        grph[rawnight]['out'].append(name)
+
+        # get the raw exposures
+        raw = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
+
+        for cam in sorted(raw.keys()):
+            cammat = campat.match(cam)
+            if cammat is None:
+                raise RuntimeError("invalid camera string {}".format(cam))
+            band = cammat.group(1)
+            spec = cammat.group(2)
+
+            node = {}
+            node['type'] = 'pix'
+            node['id'] = ex
+            node['band'] = band
+            node['spec'] = spec
+            node['flavor'] = flavor
+            node['in'] = [rawnight]
+            node['out'] = []
+            name = os.path.join(rawnight, "pix-{}{}-{:08d}".format(band, spec, ex))
+
+            grph[name] = node
+            grph[rawnight]['out'].append(name)
+
+    # Now that we have added all the raw data to the graph, we work our way
+    # through the processing steps.  
+
+    # This step is a placeholder, in case we want to combine information from
+    # multiple flats or arcs before running bootcalib.  We mark these bootcalib
+    # outputs as depending on all arcs and flats, but in reality we may just
+    # use the first or last set.
+
+    # Since each psfboot file takes multiple exposures as input, we first
+    # create those nodes.
+
+    for band in ['b', 'r', 'z']:
+        for spec in range(10):
+            name = os.path.join(rawnight, "psfboot-{}{}".format(band, spec))
+            node = {}
+            node['type'] = 'psfboot'
+            node['band'] = band
+            node['spec'] = spec
+            node['in'] = []
+            node['out'] = []
+            grph[name] = node
+
+    for name, nd in grph.items():
+        if nd['type'] != 'pix':
+            continue
+        if (nd['flavor'] != 'flat') and (nd['flavor'] != 'arc'):
+            continue
+        band = nd['band']
+        spec = nd['spec']
+        bootname = os.path.join(rawnight, "psfboot-{}{}".format(band, spec))
+        grph[bootname]['in'].append(name)
+        nd['out'].append(bootname)
+
+    # Next is full PSF estimation.  Inputs are the arc image and the bootcalib
+    # output file.  We also add nodes for the combined psfs.
+
+    for band in ['b', 'r', 'z']:
+        for spec in range(10):
+            name = os.path.join(rawnight, "psf-{}{}".format(band, spec))
+            node = {}
+            node['type'] = 'psfnight'
+            node['band'] = band
+            node['spec'] = spec
+            node['in'] = []
+            node['out'] = []
+            grph[name] = node
+
+    for name, nd in grph.items():
+        if nd['type'] != 'pix':
+            continue
+        if nd['flavor'] != 'arc':
+            continue
+        band = nd['band']
+        spec = nd['spec']
+        id = nd['id']
+        bootname = os.path.join(rawnight, "psfboot-{}{}".format(band, spec))
+        psfname = os.path.join(rawnight, "psf-{}{}-{:08d}".format(band, spec, id))
+        psfnightname = os.path.join(rawnight, "psf-{}{}".format(band, spec))
+        node = {}
+        node['type'] = 'psf'
+        node['band'] = band
+        node['spec'] = spec
+        node['id'] = id
+        node['in'] = [name, bootname]
+        node['out'] = [psfnightname]
+        grph[psfname] = node
+        grph[bootname]['out'].append(psfname)
+        grph[psfnightname]['in'].append(psfname)
+        nd['out'].append(psfname)
+
+    # Now we extract the flats and science frames using the nightly psf
+
+    for name, nd in grph.items():
+        if nd['type'] != 'pix':
+            continue
+        if nd['flavor'] == 'arc':
+            continue
+        band = nd['band']
+        spec = nd['spec']
+        id = nd['id']
+        flavor = nd['flavor']
+        framename = os.path.join(rawnight, "frame-{}{}-{:08d}".format(band, spec, id))
+        psfnightname = os.path.join(rawnight, "psf-{}{}".format(band, spec))
+        fmname = os.path.join(rawnight, "fibermap-{:08d}".format(id))
+        node = {}
+        node['type'] = 'frame'
+        node['band'] = band
+        node['spec'] = spec
+        node['id'] = id
+        node['flavor'] = flavor
+        node['in'] = [name, fmname, psfnightname]
+        node['out'] = []
+        grph[framename] = node
+        grph[psfnightname]['out'].append(framename)
+        grph[fmname]['out'].append(framename)
+        nd['out'].append(framename)
+
+    # Now build the fiberflats for each flat exposure.  We keep a list of all
+    # available fiberflats while we are looping over them, since we'll need
+    # that in the next step to select the "most recent" fiberflat.
+
+    flatexpid = {}
+
+    for name, nd in grph.items():
+        if nd['type'] != 'frame':
+            continue
+        if nd['flavor'] != 'flat':
+            continue
+        band = nd['band']
+        spec = nd['spec']
+        id = nd['id']
+        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, id))
+        node = {}
+        node['type'] = 'fiberflat'
+        node['band'] = band
+        node['spec'] = spec
+        node['id'] = id
+        node['in'] = [name]
+        node['out'] = []
+        grph[flatname] = node
+        nd['out'].append(flatname)
+        cam = "{}{}".format(band, spec)
+        if cam not in flatexpid.keys():
+            flatexpid[cam] = []
+        flatexpid[cam].append(id)
+
+    # To compute the sky file, we use the "most recent fiberflat" that came
+    # before the current exposure.
+
+    for name, nd in grph.items():
+        if nd['type'] != 'frame':
+            continue
+        if nd['flavor'] == 'flat':
+            continue
+        band = nd['band']
+        spec = nd['spec']
+        id = nd['id']
+        cam = "{}{}".format(band, spec)
+        flatid = None
+        for fid in sorted(flatexpid[cam]):
+            if (flatid is None):
+                flatid = fid
+            elif (fid > flatid) and (fid < id):
+                flatid = fid
+        skyname = os.path.join(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
+        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        node = {}
+        node['type'] = 'sky'
+        node['band'] = band
+        node['spec'] = spec
+        node['id'] = id
+        node['in'] = [name, flatname]
+        node['out'] = []
+        grph[skyname] = node
+        nd['out'].append(skyname)
+        grph[flatname]['out'].append(skyname)
+
+    # Construct the standard star files.
+
+    for name, nd in grph.items():
+        if nd['type'] != 'frame':
+            continue
+        if nd['flavor'] == 'flat':
+            continue
+        band = nd['band']
+        spec = nd['spec']
+        id = nd['id']
+        cam = "{}{}".format(band, spec)
+        flatid = None
+        for fid in sorted(flatexpid[cam]):
+            if (flatid is None):
+                flatid = fid
+            elif (fid > flatid) and (fid < id):
+                flatid = fid
+        starname = os.path.join(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
+        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        skyname = os.path.join(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
+        node = {}
+        node['type'] = 'stdstars'
+        node['band'] = band
+        node['spec'] = spec
+        node['id'] = id
+        node['in'] = [skyname, name, flatname]
+        node['out'] = []
+        grph[starname] = node
+        nd['out'].append(starname)
+        grph[flatname]['out'].append(starname)
+        grph[skyname]['out'].append(starname)
+
+    # Construct calibration files
+
+    for name, nd in grph.items():
+        if nd['type'] != 'frame':
+            continue
+        if nd['flavor'] == 'flat':
+            continue
+        band = nd['band']
+        spec = nd['spec']
+        id = nd['id']
+        cam = "{}{}".format(band, spec)
+        flatid = None
+        for fid in sorted(flatexpid[cam]):
+            if (flatid is None):
+                flatid = fid
+            elif (fid > flatid) and (fid < id):
+                flatid = fid
+        skyname = os.path.join(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
+        starname = os.path.join(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
+        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        calname = os.path.join(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
+        node = {}
+        node['type'] = 'calib'
+        node['band'] = band
+        node['spec'] = spec
+        node['id'] = id
+        node['in'] = [name, flatname, skyname, starname]
+        node['out'] = []
+        grph[calname] = node
+        grph[flatname]['out'].append(calname)
+        grph[skyname]['out'].append(calname)
+        grph[starname]['out'].append(calname)
+        nd['out'].append(calname)
+
+    return grph
+
+
+def graph_prune(grph, name, descend=False):
+    # unlink from parents
+    for p in grph[name]['in']:
+        grph[p]['out'].remove(name)
+    if descend:
+        # recursively process children
+        for c in grph[name]['out']:
+            graph_prune(grph, c, descend=True)
+    else:
+        # not removing children, so only unlink
+        for c in grph[name]['out']:
+            grph[c]['in'].remove(name)
+    del grph[name]
+    return
+
+
+def graph_mark(grph, name, state=None, descend=False):
+    if descend:
+        # recursively process children
+        for c in grph[name]['out']:
+            graph_mark(grph, c, state=state, descend=True)
+    # set or clear state
+    if state is None:
+        if 'state' in grph[name].keys():
+            del grph[name]['state']
+    else:
+        grph[name]['state'] = state
+    return
+
+
+def graph_slice(grph, names=None, types=None, deps=False):
+    if types is None:
+        types = _graph_types
+
+    newgrph = {}
+    
+    # First copy directly selected nodes
+    for name, nd in grph.items():
+        if (names is not None) and (name not in names):
+            continue
+        if nd['type'] not in types:
+            continue
+        newgrph[name] = copy.deepcopy(nd)
+
+    # Now optionally grab all direct inputs
+    if deps:
+        for name, nd in newgrph.items():
+            for p in nd['in']:
+                if p not in newgrph.keys():
+                    newgrph[p] = copy.deepcopy(grph[p])
+
+    # Now remove links that we have pruned
+    for name, nd in newgrph.items():
+        newin = []
+        for p in nd['in']:
+            if p in newgrph.keys():
+                newin.append(p)
+        nd['in'] = newin
+        newout = []
+        for c in nd['out']:
+            if c in newgrph.keys():
+                newout.append(c)
+        nd['out'] = newout
+
+    return newgrph
+
+
+def graph_slice_spec(grph, spectrographs=None):
+    newgrph = copy.deepcopy(grph)
+    if spectrographs is None:
+        spectrographs = range(10)
+    for name, nd in newgrph.items():
+        if 'spec' in nd.keys():
+            if int(nd['spec']) not in spectrographs:
+                graph_prune(newgrph, name, descend=False)
+    return newgrph
+
+
+def graph_dot(grph, f):
+    # For visualization, we rank nodes of the same type together.
+
+    rank = {}
+    for t in _graph_types:
+        rank[t] = []
+
+    for name, nd in grph.items():
+        if nd['type'] not in _graph_types:
+            raise RuntimeError("graph node {} has invalid type {}".format(name, nd['type']))
+        rank[nd['type']].append(name)
+
+    tab = '    '
+    f.write('\n// DESI Plan\n\n')
+    f.write('digraph DESI {\n')
+    f.write('splines=false;\n')
+    f.write('overlap=false;\n')
+    f.write('{}rankdir=LR\n'.format(tab))
+
+    # organize nodes into subgraphs
+
+    for t in _graph_types:
+        f.write('{}subgraph cluster{} {{\n'.format(tab, t))
+        f.write('{}{}label="{}";\n'.format(tab, tab, t))
+        f.write('{}{}newrank=true;\n'.format(tab, tab))
+        f.write('{}{}rank=same;\n'.format(tab, tab))
+        for name in sorted(rank[t]):
+            nd = grph[name]
+            props = "[shape=box,penwidth=3"
+            if 'state' in nd.keys():
+                props = "{},color=\"{}\"".format(props, _state_colors[nd['state']])
+            else:
+                props = "{},color=\"{}\"".format(props, _state_colors['none'])
+            props = "{}]".format(props)
+            f.write('{}{}"{}" {};\n'.format(tab, tab, name, props))
+        f.write('{}}}\n'.format(tab))
+
+    # write dependencies
+
+    for t in _graph_types:
+        for name in sorted(rank[t]):
+            for child in grph[name]['out']:
+                f.write('{}"{}" -> "{}" [penwidth=1,color="#999999"];\n'.format(tab, name, child))
+
+    # write rank grouping
+
+    # for t in types:
+    #     if (t == 'night') and len(rank[t]) == 1:
+    #         continue
+    #     f.write('{}{{ rank=same '.format(tab))
+    #     for name in sorted(rank[t]):
+    #         f.write('"{}" '.format(name))
+    #     f.write(' }\n')
+
+    f.write('}\n\n')
+
+    return
 
 
 def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
