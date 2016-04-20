@@ -70,8 +70,8 @@ def main():
     meta = dict(SIMSPECV='9.999', PRODNAME=os.getenv('PRODNAME'))
 
     # Run stats
+    summ_dict = dsqa_z.summ_stats(simz_tab)
     if args.qafile is not None:
-        summ_dict = dsqa_z.summ_stats(simz_tab)
         # Write yaml
         with open(args.qafile, 'w') as outfile:
             outfile.write(yaml.dump(meta))#, default_flow_style=True) )
@@ -79,7 +79,9 @@ def main():
 
     if args.qafig is not None:
         pp = PdfPages(args.qafig)
-        # Summ
+        # Summary for dz of all types
+        dsqa_z.dz_summ(simz_tab, pp=pp)
+        # Summary of individual types
         dsqa_z.summ_fig(simz_tab, summ_dict, meta, pp=pp)
         for objtype in ['ELG','LRG', 'QSO_T', 'QSO_L']:
             dsqa_z.obj_fig(simz_tab, objtype, summ_dict, pp=pp)
