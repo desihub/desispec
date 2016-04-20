@@ -11,9 +11,9 @@ Read fibermaps and zbest files to generate QA related to redshifts
 import argparse
 import os.path
 
-import numpy as np
-import glob
+import yaml
 import pdb
+from matplotlib.backends.backend_pdf import PdfPages
 
 import desispec.io
 from desispec.log import get_logger, DEBUG
@@ -29,6 +29,8 @@ def main():
         help = 'Night to process in the format YYYYMMDD')
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$PRODNAME) to processed data.')
+    parser.add_argument('--qafile', type = str, default = None, required=False,
+                        help = 'path of QA file.')
     parser.add_argument('--qafig', type=str, default=None, help = 'path of QA figure file')
     args = parser.parse_args()
     if args.verbose:
@@ -63,7 +65,26 @@ def main():
 
     # Load Table
     simz_tab = dsqa_z.load_z(fibermap_files, zbest_files)
-    pdb.set_trace()
+
+    # Meta data
+    meta = dict(SIMSPECV='9.999', PRODNAME=os.getenv('PRODNAME'))
+
+    # Run stats
+    if args.qafile is not None:
+        summ_dict = dsqa_z.summ_stats(simz_tab)
+        # Write yaml
+        with open(args.qafile, 'w') as outfile:
+            outfile.write(yaml.dump(meta))#, default_flow_style=True) )
+            outfile.write(yaml.dump(summ_dict, default_flow_style=False) )
+
+    if args.qafig is not None:
+        pp = PdfPages(args.qafig)
+        # Summ
+        dsqa_z.summ_fig(simz_tab, summ_dict, meta, pp=pp)
+        for objtype in ['ELG','LRG', 'QSO_T', 'QSO_L']:
+            dsqa_z.obj_fig(simz_tab, objtype, summ_dict, pp=pp)
+        # All done
+        pp.close()
 
 if __name__ == '__main__':
     main()
