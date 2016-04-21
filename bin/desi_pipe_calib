@@ -89,10 +89,10 @@ def main():
         fullframes = comm.bcast(fullframes, root=0)
 
     # if requested, restrict the exposure list to a single ID
+    frames = {}
     if args.expid is not None:
         if rank == 0:
             log.info("processing ONLY exposure {}".format(args.expid))
-        frames = {}
         frames[args.expid] = fullframes[args.expid]
     else:
         frames = fullframes

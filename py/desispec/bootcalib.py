@@ -104,6 +104,8 @@ def load_gdarc_lines(camera):
     -------
     dlamb : float
       Dispersion for input camera
+    wmark : float
+      wavelength to key off of [???]
     gd_lines : ndarray
       Array of lines expected to be recorded and good for ID
     line_guess : int or None

@@ -31,9 +31,19 @@ def main():
     parser.add_argument( '--range_r', required=False, default="5635.0,7731.0,0.8", help='R band wavelength range \"wmin,wmax,dw\"' )
     parser.add_argument( '--range_z', required=False, default="7445.0,9824.0,0.8", help='Z band wavelength range \"wmin,wmax,dw\"' )
     parser.add_argument( '--dump', required=True, default=None, help='write commands to this file.')
+    parser.add_argument( '--spectrographs', required=False, default=None, help='only process this comma-separated list of spectrographs' )
     args = parser.parse_args()
 
     log = get_logger()
+
+    spectrographs = []
+    if args.spectrographs is None:
+        for s in range(10):
+            spectrographs.append(s)
+    else:
+        spc = args.spectrographs.split(',')
+        for s in spc:
+            spectrographs.append(int(s))
 
     # If data directories are not given, get them from environment
     # variables.
@@ -62,12 +72,22 @@ def main():
 
     # get the list of raw files
 
-    (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night)
-    psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
+    (expid, exptype, fibermap, fullraw) = pipe.find_raw(rawdir, args.night, spectrographs=spectrographs)
+    calpsf = os.path.join(specdir, 'calib2d', 'psf', args.night)
+    psf = {}
+    combine = True
+    for band in ['b', 'r', 'z']:
+        for spc in spectrographs:
+            cam = "{}{}".format(band, spc)
+            psf[cam] = os.path.join(calpsf, 'psf-{}.fits'.format(cam))
+            if not os.path.isfile(psf[cam]):
+                combine = False
+    if not combine:
+        psf = pipe.psf_newest(os.path.join(specdir, 'exposures', args.night))
 
     # if requested, restrict the exposure list to a single ID
+    raw = {}
     if args.expid is not None:
-        raw = {}
         raw[args.expid] = fullraw[args.expid]
     else:
         raw = fullraw
