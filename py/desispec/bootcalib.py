@@ -576,6 +576,7 @@ def parse_nist(ion, vacuum=True):
     # Return
     return nist_tbl
 
+
 def load_arcline_list(camera, vacuum=True):
     """Loads arc line list from NIST files
     Parses and rejects
@@ -602,6 +603,8 @@ def load_arcline_list(camera, vacuum=True):
         lamps = ['HgI','NeI']
     elif camera[0] == 'z':
         lamps = ['HgI','NeI']
+    elif camera == 'all':  # Used for specex
+        lamps = ['CdI','ArI','HgI','NeI']
     else:
         log.error("Not ready for this camera")
     # Get the parse dict

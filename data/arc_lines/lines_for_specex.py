@@ -1,0 +1,46 @@
+""" Simple script to generate a line list formatted for specex
+"""
+from __future__ import (print_function, absolute_import, division,
+                        unicode_literals)
+import numpy as np
+import datetime
+import pdb
+
+from desispec import bootcalib as bootc
+
+from astropy.table import Table, Column
+
+
+def main():
+    """
+    Returns:
+
+    """
+    # Read all lines used by bootcalib
+    llist = bootc.load_arcline_list('all')
+    score = np.ones(len(llist)).astype(int)*2
+
+    # Get hard-coded lines used in bootcalib
+    all_gd = []
+    for camera in ['b','r','z']:
+        dlamb, wmark, gd_lines, line_guess = bootc.load_gdarc_lines(camera)
+        all_gd += list(gd_lines)
+
+    # Modify score
+    for line in all_gd:
+        if np.min(np.abs(line-llist['wave'])) < 0.1:
+            print('Used in bootcalib: {:g}'.format(line))
+            score[np.argmin(np.abs(line-llist['wave']))] = 1
+    # Add to Table
+    sc_clm = Column(score, name='score')
+    llist.add_column(sc_clm)
+
+    # Write
+    cut_llist = llist[['Ion', 'wave','score','RelInt']]
+    today = datetime.date.today()
+    cut_llist.meta = dict(version=str('v1.0'), date=str(today))
+    cut_llist.write('specex_linelist.txt', format='ascii.ecsv')
+
+
+if __name__ == '__main__':
+    main()
