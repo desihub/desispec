@@ -498,7 +498,7 @@ def fix_poor_solutions(all_wv_soln, all_dlamb, ny, ldegree):
 # Linelist routines
 ########################################################
 
-def parse_nist(ion):
+def parse_nist(ion, vacuum=True):
     """Parse a NIST ASCII table.
 
     Note that the long ---- should have
@@ -510,10 +510,16 @@ def parse_nist(ion):
     ----------
     ion : str
       Name of ion
+    vaccuum : bool, optional
+      Use vacuum wavelengths
     """
     log=get_logger()
     # Find file
-    srch_file = desispec_path + '/data/arc_lines/'+ion+'_air.ascii'
+    if vacuum:
+        srch_file = desispec_path + '/data/arc_lines/'+ion+'_vacuum.ascii'
+    else:
+        log.info("Using air wavelengths")
+        srch_file = desispec_path + '/data/arc_lines/'+ion+'_air.ascii'
     nist_file = glob.glob(srch_file)
     if len(nist_file) != 1:
         log.error("Cannot find NIST file {:s}".format(srch_file))
@@ -545,7 +551,7 @@ def parse_nist(ion):
     # Return
     return nist_tbl
 
-def load_arcline_list(camera):
+def load_arcline_list(camera, vacuum=True):
     """Loads arc line list from NIST files
     Parses and rejects
 
@@ -555,6 +561,8 @@ def load_arcline_list(camera):
     ----------
     lines : list
       List of ions to load
+    vacuum : bool, optional
+      Use vacuum wavelengths
 
     Returns
     -------
@@ -572,8 +580,12 @@ def load_arcline_list(camera):
     else:
         log.error("Not ready for this camera")
     # Get the parse dict
-    parse_dict = load_parse_dict()
+    parse_dict = load_parse_dict(vacuum=vacuum)
     # Read rejection file
+    if vacuum:
+        rej_file = desispec_path+'/data/arc_lines/rejected_lines_vacuum.yaml'
+    else:
+        rej_file = desispec_path+'/data/arc_lines/rejected_lines_air.yaml'
     with open(desispec_path+'/data/arc_lines/rejected_lines.yaml', 'r') as infile:
         rej_dict = yaml.load(infile)
     # Loop through the NIST Tables
@@ -601,8 +613,8 @@ def load_arcline_list(camera):
     return alist
 
 
-def reject_lines(tbl,rej_dict):
-    """Parses a NIST table using various criteria
+def reject_lines(tbl,rej_dict, rej_tol=0.1):
+    """Rejects lines from a NIST table
 
     Taken from PYPIT
 
@@ -612,6 +624,8 @@ def reject_lines(tbl,rej_dict):
       Read previously from NIST ASCII file
     rej_dict : dict
       Dict of rejected lines
+    rej_tol : float, optional
+      Tolerance for matching a line to reject to linelist (Angstroms)
 
     Returns
     -------
@@ -621,7 +635,7 @@ def reject_lines(tbl,rej_dict):
     msk = tbl['wave'] == tbl['wave']
     # Loop on rejected lines
     for wave in rej_dict.keys():
-        close = np.where(np.abs(wave-tbl['wave']) < 0.1)[0]
+        close = np.where(np.abs(wave-tbl['wave']) < rej_tol)[0]
         if rej_dict[wave] == 'all':
             msk[close] = False
         else:
