@@ -92,7 +92,7 @@ regularize: {regularize}
     regularize=opts.regularize)
 
 #- The actual extraction
-flux, ivar, Rdata = ex2d(img.pix, img.ivar, psf, opts.specmin, opts.nspec, wave,
+flux, ivar, Rdata = ex2d(img.pix, img.ivar*(img.mask==0), psf, opts.specmin, opts.nspec, wave,
              regularize=opts.regularize, ndecorr=True,
              bundlesize=bundlesize, wavesize=opts.nwavestep, verbose=opts.verbose)
 
