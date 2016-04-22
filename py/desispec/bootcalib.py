@@ -1361,7 +1361,6 @@ def script_bootcalib(arc_idx, flat_idx, cameras=None, channels=None, nproc=10):
     #
     if cameras is None:
         cameras = ['0','1','2','3','4','5','6','7','8','9']
-        #cameras = ['0']
     if channels is None:
         channels = ['b','r','z']
         #channels = ['b']#,'r','z']
