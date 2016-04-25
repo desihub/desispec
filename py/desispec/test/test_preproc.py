@@ -1,46 +1,61 @@
+from __future__ import absolute_import, division, print_function
+
 import unittest
 import os.path
 from astropy.io import fits
 import numpy as np
 
 from desispec.preproc import preproc, _parse_sec_keyword
+from desispec import io
 
 class TestPreProc(unittest.TestCase):
     
     def tearDown(self):
-        if os.path.exists(self.calibfile):
-            os.remove(self.calibfile)
+        for filename in [self.calibfile, self.rawfile]:
+            if os.path.exists(filename):
+                os.remove(filename)
     
     def setUp(self):
         self.calibfile = 'test-calib-askjapqwhezcpasehadfaqp.fits'
+        self.rawfile = 'test-raw-askjapqwhezcpasehadfaqp.fits'
         hdr = dict()
         hdr['CAMERA'] = 'b0'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
-        hdr['CCDSEC'] = '[1:200,1:150]'
-        hdr['BIASSECA'] = '[1:20,1:80]'
-        hdr['DATASECA'] = '[21:110,1:80]'
-        hdr['CCDSECA'] =  '[1:90,1:80]'
-        hdr['BIASSECB'] = '[221:240,1:80]'
-        hdr['DATASECB'] = '[111:220,1:80]'
-        hdr['CCDSECB'] =  '[91:200,1:80]'
-        hdr['BIASSECC'] = '[1:20,81:150]'
-        hdr['DATASECC'] = '[21:110,81:150]'
-        hdr['CCDSECC'] =  '[1:90,81:150]'
-        hdr['BIASSECD'] = '[221:240,81:150]'
-        hdr['DATASECD'] = '[111:220,81:150]'
-        hdr['CCDSECD'] =  '[91:200,81:150]'
+
+        #- [x,y] 1-indexed for FITS; in reality the amps will be symmetric
+        #- but the header definitions don't require that to make sure we are
+        #- getting dimensions correct
+
+        hdr['CCDSEC'] = '[1:190,1:150]'     #- dimensions of output
+
+        hdr['BIASSECA'] = '[101:150,1:80]'  #- overscan region in raw image
+        hdr['DATASECA'] = '[1:100,1:80]'    #- data region in raw image
+        hdr['CCDSECA'] =  '[1:100,1:80]'    #- where should this go in output
+        
+        hdr['BIASSECB'] = '[151:200,1:80]'
+        hdr['DATASECB'] = '[201:290,1:80]'
+        hdr['CCDSECB'] =  '[101:190,1:80]'
+
+        hdr['BIASSECC'] = '[151:200,81:150]'
+        hdr['DATASECC'] = '[201:290,81:150]'
+        hdr['CCDSECC'] =  '[101:190,81:150]'
+
+        hdr['BIASSECD'] = '[101:150,81:150]'
+        hdr['DATASECD'] = '[1:100,81:150]'
+        hdr['CCDSECD'] =  '[1:100,81:150]'
+        
         self.header = hdr
         self.ny = 150
-        self.nx = 200
-        self.noverscan = 20
+        self.nx = 190
+        self.noverscan = 50
         self.rawimage = np.zeros((self.ny, self.nx+2*self.noverscan))
         self.offset = dict(A=100.0, B=100.5, C=50.3, D=200.4)
         self.gain = dict(A=1.0, B=1.5, C=0.8, D=1.2)
         self.rdnoise = dict(A=2.0, B=2.2, C=2.4, D=2.6)
         
         self.quad = dict(
-            A = np.s_[0:80, 0:90], B = np.s_[0:80, 90:200],
-            C = np.s_[80:150, 0:90], D = np.s_[80:150, 90:200],
+            A = np.s_[0:80, 0:100], B = np.s_[0:80, 100:190],
+            C = np.s_[80:150, 100:190], D = np.s_[80:150, 0:100],
         )
         
         for amp in ('A', 'B', 'C', 'D'):
@@ -107,6 +122,32 @@ class TestPreProc(unittest.TestCase):
         image = preproc(self.rawimage, self.header, pixflat=pixflat)
         self.assertTrue(np.all(image.mask[0:10,0:10] & ccdmask.PIXFLATZERO))
         self.assertTrue(np.all(image.mask[10:20,10:20] & ccdmask.PIXFLATLOW))
+
+    def test_io(self):
+        io.write_raw(self.rawfile, self.rawimage, self.header, camera='b0')
+        io.write_raw(self.rawfile, self.rawimage, self.header, camera='r1')
+        io.write_raw(self.rawfile, self.rawimage, self.header, camera='z9')
+        b0 = io.read_raw(self.rawfile, 'b0')
+        r1 = io.read_raw(self.rawfile, 'r1')
+        z9 = io.read_raw(self.rawfile, 'z9')
+
+    def test_keywords(self):
+        for keyword in self.header.keys():
+            #- Missing GAIN* and RDNOISE* are warnings but not errors
+            if keyword.startswith('GAIN') or keyword.startswith('RDNOISE'):
+                continue
+
+            print('--', keyword, '--')
+
+            if os.path.exists(self.rawfile):
+                os.remove(self.rawfile)
+            value = self.header[keyword]
+            del self.header[keyword]
+            with self.assertRaises(KeyError):
+                io.write_raw(self.rawfile, self.rawimage, self.header)
+            self.header[keyword] = value
+            
+        dateobs = self.header
 
     #- striving for 100% coverage...
     def test_pedantic(self):
