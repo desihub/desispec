@@ -16,15 +16,15 @@ log = get_logger()
 def read_raw(filename, camera, **kwargs):
     '''
     Returns preprocessed raw data from `camera` extension of `filename`
-    
+
     Args:
         filename : input fits filename with DESI raw data
         camera : camera name (B0,R1, .. Z9) or FITS extension name or number
-        
+
     Options:
         Other keyword arguments are passed to desispec.preproc.preproc(),
         e.g. bias, pixflat, mask.  See preproc() documentation for details.
-        
+
     Returns Image object with member variables pix, ivar, mask, readnoise
     '''
     rawimage, header = fits.getdata(filename, extname=camera, header=True)
@@ -34,18 +34,20 @@ def read_raw(filename, camera, **kwargs):
 def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     '''
     Write raw pixel data to a DESI raw data file
-    
+
     Args:
         filename : file name to write data; if this exists, append a new HDU
         rawdata : 2D ndarray of raw pixel data including overscans
         header : dict-like object or fits.Header
-    
+
     Options:
         camera : B0, R1 .. Z9 - override value in header
         primary_header : header to write in HDU0
-    
+
     The primary utility of this function over raw fits calls is to ensure
-    that all necessary keywords are present before writing the file
+    that all necessary keywords are present before writing the file.
+    CCDSEC, DATE-OBS, and CCDSECx, BIASSECx, DATASECx where x=A,B,C, or D
+    GAINx and RDNOISEx will generate a non-fatal warning if missing
     '''
     header = desispec.io.util.fitsheader(header)
     primary_header = desispec.io.util.fitsheader(primary_header)
