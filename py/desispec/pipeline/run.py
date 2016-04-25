@@ -19,6 +19,39 @@ import subprocess as sp
 from desispec.log import get_logger
 
 
+def run_bootcalib():
+    
+    pass
+
+
+def run_psf():
+    pass
+
+
+def run_extract():
+    pass
+
+
+def run_fiberflat():
+    pass
+
+
+def run_sky():
+    pass
+
+
+def run_stdstars():
+    pass
+
+
+def run_calib():
+    pass
+
+
+def run_cframe():
+    pass
+
+
 def pid_exists( pid ):
     """Check whether pid exists in the current process table.
 

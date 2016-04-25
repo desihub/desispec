@@ -430,6 +430,40 @@ def graph_night(rawdir, rawnight):
         grph[starname]['out'].append(calname)
         nd['out'].append(calname)
 
+    # Build cframe files
+
+    for name, nd in grph.items():
+        if nd['type'] != 'frame':
+            continue
+        if nd['flavor'] == 'flat':
+            continue
+        band = nd['band']
+        spec = nd['spec']
+        id = nd['id']
+        cam = "{}{}".format(band, spec)
+        flatid = None
+        for fid in sorted(flatexpid[cam]):
+            if (flatid is None):
+                flatid = fid
+            elif (fid > flatid) and (fid < id):
+                flatid = fid
+        skyname = os.path.join(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
+        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        calname = os.path.join(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
+        cfname = os.path.join(rawnight, "cframe-{}{}-{:08d}".format(band, spec, id))
+        node = {}
+        node['type'] = 'cframe'
+        node['band'] = band
+        node['spec'] = spec
+        node['id'] = id
+        node['in'] = [name, flatname, skyname, calname]
+        node['out'] = []
+        grph[cfname] = node
+        grph[flatname]['out'].append(cfname)
+        grph[skyname]['out'].append(cfname)
+        grph[calname]['out'].append(cfname)
+        nd['out'].append(cfname)
+
     return grph
 
 
