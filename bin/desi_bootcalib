@@ -13,5 +13,5 @@ import sys
 import desispec.bootcalib as desiboot
 
 if __name__ == '__main__':
-    opts = sys.argv[1:]
-    desiboot.main(opts)
+    args = desiboot.parse()
+    desiboot.main(args)

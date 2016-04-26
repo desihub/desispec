@@ -1691,9 +1691,8 @@ def qa_fiber_trace(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
     pp.close()
 
 
-def main(options) :
-
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Bootstrap DESI PSF.")
 
     parser.add_argument('--fiberflat', type = str, default = None, required=False,
                         help = 'path of DESI fiberflat fits file')
@@ -1710,7 +1709,15 @@ def main(options) :
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
     parser.add_argument("--legendre-degree", type = int, default=6, required=False, help="Legendre polynomial degree for traces")
 
-    args = parser.parse_args(options)
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+
+def main(args):
 
     log=get_logger()
 
@@ -1738,9 +1745,9 @@ def main(options) :
         ###########
         # Find fibers
         log.info("finding the fibers")
-        xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
+        xpk, ypos, cut = find_fiber_peaks(flat)
         if QA:
-            desiboot.qa_fiber_peaks(xpk, cut, pp)
+            qa_fiber_peaks(xpk, cut, pp)
 
         # Test?
         if args.test:
@@ -1754,20 +1761,20 @@ def main(options) :
         log.info("tracing the fiber flat spectra")
         # Crude first
         log.info("crudely..")
-        xset, xerr = desiboot.trace_crude_init(flat,xpk,ypos)
+        xset, xerr = trace_crude_init(flat,xpk,ypos)
         # Polynomial fits
         log.info("fitting the traces")
-        xfit, fdicts = desiboot.fit_traces(xset,xerr)
+        xfit, fdicts = fit_traces(xset,xerr)
         # QA
         if QA:
-            desiboot.qa_fiber_Dx(xfit, fdicts, pp)
+            qa_fiber_Dx(xfit, fdicts, pp)
 
         ###########
         # Model the PSF with Gaussian
         log.info("modeling the PSF with a Gaussian, be patient..")
-        gauss = desiboot.fiber_gauss(flat,xfit,xerr)
+        gauss = fiber_gauss(flat,xfit,xerr)
         if QA:
-            desiboot.qa_fiber_gauss(gauss, pp)
+            qa_fiber_gauss(gauss, pp)
         XCOEFF = None
     else: # Load PSF file and generate trace info
         log.warning("Not tracing the flat.  Using the PSF file.")
@@ -1807,14 +1814,14 @@ def main(options) :
                 fit_dict['coeff'] = XCOEFF[ii,:]
                 xfit[:,ii] = dufits.func_val(wv_array, fit_dict)
 
-        all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, xfit, gauss)
+        all_spec = extract_sngfibers_gaussianpsf(arc, xfit, gauss)
 
         ############################
         # Line list
         camera = header['CAMERA']
         log.info("Loading line list")
-        llist = desiboot.load_arcline_list(camera)
-        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
+        llist = load_arcline_list(camera)
+        dlamb, wmark, gd_lines, line_guess = load_gdarc_lines(camera)
 
         #####################################
         # Loop to solve for wavelengths
@@ -1826,10 +1833,10 @@ def main(options) :
             if (ii % 20) == 0:
                 log.info("working on spectrum {:d}".format(ii))
             # Find Lines
-            pixpk = desiboot.find_arc_lines(spec)
+            pixpk = find_arc_lines(spec)
             # Match a set of 5 gd_lines to detected lines
             try:
-                id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
+                id_dict = id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
             except:
                 log.warn("ID_ARC failed on fiber {:d}".format(ii))
                 id_dict = dict(status='junk')
@@ -1846,9 +1853,9 @@ def main(options) :
                 inpoly = 3  # The solution in the z-camera has greater curvature
             else:
                 inpoly = 2
-            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=inpoly, debug=debug)
+            add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=inpoly, debug=debug)
             # Now the rest
-            desiboot.id_remainder(id_dict, pixpk, llist)
+            id_remainder(id_dict, pixpk, llist)
             # Final fit wave vs. pix too
             final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
             rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
@@ -1867,19 +1874,19 @@ def main(options) :
             all_wv_soln.append(id_dict)
 
         # Fix solutions with poor RMS (failures)
-        desiboot.fix_poor_solutions(all_wv_soln, all_dlamb, ny, args.legendre_degree)
+        fix_poor_solutions(all_wv_soln, all_dlamb, ny, args.legendre_degree)
 
         if QA:
-            desiboot.qa_arc_spec(all_spec, all_wv_soln, pp)
-            desiboot.qa_fiber_arcrms(all_wv_soln, pp)
-            desiboot.qa_fiber_dlamb(all_spec, all_wv_soln, pp)
+            qa_arc_spec(all_spec, all_wv_soln, pp)
+            qa_fiber_arcrms(all_wv_soln, pp)
+            qa_fiber_dlamb(all_spec, all_wv_soln, pp)
     else:
         all_wv_soln = None
 
     ###########
     # Write PSF file
     log.info("writing PSF file")
-    desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, ncoeff=args.legendre_degree , without_arc=args.trace_only,
+    write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, ncoeff=args.legendre_degree , without_arc=args.trace_only,
                        XCOEFF=XCOEFF)
     log.info("successfully wrote {:s}".format(args.outfile))
 
