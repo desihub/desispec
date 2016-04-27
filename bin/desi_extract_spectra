@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Extract spectra from DESI pre-processed raw data
+"""
+
+import desispec.scripts.extract as extract
+
+
+if __name__ == '__main__':
+    args = extract.parse()
+    extract.main(args)
+
