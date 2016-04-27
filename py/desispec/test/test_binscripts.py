@@ -150,7 +150,7 @@ class TestBinScripts(unittest.TestCase):
         self._write_fiberflat()
         self._write_fibermap()
 
-        cmd = "{} {}/desi_compute_sky.py --infile {} --fibermap {} --fiberflat {} --outfile {} --qafile {} --qafig {}".format(
+        cmd = "{} {}/desi_compute_sky --infile {} --fibermap {} --fiberflat {} --outfile {} --qafile {} --qafig {}".format(
             sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.qafile, self.qafig)
         err = runcmd(cmd,
                 inputs  = [self.framefile, self.fiberflatfile, self.fibermapfile],

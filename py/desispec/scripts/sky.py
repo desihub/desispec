@@ -1,12 +1,5 @@
-#!/usr/bin/env python
-#
-# See top-level LICENSE.rst file for Copyright information
-#
-# -*- coding: utf-8 -*-
 
-"""
-This script computes the fiber flat field correction from a DESI continuum lamp frame.
-"""
+from __future__ import absolute_import, division
 
 from desispec.io import read_frame
 from desispec.io import read_fiberflat
@@ -22,9 +15,9 @@ import argparse
 import numpy as np
 import sys, os
 
-def main() :
 
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Compute the sky model.")
 
     parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
@@ -39,7 +32,16 @@ def main() :
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file')
 
-    args = parser.parse_args()
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+
+def main(args) :
+
     log=get_logger()
 
     log.info("starting")
@@ -80,5 +82,3 @@ def main() :
     log.info("successfully wrote %s"%args.outfile)
 
 
-if __name__ == '__main__':
-    main()
