@@ -134,7 +134,7 @@ class TestBinScripts(unittest.TestCase):
         self._write_skymodel()
         self._write_stdstars()
 
-        cmd = "{} {}/desi_compute_fluxcalibration.py --infile {} --fibermap {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {}".format(
+        cmd = "{} {}/desi_compute_fluxcalibration --infile {} --fibermap {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {}".format(
             sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.stdfile,
                 self.calibfile, self.qafile, self.qafig)
         err = runcmd(cmd,
