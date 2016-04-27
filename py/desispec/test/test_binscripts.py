@@ -113,7 +113,7 @@ class TestBinScripts(unittest.TestCase):
         self._write_fibermap()
 
         # QA fig requires fibermapfile
-        cmd = '{} {}/desi_compute_fiberflat.py --infile {} --fibermap {} --outfile {} --qafile {} --qafig {}'.format(
+        cmd = '{} {}/desi_compute_fiberflat --infile {} --fibermap {} --outfile {} --qafile {} --qafig {}'.format(
                 sys.executable, self.binDir, self.framefile, self.fibermapfile,
                 self.fiberflatfile, self.qafile, self.qafig)
         err = runcmd(cmd,

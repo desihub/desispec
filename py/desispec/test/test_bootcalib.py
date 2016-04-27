@@ -15,6 +15,8 @@ from astropy.io import fits
 from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
 
+from desispec.scripts import bootcalib as bootscript
+
 
 class TestBoot(unittest.TestCase):
 
@@ -146,8 +148,8 @@ class TestBoot(unittest.TestCase):
             '--outfile',
             self.testout
         ]
-        args = desiboot.parse(options=argstr)
-        desiboot.main(args)
+        args = bootscript.parse(options=argstr)
+        bootscript.main(args)
 
 
     def runTest(self):

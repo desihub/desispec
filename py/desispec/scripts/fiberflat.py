@@ -1,14 +1,14 @@
-#!/usr/bin/env python
-#
-# See top-level LICENSE.rst file for Copyright information
-#
-# -*- coding: utf-8 -*-
-
 """
-This script computes the fiber flat field correction from a DESI continuum lamp frame.
-"""
+desispec.fiberflat
+==================
 
-import pdb
+Utility functions to compute a fiber flat correction and apply it
+We try to keep all the (fits) io separated.
+"""
+from __future__ import absolute_import, division
+
+import numpy as np
+
 from desispec.io import read_frame
 from desispec.io import write_fiberflat
 from desispec.io import read_fibermap
@@ -19,10 +19,9 @@ from desispec.io import write_qa_frame
 from desispec.qa import qa_plots
 import argparse
 
-def main() :
 
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Compute the fiber flat field correction from a DESI continuum lamp frame")
     parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI frame fits file corresponding to a continuum lamp exposure')
     parser.add_argument('--outfile', type = str, default = None, required=True,
@@ -33,9 +32,16 @@ def main() :
                         help = 'path of DESI exposure fiber map file')
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file (requires fiber map file)')
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
 
 
-    args = parser.parse_args()
+def main(args) :
+
     log=get_logger()
 
     log.info("starting")
@@ -69,5 +75,3 @@ def main() :
     log.info("successfully wrote %s"%args.outfile)
 
 
-if __name__ == '__main__':
-    main()
