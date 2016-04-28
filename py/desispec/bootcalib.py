@@ -20,6 +20,7 @@ import glob
 import math
 import time
 import os
+import argparse
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -1688,3 +1689,4 @@ def qa_fiber_trace(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
     # Finish
     print('Writing {:s} QA for fiber trace'.format(outfil))
     pp.close()
+
