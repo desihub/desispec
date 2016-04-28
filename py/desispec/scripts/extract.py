@@ -8,6 +8,7 @@ import sys
 import os
 import os.path
 import time
+import argparse
 import numpy as np
 
 import specter
@@ -34,8 +35,8 @@ def parse(options=None):
                         help="first spectrum to extract")
     parser.add_argument("-n", "--nspec", type=int, required=False,
                         help="number of spectra to extract")
-    parser.add_argument("-r", "--regularize", type="float", required=False, default=0.0,
-                        help="regularization amount (%default)")
+    parser.add_argument("-r", "--regularize", type=float, required=False, default=0.0,
+                        help="regularization amount (default %(default)s)")
     parser.add_argument("--nwavestep", type=int, required=False, default=50,
                         help="number of wavelength steps per divide-and-conquer extraction step")
     parser.add_argument("-v", "--verbose", action="store_true", help="print more stuff")
@@ -100,15 +101,15 @@ def main(args):
 
     #- Print parameters
     print """\
-    #--- Extraction Parameters ---
-    input:      {input}
-    psf:        {psf}
-    output:     {output}
-    wavelength: {wstart} - {wstop} AA steps {dw}
-    specmin:    {specmin}
-    nspec:      {nspec}
-    regularize: {regularize}
-    #-----------------------------\
+#--- Extraction Parameters ---
+input:      {input}
+psf:        {psf}
+output:     {output}
+wavelength: {wstart} - {wstop} AA steps {dw}
+specmin:    {specmin}
+nspec:      {nspec}
+regularize: {regularize}
+#-----------------------------\
     """.format(input=input_file, psf=psf_file, output=args.output,
         wstart=wstart, wstop=wstop, dw=dw,
         specmin=specmin, nspec=nspec,
