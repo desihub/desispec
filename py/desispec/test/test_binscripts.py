@@ -107,7 +107,7 @@ class TestBinScripts(unittest.TestCase):
 
     def test_compute_fiberflat(self):
         """
-        Tests desi_compute_fiberflat.py --infile frame.fits --outfile fiberflat.fits
+        Tests desi_compute_fiberflat --infile frame.fits --outfile fiberflat.fits
         """
         self._write_frame(flavor='flat')
         self._write_fibermap()
@@ -126,7 +126,7 @@ class TestBinScripts(unittest.TestCase):
 
     def test_compute_fluxcalib(self):
         """
-        Tests desi_compute_sky.py --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        Tests desi_compute_sky --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
         self._write_frame(flavor='dark', camera='b')
         self._write_fiberflat()
@@ -144,7 +144,7 @@ class TestBinScripts(unittest.TestCase):
 
     def test_compute_sky(self):
         """
-        Tests desi_compute_sky.py --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        Tests desi_compute_sky --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
         self._write_frame(flavor='dark')
         self._write_fiberflat()

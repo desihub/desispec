@@ -48,11 +48,12 @@ def parse(options=None):
     return args
 
 
-def main(args) :
+#- function for multiprocessing
+def _func(arg) :
+    return RedMonsterZfind(**arg)
 
-    #- function for multiprocessing
-    def _func(arg) :
-        return RedMonsterZfind(**arg)
+
+def main(args) :
 
     log = get_logger()
 
@@ -63,7 +64,7 @@ def main(args) :
     log.info("Reading bricks")
     brick = dict()
     if args.brick is not None:
-        if len(brickfiles) != 0:
+        if len(args.brickfiles) != 0:
             log.error('Give -b/--brick or input brickfiles but not both')
             sys.exit(1)
             
@@ -154,7 +155,9 @@ def main(args) :
     else: # Multiprocessing
         log.info("starting multiprocessing with {} cpus for {} spectra in {} groups".format(args.nproc, nspec, len(func_args)))
         pool = multiprocessing.Pool(args.nproc)
-        zf =  pool.map(_func, func_args)
+        zf = pool.map(_func, func_args)
+        pool.close()
+        pool.join()
 
     # reformat results
     dtype = list()
