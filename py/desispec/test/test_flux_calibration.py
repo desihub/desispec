@@ -22,6 +22,9 @@ import desispec.io
 
 import speclite.filters
 
+import desispec.scripts.fluxcalibration as fluxcalscript
+
+
 # set up a resolution matrix
 
 def set_resolmatrix(nspec,nwave):
@@ -280,6 +283,11 @@ class TestFluxCalibration(unittest.TestCase):
         fc=FluxCalib(origframe.wave+0.01,calib,fcivar,mask)
         with self.assertRaises(SystemExit):  #should be ValueError instead?
             apply_flux_calibration(frame,fc)
+
+    def test_main(self):
+        pass
+
+
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

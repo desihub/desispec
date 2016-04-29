@@ -60,8 +60,10 @@ else:
         else:
             log.error('Channel {} in multiple input files'.format(bx.channel))
             sys.exit(2)
-            
-assert set(brick.keys()) == set(['b', 'r', 'z'])
+
+filters=brick.keys()
+for fil in filters:
+	log.info("Filter found: "+fil)
 
 #- Assume all channels have the same number of targets
 #- TODO: generalize this to allow missing channels
@@ -77,10 +79,9 @@ nspec = opts.nspec
 #- Full coadd code is a bit slow, so try something quick and dirty for
 #- now to get something going for redshifting
 log.info("Combining individual channels and exposures")
-wb = brick['b'].get_wavelength_grid()
-wr = brick['r'].get_wavelength_grid()
-wz = brick['z'].get_wavelength_grid()
-wave = np.concatenate([wb, wr, wz])
+wave=[]
+for fil in filters:
+	wave=np.concatenate([wave,brick[fil].get_wavelength_grid()])
 np.ndarray.sort(wave)
 nwave = len(wave)
 
@@ -96,7 +97,7 @@ for i, targetid in enumerate(targetids):
     xwave = list()
     xflux = list()
     xivar = list()
-    for channel in ('b', 'r', 'z'):
+    for channel in filters:
         exp_flux, exp_ivar, resolution, info = brick[channel].get_target(targetid)
         weights = np.sum(exp_ivar, axis=0)
         ii, = np.where(weights > 0)

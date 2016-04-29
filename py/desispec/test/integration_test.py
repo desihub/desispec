@@ -121,7 +121,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             framefile = io.findfile('frame', night, expid, camera)
             # cmd = "exspec -i {pix} -p {psf} --specmin 0 --nspec {nspec} -w {wave} -o {frame}".format(
             #     pix=pixfile, psf=psffile, wave=waverange[channel], frame=framefile, **params)
-            cmd = "desi_extract_spectra.py -i {pix} -p {psf} -f {fibermap} --specmin 0 --nspec {nspec} -o {frame}".format(
+            cmd = "desi_extract_spectra -i {pix} -p {psf} -f {fibermap} --specmin 0 --nspec {nspec} -o {frame}".format(
                 pix=pixfile, psf=psffile, frame=framefile, fibermap=fiberfile, **params)
 
             inputs = [pixfile, psffile, fiberfile]
@@ -136,7 +136,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         camera = channel+"0"
         framefile = io.findfile('frame', night, expid, camera)
         fiberflat = io.findfile('fiberflat', night, expid, camera)
-        cmd = "desi_compute_fiberflat.py --infile {frame} --outfile {fiberflat}".format(
+        cmd = "desi_compute_fiberflat --infile {frame} --outfile {fiberflat}".format(
             frame=framefile, fiberflat=fiberflat, **params)
         inputs = [framefile,]
         outputs = [fiberflat,]
@@ -153,7 +153,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         fibermap = io.findfile('fibermap', night, expid)
         fiberflat = io.findfile('fiberflat', night, flat_expid, camera)
         skyfile = io.findfile('sky', night, expid, camera)
-        cmd="desi_compute_sky.py --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky}".format(
+        cmd="desi_compute_sky --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky}".format(
             frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile, **params)
         inputs = [framefile, fibermap, fiberflat]
         outputs = [skyfile, ]
@@ -193,7 +193,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         calibfile = io.findfile('calib', night, expid, camera)
 
         #- Compute flux calibration vector
-        cmd = """desi_compute_fluxcalibration.py \
+        cmd = """desi_compute_fluxcalibration \
           --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --sky {sky} \
           --models {stdstars} --outfile {calib}""".format(
             frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile,
