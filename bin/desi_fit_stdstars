@@ -1,0 +1,22 @@
+#!/usr/bin/env python
+# See top-level LICENSE.rst file for Copyright information
+
+"""
+Get the normalized best template to do flux calibration.
+
+desi_fit_stdstars
+    --indir INDIR
+    --fiberflat FILENAME
+    --models STDSTAR_MODELS
+    --fibermapdir FMDIR
+    --spectrograph N
+    --outfile X
+"""
+
+import desispec.scripts.stdstars as stdstars
+
+
+if __name__ == '__main__':
+    args = stdstars.parse()
+    stdstars.main(args)
+

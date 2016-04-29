@@ -121,7 +121,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             framefile = io.findfile('frame', night, expid, camera)
             # cmd = "exspec -i {pix} -p {psf} --specmin 0 --nspec {nspec} -w {wave} -o {frame}".format(
             #     pix=pixfile, psf=psffile, wave=waverange[channel], frame=framefile, **params)
-            cmd = "desi_extract_spectra.py -i {pix} -p {psf} -f {fibermap} --specmin 0 --nspec {nspec} -o {frame}".format(
+            cmd = "desi_extract_spectra -i {pix} -p {psf} -f {fibermap} --specmin 0 --nspec {nspec} -o {frame}".format(
                 pix=pixfile, psf=psffile, frame=framefile, fibermap=fiberfile, **params)
 
             inputs = [pixfile, psffile, fiberfile]
@@ -136,7 +136,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         camera = channel+"0"
         framefile = io.findfile('frame', night, expid, camera)
         fiberflat = io.findfile('fiberflat', night, expid, camera)
-        cmd = "desi_compute_fiberflat.py --infile {frame} --outfile {fiberflat}".format(
+        cmd = "desi_compute_fiberflat --infile {frame} --outfile {fiberflat}".format(
             frame=framefile, fiberflat=fiberflat, **params)
         inputs = [framefile,]
         outputs = [fiberflat,]
@@ -153,7 +153,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         fibermap = io.findfile('fibermap', night, expid)
         fiberflat = io.findfile('fiberflat', night, flat_expid, camera)
         skyfile = io.findfile('sky', night, expid, camera)
-        cmd="desi_compute_sky.py --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky}".format(
+        cmd="desi_compute_sky --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky}".format(
             frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile, **params)
         inputs = [framefile, fibermap, fiberflat]
         outputs = [skyfile, ]
@@ -169,7 +169,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'
 
     stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
-    cmd = """desi_fit_stdstars.py --spectrograph 0 \
+    cmd = """desi_fit_stdstars --spectrograph 0 \
       --fibermap {fibermap} \
       --fiberflatexpid {flat_expid} \
       --models {std_templates} --outfile {stdstars}""".format(
@@ -193,7 +193,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         calibfile = io.findfile('calib', night, expid, camera)
 
         #- Compute flux calibration vector
-        cmd = """desi_compute_fluxcalibration.py \
+        cmd = """desi_compute_fluxcalibration \
           --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --sky {sky} \
           --models {stdstars} --outfile {calib}""".format(
             frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile,
@@ -206,7 +206,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
         #- Apply the flux calibration to write a cframe file
         cframefile = io.findfile('cframe', night, expid, camera)
-        cmd = """desi_process_exposure.py \
+        cmd = """desi_process_exposure \
           --infile {frame} --fiberflat {fiberflat} --sky {sky} --calib {calib} \
           --outfile {cframe}""".format(frame=framefile, fibermap=fibermap,
             fiberflat=fiberflat, sky=skyfile, calib=calibfile, cframe=cframefile)
@@ -228,7 +228,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         for channel in ['b', 'r', 'z']:
             outputs.append( io.findfile('brick', brickname=b, band=channel))
 
-    cmd = "desi_make_bricks.py --night "+night
+    cmd = "desi_make_bricks --night "+night
     if runcmd(cmd, inputs, outputs, clobber) != 0:
         raise RuntimeError('brick generation failed')
 
@@ -238,7 +238,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs = [io.findfile('brick', brickname=b, band=channel) for channel in ['b', 'r', 'z']]
         zbestfile = io.findfile('zbest', brickname=b)
         outputs = [zbestfile, ]
-        cmd = "desi_zfind.py --brick {} -o {}".format(b, zbestfile)
+        cmd = "desi_zfind --brick {} -o {}".format(b, zbestfile)
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('redshifts failed for brick '+b)
 

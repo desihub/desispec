@@ -1,8 +1,3 @@
-#!/usr/bin/env python
-#
-# See top-level LICENSE.rst file for Copyright information
-#
-# -*- coding: utf-8 -*-
 
 """
 This script processes an exposure by applying fiberflat, sky subtraction,
@@ -21,11 +16,8 @@ from desispec.log import get_logger
 import argparse
 import sys
 
-
-def main() :
-
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Apply fiberflat, sky subtraction and calibration.")
     parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None,
@@ -36,9 +28,17 @@ def main() :
                         help = 'path of DESI calibration fits file')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
-    # add calibration here when exists
 
-    args = parser.parse_args()
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+
+def main(args):
+
     log = get_logger()
 
     if (args.fiberflat is None) and (args.sky is None) and (args.calib is None):
@@ -76,6 +76,3 @@ def main() :
     log.info("successfully wrote %s"%args.outfile)
 
 
-
-if __name__ == '__main__':
-    main()
