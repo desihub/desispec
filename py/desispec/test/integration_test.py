@@ -169,7 +169,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'
 
     stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
-    cmd = """desi_fit_stdstars.py --spectrograph 0 \
+    cmd = """desi_fit_stdstars --spectrograph 0 \
       --fibermap {fibermap} \
       --fiberflatexpid {flat_expid} \
       --models {std_templates} --outfile {stdstars}""".format(
@@ -206,7 +206,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
         #- Apply the flux calibration to write a cframe file
         cframefile = io.findfile('cframe', night, expid, camera)
-        cmd = """desi_process_exposure.py \
+        cmd = """desi_process_exposure \
           --infile {frame} --fiberflat {fiberflat} --sky {sky} --calib {calib} \
           --outfile {cframe}""".format(frame=framefile, fibermap=fibermap,
             fiberflat=fiberflat, sky=skyfile, calib=calibfile, cframe=cframefile)
@@ -228,7 +228,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         for channel in ['b', 'r', 'z']:
             outputs.append( io.findfile('brick', brickname=b, band=channel))
 
-    cmd = "desi_make_bricks.py --night "+night
+    cmd = "desi_make_bricks --night "+night
     if runcmd(cmd, inputs, outputs, clobber) != 0:
         raise RuntimeError('brick generation failed')
 
@@ -238,7 +238,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs = [io.findfile('brick', brickname=b, band=channel) for channel in ['b', 'r', 'z']]
         zbestfile = io.findfile('zbest', brickname=b)
         outputs = [zbestfile, ]
-        cmd = "desi_zfind.py --brick {} -o {}".format(b, zbestfile)
+        cmd = "desi_zfind --brick {} -o {}".format(b, zbestfile)
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('redshifts failed for brick '+b)
 

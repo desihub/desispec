@@ -1,0 +1,12 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+import desispec.scripts.updatecoadd as coadd
+
+if __name__ == '__main__':
+    args = coadd.parse()
+    coadd.main(args)
+
