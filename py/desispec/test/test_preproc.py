@@ -26,39 +26,37 @@ class TestPreProc(unittest.TestCase):
         #- but the header definitions don't require that to make sure we are
         #- getting dimensions correct
 
-        hdr['CCDSEC'] = '[1:190,1:150]'     #- dimensions of output
-
-        hdr['BIASSECA'] = '[101:150,1:80]'  #- overscan region in raw image
-        hdr['DATASECA'] = '[1:100,1:80]'    #- data region in raw image
-        hdr['CCDSECA'] =  '[1:100,1:80]'    #- where should this go in output
+        hdr['BIASSEC1'] = '[101:150,1:80]'  #- overscan region in raw image
+        hdr['DATASEC1'] = '[1:100,1:80]'    #- data region in raw image
+        hdr['CCDSEC1'] =  '[1:100,1:80]'    #- where should this go in output
         
-        hdr['BIASSECB'] = '[151:200,1:80]'
-        hdr['DATASECB'] = '[201:290,1:80]'
-        hdr['CCDSECB'] =  '[101:190,1:80]'
+        hdr['BIASSEC2'] = '[151:200,1:80]'
+        hdr['DATASEC2'] = '[201:290,1:80]'
+        hdr['CCDSEC2'] =  '[101:190,1:80]'
 
-        hdr['BIASSECC'] = '[151:200,81:150]'
-        hdr['DATASECC'] = '[201:290,81:150]'
-        hdr['CCDSECC'] =  '[101:190,81:150]'
+        hdr['BIASSEC3'] = '[101:150,81:150]'
+        hdr['DATASEC3'] = '[1:100,81:150]'
+        hdr['CCDSEC3'] =  '[1:100,81:150]'
 
-        hdr['BIASSECD'] = '[101:150,81:150]'
-        hdr['DATASECD'] = '[1:100,81:150]'
-        hdr['CCDSECD'] =  '[1:100,81:150]'
+        hdr['BIASSEC4'] = '[151:200,81:150]'
+        hdr['DATASEC4'] = '[201:290,81:150]'
+        hdr['CCDSEC4'] =  '[101:190,81:150]'
         
         self.header = hdr
         self.ny = 150
         self.nx = 190
         self.noverscan = 50
         self.rawimage = np.zeros((self.ny, self.nx+2*self.noverscan))
-        self.offset = dict(A=100.0, B=100.5, C=50.3, D=200.4)
-        self.gain = dict(A=1.0, B=1.5, C=0.8, D=1.2)
-        self.rdnoise = dict(A=2.0, B=2.2, C=2.4, D=2.6)
+        self.offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
+        self.gain = {'1':1.0, '2':1.5, '3':0.8, '4':1.2}
+        self.rdnoise = {'1':2.0, '2':2.2, '3':2.4, '4':2.6}
         
-        self.quad = dict(
-            A = np.s_[0:80, 0:100], B = np.s_[0:80, 100:190],
-            C = np.s_[80:150, 100:190], D = np.s_[80:150, 0:100],
-        )
+        self.quad = {
+            '1': np.s_[0:80, 0:100], '2': np.s_[0:80, 100:190],
+            '3': np.s_[80:150, 0:100], '4': np.s_[80:150, 100:190],
+        }
         
-        for amp in ('A', 'B', 'C', 'D'):
+        for amp in ('1', '2', '3', '4'):
             self.header['GAIN'+amp] = self.gain[amp]
             self.header['RDNOISE'+amp] = self.rdnoise[amp]
             
@@ -78,7 +76,7 @@ class TestPreProc(unittest.TestCase):
         image = preproc(self.rawimage, self.header)
         self.assertEqual(image.pix.shape, (self.ny, self.nx))
         self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
-        for amp in ('A', 'B', 'C', 'D'):
+        for amp in ('1', '2', '3', '4'):
             pix = image.pix[self.quad[amp]]
             rdnoise = np.median(image.readnoise[self.quad[amp]])
             self.assertAlmostEqual(np.median(pix), 0.0, delta=0.2)
@@ -136,8 +134,10 @@ class TestPreProc(unittest.TestCase):
             #- Missing GAIN* and RDNOISE* are warnings but not errors
             if keyword.startswith('GAIN') or keyword.startswith('RDNOISE'):
                 continue
-
-            print('--', keyword, '--')
+            
+            #- DATE-OBS is also optional
+            if keyword.startswith('DATE-OBS'):
+                continue
 
             if os.path.exists(self.rawfile):
                 os.remove(self.rawfile)
@@ -169,17 +169,17 @@ class TestPreProc(unittest.TestCase):
         image = preproc(rawimage, self.header)
         #- Missing expected RDNOISE keywords shouldn't be fatal
         hdr = self.header.copy()
-        del hdr['RDNOISEA']
-        del hdr['RDNOISEB']
-        del hdr['RDNOISEC']
-        del hdr['RDNOISED']
+        del hdr['RDNOISE1']
+        del hdr['RDNOISE2']
+        del hdr['RDNOISE3']
+        del hdr['RDNOISE4']
         image = preproc(self.rawimage, hdr)
         #- Missing expected GAIN keywords should log error but not crash
         hdr = self.header.copy()
-        del hdr['GAINA']
-        del hdr['GAINB']
-        del hdr['GAINC']
-        del hdr['GAIND']
+        del hdr['GAIN1']
+        del hdr['GAIN2']
+        del hdr['GAIN3']
+        del hdr['GAIN4']
         image = preproc(self.rawimage, hdr)
 
     #- Not implemented yet, but flag these as expectedFailures instead of

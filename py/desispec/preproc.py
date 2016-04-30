@@ -20,7 +20,7 @@ def _parse_sec_keyword(value):
       * FITS upperlimit-inclusive vs. python upperlimit-exclusive
       * FITS[x,y] vs. python[y,x]
     
-    i.e. BIASSECB='[7:56,51:4146]' -> (slice(50,4146), slice(6,56))
+    i.e. BIASSEC2='[7:56,51:4146]' -> (slice(50,4146), slice(6,56))
     '''
     m = re.search('\[(\d+):(\d+)\,(\d+):(\d+)\]', value)
     if m is None:
@@ -62,14 +62,15 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     Args:
         rawimage : 2D numpy array directly from raw data file
         header : dict-like metadata, e.g. from FITS header, with keywords
-            CAMERA, DATE-OBS, CCDSEC, BIASSECx, DATASECx, CCDSECx
-            where x = A, B, C, D for each of the 4 amplifiers
+            CAMERA, BIASSECx, DATASECx, CCDSECx
+            where x = 1, 2, 3, 4 for each of the 4 amplifiers.
         
     Optional bias, pixflat, and mask can each be:
         False: don't apply that step
         True: use default calibration data for that night
         ndarray: use that array
         filename (str or unicode): read HDU 0 and use that
+        DATE-OBS is required in header if bias, pixflat, or mask=True
 
     Returns Image object with member variables:
         image : 2D preprocessed image in units of electrons per pixel
@@ -105,11 +106,11 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
 
     #- Subtract bias image
     camera = header['CAMERA']
-    dateobs = header['DATE-OBS']
     
     if bias is not False and bias is not None:
         if bias is True:
             #- use default bias file for this camera/night
+            dateobs = header['DATE-OBS']
             bias = read_bias(camera=camera, dateobs=dateobs)
         elif isinstance(bias, (str, unicode)):
             #- treat as filename
@@ -121,11 +122,11 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 
     #- Output arrays
-    yy, xx = _parse_sec_keyword(header['CCDSEC'])
+    yy, xx = _parse_sec_keyword(header['CCDSEC4'])  #- 4 = upper right
     image = np.zeros( (yy.stop, xx.stop) )
     readnoise = np.zeros_like(image)
     
-    for amp in ['A', 'B', 'C', 'D']:
+    for amp in ['1', '2', '3', '4']:
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
         
         #- Initial teststand data may be missing GAIN* keywords; don't crash
@@ -169,6 +170,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     #- Load mask
     if mask is not False and mask is not None:
         if mask is True:
+            dateobs = header['DATE-OBS']
             mask = read_mask(camera=camera, dateobs=dateobs)
         elif isinstance(mask, (str, unicode)):
             mask = read_mask(filename=mask)
@@ -181,6 +183,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     #- Divide by pixflat image
     if pixflat is not False and pixflat is not None:
         if pixflat is True:
+            dateobs = header['DATE-OBS']
             pixflat = read_pixflat(camera=camera, dateobs=dateobs)
         elif isinstance(pixflat, (str, unicode)):
             pixflat = read_pixflat(filename=pixflat)
