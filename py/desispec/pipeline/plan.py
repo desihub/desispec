@@ -35,7 +35,8 @@ _graph_types = [
     'fiberflat',
     'sky',
     'stdstars',
-    'calib'
+    'calib',
+    'cframe'
 ]
 
 _state_colors = {

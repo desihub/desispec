@@ -16,40 +16,69 @@ import errno
 import sys
 import subprocess as sp
 
+import yaml
+
 from desispec.log import get_logger
 
 
-def run_bootcalib():
-    
-    pass
+def default_run_options():
+    allopts = {}
+    opts['trace-only'] = False
+    opts['legendre-degree'] = 6
+    allopts['bootcalib'] = opts
+
+    opts = {}
+    opts['flux-hdu'] = 1
+    opts['ivar-hdu'] = 2
+    opts['mask-hdu'] = 3
+    opts['header-hdu'] = 1
+    opts['xcoord-hdu'] = 1
+    opts['ycoord-hdu'] = 1
+    opts['psfmodel'] = 'GAUSSHERMITE'
+    opts['half_size_x'] = 8
+    opts['half_size_y'] = 5
+    opts['verbose'] = False
+    opts['gauss_hermite_deg'] = 6
+    opts['legendre_deg_wave'] = 4
+    opts['legendre_deg_x'] = 1
+    opts['trace_deg_wave'] = 6
+    opts['trace_deg_x'] = 6
+    allopts['specex'] = opts
+
+    opts = {}
+    opts['regularize'] = 0.0
+    opts['nwavestep'] = 50
+    opts['verbose'] = False
+    allopts['extract'] = opts
+
+    allopts['fiberflat'] = {}
+
+    allopts['sky'] = {}
+
+    allopts['stdstars'] = {}
+
+    allopts['fluxcalibration'] = {}
+
+    allopts['procexp'] = {}
+
+    allopts['makebricks'] = {}
+
+    allopts['zfind'] = {}
+
+    return allopts
 
 
-def run_psf():
-    pass
+def write_run_options(path, opts):
+    with open(path, 'w') as f:
+        yaml.dump(opts, f, default_flow_style=False)
+    return
 
 
-def run_extract():
-    pass
-
-
-def run_fiberflat():
-    pass
-
-
-def run_sky():
-    pass
-
-
-def run_stdstars():
-    pass
-
-
-def run_calib():
-    pass
-
-
-def run_cframe():
-    pass
+def read_run_options(path):
+    opts = None
+    with open(path, 'r') as f:
+        opts = yaml.load(f)
+    return opts
 
 
 def pid_exists( pid ):
