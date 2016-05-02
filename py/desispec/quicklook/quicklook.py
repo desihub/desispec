@@ -93,30 +93,30 @@ def testconfig(outfilename="qlconfig.yaml"):
                        "StepName":"Preprocessing-Pixel Flattening",
                        "OutputFile":"QA_pixelflattening.yaml"
                        },
-                      #{'PA':{"ModuleName":"desispec.procalgs",
-                      #       "ClassName":"BoxcarExtraction",
-                      #       "Name":"Boxcar Extraction",
-                      #       "kwargs":{"PSFFile":"%%PSFFile",
-                      #                 "BoxWidth":2.5,
-                      #                 "DeltaW":0.5,
-                      #                 "Nspec":500
-                      #                 }
-                      #       },
-                      # 'QAs':[],
-                      # "StepName":"Boxcar Extration",
-                      # "OutputFile":"QA_boxcarextraction.yaml"
-                      # },
                       {'PA':{"ModuleName":"desispec.procalgs",
-                             "ClassName":"Extraction_2d",
-                             "Name":"2D Extraction",
-                             "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
-                                       "Nspec":10,
-                                       "Wavelength": "5630,7740,0.5"
+                             "ClassName":"BoxcarExtraction",
+                             "Name":"Boxcar Extraction",
+                             "kwargs":{"PSFFile":"%%PSFFile",
+                                       "BoxWidth":2.5,
+                                       "DeltaW":0.5,
+                                       "Nspec":500
                                        }
                              },
                        'QAs':[],
-                       "StepName":"2D Extraction",
-                       "OutputFile":"extraction.yaml"
+                       "StepName":"Boxcar Extration",
+                       "OutputFile":"QA_boxcarextraction.yaml"
+                      # },
+                      #{'PA':{"ModuleName":"desispec.procalgs",
+                      #       "ClassName":"Extraction_2d",
+                      #       "Name":"2D Extraction",
+                      #       "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
+                      #                 "Nspec":10,
+                      #                 "Wavelength": "5630,7740,0.5"
+                      #                 }
+                      #       },
+                      # 'QAs':[],
+                      # "StepName":"2D Extraction",
+                      # "OutputFile":"extraction.yaml"
                        }
                       ]
           }
