@@ -32,7 +32,8 @@ def testconfig(outfilename="qlconfig.yaml"):
           'FiberMap':os.environ['FIBERMAP'],# path to fiber map
           'RawImage':os.environ['PIXIMAGE'],#path to input image
           'PixelFlat':os.environ['PIXELFLAT'], #path to pixel flat image
-          'PSFFile':os.environ['PSFFILE'],  # .../desimodel/data/specpsf/psf-r.fits
+          'PSFFile':os.environ['PSFFILE'],  # for boxcar this can be bootcalib psf or specter psf file
+          #'PSFFile_sp':os.environ['PSFFILE_sp'], # .../desimodel/data/specpsf/psf-r.fits (for running 2d extraction)
           'basePath':os.environ['DESIMODEL'],
           'OutputFile':'lastframe_QL-r0-00000004.fits', # output file from last pipeline step. Need to output intermediate steps? Most likely after boxcar extraction?
           'PipeLine':[{'PA':{"ModuleName":"desispec.procalgs",
@@ -92,18 +93,30 @@ def testconfig(outfilename="qlconfig.yaml"):
                        "StepName":"Preprocessing-Pixel Flattening",
                        "OutputFile":"QA_pixelflattening.yaml"
                        },
+                      #{'PA':{"ModuleName":"desispec.procalgs",
+                      #       "ClassName":"BoxcarExtraction",
+                      #       "Name":"Boxcar Extraction",
+                      #       "kwargs":{"PSFFile":"%%PSFFile",
+                      #                 "BoxWidth":2.5,
+                      #                 "DeltaW":0.5,
+                      #                 "Nspec":500
+                      #                 }
+                      #       },
+                      # 'QAs':[],
+                      # "StepName":"Boxcar Extration",
+                      # "OutputFile":"QA_boxcarextraction.yaml"
+                      # },
                       {'PA':{"ModuleName":"desispec.procalgs",
-                             "ClassName":"BoxcarExtraction",
-                             "Name":"Boxcar Extraction",
-                             "kwargs":{"PSFFile":"%%PSFFile",
-                                       "BoxWidth":2.5,
-                                       "DeltaW":0.5,
-                                       "Nspec":500
+                             "ClassName":"Extraction_2d",
+                             "Name":"2D Extraction",
+                             "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
+                                       "Nspec":10,
+                                       "Wavelength": "5630,7740,0.5"
                                        }
                              },
                        'QAs':[],
-                       "StepName":"Boxcar Extration",
-                       "OutputFile":"QA_boxcarextraction.yaml"
+                       "StepName":"2D Extraction",
+                       "OutputFile":"extraction.yaml"
                        }
                       ]
           }
@@ -186,12 +199,9 @@ responding
         log.info("Starting to run step %s"%(paconf[s]["StepName"]))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
-        print inp
-        print pargs
         try:
             hb.start("Running %s"%(step[0].name))
             inp=pa(inp,**pargs)
-            print inp
         except Exception as e:
             log.critical("Failed to run PA %s error was %s"%(step[0].name,e))
             sys.exit("Failed to run PA %s"%(step[0].name))
