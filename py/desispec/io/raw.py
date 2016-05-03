@@ -7,6 +7,7 @@ TODO: move into datamodel after we have verified the format
 
 import os.path
 from astropy.io import fits
+import numpy as np
 
 import desispec.io.util
 from desispec.preproc import preproc
@@ -51,6 +52,11 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     '''
     header = desispec.io.util.fitsheader(header)
     primary_header = desispec.io.util.fitsheader(primary_header)
+
+    if rawdata.dtype not in (np.int16, np.int32, np.int64):
+        message = 'dtype {} not supported for raw data'.format(rawdata.dtype)
+        log.fatal(message)
+        raise ValueError(message)
 
     #- Check required keywords before writing anything
     missing_keywords = list()
@@ -102,14 +108,29 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     #- temporarily generate an uncompressed HDU to get those keywords
     header = fits.ImageHDU(rawdata, header=header, name=extname).header
 
+    #- Bizarrely, compression of 64-bit integers isn't supported.
+    #- downcast to 32-bit if that won't lose precision
+    if rawdata.dtype == np.int64:
+        if np.max(np.abs(rawdata)) < 2**31:
+            rawdata = rawdata.astype(np.int32)
+
+    if rawdata.dtype in (np.int16, np.int32):
+        dataHDU = fits.CompImageHDU(rawdata, header=header, name=extname)
+    elif rawdata.dtype == np.int64:
+        log.warn('Image compression not supported for 64-bit; writing uncompressed')
+        dataHDU = fits.ImageHDU(rawdata, header=header, name=extname)
+    else:
+        log.error("How did we get this far with rawdata dtype {}?".format(rawdata.dtype))
+        dataHDU = fits.ImageHDU(rawdata, header=header, name=extname)
+
     #- Actually write or update the file
     if os.path.exists(filename):
         hdus = fits.open(filename, mode='append', memmap=False)
-        hdus.append(fits.CompImageHDU(rawdata, header=header, name=extname))
+        hdus.append(dataHDU)
         hdus.flush()
         hdus.close()
     else:
         hdus = fits.HDUList()
         hdus.append(fits.PrimaryHDU(None, header=primary_header))
-        hdus.append(fits.CompImageHDU(rawdata, header=header, name=extname))
+        hdus.append(dataHDU)
         hdus.writeto(filename)

@@ -117,7 +117,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
             bias = read_bias(filename=bias)
             
         if bias.shape == rawimage.shape:
-            rawimage -= bias
+            rawimage = rawimage - bias
         else:
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 

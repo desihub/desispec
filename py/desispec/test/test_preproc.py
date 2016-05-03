@@ -69,6 +69,9 @@ class TestPreProc(unittest.TestCase):
             self.rawimage[xy] += self.offset[amp]
             self.rawimage[xy] += np.random.normal(scale=self.rdnoise[amp], size=shape)/self.gain[amp]
 
+        #- raw data are integers, not floats
+        self.rawimage = self.rawimage.astype(np.int32)
+
         #- Confirm that all regions were correctly offset
         assert not np.any(self.rawimage == 0.0)
             
@@ -128,6 +131,58 @@ class TestPreProc(unittest.TestCase):
         b0 = io.read_raw(self.rawfile, 'b0')
         r1 = io.read_raw(self.rawfile, 'r1')
         z9 = io.read_raw(self.rawfile, 'z9')
+        
+    def test_32_64(self):
+        '''
+        64-bit integers aren't supported for compressed HDUs;
+        make sure we handle that gracefully
+        '''
+        data64 = np.linspace(0, 2**60, 10, dtype=np.int64)
+        datasmall64 = np.linspace(0, 2**30, 10, dtype=np.int64)
+        data32 = np.linspace(0, 2**30, 10, dtype=np.int32)
+        data16 = np.linspace(0, 2**10, 10, dtype=np.int16)
+
+        #- Primary HDU should be blank
+        #- Should be written as vanilla ImageHDU
+        io.write_raw(self.rawfile, data64, self.header, camera='b0')
+        #- Should be written as vanilla ImageHDU
+        io.write_raw(self.rawfile, data64, self.header, camera='b1')
+        #- Should be converted to 32-bit CompImageHDU
+        io.write_raw(self.rawfile, datasmall64, self.header, camera='b2')
+        #- Should be 32-bit CompImageHDU
+        io.write_raw(self.rawfile, data32, self.header, camera='b3')
+        #- Should be 16-bit CompImageHDU
+        io.write_raw(self.rawfile, data16, self.header, camera='b4')
+        
+        fx = fits.open(self.rawfile)
+                
+        #- Blank PrimaryHDU should have been inserted
+        self.assertTrue(isinstance(fx[0], fits.PrimaryHDU))
+        self.assertTrue(fx[0].data == None)
+        #- 64-bit image written uncompressed after blank HDU
+        self.assertTrue(isinstance(fx[1], fits.ImageHDU))
+        self.assertEqual(fx[1].data.dtype, np.dtype('>i8'))
+        self.assertEqual(fx[1].header['EXTNAME'], 'B0')
+        
+        #- 64-bit image written uncompressed
+        self.assertTrue(isinstance(fx[2], fits.ImageHDU))
+        self.assertEqual(fx[2].data.dtype, np.dtype('>i8'))
+        self.assertEqual(fx[2].header['EXTNAME'], 'B1')
+        
+        #- 64-bit image with small numbers converted to 32-bit compressed
+        self.assertTrue(isinstance(fx[3], fits.CompImageHDU))
+        self.assertEqual(fx[3].data.dtype, np.int32)
+        self.assertEqual(fx[3].header['EXTNAME'], 'B2')
+        
+        #- 32-bit image written compressed
+        self.assertTrue(isinstance(fx[4], fits.CompImageHDU))
+        self.assertEqual(fx[4].data.dtype, np.int32)
+        self.assertEqual(fx[4].header['EXTNAME'], 'B3')
+
+        #- 16-bit image written compressed
+        self.assertTrue(isinstance(fx[5], fits.CompImageHDU))
+        self.assertEqual(fx[5].data.dtype, np.int16)
+        self.assertEqual(fx[5].header['EXTNAME'], 'B4')
 
     def test_keywords(self):
         for keyword in self.header.keys():
