@@ -5,6 +5,7 @@ import subprocess
 import importlib
 import yaml
 from desispec.quicklook import qllogger
+from desispec.quicklook import qlheartbeat as QLHB
 
 
 def testconfig(outfilename="qlconfig.yaml"):
@@ -31,7 +32,8 @@ def testconfig(outfilename="qlconfig.yaml"):
           'FiberMap':os.environ['FIBERMAP'],# path to fiber map
           'RawImage':os.environ['PIXIMAGE'],#path to input image
           'PixelFlat':os.environ['PIXELFLAT'], #path to pixel flat image
-          'PSFFile':os.environ['PSFFILE'],  # .../desimodel/data/specpsf/psf-r.fits
+          'PSFFile':os.environ['PSFFILE'],  # for boxcar this can be bootcalib psf or specter psf file
+          #'PSFFile_sp':os.environ['PSFFILE_sp'], # .../desimodel/data/specpsf/psf-r.fits (for running 2d extraction)
           'basePath':os.environ['DESIMODEL'],
           'OutputFile':'lastframe_QL-r0-00000004.fits', # output file from last pipeline step. Need to output intermediate steps? Most likely after boxcar extraction?
           'PipeLine':[{'PA':{"ModuleName":"desispec.procalgs",
@@ -103,6 +105,18 @@ def testconfig(outfilename="qlconfig.yaml"):
                        'QAs':[],
                        "StepName":"Boxcar Extration",
                        "OutputFile":"QA_boxcarextraction.yaml"
+                      # },
+                      #{'PA':{"ModuleName":"desispec.procalgs",
+                      #       "ClassName":"Extraction_2d",
+                      #       "Name":"2D Extraction",
+                      #       "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
+                      #                 "Nspec":10,
+                      #                 "Wavelength": "5630,7740,0.5"
+                      #                 }
+                      #       },
+                      # 'QAs':[],
+                      # "StepName":"2D Extraction",
+                      # "OutputFile":"extraction.yaml"
                        }
                       ]
           }
@@ -157,7 +171,26 @@ def mapkeywords(kw,kwmap):
             newmap[k]=v
     return newmap
 
-def runpipeline(pl,convdict,conf,hb):
+def runpipeline(pl,convdict,conf):
+    """
+    runs the quicklook pipeline as configured
+    args:- pl: is a list of [pa,qas] where pa is a pipeline step and qas the cor
+responding 
+               qas for that pa
+           conf: a configured dictionary, read from the configuration yaml file.
+                 e.g: conf=configdict=yaml.load(open('configfile.yaml','rb'))
+           convdict: converted dictionary
+                 e.g : conf["IMAGE"] is the real psf file
+                       but convdict["IMAGE"] is like desispec.image.Image object
+ and so on.
+                       details in setup_pipeline method below for examples.
+    """
+    
+   
+    qlog=qllogger.QLLogger("QuickLook",20)
+    log=qlog.getlog()
+    hb=QLHB.QLHeartbeat(log,conf["Period"],conf["Timeout"])
+
     inp=convdict["rawimage"]
     paconf=conf["PipeLine"]
     qlog=qllogger.QLLogger("QuickLook",0)
@@ -166,12 +199,9 @@ def runpipeline(pl,convdict,conf,hb):
         log.info("Starting to run step %s"%(paconf[s]["StepName"]))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
-        print inp
-        print pargs
         try:
             hb.start("Running %s"%(step[0].name))
             inp=pa(inp,**pargs)
-            print inp
         except Exception as e:
             log.critical("Failed to run PA %s error was %s"%(step[0].name,e))
             sys.exit("Failed to run PA %s"%(step[0].name))
@@ -196,6 +226,12 @@ def runpipeline(pl,convdict,conf,hb):
 #- Setup pipeline from configuration
 
 def setup_pipeline(config):
+    """
+       Given a configuration from QLF, this sets up a pipeline [pa,qa] and also returns a     
+       conversion dictionary from the configuration dictionary so that Pipeline steps (PA) can   
+       take them. This is required for runpipeline.
+    """
+       
     import desispec.io.fibermap as fibIO
     import desispec.io.sky as skyIO
     import desispec.io.fiberflat as ffIO
@@ -206,7 +242,6 @@ def setup_pipeline(config):
     import desispec.frame as dframe
     import desispec.procalgs as procalgs
     from desispec.boxcar import do_boxcar
-    from desispec.quicklook import qlheartbeat as QLHB
 
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
@@ -272,7 +307,7 @@ def setup_pipeline(config):
     
 
     if "PSFFile" in config:
-        from specter.psf import load_psf
+        #from specter.psf import load_psf
         import desispec.psf
         psf=desispec.psf.PSF(config["PSFFile"])
         #psf=load_psf(config["PSFFile"])
@@ -321,6 +356,8 @@ def setup_pipeline(config):
         skymodel=skyIO.read_sky(skyfile)
         convdict["SkyFile"]=skymodel
 
+    hbeat.stop("Finished reading all static files")
+
     img=inp
     convdict["rawimage"]=img
     pipeline=[]
@@ -343,20 +380,5 @@ def setup_pipeline(config):
             else:
                 qas.append(qa)
         pipeline.append([pa,qas])
-    
-    chan,cam,expid=get_chan_cam_exp(inpname)
-    res=runpipeline(pipeline,convdict,config,hbeat)
-    if isinstance(res,im.Image):
-        if config["OutputFile"]: finalname=config["OutputFile"]
-        else: finalname="image-%s%d-%08d.fits"%(chan,cam,expid)
-        imIO.write_image(finalname,res,meta=None)        
-    elif isinstance(res,dframe.Frame):
-        if config["OutputFile"]: finalname=config["OutputFile"]
-        else: finalname="frame-%s%d-%08d.fits"%(chan,cam,expid)
-        frIO.write_frame(finalname,res,header=None)
-    else:
-        log.error("Result of pipeline is in unkown type %s. Don't know how to write"%(type(res)))
-        sys.exit("Unknown pipeline result type %s."%(type(res)))
-    log.info("Pipeline completed. Final result is in %s"%finalname)
-    return 
+    return pipeline,convdict
 
