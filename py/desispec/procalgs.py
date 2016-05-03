@@ -195,9 +195,8 @@ class BootCalibration(pas.PipelineAlg):
 
 
     def run_pa(self,deg,flatimage,arcimage,outputfile):
-        import desispec.wrap_bootcalib as wrapboot
         from desispec import bootcalib as desiboot
-        xfit,fdicts,gauss,all_wv_soln=wrapboot.wrap_bootcalib(deg,flatimage,arcimage)
+        xfit,fdicts,gauss,all_wv_soln=desiboot.bootcalib(deg,flatimage,arcimage)
 
         desiboot.write_psf(outputfile, xfit, fdicts, gauss,all_wv_soln)
 
