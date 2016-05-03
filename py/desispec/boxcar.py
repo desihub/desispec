@@ -89,7 +89,7 @@ def do_boxcar(image,psf,boxwidth=2.5,dw=0.5,nspec=500):
     for spec in xrange(flux.shape[1]):
         ww=psf.wavelength(spec)
         fflux[spec,:]=resample_flux(wtarget,ww,flux[:,spec])
-        ivar[spec,:]=1./(fflux[spec,:]+image.readnoise)
+        ivar[spec,:]=1./(fflux[spec,:].clip(0.0)+image.readnoise) #- taking only positive pixel counts
     dwave=np.gradient(wtarget)
     fflux/=dwave
     ivar*=dwave**2
