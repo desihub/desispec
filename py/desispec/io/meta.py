@@ -111,7 +111,8 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
         rawdata_dir(str): [optional] overrides $DESI_SPECTRO_DATA
 
     Returns:
-        The file that is uniquely specified by the type, night, and exposure.
+        dict: Dictionary of found file names using camera id strings as keys, which are
+            guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', rawdata_dir=rawdata_dir)
     literals = map(re.escape,glob_pattern.split('*'))

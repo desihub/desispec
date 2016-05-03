@@ -107,13 +107,13 @@ class TestBinScripts(unittest.TestCase):
 
     def test_compute_fiberflat(self):
         """
-        Tests desi_compute_fiberflat.py --infile frame.fits --outfile fiberflat.fits
+        Tests desi_compute_fiberflat --infile frame.fits --outfile fiberflat.fits
         """
         self._write_frame(flavor='flat')
         self._write_fibermap()
 
         # QA fig requires fibermapfile
-        cmd = '{} {}/desi_compute_fiberflat.py --infile {} --fibermap {} --outfile {} --qafile {} --qafig {}'.format(
+        cmd = '{} {}/desi_compute_fiberflat --infile {} --fibermap {} --outfile {} --qafile {} --qafig {}'.format(
                 sys.executable, self.binDir, self.framefile, self.fibermapfile,
                 self.fiberflatfile, self.qafile, self.qafig)
         err = runcmd(cmd,
@@ -126,7 +126,7 @@ class TestBinScripts(unittest.TestCase):
 
     def test_compute_fluxcalib(self):
         """
-        Tests desi_compute_sky.py --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        Tests desi_compute_sky --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
         self._write_frame(flavor='dark', camera='b')
         self._write_fiberflat()
@@ -134,7 +134,7 @@ class TestBinScripts(unittest.TestCase):
         self._write_skymodel()
         self._write_stdstars()
 
-        cmd = "{} {}/desi_compute_fluxcalibration.py --infile {} --fibermap {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {}".format(
+        cmd = "{} {}/desi_compute_fluxcalibration --infile {} --fibermap {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {}".format(
             sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.stdfile,
                 self.calibfile, self.qafile, self.qafig)
         err = runcmd(cmd,
@@ -144,13 +144,13 @@ class TestBinScripts(unittest.TestCase):
 
     def test_compute_sky(self):
         """
-        Tests desi_compute_sky.py --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
+        Tests desi_compute_sky --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
         self._write_frame(flavor='dark')
         self._write_fiberflat()
         self._write_fibermap()
 
-        cmd = "{} {}/desi_compute_sky.py --infile {} --fibermap {} --fiberflat {} --outfile {} --qafile {} --qafig {}".format(
+        cmd = "{} {}/desi_compute_sky --infile {} --fibermap {} --fiberflat {} --outfile {} --qafile {} --qafig {}".format(
             sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.qafile, self.qafig)
         err = runcmd(cmd,
                 inputs  = [self.framefile, self.fiberflatfile, self.fibermapfile],

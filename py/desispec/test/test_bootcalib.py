@@ -3,6 +3,8 @@ tests bootcalib code
 """
 
 import unittest
+from uuid import uuid1
+import os
 
 import numpy as np
 import urllib2
@@ -13,26 +15,38 @@ from astropy.io import fits
 from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
 
-# Grab the data
-arc_fil = 'tmp_arc.fits.gz'
-afil = glob.glob(arc_fil)
-if len(afil) == 0:
-    url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
-    f = urllib2.urlopen(url_arc)
-    with open(arc_fil, "wb") as code:
-        code.write(f.read())
-flat_fil = 'tmp_flat.fits.gz'
-ffil = glob.glob(flat_fil)
-if len(ffil) == 0:
-    url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
-    f = urllib2.urlopen(url_flat)
-    with open(flat_fil, "wb") as code:
-        code.write(f.read())
+from desispec.scripts import bootcalib as bootscript
+
 
 class TestBoot(unittest.TestCase):
+
+    def setUp(self):
+        self.testarc = 'test_arc.fits.gz'
+        self.testflat = 'test_flat.fits.gz'
+        self.testout = 'test_bootcalib_{}.fits'.format(uuid1())
+
+        # Grab the data
+        afil = glob.glob(self.testarc)
+        if len(afil) == 0:
+            url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
+            f = urllib2.urlopen(url_arc)
+            with open(self.testarc, "wb") as code:
+                code.write(f.read())
+        ffil = glob.glob(self.testflat)
+        if len(ffil) == 0:
+            url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
+            f = urllib2.urlopen(url_flat)
+            with open(self.testflat, "wb") as code:
+                code.write(f.read())
+
+
+    def tearDown(self):
+        if os.path.isfile(self.testout):
+            os.unlink(self.testout)
+
     
     def test_fiber_peaks(self):
-        flat_hdu = fits.open(flat_fil)
+        flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         ###########
         # Find fibers
@@ -40,7 +54,7 @@ class TestBoot(unittest.TestCase):
         assert len(xpk) == 25
 
     def test_tracing(self):
-        flat_hdu = fits.open(flat_fil)
+        flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         # Find fibers (necessary)
         xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
@@ -49,7 +63,7 @@ class TestBoot(unittest.TestCase):
         xfit, fdicts = desiboot.fit_traces(xset,xerr)
 
     def test_gauss(self):
-        flat_hdu = fits.open(flat_fil)
+        flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         # Find fibers (necessary)
         xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
@@ -68,7 +82,7 @@ class TestBoot(unittest.TestCase):
 
     def test_wavelengths(self):
         # Read flat
-        flat_hdu = fits.open(flat_fil)
+        flat_hdu = fits.open(self.testflat)
         header = flat_hdu[0].header
         flat = flat_hdu[0].data
         ny = flat.shape[0]
@@ -82,7 +96,7 @@ class TestBoot(unittest.TestCase):
         # Gaussian
         gauss = desiboot.fiber_gauss(flat, xfit, xerr)
         # Read arc
-        arc_hdu = fits.open(arc_fil)
+        arc_hdu = fits.open(self.testarc)
         arc = arc_hdu[0].data
         # Extract arc spectra (one per fiber)
         all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, xfit, gauss)
@@ -123,6 +137,20 @@ class TestBoot(unittest.TestCase):
             all_wv_soln.append(id_dict)
 
         self.assertLess(all_wv_soln[0]['rms'], 0.25)
+
+
+    def test_main(self):
+        argstr = [
+            '--fiberflat',
+            self.testflat,
+            '--arcfile',
+            self.testarc,
+            '--outfile',
+            self.testout
+        ]
+        args = bootscript.parse(options=argstr)
+        bootscript.main(args)
+
 
     def runTest(self):
         pass
