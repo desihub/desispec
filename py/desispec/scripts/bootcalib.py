@@ -163,8 +163,8 @@ def main(args):
         # Line list
         camera = header['CAMERA']
         log.info("Loading line list")
-        llist = desiboot.load_arcline_list(camera,lamps)
-        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera,lamps)
+        llist = desiboot.load_arcline_list(camera,vacuum=True,lamps=lamps)
+        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera,vacuum=True,lamps=lamps)
 
         #####################################
         # Loop to solve for wavelengths
