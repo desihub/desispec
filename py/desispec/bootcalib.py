@@ -972,12 +972,9 @@ def parse_nist(ion, vacuum=True):
     # Return
     return nist_tbl
 
-<<<<<<< HEAD
-def load_arcline_list(camera,lamps=None):
-=======
 
-def load_arcline_list(camera, vacuum=True):
->>>>>>> origin
+def load_arcline_list(camera, vacuum=True,lamps=None):
+    
     """Loads arc line list from NIST files
     Parses and rejects
 
@@ -989,7 +986,8 @@ def load_arcline_list(camera, vacuum=True):
       List of ions to load
     vacuum : bool, optional
       Use vacuum wavelengths
-
+    lamps : optional numpy array of ions, ex np.array(["HgI","CdI","ArI","NeI"])
+    
     Returns
     -------
     alist : Table
@@ -997,7 +995,6 @@ def load_arcline_list(camera, vacuum=True):
     """
     log=get_logger()
     wvmnx = None
-<<<<<<< HEAD
     if lamps is None :
         if camera[0] == 'b':
             lamps = ['CdI','ArI','HgI','NeI','KrI']
@@ -1005,20 +1002,11 @@ def load_arcline_list(camera, vacuum=True):
             lamps = ['CdI','ArI','HgI','NeI','KrI']
         elif camera[0] == 'z':
             lamps = ['CdI','ArI','HgI','NeI','KrI']
+        elif camera == 'all': # Used for specex
+            lamps = ['CdI','ArI','HgI','NeI','KrI']
         else:
             log.error("Not ready for this camera")
-=======
-    if camera[0] == 'b':
-        lamps = ['CdI','ArI','HgI','NeI']
-    elif camera[0] == 'r':
-        lamps = ['HgI','NeI']
-    elif camera[0] == 'z':
-        lamps = ['HgI','NeI']
-    elif camera == 'all':  # Used for specex
-        lamps = ['CdI','ArI','HgI','NeI']
-    else:
-        log.error("Not ready for this camera")
->>>>>>> origin
+    
     # Get the parse dict
     parse_dict = load_parse_dict()
     # Read rejection file
