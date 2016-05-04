@@ -194,10 +194,10 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
     if camera[0] == 'b':
         
         lines={}
-        if vacuum :
-            lines["HgI"]=[3651.198, 4047.708, 4078.988, 4359.56, 5462.268, 5771.210, 5792.276]
+        if vacuum :            
+            lines["HgI"]=[3651.198, 3655.883, 3664.327, 4047.708, 4078.988, 4359.56, 5462.268, 5771.210, 5792.276]
             lines["CdI"]=[3611.5375, 4679.4587, 4801.2540, 5087.2393]
-            lines["NeI"]=[5883.5252, 5946.4810]
+            lines["NeI"]=[5854.1101, 5883.5252, 5946.4810]
             lines["ArI"]=[]
             lines["KrI"]=[]
             wmark = 4359.56  # Hg
@@ -791,7 +791,7 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
             best_rms = rms
             
         # stop at some moment
-        if count>=20 and best_rms<0.5 and len(y_id)>10 :
+        if count>=20 and best_rms<0.2 and len(y_id)>=min(15,min(len(y),len(w))) :
             #log.info("stop here because we have a correct solution")
             break
 
