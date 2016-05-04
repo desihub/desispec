@@ -1,14 +1,16 @@
-#!/usr/bin/env python
-#
-# See top-level LICENSE.rst file for Copyright information
-#
-# -*- coding: utf-8 -*-
-
 """
-This script runs bootcalib scripts for one spectrograph given a flat, arc combination
-"""
+desispec.bootcalib
+==================
 
-import pdb
+Utility functions to perform a quick calibration of DESI data
+
+TODO:
+1. Expand to r, i cameras
+2. QA plots
+3. Test with CR data
+"""
+from __future__ import print_function, absolute_import, division, unicode_literals
+
 import numpy as np
 from desispec.log import get_logger
 from desispec import bootcalib as desiboot
@@ -20,9 +22,9 @@ import argparse
 
 from astropy.io import fits
 
-def main() :
 
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Bootstrap DESI PSF.")
 
     parser.add_argument('--fiberflat', type = str, default = None, required=False,
                         help = 'path of DESI fiberflat fits file')
@@ -40,9 +42,19 @@ def main() :
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
     parser.add_argument("--legendre-degree", type = int, default=6, required=False, help="Legendre polynomial degree for traces")
-    parser.add_argument("--ntrack", type = int, default=5, required=False, help="Number of solutions to be tracked (more is safer but slower)")
+    parser.add_argument("--triplet-matching", default=False, action="store_true", help="use triplet matching method for line identification (slower but expected more robust)")
+    parser.add_argument("--ntrack", type = int, default=5, required=False, help="Number of solutions to be tracked (only used with triplet-matching, more is safer but slower)")
     
-    args = parser.parse_args()
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+
+def main(args):
+    
     log=get_logger()
 
     log.info("starting")
@@ -166,13 +178,14 @@ def main() :
             # Find Lines
             pixpk = desiboot.find_arc_lines(spec)
             # Match a set of 5 gd_lines to detected lines
-            #try:
-            id_dict = desiboot.id_arc_lines_using_triplets(pixpk, gd_lines, dlamb,ntrack=args.ntrack)
-            #except:
-            #    log.warn("ID_ARC failed on fiber {:d}".format(ii))
-            #    id_dict = dict(status='junk')
-            
-            
+            try:
+                if args.triplet_matching :
+                    id_dict = desiboot.id_arc_lines_using_triplets(pixpk, gd_lines, dlamb,ntrack=args.ntrack)
+                else :
+                    id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)
+            except:
+                log.warn("ID_ARC failed on fiber {:d}".format(ii))
+                id_dict = dict(status='junk')
             # Add to dict
             id_dict['fiber'] = ii
             id_dict['pixpk'] = pixpk
@@ -238,6 +251,3 @@ def main() :
         pp.close()
     log.info("finishing..")
 
-
-if __name__ == '__main__':
-    main()

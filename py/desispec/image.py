@@ -20,9 +20,6 @@ class Image(object):
             readnoise : CCD readout noise in electrons/pixel (float)
             camera : e.g. 'b0', 'r1', 'z9'
             meta : dict-like metadata key/values, e.g. from FITS header
-            
-        Notes:
-            TODO: expand readnoise be an array instead of a single float
         """
         if pix.ndim != 2:
             raise ValueError('pix must be 2D, not {}D'.format(pix.ndim))
@@ -65,6 +62,11 @@ class Image(object):
         ivar = self.ivar[xyslice]
         mask = self.mask[xyslice]        
         meta = copy.copy(self.meta)
+        
+        if np.isscalar(self.readnoise):
+            readnoise = self.readnoise
+        else:
+            readnoise = self.readnoise[xyslice]
     
         #- NAXIS1 = x, NAXIS2 = y; python slices[y,x] = [NAXIS2, NAXIS1]
         if meta is not None and (('NAXIS1' in meta) or ('NAXIS2' in meta)):
@@ -83,4 +85,4 @@ class Image(object):
                     meta['NAXIS2'] = ny
             
         return Image(pix, ivar, mask, \
-            readnoise=self.readnoise, camera=self.camera, meta=meta)
+            readnoise=readnoise, camera=self.camera, meta=meta)

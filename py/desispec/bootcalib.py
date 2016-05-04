@@ -20,6 +20,7 @@ import glob
 import math
 import time
 import os
+import argparse
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -40,6 +41,76 @@ try:
 except KeyError:
     desispec_path = os.path.abspath(os.path.join(imp.find_module('desispec')[1], '..', '..'))
 glbl_figsz = (16,9)
+
+########################################################
+# High level wrapper
+# TODO: This was ported from the original bin/desi_bootcalib so that it could
+# be called independently by quicklook, but it needs to be coordinated with
+# desispec.scripts.bootcalib.main()
+########################################################
+
+def bootcalib(deg,flatimage,arcimage):
+    """
+    deg: Legendre polynomial degree to use to fit
+    flatimage: desispec.image.Image object of flatfield
+    arcimage: desispec.image.Image object of arc
+
+    #- Mostly inherited from desispec/bin/desi_bootcalib directly as needed
+
+    returns xfit
+            fdicts
+            gauss
+            all_wave_soln
+    TODO: document what those return objects are
+    """
+
+    camera=flatimage.camera
+    flat=flatimage.pix
+    ny=flat.shape[0]
+
+    xpk,ypos,cut=find_fiber_peaks(flat)
+    xset,xerr=trace_crude_init(flat,xpk,ypos)
+    xfit,fdicts=fit_traces(xset,xerr)
+    gauss=fiber_gauss(flat,xfit,xerr)
+
+    #- Also need wavelength solution not just trace
+
+    arc=arcimage.pix
+    all_spec=extract_sngfibers_gaussianpsf(arc,xfit,gauss)
+    llist=load_arcline_list(camera)
+    dlamb,wmark,gd_lines,line_guess=load_gdarc_lines(camera)
+
+    #- Solve for wavelengths
+    all_wv_soln=[]
+    all_dlamb=[]
+    for ii in range(all_spec.shape[1]):
+        spec=all_spec[:,ii]
+        pixpk=find_arc_lines(spec)
+        id_dict=id_arc_lines(pixpk,gd_lines,dlamb,wmark,line_guess=line_guess)
+        id_dict['fiber']=ii
+        #- Find the other good ones
+        if camera == 'z':
+            inpoly = 3  # The solution in the z-camera has greater curvature
+        else:
+            inpoly = 2
+        add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=inpoly)
+        #- Now the rest
+        id_remainder(id_dict, pixpk, llist)
+        #- Final fit wave vs. pix too
+        final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']), np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
+        rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0],final_fit)-np.array(id_dict['id_pix'])[mask==0])**2))
+        final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']), np.array(id_dict['id_wave']),'legendre',deg, niter=5)
+
+        id_dict['final_fit'] = final_fit
+        id_dict['rms'] = rms
+        id_dict['final_fit_pix'] = final_fit_pix
+        id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
+        id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
+        id_dict['mask'] = mask
+        all_wv_soln.append(id_dict)
+
+    return xfit, fdicts, gauss,all_wv_soln
+
 
 ########################################################
 # Arc/Wavelength Routines (Linelists come next)
@@ -92,14 +163,18 @@ def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
     return xpk
 
 
-def load_gdarc_lines(camera,lamps=None):
+def load_gdarc_lines(camera, vacuum=True,lamps=None):
+
     """Loads a select set of arc lines for initial calibrating
 
     Parameters
     ----------
     camera : str
       Camera ('b', 'g', 'r')
-
+    vacuum : bool, optional
+      Use vacuum wavelengths
+    lamps : optional numpy array of ions, ex np.array(["HgI","CdI","ArI","NeI"])
+    
     Returns
     -------
     dlamb : float
@@ -116,69 +191,93 @@ def load_gdarc_lines(camera,lamps=None):
     if lamps is None :
         lamps=np.array(["HgI","CdI","ArI","NeI"])
     
-    
-
-    # julien adds 5790.660 for Hg
-    
     if camera[0] == 'b':
-                
+        
         lines={}
-        lines["HgI"]=[4046.57, 4077.84, 4358.34, 5460.75, 5769.598, 5790.660]
-        lines["CdI"]=[3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
-        lines["NeI"]=[5881.895, 5944.834]
-        lines["ArI"]=[]
-        lines["KrI"]=[]
+        if vacuum :
+            print "ERROR !!!!"
+            lines["HgI"]=[3651.198, 4047.708, 4078.988, 4359.56, 5462.268, 5771.210, 5792.276]
+            lines["CdI"]=[3611.5375, 4679.4587, 4801.2540, 5087.2393]
+            lines["NeI"]=[5883.5252, 5946.4810]
+            lines["ArI"]=[]
+            lines["KrI"]=[]
+            wmark = 4359.56  # Hg
+        else :
+            lines["HgI"]=[4046.57, 4077.84, 4358.34, 5460.75, 5769.598, 5790.670]
+            lines["CdI"]=[3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
+            lines["NeI"]=[5881.895, 5944.834]
+            lines["ArI"]=[]
+            lines["KrI"]=[]
+            wmark = 4358.34  # Hg
         
         gd_lines=np.array([])
         for lamp in lamps :
             gd_lines=np.append(gd_lines,lines[lamp])
             
         dlamb = 0.589
-        wmark = 4358.34  # Hg
         line_guess = None
         
     elif camera[0] == 'r':
         
         lines={}
-        lines["HgI"] = [5769.598]
-        lines["NeI"] = [5852.4878, 5944.834, 6143.062, 6402.246, 6506.528,
-               #6532.8824, #6598.9528,
-               6678.2766, 6717.043, 6929.4672, 7032.4128,
-               7173.9380, 7245.1665, 7438.898]
-        lines["ArI"] = [6965.431]#, 7635.106, 7723.761]
-        lines["KrI"] = [7601.55,7694.54]
-        lines["CdI"] = []
+        if vacuum :
+            lines["HgI"] = [5771.210]
+            lines["NeI"] = [5854.1101, 5946.481, 6144.7629, 6404.018, 6508.3255,
+                   6680.1205, 6718.8974, 6931.3787, 7034.3520,
+                   7175.9154, 7247.1631, 7440.9469]
+            lines["ArI"] = [6965.431]#, 7635.106, 7723.761]
+            lines["KrI"] = [...,...]
+            lines["CdI"] = []
+            wmark = 6718.8974 # Ne
+            
+        else :            
+            lines["HgI"] = [5769.598]
+            lines["NeI"] = [5852.4878, 5944.834, 6143.062, 6402.246, 6506.528,
+                            #6532.8824, #6598.9528,
+                            6678.2766, 6717.043, 6929.4672, 7032.4128,
+                            7173.9380, 7245.1665, 7438.898]
+            lines["ArI"] = [6965.431]#, 7635.106, 7723.761]
+            lines["KrI"] = [7601.55,7694.54]
+            lines["CdI"] = []
+            wmark = 6717.043  # 6402.246  # Ne
         
         gd_lines=np.array([])
         for lamp in lamps :
             gd_lines=np.append(gd_lines,lines[lamp])
         
         dlamb = 0.527
-        #wmark = 6598.9528 # 6678.2766  # 6717.043  # 6402.246  # Ne
-        wmark = 6717.043  # 6402.246  # Ne
-        line_guess = None
-        
+        line_guess = 24
     
     elif camera[0] == 'z':
         
         lines={}
-        lines["NeI"] = [7438.898, 7488.8712, 7535.7739,
-               7943.1805, 8136.4061, 8300.3248,
-               8377.6070, 8495.3591, 8591.2583, 8634.6472, 8654.3828,
-               8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
-        lines["KrI"] = [7601.55,7694.54,7854.82,8059.50,8104.36,8190.06,8298.11,8776.75,8928.69]
-        lines["ArI"] = [9122.97,9784.50]
-        lines["HgI"] = []
-        lines["CdI"] = []
-        
+        if vacuum :
+            lines["NeI"] = [7440.9469, 7490.9335, 7537.8488,
+                            7945.3654, 8138.6432, 8302.6062,
+                            8379.9093, 8497.6932, 8593.6184, 8637.0190, 8656.7599,
+                            8786.1660, 8921.9496, 9151.1829, 9204.2841, 9427.9655]
+            lines["KrI"] = [...]
+            lines["ArI"] = [...]
+            lines["HgI"] = []
+            lines["CdI"] = []
+            wmark = 8593.6184 # Ne
+        else :
+            lines["NeI"] = [7438.898, 7488.8712, 7535.7739,
+                            7943.1805, 8136.4061, 8300.3248,
+                            8377.6070, 8495.3591, 8591.2583, 8634.6472, 8654.3828,
+                            8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
+            lines["KrI"] = [7601.55,7694.54,7854.82,8059.50,8104.36,8190.06,8298.11,8776.75,8928.69]
+            lines["ArI"] = [9122.97,9784.50]
+            lines["HgI"] = []
+            lines["CdI"] = []
+            wmark = 8591.2583
+
         gd_lines=np.array([])
         for lamp in lamps :
             gd_lines=np.append(gd_lines,lines[lamp])
         
         dlamb = 0.599  # Ang
-        line_guess = None
-        wmark = 8591.2583 # Ne
-        #wmark = 8104.36 # Kr
+        line_guess = 17
         
     else:
         log.error('Bad camera')
@@ -819,7 +918,7 @@ def fix_poor_solutions(all_wv_soln, all_dlamb, ny, ldegree):
 # Linelist routines
 ########################################################
 
-def parse_nist(ion):
+def parse_nist(ion, vacuum=True):
     """Parse a NIST ASCII table.
 
     Note that the long ---- should have
@@ -831,10 +930,16 @@ def parse_nist(ion):
     ----------
     ion : str
       Name of ion
+    vaccuum : bool, optional
+      Use vacuum wavelengths
     """
     log=get_logger()
     # Find file
-    srch_file = desispec_path + '/data/arc_lines/'+ion+'_air.ascii'
+    if vacuum:
+        srch_file = desispec_path + '/data/arc_lines/'+ion+'_vacuum.ascii'
+    else:
+        log.info("Using air wavelengths")
+        srch_file = desispec_path + '/data/arc_lines/'+ion+'_air.ascii'
     nist_file = glob.glob(srch_file)
     if len(nist_file) != 1:
         log.error("Cannot find NIST file {:s}".format(srch_file))
@@ -868,7 +973,12 @@ def parse_nist(ion):
     # Return
     return nist_tbl
 
+<<<<<<< HEAD
 def load_arcline_list(camera,lamps=None):
+=======
+
+def load_arcline_list(camera, vacuum=True):
+>>>>>>> origin
     """Loads arc line list from NIST files
     Parses and rejects
 
@@ -878,6 +988,8 @@ def load_arcline_list(camera,lamps=None):
     ----------
     lines : list
       List of ions to load
+    vacuum : bool, optional
+      Use vacuum wavelengths
 
     Returns
     -------
@@ -886,6 +998,7 @@ def load_arcline_list(camera,lamps=None):
     """
     log=get_logger()
     wvmnx = None
+<<<<<<< HEAD
     if lamps is None :
         if camera[0] == 'b':
             lamps = ['CdI','ArI','HgI','NeI','KrI']
@@ -895,16 +1008,32 @@ def load_arcline_list(camera,lamps=None):
             lamps = ['CdI','ArI','HgI','NeI','KrI']
         else:
             log.error("Not ready for this camera")
+=======
+    if camera[0] == 'b':
+        lamps = ['CdI','ArI','HgI','NeI']
+    elif camera[0] == 'r':
+        lamps = ['HgI','NeI']
+    elif camera[0] == 'z':
+        lamps = ['HgI','NeI']
+    elif camera == 'all':  # Used for specex
+        lamps = ['CdI','ArI','HgI','NeI']
+    else:
+        log.error("Not ready for this camera")
+>>>>>>> origin
     # Get the parse dict
     parse_dict = load_parse_dict()
     # Read rejection file
-    with open(desispec_path+'/data/arc_lines/rejected_lines.yaml', 'r') as infile:
+    if vacuum:
+        rej_file = desispec_path+'/data/arc_lines/rejected_lines_vacuum.yaml'
+    else:
+        rej_file = desispec_path+'/data/arc_lines/rejected_lines_air.yaml'
+    with open(rej_file, 'r') as infile:
         rej_dict = yaml.load(infile)
     # Loop through the NIST Tables
     tbls = []
     for iline in lamps:
         # Load
-        tbl = parse_nist(iline)
+        tbl = parse_nist(iline, vacuum=vacuum)
         # Parse
         if iline in parse_dict.keys():
             tbl = parse_nist_tbl(tbl,parse_dict[iline])
@@ -927,8 +1056,8 @@ def load_arcline_list(camera,lamps=None):
     return alist
 
 
-def reject_lines(tbl,rej_dict):
-    """Parses a NIST table using various criteria
+def reject_lines(tbl,rej_dict, rej_tol=0.1):
+    """Rejects lines from a NIST table
 
     Taken from PYPIT
 
@@ -938,6 +1067,8 @@ def reject_lines(tbl,rej_dict):
       Read previously from NIST ASCII file
     rej_dict : dict
       Dict of rejected lines
+    rej_tol : float, optional
+      Tolerance for matching a line to reject to linelist (Angstroms)
 
     Returns
     -------
@@ -947,7 +1078,7 @@ def reject_lines(tbl,rej_dict):
     msk = tbl['wave'] == tbl['wave']
     # Loop on rejected lines
     for wave in rej_dict.keys():
-        close = np.where(np.abs(wave-tbl['wave']) < 0.1)[0]
+        close = np.where(np.abs(wave-tbl['wave']) < rej_tol)[0]
         if rej_dict[wave] == 'all':
             msk[close] = False
         else:
@@ -1326,7 +1457,7 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
         # Stats on residuals
         nmask_new = np.sum(mask)-nmask 
         if nmask_new > 200:
-            raise ValueError('Rejected too many points: {:d}'.format(nmask_new))
+            log.error("Rejected many points ({:d}) in fiber {:d}".format(nmask_new, ii))
         # Save
         xnew[:,ii] = dufits.func_val(yval,dfit)
         fits.append(dfit)
@@ -1661,7 +1792,6 @@ def script_bootcalib(arc_idx, flat_idx, cameras=None, channels=None, nproc=10):
     #
     if cameras is None:
         cameras = ['0','1','2','3','4','5','6','7','8','9']
-        #cameras = ['0']
     if channels is None:
         channels = ['b','r','z']
         #channels = ['b']#,'r','z']
@@ -1989,3 +2119,4 @@ def qa_fiber_trace(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
     # Finish
     print('Writing {:s} QA for fiber trace'.format(outfil))
     pp.close()
+

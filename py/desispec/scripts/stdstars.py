@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# See top-level LICENSE.rst file for Copyright information
+
 
 """
 Get the normalized best template to do flux calibration.
@@ -21,22 +20,31 @@ from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.log import get_logger
 import argparse
 import numpy as np
-import os,sys
+import os
+import sys
 
-def main() :
-    """ finds the best models of all standard stars in the frame
-    and normlize the model flux. Output is written to a file and will be called for calibration.
-    """
 
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
     parser.add_argument('--fiberflatexpid', type = int, help = 'fiberflat exposure ID')
     parser.add_argument('--fibermap', type = str, help = 'path of fibermap file')
     parser.add_argument('--models', type = str, help = 'path of spectro-photometric stellar spectra fits')
     parser.add_argument('--spectrograph', type = int, default = 0, help = 'spectrograph number, can go 0-9')
     parser.add_argument('--outfile', type = str, help = 'output file for normalized stdstar model flux')
 
-    args = parser.parse_args()
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+
+def main(args) :
+    """ finds the best models of all standard stars in the frame
+    and normlize the model flux. Output is written to a file and will be called for calibration.
+    """
+
     log = get_logger()
     # Call necessary environment variables. No need if add argument to give full file path.
     if 'DESI_SPECTRO_REDUX' not in os.environ:
@@ -205,5 +213,4 @@ def main() :
     norm_model_file=args.outfile
     io.write_stdstar_models(norm_model_file,normflux,stdwave,stdfibers,data)
 
-if "__main__" == __name__:
-    main()
+

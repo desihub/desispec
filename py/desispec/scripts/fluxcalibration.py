@@ -1,12 +1,6 @@
-#!/usr/bin/env python
-#
-# See top-level LICENSE.rst file for Copyright information
-#
-# -*- coding: utf-8 -*-
 
-"""
-This script computes the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.
-"""
+from __future__ import absolute_import, division
+
 
 from desispec.io import read_frame
 from desispec.io import read_fiberflat
@@ -28,13 +22,12 @@ import numpy as np
 import sys
 
 
-def main() :
-
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Compute the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.")
 
     parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fibermap', type = str, default = None, required=True,
+    parser.add_argument('--fibermap', type = str, default = None, required=False,
                         help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
@@ -48,9 +41,17 @@ def main() :
                         help='path of QA file.')
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file')
+    
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
 
 
-    args = parser.parse_args()
+def main(args) :
+
     log=get_logger()
 
     if args.fibermap is not None:
@@ -107,9 +108,5 @@ def main() :
     # write result
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)
 
-
     log.info("successfully wrote %s"%args.outfile)
 
-
-if __name__ == '__main__':
-    main()

@@ -7,6 +7,7 @@ from __future__ import division
 import unittest
 import copy
 import os
+from uuid import uuid1
 
 import numpy as np
 import scipy.sparse
@@ -17,6 +18,11 @@ from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.fiberflat import compute_fiberflat, apply_fiberflat
 from desispec.log import get_logger
+from desispec.io import write_frame
+import desispec.io as io
+
+from desispec.scripts import fiberflat as ffscript
+
 
 def _get_data():
     """
@@ -37,6 +43,23 @@ def _get_data():
     
 
 class TestFiberFlat(unittest.TestCase):
+
+
+    def setUp(self):
+        id = uuid1()
+        self.testfibermap = 'test_fibermap_{}.fits'.format(id)
+        self.testframe = 'test_frame_{}.fits'.format(id)
+        self.testflat = 'test_fiberflat_{}.fits'.format(id)
+
+
+    def tearDown(self):
+        if os.path.isfile(self.testframe):
+            os.unlink(self.testframe)
+        if os.path.isfile(self.testflat):
+            os.unlink(self.testflat)
+        if os.path.isfile(self.testfibermap):
+            os.unlink(self.testfibermap)
+
 
     def test_interface(self):
         """
@@ -280,6 +303,50 @@ class TestFiberFlat(unittest.TestCase):
         apply_fiberflat(frame, ff)
 
         self.assertTrue(np.all(frame.ivar[0, 0:5] == 0.0))
+
+    def test_main(self):
+        """
+        Test the main program.
+        """
+        # generate the frame data
+        wave, flux, ivar, mask = _get_data()
+        nspec, nwave = flux.shape
+        
+        #- Setup data for a Resolution matrix
+        sigma = 4.0
+        ndiag = 11
+        xx = np.linspace(-(ndiag-1)/2.0, +(ndiag-1)/2.0, ndiag)
+        Rdata = np.zeros( (nspec, ndiag, nwave) )
+        kernel = np.exp(-xx**2/(2*sigma))
+        kernel /= sum(kernel)
+        for i in range(nspec):
+            for j in range(nwave):
+                Rdata[i,:,j] = kernel
+
+        #- Convolve the data with the resolution matrix
+        convflux = np.empty_like(flux)
+        for i in range(nspec):
+            convflux[i] = Resolution(Rdata[i]).dot(flux[i])
+
+        # create a fake fibermap
+        fibermap = io.empty_fibermap(nspec, nwave)
+        for i in range(0, nspec):
+            fibermap['OBJTYPE'][i] = 'FAKE'
+        io.write_fibermap(self.testfibermap, fibermap)
+
+        #- write out the frame
+        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0, fibermap=fibermap)
+        write_frame(self.testframe, frame, fibermap=fibermap)
+
+        # set program arguments
+        argstr = [
+            '--infile', self.testframe,
+            '--outfile', self.testflat
+        ]
+
+        # run it
+        args = ffscript.parse(options=argstr)
+        ffscript.main(args)
         
                 
 class TestFiberFlatObject(unittest.TestCase):

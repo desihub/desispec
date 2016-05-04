@@ -65,8 +65,8 @@ def main():
     (expid, exptype, fullframes) = pipe.find_frames(specdir, args.night)
 
     # if requested, restrict the exposure list to a single ID
+    frames = {}
     if args.expid is not None:
-        frames = {}
         frames[args.expid] = fullframes[args.expid]
     else:
         frames = fullframes

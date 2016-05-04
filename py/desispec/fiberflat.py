@@ -18,6 +18,7 @@ import sys
 from desispec.log import get_logger
 import math
 
+
 def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxval=10.) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelength grid, with uncorrelated noise.
@@ -580,6 +581,4 @@ def qa_fiberflat(param, frame, fiberflat):
 
     # Return
     return qadict
-
-
 

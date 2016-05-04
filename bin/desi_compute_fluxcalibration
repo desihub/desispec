@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+This script computes the flux calibration for a DESI frame using precomputed spectro-photometrically calibrated stellar models.
+"""
+
+import desispec.scripts.fluxcalibration as fluxcal
+
+
+if __name__ == '__main__':
+    args = fluxcal.parse()
+    fluxcal.main(args)
