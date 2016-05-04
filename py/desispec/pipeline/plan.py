@@ -632,7 +632,7 @@ def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
         for b in range(nbundle):
             outb = "{}-{:02d}.fits".format(outbase, b)
             mergeinputs.append(outb)
-            com = ['desi_extract_spectra.py']
+            com = ['desi_extract_spectra']
             com.extend(['-i', raw[cam]])
             com.extend(['-p', psffile])
             com.extend(['-f', fibermap[id]])
@@ -649,7 +649,7 @@ def tasks_exspec_exposure(id, raw, fibermap, wrange, psf_select):
 
             tasks_extract.append(task)
 
-        com = ['desi_merge_bundles.py']
+        com = ['desi_merge_bundles']
         com.extend(['-o', '{}.part'.format(outfile)])
         com.extend(mergeinputs)
         task = {}
@@ -803,7 +803,7 @@ def tasks_fiberflat_exposure(id, frames, calnight):
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
         outfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, id))
 
-        com = ['desi_compute_fiberflat.py']
+        com = ['desi_compute_fiberflat']
         com.extend(['--infile', infile])
         com.extend(['--outfile', '{}.part'.format(outfile)])
 
@@ -834,7 +834,7 @@ def tasks_sky_exposure(id, frames, calnight, flatexp, fibermap):
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
         outfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
         flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
-        com = ['desi_compute_sky.py']
+        com = ['desi_compute_sky']
         com.extend(['--infile', infile])
         com.extend(['--outfile', "{}.part".format(outfile)])
         com.extend(['--fibermap', fibermap[id]])
@@ -874,7 +874,7 @@ def tasks_star_exposure(id, frames, calnight, flatexp, fibermap):
         spectrograph = cam[1]
         flatfile = os.path.join(calnight, "fiberflat-{}-{:08d}.fits".format(cam, flatexp))
         outfile = os.path.join("{:08d}".format(id), "stdstars-{}-{:08d}.fits".format(cam, id))
-        com = ['desi_fit_stdstars.py']
+        com = ['desi_fit_stdstars']
         com.extend(['--fiberflatexpid', "{}".format(flatexp)])
         com.extend(['--outfile', "{}.part".format(outfile)])
         com.extend(['--fibermap', fibermap[id]])
@@ -917,7 +917,7 @@ def tasks_calcalc_exposure(id, frames, calnight, flatexp, fibermap):
         outfile = os.path.join("{:08d}".format(id), "calib-{}-{:08d}.fits".format(cam, id))
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
         starfile = os.path.join("{:08d}".format(id), "stdstars-{}-{:08d}.fits".format(cam, id))
-        com = ['desi_compute_fluxcalibration.py']
+        com = ['desi_compute_fluxcalibration']
         com.extend(['--infile', infile])
         com.extend(['--fiberflat', flatfile])
         com.extend(['--outfile', "{}.part".format(outfile)])
@@ -961,7 +961,7 @@ def tasks_calapp_exposure(id, frames, calnight, flatexp):
         calfile = os.path.join("{:08d}".format(id), "calib-{}-{:08d}.fits".format(cam, id))
         infile = os.path.join("{:08d}".format(id), "frame-{}-{:08d}.fits".format(cam, id))
         skyfile = os.path.join("{:08d}".format(id), "sky-{}-{:08d}.fits".format(cam, id))
-        com = ['desi_process_exposure.py']
+        com = ['desi_process_exposure']
         com.extend(['--infile', infile])
         com.extend(['--fiberflat', flatfile])
         com.extend(['--outfile', "{}.part".format(outfile)])
@@ -1003,7 +1003,7 @@ def tasks_zfind(bricks, objtype, zspec):
         brick_z = os.path.join(brk, "brick-z-{}.fits".format(brk))
         outfile = os.path.join(brk, "zbest-{}.fits".format(brk))
 
-        com = ['desi_zfind.py']
+        com = ['desi_zfind']
         com.extend(['--brick', brk])
         com.extend(['--outfile', "{}.part".format(outfile)])
         if objtype is not None:
