@@ -195,7 +195,6 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
         
         lines={}
         if vacuum :
-            print "ERROR !!!!"
             lines["HgI"]=[3651.198, 4047.708, 4078.988, 4359.56, 5462.268, 5771.210, 5792.276]
             lines["CdI"]=[3611.5375, 4679.4587, 4801.2540, 5087.2393]
             lines["NeI"]=[5883.5252, 5946.4810]
@@ -239,7 +238,7 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
             lines["ArI"] = [6965.431]#, 7635.106, 7723.761]
             lines["KrI"] = [7601.55,7694.54]
             lines["CdI"] = []
-            wmark = 6717.043  # 6402.246  # Ne
+            wmark = 6717.043  # Ne
         
         gd_lines=np.array([])
         for lamp in lamps :
@@ -256,8 +255,8 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
                             7945.3654, 8138.6432, 8302.6062,
                             8379.9093, 8497.6932, 8593.6184, 8637.0190, 8656.7599,
                             8786.1660, 8921.9496, 9151.1829, 9204.2841, 9427.9655]
-            lines["KrI"] = [...]
-            lines["ArI"] = [...]
+            lines["KrI"] = [7603.6384,7696.6579,7856.9844,8061.7211,8106.5945,8192.3082,8300.3907,8779.1607,8931.1447]
+            lines["ArI"] = [9125.471,9787.186]
             lines["HgI"] = []
             lines["CdI"] = []
             wmark = 8593.6184 # Ne
