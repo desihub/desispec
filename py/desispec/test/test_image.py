@@ -36,6 +36,9 @@ class TestImage(unittest.TestCase):
         self.assertEqual(image.readnoise, 0.0)
         image = Image(self.pix, self.ivar, readnoise=1.0)
         self.assertEqual(image.readnoise, 1.0)
+        readnoise = np.random.uniform(size=self.pix.shape)
+        image = Image(self.pix, self.ivar, readnoise=readnoise)
+        self.assertTrue(np.all(image.readnoise == readnoise))
 
     def test_camera(self):
         image = Image(self.pix, self.ivar)
@@ -99,6 +102,16 @@ class TestImage(unittest.TestCase):
         self.assertEqual(img2.pix.shape[1], nx)
         self.assertEqual(img2.pix.shape[0], img2.meta['NAXIS2'])
         self.assertEqual(img2.pix.shape[1], img2.meta['NAXIS1'])
+
+        #- test slicing readnoise image
+        readnoise = np.random.uniform(size=self.pix.shape)
+        img1 = Image(self.pix, self.ivar, meta=meta, readnoise=readnoise)
+        xy = np.s_[1:1+ny, 2:2+nx]
+        img2 = img1[xy]
+        self.assertTrue(np.all(img1.pix[xy] == img2.pix))
+        self.assertTrue(np.all(img1.ivar[xy] == img2.ivar))
+        self.assertTrue(np.all(img1.mask[xy] == img2.mask))
+        self.assertTrue(np.all(img1.readnoise[xy] == img2.readnoise))
         
         #- Test bad slicing
         with self.assertRaises(ValueError):

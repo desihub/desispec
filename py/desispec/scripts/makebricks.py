@@ -1,8 +1,4 @@
-#!/usr/bin/env python
-#
-# See top-level LICENSE.rst file for Copyright information
-#
-# -*- coding: utf-8 -*-
+
 """
 Read fibermap and cframe files for all exposures of a single night and update or create brick files.
 """
@@ -15,16 +11,26 @@ import numpy as np
 import desispec.io
 from desispec.log import get_logger, DEBUG
 
-def main():
 
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Update or create brick files.")
     parser.add_argument('--verbose', action = 'store_true',
         help = 'Provide verbose reporting of progress.')
     parser.add_argument('--night', type = str, default = None, metavar = 'YYYYMMDD',
         help = 'Night to process in the format YYYYMMDD')
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
         help = 'Override default path ($DESI_SPECTRO_REDUX/$PRODNAME) to processed data.')
-    args = parser.parse_args()
+
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
+
+
+def main(args):
+
     if args.verbose:
         log = get_logger(DEBUG)
     else:
@@ -88,5 +94,3 @@ def main():
         log.critical(str(e))
         return -2
 
-if __name__ == '__main__':
-    main()

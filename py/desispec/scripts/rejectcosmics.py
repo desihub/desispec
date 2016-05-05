@@ -1,8 +1,3 @@
-#!/usr/bin/env python
-#
-# See top-level LICENSE.rst file for Copyright information
-#
-# -*- coding: utf-8 -*-
 
 """
 This script finds cosmics in a pre-processed image and write the result in the mask extension of an output image
@@ -15,12 +10,10 @@ from desispec.cosmics import reject_cosmic_rays
 from desispec.log import get_logger
 import argparse
 import numpy as np
-#import sys # for tests
-#import astropy.io.fits as pyfits # for tests
 
-def main() :
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Find and mask cosmics.")
     parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure image fits file')
     parser.add_argument('--outfile', type = str, default = None,
@@ -28,14 +21,20 @@ def main() :
     parser.add_argument('--ignore_cosmic_ccdmask', action = 'store_true',
                         help = 'ignore pre-existing bitmask ccdmask.COSMIC (for development tests)')
 
-    args = parser.parse_args()
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
 
+
+def main(args) :
 
     if args.outfile is not None :
         outfile=args.outfile
     else :
         outfile=args.infile
-
 
     log = get_logger()
     log.info("starting finding cosmics in %s"%args.infile)
@@ -55,5 +54,3 @@ def main() :
 
     log.info("done")
 
-if __name__ == '__main__':
-    main()

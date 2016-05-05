@@ -1,14 +1,16 @@
-#!/usr/bin/env python
-#
-# See top-level LICENSE.rst file for Copyright information
-#
-# -*- coding: utf-8 -*-
-
 """
-This script runs bootcalib scripts for one spectrograph given a flat, arc combination
-"""
+desispec.bootcalib
+==================
 
-import pdb
+Utility functions to perform a quick calibration of DESI data
+
+TODO:
+1. Expand to r, i cameras
+2. QA plots
+3. Test with CR data
+"""
+from __future__ import print_function, absolute_import, division, unicode_literals
+
 import numpy as np
 from desispec.log import get_logger
 from desispec import bootcalib as desiboot
@@ -20,9 +22,9 @@ import argparse
 
 from astropy.io import fits
 
-def main() :
 
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def parse(options=None):
+    parser = argparse.ArgumentParser(description="Bootstrap DESI PSF.")
 
     parser.add_argument('--fiberflat', type = str, default = None, required=False,
                         help = 'path of DESI fiberflat fits file')
@@ -34,16 +36,36 @@ def main() :
                         help = 'path of DESI sky fits file')
     parser.add_argument('--qafile', type = str, default = None, required=False,
                         help = 'path of QA figure file')
+    parser.add_argument('--lamps', type = str, default = None, required=False,
+                        help = 'comma-separated used lamp elements, ex: HgI,NeI,ArI,CdI,KrI')
     parser.add_argument("--test", help="Debug?", default=False, action="store_true")
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
     parser.add_argument("--legendre-degree", type = int, default=6, required=False, help="Legendre polynomial degree for traces")
+    parser.add_argument("--triplet-matching", default=False, action="store_true", help="use triplet matching method for line identification (slower but expected more robust)")
+    parser.add_argument("--ntrack", type = int, default=5, required=False, help="Number of solutions to be tracked (only used with triplet-matching, more is safer but slower)")
+    
+    args = None
+    if options is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(options)
+    return args
 
-    args = parser.parse_args()
+
+def main(args):
+    
     log=get_logger()
 
     log.info("starting")
 
+    lamps=None
+    if args.lamps :
+        lamps=np.array(args.lamps.split(","))
+        log.info("Using lamps = %s"%str(lamps))
+    else :
+        log.info("Using default set of lamps")
+    
     if (args.psffile is None) and (args.fiberflat is None):
         raise IOError("Must provide either a PSF file or a fiberflat")
 
@@ -141,8 +163,8 @@ def main() :
         # Line list
         camera = header['CAMERA']
         log.info("Loading line list")
-        llist = desiboot.load_arcline_list(camera)
-        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
+        llist = desiboot.load_arcline_list(camera,vacuum=True,lamps=lamps)
+        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera,vacuum=True,lamps=lamps)
 
         #####################################
         # Loop to solve for wavelengths
@@ -157,12 +179,13 @@ def main() :
             pixpk = desiboot.find_arc_lines(spec)
             # Match a set of 5 gd_lines to detected lines
             try:
-                #id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)#, verbose=True)
-                id_dict = desiboot.id_arc_lines_alternative(pixpk, gd_lines, dlamb, wmark)
+                if args.triplet_matching :
+                    id_dict = desiboot.id_arc_lines_using_triplets(pixpk, gd_lines, dlamb,ntrack=args.ntrack)
+                else :
+                    id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)
             except:
                 log.warn("ID_ARC failed on fiber {:d}".format(ii))
                 id_dict = dict(status='junk')
-                
             # Add to dict
             id_dict['fiber'] = ii
             id_dict['pixpk'] = pixpk
@@ -205,7 +228,7 @@ def main() :
             all_wv_soln.append(id_dict)
 
         # Fix solutions with poor RMS (failures)
-        desiboot.fix_poor_solutions(all_wv_soln, all_dlamb, ny, args.legendre_degree)
+        # desiboot.fix_poor_solutions(all_wv_soln, all_dlamb, ny, args.legendre_degree)
 
         if QA:
             desiboot.qa_arc_spec(all_spec, all_wv_soln, pp)
@@ -228,6 +251,3 @@ def main() :
         pp.close()
     log.info("finishing..")
 
-
-if __name__ == '__main__':
-    main()

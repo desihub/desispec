@@ -10,6 +10,9 @@ from desispec.resolution import Resolution
 from desispec.frame import Frame
 import desispec.io
 
+import desispec.scripts.sky as skyscript
+
+
 class TestSky(unittest.TestCase):
     
     #- Create unique test filename in a subdirectory
@@ -71,6 +74,10 @@ class TestSky(unittest.TestCase):
         subtract_sky(spectra, sky)
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-5, atol=1e-6))
+
+    def test_main(self):
+        pass
+        
         
     def runTest(self):
         pass
