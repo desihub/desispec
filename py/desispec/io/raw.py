@@ -10,7 +10,7 @@ from astropy.io import fits
 import numpy as np
 
 import desispec.io.util
-from desispec.preproc import preproc
+import desispec.preproc
 from desispec.log import get_logger
 log = get_logger()
 
@@ -28,8 +28,22 @@ def read_raw(filename, camera, **kwargs):
 
     Returns Image object with member variables pix, ivar, mask, readnoise
     '''
-    rawimage, header = fits.getdata(filename, extname=camera, header=True)
-    img = preproc(rawimage, header, **kwargs)
+    fx = fits.open(filename, memmap=False)
+    if camera.upper() not in fx:
+        raise IOError('Camera {} not in {}'.format(camera, filename))
+
+    rawimage = fx[camera.upper()].data
+    header = fx[camera.upper()].header
+
+    if 'INHERIT' in header and header['INHERIT']:
+        h0 = fx[0].header
+        for key in h0.keys():
+            if key not in header:
+                header[key] = h0[key]
+
+    fx.close()
+
+    img = desispec.preproc.preproc(rawimage, header, **kwargs)
     return img
 
 def write_raw(filename, rawdata, header, camera=None, primary_header=None):
@@ -39,11 +53,12 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     Args:
         filename : file name to write data; if this exists, append a new HDU
         rawdata : 2D ndarray of raw pixel data including overscans
-        header : dict-like object or fits.Header
+        header : dict-like object or fits.Header with keywords
+            CCDSECx, BIASSECx, DATASECx where x=1,2,3, or 4
 
     Options:
         camera : B0, R1 .. Z9 - override value in header
-        primary_header : header to write in HDU0
+        primary_header : header to write in HDU0 if filename doesn't yet exist
 
     The primary utility of this function over raw fits calls is to ensure
     that all necessary keywords are present before writing the file.

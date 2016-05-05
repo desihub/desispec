@@ -5,19 +5,21 @@ import os.path
 from astropy.io import fits
 import numpy as np
 
+import desispec.scripts.preproc
 from desispec.preproc import preproc, _parse_sec_keyword
 from desispec import io
 
 class TestPreProc(unittest.TestCase):
     
     def tearDown(self):
-        for filename in [self.calibfile, self.rawfile]:
+        for filename in [self.calibfile, self.rawfile, self.pixfile]:
             if os.path.exists(filename):
                 os.remove(filename)
     
     def setUp(self):
         self.calibfile = 'test-calib-askjapqwhezcpasehadfaqp.fits'
         self.rawfile = 'test-raw-askjapqwhezcpasehadfaqp.fits'
+        self.pixfile = 'test-pix-askjapqwhezcpasehadfaqp.fits'
         hdr = dict()
         hdr['CAMERA'] = 'b0'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
@@ -41,6 +43,9 @@ class TestPreProc(unittest.TestCase):
         hdr['BIASSEC4'] = '[151:200,81:150]'
         hdr['DATASEC4'] = '[201:290,81:150]'
         hdr['CCDSEC4'] =  '[101:190,81:150]'
+        
+        hdr['NIGHT'] = '20150102'
+        hdr['EXPID'] = 1
         
         self.header = hdr
         self.ny = 150
@@ -82,7 +87,7 @@ class TestPreProc(unittest.TestCase):
         for amp in ('1', '2', '3', '4'):
             pix = image.pix[self.quad[amp]]
             rdnoise = np.median(image.readnoise[self.quad[amp]])
-            self.assertAlmostEqual(np.median(pix), 0.0, delta=0.2)
+            self.assertAlmostEqual(np.mean(pix), 0.0, delta=3*rdnoise/np.sqrt(pix.size))
             self.assertAlmostEqual(np.std(pix), self.rdnoise[amp], delta=0.2)
             self.assertAlmostEqual(rdnoise, self.rdnoise[amp], delta=0.2)
 
@@ -190,8 +195,9 @@ class TestPreProc(unittest.TestCase):
             if keyword.startswith('GAIN') or keyword.startswith('RDNOISE'):
                 continue
             
-            #- DATE-OBS is also optional
-            if keyword.startswith('DATE-OBS'):
+            #- DATE-OBS, NIGHT, and EXPID are also optional
+            #- (but maybe they should be required...)
+            if keyword in ('DATE-OBS', 'NIGHT', 'EXPID'):
                 continue
 
             if os.path.exists(self.rawfile):
@@ -236,6 +242,17 @@ class TestPreProc(unittest.TestCase):
         del hdr['GAIN3']
         del hdr['GAIN4']
         image = preproc(self.rawimage, hdr)
+
+    def test_preproc_script(self):
+        io.write_raw(self.rawfile, self.rawimage, self.header, camera='b0')
+        io.write_raw(self.rawfile, self.rawimage, self.header, camera='b1')
+        args = ['--infile', self.rawfile, '--cameras', 'b1',
+                '--pixfile', self.pixfile]
+        if os.path.exists(self.pixfile):
+            os.remove(self.pixfile)            
+        desispec.scripts.preproc.main(args)
+        img = io.read_image(self.pixfile)        
+        self.assertEqual(img.pix.shape, (self.ny, self.nx))
 
     #- Not implemented yet, but flag these as expectedFailures instead of
     #- successful tests of raising NotImplementedError

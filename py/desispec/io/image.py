@@ -37,7 +37,6 @@ def write_image(outfile, image, meta=None):
         hdu.header.append( ('RDNOISE', image.readnoise, 'Read noise [RMS electrons/pixel]'))
 
     hx.append(hdu)
-
     hx.append(fits.ImageHDU(image.ivar.astype(np.float32), name='IVAR'))
     hx.append(fits.CompImageHDU(image.mask.astype(np.int16), name='MASK'))
     if not np.isscalar(image.readnoise):
