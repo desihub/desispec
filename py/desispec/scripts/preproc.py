@@ -14,7 +14,16 @@ from desispec.log import get_logger
 log = get_logger()
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Preprocess DESI raw data")
+    parser = argparse.ArgumentParser(
+        description="Preprocess DESI raw data",
+        epilog='''By default, all HDUs of the input file are processed and
+written to pix*.fits files in the current directory; use --outdir to override
+the output directory location.  --pixfile PIXFILE can be used to
+override a single output filename but if only a single
+camera is given with --cameras.
+--bias/--pixflat/--mask can specify the calibration files
+to use, but also only if a single camera is specified.
+        ''')
     parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI raw data file')
     parser.add_argument('--outdir', type = str, default = None, required=False,
