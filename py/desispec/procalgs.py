@@ -357,12 +357,13 @@ class Extraction_2d(pas.PipelineAlg):
             
         return frame
 
-#TODO: Everything below and beyond extraction is to be tested. Adding PA steps as placeholder. Not configured yet.
- 
-class FiberFlat(pas.PipelineAlg):
+
+class ComputeFiberflat(pas.PipelineAlg):
+    """ PA to compute fiberflat field correction from a DESI continuum lamp frame
+    """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Fiber Flatfield"
+            name="Compute Fiberflat"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -372,20 +373,78 @@ class FiberFlat(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "FiberFlatFrame" not in kwargs:
-            raise qlexceptions.ParameterException("Need Fiberflat frame file")
+        input_frame=args[0] #- frame object to calculate fiberflat from
+        return self.run_pa(input_frame)
+    
+    def run_pa(self,input_frame):
+        from desispec.fiberflat import compute_fiberflat
+        return compute_fiberflat(input_frame)
+        
+ 
+class ApplyFiberFlat(pas.PipelineAlg):
+    """
+       PA to Apply the fiberflat field to the given frame
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Apply FiberFlat"
+        from desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if "FiberFlatFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need Fiberflat file")
         
         input_frame=args[0]
-        fiberflat=kwargs["FiberFlatFrame"]
+        fiberflat=kwargs["FiberFlatFile"]
         
         return self.run_pa(input_frame,fiberflat)
 
-    def run_pa(self,input_frame,friberflat): 
+    def run_pa(self,input_frame,fiberflat): 
      
-        from desispec.fiberflat import compute_fiberflat,apply_fiberflat
-        fiberflat=compute_fiberflat(input_frame) 
-        return apply_fiberflat(input_frame,fiberflat)
+        from desispec.fiberflat import apply_fiberflat 
+        apply_fiberflat(input_frame,fiberflat)
+        return input_frame
 
+class ComputeSky(pas.PipelineAlg):
+    """ PA to compute sky model from a DESI frame
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Compute Sky"
+        from desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if "FiberFlatField" not in kwargs: #- need this as fiberflat has to apply to frame first
+            raise qlexceptions.ParameterException("Need Fiberflat frame file")
+        input_frame=args[0] #- frame object to calculate sky from
+        if "FiberMap" in kwargs:
+            fibermap=kwargs["FiberMap"]
+        fiberflat=kwargs["FiberFlatField"]
+
+        return self.run_pa(input_frame,fiberflat)
+    
+    def run_pa(self,input_frame,fiberflat):
+        from desispec.fiberflat import apply_fiberflat
+        from desispec.sky import compute_sky
+        #- First apply fiberflat to sky fibers
+        apply_fiberflat(input_frame)
+
+        #- calculate the model
+        skymodel=compute_sky(input_frame,fiberflat)
+
+        return compute_sky(input_frame)
 
 class SubtractSky(pas.PipelineAlg):
 
@@ -401,12 +460,15 @@ class SubtractSky(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        
-        input_frame=args[0]
-           
-        return self.run_pa(input_frame)
+        if "SkyFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need Skymodel file")
+
+        input_frame=args[0] #- this must be flat field applied before sky subtraction in the pipeline
+        skymodel=kwargs["SkyFile"] #- this is already flat field before the file was created
+                   
+        return self.run_pa(input_frame,skymodel)
     
-    def run_pa(self,input_frame):
+    def run_pa(self,input_frame,skymodel):
         from desispec.sky import subtract_sky
-        skymodel=compute_sky(frame)
-        return subtract_sky(frame,skymodel)
+        subtract_sky(input_frame,skymodel)
+        return input_frame
