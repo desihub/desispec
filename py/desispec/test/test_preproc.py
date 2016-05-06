@@ -9,6 +9,16 @@ import desispec.scripts.preproc
 from desispec.preproc import preproc, _parse_sec_keyword
 from desispec import io
 
+def xy2hdr(xyslice):
+    '''
+    convert 2D slice into IRAF style [a:b,c:d] header value
+    
+    e.g. xyslice2header(np.s_[0:10, 5:20]) -> '[6:20,1:10]'
+    '''
+    yy, xx = xyslice
+    value = '[{}:{},{}:{}]'.format(xx.start+1, xx.stop, yy.start+1, yy.stop)
+    return value
+
 class TestPreProc(unittest.TestCase):
     
     def tearDown(self):
@@ -28,37 +38,43 @@ class TestPreProc(unittest.TestCase):
         #- but the header definitions don't require that to make sure we are
         #- getting dimensions correct
 
-        hdr['BIASSEC1'] = '[101:150,1:80]'  #- overscan region in raw image
-        hdr['DATASEC1'] = '[1:100,1:80]'    #- data region in raw image
-        hdr['CCDSEC1'] =  '[1:100,1:80]'    #- where should this go in output
+        #- Dimensions per amp, not full 4-quad CCD
+        self.ny = ny = 500
+        self.nx = nx = 400
+        self.noverscan = nover = 50
+
+        #- BIASSEC = overscan region in raw image
+        #- DATASEC = data region in raw image
+        #- CCDSEC = where should this go in output
+
+        hdr['BIASSEC1'] = xy2hdr(np.s_[0:ny, nx:nx+nover])
+        hdr['DATASEC1'] = xy2hdr(np.s_[0:ny, 0:nx])
+        hdr['CCDSEC1'] = xy2hdr(np.s_[0:ny, 0:nx])
         
-        hdr['BIASSEC2'] = '[151:200,1:80]'
-        hdr['DATASEC2'] = '[201:290,1:80]'
-        hdr['CCDSEC2'] =  '[101:190,1:80]'
+        hdr['BIASSEC2'] = xy2hdr(np.s_[0:ny, nx+nover:nx+2*nover])
+        hdr['DATASEC2'] = xy2hdr(np.s_[0:ny, nx+2*nover:nx+2*nover+nx])
+        hdr['CCDSEC2'] =  xy2hdr(np.s_[0:ny, nx:nx+nx])
 
-        hdr['BIASSEC3'] = '[101:150,81:150]'
-        hdr['DATASEC3'] = '[1:100,81:150]'
-        hdr['CCDSEC3'] =  '[1:100,81:150]'
-
-        hdr['BIASSEC4'] = '[151:200,81:150]'
-        hdr['DATASEC4'] = '[201:290,81:150]'
-        hdr['CCDSEC4'] =  '[101:190,81:150]'
+        hdr['BIASSEC3'] = xy2hdr(np.s_[ny:ny+ny, nx:nx+nover])
+        hdr['DATASEC3'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
+        hdr['CCDSEC3'] = xy2hdr(np.s_[ny:ny+ny, 0:nx])
+        
+        hdr['BIASSEC4'] = xy2hdr(np.s_[ny:ny+ny, nx+nover:nx+2*nover])
+        hdr['DATASEC4'] = xy2hdr(np.s_[ny:ny+ny, nx+2*nover:nx+2*nover+nx])
+        hdr['CCDSEC4'] =  xy2hdr(np.s_[ny:ny+ny, nx:nx+nx])
         
         hdr['NIGHT'] = '20150102'
         hdr['EXPID'] = 1
         
         self.header = hdr
-        self.ny = 150
-        self.nx = 190
-        self.noverscan = 50
-        self.rawimage = np.zeros((self.ny, self.nx+2*self.noverscan))
+        self.rawimage = np.zeros((2*self.ny, 2*self.nx+2*self.noverscan))
         self.offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
         self.gain = {'1':1.0, '2':1.5, '3':0.8, '4':1.2}
         self.rdnoise = {'1':2.0, '2':2.2, '3':2.4, '4':2.6}
         
         self.quad = {
-            '1': np.s_[0:80, 0:100], '2': np.s_[0:80, 100:190],
-            '3': np.s_[80:150, 0:100], '4': np.s_[80:150, 100:190],
+            '1': np.s_[0:ny, 0:nx], '2': np.s_[0:ny, nx:nx+nx],
+            '3': np.s_[ny:ny+ny, 0:nx], '4': np.s_[ny:ny+ny, nx:nx+nx],
         }
         
         for amp in ('1', '2', '3', '4'):
@@ -82,12 +98,13 @@ class TestPreProc(unittest.TestCase):
             
     def test_preproc(self):
         image = preproc(self.rawimage, self.header)
-        self.assertEqual(image.pix.shape, (self.ny, self.nx))
+        self.assertEqual(image.pix.shape, (2*self.ny, 2*self.nx))
         self.assertTrue(np.all(image.ivar <= 1/image.readnoise**2))
         for amp in ('1', '2', '3', '4'):
             pix = image.pix[self.quad[amp]]
             rdnoise = np.median(image.readnoise[self.quad[amp]])
-            self.assertAlmostEqual(np.mean(pix), 0.0, delta=3*rdnoise/np.sqrt(pix.size))
+            npixover = self.ny * self.noverscan
+            self.assertAlmostEqual(np.mean(pix), 0.0, delta=3*rdnoise/np.sqrt(npixover))
             self.assertAlmostEqual(np.std(pix), self.rdnoise[amp], delta=0.2)
             self.assertAlmostEqual(rdnoise, self.rdnoise[amp], delta=0.2)
 
@@ -102,7 +119,7 @@ class TestPreProc(unittest.TestCase):
 
     def test_pixflat(self):
         image = preproc(self.rawimage, self.header, pixflat=False)
-        pixflat = np.ones((self.ny, self.nx))
+        pixflat = np.ones_like(image.pix)
         image = preproc(self.rawimage, self.header, pixflat=pixflat)
         fits.writeto(self.calibfile, pixflat)
         image = preproc(self.rawimage, self.header, pixflat=self.calibfile)
@@ -111,7 +128,7 @@ class TestPreProc(unittest.TestCase):
 
     def test_mask(self):
         image = preproc(self.rawimage, self.header, mask=False)
-        mask = np.random.randint(0, 2, size=(self.ny, self.nx))
+        mask = np.random.randint(0, 2, size=image.pix.shape)
         image = preproc(self.rawimage, self.header, mask=mask)
         self.assertTrue(np.all(image.mask == mask))
         fits.writeto(self.calibfile, mask)
@@ -122,7 +139,7 @@ class TestPreProc(unittest.TestCase):
 
     def test_pixflat_mask(self):
         from desispec.maskbits import ccdmask
-        pixflat = np.ones((self.ny, self.nx))
+        pixflat = np.ones((2*self.ny, 2*self.nx))
         pixflat[0:10, 0:10] = 0.0
         pixflat[10:20, 10:20] = 0.05
         image = preproc(self.rawimage, self.header, pixflat=pixflat)
@@ -252,7 +269,7 @@ class TestPreProc(unittest.TestCase):
             os.remove(self.pixfile)            
         desispec.scripts.preproc.main(args)
         img = io.read_image(self.pixfile)        
-        self.assertEqual(img.pix.shape, (self.ny, self.nx))
+        self.assertEqual(img.pix.shape, (2*self.ny, 2*self.nx))
 
     #- Not implemented yet, but flag these as expectedFailures instead of
     #- successful tests of raising NotImplementedError
