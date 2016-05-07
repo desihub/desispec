@@ -566,62 +566,61 @@ def remove_duplicates(wy,w,y_id,w_id) :
     return y_id2,w_id2
 
 
-def refine_solution(y,w,y_id,w_id,degmin=2,degmax=3) :
+def refine_solution(y,w,y_id,w_id,deg=3) :
     log=get_logger()
-    transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=degmin))
+    transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=deg))
     wy=transfo(y)
-    remove_duplicates(wy,w,y_id,w_id)
+    y_id,w_id=remove_duplicates(wy,w,y_id,w_id)
     nmatch=len(y_id)
     #log.info("init nmatch=%d rms=%f wave=%s"%(nmatch,np.std(wy[y_id]-w[w_id]),w[w_id]))
     #log.info("init nmatch=%d rms=%f"%(nmatch,np.std(wy[y_id]-w[w_id])))
-    if nmatch<3 :
+    if nmatch<deg+1 :
         log.error("error : init nmatch too small")
         return y_id,w_id,1000.,0
-    deg=1
-    transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=deg))
-    
-    
+        
     rms=0.
     
     # loop on fit of transfo, pairing, cleaning
     for loop in range(200) :
         
+        # compute transfo
+        transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=deg))
+
         # apply transfo to measurements
         wy=transfo(y)        
         previous_rms = rms+0.
         rms=np.std(wy[y_id]-w[w_id])
         
         # match lines
-        y_id=[]
-        w_id=[]
         mdiff0=max(2.,rms*2.) # this is a difficult parameter to tune, either loose lever arm, or have false matches !!
         mdiff1=10. # this is a difficult parameter to tune, either loose lever arm, or have false matches !!
-        for i,wi in enumerate(wy) :
+        unmatched_indices=np.setdiff1d(np.arange(y.size),y_id)
+        for i,wi in zip(unmatched_indices,wy[unmatched_indices]) :
             dist=np.abs(wi-w)
             jj=np.argsort(dist)
-            if dist[jj[0]]<mdiff0 or ( dist[jj[0]]<mdiff1 and dist[jj[0]]<0.3*dist[jj[1]]) : 
-                j=jj[0]
-                y_id.append(i)
-                w_id.append(j)
-        y_id,w_id = remove_duplicates(wy,w,y_id,w_id)
-        
+            for j,o in enumerate(jj) :
+                if j in w_id :
+                    continue
+                if dist[j]<mdiff0 or ( o<jj.size-1 and dist[j]<mdiff1 and dist[j]<0.3*dist[jj[o+1]]) : 
+                    y_id=np.append(y_id,i)
+                    w_id=np.append(w_id,j)
         previous_nmatch = nmatch+0
         nmatch=len(y_id)
         
         #log.info("iter #%d nmatch=%d rms=%f"%(loop,nmatch,rms))
-        if nmatch < 3 :
+        if nmatch < deg+1 :
            log.error("error init nmatch too small")
            y_id=[]
            w_id=[]
            rms=100000.
            return y_id,w_id,rms,loop 
-        if loop<3 :
-            deg=min(nmatch-2,degmin)
-        elif loop<4 :
-            deg=min(nmatch-2,min(degmin+1,degmax))
-        transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=deg))
-        if nmatch==previous_nmatch and abs(rms-previous_rms)<0.01 and loop >=4 :
+        
+        if nmatch==previous_nmatch and abs(rms-previous_rms)<0.01 and loop>=1 :
             break
+        if nmatch>=min(w.size,y.size) :
+            #print("break because %d>=min(%d,%d)"%(nmatch,w.size,y.size))
+            break
+
     return y_id,w_id,rms,loop
 
 
@@ -715,10 +714,11 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
     # centered version
     dwdy_pairs   = (cdy2_13*dw_12-cdy2_12*dw_13)/(cdy2_13*dy_12-cdy2_12*dy_13)
     d2wdy2_pairs = (dy_13*dw_12-dy_12*dw_13)/(dy_13*cdy2_12-dy_12*cdy2_13)
+    del dy_12,dy_13,dy2_12,dy2_13,cdy2_12,cdy2_13,dw_12,dw_13
     
     # now create and fill a 4D histogram
     ndwdy    = 41
-    nd2wdy2  = 11
+    nd2wdy2  = 21
     #print("ndwdy=%d nd2wdy2=%d ny_triplets=%d nw_triplets=%d"%(ndwdy,nd2wdy2,len(y),len(w)))
     
     dwdy_min = dwdy_prior*(1-toler)
@@ -791,7 +791,7 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
             best_rms = rms
             
         # stop at some moment
-        if count>=20 and best_rms<0.2 and len(y_id)>=min(15,min(len(y),len(w))) :
+        if best_rms<0.2 and len(y_id)>=min(15,min(len(y),len(w))) :
             #log.info("stop here because we have a correct solution")
             break
 
