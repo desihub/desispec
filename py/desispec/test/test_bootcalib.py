@@ -98,8 +98,9 @@ class TestBoot(unittest.TestCase):
         # Read arc
         arc_hdu = fits.open(self.testarc)
         arc = arc_hdu[0].data
+        arc_ivar = np.ones(arc.shape)
         # Extract arc spectra (one per fiber)
-        all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, xfit, gauss)
+        all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, arc_ivar, xfit, gauss)
         # Line list
         camera = header['CAMERA']
         llist = desiboot.load_arcline_list(camera)

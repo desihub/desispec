@@ -82,7 +82,11 @@ def main(args):
         # Read flat
         flat_hdu = fits.open(args.fiberflat)
         header = flat_hdu[0].header
-        flat = flat_hdu[0].data*(flat_hdu[1].data>0)*(flat_hdu[2].data==0)
+        if len(flat_hdu)==3 :
+            flat = flat_hdu[0].data*(flat_hdu[1].data>0)*(flat_hdu[2].data==0)
+        else :
+            flat = flat_hdu[0].data
+            log.warning("found only %d HDU in flat, do not use ivar"%len(flat_hdu))
         ny = flat.shape[0]
 
         ###########
@@ -139,12 +143,18 @@ def main(args):
         # Read arc
         log.info("reading arc")
         arc_hdu = fits.open(args.arcfile)
-        # set to zero ivar of masked pixels, force positive or null ivar
-        arc_ivar = arc_hdu[1].data*(arc_hdu[2].data==0)*(arc_hdu[1].data>0)
-        # and mask pixels below -5 sigma (cures unmasked dead columns in sims.)
-        arc_ivar *= (arc_hdu[0].data*np.sqrt(arc_hdu[1].data)>-5.)
-        # set to zero pixel values with null ivar              
-        arc = arc_hdu[0].data*(arc_ivar>0)
+        if len(arc_hdu)==3 :
+            # set to zero ivar of masked pixels, force positive or null ivar
+            arc_ivar = arc_hdu[1].data*(arc_hdu[2].data==0)*(arc_hdu[1].data>0)
+            # and mask pixels below -5 sigma (cures unmasked dead columns in sims.)
+            arc_ivar *= (arc_hdu[0].data*np.sqrt(arc_hdu[1].data)>-5.)
+            # set to zero pixel values with null ivar              
+            arc = arc_hdu[0].data*(arc_ivar>0)
+        else :
+            arc = arc_hdu[0].data
+            arc_ivar = np.ones(arc.shape)
+            log.warning("found only %d HDU in arc, do not use ivar"%len(arc_hdu))
+        
         header = arc_hdu[0].header
         ny = arc.shape[0]
 
