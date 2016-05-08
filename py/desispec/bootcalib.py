@@ -1510,7 +1510,7 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         #all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
         a=np.sum(img_ivar[:,minx:maxx+1]*psf**2,axis=1)
         ok=(a>0)
-        all_spec[ok,qq] = np.sum(img_ivar[ok,minx:maxx+1]*psf*img[ok,minx:maxx+1],axis=1) / a[ok]
+        all_spec[ok,qq] = np.sum(img_ivar[ok,minx:maxx+1]*psf[ok]*img[ok,minx:maxx+1],axis=1) / a[ok]
         
     # Return
     return all_spec
