@@ -116,7 +116,7 @@ def bootcalib(deg,flatimage,arcimage):
 # Arc/Wavelength Routines (Linelists come next)
 ########################################################
 
-def find_arc_lines(spec,rms_thresh=10.,nwidth=5):
+def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     """Find and centroid arc lines in an input spectrum
 
     Parameters
@@ -254,9 +254,11 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
             lines["NeI"] = [7440.9469, 7490.9335, 7537.8488,
                             7945.3654, 8138.6432, 8302.6062,
                             8379.9093, 8497.6932, 8593.6184, 8637.0190, 8656.7599,
-                            8786.1660, 8921.9496, 9151.1829, 9204.2841, 9427.9655]
+                            8786.1660, 8921.9496, 9151.1829, 9204.2841, 9427.9655,9536.7793,9668.0709]
+                            #8786.1660, 8921.9496, 8991.024,  9151.1829, 9204.2841, 9222.59, 9227.03, 9303.4053, 
+                            #9329.0663, 9375.8796, 9427.9655,9461.806,9489.2849,9536.7793,9550.0241,9668.0709]
             lines["KrI"] = [7603.6384,7696.6579,7856.9844,8061.7211,8106.5945,8192.3082,8300.3907,8779.1607,8931.1447]
-            lines["ArI"] = [9125.471,9787.186]
+            lines["ArI"] = [9125.471]
             lines["HgI"] = []
             lines["CdI"] = []
             wmark = 8593.6184 # Ne
@@ -637,9 +639,6 @@ def compute_triplets(wave) :
                 triplets.append(triplet)
     return np.array(triplets)
 
-   
-    
-
 def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntrack=50):
     """Match (as best possible), a set of the input list of expected arc lines to the detected list
     
@@ -667,60 +666,38 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
     #log.info("y=%s"%str(y))
     #log.info("w=%s"%str(w))
     
-
     # compute triplets of waves of y positions
     y_triplets = compute_triplets(y)
     w_triplets = compute_triplets(w)
     
-    
-    # w = a*y**2+b*y+c
-    # dw_12 = a*dy2_12+b*dy_12
-    # dw_13 = a*dy2_13+b*dy_13
-    # a = (dy_13*dw_12-dy_12*dw_13)/(dy_13*dy2_12-dy_12*dy2_13)
-    # b = (dy2_13*dw_12-dy2_12*dw_13)/(dy2_13*dy_12-dy2_12*dy_13)
-    
-    # centered version
+    # each pair of triplet defines a 2nd order polynomial (chosen centered on y=2000)
     # w = a*(y-2000)**2+b*(y-2000)+c
     # w = a*y**2-4000*a*y+b*y+cst
     # w = a*(y**2-4000*y)+b*y+cst
     # dw_12 = a*(dy2_12-4000*dy_12)+b*dy_12
     # dw_13 = a*(dy2_13-4000*dy_13)+b*dy_12
     # dw_12 = a*cdy2_12+b*dy_12
-    # dw_13 = a*cdy2_13+b*dy_12
+    # dw_13 = a*cdy2_13+b*dy_13
     # with cdy2_12=dy2_12-4000*dy_12
     # and  cdy2_13=dy2_13-4000*dy_13
+    # idet = 1./(dy_13*cdy2_12-dy_12*cdy2_13)
+    # a = idet*(dy_13*dw_12-dy_12*dw_13)
+    # b = idet*(-cdy2_13*dw_12+cdy2_12*dw_13)
     
-
-
     #triplet=[w1,w2,w3,i1,i1+1+i2,i1+i2+2+i3,w2-w1,w3-w1,w2**2-w1**2,w3**2-w1**2]
-    
-    # in all pairs of triplets(y,w)
-    iy_pairs=np.tile(y_triplets[:,3],(len(w_triplets),1)) # index of first y of triplets
-    dy_12=np.tile(y_triplets[:,6],(len(w_triplets),1))
-    dy_13=np.tile(y_triplets[:,7],(len(w_triplets),1))
-    dy2_12=np.tile(y_triplets[:,8],(len(w_triplets),1))
-    dy2_13=np.tile(y_triplets[:,9],(len(w_triplets),1))
-
-    cdy2_12=dy2_12-4000*dy_12
-    cdy2_13=dy2_13-4000*dy_13
-    
-    iw_pairs=np.tile(w_triplets[:,3],(len(y_triplets),1)).T # index of first y of triplets
-    dw_12 = np.tile(w_triplets[:,6],(len(y_triplets),1)).T
-    dw_13 = np.tile(w_triplets[:,7],(len(y_triplets),1)).T
-    
-    # best fit second order transfo dwdy and d2wdy2 for all pairs
-    #dwdy_pairs   = (dy2_13*dw_12-dy2_12*dw_13)/(dy2_13*dy_12-dy2_12*dy_13)
-    #d2wdy2_pairs = (dy_13*dw_12-dy_12*dw_13)/(dy_13*dy2_12-dy_12*dy2_13)
+    dy_12=y_triplets[:,6]
+    dy_13=y_triplets[:,7]
+    #dy2_12=y_triplets[:,8]
+    #dy2_13=y_triplets[:,9]
     # centered version
-    dwdy_pairs   = (cdy2_13*dw_12-cdy2_12*dw_13)/(cdy2_13*dy_12-cdy2_12*dy_13)
-    d2wdy2_pairs = (dy_13*dw_12-dy_12*dw_13)/(dy_13*cdy2_12-dy_12*cdy2_13)
-    del dy_12,dy_13,dy2_12,dy2_13,cdy2_12,cdy2_13,dw_12,dw_13
+    cdy2_12=y_triplets[:,8]-4000.*y_triplets[:,6]
+    cdy2_13=y_triplets[:,9]-4000.*y_triplets[:,7]
+    idet=1./(dy_13*cdy2_12-dy_12*cdy2_13)
     
-    # now create and fill a 4D histogram
+    # fill histogram with polynomial coefs and first index of each triplet in the pair for all pairs of triplets(y,w)
+    # create the 4D histogram
     ndwdy    = 41
     nd2wdy2  = 21
-    #print("ndwdy=%d nd2wdy2=%d ny_triplets=%d nw_triplets=%d"%(ndwdy,nd2wdy2,len(y),len(w)))
-    
     dwdy_min = dwdy_prior*(1-toler)
     dwdy_max = dwdy_prior*(1+toler)
     dwdy_step = (dwdy_max-dwdy_min)/ndwdy
@@ -728,18 +705,21 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
     d2wdy2_max = +d2wdy2_prior
     d2wdy2_step = (d2wdy2_max-d2wdy2_min)/nd2wdy2
     histogram = np.zeros((ndwdy,nd2wdy2,len(y),len(w))) # definition of the histogram
-
-    # bins in the histogram
-    dwdy_bin   = ((dwdy_pairs-dwdy_min)/dwdy_step).ravel().astype(int)
-    d2wdy2_bin = ((d2wdy2_pairs-d2wdy2_min)/d2wdy2_step).ravel().astype(int)
-    iy_bin=iy_pairs.ravel()
-    iw_bin=iw_pairs.ravel()
-    pairs_in_histo=(dwdy_bin>=0)&(dwdy_bin<ndwdy)&(d2wdy2_bin>=0)&(d2wdy2_bin<nd2wdy2)
-     # fill histo
-    for a,b,c,d in zip(dwdy_bin[pairs_in_histo],d2wdy2_bin[pairs_in_histo],iy_bin[pairs_in_histo],iw_bin[pairs_in_histo]) :
-        histogram[a,b,c,d] += 1
-
-    # max bins in histo
+    
+    # fill the histogram
+    for w_triplet in w_triplets :
+        #d2wdy2 = idet*(dy_13*w_triplet[6]-dy_12*w_triplet[7])
+        #dwdy   = idet*(-cdy2_13*w_triplet[6]+cdy2_12*w_triplet[7])        
+        # bins in the histogram
+        dwdy_bin   = ((idet*(-cdy2_13*w_triplet[6]+cdy2_12*w_triplet[7])-dwdy_min)/dwdy_step).astype(int)
+        d2wdy2_bin = ((idet*(dy_13*w_triplet[6]-dy_12*w_triplet[7])-d2wdy2_min)/d2wdy2_step).astype(int)
+        pairs_in_histo=np.where((dwdy_bin>=0)&(dwdy_bin<ndwdy)&(d2wdy2_bin>=0)&(d2wdy2_bin<nd2wdy2))[0]
+        # fill histo
+        iw=w_triplet[3]
+        for a,b,c in zip(dwdy_bin[pairs_in_histo],d2wdy2_bin[pairs_in_histo],y_triplets[pairs_in_histo,3]) :
+            histogram[a,b,c,iw] += 1
+    
+    # find max bins in the histo
     histogram_ravel = histogram.ravel()
     best_histo_bins = histogram_ravel.argsort()[::-1]
     #log.info("nmatch in first bins=%s"%histogram.ravel()[best_histo_bins[:3]])
@@ -748,7 +728,7 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
     best_w_id=[]
     best_rms=1000.
     
-    # loop on best matches
+    # loop on best matches ( = most populated bins)
     count=0
     for histo_bin in best_histo_bins[:ntrack] :
         if  histogram_ravel[histo_bin]<4 :
@@ -759,18 +739,21 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
         #print("bins=",dwdy_best_bin,d2wdy2_best_bin,iy_best_bin,iw_best_bin)
         
         # pairs of triplets in this histo bin
-        pairs_in_bin = np.where((dwdy_bin==dwdy_best_bin)&(d2wdy2_bin==d2wdy2_best_bin)&(iy_bin==iy_best_bin)&(iw_bin==iw_best_bin))[0]
-
-        # cannot use all pairs because of offset that can vary a lot 
-        # pairs_in_bin = np.where((dwdy_bin==dwdy_best_bin)&(d2wdy2_bin==d2wdy2_best_bin))[0] # all triplets with same transfo bin
-        
-        # convert to pairs of wavelength,y
-        y_id=np.array([])
-        for i in range(3,6) :
-            y_id=np.append(y_id,np.tile(y_triplets[:,i],(len(w_triplets),1)).ravel()[pairs_in_bin])
         w_id=np.array([])
-        for i in range(3,6) :
-            w_id=np.append(w_id,np.tile(w_triplets[:,i],(len(y_triplets),1)).T.ravel()[pairs_in_bin])
+        y_id=np.array([])
+        wok=np.where(w_triplets[:,3]==iw_best_bin)[0]
+        yok=np.where(y_triplets[:,3]==iy_best_bin)[0]
+        for w_triplet in w_triplets[wok] :
+            #d2wdy2 = idet[yok]*(dy_13[yok]*w_triplet[6]-dy_12[yok]*w_triplet[7])
+            #dwdy   = idet[yok]*(-cdy2_13[yok]*w_triplet[6]+cdy2_12[yok]*w_triplet[7])
+            # bins in the histogram
+            dwdy_bin   = ((idet[yok]*(-cdy2_13[yok]*w_triplet[6]+cdy2_12[yok]*w_triplet[7])-dwdy_min)/dwdy_step).astype(int)
+            d2wdy2_bin = ((idet[yok]*(dy_13[yok]*w_triplet[6]-dy_12[yok]*w_triplet[7])-d2wdy2_min)/d2wdy2_step).astype(int)
+            wyok=yok[np.where((dwdy_bin==dwdy_best_bin)&(d2wdy2_bin==d2wdy2_best_bin))[0]]
+            for y_triplet in y_triplets[wyok] :
+                y_id=np.append(y_id,y_triplet[3:6])
+                w_id=np.append(w_id,w_triplet[3:6])
+        
         # now need to rm duplicates
         nw=len(w)
         ny=len(y)
@@ -1462,13 +1445,15 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     return xnew, fits
 
 
-def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
+def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verbose=True):
     """Extract spectrum for fibers one-by-one using a Gaussian PSF
 
     Parameters
     ----------
     img : ndarray
       Image
+    img_ivar : ndarray
+      Image inverse variance
     xtrc : ndarray
       fiber trace
     sigma : float
@@ -1522,7 +1507,11 @@ def extract_sngfibers_gaussianpsf(img, xtrc, sigma, box_radius=2, verbose=True):
         #psf = mask * g_init(dx_img)
         # Extract
         #all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
-        all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
+        #all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
+        a=np.sum(img_ivar[:,minx:maxx+1]*psf**2,axis=1)
+        ok=(a>0)
+        all_spec[ok,qq] = np.sum(img_ivar[ok,minx:maxx+1]*psf*img[ok,minx:maxx+1],axis=1) / a[ok]
+        
     # Return
     return all_spec
 

@@ -139,7 +139,12 @@ def main(args):
         # Read arc
         log.info("reading arc")
         arc_hdu = fits.open(args.arcfile)
-        arc = arc_hdu[0].data*(arc_hdu[1].data>0)*(arc_hdu[2].data==0)
+        # set to zero ivar of masked pixels, force positive or null ivar
+        arc_ivar = arc_hdu[1].data*(arc_hdu[2].data==0)*(arc_hdu[1].data>0)
+        # and mask pixels below -5 sigma (cures unmasked dead columns in sims.)
+        arc_ivar *= (arc_hdu[0].data*np.sqrt(arc_hdu[1].data)>-5.)
+        # set to zero pixel values with null ivar              
+        arc = arc_hdu[0].data*(arc_ivar>0)
         header = arc_hdu[0].header
         ny = arc.shape[0]
 
@@ -156,8 +161,8 @@ def main(args):
             for ii in range(nfiber):
                 fit_dict['coeff'] = XCOEFF[ii,:]
                 xfit[:,ii] = dufits.func_val(wv_array, fit_dict)
-
-        all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, xfit, gauss)
+        
+        all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, arc_ivar, xfit, gauss)
 
         ############################
         # Line list
