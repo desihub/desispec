@@ -82,7 +82,7 @@ def main(args):
         # Read flat
         flat_hdu = fits.open(args.fiberflat)
         header = flat_hdu[0].header
-        flat = flat_hdu[0].data
+        flat = flat_hdu[0].data*(flat_hdu[1].data>0)*(flat_hdu[2].data==0)
         ny = flat.shape[0]
 
         ###########
@@ -139,7 +139,7 @@ def main(args):
         # Read arc
         log.info("reading arc")
         arc_hdu = fits.open(args.arcfile)
-        arc = arc_hdu[0].data
+        arc = arc_hdu[0].data*(arc_hdu[1].data>0)*(arc_hdu[2].data==0)
         header = arc_hdu[0].header
         ny = arc.shape[0]
 
