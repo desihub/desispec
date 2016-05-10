@@ -21,8 +21,14 @@ import pickle
 import yaml
 
 import desispec
+import desispec.scripts.bootcalib as bootcalib
 from desispec.log import get_logger
 from .plan import *
+
+
+step_types = {
+    'bootcalib' : ['psfboot'],
+}
 
 
 def default_options():
@@ -120,62 +126,33 @@ def finish_task(name, node):
 def is_finished(rawdir, proddir, grph, name):
     # eventually, we could check a database to get this info...
 
-    if step == 'bootcalib':
-        outpath = graph_path_psfboot(proddir, name)
-        if not os.path.isfile(outpath):
-            return False
-        tout = os.path.getmtime(outpath)
-        for input in grph[name]['in']:
-            inpath = graph_path_pix(rawdir, input)
-            # if the input file exists, check if its timestamp
-            # is newer than the output.
-            if os.path.isfile(inpath):
-                tin = os.path.getmtime(inpath)
-                if tin > tout:
-                    return False
+    type = grph[name]['type']
 
-    elif step == 'specex':
-        pass
+    outpath = graph_path(rawdir, proddir, name, type)
+    if not os.path.isfile(outpath):
+        return False
 
-    elif step == 'extract':
-        pass
-    
-    elif step == 'fiberflat':
-        pass
-    
-    elif step == 'sky':
-        pass
-    
-    elif step == 'stdstars':
-        pass
-    
-    elif step == 'fluxcal':
-        pass
-    
-    elif step == 'procexp':
-        pass
-    
-    elif step == 'makebricks':
-        pass
-    
-    elif step == 'zfind':
-        pass
-    
-    else:
-        raise RuntimeError("Unknown pipeline step {}".format(step))
-
+    tout = os.path.getmtime(outpath)
+    for input in grph[name]['in']:
+        inpath = graph_path(rawdir, proddir, input, grph[input]['type'])
+        # if the input file exists, check if its timestamp
+        # is newer than the output.
+        if os.path.isfile(inpath):
+            tin = os.path.getmtime(inpath)
+            if tin > tout:
+                return False
     return True
 
 
 def run_task(step, rawdir, proddir, grph, opts, comm=None):
-    if step not in graph_types:
+    if step not in step_types.keys():
         raise ValueError("step type {} not recognized".format(step))
     # Verify that there is only a single node in the graph
     # of the desired step.  The graph should already have
     # been sliced before calling this task.
     nds = []
     for name, nd in grph.items():
-        if nd['type'] == step:
+        if nd['type'] in step_types[step]:
             nds.append(name)
     if len(nds) != 1:
         raise RuntimeError("run_task should only be called with a graph containing a single node to process")
@@ -183,9 +160,14 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     name = nds[0]
     node = grph[name]
 
+    print("running task {} : {}".format(step, name))
+    print(grph)
+
     # step-specific operations
 
     if step == 'bootcalib':
+        print("inside bootcalib")
+        print(node)
         # The inputs to this step include *all* the arcs and flats for the
         # night.  Here we sort them into the list of arcs and the list of
         # flats, and simply choose the first one of each.
@@ -193,26 +175,41 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         flats = []
         for input in node['in']:
             inode = grph[input]
-            if inode['type'] == 'arc':
+            if inode['flavor'] == 'arc':
                 arcs.append(input)
-            elif inode['type'] == 'flat':
+            elif inode['flavor'] == 'flat':
                 flats.append(input)
+        print(arcs)
+        print(flats)
+        if len(arcs) == 0:
+            raise RuntimeError("no arc images found!")
+        if len(flats) == 0:
+            raise RuntimeError("no flat images found!")
         firstarc = sorted(arcs)[0]
         firstflat = sorted(flats)[0]
+        print("arc = {}, flat = {}".format(firstarc, firstflat))
         # build list of options
         arcpath = graph_path_pix(rawdir, firstarc)
+        print(arcpath)
         flatpath = graph_path_pix(rawdir, firstflat)
+        print(flatpath)
         outpath = graph_path_psfboot(proddir, name)
-        qapath = run_qa_path(outpath)
+        print(outpath)
+        qapath = qa_path(outpath)
+        print(qapath)
+        print("out = {}, qa = {}".format(outpath, qapath))
         options = {}
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
         options['qafile'] = qapath
         options['outfile'] = outpath
         options.update(opts)
+        print(options)
         optarray = option_list(options)
+        print(optarray)
         args = desispec.scripts.bootcalib.parse(optarray)
-        desispec.scripts.bootcalib.main(args)
+        print(args)
+        bootcalib.main(args)
 
     elif step == 'specex':
         pass
@@ -256,6 +253,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
         nproc = comm.size
         rank = comm.rank
 
+    print("step {} with {} procs".format(step, nproc))
+
     # Get the tasks that need to be done for this step.
 
     tasks = None
@@ -263,7 +262,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
         # For this step, compute all the tasks that we need to do
         alltasks = []
         for name, nd in grph.items():
-            if nd['type'] == step:
+            if nd['type'] in step_types[step]:
                 alltasks.append(name)
 
         # For each task, prune if it is finished
@@ -319,6 +318,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             # slice out just the graph for this task
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             pfile = os.path.join(faildir, "fail_{}_{}.pkl".format(step, tasks[t]))
+
             try:
                 # if the step previously failed, clear that file now
                 if os.path.isfile(pfile):
@@ -338,7 +338,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 fpkl['graph'] = tgraph
                 fpkl['opts'] = options
                 fpkl['procs'] = taskproc
-                pfile = "fail_{}_{}.pkl".format(step, tasks[t])
+                pfile = os.path.join(faildir, "fail_{}_{}.pkl".format(step, tasks[t]))
                 with open(pfile, 'wb') as p:
                     pickle.dump(fpkl, p)
 

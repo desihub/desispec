@@ -163,11 +163,15 @@ def graph_night(rawdir, rawnight):
 
     allbricks = set()
 
-    # first, insert raw data into the graph
+    # First, insert raw data into the graph.  We use the existence of the raw data
+    # as a filter over spectrographs.  Spectrographs whose raw data do not exist
+    # are excluded from the graph.
 
     expid = io.get_exposures(rawnight, raw=True, rawdata_dir=rawdir)
     
     campat = re.compile(r'([brz])([0-9])')
+
+    keepspec = set()
 
     for ex in sorted(expid):
         # get the fibermap for this exposure
@@ -204,6 +208,8 @@ def graph_night(rawdir, rawnight):
             band = cammat.group(1)
             spec = cammat.group(2)
 
+            keepspec.update(spec)
+
             node = {}
             node['type'] = 'pix'
             node['id'] = ex
@@ -217,6 +223,8 @@ def graph_night(rawdir, rawnight):
             grph[name] = node
             grph[rawnight]['out'].append(name)
 
+    keep = sorted(list(keepspec))
+
     # Now that we have added all the raw data to the graph, we work our way
     # through the processing steps.  
 
@@ -229,7 +237,7 @@ def graph_night(rawdir, rawnight):
     # create those nodes.
 
     for band in ['b', 'r', 'z']:
-        for spec in range(10):
+        for spec in keep:
             name = graph_name(rawnight, "psfboot-{}{}".format(band, spec))
             node = {}
             node['type'] = 'psfboot'
@@ -254,7 +262,7 @@ def graph_night(rawdir, rawnight):
     # output file.  We also add nodes for the combined psfs.
 
     for band in ['b', 'r', 'z']:
-        for spec in range(10):
+        for spec in keep:
             name = graph_name(rawnight, "psf-{}{}".format(band, spec))
             node = {}
             node['type'] = 'psfnight'
@@ -478,7 +486,7 @@ def graph_night(rawdir, rawnight):
 
 
 def graph_path_fibermap(rawdir, name):
-    patstr = "([0-9]{{8}}){}(fibermap-[brz][0-9]{{8}})".format(_graph_sep)
+    patstr = "([0-9]{{8}}){}(fibermap-[0-9]{{8}})".format(_graph_sep)
     pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
@@ -490,7 +498,9 @@ def graph_path_fibermap(rawdir, name):
 
 
 def graph_path_pix(rawdir, name):
-    patstr = "([0-9]{{8}}){}(pix-[brz][0-9]{{8}})".format(_graph_sep)
+    patstr = "([0-9]{{8}}){}(pix-[brz][0-9]-[0-9]{{8}})".format(_graph_sep)
+    print("pix pat = ", patstr)
+    print("pix name = ", name)
     pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
@@ -515,7 +525,7 @@ def graph_path_psfboot(proddir, name):
 
 
 def graph_path_psf(proddir, name):
-    patstr = "([0-9]{{8}}){}(psf-[brz][0-9])".format(_graph_sep)
+    patstr = "([0-9]{{8}}){}psf-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
     pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
@@ -529,7 +539,8 @@ def graph_path_psf(proddir, name):
 
 
 def graph_path_psfnight(proddir, name):
-    pat = re.compile(r'([0-9]{8})/(psfnight-[brz][0-9])')
+    patstr = "([0-9]{{8}}){}(psfnight-[brz][0-9])".format(_graph_sep)
+    pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
         raise RuntimeError("{} is not a valid psfnight name".format(name))
@@ -540,8 +551,12 @@ def graph_path_psfnight(proddir, name):
     return path
 
 
+    patstr = "([0-9]{{8}}){}psf-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
+
 def graph_path_frame(proddir, name):
-    pat = re.compile(r'([0-9]{8})/frame-([brz][0-9])-([0-9]{8})')
+    patstr = "([0-9]{{8}}){}frame-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
         raise RuntimeError("{} is not a valid frame name".format(name))
@@ -554,7 +569,8 @@ def graph_path_frame(proddir, name):
 
 
 def graph_path_fiberflat(proddir, name):
-    pat = re.compile(r'([0-9]{8})/fiberflat-([brz][0-9])-([0-9]{8})')
+    patstr = "([0-9]{{8}}){}fiberflat-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
         raise RuntimeError("{} is not a valid fiberflat name".format(name))
@@ -567,7 +583,8 @@ def graph_path_fiberflat(proddir, name):
 
 
 def graph_path_sky(proddir, name):
-    pat = re.compile(r'([0-9]{8})/sky-([brz][0-9])-([0-9]{8})')
+    patstr = "([0-9]{{8}}){}sky-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
         raise RuntimeError("{} is not a valid sky name".format(name))
@@ -580,7 +597,8 @@ def graph_path_sky(proddir, name):
 
 
 def graph_path_stdstars(proddir, name):
-    pat = re.compile(r'([0-9]{8})/stdstars-([brz][0-9])-([0-9]{8})')
+    patstr = "([0-9]{{8}}){}stdstars-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
         raise RuntimeError("{} is not a valid standard star name".format(name))
@@ -593,7 +611,8 @@ def graph_path_stdstars(proddir, name):
 
 
 def graph_path_calib(proddir, name):
-    pat = re.compile(r'([0-9]{8})/calib-([brz][0-9])-([0-9]{8})')
+    patstr = "([0-9]{{8}}){}calib-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
         raise RuntimeError("{} is not a valid calibration name".format(name))
@@ -606,7 +625,8 @@ def graph_path_calib(proddir, name):
 
 
 def graph_path_cframe(proddir, name):
-    pat = re.compile(r'([0-9]{8})/cframe-([brz][0-9])-([0-9]{8})')
+    patstr = "([0-9]{{8}}){}cframe-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
         raise RuntimeError("{} is not a valid cframe name".format(name))
@@ -616,6 +636,34 @@ def graph_path_cframe(proddir, name):
     dir = os.path.join(proddir, 'exposures', night, expid)
     path = os.path.join(dir, "cframe-{}-{}.fits".format(cam, expid))
     return path
+
+
+def graph_path(rawdir, proddir, name, type):
+    if type == 'fibermap':
+        return graph_path_fibermap(rawdir, name)
+    elif type == 'pix':
+        return graph_path_pix(rawdir, name)
+    elif type == 'psfboot':
+        return graph_path_psfboot(proddir, name)
+    elif type == 'psf':
+        return graph_path_psf(proddir, name)
+    elif type == 'psfnight':
+        return graph_path_psfnight(proddir, name)
+    elif type == 'frame':
+        return graph_path_frame(proddir, name)
+    elif type == 'fiberflat':
+        return graph_path_fiberflat(proddir, name)
+    elif type == 'sky':
+        return graph_path_sky(proddir, name)
+    elif type == 'stdstars':
+        return graph_path_stdstars(proddir, name)
+    elif type == 'calib':
+        return graph_path_calib(proddir, name)
+    elif type == 'cframe':
+        return graph_path_cframe(proddir, name)
+    else:
+        raise RuntimeError("unknown type {}".format(type))
+    return ""
 
 
 def graph_prune(grph, name, descend=False):
