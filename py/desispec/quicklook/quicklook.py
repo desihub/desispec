@@ -111,7 +111,8 @@ def testconfig(outfilename="qlconfig.yaml"):
                              "Name":"2D Extraction",
                              "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
                                        "Nspec":10,
-                                       "Wavelength": "5630,7740,0.5"
+                                       "Wavelength": "5630,7740,0.5",
+                                       "FiberMap":"%%FiberMap" #need this for qa_skysub downstream as well.
                                        }
                              },
                        'QAs':[],
@@ -134,7 +135,13 @@ def testconfig(outfilename="qlconfig.yaml"):
                              "kwargs":{"SkyFile":"%%SkyFile"
                                       }
                              },
-                       'QAs':[],
+                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
+                               "ClassName":"Calculate_SNR",
+                               "Name":"Calculate Signal-to-Noise ratio",
+                               "kwargs":{'SkyFile':"%%SkyFile"
+                                        }
+                               }
+                             ],
                        "StepName": "Sky Subtraction",
                        "OutputFile":"sky_subtraction_QA.yaml"
                       }                       
