@@ -248,6 +248,15 @@ def integration_test(night=None, nspec=5, clobber=False):
         cmd = "desi_zfind --brick {} -o {}".format(b, zbestfile)
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('redshifts failed for brick '+b)
+    # ztruth QA
+    qafile = io.findfile('qa_ztruth', night)
+    qafig = io.findfile('qa_ztruth_fig', night)
+    cmd = "desi_qa_zfind --night {night} --qafile {qafile} --qafig {qafig}".format(
+        night=night, qafile=qafile, qafig=qafig)
+    inputs = []
+    outputs = [qafile, qafig]
+    if runcmd(cmd, inputs, outputs, clobber) != 0:
+        raise RuntimeError('redshift QA failed for night '+night)
 
     #-----
     #- Did it work?
