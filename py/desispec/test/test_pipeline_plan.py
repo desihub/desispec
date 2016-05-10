@@ -64,13 +64,18 @@ class TestPlanCmd(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        shutil.rmtree(cls.testraw)
+        #shutil.rmtree(cls.testraw)
+        pass
 
+
+    def test_graph_names(self):
+        pass
     
     def test_graph(self):
         grph = graph_night(self.testraw, self.night)
         with open(os.path.join(self.testraw, "{}.dot".format(self.night)), 'w') as f:
             graph_dot(grph, f)
+        graph_write(os.path.join(self.testraw, "{}_graph.yml".format(self.night)), grph)
 
 
     def test_graph_slice_spec(self):
@@ -83,7 +88,7 @@ class TestPlanCmd(unittest.TestCase):
     def test_graph_make_fail(self):
         grph = graph_night(self.testraw, self.night)
         grph4 = graph_slice_spec(grph, [4])
-        graph_mark(grph4, os.path.join(self.night, "pix-r4-{:08d}".format(3)), 'fail', descend=True)
+        graph_mark(grph4, graph_name(self.night, "pix-r4-{:08d}".format(3)), 'fail', descend=True)
         with open(os.path.join(self.testraw, "{}-spec4_fail.dot".format(self.night)), 'w') as f:
             graph_dot(grph4, f)
 

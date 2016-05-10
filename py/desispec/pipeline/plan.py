@@ -24,7 +24,7 @@ import desispec.io as io
 import desispec.log as log
 
 
-_graph_types = [
+graph_types = [
     'night',
     'fibermap',
     'pix',
@@ -44,6 +44,8 @@ _state_colors = {
     'done': '#00ff00',
     'fail': '#ff0000',
 }
+
+_graph_sep = '_'
 
 
 def find_raw(rawdir, rawnight, spectrographs=None):
@@ -135,6 +137,13 @@ def find_bricks(proddir):
     return bricks
 
 
+def graph_name(*args):
+    if len(args) > 0:
+        return _graph_sep.join(args)
+    else:
+        return ""
+
+
 # Each node of the graph is a dictionary, with required keys 'type',
 # 'in', and 'out'.  Where 'in' and 'out' are lists of other nodes.  
 # Extra keys for each type are allowed.  Some keys (band, spec, etc)
@@ -180,7 +189,7 @@ def graph_night(rawdir, rawnight):
         node['bricks'] = bricks
         node['in'] = [rawnight]
         node['out'] = []
-        name = os.path.join(rawnight, "fibermap-{:08d}".format(ex))
+        name = graph_name(rawnight, "fibermap-{:08d}".format(ex))
 
         grph[name] = node
         grph[rawnight]['out'].append(name)
@@ -203,7 +212,7 @@ def graph_night(rawdir, rawnight):
             node['flavor'] = flavor
             node['in'] = [rawnight]
             node['out'] = []
-            name = os.path.join(rawnight, "pix-{}{}-{:08d}".format(band, spec, ex))
+            name = graph_name(rawnight, "pix-{}{}-{:08d}".format(band, spec, ex))
 
             grph[name] = node
             grph[rawnight]['out'].append(name)
@@ -221,7 +230,7 @@ def graph_night(rawdir, rawnight):
 
     for band in ['b', 'r', 'z']:
         for spec in range(10):
-            name = os.path.join(rawnight, "psfboot-{}{}".format(band, spec))
+            name = graph_name(rawnight, "psfboot-{}{}".format(band, spec))
             node = {}
             node['type'] = 'psfboot'
             node['band'] = band
@@ -237,7 +246,7 @@ def graph_night(rawdir, rawnight):
             continue
         band = nd['band']
         spec = nd['spec']
-        bootname = os.path.join(rawnight, "psfboot-{}{}".format(band, spec))
+        bootname = graph_name(rawnight, "psfboot-{}{}".format(band, spec))
         grph[bootname]['in'].append(name)
         nd['out'].append(bootname)
 
@@ -246,7 +255,7 @@ def graph_night(rawdir, rawnight):
 
     for band in ['b', 'r', 'z']:
         for spec in range(10):
-            name = os.path.join(rawnight, "psf-{}{}".format(band, spec))
+            name = graph_name(rawnight, "psf-{}{}".format(band, spec))
             node = {}
             node['type'] = 'psfnight'
             node['band'] = band
@@ -263,9 +272,9 @@ def graph_night(rawdir, rawnight):
         band = nd['band']
         spec = nd['spec']
         id = nd['id']
-        bootname = os.path.join(rawnight, "psfboot-{}{}".format(band, spec))
-        psfname = os.path.join(rawnight, "psf-{}{}-{:08d}".format(band, spec, id))
-        psfnightname = os.path.join(rawnight, "psf-{}{}".format(band, spec))
+        bootname = graph_name(rawnight, "psfboot-{}{}".format(band, spec))
+        psfname = graph_name(rawnight, "psf-{}{}-{:08d}".format(band, spec, id))
+        psfnightname = graph_name(rawnight, "psf-{}{}".format(band, spec))
         node = {}
         node['type'] = 'psf'
         node['band'] = band
@@ -289,9 +298,9 @@ def graph_night(rawdir, rawnight):
         spec = nd['spec']
         id = nd['id']
         flavor = nd['flavor']
-        framename = os.path.join(rawnight, "frame-{}{}-{:08d}".format(band, spec, id))
-        psfnightname = os.path.join(rawnight, "psf-{}{}".format(band, spec))
-        fmname = os.path.join(rawnight, "fibermap-{:08d}".format(id))
+        framename = graph_name(rawnight, "frame-{}{}-{:08d}".format(band, spec, id))
+        psfnightname = graph_name(rawnight, "psf-{}{}".format(band, spec))
+        fmname = graph_name(rawnight, "fibermap-{:08d}".format(id))
         node = {}
         node['type'] = 'frame'
         node['band'] = band
@@ -319,7 +328,7 @@ def graph_night(rawdir, rawnight):
         band = nd['band']
         spec = nd['spec']
         id = nd['id']
-        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, id))
+        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, id))
         node = {}
         node['type'] = 'fiberflat'
         node['band'] = band
@@ -352,8 +361,8 @@ def graph_night(rawdir, rawnight):
                 flatid = fid
             elif (fid > flatid) and (fid < id):
                 flatid = fid
-        skyname = os.path.join(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
+        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         node = {}
         node['type'] = 'sky'
         node['band'] = band
@@ -382,9 +391,9 @@ def graph_night(rawdir, rawnight):
                 flatid = fid
             elif (fid > flatid) and (fid < id):
                 flatid = fid
-        starname = os.path.join(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
-        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
-        skyname = os.path.join(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
+        starname = graph_name(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
+        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
         node = {}
         node['type'] = 'stdstars'
         node['band'] = band
@@ -414,10 +423,10 @@ def graph_night(rawdir, rawnight):
                 flatid = fid
             elif (fid > flatid) and (fid < id):
                 flatid = fid
-        skyname = os.path.join(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        starname = os.path.join(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
-        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
-        calname = os.path.join(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
+        skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
+        starname = graph_name(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
+        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        calname = graph_name(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
         node = {}
         node['type'] = 'calib'
         node['band'] = band
@@ -448,10 +457,10 @@ def graph_night(rawdir, rawnight):
                 flatid = fid
             elif (fid > flatid) and (fid < id):
                 flatid = fid
-        skyname = os.path.join(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        flatname = os.path.join(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
-        calname = os.path.join(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
-        cfname = os.path.join(rawnight, "cframe-{}{}-{:08d}".format(band, spec, id))
+        skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
+        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        calname = graph_name(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
+        cfname = graph_name(rawnight, "cframe-{}{}-{:08d}".format(band, spec, id))
         node = {}
         node['type'] = 'cframe'
         node['band'] = band
@@ -466,6 +475,147 @@ def graph_night(rawdir, rawnight):
         nd['out'].append(cfname)
 
     return grph
+
+
+def graph_path_fibermap(rawdir, name):
+    patstr = "([0-9]{{8}}){}(fibermap-[brz][0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid fibermap name".format(name))
+    night = mat.group(1)
+    root = mat.group(2)
+    path = os.path.join(rawdir, night, "{}.fits".format(root))
+    return path
+
+
+def graph_path_pix(rawdir, name):
+    patstr = "([0-9]{{8}}){}(pix-[brz][0-9]{{8}})".format(_graph_sep)
+    pat = re.compile(patstr)
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid pix name".format(name))
+    night = mat.group(1)
+    root = mat.group(2)
+    path = os.path.join(rawdir, night, "{}.fits".format(root))
+    return path
+
+
+def graph_path_psfboot(proddir, name):
+    patstr = "([0-9]{{8}}){}(psfboot-[brz][0-9])".format(_graph_sep)
+    pat = re.compile(patstr)
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid psfboot name".format(name))
+    night = mat.group(1)
+    root = mat.group(2)
+    dir = os.path.join(proddir, 'calib2d', 'psf')
+    path = os.path.join(dir, night, "{}.fits".format(root))
+    return path
+
+
+def graph_path_psf(proddir, name):
+    patstr = "([0-9]{{8}}){}(psf-[brz][0-9])".format(_graph_sep)
+    pat = re.compile(patstr)
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid psf name".format(name))
+    night = mat.group(1)
+    cam = mat.group(2)
+    expid = mat.group(3)
+    dir = os.path.join(proddir, 'exposures', night, expid)
+    path = os.path.join(dir, "psf-{}-{}.fits".format(cam, expid))
+    return path
+
+
+def graph_path_psfnight(proddir, name):
+    pat = re.compile(r'([0-9]{8})/(psfnight-[brz][0-9])')
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid psfnight name".format(name))
+    night = mat.group(1)
+    root = mat.group(2)
+    dir = os.path.join(proddir, 'calib2d', 'psf')
+    path = os.path.join(dir, "{}.fits".format(root))
+    return path
+
+
+def graph_path_frame(proddir, name):
+    pat = re.compile(r'([0-9]{8})/frame-([brz][0-9])-([0-9]{8})')
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid frame name".format(name))
+    night = mat.group(1)
+    cam = mat.group(2)
+    expid = mat.group(3)
+    dir = os.path.join(proddir, 'exposures', night, expid)
+    path = os.path.join(dir, "frame-{}-{}.fits".format(cam, expid))
+    return path
+
+
+def graph_path_fiberflat(proddir, name):
+    pat = re.compile(r'([0-9]{8})/fiberflat-([brz][0-9])-([0-9]{8})')
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid fiberflat name".format(name))
+    night = mat.group(1)
+    cam = mat.group(2)
+    expid = mat.group(3)
+    dir = os.path.join(proddir, 'exposures', night, expid)
+    path = os.path.join(dir, "fiberflat-{}-{}.fits".format(cam, expid))
+    return path
+
+
+def graph_path_sky(proddir, name):
+    pat = re.compile(r'([0-9]{8})/sky-([brz][0-9])-([0-9]{8})')
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid sky name".format(name))
+    night = mat.group(1)
+    cam = mat.group(2)
+    expid = mat.group(3)
+    dir = os.path.join(proddir, 'exposures', night, expid)
+    path = os.path.join(dir, "sky-{}-{}.fits".format(cam, expid))
+    return path
+
+
+def graph_path_stdstars(proddir, name):
+    pat = re.compile(r'([0-9]{8})/stdstars-([brz][0-9])-([0-9]{8})')
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid standard star name".format(name))
+    night = mat.group(1)
+    cam = mat.group(2)
+    expid = mat.group(3)
+    dir = os.path.join(proddir, 'exposures', night, expid)
+    path = os.path.join(dir, "stdstars-{}-{}.fits".format(cam, expid))
+    return path
+
+
+def graph_path_calib(proddir, name):
+    pat = re.compile(r'([0-9]{8})/calib-([brz][0-9])-([0-9]{8})')
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid calibration name".format(name))
+    night = mat.group(1)
+    cam = mat.group(2)
+    expid = mat.group(3)
+    dir = os.path.join(proddir, 'exposures', night, expid)
+    path = os.path.join(dir, "calib-{}-{}.fits".format(cam, expid))
+    return path
+
+
+def graph_path_cframe(proddir, name):
+    pat = re.compile(r'([0-9]{8})/cframe-([brz][0-9])-([0-9]{8})')
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid cframe name".format(name))
+    night = mat.group(1)
+    cam = mat.group(2)
+    expid = mat.group(3)
+    dir = os.path.join(proddir, 'exposures', night, expid)
+    path = os.path.join(dir, "cframe-{}-{}.fits".format(cam, expid))
+    return path
 
 
 def graph_prune(grph, name, descend=False):
@@ -500,7 +650,7 @@ def graph_mark(grph, name, state=None, descend=False):
 
 def graph_slice(grph, names=None, types=None, deps=False):
     if types is None:
-        types = _graph_types
+        types = graph_types
 
     newgrph = {}
     
@@ -546,15 +696,28 @@ def graph_slice_spec(grph, spectrographs=None):
     return newgrph
 
 
+def graph_write(path, grph):
+    with open(path, 'w') as f:
+        yaml.dump(grph, f, default_flow_style=False)
+    return
+
+
+def graph_read(path):
+    grph = None
+    with open(path, 'r') as f:
+        grph = yaml.load(f)
+    return grph
+
+
 def graph_dot(grph, f):
     # For visualization, we rank nodes of the same type together.
 
     rank = {}
-    for t in _graph_types:
+    for t in graph_types:
         rank[t] = []
 
     for name, nd in grph.items():
-        if nd['type'] not in _graph_types:
+        if nd['type'] not in graph_types:
             raise RuntimeError("graph node {} has invalid type {}".format(name, nd['type']))
         rank[nd['type']].append(name)
 
@@ -567,7 +730,7 @@ def graph_dot(grph, f):
 
     # organize nodes into subgraphs
 
-    for t in _graph_types:
+    for t in graph_types:
         f.write('{}subgraph cluster{} {{\n'.format(tab, t))
         f.write('{}{}label="{}";\n'.format(tab, tab, t))
         f.write('{}{}newrank=true;\n'.format(tab, tab))
@@ -585,7 +748,7 @@ def graph_dot(grph, f):
 
     # write dependencies
 
-    for t in _graph_types:
+    for t in graph_types:
         for name in sorted(rank[t]):
             for child in grph[name]['out']:
                 f.write('{}"{}" -> "{}" [penwidth=1,color="#999999"];\n'.format(tab, name, child))
