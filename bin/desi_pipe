@@ -231,7 +231,7 @@ def main():
                     arcfile = os.path.join(rawdir, nt, arcname)
                     outname = "psfboot-{}.fits".format(cam)
                     outfile = os.path.join(calpsf, nt, outname)
-                    commands.append("desi_bootcalib.py --fiberflat {} --arcfile {} --outfile {}".format(flatfile, arcfile, outfile))
+                    commands.append("desi_bootcalib --fiberflat {} --arcfile {} --outfile {}".format(flatfile, arcfile, outfile))
             shell_file = os.path.join(nsdir, "bootcalib.sh")
             nersc_file = os.path.join(nsdir, "bootcalib.nersc")
             shell_log = os.path.join(nldir, "bootcalib_sh")
@@ -286,7 +286,7 @@ def main():
                     psfname = "psf-{}-{:08d}.fits".format(cam, arc)
                     psffile = os.path.join(expdir, nt, "{:08d}".format(arc), psfname)
                     infiles.append(psffile)
-            commands.append("specex_mean_psf.py --output {} --input {}".format(outfile, " ".join(infiles)))
+            commands.append("specex_mean_psf --output {} --input {}".format(outfile, " ".join(infiles)))
         
         shell_file = os.path.join(nsdir, "meanpsf.sh")
         nersc_file = os.path.join(nsdir, "meanpsf.nersc")
@@ -353,7 +353,7 @@ def main():
         # Create scripts to run make bricks
 
         commands = []
-        commands.append("desi_make_bricks.py --night {}".format(nt))
+        commands.append("desi_make_bricks --night {}".format(nt))
         shell_file = os.path.join(nsdir, "bricks.sh")
         nersc_file = os.path.join(nsdir, "bricks.nersc")
         shell_log = os.path.join(nldir, "bricks_sh")
