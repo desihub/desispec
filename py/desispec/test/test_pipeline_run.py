@@ -17,19 +17,61 @@ import desispec.io as io
 
 class TestRunCmd(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.testraw = 'test-'+uuid4().hex
-        os.mkdir(cls.testraw)
+    def setUp(self):
+        self.uid = uuid4().hex
+        self.testraw = "test_raw-{}".format(self.uid)
+        os.mkdir(self.testraw)
+        self.testprod = "test_redux-{}".format(self.uid)
+        os.mkdir(self.testprod)
 
-        cls.night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
-        cls.nightdir = os.path.join(cls.testraw, cls.night)
-        os.mkdir(cls.nightdir)
+        self.night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
+        self.rawnightdir = os.path.join(self.testraw, self.night)
+        os.mkdir(self.rawnightdir)
+        self.prodnightdir = os.path.join(self.testprod, self.night)
+        os.mkdir(self.prodnightdir)
+
+        for expid in [0, 1]:
+            fibermap = io.fibermap.empty_fibermap(10)
+            for key in fibermap.dtype.names:
+                column = fibermap[key]
+                fibermap[key] = np.random.random(column.shape).astype(column.dtype)
+            hdr = {'flavor': 'flat'}
+            fmfile = os.path.join(self.rawnightdir, "fibermap-{:08d}.fits".format(expid))
+            io.write_fibermap(fmfile, fibermap, header=hdr)
+
+        for expid in [2, 3]:
+            fibermap = io.fibermap.empty_fibermap(10)
+            for key in fibermap.dtype.names:
+                column = fibermap[key]
+                fibermap[key] = np.random.random(column.shape).astype(column.dtype)
+            hdr = {'flavor': 'arc'}
+            fmfile = os.path.join(self.rawnightdir, "fibermap-{:08d}.fits".format(expid))
+            io.write_fibermap(fmfile, fibermap, header=hdr)
+
+        for expid in [4, 5]:
+            fibermap = io.fibermap.empty_fibermap(10)
+            for key in fibermap.dtype.names:
+                column = fibermap[key]
+                fibermap[key] = np.random.random(column.shape).astype(column.dtype)
+            hdr = {'flavor': 'science'}
+            fmfile = os.path.join(self.rawnightdir, "fibermap-{:08d}.fits".format(expid))
+            io.write_fibermap(fmfile, fibermap, header=hdr)
+
+        for expid in range(6):
+            for band in ['b', 'r', 'z']:
+                for spec in range(10):
+                    cam = "{}{}".format(band, spec)
+                    pixfile = os.path.join(self.rawnightdir, "pix-{}-{:08d}.fits".format(cam, expid))
+                    with open(pixfile, 'w') as p:
+                        p.write("")
+
+        self.grph = graph_night(self.testraw, self.night)
+        graph_write(os.path.join(self.testraw, "{}_graph.yml".format(self.night)), self.grph)
 
 
-    @classmethod
-    def tearDownClass(cls):
-        #shutil.rmtree(cls.testraw)
+    def tearDown(self):
+        shutil.rmtree(self.testraw)
+        shutil.rmtree(self.testprod)
         pass
 
     
@@ -37,6 +79,11 @@ class TestRunCmd(unittest.TestCase):
         options = default_options()
         dump = os.path.join(self.testraw, "opts.yml")
         write_options(dump, options)
+
+
+    def test_failpkl(self):
+        options = default_options()
+        run_step('bootcalib', self.testraw, self.testprod, self.grph, options)
     
 
 #- This runs all test* functions in any TestCase class in this file
