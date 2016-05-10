@@ -231,7 +231,7 @@ def main():
                     arcfile = os.path.join(rawdir, nt, arcname)
                     outname = "psfboot-{}.fits".format(cam)
                     outfile = os.path.join(calpsf, nt, outname)
-                    commands.append("desi_bootcalib --fiberflat {} --arcfile {} --outfile {}".format(flatfile, arcfile, outfile))
+                    commands.append("desi_bootcalib --triplet-matching --fiberflat {} --arcfile {} --outfile {}".format(flatfile, arcfile, outfile))
             shell_file = os.path.join(nsdir, "bootcalib.sh")
             nersc_file = os.path.join(nsdir, "bootcalib.nersc")
             shell_log = os.path.join(nldir, "bootcalib_sh")
@@ -243,7 +243,8 @@ def main():
 
         # Create scripts to run specex
 
-        lamplines = "/project/projectdirs/desi/software/edison/specex/specex-0.3.4/data/lamplines-specex.par"
+        #lamplines = "/project/projectdirs/desi/software/edison/specex/specex-0.3.4/data/lamplines-specex.par"
+        lamplines = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt"
 
         shell_file = os.path.join(nsdir, "specex.sh")
         nersc_file = os.path.join(nsdir, "specex.nersc")
