@@ -263,7 +263,7 @@ def graph_night(rawdir, rawnight):
 
     for band in ['b', 'r', 'z']:
         for spec in keep:
-            name = graph_name(rawnight, "psf-{}{}".format(band, spec))
+            name = graph_name(rawnight, "psfnight-{}{}".format(band, spec))
             node = {}
             node['type'] = 'psfnight'
             node['band'] = band
@@ -282,7 +282,7 @@ def graph_night(rawdir, rawnight):
         id = nd['id']
         bootname = graph_name(rawnight, "psfboot-{}{}".format(band, spec))
         psfname = graph_name(rawnight, "psf-{}{}-{:08d}".format(band, spec, id))
-        psfnightname = graph_name(rawnight, "psf-{}{}".format(band, spec))
+        psfnightname = graph_name(rawnight, "psfnight-{}{}".format(band, spec))
         node = {}
         node['type'] = 'psf'
         node['band'] = band
@@ -307,7 +307,7 @@ def graph_night(rawdir, rawnight):
         id = nd['id']
         flavor = nd['flavor']
         framename = graph_name(rawnight, "frame-{}{}-{:08d}".format(band, spec, id))
-        psfnightname = graph_name(rawnight, "psf-{}{}".format(band, spec))
+        psfnightname = graph_name(rawnight, "psfnight-{}{}".format(band, spec))
         fmname = graph_name(rawnight, "fibermap-{:08d}".format(id))
         node = {}
         node['type'] = 'frame'

@@ -17,22 +17,26 @@ import sys
 import subprocess as sp
 import re
 import pickle
+import copy
 
 import yaml
 
 import desispec
-import desispec.scripts.bootcalib as bootcalib
-import desispec.scripts.specex as specex
 
 from desispec.log import get_logger
 from .plan import *
 from .utils import *
 
+import desispec.scripts.bootcalib as bootcalib
+import desispec.scripts.specex as specex
+import desispec.scripts.extract as extract
+
 
 step_types = {
     'bootcalib' : ['psfboot'],
     'specex' : ['psf'],
-    'psfcombine' : ['psfnight']
+    'psfcombine' : ['psfnight'],
+    'extract' : ['frame']
 }
 
 
@@ -66,6 +70,9 @@ def default_options():
     opts['regularize'] = 0.0
     opts['nwavestep'] = 50
     opts['verbose'] = False
+    opts['wavelength_b'] = "3579.0,5939.0,0.8"
+    opts['wavelength_r'] = "5635.0,7731.0,0.8"
+    opts['wavelength_z'] = "7445.0,9824.0,0.8"
     allopts['extract'] = opts
 
     allopts['fiberflat'] = {}
@@ -181,7 +188,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
-        args = desispec.scripts.bootcalib.parse(optarray)
+        args = bootcalib.parse(optarray)
         bootcalib.main(args)
 
     elif step == 'specex':
@@ -223,8 +230,53 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         sp.check_call(com)
 
     elif step == 'extract':
-        pass
+        
+        pix = []
+        psf = []
+        fm = []
+        band = None
+        for input in node['in']:
+            inode = grph[input]
+            if inode['type'] == 'psfnight':
+                psf.append(input)
+            elif inode['type'] == 'pix':
+                pix.append(input)
+                band = inode['band']
+            elif inode['type'] == 'fibermap':
+                fm.append(input)
+        if len(psf) != 1:
+            raise RuntimeError("extraction needs exactly one psfnight file")
+        if len(pix) == 0:
+            raise RuntimeError("extraction needs exactly one image file")
+        if len(fm) == 0:
+            raise RuntimeError("extraction needs exactly one fibermap file")
 
+        imgfile = graph_path_pix(rawdir, pix[0])
+        psffile = graph_path_psfnight(proddir, psf[0])
+        fmfile = graph_path_fibermap(rawdir, fm[0])
+        outfile = graph_path_frame(proddir, name)
+
+        options = {}
+        options['input'] = imgfile
+        options['fibermap'] = fmfile
+        options['psf'] = psffile
+        options['output'] = outfile
+
+        # extract the wavelength range from the options, depending on the band
+
+        optscopy = copy.deepcopy(opts)
+        wkey = "wavelength_{}".format(band)
+        wave = optscopy[wkey]
+        del optscopy['wavelength_b']
+        del optscopy['wavelength_r']
+        del optscopy['wavelength_z']
+        optscopy['wavelength'] = wave
+
+        options.update(optscopy)
+        optarray = option_list(options)
+
+        args = extract.parse(optarray)
+        extract.main_mpi(args, comm)
     
     elif step == 'fiberflat':
         pass

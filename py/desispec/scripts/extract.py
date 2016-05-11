@@ -6,6 +6,7 @@ from __future__ import absolute_import, division
 
 import sys
 import os
+import re
 import os.path
 import time
 import argparse
@@ -17,6 +18,8 @@ from specter.extract import ex2d
 
 from desispec import io
 from desispec.frame import Frame
+
+import desispec.scripts.mergebundles as merge
 
 
 def parse(options=None):
@@ -268,7 +271,7 @@ def main_mpi(args, comm=None):
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
         outbundle = "{}_{:02d}.fits".format(outroot, b)
 
-        print('Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
+        print('extract:  Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
 
         #- The actual extraction
@@ -289,9 +292,17 @@ def main_mpi(args, comm=None):
                     fibers=fibers, meta=img.meta, fibermap=fibermap)
 
         #- Write output
-        io.write_frame(args.output, frame)
+        io.write_frame(outbundle, frame)
 
-        print('Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
+        print('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
             specmin, specmin+nspec, time.asctime()))
 
-
+    if rank == 0:
+        opts = [
+            '--output', args.output,
+            '--force',
+            '--delete'
+        ]
+        opts.extend([ "{}_{:02d}.fits".format(outroot, b) for b in bundles ])
+        args = merge.parse(opts)
+        merge.main(args)

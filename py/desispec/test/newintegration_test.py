@@ -100,7 +100,7 @@ def sim(night, nspec=5, clobber=False):
     return
 
 
-def integration_test(night=None, nspec=25, clobber=False):
+def integration_test(night=None, nspec=5, clobber=False):
     """Run an integration test from raw data simulations through redshifts
     
     Args:
@@ -126,9 +126,6 @@ def integration_test(night=None, nspec=25, clobber=False):
 
     # simulate inputs
     sim(night, nspec=nspec, clobber=clobber)
-
-    # get default options
-    opts = pipe.default_options()
 
     # raw and production locations
 
@@ -181,6 +178,12 @@ def integration_test(night=None, nspec=25, clobber=False):
 
     # Now we perform all pipeline steps with a single process.
 
+    # get default options, and modify to restrict the range of spectra
+    
+    opts = pipe.default_options()
+    opts['extract']['specmin'] = 0
+    opts['extract']['nspec'] = nspec
+
     # bootcalib
 
     # FIXME:  We cannot currently run bootcalib on a subset of spectra.
@@ -220,34 +223,8 @@ def integration_test(night=None, nspec=25, clobber=False):
 
     # Extraction
 
+    pipe.run_step('extract', rawdir, proddir, grph, opts)
 
-
-
-
-    # #-----
-    # #- Extract
-
-    # waverange = dict(
-    #     b = "3570,5940,1.0",
-    #     r = "5630,7740,1.0",
-    #     z = "7440,9830,1.0",
-    #     )
-    # for expid in [0,1,2]:
-    #     for channel in ['b', 'r', 'z']:
-    #         camera = channel+'0'
-    #         pixfile = io.findfile('pix', night, expid, camera)
-    #         fiberfile = io.findfile('fibermap', night, expid)
-    #         psffile = '{}/data/specpsf/psf-{}.fits'.format(os.getenv('DESIMODEL'), channel)
-    #         framefile = io.findfile('frame', night, expid, camera)
-    #         # cmd = "exspec -i {pix} -p {psf} --specmin 0 --nspec {nspec} -w {wave} -o {frame}".format(
-    #         #     pix=pixfile, psf=psffile, wave=waverange[channel], frame=framefile, **params)
-    #         cmd = "desi_extract_spectra -i {pix} -p {psf} -f {fibermap} --specmin 0 --nspec {nspec} -o {frame}".format(
-    #             pix=pixfile, psf=psffile, frame=framefile, fibermap=fiberfile, **params)
-
-    #         inputs = [pixfile, psffile, fiberfile]
-    #         outputs = [framefile,]
-    #         if runcmd(cmd, inputs, outputs, clobber) != 0:
-    #             raise RuntimeError('extraction failed for {} expid {}'.format(camera, expid))
 
     # #-----
     # #- Fiber flat
