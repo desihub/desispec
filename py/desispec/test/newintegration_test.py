@@ -229,37 +229,10 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     pipe.run_step('fiberflat', rawdir, proddir, grph, opts)
 
+    # Sky
 
-    # #-----
-    # #- Fiber flat
-    # expid = 0
-    # for channel in ['b', 'r', 'z']:
-    #     camera = channel+"0"
-    #     framefile = io.findfile('frame', night, expid, camera)
-    #     fiberflat = io.findfile('fiberflat', night, expid, camera)
-    #     cmd = "desi_compute_fiberflat --infile {frame} --outfile {fiberflat}".format(
-    #         frame=framefile, fiberflat=fiberflat, **params)
-    #     inputs = [framefile,]
-    #     outputs = [fiberflat,]
-    #     if runcmd(cmd, inputs, outputs, clobber) != 0:
-    #         raise RuntimeError('fiberflat failed for '+camera)
+    pipe.run_step('sky', rawdir, proddir, grph, opts)
 
-    # #-----
-    # #- Sky model
-    # flat_expid = 0
-    # expid = 2
-    # for channel in ['b', 'r', 'z']:
-    #     camera = channel+"0"
-    #     framefile = io.findfile('frame', night, expid, camera)
-    #     fibermap = io.findfile('fibermap', night, expid)
-    #     fiberflat = io.findfile('fiberflat', night, flat_expid, camera)
-    #     skyfile = io.findfile('sky', night, expid, camera)
-    #     cmd="desi_compute_sky --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky}".format(
-    #         frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile, **params)
-    #     inputs = [framefile, fibermap, fiberflat]
-    #     outputs = [skyfile, ]
-    #     if runcmd(cmd, inputs, outputs, clobber) != 0:
-    #         raise RuntimeError('sky model failed for '+camera)
 
 
     # #-----

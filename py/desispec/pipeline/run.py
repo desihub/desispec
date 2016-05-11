@@ -38,7 +38,8 @@ step_types = {
     'specex' : ['psf'],
     'psfcombine' : ['psfnight'],
     'extract' : ['frame'],
-    'fiberflat' : ['fiberflat']
+    'fiberflat' : ['fiberflat'],
+    'sky' : ['sky']
 }
 
 
@@ -144,6 +145,7 @@ def is_finished(rawdir, proddir, grph, name):
 def run_task(step, rawdir, proddir, grph, opts, comm=None):
     if step not in step_types.keys():
         raise ValueError("step type {} not recognized".format(step))
+
     # Verify that there is only a single node in the graph
     # of the desired step.  The graph should already have
     # been sliced before calling this task.
@@ -156,6 +158,12 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
 
     name = nds[0]
     node = grph[name]
+
+    nproc = 1
+    rank = 0
+    if comm is not None:
+        nproc = comm.size
+        rank = comm.rank
 
     # step-specific operations
 
@@ -191,7 +199,9 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options.update(opts)
         optarray = option_list(options)
         args = bootcalib.parse(optarray)
-        bootcalib.main(args)
+
+        if rank == 0:
+            bootcalib.main(args)
 
     elif step == 'specex':
 
@@ -228,8 +238,9 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         com.extend(['--output', outfile])
         com.extend(['--input'])
         com.extend(infiles)
-        
-        sp.check_call(com)
+
+        if rank == 0:
+            sp.check_call(com)
 
     elif step == 'extract':
         
@@ -248,9 +259,9 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
                 fm.append(input)
         if len(psf) != 1:
             raise RuntimeError("extraction needs exactly one psfnight file")
-        if len(pix) == 0:
+        if len(pix) != 1:
             raise RuntimeError("extraction needs exactly one image file")
-        if len(fm) == 0:
+        if len(fm) != 1:
             raise RuntimeError("extraction needs exactly one fibermap file")
 
         imgfile = graph_path_pix(rawdir, pix[0])
@@ -278,7 +289,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         args = extract.parse(optarray)
-        extract.main_mpi(args, comm)
+        extract.main_mpi(args, comm=comm)
     
     elif step == 'fiberflat':
 
@@ -296,10 +307,42 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         args = fiberflat.parse(optarray)
-        fiberflat.main(args)
+
+        if rank == 0:
+            fiberflat.main(args)
     
     elif step == 'sky':
-        pass
+        
+        frm = []
+        flat = []
+        for input in node['in']:
+            inode = grph[input]
+            if inode['type'] == 'frame':
+                frm.append(input)
+            elif inode['type'] == 'fiberflat':
+                flat.append(input)
+        if len(frm) != 1:
+            raise RuntimeError("sky needs exactly one frame file")
+        if len(flat) != 1:
+            raise RuntimeError("sky needs exactly one fiberflat file")
+
+        framefile = graph_path_frame(proddir, frm[0])
+        flatfile = graph_path_fiberflat(proddir, flat[0])
+        outfile = graph_path_sky(proddir, name)
+        qafile = qa_path(outfile)
+
+        options = {}
+        options['infile'] = framefile
+        options['fiberflat'] = flatfile
+        options['qafile'] = qafile
+        options['outfile'] = outfile
+        options.update(opts)
+        optarray = option_list(options)
+
+        args = sky.parse(optarray)
+
+        if rank == 0:
+            sky.main(args)
     
     elif step == 'stdstars':
         pass
@@ -427,6 +470,10 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 fyml['procs'] = taskproc
                 with open(ffile, 'w') as f:
                     yaml.dump(fyml, f, default_flow_style=False)
+
+    if comm is not None:
+        comm.barrier()
+    return
 
 
 def retry_task(failpath, newopts=None):
