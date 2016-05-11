@@ -499,8 +499,6 @@ def graph_path_fibermap(rawdir, name):
 
 def graph_path_pix(rawdir, name):
     patstr = "([0-9]{{8}}){}(pix-[brz][0-9]-[0-9]{{8}})".format(_graph_sep)
-    print("pix pat = ", patstr)
-    print("pix name = ", name)
     pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
@@ -519,8 +517,8 @@ def graph_path_psfboot(proddir, name):
         raise RuntimeError("{} is not a valid psfboot name".format(name))
     night = mat.group(1)
     root = mat.group(2)
-    dir = os.path.join(proddir, 'calib2d', 'psf')
-    path = os.path.join(dir, night, "{}.fits".format(root))
+    dir = os.path.join(proddir, 'calib2d', 'psf', night)
+    path = os.path.join(dir, "{}.fits".format(root))
     return path
 
 
@@ -546,13 +544,10 @@ def graph_path_psfnight(proddir, name):
         raise RuntimeError("{} is not a valid psfnight name".format(name))
     night = mat.group(1)
     root = mat.group(2)
-    dir = os.path.join(proddir, 'calib2d', 'psf')
+    dir = os.path.join(proddir, 'calib2d', 'psf', night)
     path = os.path.join(dir, "{}.fits".format(root))
     return path
 
-
-    patstr = "([0-9]{{8}}){}psf-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
-    pat = re.compile(patstr)
 
 def graph_path_frame(proddir, name):
     patstr = "([0-9]{{8}}){}frame-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)

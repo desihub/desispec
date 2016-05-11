@@ -22,12 +22,17 @@ import yaml
 
 import desispec
 import desispec.scripts.bootcalib as bootcalib
+import desispec.scripts.specex as specex
+
 from desispec.log import get_logger
 from .plan import *
+from .utils import *
 
 
 step_types = {
     'bootcalib' : ['psfboot'],
+    'specex' : ['psf'],
+    'psfcombine' : ['psfnight']
 }
 
 
@@ -40,21 +45,21 @@ def default_options():
     allopts['bootcalib'] = opts
 
     opts = {}
-    opts['flux-hdu'] = 1
-    opts['ivar-hdu'] = 2
-    opts['mask-hdu'] = 3
-    opts['header-hdu'] = 1
-    opts['xcoord-hdu'] = 1
-    opts['ycoord-hdu'] = 1
-    opts['psfmodel'] = 'GAUSSHERMITE'
-    opts['half_size_x'] = 8
-    opts['half_size_y'] = 5
-    opts['verbose'] = False
-    opts['gauss_hermite_deg'] = 6
-    opts['legendre_deg_wave'] = 4
-    opts['legendre_deg_x'] = 1
-    opts['trace_deg_wave'] = 6
-    opts['trace_deg_x'] = 6
+    # opts['flux-hdu'] = 1
+    # opts['ivar-hdu'] = 2
+    # opts['mask-hdu'] = 3
+    # opts['header-hdu'] = 1
+    # opts['xcoord-hdu'] = 1
+    # opts['ycoord-hdu'] = 1
+    # opts['psfmodel'] = 'GAUSSHERMITE'
+    # opts['half_size_x'] = 8
+    # opts['half_size_y'] = 5
+    # opts['verbose'] = False
+    # opts['gauss_hermite_deg'] = 6
+    # opts['legendre_deg_wave'] = 4
+    # opts['legendre_deg_x'] = 1
+    # opts['trace_deg_wave'] = 6
+    # opts['trace_deg_x'] = 6
     allopts['specex'] = opts
 
     opts = {}
@@ -101,23 +106,6 @@ def qa_path(datafile, suffix="_QA"):
     return qafile
 
 
-def option_list(opts):
-    optlist = []
-    for key, val in opts.items():
-        keystr = "--{}".format(key)
-        if isinstance(val, (bool,)):
-            if val:
-                optlist.append(keystr)
-                optlist.append()
-        else:
-            optlist.append(keystr)
-            if isinstance(val, (float,)):
-                optlist.append("{:.14e}".format(val))
-            else:
-                optlist.append("{}".format(val))
-    return optlist
-
-
 def finish_task(name, node):
     # eventually we will mark this as complete in a database...
     pass
@@ -160,14 +148,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     name = nds[0]
     node = grph[name]
 
-    print("running task {} : {}".format(step, name))
-    print(grph)
-
     # step-specific operations
 
     if step == 'bootcalib':
-        print("inside bootcalib")
-        print(node)
+
         # The inputs to this step include *all* the arcs and flats for the
         # night.  Here we sort them into the list of arcs and the list of
         # flats, and simply choose the first one of each.
@@ -179,43 +163,68 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
                 arcs.append(input)
             elif inode['flavor'] == 'flat':
                 flats.append(input)
-        print(arcs)
-        print(flats)
         if len(arcs) == 0:
             raise RuntimeError("no arc images found!")
         if len(flats) == 0:
             raise RuntimeError("no flat images found!")
         firstarc = sorted(arcs)[0]
         firstflat = sorted(flats)[0]
-        print("arc = {}, flat = {}".format(firstarc, firstflat))
         # build list of options
         arcpath = graph_path_pix(rawdir, firstarc)
-        print(arcpath)
         flatpath = graph_path_pix(rawdir, firstflat)
-        print(flatpath)
         outpath = graph_path_psfboot(proddir, name)
-        print(outpath)
         qapath = qa_path(outpath)
-        print(qapath)
-        print("out = {}, qa = {}".format(outpath, qapath))
         options = {}
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
         options['qafile'] = qapath
         options['outfile'] = outpath
         options.update(opts)
-        print(options)
         optarray = option_list(options)
-        print(optarray)
         args = desispec.scripts.bootcalib.parse(optarray)
-        print(args)
         bootcalib.main(args)
 
     elif step == 'specex':
-        pass
+
+        # get input files
+        pix = []
+        boot = []
+        for input in node['in']:
+            inode = grph[input]
+            if inode['type'] == 'psfboot':
+                boot.append(input)
+            elif inode['type'] == 'pix':
+                pix.append(input)
+        if len(boot) != 1:
+            raise RuntimeError("specex needs exactly one psfboot file")
+        if len(pix) == 0:
+            raise RuntimeError("specex needs exactly one image file")
+        bootfile = graph_path_psfboot(proddir, boot[0])
+        imgfile = graph_path_pix(rawdir, pix[0])
+        outfile = graph_path_psf(proddir, name)
+        outdir = os.path.dirname(outfile)
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
+
+        specex.run_frame(imgfile, bootfile, outfile, opts, comm=comm)
+
+    elif step == 'psfcombine':
+
+        outfile = graph_path_psfnight(proddir, name)
+        infiles = []
+        for input in node['in']:
+            infiles.append(graph_path_psf(proddir, input))
+
+        com = ['specex_mean_psf.py']
+        com.extend(['--output', outfile])
+        com.extend(['--input'])
+        com.extend(infiles)
+        
+        sp.check_call(com)
 
     elif step == 'extract':
         pass
+
     
     elif step == 'fiberflat':
         pass
@@ -300,47 +309,57 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     # Now we divide up the tasks among the groups of processes as
     # equally as possible.
 
-    group_ntask = int(ntask / ngroup)
+    group_ntask = 0
     group_firsttask = 0
-    leftover = ntask % ngroup
-    if group < leftover:
-        group_ntask += 1
-        group_firsttask = group * group_ntask
+
+    if ntask < ngroup:
+        if group < ntask:
+            group_ntask = 1
+            group_firsttask = group
+        else:
+            group_ntask = 0
     else:
-        group_firsttask = ((group_ntask + 1) * leftover) + (group_ntask * (group - leftover))
+        group_ntask = int(ntask / ngroup)
+        leftover = ntask % ngroup
+        if group < leftover:
+            group_ntask += 1
+            group_firsttask = group * group_ntask
+        else:
+            group_firsttask = ((group_ntask + 1) * leftover) + (group_ntask * (group - leftover))
 
     # every group goes and does its tasks...
 
     faildir = os.path.join(proddir, 'failed')
 
-    for t in range(ntask):
-        if (t >= group_firsttask) and (t < group_firsttask + group_ntask):
+    if group_ntask > 0:
+        for t in range(group_firsttask, group_firsttask + group_ntask):
             # slice out just the graph for this task
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             pfile = os.path.join(faildir, "fail_{}_{}.pkl".format(step, tasks[t]))
 
-            try:
-                # if the step previously failed, clear that file now
-                if os.path.isfile(pfile):
-                    os.remove(pfile)
-                run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
-            except:
-                # The task threw an exception.  We want to dump all information
-                # that will be needed to re-run the run_task() function on just
-                # this task.
-                msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
-                log.error(msg)
-                fpkl = {}
-                fpkl['step'] = step
-                fpkl['rawdir'] = rawdir
-                fpkl['proddir'] = proddir
-                fpkl['task'] = tasks[t]
-                fpkl['graph'] = tgraph
-                fpkl['opts'] = options
-                fpkl['procs'] = taskproc
-                pfile = os.path.join(faildir, "fail_{}_{}.pkl".format(step, tasks[t]))
-                with open(pfile, 'wb') as p:
-                    pickle.dump(fpkl, p)
+            run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+            # try:
+            #     # if the step previously failed, clear that file now
+            #     if os.path.isfile(pfile):
+            #         os.remove(pfile)
+            #     run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+            # except:
+            #     # The task threw an exception.  We want to dump all information
+            #     # that will be needed to re-run the run_task() function on just
+            #     # this task.
+            #     msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
+            #     log.error(msg)
+            #     fpkl = {}
+            #     fpkl['step'] = step
+            #     fpkl['rawdir'] = rawdir
+            #     fpkl['proddir'] = proddir
+            #     fpkl['task'] = tasks[t]
+            #     fpkl['graph'] = tgraph
+            #     fpkl['opts'] = options
+            #     fpkl['procs'] = taskproc
+            #     pfile = os.path.join(faildir, "fail_{}_{}.pkl".format(step, tasks[t]))
+            #     with open(pfile, 'wb') as p:
+            #         pickle.dump(fpkl, p)
 
 
 def retry_task(failpath, newopts=None):

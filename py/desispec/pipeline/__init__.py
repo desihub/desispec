@@ -28,3 +28,5 @@ from .run import (pid_exists, subprocess_list, shell_job,
 	nersc_job, default_options, write_options, read_options, qa_path,
     finish_task, is_finished, run_task, run_step, retry_task,
     step_types)
+
+from .utils import option_list

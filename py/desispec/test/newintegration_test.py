@@ -100,7 +100,7 @@ def sim(night, nspec=5, clobber=False):
     return
 
 
-def integration_test(night=None, nspec=5, clobber=False):
+def integration_test(night=None, nspec=25, clobber=False):
     """Run an integration test from raw data simulations through redshifts
     
     Args:
@@ -118,7 +118,8 @@ def integration_test(night=None, nspec=5, clobber=False):
     # YEARMMDD string, rolls over at noon not midnight
     # TODO: fix usage of night to be something other than today
     if night is None:
-        night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
+        #night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
+        night = "20160726"
 
     # check for required environment variables
     check_env()
@@ -155,6 +156,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     if not os.path.isdir(expdir):
         os.makedirs(expdir)
 
+    expnight = os.path.join(expdir, night)
+    if not os.path.isdir(expnight):
+        os.makedirs(expnight)
+
     brkdir = os.path.join(proddir, 'bricks')
     if not os.path.isdir(brkdir):
         os.makedirs(brkdir)
@@ -180,7 +185,6 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     # FIXME:  We cannot currently run bootcalib on a subset of spectra.
     # For now, we symlink the spotgrid PSFs in place.
-
     for band in ['b', 'r', 'z']:
         for spec in range(10):
             cam = "{}{}".format(band, spec)
@@ -193,6 +197,28 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     # PSF estimation
 
+    # FIXME:  specex segfaults...
+    for expid in [0, 2]:
+        expdir = os.path.join(expnight, "{:08d}".format(expid))
+        if not os.path.isdir(expdir):
+            os.makedirs(expdir)
+        for band in ['b', 'r', 'z']:
+            for spec in range(1):
+                target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
+                lnk = os.path.join(expdir, "psf-{}{}-{:08d}.fits".format(band, spec, expid))
+                if not os.path.islink(lnk):
+                    os.symlink(target, lnk)
+    for band in ['b', 'r', 'z']:
+        for spec in range(1):
+            target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
+            lnk = os.path.join(calpsfnight, "psfnight-{}{}.fits".format(band, spec))
+            if not os.path.islink(lnk):
+                os.symlink(target, lnk)
+
+    #pipe.run_step('specex', rawdir, proddir, grph, opts)
+    #pipe.run_step('psfcombine', rawdir, proddir, grph, opts)
+
+    # Extraction
 
 
 

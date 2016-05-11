@@ -15,7 +15,7 @@ import desispec.io as io
 #- TODO: override log level to quiet down error messages that are supposed
 #- to be there from these tests
 
-class TestRunCmd(unittest.TestCase):
+class TestPipelineRun(unittest.TestCase):
 
     def setUp(self):
         self.uid = uuid4().hex
@@ -27,8 +27,42 @@ class TestRunCmd(unittest.TestCase):
         self.night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
         self.rawnightdir = os.path.join(self.testraw, self.night)
         os.mkdir(self.rawnightdir)
-        self.prodnightdir = os.path.join(self.testprod, self.night)
-        os.mkdir(self.prodnightdir)
+
+        self.cal2d = os.path.join(self.testprod, 'calib2d')
+        if not os.path.isdir(self.cal2d):
+            os.makedirs(self.cal2d)
+
+        self.calpsf = os.path.join(self.cal2d, 'psf')
+        if not os.path.isdir(self.calpsf):
+            os.makedirs(self.calpsf)
+
+        self.calpsfnight = os.path.join(self.calpsf, self.night)
+        if not os.path.isdir(self.calpsfnight):
+            os.makedirs(self.calpsfnight)
+
+        self.expdir = os.path.join(self.testprod, 'exposures')
+        if not os.path.isdir(self.expdir):
+            os.makedirs(self.expdir)
+
+        self.expnight = os.path.join(self.expdir, self.night)
+        if not os.path.isdir(self.expnight):
+            os.makedirs(self.expnight)
+
+        self.brkdir = os.path.join(self.testprod, 'bricks')
+        if not os.path.isdir(self.brkdir):
+            os.makedirs(self.brkdir)
+
+        self.logdir = os.path.join(self.testprod, 'logs')
+        if not os.path.isdir(self.logdir):
+            os.makedirs(self.logdir)
+
+        self.faildir = os.path.join(self.testprod, 'failed')
+        if not os.path.isdir(self.faildir):
+            os.makedirs(self.faildir)
+
+        self.scriptdir = os.path.join(self.testprod, 'scripts')
+        if not os.path.isdir(self.scriptdir):
+            os.makedirs(self.scriptdir)
 
         for expid in [0, 1]:
             fibermap = io.fibermap.empty_fibermap(10)
@@ -83,7 +117,7 @@ class TestRunCmd(unittest.TestCase):
 
     def test_failpkl(self):
         options = default_options()
-        run_step('bootcalib', self.testraw, self.testprod, self.grph, options)
+        #run_step('bootcalib', self.testraw, self.testprod, self.grph, options)
     
 
 #- This runs all test* functions in any TestCase class in this file

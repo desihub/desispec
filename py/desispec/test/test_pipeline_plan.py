@@ -15,7 +15,7 @@ import desispec.io as io
 #- TODO: override log level to quiet down error messages that are supposed
 #- to be there from these tests
 
-class TestPlanCmd(unittest.TestCase):
+class TestPipelinePlan(unittest.TestCase):
 
     def setUp(self):
         self.testraw = 'test-'+uuid4().hex
