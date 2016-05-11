@@ -67,7 +67,7 @@ def main(args):
     nwave = len(w)
     R1 = fits.getdata(args.files[0], 'RESOLUTION')
     ndiag = R1.shape[1]
-    hdr = fits.getheader(args[0])
+    hdr = fits.getheader(args.files[0])
 
     camera = hdr['CAMERA']     #- b0, r1, .. z9
     spectrograph = int(camera[1])
@@ -80,7 +80,7 @@ def main(args):
     fibermap = desispec.io.empty_fibermap(nspec, specmin=fibermin)
 
     #- Fill them!
-    for filename in args:
+    for filename in args.files :
         fx = fits.open(filename)
         xhdr = fx[0].header
         xflux = fx['FLUX'].data
