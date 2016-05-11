@@ -30,13 +30,15 @@ from .utils import *
 import desispec.scripts.bootcalib as bootcalib
 import desispec.scripts.specex as specex
 import desispec.scripts.extract as extract
+import desispec.scripts.fiberflat as fiberflat
 
 
 step_types = {
     'bootcalib' : ['psfboot'],
     'specex' : ['psf'],
     'psfcombine' : ['psfnight'],
-    'extract' : ['frame']
+    'extract' : ['frame'],
+    'fiberflat' : ['fiberflat']
 }
 
 
@@ -279,7 +281,22 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         extract.main_mpi(args, comm)
     
     elif step == 'fiberflat':
-        pass
+
+        if len(node['in']) != 1:
+            raise RuntimeError('fiberflat should have only one input frame')
+        framefile = graph_path_frame(proddir, node['in'][0])
+        outfile = graph_path_fiberflat(proddir, name)
+        qafile = qa_path(outfile)
+
+        options = {}
+        options['infile'] = framefile
+        options['qafile'] = qafile
+        options['outfile'] = outfile
+        options.update(opts)
+        optarray = option_list(options)
+
+        args = fiberflat.parse(optarray)
+        fiberflat.main(args)
     
     elif step == 'sky':
         pass
@@ -387,50 +404,48 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
         for t in range(group_firsttask, group_firsttask + group_ntask):
             # slice out just the graph for this task
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
-            pfile = os.path.join(faildir, "fail_{}_{}.pkl".format(step, tasks[t]))
+            ffile = os.path.join(faildir, "fail_{}_{}.yaml".format(step, tasks[t]))
 
-            run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
-            # try:
-            #     # if the step previously failed, clear that file now
-            #     if os.path.isfile(pfile):
-            #         os.remove(pfile)
-            #     run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
-            # except:
-            #     # The task threw an exception.  We want to dump all information
-            #     # that will be needed to re-run the run_task() function on just
-            #     # this task.
-            #     msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
-            #     log.error(msg)
-            #     fpkl = {}
-            #     fpkl['step'] = step
-            #     fpkl['rawdir'] = rawdir
-            #     fpkl['proddir'] = proddir
-            #     fpkl['task'] = tasks[t]
-            #     fpkl['graph'] = tgraph
-            #     fpkl['opts'] = options
-            #     fpkl['procs'] = taskproc
-            #     pfile = os.path.join(faildir, "fail_{}_{}.pkl".format(step, tasks[t]))
-            #     with open(pfile, 'wb') as p:
-            #         pickle.dump(fpkl, p)
+            try:
+                # if the step previously failed, clear that file now
+                if os.path.isfile(pfile):
+                    os.remove(pfile)
+                run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+            except:
+                # The task threw an exception.  We want to dump all information
+                # that will be needed to re-run the run_task() function on just
+                # this task.
+                msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
+                log.error(msg)
+                fyml = {}
+                fyml['step'] = step
+                fyml['rawdir'] = rawdir
+                fyml['proddir'] = proddir
+                fyml['task'] = tasks[t]
+                fyml['graph'] = tgraph
+                fyml['opts'] = options
+                fyml['procs'] = taskproc
+                with open(ffile, 'w') as f:
+                    yaml.dump(fyml, f, default_flow_style=False)
 
 
 def retry_task(failpath, newopts=None):
     log = get_logger()
 
     if not os.path.isfile(failpath):
-        raise RuntimeError("failure pickle file {} does not exist".format(failpath))
+        raise RuntimeError("failure yaml file {} does not exist".format(failpath))
 
-    fpkl = None
-    with open(failpath, 'rb') as p:
-        fpkl = pickle.load(p)
+    fyml = None
+    with open(failpath, 'r') as f:
+        fyml = yaml.load(f)
 
-    step = fpkl['step']
-    rawdir = fpkl['rawdir']
-    proddir = fpkl['proddir']
-    name = fpkl['task']
-    grph = fpkl['graph']
-    origopts = fpkl['opts']
-    nproc = fpkl['procs']
+    step = fyml['step']
+    rawdir = fyml['rawdir']
+    proddir = fyml['proddir']
+    name = fyml['task']
+    grph = fyml['graph']
+    origopts = fyml['opts']
+    nproc = fyml['procs']
 
     comm = None
     if nproc > 1:

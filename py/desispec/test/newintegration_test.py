@@ -225,6 +225,10 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     pipe.run_step('extract', rawdir, proddir, grph, opts)
 
+    # Fiber flats
+
+    pipe.run_step('fiberflat', rawdir, proddir, grph, opts)
+
 
     # #-----
     # #- Fiber flat
