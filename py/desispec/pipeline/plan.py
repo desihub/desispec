@@ -399,6 +399,7 @@ def graph_night(rawdir, rawnight):
                 flatid = fid
             elif (fid > flatid) and (fid < id):
                 flatid = fid
+        fmname = graph_name(rawnight, "fibermap-{:08d}".format(id))
         starname = graph_name(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
         flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
@@ -407,7 +408,7 @@ def graph_night(rawdir, rawnight):
         node['band'] = band
         node['spec'] = spec
         node['id'] = id
-        node['in'] = [skyname, name, flatname]
+        node['in'] = [skyname, name, flatname, fmname]
         node['out'] = []
         grph[starname] = node
         nd['out'].append(starname)

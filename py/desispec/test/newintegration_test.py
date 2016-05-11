@@ -233,27 +233,10 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     pipe.run_step('sky', rawdir, proddir, grph, opts)
 
+    # Fit standard stars
 
+    pipe.run_step('stdstars', rawdir, proddir, grph, opts)
 
-    # #-----
-    # #- Fit standard stars
-    # if 'STD_TEMPLATES' in os.environ:
-    #     std_templates = os.getenv('STD_TEMPLATES')
-    # else:
-    #     std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'
-
-    # stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
-    # cmd = """desi_fit_stdstars --spectrograph 0 \
-    #   --fibermap {fibermap} \
-    #   --fiberflatexpid {flat_expid} \
-    #   --models {std_templates} --outfile {stdstars}""".format(
-    #     flat_expid=flat_expid, fibermap=fibermap, std_templates=std_templates,
-    #     stdstars=stdstarfile)
-
-    # inputs = [fibermap, std_templates]
-    # outputs = [stdstarfile,]
-    # if runcmd(cmd, inputs, outputs, clobber) != 0:
-    #     raise RuntimeError('fitting stdstars failed')
 
 
     # #-----

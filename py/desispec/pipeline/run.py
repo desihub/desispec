@@ -31,6 +31,8 @@ import desispec.scripts.bootcalib as bootcalib
 import desispec.scripts.specex as specex
 import desispec.scripts.extract as extract
 import desispec.scripts.fiberflat as fiberflat
+import desispec.scripts.sky as sky
+import desispec.scripts.stdstars as stdstars
 
 
 step_types = {
@@ -82,7 +84,9 @@ def default_options():
 
     allopts['sky'] = {}
 
-    allopts['stdstars'] = {}
+    opts = {}
+    opts['models'] = '/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+    allopts['stdstars'] = opts
 
     allopts['fluxcal'] = {}
 
@@ -345,7 +349,58 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
             sky.main(args)
     
     elif step == 'stdstars':
-        pass
+
+        # This code is "different" from the other post-extraction
+        # ones.  Instead of taking explicit paths to the frame and
+        # sky files, it looks them up from the exposure ID.  It 
+        # should be changed to make it consistent...
+
+        frm = []
+        flat = []
+        sky = []
+        fm = []
+        flatexp = None
+        specgrph = None
+        for input in node['in']:
+            inode = grph[input]
+            if inode['type'] == 'frame':
+                frm.append(input)
+                specgrph = inode['spec']
+            elif inode['type'] == 'fiberflat':
+                flat.append(input)
+                flatexp = inode['id']
+            elif inode['type'] == 'sky':
+                sky.append(input)
+            elif inode['type'] == 'fibermap':
+                fm.append(input)
+        if len(frm) != 1:
+            raise RuntimeError("stdstars needs exactly one frame file")
+        if len(flat) != 1:
+            raise RuntimeError("stdstars needs exactly one fiberflat file")
+        if len(sky) != 1:
+            raise RuntimeError("stdstars needs exactly one sky file")
+        if len(fm) != 1:
+            raise RuntimeError("stdstars needs exactly one fibermap file")
+
+        fmfile = graph_path_fibermap(rawdir, fm[0])
+        framefile = graph_path_frame(proddir, frm[0])
+        flatfile = graph_path_fiberflat(proddir, flat[0])
+        skyfile = graph_path_sky(proddir, sky[0])
+        outfile = graph_path_stdstars(proddir, name)
+        qafile = qa_path(outfile)
+
+        options = {}
+        options['spectrograph'] = specgrph
+        options['fiberflatexpid'] = flatexp
+        options['fibermap'] = fmfile
+        options['outfile'] = outfile
+        options.update(opts)
+        optarray = option_list(options)
+
+        args = stdstars.parse(optarray)
+
+        if rank == 0:
+            stdstars.main(args)
     
     elif step == 'fluxcal':
         pass
