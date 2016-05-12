@@ -22,13 +22,13 @@ def parse(options=None):
     default_nproc = max(1, multiprocessing.cpu_count() // 2)
 
     parser = argparse.ArgumentParser(description="Fit redshifts and classifications on bricks.")
-    parser.add_argument("-b", "--brick", type=str, required=True,
+    parser.add_argument("-b", "--brick", type=str, required=False,
         help="input brickname")
     parser.add_argument("-n", "--nspec", type=int, required=False,
         help="number of spectra to fit [default: all]")
     parser.add_argument("-o", "--outfile", type=str, required=False,
         help="output file name")
-    parser.add_argument(      "--objtype", type=str, required=False,
+    parser.add_argument("--objtype", type=str, required=False,
         help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
     parser.add_argument("--zspec", action="store_true",
         help="also include spectra in output file")
@@ -65,13 +65,13 @@ def main(args) :
     brick = dict()
     if args.brick is not None:
         if len(args.brickfiles) != 0:
-            log.error('Give -b/--brick or input brickfiles but not both')
-            sys.exit(1)
-            
+            raise RuntimeError('Give -b/--brick or input brickfiles but not both')            
         for channel in ('b', 'r', 'z'):
             filename = io.findfile('brick', band=channel, brickname=args.brick)
             brick[channel] = io.Brick(filename)
     else:
+        if len(args.brickfiles) != 3:
+            raise RuntimeError('Exactly 3 brickfiles should be given, or use --brick')
         for filename in args.brickfiles:
             bx = io.Brick(filename)
             if bx.channel not in brick:
