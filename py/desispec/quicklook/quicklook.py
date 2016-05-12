@@ -25,7 +25,7 @@ def testconfig(outfilename="qlconfig.yaml"):
           'Period':5.0, # Heartbeat Period (Secs)
           'Timeout': 120.0, # Heartbeat Timeout (Secs)
           'DumpIntermediates':False, # whether to dump output of each step
-          'FiberFlatFrame':os.environ['FIBERFLATFRAME'], # path to fiber flat frame
+          'FiberFlatFile':os.environ['FIBERFLATFILE'], # path to fiber flat field file
           'FiberFlatImage':os.environ['FIBERFLATIMAGE'], # for psf calibration
           'ArcLampImage':os.environ['ARCLAMPIMAGE'], # for psf calibration
           'SkyFile':os.environ['SKYFILE'], # path to Sky file
@@ -93,31 +93,58 @@ def testconfig(outfilename="qlconfig.yaml"):
                        "StepName":"Preprocessing-Pixel Flattening",
                        "OutputFile":"QA_pixelflattening.yaml"
                        },
-                      {'PA':{"ModuleName":"desispec.procalgs",
-                             "ClassName":"BoxcarExtraction",
-                             "Name":"Boxcar Extraction",
-                             "kwargs":{"PSFFile":"%%PSFFile",
-                                       "BoxWidth":2.5,
-                                       "DeltaW":0.5,
-                                       "Nspec":500
-                                       }
-                             },
-                       'QAs':[],
-                       "StepName":"Boxcar Extration",
-                       "OutputFile":"QA_boxcarextraction.yaml"
-                      # },
                       #{'PA':{"ModuleName":"desispec.procalgs",
-                      #       "ClassName":"Extraction_2d",
-                      #       "Name":"2D Extraction",
-                      #       "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
-                      #                 "Nspec":10,
-                      #                 "Wavelength": "5630,7740,0.5"
+                      #       "ClassName":"BoxcarExtraction",
+                      #       "Name":"Boxcar Extraction",
+                      #       "kwargs":{"PSFFile":"%%PSFFile",
+                      #                 "BoxWidth":2.5,
+                      #                 "DeltaW":0.5,
+                      #                 "Nspec":500
                       #                 }
                       #       },
                       # 'QAs':[],
-                      # "StepName":"2D Extraction",
-                      # "OutputFile":"extraction.yaml"
-                       }
+                      # "StepName":"Boxcar Extration",
+                      # "OutputFile":"QA_boxcarextraction.yaml"
+                      # },
+                      {'PA':{"ModuleName":"desispec.procalgs",
+                             "ClassName":"Extraction_2d",
+                             "Name":"2D Extraction",
+                             "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
+                                       "Nspec":10,
+                                       "Wavelength": "5630,7740,0.5",
+                                       "FiberMap":"%%FiberMap" #need this for qa_skysub downstream as well.
+                                       }
+                             },
+                       'QAs':[],
+                       "StepName":"2D Extraction",
+                       "OutputFile":"2dextraction_QA.yaml"
+                       },
+                      {'PA':{"ModuleName":"desispec.procalgs",
+                             "ClassName": "ApplyFiberFlat",
+                             "Name": "Apply Fiberflat",
+                             "kwargs":{"FiberFlatFile":"%%FiberFlatFile"
+                                      }
+                             },
+                       'QAs':[],
+                       "StepName":"Apply Fiberflat",
+                       "Outputfile":"apply_fiberflat_QA.yaml"
+                      },
+                      {'PA':{"ModuleName":"desispec.procalgs",
+                             "ClassName":"SubtractSky",
+                             "Name": "Sky Subtraction",
+                             "kwargs":{"SkyFile":"%%SkyFile"
+                                      }
+                             },
+                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
+                               "ClassName":"Calculate_SNR",
+                               "Name":"Calculate Signal-to-Noise ratio",
+                               "kwargs":{'SkyFile':"%%SkyFile"
+                                        }
+                               }
+                             ],
+                       "StepName": "Sky Subtraction",
+                       "OutputFile":"sky_subtraction_QA.yaml"
+                      }                       
                       ]
           }
     
@@ -295,10 +322,10 @@ def setup_pipeline(config):
     if "ArcLampImage" in config:
         arclampimagefile=config["ArcLampImage"]
 
-    fiberflatframefile=None
-    fiberflatframe=None
-    if "FiberFlatFrame" in config:
-        fiberflatframefile=config["FiberFlatFrame"]
+    fiberflatfile=None
+    fiberflat=None
+    if "FiberFlatFile" in config:
+        fiberflatfile=config["FiberFlatFile"]
 
     skyfile=None
     skyimage=None
@@ -346,10 +373,10 @@ def setup_pipeline(config):
         arclampimage=imIO.read_image(arclampimagefile)
         convdict["ArcLampImage"]=arclampimage
 
-    if fiberflatframefile: 
-        hbeat.start("Reading FiberFlat frame %s"%fiberflatframefile)
-        fiberflatframe=ffIO.read_fiberflat(fiberflatframefile)
-        convdict["FiberFlatFrame"]=fiberflatframe
+    if fiberflatfile: 
+        hbeat.start("Reading FiberFlat %s"%fiberflatfile)
+        fiberflat=ffIO.read_fiberflat(fiberflatfile)
+        convdict["FiberFlatFile"]=fiberflat
 
     if skyfile:
         hbeat.start("Reading SkyModel file %s"%skyfile)

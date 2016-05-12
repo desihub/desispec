@@ -217,26 +217,26 @@ class Calculate_SNR(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        return self.calculate_snr(args[0])
+        if "SkyFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need Skymodel file")
+        input_frame=args[0]
+        skymodel=kwargs["SkyFile"]
+
+        return self.run_qa(input_frame,skymodel)
+
+    def run_qa(self,input_frame,skymodel):
+        from desispec.sky import qa_skysub
+
+        #- parameters (adopting from offline qa)
+        sky_dict={'PCHI_RESID': 0.05, 'PER_RESID': 95.0}
+        qadict=qa_skysub(sky_dict,input_frame,skymodel)
+
+        #- return values with expert level
+        retval={}
+        retval["VALUE"]={"Median SNR":qadict['MED_SNR'],"Total SNR":qadict['TOT_SNR']}
+        retval["EXPERT_LEVEL"]={"EXPERT LEVEL":"OBSERVER"}
+        return retval
+
     def get_default_config(self):
         return {}
 
-    def calculate_snr(self,frame): #on the extracted frame extraction
-        """ input is desispec.frame like object
-        output: median of S/N (bin) for each fiber
-        total snr calculated considering bin by bin uncorrelated S/N 
-        """
-        flux=frame.flux
-        wave=frame.wave
-        ivar=frame.ivar
-        medsnr=np.zeros(flux.shape[0])
-        snrtot=np.zeros(flux.shape[0])
-        for ii in range(flux.shape[0]):
-            signalmask=flux[ii,:]>0
-            snr=flux[ii,signalmask]*np.sqrt(ivar[ii,signalmask]) # actually flux should be sky subtracted for true S/N?
-            medsnr[ii]=np.median(snr)
-            snrtot[ii]=np.sqrt(np.sum(snr**2))
-        retval={}
-        retval["VALUE"]={"Median SNR":medsnr,"Total SNR":snrtot}
-        retval["EXPERT_LEVEL"]={"EXPERT LEVEL":"OBSERVER"}
-        return retval
