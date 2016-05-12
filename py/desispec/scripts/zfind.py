@@ -70,8 +70,6 @@ def main(args) :
             filename = io.findfile('brick', band=channel, brickname=args.brick)
             brick[channel] = io.Brick(filename)
     else:
-        if len(args.brickfiles) != 3:
-            raise RuntimeError('Exactly 3 brickfiles should be given, or use --brick')
         for filename in args.brickfiles:
             bx = io.Brick(filename)
             if bx.channel not in brick:
