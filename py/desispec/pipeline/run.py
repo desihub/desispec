@@ -33,6 +33,8 @@ import desispec.scripts.extract as extract
 import desispec.scripts.fiberflat as fiberflat
 import desispec.scripts.sky as skypkg
 import desispec.scripts.stdstars as stdstars
+import desispec.scripts.fluxcalibration as fluxcal
+import desispec.scripts.procexp as procexp
 
 
 step_types = {
@@ -42,7 +44,9 @@ step_types = {
     'extract' : ['frame'],
     'fiberflat' : ['fiberflat'],
     'sky' : ['sky'],
-    'stdstars' : ['stdstars']
+    'stdstars' : ['stdstars'],
+    'fluxcal' : ['calib'],
+    'procexp' : ['cframe']
 }
 
 
@@ -390,10 +394,98 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
             stdstars.main(args)
     
     elif step == 'fluxcal':
-        pass
+
+        frm = []
+        flat = []
+        sky = []
+        star = []
+        for input in node['in']:
+            inode = grph[input]
+            if inode['type'] == 'frame':
+                frm.append(input)
+            elif inode['type'] == 'fiberflat':
+                flat.append(input)
+            elif inode['type'] == 'sky':
+                sky.append(input)
+            elif inode['type'] == 'stdstars':
+                star.append(input)
+        if len(frm) != 1:
+            raise RuntimeError("fluxcal needs exactly one frame file")
+        if len(flat) != 1:
+            raise RuntimeError("fluxcal needs exactly one fiberflat file")
+        if len(sky) != 1:
+            raise RuntimeError("fluxcal needs exactly one sky file")
+        if len(star) != 1:
+            raise RuntimeError("fluxcal needs exactly one star file")
+
+        framefile = graph_path_frame(proddir, frm[0])
+        flatfile = graph_path_fiberflat(proddir, flat[0])
+        skyfile = graph_path_sky(proddir, sky[0])
+        starfile = graph_path_stdstars(proddir, star[0])
+        outfile = graph_path_calib(proddir, name)
+        qafile = qa_path(outfile)
+
+        options = {}
+        options['infile'] = framefile
+        options['fiberflat'] = flatfile
+        options['qafile'] = qafile
+        options['sky'] = skyfile
+        options['models'] = starfile
+        options['outfile'] = outfile
+        options.update(opts)
+        optarray = option_list(options)
+
+        args = fluxcal.parse(optarray)
+
+        if rank == 0:
+            fluxcal.main(args)
     
     elif step == 'procexp':
-        pass
+        
+        frm = []
+        flat = []
+        sky = []
+        cal = []
+        for input in node['in']:
+            inode = grph[input]
+            if inode['type'] == 'frame':
+                frm.append(input)
+            elif inode['type'] == 'fiberflat':
+                flat.append(input)
+            elif inode['type'] == 'sky':
+                sky.append(input)
+            elif inode['type'] == 'calib':
+                cal.append(input)
+        if len(frm) != 1:
+            raise RuntimeError("procexp needs exactly one frame file")
+        if len(flat) != 1:
+            raise RuntimeError("procexp needs exactly one fiberflat file")
+        if len(sky) != 1:
+            raise RuntimeError("procexp needs exactly one sky file")
+        if len(cal) != 1:
+            raise RuntimeError("procexp needs exactly one calib file")
+
+        framefile = graph_path_frame(proddir, frm[0])
+        flatfile = graph_path_fiberflat(proddir, flat[0])
+        skyfile = graph_path_sky(proddir, sky[0])
+        calfile = graph_path_calib(proddir, cal[0])
+        outfile = graph_path_cframe(proddir, name)
+        qafile = qa_path(outfile)
+
+        options = {}
+        options['infile'] = framefile
+        options['fiberflat'] = flatfile
+        #options['qafile'] = qafile
+        options['sky'] = skyfile
+        options['calib'] = calfile
+        options['outfile'] = outfile
+        options.update(opts)
+        optarray = option_list(options)
+
+        args = procexp.parse(optarray)
+
+        if rank == 0:
+            procexp.main(args)
     
     elif step == 'makebricks':
         pass

@@ -247,40 +247,14 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     pipe.run_step('stdstars', rawdir, proddir, grph, opts)
 
+    # Flux calibration
 
+    pipe.run_step('fluxcal', rawdir, proddir, grph, opts)
 
-    # #-----
-    # #- Flux calibration
-    # for channel in ['b', 'r', 'z']:
-    #     camera = channel+"0"
-    #     framefile = io.findfile('frame', night, expid, camera)
-    #     fibermap  = io.findfile('fibermap', night, expid)
-    #     fiberflat = io.findfile('fiberflat', night, flat_expid, camera)
-    #     skyfile   = io.findfile('sky', night, expid, camera)
-    #     calibfile = io.findfile('calib', night, expid, camera)
+    # Process exposure into calibrated frame
 
-    #     #- Compute flux calibration vector
-    #     cmd = """desi_compute_fluxcalibration \
-    #       --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --sky {sky} \
-    #       --models {stdstars} --outfile {calib}""".format(
-    #         frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile,
-    #         stdstars=stdstarfile, calib=calibfile,
-    #         )
-    #     inputs = [framefile, fibermap, fiberflat, skyfile, stdstarfile]
-    #     outputs = [calibfile,]
-    #     if runcmd(cmd, inputs, outputs, clobber) != 0:
-    #         raise RuntimeError('flux calibration failed for '+camera)
+    pipe.run_step('procexp', rawdir, proddir, grph, opts)
 
-    #     #- Apply the flux calibration to write a cframe file
-    #     cframefile = io.findfile('cframe', night, expid, camera)
-    #     cmd = """desi_process_exposure \
-    #       --infile {frame} --fiberflat {fiberflat} --sky {sky} --calib {calib} \
-    #       --outfile {cframe}""".format(frame=framefile, fibermap=fibermap,
-    #         fiberflat=fiberflat, sky=skyfile, calib=calibfile, cframe=cframefile)
-    #     inputs = [framefile, fiberflat, skyfile, calibfile]
-    #     outputs = [cframefile, ]
-    #     if runcmd(cmd, inputs, outputs, clobber) != 0:
-    #         raise RuntimeError('combining calibration steps failed for '+camera)
 
     # #-----
     # #- Bricks
