@@ -30,27 +30,50 @@ def _parse_sec_keyword(value):
         
     return np.s_[ymin-1:ymax, xmin-1:xmax]
 
-def _overscan(pix, sigma=5, niter=3):
+def _clipped_std_bias(nsigma):
+    '''
+    Returns the bias on the standard deviation of a sigma-clipped dataset
+
+    Divide by the returned bias to get a corrected value
+
+    a = nsigma
+    bias = sqrt((integrate x^2 exp(-x^2/2), x=-a..a) / (integrate exp(-x^2/2), x=-a..a))
+         = sqrt(1 - 2a exp(-a^2/2) / (sqrt(2pi) erf(a/sqrt(2))))
+
+    See http://www.wolframalpha.com/input/?i=(integrate+x%5E2+exp(-x%5E2%2F2),+x+%3D+-a+to+a)+%2F+(integrate+exp(-x%5E2%2F2),+x%3D-a+to+a)
+    '''
+    from scipy.special import erf
+    a = float(nsigma)
+    stdbias = np.sqrt(1 - 2*a*np.exp(-a**2/2.) / (np.sqrt(2*np.pi) * erf(a/np.sqrt(2))))
+    return stdbias
+
+def _overscan(pix, nsigma=5, niter=3):
     '''
     returns overscan, readnoise from overscan image pixels
-    
+
+    Args:
+        pix (ndarray) : overscan pixels from CCD image
+
     Optional:
-        sigma : sigma clipping parameter for mean calculation
-        niter : number of iterative refits
+        nsigma (float) : number of standard deviations for sigma clipping
+        niter (int) : number of iterative refits
     '''
     #- normalized median absolute deviation as robust version of RMS
     #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
     overscan = np.median(pix)
     absdiff = np.abs(pix - overscan)
     readnoise = 1.4826*np.median(absdiff)
-    
+
     #- input pixels are integers, so iteratively refit
     for i in range(niter):
         absdiff = np.abs(pix - overscan)
-        good = absdiff < sigma*readnoise
+        good = absdiff < nsigma*readnoise
         overscan = np.mean(pix[good])
         readnoise = np.std(pix[good])
-    
+
+    #- correct for bias from sigma clipping
+    readnoise /= _clipped_std_bias(nsigma)
+
     return overscan, readnoise
 
 def preproc(rawimage, header, bias=False, pixflat=False, mask=False):

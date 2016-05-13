@@ -6,7 +6,7 @@ from astropy.io import fits
 import numpy as np
 
 import desispec.scripts.preproc
-from desispec.preproc import preproc, _parse_sec_keyword
+from desispec.preproc import preproc, _parse_sec_keyword, _clipped_std_bias
 from desispec import io
 
 def xy2hdr(xyslice):
@@ -270,6 +270,16 @@ class TestPreProc(unittest.TestCase):
         desispec.scripts.preproc.main(args)
         img = io.read_image(self.pixfile)        
         self.assertEqual(img.pix.shape, (2*self.ny, 2*self.nx))
+
+    def test_clipped_std_bias(self):
+        '''Compare to www.wolframalpha.com integrals'''
+        self.assertAlmostEqual(_clipped_std_bias(1), 0.53956, places=5)
+        self.assertAlmostEqual(_clipped_std_bias(2), 0.879626, places=6)
+        self.assertAlmostEqual(_clipped_std_bias(3), 0.986578, places=6)
+        np.random.seed(1)
+        x = np.random.normal(size=1000000)
+        biased_std = np.std(x[np.abs(x)<3])
+        self.assertAlmostEqual(biased_std, _clipped_std_bias(3), places=3)
 
     #- Not implemented yet, but flag these as expectedFailures instead of
     #- successful tests of raising NotImplementedError
