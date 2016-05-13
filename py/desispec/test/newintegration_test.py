@@ -176,6 +176,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     # get the dependency graph for this night
     grph = pipe.graph_night(rawdir, night)
 
+    with open(os.path.join(proddir, "plan_{}.dot".format(night)), 'w') as f:
+        pipe.graph_dot(grph, f)
+    pipe.graph_write(os.path.join(proddir, "plan_{}.yaml".format(night)), grph)
+
     # Now we perform all pipeline steps with a single process.
 
     # get default options, and modify to restrict the range of spectra
@@ -183,6 +187,12 @@ def integration_test(night=None, nspec=5, clobber=False):
     opts = pipe.default_options()
     opts['extract']['specmin'] = 0
     opts['extract']['nspec'] = nspec
+
+    optdump = os.path.join(proddir, "options.yaml")
+    if not os.path.isfile(optdump):
+        pipe.write_options(optdump, opts)
+
+    opts = pipe.read_options(optdump)
 
     # bootcalib
 

@@ -382,7 +382,10 @@ def graph_night(rawdir, rawnight):
         nd['out'].append(skyname)
         grph[flatname]['out'].append(skyname)
 
-    # Construct the standard star files.
+    # Construct the standard star files.  These are one per spectrograph,
+    # and depend on the frames and the corresponding flats and sky files.
+
+    stdgrph = {}
 
     for name, nd in grph.items():
         if nd['type'] != 'frame':
@@ -392,6 +395,20 @@ def graph_night(rawdir, rawnight):
         band = nd['band']
         spec = nd['spec']
         id = nd['id']
+
+        starname = graph_name(rawnight, "stdstars-{}-{:08d}".format(spec, id))
+        # does this spectrograph exist yet in the graph?
+        if starname not in stdgrph.keys():
+            fmname = graph_name(rawnight, "fibermap-{:08d}".format(id))
+            grph[fmname]['out'].append(starname)
+            node = {}
+            node['type'] = 'stdstars'
+            node['spec'] = spec
+            node['id'] = id
+            node['in'] = [fmname]
+            node['out'] = []
+            stdgrph[starname] = node
+
         cam = "{}{}".format(band, spec)
         flatid = None
         for fid in sorted(flatexpid[cam]):
@@ -399,21 +416,17 @@ def graph_night(rawdir, rawnight):
                 flatid = fid
             elif (fid > flatid) and (fid < id):
                 flatid = fid
-        fmname = graph_name(rawnight, "fibermap-{:08d}".format(id))
-        starname = graph_name(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
+                
         flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        node = {}
-        node['type'] = 'stdstars'
-        node['band'] = band
-        node['spec'] = spec
-        node['id'] = id
-        node['in'] = [skyname, name, flatname, fmname]
-        node['out'] = []
-        grph[starname] = node
+
+        stdgrph[starname]['in'].extend([skyname, name, flatname])
+
         nd['out'].append(starname)
         grph[flatname]['out'].append(starname)
         grph[skyname]['out'].append(starname)
+
+    grph.update(stdgrph)
 
     # Construct calibration files
 
@@ -433,7 +446,7 @@ def graph_night(rawdir, rawnight):
             elif (fid > flatid) and (fid < id):
                 flatid = fid
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        starname = graph_name(rawnight, "stdstars-{}{}-{:08d}".format(band, spec, id))
+        starname = graph_name(rawnight, "stdstars-{}-{:08d}".format(spec, id))
         flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         calname = graph_name(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
         node = {}
@@ -573,7 +586,7 @@ def graph_path_fiberflat(proddir, name):
     night = mat.group(1)
     cam = mat.group(2)
     expid = mat.group(3)
-    dir = os.path.join(proddir, 'exposures', night, expid)
+    dir = os.path.join(proddir, 'calib2d', night)
     path = os.path.join(dir, "fiberflat-{}-{}.fits".format(cam, expid))
     return path
 
@@ -593,16 +606,16 @@ def graph_path_sky(proddir, name):
 
 
 def graph_path_stdstars(proddir, name):
-    patstr = "([0-9]{{8}}){}stdstars-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
+    patstr = "([0-9]{{8}}){}stdstars-([0-9])-([0-9]{{8}})".format(_graph_sep)
     pat = re.compile(patstr)
     mat = pat.match(name)
     if mat is None:
         raise RuntimeError("{} is not a valid standard star name".format(name))
     night = mat.group(1)
-    cam = mat.group(2)
+    spec = mat.group(2)
     expid = mat.group(3)
     dir = os.path.join(proddir, 'exposures', night, expid)
-    path = os.path.join(dir, "stdstars-{}-{}.fits".format(cam, expid))
+    path = os.path.join(dir, "stdstars-{}-{}.fits".format(spec, expid))
     return path
 
 

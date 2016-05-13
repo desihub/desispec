@@ -31,7 +31,7 @@ import desispec.scripts.bootcalib as bootcalib
 import desispec.scripts.specex as specex
 import desispec.scripts.extract as extract
 import desispec.scripts.fiberflat as fiberflat
-import desispec.scripts.sky as sky
+import desispec.scripts.sky as skypkg
 import desispec.scripts.stdstars as stdstars
 
 
@@ -41,7 +41,8 @@ step_types = {
     'psfcombine' : ['psfnight'],
     'extract' : ['frame'],
     'fiberflat' : ['fiberflat'],
-    'sky' : ['sky']
+    'sky' : ['sky'],
+    'stdstars' : ['stdstars']
 }
 
 
@@ -343,17 +344,12 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options.update(opts)
         optarray = option_list(options)
 
-        args = sky.parse(optarray)
+        args = skypkg.parse(optarray)
 
         if rank == 0:
-            sky.main(args)
+            skypkg.main(args)
     
     elif step == 'stdstars':
-
-        # This code is "different" from the other post-extraction
-        # ones.  Instead of taking explicit paths to the frame and
-        # sky files, it looks them up from the exposure ID.  It 
-        # should be changed to make it consistent...
 
         frm = []
         flat = []
@@ -373,19 +369,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
                 sky.append(input)
             elif inode['type'] == 'fibermap':
                 fm.append(input)
-        if len(frm) != 1:
-            raise RuntimeError("stdstars needs exactly one frame file")
-        if len(flat) != 1:
-            raise RuntimeError("stdstars needs exactly one fiberflat file")
-        if len(sky) != 1:
-            raise RuntimeError("stdstars needs exactly one sky file")
         if len(fm) != 1:
             raise RuntimeError("stdstars needs exactly one fibermap file")
 
         fmfile = graph_path_fibermap(rawdir, fm[0])
-        framefile = graph_path_frame(proddir, frm[0])
-        flatfile = graph_path_fiberflat(proddir, flat[0])
-        skyfile = graph_path_sky(proddir, sky[0])
         outfile = graph_path_stdstars(proddir, name)
         qafile = qa_path(outfile)
 
@@ -504,27 +491,29 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             ffile = os.path.join(faildir, "fail_{}_{}.yaml".format(step, tasks[t]))
 
-            try:
-                # if the step previously failed, clear that file now
-                if os.path.isfile(pfile):
-                    os.remove(pfile)
-                run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
-            except:
-                # The task threw an exception.  We want to dump all information
-                # that will be needed to re-run the run_task() function on just
-                # this task.
-                msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
-                log.error(msg)
-                fyml = {}
-                fyml['step'] = step
-                fyml['rawdir'] = rawdir
-                fyml['proddir'] = proddir
-                fyml['task'] = tasks[t]
-                fyml['graph'] = tgraph
-                fyml['opts'] = options
-                fyml['procs'] = taskproc
-                with open(ffile, 'w') as f:
-                    yaml.dump(fyml, f, default_flow_style=False)
+            run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+
+            # try:
+            #     # if the step previously failed, clear that file now
+            #     if os.path.isfile(ffile):
+            #         os.remove(ffile)
+            #     run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+            # except:
+            #     # The task threw an exception.  We want to dump all information
+            #     # that will be needed to re-run the run_task() function on just
+            #     # this task.
+            #     msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
+            #     log.error(msg)
+            #     fyml = {}
+            #     fyml['step'] = step
+            #     fyml['rawdir'] = rawdir
+            #     fyml['proddir'] = proddir
+            #     fyml['task'] = tasks[t]
+            #     fyml['graph'] = tgraph
+            #     fyml['opts'] = options
+            #     fyml['procs'] = taskproc
+            #     with open(ffile, 'w') as f:
+            #         yaml.dump(fyml, f, default_flow_style=False)
 
     if comm is not None:
         comm.barrier()
