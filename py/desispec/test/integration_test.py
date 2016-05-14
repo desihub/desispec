@@ -251,7 +251,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     # ztruth QA
     qafile = io.findfile('qa_ztruth', night)
     qafig = io.findfile('qa_ztruth_fig', night)
-    cmd = "desi_qa_zfind --night {night} --qafile {qafile} --qafig {qafig}".format(
+    cmd = "desi_qa_zfind --night {night} --qafile {qafile} --qafig {qafig} --verbose".format(
         night=night, qafile=qafile, qafig=qafig)
     inputs = []
     outputs = [qafile, qafig]
