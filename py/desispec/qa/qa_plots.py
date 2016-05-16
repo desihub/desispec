@@ -11,6 +11,7 @@ import pdb
 from desispec import fluxcalibration as dsflux
 
 import matplotlib
+matplotlib.use('agg')
 from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 
