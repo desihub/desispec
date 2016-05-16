@@ -140,10 +140,25 @@ def main():
     # the state of all nodes.
 
     for st in range(firststep, laststep):
+        runfile = None
+        jobid = None
+        if rank == 0:
+            log.info("starting step {}".format(allsteps[st]))
+            if 'SLURM_JOBID' in os.environ.keys():
+                jobid = os.environ['SLURM_JOBID']
+            else:
+                jobid = os.getpid()
+            runfile = os.path.join(rundir, "running_{}_{}".format(allsteps[st], jobid))
+            with open(runfile, 'w') as f:
+                f.write("")
         pipe.run_step(allsteps[st], rawdir, proddir, grph, opts, comm=comm, taskproc=steptaskproc[st])
         if comm is not None:
             comm.barrier()
         if rank == 0:
+            outgrph = os.path.join(rundir, "done_{}_{}.yaml".format(allsteps[st], jobid))
+            pipe.graph_write(outgrph, grph)
+            if os.path.isfile(runfile):
+                os.remove(runfile)
             log.info("completed step {}".format(allsteps[st]))
 
 
