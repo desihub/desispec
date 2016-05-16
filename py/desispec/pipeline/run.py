@@ -37,6 +37,19 @@ import desispec.scripts.fluxcalibration as fluxcal
 import desispec.scripts.procexp as procexp
 
 
+run_steps = [
+    'bootcalib',
+    'specex',
+    'psfcombine',
+    'extract',
+    'fiberflat',
+    'sky',
+    'stdstars',
+    'fluxcal',
+    'procexp'
+]
+
+
 step_types = {
     'bootcalib' : ['psfboot'],
     'specex' : ['psf'],
@@ -510,7 +523,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
 
     print("step {} with {} procs".format(step, nproc))
 
-    # Get the tasks that need to be done for this step.
+    # Get the tasks that need to be done for this step.  Mark all completed
+    # tasks as done.
 
     tasks = None
     if rank == 0:
@@ -523,11 +537,14 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
         # For each task, prune if it is finished
         tasks = []
         for t in alltasks:
-            if not is_finished(rawdir, proddir, grph, t):
+            if is_finished(rawdir, proddir, grph, t):
+                graph_mark(grph, t, state='done', descend=False)
+            else:
                 tasks.append(t)
 
     if comm is not None:
         tasks = comm.bcast(tasks, root=0)
+        grph = comm.bcast(grph, root=0)
 
     ntask = len(tasks)
 
@@ -539,6 +556,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     # processes for each task, split the communicator.
 
     comm_group = comm
+    comm_rank = None
     group = rank
     ngroup = nproc
     group_rank = 0
@@ -548,9 +566,11 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             group = int(rank / taskproc)
             group_rank = rank % ngroup
             comm_group = comm.Split(color=group, key=group_rank)
+            comm_rank = comm.Split(color=group_rank, key=group)
         else:
             from mpi4py import MPI
             comm_group = MPI.COMM_SELF
+            comm_rank = comm
 
     # Now we divide up the tasks among the groups of processes as
     # equally as possible.
@@ -575,40 +595,49 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
 
     # every group goes and does its tasks...
 
-    faildir = os.path.join(proddir, 'failed')
+    faildir = os.path.join(proddir, 'run', 'failed')
 
     if group_ntask > 0:
         for t in range(group_firsttask, group_firsttask + group_ntask):
             # slice out just the graph for this task
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
-            ffile = os.path.join(faildir, "fail_{}_{}.yaml".format(step, tasks[t]))
+            ffile = os.path.join(faildir, "{}_{}.yaml".format(step, tasks[t]))
 
-            run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+            #run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
 
-            # try:
-            #     # if the step previously failed, clear that file now
-            #     if os.path.isfile(ffile):
-            #         os.remove(ffile)
-            #     run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
-            # except:
-            #     # The task threw an exception.  We want to dump all information
-            #     # that will be needed to re-run the run_task() function on just
-            #     # this task.
-            #     msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
-            #     log.error(msg)
-            #     fyml = {}
-            #     fyml['step'] = step
-            #     fyml['rawdir'] = rawdir
-            #     fyml['proddir'] = proddir
-            #     fyml['task'] = tasks[t]
-            #     fyml['graph'] = tgraph
-            #     fyml['opts'] = options
-            #     fyml['procs'] = taskproc
-            #     with open(ffile, 'w') as f:
-            #         yaml.dump(fyml, f, default_flow_style=False)
+            try:
+                # if the step previously failed, clear that file now
+                if os.path.isfile(ffile):
+                    os.remove(ffile)
+                run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+                # mark step as done in our group's graph
+                graph_mark(grph, tasks[t], state='done', descend=False)
+            except:
+                # The task threw an exception.  We want to dump all information
+                # that will be needed to re-run the run_task() function on just
+                # this task.
+                msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
+                log.error(msg)
+                fyml = {}
+                fyml['step'] = step
+                fyml['rawdir'] = rawdir
+                fyml['proddir'] = proddir
+                fyml['task'] = tasks[t]
+                fyml['graph'] = tgraph
+                fyml['opts'] = options
+                fyml['procs'] = taskproc
+                with open(ffile, 'w') as f:
+                    yaml.dump(fyml, f, default_flow_style=False)
+                # mark the step as failed in our group's local graph
+                graph_mark(grph, tasks[t], state='fail', descend=True)
+
+    # Now we take the graphs from all groups and merge their states
 
     if comm is not None:
         comm.barrier()
+        graph_merge_state(grph, comm=comm_rank)
+        grph = comm_group.bcast(grph, root=0)
+
     return
 
 

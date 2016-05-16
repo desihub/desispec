@@ -1,0 +1,152 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Run one or more pipeline steps.
+"""
+
+from __future__ import absolute_import, division, print_function
+
+comm = None
+rank = 0
+nproc = 1
+
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.rank
+    nproc = comm.size
+except ImportError:
+    print("mpi4py not found, using only one process")
+
+import sys
+import os
+import numpy as np
+import argparse
+import re
+
+from desispec.log import get_logger
+import desispec.pipeline as pipe
+
+
+def main():
+    parser = argparse.ArgumentParser( description='Run steps of the pipeline at a given concurrency.' )
+    parser.add_argument( '--night', required=False, default=None, help='only use process this night (YYYYMMDD)' )
+    parser.add_argument( '--first', required=False, default=None, help='first step of the pipeline to run' )
+    parser.add_argument( '--last', required=False, default=None, help='last step of the pipeline to run')
+    args = parser.parse_args()
+
+    log = get_logger()
+
+
+    # raw and production locations
+
+    rawdir = os.environ['DESI_SPECTRO_DATA']
+    proddir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['PRODNAME'])
+
+    if rank == 0:
+        log.info("using raw dir {}".format(rawdir))
+        log.info("using spectro production dir {}".format(proddir))
+
+    # find the list of all nights which have been planned
+
+    plandir = os.path.join(proddir, 'plan')
+
+    allnights = []
+    planpat = re.compile(r'([0-9]{8})\.yaml')
+    for root, dirs, files in os.walk(plandir, topdown=True):
+        for f in files:
+            planmat = planpat.match(f)
+            if planmat is not None:
+                night = planmat.group(1)
+                allnights.append(night)
+        break
+
+    # select nights to use
+
+    nights = []
+    if args.night is not None:
+        if args.night in allnights:
+            nights = [args.night]
+        else:
+            raise RuntimeError("Requested night {} has not been planned".format(args.night))
+    else:
+        nights = allnights
+
+    if rank == 0:
+        log.info("processing {} night(s)".format(len(nights)))
+
+    # load the graphs from selected nights and merge
+
+    grph = {}
+    for n in nights:
+        nightfile = os.path.join(plandir, "{}.yaml".format(night))
+        ngrph = pipe.graph_read(nightfile)
+        grph.update(ngrph)
+
+    # read run options from disk
+
+    rundir = os.path.join(proddir, "run")
+    optfile = os.path.join(rundir, "options.yaml")
+    opts = pipe.read_options(optfile)
+
+    # compute the ordered list of steps to run
+
+    allsteps = pipe.run_steps
+
+    firststep = None
+    if args.first is None:
+        firststep = 0
+    else:
+        s = 0
+        for st in allsteps:
+            if st == args.first:
+                firststep = s
+            s += 1
+
+    laststep = None
+    if args.last is None:
+        laststep = len(allsteps)
+    else:
+        s = 1
+        for st in allsteps:
+            if st == args.last:
+                laststep = s
+            s += 1
+
+    if rank == 0:
+        log.info("running steps {} to {}".format(allsteps[firststep], allsteps[laststep]))
+
+    # Assign the desired number of processes per task
+
+    steptaskproc = {}
+    for st in allsteps:
+        steptaskproc[st] = 1
+
+    steptaskproc['bootcalib'] = 1
+    steptaskproc['specex'] = 20
+    steptaskproc['psfcombine'] = 1
+    steptaskproc['extract'] = 20
+    steptaskproc['fiberflat'] = 1
+    steptaskproc['sky'] = 1
+    steptaskproc['stdstars'] = 1
+    steptaskproc['fluxcal'] = 1
+    steptaskproc['procexp'] = 1
+
+    # Run the steps.  Each step updates the graph in place to track
+    # the state of all nodes.
+
+    for st in range(firststep, laststep):
+        pipe.run_step(allsteps[st], rawdir, proddir, grph, opts, comm=comm, taskproc=steptaskproc[st])
+        if comm is not None:
+            comm.barrier()
+        if rank == 0:
+            log.info("completed step {}".format(allsteps[st]))
+
+
+if __name__ == "__main__":
+    main()
+

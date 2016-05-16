@@ -496,6 +496,34 @@ def graph_night(rawdir, rawnight):
         grph[calname]['out'].append(cfname)
         nd['out'].append(cfname)
 
+    # Brick dependencies
+
+    # process allbricks
+
+    # for name, nd in grph.items():
+    #     if nd['type'] != 'fibermap':
+    #         continue
+    #     if nd['flavor'] == 'arc':
+    #         continue
+    #     if nd['flavor'] == 'flat':
+    #         continue
+    #     night = nd['in'][0]
+    #     id = nd['id']
+    #     bricks = nd['bricks']
+
+    #     node['type'] = 'brick'
+
+
+
+
+    #     node['id'] = ex
+    #     node['flavor'] = flavor
+    #     node['bricks'] = bricks
+    #     node['in'] = [rawnight]
+    #     node['out'] = []
+
+
+
     return grph
 
 
@@ -821,6 +849,52 @@ def graph_dot(grph, f):
     #     f.write(' }\n')
 
     f.write('}\n\n')
+
+    return
+
+
+def graph_merge_state(grph, comm=None):
+    if comm is None:
+        return
+    # check that we have the same list of nodes on all processes.  Then
+    # merge the states.  "fail" overrides "None", and "done" overrides
+    # them both.
+    
+    states = {}
+    names = sorted(list(grph.keys()))
+    for n in names:
+        if 'state' in grph[n].keys():
+            states[n] = grph[n]['state']
+        else:
+            states[n] = None
+
+    for p in range(1, comm.size):
+
+        if comm.rank == 0:
+            pstates = comm.recv(source=p, tag=p)
+            pnames = sorted(list(pstates.keys()))
+            if pnames != names:
+                raise RuntimeError("names of all objects must be the same when merging graph states")
+            for n in names:
+                if states[n] is not None:
+                    if states[n] != 'done':
+                        if pstates[n] == 'done':
+                            states[n] = 'done'
+                else:
+                    if pstates[n] is not None:
+                        states[n] = pstates[n]
+
+        elif comm.rank == p:
+            comm.send(states, dest=0, tag=0)
+        comm.barrier()
+
+    # broadcast final merged state back to all processes.
+    states = comm.bcast(states, root=0)
+
+    # update process-local graph
+    for n in names:
+        if states[n] is not None:
+            grph[n]['state'] = states[n]
 
     return
 
