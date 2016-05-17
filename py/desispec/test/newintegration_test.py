@@ -207,33 +207,6 @@ def integration_test(night=None, nspec=5, clobber=False):
 
 
     # #-----
-    # #- Bricks
-    # inputs = list()
-    # for camera in ['b0', 'r0', 'z0']:
-    #     inputs.append( io.findfile('cframe', night, expid, camera) )
-
-    # outputs = list()
-    # fibermap = io.read_fibermap(io.findfile('fibermap', night, expid))
-    # bricks = set(fibermap['BRICKNAME'])
-    # for b in bricks:
-    #     for channel in ['b', 'r', 'z']:
-    #         outputs.append( io.findfile('brick', brickname=b, band=channel))
-
-    # cmd = "desi_make_bricks --night "+night
-    # if runcmd(cmd, inputs, outputs, clobber) != 0:
-    #     raise RuntimeError('brick generation failed')
-
-    # #-----
-    # #- Redshifts!
-    # for b in bricks:
-    #     inputs = [io.findfile('brick', brickname=b, band=channel) for channel in ['b', 'r', 'z']]
-    #     zbestfile = io.findfile('zbest', brickname=b)
-    #     outputs = [zbestfile, ]
-    #     cmd = "desi_zfind --brick {} -o {}".format(b, zbestfile)
-    #     if runcmd(cmd, inputs, outputs, clobber) != 0:
-    #         raise RuntimeError('redshifts failed for brick '+b)
-
-    # #-----
     # #- Did it work?
     # #- (this combination of fibermap, simspec, and zbest is a pain)
     # simdir = os.path.dirname(io.findfile('fibermap', night=night, expid=expid))
