@@ -16,6 +16,9 @@ import desispec.pipeline as pipe
 import desispec.io as io
 import desispec.log as logging
 
+import desispec.scripts.makebricks as makebricks
+
+
 #- prevent nose from trying to run this test since it takes too long
 __test__ = False
 
@@ -132,85 +135,45 @@ def integration_test(night=None, nspec=5, clobber=False):
     rawdir = os.environ['DESI_SPECTRO_DATA']
     proddir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['PRODNAME'])
 
-    # create production output directories
+    # create production output directories and modify the options to
+    # restrict the test to a smaller number of spectra.
 
     if not os.path.isdir(proddir):
-        os.makedirs(proddir)
-    
+        pipe.create_prod(rawdir, proddir)
+
+        optfile = os.path.join(proddir, "run", "options.yaml")
+        opts = pipe.read_options(optfile)
+
+        opts['extract']['specmin'] = 0
+        opts['extract']['nspec'] = nspec
+        opts['stdstars']['models'] = '/home/kisner/scratch/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+
+        pipe.write_options(optfile, opts)
+
+    # For this small size of dataset, bootcalib and specex do not yet work.
+    # instead we make symlinks to true PSFs used in the simulation.
+
+    # bootcalib
+
     cal2d = os.path.join(proddir, 'calib2d')
-    if not os.path.isdir(cal2d):
-        os.makedirs(cal2d)
-
     calpsf = os.path.join(cal2d, 'psf')
-    if not os.path.isdir(calpsf):
-        os.makedirs(calpsf)
-
     calpsfnight = os.path.join(calpsf, night)
     if not os.path.isdir(calpsfnight):
         os.makedirs(calpsfnight)
 
-    expdir = os.path.join(proddir, 'exposures')
-    if not os.path.isdir(expdir):
-        os.makedirs(expdir)
+    expnight = os.path.join(proddir, 'exposures', night)
 
-    expnight = os.path.join(expdir, night)
-    if not os.path.isdir(expnight):
-        os.makedirs(expnight)
-
-    brkdir = os.path.join(proddir, 'bricks')
-    if not os.path.isdir(brkdir):
-        os.makedirs(brkdir)
-
-    logdir = os.path.join(proddir, 'logs')
-    if not os.path.isdir(logdir):
-        os.makedirs(logdir)
-
-    faildir = os.path.join(proddir, 'failed')
-    if not os.path.isdir(faildir):
-        os.makedirs(faildir)
-
-    scriptdir = os.path.join(proddir, 'scripts')
-    if not os.path.isdir(scriptdir):
-        os.makedirs(scriptdir)
-
-    # get the dependency graph for this night
-    grph = pipe.graph_night(rawdir, night)
-
-    with open(os.path.join(proddir, "plan_{}.dot".format(night)), 'w') as f:
-        pipe.graph_dot(grph, f)
-    pipe.graph_write(os.path.join(proddir, "plan_{}.yaml".format(night)), grph)
-
-    # Now we perform all pipeline steps with a single process.
-
-    # get default options, and modify to restrict the range of spectra
-    
-    opts = pipe.default_options()
-    opts['extract']['specmin'] = 0
-    opts['extract']['nspec'] = nspec
-
-    optdump = os.path.join(proddir, "options.yaml")
-    if not os.path.isfile(optdump):
-        pipe.write_options(optdump, opts)
-
-    opts = pipe.read_options(optdump)
-
-    # bootcalib
-
-    # FIXME:  We cannot currently run bootcalib on a subset of spectra.
-    # For now, we symlink the spotgrid PSFs in place.
     for band in ['b', 'r', 'z']:
         for spec in range(10):
             cam = "{}{}".format(band, spec)
             target = os.path.join(os.environ['DESIMODEL'], 'data', 'specpsf', "psf-{}.fits".format(band))
             lnk = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
+            print("ln -s {} {}".format(target, lnk))
             if not os.path.islink(lnk):
                 os.symlink(target, lnk)
 
-    #pipe.run_step('bootcalib', rawdir, proddir, grph, opts)
-
     # PSF estimation
 
-    # FIXME:  specex segfaults...
     for expid in [0, 2]:
         expdir = os.path.join(expnight, "{:08d}".format(expid))
         if not os.path.isdir(expdir):
@@ -219,6 +182,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             for spec in range(1):
                 target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
                 lnk = os.path.join(expdir, "psf-{}{}-{:08d}.fits".format(band, spec, expid))
+                print("ln -s {} {}".format(target, lnk))
                 if not os.path.islink(lnk):
                     os.symlink(target, lnk)
     for band in ['b', 'r', 'z']:
@@ -228,32 +192,18 @@ def integration_test(night=None, nspec=5, clobber=False):
             if not os.path.islink(lnk):
                 os.symlink(target, lnk)
 
-    #pipe.run_step('specex', rawdir, proddir, grph, opts)
-    #pipe.run_step('psfcombine', rawdir, proddir, grph, opts)
+    # run the pipeline up to cframes
 
-    # Extraction
+    pipe.run_steps('extract', 'procexp', rawdir, proddir, nights=[night], comm=None)
 
-    pipe.run_step('extract', rawdir, proddir, grph, opts)
+    # make bricks
 
-    # Fiber flats
+    args = makebricks.parse(['--night', night])
+    makebricks.main(args)
 
-    pipe.run_step('fiberflat', rawdir, proddir, grph, opts)
+    # run redshift fitting
 
-    # Sky
-
-    pipe.run_step('sky', rawdir, proddir, grph, opts)
-
-    # Fit standard stars
-
-    pipe.run_step('stdstars', rawdir, proddir, grph, opts)
-
-    # Flux calibration
-
-    pipe.run_step('fluxcal', rawdir, proddir, grph, opts)
-
-    # Process exposure into calibrated frame
-
-    pipe.run_step('procexp', rawdir, proddir, grph, opts)
+    pipe.run_steps('zfind', 'zfind', rawdir, proddir, nights=[night], comm=None)
 
 
     # #-----

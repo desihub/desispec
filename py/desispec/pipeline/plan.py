@@ -36,7 +36,9 @@ graph_types = [
     'sky',
     'stdstars',
     'calib',
-    'cframe'
+    'cframe',
+    'brick',
+    'zbest'
 ]
 
 _state_colors = {
@@ -135,6 +137,125 @@ def find_bricks(proddir):
             if brickmat is not None:
                 bricks.append(d)
     return bricks
+
+
+def default_options():
+    allopts = {}
+
+    opts = {}
+    opts['trace-only'] = False
+    opts['legendre-degree'] = 6
+    allopts['bootcalib'] = opts
+
+    opts = {}
+    # opts['flux-hdu'] = 1
+    # opts['ivar-hdu'] = 2
+    # opts['mask-hdu'] = 3
+    # opts['header-hdu'] = 1
+    # opts['xcoord-hdu'] = 1
+    # opts['ycoord-hdu'] = 1
+    # opts['psfmodel'] = 'GAUSSHERMITE'
+    # opts['half_size_x'] = 8
+    # opts['half_size_y'] = 5
+    # opts['verbose'] = False
+    # opts['gauss_hermite_deg'] = 6
+    # opts['legendre_deg_wave'] = 4
+    # opts['legendre_deg_x'] = 1
+    # opts['trace_deg_wave'] = 6
+    # opts['trace_deg_x'] = 6
+    allopts['specex'] = opts
+
+    opts = {}
+    opts['regularize'] = 0.0
+    opts['nwavestep'] = 50
+    opts['verbose'] = False
+    opts['wavelength_b'] = "3579.0,5939.0,0.8"
+    opts['wavelength_r'] = "5635.0,7731.0,0.8"
+    opts['wavelength_z'] = "7445.0,9824.0,0.8"
+    allopts['extract'] = opts
+
+    allopts['fiberflat'] = {}
+
+    allopts['sky'] = {}
+
+    opts = {}
+    opts['models'] = '/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+    allopts['stdstars'] = opts
+
+    allopts['fluxcal'] = {}
+
+    allopts['procexp'] = {}
+
+    allopts['makebricks'] = {}
+
+    allopts['zfind'] = {}
+
+    return allopts
+
+
+def write_options(path, opts):
+    with open(path, 'w') as f:
+        yaml.dump(opts, f, default_flow_style=False)
+    return
+
+
+def read_options(path):
+    opts = None
+    with open(path, 'r') as f:
+        opts = yaml.load(f)
+    return opts
+
+
+def create_prod(rawdir, proddir):
+    if os.path.isdir(proddir):
+        raise RuntimeError("production directory {} already exists".format(proddir))
+
+    os.makedirs(proddir)
+    
+    cal2d = os.path.join(proddir, 'calib2d')
+    os.makedirs(cal2d)
+
+    calpsf = os.path.join(cal2d, 'psf')
+    os.makedirs(calpsf)
+
+    expdir = os.path.join(proddir, 'exposures')
+    os.makedirs(expdir)
+
+    brkdir = os.path.join(proddir, 'bricks')
+    os.makedirs(brkdir)
+
+    plandir = os.path.join(proddir, 'plan')
+    os.makedirs(plandir)
+
+    rundir = os.path.join(proddir, 'run')
+    os.makedirs(rundir)
+
+    faildir = os.path.join(rundir, 'failed')
+    os.makedirs(faildir)
+
+    scriptdir = os.path.join(proddir, 'scripts')
+    os.makedirs(scriptdir)
+
+    optfile = os.path.join(rundir, 'options.yaml')
+    opts = default_options()
+    write_options(optfile, opts)
+
+    nights = []
+    nightpat = re.compile(r'\d{8}')
+    for root, dirs, files in os.walk(rawdir, topdown=True):
+        for d in dirs:
+            nightmat = nightpat.match(d)
+            if nightmat is not None:
+                nights.append(d)
+        break
+
+    for n in nights:
+        grph = graph_night(rawdir, n)
+        with open(os.path.join(plandir, "{}.dot".format(n)), 'w') as f:
+            graph_dot(grph, f)
+        graph_write(os.path.join(plandir, "{}.yaml".format(n)), grph)
+
+    return
 
 
 def graph_name(*args):
@@ -496,33 +617,45 @@ def graph_night(rawdir, rawnight):
         grph[calname]['out'].append(cfname)
         nd['out'].append(cfname)
 
-    # Brick dependencies
+    # Brick / Zbest dependencies
 
-    # process allbricks
+    for b in allbricks:
+        inb = []
+        for band in ['b', 'r', 'z']:
+            node = {}
+            node['type'] = 'brick'
+            node['brick'] = b
+            node['band'] = band
+            node['in'] = []
+            node['out'] = []
+            bname = "brick-{}-{}".format(band, b)
+            inb.append(bname)
+            grph[bname] = node
+        node = {}
+        node['type'] = 'zbest'
+        node['brick'] = b
+        node['in'] = inb
+        node['out'] = []
+        zbname = "zbest-{}".format(b)
+        grph[zbname] = node
 
-    # for name, nd in grph.items():
-    #     if nd['type'] != 'fibermap':
-    #         continue
-    #     if nd['flavor'] == 'arc':
-    #         continue
-    #     if nd['flavor'] == 'flat':
-    #         continue
-    #     night = nd['in'][0]
-    #     id = nd['id']
-    #     bricks = nd['bricks']
-
-    #     node['type'] = 'brick'
-
-
-
-
-    #     node['id'] = ex
-    #     node['flavor'] = flavor
-    #     node['bricks'] = bricks
-    #     node['in'] = [rawnight]
-    #     node['out'] = []
-
-
+    for name, nd in grph.items():
+        if nd['type'] != 'fibermap':
+            continue
+        if nd['flavor'] == 'arc':
+            continue
+        if nd['flavor'] == 'flat':
+            continue
+        night = nd['in'][0]
+        id = nd['id']
+        bricks = nd['bricks']
+        for band in ['b', 'r', 'z']:
+            for spec in keep:
+                cfname = graph_name(rawnight, "cframe-{}{}-{:08d}".format(band, spec, id))
+                for b in bricks:
+                    bname = "brick-{}-{}".format(band, b)
+                    grph[bname]['in'].append(cfname)
+                    grph[cfname]['out'].append(bname)
 
     return grph
 
@@ -675,6 +808,17 @@ def graph_path_cframe(proddir, name):
     return path
 
 
+def graph_path_zbest(proddir, name):
+    patstr = "zbest-(.*)"
+    pat = re.compile(patstr)
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid zbest name".format(name))
+    brick = mat.group(1)
+    path = os.path.join(proddir, 'bricks', brick, "zbest-{}.fits".format(brick))
+    return path
+
+
 def graph_path(rawdir, proddir, name, type):
     if type == 'fibermap':
         return graph_path_fibermap(rawdir, name)
@@ -698,6 +842,8 @@ def graph_path(rawdir, proddir, name, type):
         return graph_path_calib(proddir, name)
     elif type == 'cframe':
         return graph_path_cframe(proddir, name)
+    elif type == 'zbest':
+        return graph_path_zbest(proddir, name)
     else:
         raise RuntimeError("unknown type {}".format(type))
     return ""

@@ -35,9 +35,10 @@ import desispec.scripts.sky as skypkg
 import desispec.scripts.stdstars as stdstars
 import desispec.scripts.fluxcalibration as fluxcal
 import desispec.scripts.procexp as procexp
+import desispec.scripts.zfind as zfind
 
 
-run_steps = [
+run_step_types = [
     'bootcalib',
     'specex',
     'psfcombine',
@@ -46,11 +47,12 @@ run_steps = [
     'sky',
     'stdstars',
     'fluxcal',
-    'procexp'
+    'procexp',
+    'zfind'
 ]
 
 
-step_types = {
+step_file_types = {
     'bootcalib' : ['psfboot'],
     'specex' : ['psf'],
     'psfcombine' : ['psfnight'],
@@ -59,75 +61,9 @@ step_types = {
     'sky' : ['sky'],
     'stdstars' : ['stdstars'],
     'fluxcal' : ['calib'],
-    'procexp' : ['cframe']
+    'procexp' : ['cframe'],
+    'zfind' : ['zbest']
 }
-
-
-def default_options():
-    allopts = {}
-
-    opts = {}
-    opts['trace-only'] = False
-    opts['legendre-degree'] = 6
-    allopts['bootcalib'] = opts
-
-    opts = {}
-    # opts['flux-hdu'] = 1
-    # opts['ivar-hdu'] = 2
-    # opts['mask-hdu'] = 3
-    # opts['header-hdu'] = 1
-    # opts['xcoord-hdu'] = 1
-    # opts['ycoord-hdu'] = 1
-    # opts['psfmodel'] = 'GAUSSHERMITE'
-    # opts['half_size_x'] = 8
-    # opts['half_size_y'] = 5
-    # opts['verbose'] = False
-    # opts['gauss_hermite_deg'] = 6
-    # opts['legendre_deg_wave'] = 4
-    # opts['legendre_deg_x'] = 1
-    # opts['trace_deg_wave'] = 6
-    # opts['trace_deg_x'] = 6
-    allopts['specex'] = opts
-
-    opts = {}
-    opts['regularize'] = 0.0
-    opts['nwavestep'] = 50
-    opts['verbose'] = False
-    opts['wavelength_b'] = "3579.0,5939.0,0.8"
-    opts['wavelength_r'] = "5635.0,7731.0,0.8"
-    opts['wavelength_z'] = "7445.0,9824.0,0.8"
-    allopts['extract'] = opts
-
-    allopts['fiberflat'] = {}
-
-    allopts['sky'] = {}
-
-    opts = {}
-    opts['models'] = '/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
-    allopts['stdstars'] = opts
-
-    allopts['fluxcal'] = {}
-
-    allopts['procexp'] = {}
-
-    allopts['makebricks'] = {}
-
-    allopts['zfind'] = {}
-
-    return allopts
-
-
-def write_options(path, opts):
-    with open(path, 'w') as f:
-        yaml.dump(opts, f, default_flow_style=False)
-    return
-
-
-def read_options(path):
-    opts = None
-    with open(path, 'r') as f:
-        opts = yaml.load(f)
-    return opts
 
 
 def qa_path(datafile, suffix="_QA"):
@@ -165,7 +101,7 @@ def is_finished(rawdir, proddir, grph, name):
 
 
 def run_task(step, rawdir, proddir, grph, opts, comm=None):
-    if step not in step_types.keys():
+    if step not in step_file_types.keys():
         raise ValueError("step type {} not recognized".format(step))
 
     # Verify that there is only a single node in the graph
@@ -173,7 +109,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     # been sliced before calling this task.
     nds = []
     for name, nd in grph.items():
-        if nd['type'] in step_types[step]:
+        if nd['type'] in step_file_types[step]:
             nds.append(name)
     if len(nds) != 1:
         raise RuntimeError("run_task should only be called with a graph containing a single node to process")
@@ -500,12 +436,20 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         if rank == 0:
             procexp.main(args)
     
-    elif step == 'makebricks':
-        pass
-    
     elif step == 'zfind':
-        pass
-    
+        brick = node['brick']
+        outfile = graph_path_zbest(proddir, name)
+        qafile = qa_path(outfile)
+        options = {}
+        options['brick'] = brick
+        options['outfile'] = outfile
+        options.update(opts)
+        optarray = option_list(options)
+
+        args = zfind.parse(optarray)
+        if rank == 0:
+            zfind.main(args)
+
     else:
         raise RuntimeError("Unknown pipeline step {}".format(step))
 
@@ -531,7 +475,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
         # For this step, compute all the tasks that we need to do
         alltasks = []
         for name, nd in grph.items():
-            if nd['type'] in step_types[step]:
+            if nd['type'] in step_file_types[step]:
                 alltasks.append(name)
 
         # For each task, prune if it is finished
@@ -630,6 +574,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                     yaml.dump(fyml, f, default_flow_style=False)
                 # mark the step as failed in our group's local graph
                 graph_mark(grph, tasks[t], state='fail', descend=True)
+                raise
 
     # Now we take the graphs from all groups and merge their states
 
@@ -679,6 +624,135 @@ def retry_task(failpath, newopts=None):
         log.error("Retry Failed")
     else:
         os.remove(failpath)
+    return
+
+
+def run_steps(first, last, rawdir, proddir, nights=None, comm=None):
+    log = get_logger()
+
+    rank = 0
+    nproc = 1
+    if comm is not None:
+        rank = comm.rank
+        nproc = comm.size
+
+    # find the list of all nights which have been planned
+
+    plandir = os.path.join(proddir, 'plan')
+
+    allnights = []
+    planpat = re.compile(r'([0-9]{8})\.yaml')
+    for root, dirs, files in os.walk(plandir, topdown=True):
+        for f in files:
+            planmat = planpat.match(f)
+            if planmat is not None:
+                night = planmat.group(1)
+                allnights.append(night)
+        break
+
+    # select nights to use
+
+    selected = []
+    if nights is not None:
+        for n in nights:
+            if n in allnights:
+                selected.append(n)
+            else:
+                raise RuntimeError("Requested night {} has not been planned".format(n))
+    else:
+        selected = allnights
+
+    if rank == 0:
+        log.info("processing {} night(s)".format(len(selected)))
+
+    # load the graphs from selected nights and merge
+
+    grph = {}
+    for n in selected:
+        nightfile = os.path.join(plandir, "{}.yaml".format(n))
+        ngrph = graph_read(nightfile)
+        grph.update(ngrph)
+
+    # read run options from disk
+
+    rundir = os.path.join(proddir, "run")
+    optfile = os.path.join(rundir, "options.yaml")
+    opts = read_options(optfile)
+
+    # compute the ordered list of steps to run
+
+    firststep = None
+    if first is None:
+        firststep = 0
+    else:
+        s = 0
+        for st in run_step_types:
+            if st == first:
+                firststep = s
+            s += 1
+
+    laststep = None
+    if last is None:
+        laststep = len(run_step_types)
+    else:
+        s = 1
+        for st in run_step_types:
+            if st == last:
+                laststep = s
+            s += 1
+
+    if rank == 0:
+        log.info("running steps {} to {}".format(run_step_types[firststep], run_step_types[laststep-1]))
+
+    # Assign the desired number of processes per task
+
+    steptaskproc = {}
+    for st in run_step_types:
+        steptaskproc[st] = 1
+
+    steptaskproc['bootcalib'] = 1
+    steptaskproc['specex'] = 20
+    steptaskproc['psfcombine'] = 1
+    steptaskproc['extract'] = 20
+    steptaskproc['fiberflat'] = 1
+    steptaskproc['sky'] = 1
+    steptaskproc['stdstars'] = 1
+    steptaskproc['fluxcal'] = 1
+    steptaskproc['procexp'] = 1
+
+    # Run the steps.  Each step updates the graph in place to track
+    # the state of all nodes.
+
+    for st in range(firststep, laststep):
+        runfile = None
+        jobid = None
+        if rank == 0:
+            log.info("starting step {}".format(run_step_types[st]))
+            if 'SLURM_JOBID' in os.environ.keys():
+                jobid = "slurm-{}".format(os.environ['SLURM_JOBID'])
+            else:
+                jobid = os.getpid()
+            runfile = os.path.join(rundir, "running_{}_{}".format(run_step_types[st], jobid))
+            with open(runfile, 'w') as f:
+                f.write("")
+        run_step(run_step_types[st], rawdir, proddir, grph, opts, comm=comm, taskproc=steptaskproc[run_step_types[st]])
+        if comm is not None:
+            comm.barrier()
+        if rank == 0:
+            if os.path.isfile(runfile):
+                os.remove(runfile)
+            log.info("completed step {}".format(run_step_types[st]))
+
+    if rank == 0:
+        outroot = "outstate_{}-{}_{}".format(run_step_types[firststep], run_step_types[laststep-1], jobid)
+        outgrph = os.path.join(rundir, "{}.yaml".format(outroot))
+        graph_write(outgrph, grph)
+        with open(os.path.join(rundir, "{}.dot".format(outroot)), 'w') as f:
+            graph_dot(grph, f)
+        if os.path.isfile(runfile):
+            os.remove(runfile)
+        log.info("ending step {}".format(run_step_types[st]))
+
     return
 
 
