@@ -23,10 +23,8 @@ module load specter/master
 module load desitarget/master
 module load redmonster/master
 module switch desimodel/master
-module switch desiutil/master
 
 #- Update software packages
-echo 'updating desiutil'; cd $DESIUTIL; git pull; fix_permissions.sh .
 echo 'updating speclite'; cd $SPECLITE; git pull; fix_permissions.sh .
 echo 'updating desispec'; cd $DESISPEC; git pull; fix_permissions.sh .
 echo 'updating desisim'; cd $DESISIM; git pull; fix_permissions.sh .

@@ -136,13 +136,10 @@ def integration_test(night=None, nspec=5, clobber=False):
         camera = channel+"0"
         framefile = io.findfile('frame', night, expid, camera)
         fiberflat = io.findfile('fiberflat', night, expid, camera)
-        fibermap = io.findfile('fibermap', night, expid)  # for QA
-        qafile = io.findfile('qa_calib', night, expid, camera)
-        qafig = io.findfile('qa_flat_fig', night, expid, camera)
-        cmd = "desi_compute_fiberflat --infile {frame} --fibermap {fibermap} --outfile {fiberflat} --qafile {qafile} --qafig {qafig}".format(
-            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, qafile=qafile, qafig=qafig, **params)
-        inputs = [framefile,fibermap,]
-        outputs = [fiberflat,qafile,qafig,]
+        cmd = "desi_compute_fiberflat --infile {frame} --outfile {fiberflat}".format(
+            frame=framefile, fiberflat=fiberflat, **params)
+        inputs = [framefile,]
+        outputs = [fiberflat,]
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('fiberflat failed for '+camera)
 
@@ -156,12 +153,10 @@ def integration_test(night=None, nspec=5, clobber=False):
         fibermap = io.findfile('fibermap', night, expid)
         fiberflat = io.findfile('fiberflat', night, flat_expid, camera)
         skyfile = io.findfile('sky', night, expid, camera)
-        qafile = io.findfile('qa_data', night, expid, camera)
-        qafig = io.findfile('qa_sky_fig', night, expid, camera)
-        cmd="desi_compute_sky --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky} --qafile {qafile} --qafig {qafig}".format(
-            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile, qafile=qafile, qafig=qafig, **params)
+        cmd="desi_compute_sky --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky}".format(
+            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile, **params)
         inputs = [framefile, fibermap, fiberflat]
-        outputs = [skyfile, qafile, qafig,]
+        outputs = [skyfile, ]
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('sky model failed for '+camera)
 
@@ -196,18 +191,16 @@ def integration_test(night=None, nspec=5, clobber=False):
         fiberflat = io.findfile('fiberflat', night, flat_expid, camera)
         skyfile   = io.findfile('sky', night, expid, camera)
         calibfile = io.findfile('calib', night, expid, camera)
-        qafile = io.findfile('qa_data', night, expid, camera)
-        qafig = io.findfile('qa_flux_fig', night, expid, camera)
 
         #- Compute flux calibration vector
         cmd = """desi_compute_fluxcalibration \
           --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --sky {sky} \
-          --models {stdstars} --outfile {calib} --qafile {qafile} --qafig {qafig}""".format(
+          --models {stdstars} --outfile {calib}""".format(
             frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile,
-            stdstars=stdstarfile, calib=calibfile, qafile=qafile, qafig=qafig
+            stdstars=stdstarfile, calib=calibfile,
             )
         inputs = [framefile, fibermap, fiberflat, skyfile, stdstarfile]
-        outputs = [calibfile, qafile, qafig]
+        outputs = [calibfile,]
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('flux calibration failed for '+camera)
 
@@ -248,15 +241,6 @@ def integration_test(night=None, nspec=5, clobber=False):
         cmd = "desi_zfind --brick {} -o {}".format(b, zbestfile)
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('redshifts failed for brick '+b)
-    # ztruth QA
-    qafile = io.findfile('qa_ztruth', night)
-    qafig = io.findfile('qa_ztruth_fig', night)
-    cmd = "desi_qa_zfind --night {night} --qafile {qafile} --qafig {qafig} --verbose".format(
-        night=night, qafile=qafile, qafig=qafig)
-    inputs = []
-    outputs = [qafile, qafig]
-    if runcmd(cmd, inputs, outputs, clobber) != 0:
-        raise RuntimeError('redshift QA failed for night '+night)
 
     #-----
     #- Did it work?

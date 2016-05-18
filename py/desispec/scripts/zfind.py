@@ -28,7 +28,7 @@ def parse(options=None):
         help="number of spectra to fit [default: all]")
     parser.add_argument("-o", "--outfile", type=str, required=False,
         help="output file name")
-    parser.add_argument("--objtype", type=str, required=False,
+    parser.add_argument(      "--objtype", type=str, required=False,
         help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
     parser.add_argument("--zspec", action="store_true",
         help="also include spectra in output file")
@@ -67,7 +67,9 @@ def main(args) :
     brick = dict()
     if args.brick is not None:
         if len(args.brickfiles) != 0:
-            raise RuntimeError('Give -b/--brick or input brickfiles but not both')            
+            log.error('Give -b/--brick or input brickfiles but not both')
+            sys.exit(1)
+            
         for channel in ('b', 'r', 'z'):
             filename = io.findfile('brick', band=channel, brickname=args.brick, specprod_dir=args.specprod_dir)
             brick[channel] = io.Brick(filename)
