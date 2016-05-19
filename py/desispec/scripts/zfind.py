@@ -28,8 +28,16 @@ def parse(options=None):
         help="number of spectra to fit [default: all]")
     parser.add_argument("-o", "--outfile", type=str, required=False,
         help="output file name")
+    parser.add_argument("--specprod_dir", type=str, required=False, default=None, 
+        help="override $DESI_SPECTRO_REDUX/$PRODNAME environment variable path")
     parser.add_argument(      "--objtype", type=str, required=False,
         help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
+    parser.add_argument('--zrange-galaxy', type=float, default=(0.0, 1.6), nargs=2, 
+                        help='minimum and maximum galaxy redshifts to consider')
+    parser.add_argument('--zrange-qso', type=float, default=(0.0, 3.5), nargs=2, 
+                        help='minimum and maximum QSO redshifts to consider')
+    parser.add_argument('--zrange-star', type=float, default=(-0.005, 0.005), nargs=2, 
+                        help='minimum and maximum stellar redshifts to consider')
     parser.add_argument("--zspec", action="store_true",
         help="also include spectra in output file")
     parser.add_argument('--qafile', type=str, 
@@ -69,7 +77,8 @@ def main(args) :
             sys.exit(1)
             
         for channel in ('b', 'r', 'z'):
-            filename = io.findfile('brick', band=channel, brickname=args.brick)
+            filename = io.findfile('brick', band=channel, brickname=args.brick,
+                                   specprod_dir=args.specprod_dir)
             brick[channel] = io.Brick(filename)
     else:
         for filename in args.brickfiles:
@@ -140,7 +149,9 @@ def main(args) :
     for i in range(args.nproc):
         lo, hi = ii[i], ii[i+1]
         log.debug('CPU {} spectra {}:{}'.format(i, lo, hi))
-        arguments={"wave":wave, "flux":flux[lo:hi],"ivar":ivar[lo:hi],"objtype":args.objtype}
+        arguments = {"wave": wave, "flux": flux[lo:hi], "ivar": ivar[lo:hi],
+                     "objtype": args.objtype, "zrange_galaxy": args.zrange_galaxy,
+                     "zrange_qso": args.zrange_qso, "zrange_star": args.zrange_star}
         func_args.append( arguments )
 
     #- Do the redshift fit
