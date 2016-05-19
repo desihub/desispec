@@ -65,7 +65,7 @@ setup_keywords['test_suite']='{name}.test.{name}_test_suite.{name}_test_suite'.f
 #
 # Add internal data directories.
 #
-setup_keywords['package_data'] = {'desispec': ['data/*',]}
+setup_keywords['package_data'] = {'desispec': ['data/quicklook/*', 'data/arc_lines/*']}
 #
 # Run setup command.
 #

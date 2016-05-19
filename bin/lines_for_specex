@@ -1,20 +1,23 @@
-""" Simple script to generate a line list formatted for specex
+#!/usr/bin/env python
+"""Simple script to generate a line list formatted for specex.
 """
 from __future__ import (print_function, absolute_import, division,
                         unicode_literals)
 import numpy as np
 import datetime
-import pdb
-
+import sys
 from desispec import bootcalib as bootc
 
 from astropy.table import Table, Column
 
 
 def main():
-    """
-    Returns:
+    """Entry-point for command-line scripts.
 
+    Returns
+    -------
+    :class:`int`
+        An integer suitable for passing to :func:`sys.exit`.
     """
     # Read all lines used by bootcalib
     llist = bootc.load_arcline_list('all')
@@ -40,7 +43,8 @@ def main():
     today = datetime.date.today()
     cut_llist.meta = dict(version=str('v1.0'), date=str(today))
     cut_llist.write('specex_linelist.txt', format='ascii.ecsv')
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
