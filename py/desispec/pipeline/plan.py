@@ -206,54 +206,103 @@ def read_options(path):
     return opts
 
 
-def create_prod(rawdir, proddir):
-    if os.path.isdir(proddir):
-        raise RuntimeError("production directory {} already exists".format(proddir))
+def select_nights(allnights, nightstr):
+    # Trim list of nights based on set of patterns
+    nights = []
+    if nightstr is not None:
+        nightsel = nightstr.split(',')
+        for sel in nightsel:
+            pat = re.compile(sel)
+            for nt in allnights:
+                mat = pat.match(nt)
+                if mat is not None:
+                    if nt not in nights:
+                        nights.append(nt)
+        nights = sorted(nights)
+    else:
+        nights = sorted(allnights)
 
-    os.makedirs(proddir)
+    return nights
+
+
+def create_prod(rawdir, proddir, nightstr=None):
+
+    # create main directories if they don't exist
+
+    if not os.path.isdir(proddir):
+        os.makedirs(proddir)
     
     cal2d = os.path.join(proddir, 'calib2d')
-    os.makedirs(cal2d)
+    if not os.path.isdir(cal2d):
+        os.makedirs(cal2d)
 
     calpsf = os.path.join(cal2d, 'psf')
-    os.makedirs(calpsf)
+    if not os.path.isdir(calpsf):
+        os.makedirs(calpsf)
 
     expdir = os.path.join(proddir, 'exposures')
-    os.makedirs(expdir)
+    if not os.path.isdir(expdir):
+        os.makedirs(expdir)
 
     brkdir = os.path.join(proddir, 'bricks')
-    os.makedirs(brkdir)
+    if not os.path.isdir(brkdir):
+        os.makedirs(brkdir)
 
     plandir = os.path.join(proddir, 'plan')
-    os.makedirs(plandir)
+    if not os.path.isdir(plandir):
+        os.makedirs(plandir)
 
     rundir = os.path.join(proddir, 'run')
-    os.makedirs(rundir)
+    if not os.path.isdir(rundir):
+        os.makedirs(rundir)
 
     faildir = os.path.join(rundir, 'failed')
-    os.makedirs(faildir)
+    if not os.path.isdir(faildir):
+        os.makedirs(faildir)
 
-    scriptdir = os.path.join(proddir, 'scripts')
-    os.makedirs(scriptdir)
+    scriptdir = os.path.join(rundir, 'scripts')
+    if not os.path.isdir(scriptdir):
+        os.makedirs(scriptdir)
+
+    logdir = os.path.join(rundir, 'logs')
+    if not os.path.isdir(logdir):
+        os.makedirs(logdir)
 
     optfile = os.path.join(rundir, 'options.yaml')
-    opts = default_options()
-    write_options(optfile, opts)
+    if not os.path.isfile(optfile):
+        opts = default_options()
+        write_options(optfile, opts)
 
-    nights = []
+    # get list of nights
+
+    allnights = []
     nightpat = re.compile(r'\d{8}')
     for root, dirs, files in os.walk(rawdir, topdown=True):
         for d in dirs:
             nightmat = nightpat.match(d)
             if nightmat is not None:
-                nights.append(d)
+                allnights.append(d)
         break
 
-    for n in nights:
-        grph = graph_night(rawdir, n)
-        with open(os.path.join(plandir, "{}.dot".format(n)), 'w') as f:
+    nights = select_nights(allnights, nightstr)
+
+    # create per-night directories
+
+    for nt in nights:
+        ndir = os.path.join(expdir, nt)
+        if not os.path.isdir(ndir):
+            os.makedirs(ndir)
+        ndir = os.path.join(cal2d, nt)
+        if not os.path.isdir(ndir):
+            os.makedirs(ndir)
+        ndir = os.path.join(calpsf, nt)
+        if not os.path.isdir(ndir):
+            os.makedirs(ndir)
+
+        grph = graph_night(rawdir, nt)
+        with open(os.path.join(plandir, "{}.dot".format(nt)), 'w') as f:
             graph_dot(grph, f)
-        graph_write(os.path.join(plandir, "{}.yaml".format(n)), grph)
+        graph_write(os.path.join(plandir, "{}.yaml".format(nt)), grph)
 
     return
 

@@ -180,8 +180,6 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         imgfile = graph_path_pix(rawdir, pix[0])
         outfile = graph_path_psf(proddir, name)
         outdir = os.path.dirname(outfile)
-        if not os.path.isdir(outdir):
-            os.makedirs(outdir)
 
         specex.run_frame(imgfile, bootfile, outfile, opts, comm=comm)
 
@@ -547,8 +545,6 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             ffile = os.path.join(faildir, "{}_{}.yaml".format(step, tasks[t]))
 
-            #run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
-
             try:
                 # if the step previously failed, clear that file now
                 if os.path.isfile(ffile):
@@ -570,11 +566,12 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 fyml['graph'] = tgraph
                 fyml['opts'] = options
                 fyml['procs'] = taskproc
-                with open(ffile, 'w') as f:
-                    yaml.dump(fyml, f, default_flow_style=False)
+                if not os.path.isfile(ffile):
+                    # we are the first process to hit this
+                    with open(ffile, 'w') as f:
+                        yaml.dump(fyml, f, default_flow_style=False)
                 # mark the step as failed in our group's local graph
                 graph_mark(grph, tasks[t], state='fail', descend=True)
-                raise
 
     # Now we take the graphs from all groups and merge their states
 
@@ -627,7 +624,7 @@ def retry_task(failpath, newopts=None):
     return
 
 
-def run_steps(first, last, rawdir, proddir, nights=None, comm=None):
+def run_steps(first, last, rawdir, proddir, spectrogaphs=None, nightstr=None, comm=None):
     log = get_logger()
 
     rank = 0
@@ -635,6 +632,8 @@ def run_steps(first, last, rawdir, proddir, nights=None, comm=None):
     if comm is not None:
         rank = comm.rank
         nproc = comm.size
+
+    if 
 
     # find the list of all nights which have been planned
 
@@ -652,26 +651,30 @@ def run_steps(first, last, rawdir, proddir, nights=None, comm=None):
 
     # select nights to use
 
-    selected = []
-    if nights is not None:
-        for n in nights:
-            if n in allnights:
-                selected.append(n)
-            else:
-                raise RuntimeError("Requested night {} has not been planned".format(n))
-    else:
-        selected = allnights
+    nights = select_nights(allnights, nightstr)
 
     if rank == 0:
-        log.info("processing {} night(s)".format(len(selected)))
+        log.info("processing {} night(s)".format(len(nights)))
+
+    # select the spectrographs to use
+
+    spects = []
+    if spectrographs is None:
+        for s in range(10):
+            spects.append(s)
+    else:
+        spc = spectrographs.split(',')
+        for s in spc:
+            spects.append(int(s))
 
     # load the graphs from selected nights and merge
 
     grph = {}
-    for n in selected:
+    for n in nights:
         nightfile = os.path.join(plandir, "{}.yaml".format(n))
         ngrph = graph_read(nightfile)
-        grph.update(ngrph)
+        sgrph = graph_slice_spec(ngrph, spectrographs=spects)
+        grph.update(sgrph)
 
     # read run options from disk
 
@@ -719,6 +722,7 @@ def run_steps(first, last, rawdir, proddir, nights=None, comm=None):
     steptaskproc['stdstars'] = 1
     steptaskproc['fluxcal'] = 1
     steptaskproc['procexp'] = 1
+    steptaskproc['zfind'] = 1
 
     # Run the steps.  Each step updates the graph in place to track
     # the state of all nodes.
@@ -835,7 +839,7 @@ def subprocess_list(tasks, rank=0):
     return
 
 
-def shell_job(path, logroot, envsetup, desisetup, commands):
+def shell_job(path, logroot, envsetup, desisetup, comrun, commands):
     with open(path, 'w') as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
@@ -847,7 +851,7 @@ def shell_job(path, logroot, envsetup, desisetup, commands):
         for com in commands:
             executable = com.split(' ')[0]
             f.write("which {}\n".format(executable))
-            f.write("time {} >>${{log}} 2>&1\n\n".format(com))
+            f.write("time {} {} >>${{log}} 2>&1\n\n".format(comrun, com))
     return
 
 

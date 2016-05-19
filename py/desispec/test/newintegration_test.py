@@ -138,17 +138,16 @@ def integration_test(night=None, nspec=5, clobber=False):
     # create production output directories and modify the options to
     # restrict the test to a smaller number of spectra.
 
-    if not os.path.isdir(proddir):
-        pipe.create_prod(rawdir, proddir)
+    pipe.create_prod(rawdir, proddir)
 
-        optfile = os.path.join(proddir, "run", "options.yaml")
-        opts = pipe.read_options(optfile)
+    optfile = os.path.join(proddir, "run", "options.yaml")
+    opts = pipe.read_options(optfile)
 
-        opts['extract']['specmin'] = 0
-        opts['extract']['nspec'] = nspec
-        opts['stdstars']['models'] = '/home/kisner/scratch/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+    opts['extract']['specmin'] = 0
+    opts['extract']['nspec'] = nspec
+    opts['stdstars']['models'] = '/home/kisner/scratch/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
 
-        pipe.write_options(optfile, opts)
+    pipe.write_options(optfile, opts)
 
     # For this small size of dataset, bootcalib and specex do not yet work.
     # instead we make symlinks to true PSFs used in the simulation.
