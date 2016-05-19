@@ -19,6 +19,12 @@ os:
 # Setting sudo to false opts in to Travis-CI container-based builds.
 sudo: false
 
+# SPECEX and HARP.  Once we are building specex, we need C++11
+# features that require a newer OS and gcc.  These two lines 
+# switch us to non-container, Ubuntu 14.04
+#sudo: required
+#dist: trusty
+
 # The apt packages below are needed for sphinx builds, which can no longer
 # be installed with sudo apt-get.
 addons:
@@ -27,6 +33,11 @@ addons:
             - graphviz
             - texlive-latex-extra
             - dvipng
+            # SPECEX and HARP.  Once we are building specex, re-enable this.
+            # - libblas-dev
+            # - liblapack-dev
+            # - libboost-all-dev
+            # - libcfitsio3-dev
 # python:
     # - 2.6
     # - 2.7
@@ -42,8 +53,11 @@ env:
         - SCIPY_VERSION=0.16
         - ASTROPY_VERSION=1.1.1
         - SPHINX_VERSION=1.3
-        - DESIUTIL_VERSION=1.4.0
+        - DESIUTIL_VERSION=1.3.4
         - SPECLITE_VERSION=0.4
+        - SPECTER_VERSION=0.4.1
+        - HARP_VERSION=1.0.1
+        - SPECEX_VERSION=0.3.9
         - CONDA_INSTALL='conda install -c astropy-ci-extras --yes'
         - PIP_INSTALL='pip install'
         - OPTIONAL_DEPS=false

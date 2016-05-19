@@ -13,9 +13,9 @@ class Image(object):
         
         Args:
             pix : 2D numpy.ndarray of image pixels
+            ivar : inverse variance of pix, same shape as pix
             
         Optional:
-            ivar : inverse variance of pix, same shape as pix
             mask : 0 is good, non-0 is bad; default is (ivar==0)
             readnoise : CCD readout noise in electrons/pixel (float)
             camera : e.g. 'b0', 'r1', 'z9'

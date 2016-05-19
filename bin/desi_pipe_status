@@ -1,0 +1,85 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Inspect the current state of a pipeline production and retry failed steps.
+"""
+
+from __future__ import absolute_import, division, print_function
+
+import sys
+import os
+import numpy as np
+import argparse
+import re
+import pickle
+
+import desispec.io as io
+import desispec.pipeline as pipe
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Explore pipeline status.')
+    parser.add_argument('--raw', required=False, default=None, help='raw data directory')
+    parser.add_argument('--redux', required=False, default=None, help='output directory')
+    parser.add_argument('--prod', required=False, default=None, help='output production name')
+    parser.add_argument('--failed', required=False, default=None, help='info about the failed yaml file')
+    parser.add_argument('--retry', required=False, default=None, help='re-try to run the failed yaml file')
+
+    args = parser.parse_args()
+
+    rawdir = args.raw
+    if rawdir is None:
+        rawdir = io.rawdata_root()
+    rawdir = os.path.abspath(rawdir)
+
+    specdir = args.redux
+    if specdir is None:
+        specdir = io.specprod_root()
+    specdir = os.path.abspath(specdir)
+
+    proddir = args.prod
+    if proddir is None:
+        proddir = os.environ['PRODNAME']
+
+    expdir = os.path.join(proddir, 'exposures')
+
+    faildir = os.path.join(proddir, 'failed')
+
+    if args.failed is not None:
+        fpkl = None
+        with open(args.failed, 'rb') as p:
+            fpkl = pickle.load(p)
+
+        step = fpkl['step']
+        rawdir = fpkl['rawdir']
+        proddir = fpkl['proddir']
+        name = fpkl['task']
+        grph = fpkl['graph']
+        opts = fpkl['opts']
+        nproc = fpkl['procs']
+
+        print("{} :".format(args.failed))
+        print("    step = {}".format(step))
+        print("    processes = {}".format(nproc))
+        print("    rawdir = {}".format(step))
+        print("    proddir = {}".format(step))
+        print("    object = {}".format(name))
+        print("    opts:")
+        for op in opts:
+            print("      {}".format(op))
+        print("    deps:")
+        print(grph)
+        print("")
+
+    if args.retry is not None:
+        pipe.retry_task(args.retry)
+
+
+
+if __name__ == "__main__":
+    main()
+
