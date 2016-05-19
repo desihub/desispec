@@ -17,7 +17,8 @@ from desispec.log import get_logger
 class RedMonsterZfind(ZfindBase):
     """Class documentation goes here.
     """
-    def __init__(self, wave, flux, ivar, R=None, dloglam=1e-4, objtype=None):
+    def __init__(self, wave, flux, ivar, R=None, dloglam=1e-4, objtype=None,
+                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005)):
         """Uses Redmonster to classify and find redshifts.
 
         See :class:`desispec.zfind.zfind.ZfindBase` class for inputs/outputs.
@@ -81,11 +82,11 @@ class RedMonsterZfind(ZfindBase):
         self.templates = list()
         for x in templatetypes:
             if x == 'GALAXY':
-                self.templates.append(('ndArch-ssp_em_galaxy-v000.fits', 0.6, 1.6))
+                self.templates.append(('ndArch-ssp_em_galaxy-v000.fits', zrange_galaxy[0], zrange_galaxy[1]))
             elif x == 'STAR':
-                self.templates.append(('ndArch-spEigenStar-55734.fits', -0.005, 0.005))
+                self.templates.append(('ndArch-spEigenStar-55734.fits', zrange_star[0], zrange_star[1]))
             elif x == 'QSO':
-                self.templates.append(('ndArch-QSO-V003.fits', 0.0, 3.5))
+                self.templates.append(('ndArch-QSO-V003.fits', zrange_qso[0], zrange_qso[1]))
             else:
                 raise ValueError("Bad template type "+x)
 
