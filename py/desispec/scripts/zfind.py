@@ -29,7 +29,7 @@ def parse(options=None):
     parser.add_argument("-o", "--outfile", type=str, required=False,
         help="output file name")
     parser.add_argument("--specprod_dir", type=str, required=False, default=None, 
-        help="overwrite $SPECPROD_DIR environment variable")
+        help="override $DESI_SPECTRO_REDUX/$PRODNAME environment variable path")
     parser.add_argument(      "--objtype", type=str, required=False,
         help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
     parser.add_argument('--zrange-galaxy', type=float, default=(0.0, 1.6), nargs=2, 
