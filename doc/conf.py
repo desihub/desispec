@@ -41,11 +41,23 @@ except ImportError:
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.viewcode',
     napoleon_extension
 ]
+
+# Configuration for intersphinx, copied from astropy.
+intersphinx_mapping = {
+    'python': ('http://docs.python.org/', None),
+    # 'python3': ('http://docs.python.org/3/', path.abspath(path.join(path.dirname(__file__), 'local/python3links.inv'))),
+    'numpy': ('http://docs.scipy.org/doc/numpy/', None),
+    'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),
+    'matplotlib': ('http://matplotlib.org/', None),
+    'astropy': ('http://docs.astropy.org/en/stable/', None),
+    'h5py': ('http://docs.h5py.org/en/latest/', None)
+    }
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -61,7 +73,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'desispec'
-copyright = u'2014-2015, DESI Collaboration'
+copyright = u'2014-2016, DESI Collaboration'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -122,6 +134,12 @@ napoleon_include_private_with_doc = True
 # a list of builtin themes.
 #html_theme = 'default'
 #html_theme = 'haiku'
+try:
+    import sphinx_rtd_theme
+    html_theme = 'sphinx_rtd_theme'
+    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+except ImportError:
+    pass
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
