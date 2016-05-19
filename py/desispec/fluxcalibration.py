@@ -109,9 +109,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     bestId=-1
     red_Chisq=-1.
 
-    bconvolveFlux=convolveModel(wave["b"],resolution_data["b"],Models["b"][0])
-    rconvolveFlux=convolveModel(wave["r"],resolution_data["r"],Models["r"][0])
-    zconvolveFlux=convolveModel(wave["z"],resolution_data["z"],Models["z"][0])
+    bconvolveFlux=convolveModel(wave["b"],resolution_data["b"],Models["b"][220])
+    rconvolveFlux=convolveModel(wave["r"],resolution_data["r"],Models["r"][220])
+    zconvolveFlux=convolveModel(wave["z"],resolution_data["z"],Models["z"][220])
 
     b_models=bconvolveFlux/applySmoothingFilter(bconvolveFlux)
     r_models=rconvolveFlux/applySmoothingFilter(rconvolveFlux)
