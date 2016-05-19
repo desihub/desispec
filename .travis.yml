@@ -63,7 +63,7 @@ env:
         # These packages will always be installed.
         - CONDA_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
-        - CONDA_ALL_DEPENDENCIES="scipy coverage==3.7.1"
+        - CONDA_ALL_DEPENDENCIES="scipy coverage==3.7.1 pyyaml"
         # These packages will always be installed.
         - PIP_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
@@ -101,6 +101,8 @@ matrix:
         # Default versions
         - os: linux
           env: PYTHON_VERSION=2.7 SETUP_CMD='test --coverage'
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # More recent versions
         # We're already on the "more recent" versions.
