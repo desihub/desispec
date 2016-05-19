@@ -67,7 +67,7 @@ env:
         # These packages will always be installed.
         - PIP_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
-        - PIP_ALL_DEPENDENCIES="speclite=${SPECLITE_VERSION} coveralls"
+        - PIP_ALL_DEPENDENCIES="speclite==${SPECLITE_VERSION} coveralls"
         # These pip packages need to be installed in a certain order, so we
         # do that separately from the astropy/ci-helpers scripts.
         - DESIHUB_PIP_DEPENDENCIES="desiutil=${DESIUTIL_VERSION} specter=${SPECTER_VERSION}"
