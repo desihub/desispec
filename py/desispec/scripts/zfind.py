@@ -28,6 +28,8 @@ def parse(options=None):
         help="number of spectra to fit [default: all]")
     parser.add_argument("-o", "--outfile", type=str, required=False,
         help="output file name")
+    parser.add_argument("--specprod_dir", type=str, required=False, default=None, 
+        help="overwrite $SPECPROD_DIR environment variable")
     parser.add_argument(      "--objtype", type=str, required=False,
         help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
     parser.add_argument("--zspec", action="store_true",
@@ -69,7 +71,8 @@ def main(args) :
             sys.exit(1)
             
         for channel in ('b', 'r', 'z'):
-            filename = io.findfile('brick', band=channel, brickname=args.brick)
+            filename = io.findfile('brick', band=channel, brickname=args.brick,
+                                   specprod_dir=args.specprod_dir)
             brick[channel] = io.Brick(filename)
     else:
         for filename in args.brickfiles:
