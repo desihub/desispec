@@ -1,5 +1,5 @@
 --
--- Schema for DESI pipeline file-tracking database.
+-- Schema for DESI pipeline raw data tracking database.
 -- Note: the SQL flavor is tuned to SQLite.
 --
 CREATE TABLE brick (
@@ -19,44 +19,6 @@ CREATE TABLE brick (
 --
 --
 --
-CREATE TABLE filetype (
-    type TEXT PRIMARY KEY
-);
---
---
---
-CREATE TABLE file (
-    id TEXT PRIMARY KEY, -- Checksum of the file.  SHA1 preferred.
-    filename TEXT NOT NULL,
-    directory TEXT NOT NULL,
-    prodname TEXT NOT NULL,
-    filetype TEXT NOT NULL, -- Foreign key on filetype
-    FOREIGN KEY (filetype) REFERENCES filetype (type)
-);
---
--- Both fileid and requires are primary keys in file.
--- 'requires' == 'needs this file'
---
-CREATE TABLE filedependency (
-    fileid TEXT NOT NULL,
-    requires TEXT NOT NULL, -- Primary key on the two columns (fileid, requires)
-    PRIMARY KEY (fileid, requires),
-    FOREIGN KEY (fileid) REFERENCES file (id),
-    FOREIGN KEY (requires) REFERENCES file (id)
-);
---
--- JOIN table
---
-CREATE TABLE file2brick (
-    fileid TEXT NOT NULL,
-    brickid INTEGER NOT NULL,
-    PRIMARY KEY (fileid, brickid),
-    FOREIGN KEY (fileid) REFERENCES file (id),
-    FOREIGN KEY (brickid) REFERENCES brick (brickid)
-);
---
---
---
 CREATE TABLE night (
     night INTEGER PRIMARY KEY -- e.g. 20150510
 );
@@ -64,15 +26,18 @@ CREATE TABLE night (
 --
 --
 CREATE TABLE exposureflavor (
-    flavor TEXT PRIMARY KEY
+    flavor TEXT PRIMARY KEY -- arc, flat, science, etc.
 );
 --
 --
 --
-CREATE TABLE exposure (
-    expid INTEGER PRIMARY KEY,
+CREATE TABLE frame (
+    frameid TEXT PRIMARY KEY, -- e.g. b0-00012345
+    band TEXT NOT NULL, -- b, r, z
+    spectrograph INTEGER NOT NULL, -- 0, 1, 2, ...
+    expid INTEGER NOT NULL, -- exposure number
     night INTEGER NOT NULL, -- foreign key on night
-    flavor TEXT NOT NULL, -- arc, flat, science, etc. might want a separate table?
+    flavor TEXT NOT NULL, -- foreign key on exposureflavor
     telra REAL NOT NULL,
     teldec REAL NOT NULL,
     tileid INTEGER NOT NULL DEFAULT -1, -- it is possible for the telescope to not point at a tile.
@@ -86,20 +51,35 @@ CREATE TABLE exposure (
 --
 -- JOIN table
 --
-CREATE TABLE file2exposure (
-    fileid TEXT NOT NULL,
-    expid INTEGER NOT NULL,
-    PRIMARY KEY (fileid, expid),
-    FOREIGN KEY (fileid) REFERENCES file (id),
-    FOREIGN KEY (expid) REFERENCES exposure (expid)
-);
---
--- JOIN table
---
-CREATE TABLE exposure2brick (
-    expid INTEGER NOT NULL,
+CREATE TABLE frame2brick (
+    frameid TEXT NOT NULL,
     brickid INTEGER NOT NULL,
-    PRIMARY KEY (expid, brickid),
-    FOREIGN KEY (expid) REFERENCES exposure (expid),
+    PRIMARY KEY (frameid, brickid),
+    FOREIGN KEY (frameid) REFERENCES frame (frameid),
     FOREIGN KEY (brickid) REFERENCES brick (brickid)
 );
+--
+-- Status
+--
+CREATE TABLE statuses (
+    status TEXT PRIMARY KEY  -- not processed, failed, succeeded
+);
+--
+--
+--
+CREATE TABLE framestatus (
+    frameid TEXT NOT NULL,
+    status TEXT NOT NULL,
+    stamp TIMESTAMP NOT NULL,
+    FOREIGN KEY (status) REFERENCES statuses (status)
+);
+--
+--
+--
+CREATE TABLE brickstatus (
+    brickid INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    stamp TIMESTAMP NOT NULL,
+    FOREIGN KEY (status) REFERENCES statuses (status)
+);
+r

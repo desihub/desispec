@@ -14,19 +14,19 @@ import re
 from datetime import datetime
 from .crc import cksum
 from ..log import get_logger, DEBUG
-#
-#
-#
-def load_brick(fitsfile,dbfile,fix_area=False):
+
+
+def load_brick(fitsfile, dbfile, fix_area=False):
     """Load a bricks FITS file into the database.
 
-    Args:
-        fitsfile: string containing the name of a bricks file.
-        dbfile: string containing the name of a SQLite database file.
-        fix_area: (optional) If ``True``, deal with missing area column.
-
-    Returns:
-        None
+    Parameters
+    ----------
+    fitsfile : :class:`str`
+        The name of a bricks file.
+    dbfile : :class:`str`
+        Name of the database.
+    fix_area : :class:`bool`, optional
+        If ``True``, deal with missing area column.
     """
     with fits.open(fitsfile) as f:
         brickdata = f[1].data
@@ -41,44 +41,54 @@ def load_brick(fitsfile,dbfile,fix_area=False):
     insert = """INSERT INTO brick
         (brickname, brickid, brickq, brickrow, brickcol, ra, dec, ra1, ra2, dec1, dec2, area)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?);"""
-    c.executemany(insert,zip(*bricklist))
+    c.executemany(insert, zip(*bricklist))
     conn.commit()
     conn.close()
     return
-#
-#
-#
-def is_night(night,dbfile):
+
+
+def is_night(night, dbfile):
     """Returns ``True`` if the night is in the night table.
+
+    Parameters
+    ----------
+    night : :class:`int` or :class:`str`
+        Night name.
+    dbfile : :class:`str`
+        Name of the database.
+
+    Returns
+    -------
+    :class:`bool`
+        ``True`` if the night is in the night table.
     """
-    if isinstance(night,str):
+    if isinstance(night, str):
         n = (int(night),)
     else:
         n = (night,)
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
     q = "SELECT night FROM night WHERE night = ?;"
-    c.execute(q,n)
+    c.execute(q, n)
     rows = c.fetchall()
     conn.commit()
     conn.close()
     return len(rows) == 1
-#
-#
-#
-def load_night(nights,dbfile):
+
+
+def load_night(nights, dbfile):
     """Load a night or multiple nights into the night table.
 
-    Args:
-        nights: integer, string or list of nights
-        dbfile: string containing the name of a SQLite database file.
-
-    Returns:
-        None
+    Parameters
+    ----------
+    nights : :class:`int`, :class:`str` or :class:`list`
+        A single night or list of nights.
+    dbfile : :class:`str`
+        Name of the database.
     """
-    if isinstance(nights,str):
+    if isinstance(nights, str):
         my_nights = [int(nights)]
-    elif isinstance(nights,int):
+    elif isinstance(nights, int):
         my_nights = [nights]
     else:
         my_nights = [int(n) for n in nights]
@@ -86,39 +96,49 @@ def load_night(nights,dbfile):
     c = conn.cursor()
     insert = """INSERT INTO night (night)
         VALUES (?);"""
-    c.executemany(insert,zip(my_nights))
+    c.executemany(insert, zip(my_nights))
     conn.commit()
     conn.close()
     return
-#
-#
-#
-def is_flavor(flavor,dbfile):
+
+
+def is_flavor(flavor, dbfile):
     """Returns ``True`` if the flavor is in the exposureflavor table.
+
+    Parameters
+    ----------
+    flavor : :class:`str`
+        A flavor name.
+    dbfile : :class:`str`
+        Name of the database.
+
+    Returns
+    -------
+    :class:`bool`
+        ``True`` if the flavor is in the flavor table.
     """
     f = (flavor,)
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
     q = "SELECT flavor FROM exposureflavor WHERE flavor = ?;"
-    c.execute(q,f)
+    c.execute(q, f)
     rows = c.fetchall()
     conn.commit()
     conn.close()
     return len(rows) == 1
-#
-#
-#
-def load_flavor(flavors,dbfile):
+
+
+def load_flavor(flavors, dbfile):
     """Load a flavor or multiple flavors into the exposureflavor table.
 
-    Args:
-        flavors: string or list of flavors
-        dbfile: string containing the name of a SQLite database file.
-
-    Returns:
-        None
+    Parameters
+    ----------
+    flavors : :class:`list` or :class:`str`
+        One or more flavor names.
+    dbfile : :class:`str`
+        Name of the database.
     """
-    if isinstance(flavors,str):
+    if isinstance(flavors, str):
         my_flavors = [flavors]
     else:
         my_flavors = flavors
@@ -126,155 +146,110 @@ def load_flavor(flavors,dbfile):
     c = conn.cursor()
     insert = """INSERT INTO exposureflavor (flavor)
         VALUES (?);"""
-    c.executemany(insert,zip(my_flavors))
+    c.executemany(insert, zip(my_flavors))
     conn.commit()
     conn.close()
     return
-#
-#
-#
-def is_filetype(filetype,dbfile):
-    """Returns ``True`` if the filetype is in the exposureflavor table.
-    """
-    f = (filetype,)
-    conn = sqlite3.connect(dbfile)
-    c = conn.cursor()
-    q = "SELECT type FROM filetype WHERE type = ?;"
-    c.execute(q,f)
-    rows = c.fetchall()
-    conn.commit()
-    conn.close()
-    return len(rows) == 1
-#
-#
-#
-def load_filetype(filetype,dbfile):
-    """Load a filetype or multiple filetypes into the filetype table.
 
-    Args:
-        filetype: string or list of filetypes
-        dbfile: string containing the name of a SQLite database file.
 
-    Returns:
-        None
-    """
-    if isinstance(filetype,str):
-        my_types = [filetype]
-    else:
-        my_types = filetype
-    conn = sqlite3.connect(dbfile)
-    c = conn.cursor()
-    insert = """INSERT INTO filetype (type)
-        VALUES (?);"""
-    c.executemany(insert,zip(my_types))
-    conn.commit()
-    conn.close()
-    return
-#
-#
-#
-def get_bricks_by_name(bricknames,dbfile):
+def get_bricks_by_name(bricknames, dbfile):
     """Search for and return brick data given the brick names.
+
+    Parameters
+    ----------
+    bricknames : :class:`list` or :class:`str`
+        Look up one or more brick names.
+    dbfile : :class:`str`
+        Name of the database.
+
+    Returns
+    -------
+    rows
+        The rows of the brick table.
     """
-    if isinstance(bricknames,str):
+    if isinstance(bricknames, str):
         b = [bricknames]
     else:
         b = bricknames
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
     q = "SELECT * FROM brick WHERE brickname IN ({})".format(','.join(['?']*len(b)))
-    c.execute(q,b)
+    c.execute(q, b)
     bricks = c.fetchall()
     conn.commit()
     conn.close()
     return bricks
-#
-#
-#
-def get_brickid_by_name(bricknames,dbfile):
+
+
+def get_brickid_by_name(bricknames, dbfile):
     """Return the brickids that correspond to a set of bricknames.
+
+    Parameters
+    ----------
+    bricknames : :class:`list` or :class:`str`
+        Look up one or more brick names.
+    dbfile : :class:`str`
+        Name of the database.
+
+    Returns
+    -------
+    :class:`dict`
+        A mapping of brick name to brick id.
     """
     bid = dict()
-    bricks = get_bricks_by_name(bricknames,dbfile)
+    bricks = get_bricks_by_name(bricknames, dbfile)
     for row in bricks:
         bid[row[1]] = row[0]
     return bid
-#
-#
-#
-def load_file(files,dbfile):
-    """Load a file or list of files into the file table.
 
-    Args:
-        files: string or list containing filenames.
-        dbfile: string containing the name of a SQLite database file.
 
-    Returns:
-        load_file: a list of the file ids.
-    """
-    if isinstance(files,str):
-        my_files = [files]
-    else:
-        my_files = files
-    ids = [cksum(f,hashname='sha1') for f in my_files]
-    filenames = [os.path.basename(f) for f in my_files]
-    directories = [os.path.dirname(f) for f in my_files]
-    prodnames = [os.environ['PRODNAME']]*len(my_files)
-    filetypes =[os.path.basename(f).split('-')[0] for f in my_files]
-    for t in set(filetypes):
-        if not is_filetype(t,dbfile):
-            load_filetype(t,dbfile)
-    conn = sqlite3.connect(dbfile)
-    c = conn.cursor()
-    insert = """INSERT INTO file
-        (id, filename, directory, prodname, filetype)
-        VALUES (?,?,?,?,?);"""
-    c.executemany(insert,zip(ids,filenames,directories,prodnames,filetypes))
-    conn.commit()
-    conn.close()
-    return ids
-#
-#
-#
-def load_data(datapath,dbfile):
+def load_data(datapath, dbfile):
     """Load a night or multiple nights into the night table.
 
-    Args:
-        datapath: string containing a data directory.
-        dbfile: string containing the name of a SQLite database file.
+    Parameters
+    ----------
+    datapath : :class:`str`
+        Name of a data directory.
+    dbfile : :class:`str`
+        Name of a SQLite database file.
 
-    Returns:
-        load_data: a list of the exposure numbers found.
+    Returns
+    -------
+    :class:`list`
+        A list of the exposure numbers found.
     """
     from ..log import desi_logger
-    fibermaps = glob(os.path.join(datapath,'fibermap*.fits'))
+    fibermaps = glob(os.path.join(datapath, 'fibermap*.fits'))
     if len(fibermaps) == 0:
         return []
-    fibermap_ids = load_file(fibermaps,dbfile)
+    fibermap_ids = load_file(fibermaps, dbfile)
     fibermapre = re.compile(r'fibermap-([0-9]{8})\.fits')
     exposures = [ int(fibermapre.findall(f)[0]) for f in fibermaps ]
-    exposure_data = list()
-    exposure2brick_data = list()
-    file2exposure_data = list(zip(fibermap_ids,exposures))
-    for k,f in enumerate(fibermaps):
+    frame_data = list()
+    frame2brick_data = list()
+    for k, f in enumerate(fibermaps):
         with fits.open(f) as hdulist:
-            night = int(hdulist['FIBERMAP'].header['NIGHT'])
-            dateobs = datetime.strptime(hdulist['FIBERMAP'].header['DATE-OBS'],'%Y-%m-%dT%H:%M:%S')
+            fiberhdr = hdulist['FIBERMAP'].header
+            night = int(fiberhdr['NIGHT'])
+            dateobs = datetime.strptime(fiberhdr['DATE-OBS'],
+                                        '%Y-%m-%dT%H:%M:%S')
             bricknames = list(set(hdulist['FIBERMAP'].data['BRICKNAME'].tolist()))
-        datafiles = glob(os.path.join(datapath,'desi-*-{0:08d}.fits'.format(exposures[k])))
+        datafiles = glob(os.path.join(datapath, 'desi-*-{0:08d}.fits'.format(exposures[k])))
         if len(datafiles) == 0:
-            datafiles = glob(os.path.join(datapath,'pix-*-{0:08d}.fits'.format(exposures[k])))
+            datafiles = glob(os.path.join(datapath, 'pix-*-{0:08d}.fits'.format(exposures[k])))
         desi_logger.debug("Found datafiles: {0}.".format(", ".join(datafiles)))
-        datafile_ids = load_file(datafiles,dbfile)
-        file2exposure_data += list(zip(datafile_ids, [exposures[k]]*len(datafile_ids)))
+        datafile_ids = load_file(datafiles, dbfile)
         with fits.open(datafiles[0]) as hdulist:
             exptime = hdulist[0].header['EXPTIME']
             flavor = hdulist[0].header['FLAVOR']
-        if not is_night(night,dbfile):
-            load_night(night,dbfile)
-        if not is_flavor(flavor,dbfile):
-            load_flavor(flavor,dbfile)
-        exposure_data.append((
+        if not is_night(night, dbfile):
+            load_night(night, dbfile)
+        if not is_flavor(flavor, dbfile):
+            load_flavor(flavor, dbfile)
+        frame_data.append((
+            frames[k], # frameid, e.g. b0-00012345
+            band, # b, r, z
+            spectrograph, # 0-9
             exposures[k], # expid
             night, # night
             flavor, # flavor
@@ -285,29 +260,30 @@ def load_data(datapath,dbfile):
             dateobs, # dateobs
             0.0, # alt
             0.0)) # az
-        brickids = get_brickid_by_name(bricknames,dbfile)
+        brickids = get_brickid_by_name(bricknames, dbfile)
         for i in brickids:
-            exposure2brick_data.append( (exposures[k], brickids[i]) )
+            frame2brick_data.append( (frames[k], brickids[i]) )
     conn = sqlite3.connect(dbfile)
     c = conn.cursor()
-    insert = """INSERT INTO exposure
+    insert = """INSERT INTO frame
         (expid, night, flavor, telra, teldec, tileid, exptime, dateobs, alt, az)
         VALUES (?,?,?,?,?,?,?,?,?,?);"""
-    c.executemany(insert,exposure_data)
-    insert = """INSERT INTO exposure2brick
+    c.executemany(insert, frame_data)
+    insert = """INSERT INTO frame2brick
         (expid,brickid) VALUES (?,?);"""
-    c.executemany(insert,exposure2brick_data)
-    insert = """INSERT INTO file2exposure
-        (fileid,expid) VALUES (?,?);"""
-    c.executemany(insert,file2exposure_data)
+    c.executemany(insert, frame2brick_data)
     conn.commit()
     conn.close()
     return exposures
-#
-#
-#
+
+
 def main():
-    """Call this function from a command-line script.
+    """Entry point for command-line script.
+
+    Returns
+    -------
+    :class:`int`
+        An integer suitable for passing to :func:`sys.exit`.
     """
     #
     # command-line arguments
@@ -366,10 +342,3 @@ def main():
         exposures += load_data(e,dbfile)
     log.info("Loaded exposures: {0}".format(', '.join(map(str,exposures))))
     return 0
-#
-# TODO
-#
-# Load file information; relative directory path
-# Which files get entries in the file2brick table?  There could be a lot of
-# duplication if every file goes in.
-# How to determine file dependencies?
