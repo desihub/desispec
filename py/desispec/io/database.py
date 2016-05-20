@@ -313,6 +313,7 @@ def main():
     # command-line arguments
     #
     from argparse import ArgumentParser
+    from pkg_resources import resource_filename
     parser = ArgumentParser(description="Create and load a DESI metadata database.")
     parser.add_argument('-a', '--area', action='store_true', dest='fixarea',
         help='If area is not specified in the brick file, recompute it.')
@@ -345,7 +346,7 @@ def main():
         log.info("Removing file: {0}.".format(dbfile))
         os.remove(dbfile)
     if not os.path.exists(dbfile):
-        schema = os.path.join(os.environ['DESISPEC'],'etc','file_db.sql')
+        schema = resource_filename('desispec', 'data/db/raw_data.sql')
         log.info("Reading schema from {0}.".format(schema))
         with open(schema) as sql:
             script = sql.read()

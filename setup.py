@@ -7,6 +7,10 @@ from __future__ import absolute_import, division, print_function
 import glob
 import os
 import sys
+#
+# setuptools' sdist command ignores MANIFEST.in
+#
+from distutils.command.sdist import sdist as DistutilsSdist
 from setuptools import setup, find_packages
 #
 # DESI support code.
@@ -52,12 +56,18 @@ setup_keywords['zip_safe'] = False
 setup_keywords['use_2to3'] = True
 setup_keywords['packages'] = find_packages('py')
 setup_keywords['package_dir'] = {'':'py'}
-setup_keywords['cmdclass'] = {'version': DesiVersion,'test': DesiTest}
+setup_keywords['cmdclass'] = {'version': DesiVersion, 'test': DesiTest, 'sdist': DistutilsSdist}
 setup_keywords['test_suite']='{name}.test.{name}_test_suite.{name}_test_suite'.format(**setup_keywords)
 #
 # Autogenerate command-line scripts.
 #
 # setup_keywords['entry_points'] = {'console_scripts':['desiInstall = desiutil.install.main:main']}
+#
+# Add internal data directories.
+#
+setup_keywords['package_data'] = {'desispec': ['data/db/*',
+                                               'data/arc_lines/*',
+                                               'data/quicklook/*',]}
 #
 # Run setup command.
 #

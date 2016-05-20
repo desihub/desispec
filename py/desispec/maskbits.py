@@ -18,7 +18,7 @@ Example::
     mask & ccdmask.COSMIC      #- get ccdmask.COSMIC from integer/array `mask`
     (mask & ccdmask.COSMIC) != 0  #- test boolean status of ccdmask.COSMIC in integer/array `mask`
     ccdmask.COSMIC | specmask.SATURATED  #- Combine two bitmasks.
-    
+
     #- bit attributes
     ccdmask.mask('COSMIC')     #- 2**0, same as ccdmask.COSMIC
     ccdmask.mask(0)            #- 2**0, same as ccdmask.COSMIC
@@ -35,6 +35,8 @@ Example::
 
 #- Move these definitions into a separate yaml file
 import yaml
+from desiutil.bitmask import BitMask
+
 _bitdefs = yaml.load("""
 #- CCD pixel mask
 ccdmask:
@@ -67,87 +69,6 @@ specmask:
 
 #- zmask: reasons why redshift fitting failed
 """)
-
-#- Class to provide mask bit utility functions
-class BitMask(object):
-    """BitMask object.
-    """
-    def __init__(self, name, bitdefs):
-        """
-        Args:
-            name : name of this mask, must be key in bitdefs
-            bitdefs : dictionary of different mask bit definitions each value is a list of [bitname, bitnum, comment]
-
-        Users are not expected to create BitMask objects directly.
-
-        See maskbits.ccdmask, maskbits.specmask, maskbits.fibermask, ...
-        """
-        self._name = name
-        self._bitname = dict()  #- key num -> value name
-        self._bitnum = dict()   #- key name -> value num
-        self._comment = dict()  #- key name or num -> comment
-        for bitname, bitnum, comment in bitdefs[name]:
-            assert bitname not in self._bitnum
-            assert bitnum not in self._bitname
-            self._bitnum[bitname] = bitnum
-            self._bitname[bitnum] = bitname
-            self._comment[bitname] = comment
-            self._comment[bitnum] = comment
-
-    def bitnum(self, bitname):
-        """Return bit number (int) for bitname (string)"""
-        return self._bitnum[bitname]
-
-    def bitname(self, bitnum):
-        """Return bit name (string) for this bitnum (integer)"""
-        return self._bitname[bitnum]
-
-    def comment(self, bitname_or_num):
-        """Return comment for this bit name or bit number"""
-        return self._comment[bitname_or_num]
-
-    def mask(self, name_or_num):
-        """Return mask value, i.e. 2**bitnum for this name or number"""
-        if isinstance(name_or_num, int):
-            return 2**name_or_num
-        else:
-            return 2**self._bitnum[name_or_num]
-
-    def names(self, mask=None):
-        """Return list of names of masked bits.
-        If mask=None, return names of all known bits.
-        """
-        names = list()
-        if mask is None:
-            for bitnum in sorted(self._bitname.keys()):
-                names.append(self._bitname[bitnum])
-        else:
-            bitnum = 0
-            while bitnum < mask:
-                if (2**bitnum & mask):
-                    if bitnum in self._bitname.keys():
-                        names.append(self._bitname[bitnum])
-                    else:
-                        names.append('UNKNOWN'+str(bitnum))
-                bitnum += 1
-
-        return names
-
-    #- Allow access via mask.BITNAME
-    def __getattr__(self, name):
-        if name in self._bitnum:
-            return 2**self._bitnum[name]
-        else:
-            raise AttributeError('Unknown mask bit name '+name)
-
-    #- What to print
-    def __repr__(self):
-        result = list()
-        result.append( self._name+':' )
-        for i in sorted(self._bitname.keys()):
-            result.append('    - [{:16s} {:2d}, "{}"]'.format(self._bitname[i]+',', i, self._comment[i]))
-
-        return "\n".join(result)
 
 #-------------------------------------------------------------------------
 #- The actual masks
