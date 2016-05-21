@@ -22,7 +22,7 @@ def parse(options=None):
     default_nproc = max(1, multiprocessing.cpu_count() // 2)
 
     parser = argparse.ArgumentParser(description="Fit redshifts and classifications on bricks.")
-    parser.add_argument("-b", "--brick", type=str, required=True,
+    parser.add_argument("-b", "--brick", type=str, required=False,
         help="input brickname")
     parser.add_argument("-n", "--nspec", type=int, required=False,
         help="number of spectra to fit [default: all]")
@@ -30,7 +30,7 @@ def parse(options=None):
         help="output file name")
     parser.add_argument("--specprod_dir", type=str, required=False, default=None, 
         help="override $DESI_SPECTRO_REDUX/$PRODNAME environment variable path")
-    parser.add_argument(      "--objtype", type=str, required=False,
+    parser.add_argument("--objtype", type=str, required=False,
         help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
     parser.add_argument('--zrange-galaxy', type=float, default=(0.0, 1.6), nargs=2, 
                         help='minimum and maximum galaxy redshifts to consider')
@@ -73,9 +73,7 @@ def main(args) :
     brick = dict()
     if args.brick is not None:
         if len(args.brickfiles) != 0:
-            log.error('Give -b/--brick or input brickfiles but not both')
-            sys.exit(1)
-            
+            raise RuntimeError('Give -b/--brick or input brickfiles but not both')
         for channel in ('b', 'r', 'z'):
             filename = io.findfile('brick', band=channel, brickname=args.brick,
                                    specprod_dir=args.specprod_dir)
