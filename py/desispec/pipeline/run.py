@@ -12,6 +12,7 @@ Tools for running the pipeline.
 from __future__ import absolute_import, division, print_function
 
 import os
+import stat
 import errno
 import sys
 import subprocess as sp
@@ -463,7 +464,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
         nproc = comm.size
         rank = comm.rank
 
-    print("step {} with {} procs".format(step, nproc))
+    if taskproc > nproc:
+        raise RuntimeError("cannot have {} processes per task with only {} processes".format(taskproc, nproc))
 
     # Get the tasks that need to be done for this step.  Mark all completed
     # tasks as done.
@@ -575,12 +577,12 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
 
     # Now we take the graphs from all groups and merge their states
 
-    if comm is not None:
-        comm.barrier()
-        graph_merge_state(grph, comm=comm_rank)
-        grph = comm_group.bcast(grph, root=0)
+    # if comm is not None:
+    #     comm.barrier()
+    #     graph_merge_state(grph, comm=comm_rank)
+    #     grph = comm_group.bcast(grph, root=0)
 
-    return
+    return grph
 
 
 def retry_task(failpath, newopts=None):
@@ -624,7 +626,7 @@ def retry_task(failpath, newopts=None):
     return
 
 
-def run_steps(first, last, rawdir, proddir, spectrogaphs=None, nightstr=None, comm=None):
+def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, comm=None):
     log = get_logger()
 
     rank = 0
@@ -632,8 +634,6 @@ def run_steps(first, last, rawdir, proddir, spectrogaphs=None, nightstr=None, co
     if comm is not None:
         rank = comm.rank
         nproc = comm.size
-
-    if 
 
     # find the list of all nights which have been planned
 
@@ -727,19 +727,24 @@ def run_steps(first, last, rawdir, proddir, spectrogaphs=None, nightstr=None, co
     # Run the steps.  Each step updates the graph in place to track
     # the state of all nodes.
 
+    jobid = None
+    if rank == 0:
+        if 'SLURM_JOBID' in os.environ.keys():
+            jobid = "slurm-{}".format(os.environ['SLURM_JOBID'])
+        else:
+            jobid = os.getpid()
+
     for st in range(firststep, laststep):
         runfile = None
-        jobid = None
         if rank == 0:
             log.info("starting step {}".format(run_step_types[st]))
-            if 'SLURM_JOBID' in os.environ.keys():
-                jobid = "slurm-{}".format(os.environ['SLURM_JOBID'])
-            else:
-                jobid = os.getpid()
             runfile = os.path.join(rundir, "running_{}_{}".format(run_step_types[st], jobid))
             with open(runfile, 'w') as f:
                 f.write("")
-        run_step(run_step_types[st], rawdir, proddir, grph, opts, comm=comm, taskproc=steptaskproc[run_step_types[st]])
+        taskproc = steptaskproc[run_step_types[st]]
+        if taskproc > nproc:
+            taskproc = nproc
+        grph = run_step(run_step_types[st], rawdir, proddir, grph, opts, comm=comm, taskproc=taskproc)
         if comm is not None:
             comm.barrier()
         if rank == 0:
@@ -753,9 +758,7 @@ def run_steps(first, last, rawdir, proddir, spectrogaphs=None, nightstr=None, co
         graph_write(outgrph, grph)
         with open(os.path.join(rundir, "{}.dot".format(outroot)), 'w') as f:
             graph_dot(grph, f)
-        if os.path.isfile(runfile):
-            os.remove(runfile)
-        log.info("ending step {}".format(run_step_types[st]))
+        log.info("finished steps {} to {}".format(run_step_types[firststep], run_step_types[laststep-1]))
 
     return
 
@@ -839,7 +842,7 @@ def subprocess_list(tasks, rank=0):
     return
 
 
-def shell_job(path, logroot, envsetup, desisetup, comrun, commands):
+def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=1, threads=1):
     with open(path, 'w') as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
@@ -848,14 +851,20 @@ def shell_job(path, logroot, envsetup, desisetup, comrun, commands):
             f.write("{}\n".format(com))
         f.write("\n")
         f.write("source {}\n\n".format(desisetup))
+        f.write("export OMP_NUM_THREADS={}\n\n".format(threads))
+        run = ""
+        if comrun != "":
+            run = "{} {}".format(comrun, mpiprocs)
         for com in commands:
             executable = com.split(' ')[0]
             f.write("which {}\n".format(executable))
-            f.write("time {} {} >>${{log}} 2>&1\n\n".format(comrun, com))
+            f.write("time {} {} >>${{log}} 2>&1\n\n".format(run, com))
+    mode = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
+    os.chmod(path, mode)
     return
 
 
-def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False):
+def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, queue='debug'):
     hours = int(minutes/60)
     fullmin = int(minutes - 60*hours)
     timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
@@ -870,10 +879,10 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
 
     with open(path, 'w') as f:
         f.write("#!/bin/bash -l\n\n")
-        if totalnodes > 512:
-            f.write("#SBATCH --partition=regular\n")
-        else:
+        if queue == 'debug':
             f.write("#SBATCH --partition=debug\n")
+        else:
+            f.write("#SBATCH --partition=regular\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
@@ -906,9 +915,18 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         f.write("echo \"job datestamp = ${now}\"\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         for com in commands:
-            executable = com.split(' ')[0]
-            f.write("which {}\n".format(executable))
-            f.write("time ${{run}} {} >>${{log}} 2>&1".format(com))
+            comlist = com.split(' ')
+            executable = comlist.pop(0)
+            f.write("ex=`which {}`\n".format(executable))
+            f.write("app=\"${ex}.app\"\n")
+            f.write("if [ -x ${app} ]; then\n")
+            f.write("  if [ ${ex} -nt ${app} ]; then\n")
+            f.write("    app=${ex}\n")
+            f.write("  fi\n")
+            f.write("else\n")
+            f.write("  app=${ex}\n")
+            f.write("fi\n")
+            f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(' '.join(comlist)))
             if multisrun:
                 f.write(" &")
             f.write("\n\n")

@@ -28,6 +28,7 @@ import numpy as np
 import argparse
 import re
 
+import desispec.io as io
 from desispec.log import get_logger
 import desispec.pipeline as pipe
 
@@ -44,8 +45,8 @@ def main():
 
     # raw and production locations
 
-    rawdir = os.environ['DESI_SPECTRO_DATA']
-    proddir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['PRODNAME'])
+    rawdir = os.path.abspath(io.rawdata_root())
+    proddir = os.path.abspath(io.specprod_root())
 
     if rank == 0:
         log.info("using raw dir {}".format(rawdir))

@@ -227,6 +227,8 @@ def select_nights(allnights, nightstr):
 
 def create_prod(rawdir, proddir, nightstr=None):
 
+    expnightcount = {}
+
     # create main directories if they don't exist
 
     if not os.path.isdir(proddir):
@@ -299,12 +301,13 @@ def create_prod(rawdir, proddir, nightstr=None):
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
 
-        grph = graph_night(rawdir, nt)
+        grph, expcount = graph_night(rawdir, nt)
+        expnightcount[nt] = expcount
         with open(os.path.join(plandir, "{}.dot".format(nt)), 'w') as f:
             graph_dot(grph, f)
         graph_write(os.path.join(plandir, "{}.yaml".format(nt)), grph)
 
-    return
+    return expnightcount
 
 
 def graph_name(*args):
@@ -333,6 +336,11 @@ def graph_night(rawdir, rawnight):
 
     allbricks = set()
 
+    expcount = {}
+    expcount['flat'] = 0
+    expcount['arc'] = 0
+    expcount['science'] = 0
+
     # First, insert raw data into the graph.  We use the existence of the raw data
     # as a filter over spectrographs.  Spectrographs whose raw data do not exist
     # are excluded from the graph.
@@ -353,8 +361,19 @@ def graph_night(rawdir, rawnight):
         fmdata, fmheader = io.read_fibermap(fibermap, header=True)
         flavor = fmheader['flavor']
         bricks = set()
-        bricks.update(fmdata['BRICKNAME'])
+        fmbricks = []
+        for fmb in fmdata['BRICKNAME']:
+            if len(fmb) > 0:
+                fmbricks.append(fmb)
+        bricks.update(fmbricks)
         allbricks.update(bricks)
+
+        if flavor == 'arc':
+            expcount['arc'] += 1
+        elif flavor == 'flat':
+            expcount['flat'] += 1
+        else:
+            expcount['science'] += 1
 
         node = {}
         node['type'] = 'fibermap'
@@ -669,6 +688,7 @@ def graph_night(rawdir, rawnight):
     # Brick / Zbest dependencies
 
     for b in allbricks:
+        zbname = "zbest-{}".format(b)
         inb = []
         for band in ['b', 'r', 'z']:
             node = {}
@@ -676,7 +696,7 @@ def graph_night(rawdir, rawnight):
             node['brick'] = b
             node['band'] = band
             node['in'] = []
-            node['out'] = []
+            node['out'] = [zbname]
             bname = "brick-{}-{}".format(band, b)
             inb.append(bname)
             grph[bname] = node
@@ -685,7 +705,6 @@ def graph_night(rawdir, rawnight):
         node['brick'] = b
         node['in'] = inb
         node['out'] = []
-        zbname = "zbest-{}".format(b)
         grph[zbname] = node
 
     for name, nd in grph.items():
@@ -695,7 +714,6 @@ def graph_night(rawdir, rawnight):
             continue
         if nd['flavor'] == 'flat':
             continue
-        night = nd['in'][0]
         id = nd['id']
         bricks = nd['bricks']
         for band in ['b', 'r', 'z']:
@@ -706,7 +724,7 @@ def graph_night(rawdir, rawnight):
                     grph[bname]['in'].append(cfname)
                     grph[cfname]['out'].append(bname)
 
-    return grph
+    return (grph, expcount)
 
 
 def graph_path_fibermap(rawdir, name):
@@ -1050,6 +1068,8 @@ def graph_dot(grph, f):
 
 def graph_merge_state(grph, comm=None):
     if comm is None:
+        return
+    if comm.size == 1:
         return
     # check that we have the same list of nodes on all processes.  Then
     # merge the states.  "fail" overrides "None", and "done" overrides

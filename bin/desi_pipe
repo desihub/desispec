@@ -22,6 +22,61 @@ import desispec.io as io
 import desispec.pipeline as pipe
 
 
+def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, ntask, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes, nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh):
+    specstr = ""
+    if specs is not None:
+        specstr = " --spectrographs {}".format(','.join([ "{}".format(x) for x in specs ]))
+
+    scrdir = os.path.join(proddir, 'run', 'scripts')
+    logdir = os.path.join(proddir, 'run', 'logs')
+
+    if (nersc_threads > 1) and (nersc_mp > 1):
+        raise RuntimeError("set either nersc_threads or nersc_mp, but not both")
+
+    nstr = ""
+    scrstr = "all"
+    if night is not None:
+        nstr = " --nights {}".format(night)
+        scrstr = "{}".format(night)
+
+    stepstr = "{}-{}_{}".format(first, last, scrstr)
+    if first == last:
+        stepstr = "{}_{}".format(first, scrstr)
+
+    com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
+
+    shell_maxprocs = int(shell_maxcores / shell_threads)
+    shell_procs = shell_maxprocs
+    if ntask < shell_procs:
+        shell_procs = ntask
+
+    shell_path = os.path.join(scrdir, "{}.sh".format(stepstr))
+    shell_log = os.path.join(logdir, "{}_sh".format(stepstr))
+    pipe.shell_job(shell_path, shell_log, envcom, setupfile, com, comrun=shell_mpi_run, mpiprocs=shell_procs, threads=shell_threads)
+
+    core_per_proc = 1
+    if nersc_threads > 1:
+        core_per_proc = nersc_threads
+    elif nersc_mp > 1:
+        core_per_proc = nersc_mp
+
+    nodeproc = int(nersc_nodecores / core_per_proc)
+    nodes = int(ntask / nodeproc)
+    if nodes > nersc_maxnodes:
+        nodes = nersc_maxnodes
+
+    queue = 'debug'
+    if nodes > nersc_queue_thresh:
+        queue = 'regular'
+
+    nersc_path = os.path.join(scrdir, "{}.slurm".format(stepstr))
+    nersc_log = os.path.join(logdir, "{}_slurm".format(stepstr))
+
+    pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, com, nodes=nodes, nodeproc=nodeproc, minutes=30, multisrun=False, openmp=(nersc_threads > 1), multiproc=(nersc_mp > 1), queue=queue)
+
+    return
+
+
 def main():
     parser = argparse.ArgumentParser(description='Set up pipeline runs for a production.')
     parser.add_argument('--raw', required=False, default=None, help='raw data directory')
@@ -33,30 +88,39 @@ def main():
     
     parser.add_argument('--nersc_host', required=False, default='edison', help='NERSC slurm scripts host name (edison|cori)')
 
-    parser.add_argument('--nersc_max_proc', required=False, default='edison', help='NERSC slurm scripts max processes to use.  Default is size of debug queue max.')
+    parser.add_argument('--nersc_max_nodes', required=False, default=None, help='NERSC slurm scripts max nodes to use.  Default is size of debug queue max.')
 
-    parser.add_argument('--shell_mpi_run', required=False, default='mpirun -np', help='bash scripts command to launch MPI pipeline steps.  If --shell_max_proc is 1, this is ignored.')
-    parser.add_argument('--shell_max_proc', required=False, default=2, help='bash scripts max processes to use.')
+    parser.add_argument('--shell_mpi_run', required=False, default='mpirun -np', help='bash scripts command to launch MPI pipeline steps.  If --shell_max_cores is 1, this is ignored.')
+    parser.add_argument('--shell_max_cores', required=False, default=2, help='bash scripts max cores to use.')
 
-    parser.add_argument('--fakeboot', required=False, default=None, help='path to input psf-{r,b,z}.fits files, to bypass bootcalib')
+    parser.add_argument('--fakeboot', required=False, default=False, action="store_true", help='path to input psf-{r,b,z}.fits files, to bypass bootcalib')
     parser.add_argument('--spectrographs', required=False, default=None, help='process only this comma-separated list of spectrographs')
+
+    parser.add_argument('--zfind_workers', required=False, default=20, help='number of zfind workers.')
 
     args = parser.parse_args()
 
     nodecores = 0
-    if args.nerschost == 'edison':
+    maxnodes = 0
+    if args.nersc_host == 'edison':
         nodecores = 24
+        if args.nersc_max_nodes is not None:
+            maxnodes = int(args.nersc_max_nodes)
+        else:
+            maxnodes = 512
     elif args.nerschost == 'cori':
         nodecores = 32
+        if args.nersc_max_nodes is not None:
+            maxnodes = int(args.nersc_max_nodes)
+        else:
+            maxnodes = 64
     else:
         raise RuntimeError("unknown nersc host")
 
-    shell_nproc = int(args.shell_max_proc)
-    shell_run = ""
-    if shell_nproc > 1:
-        shell_run = "{} {}".format(args.shell_mpi_run, shell_nproc)
-
-    frames_per_exp = 3 * len(spectrographs)
+    shell_maxcores = int(args.shell_max_cores)
+    shell_mpi_run = ""
+    if shell_maxcores > 1:
+        shell_mpi_run = "{}".format(args.shell_mpi_run)
 
     rawdir = args.raw
     if rawdir is None:
@@ -65,13 +129,30 @@ def main():
 
     specdir = args.redux
     if specdir is None:
-        specdir = io.specprod_root()
-    specdir = os.path.abspath(specdir)
+        if 'DESI_SPECTRO_REDUX' not in os.environ:
+            raise RuntimeError("You must set DESI_SPECTRO_REDUX in your environment or with a commandline option")
+        specdir = os.path.abspath(os.environ['DESI_SPECTRO_REDUX'])
+
+    prodname = args.prod
+    if prodname is None:
+        if 'PRODNAME' not in os.environ:
+            raise RuntimeError("You must set PRODNAME in your environment or with a commandline option")
+        prodname = os.environ['PRODNAME']
+
+    proddir = os.path.join(specdir, prodname)
 
     # Update output directories and plans
 
     print("Updating production {}".format(proddir))
-    pipe.create_prod(rawdir, proddir, nightstr=args.nights)
+    expnightcount = pipe.create_prod(rawdir, proddir, nightstr=args.nights)
+    totcount = {}
+    totcount['flat'] = 0
+    totcount['arc'] = 0
+    totcount['science'] = 0
+    for k, v in expnightcount.items():
+        totcount['flat'] += v['flat']
+        totcount['arc'] += v['arc']
+        totcount['science'] += v['science']
 
     # create setup shell snippet
 
@@ -80,14 +161,14 @@ def main():
         s.write("# Generated by desi_pipe\n")
         s.write("export DESI_SPECTRO_DATA={}\n".format(rawdir))
         s.write("export DESI_SPECTRO_REDUX={}\n".format(specdir))
-        s.write("export PRODNAME={}\n".format(args.prod))
+        s.write("export PRODNAME={}\n".format(prodname))
         s.write("\n")
 
     # load those same things into the environment.
 
     os.environ['DESI_SPECTRO_DATA'] = rawdir
     os.environ['DESI_SPECTRO_REDUX'] = specdir
-    os.environ['PRODNAME'] = args.prod
+    os.environ['PRODNAME'] = prodname
 
     # read in the environment setup, if needed
 
@@ -97,51 +178,49 @@ def main():
             for line in f:
                 envcom.append(line.rstrip())
 
+    # which nights and spectrographs are we using?
+
+    specs = [ x for x in range(10) ]
+    if args.spectrographs is not None:
+        specs = [ int(x) for x in args.spectrographs.split(',') ]
+    nspect = len(specs)
+
+    allnights = []
+    nightpat = re.compile(r'\d{8}')
+    for root, dirs, files in os.walk(rawdir, topdown=True):
+        for d in dirs:
+            nightmat = nightpat.match(d)
+            if nightmat is not None:
+                allnights.append(d)
+        break
+
+    nights = pipe.select_nights(allnights, args.nights)
+
     # create scripts for processing
 
     print("Generating scripts")
 
-    scrdir = os.path.join(proddir, 'run', 'scripts')
-    logdir = os.path.join(proddir, 'run', 'logs')
-
-    specstr = ""
-    nspect = 10
-    if args.spectrographs is not None:
-        specstr = "--spectrographs {}".format(args.spectrographs)
-        nspect = len(args.spectrographs.split(','))
-
     # bootcalib
 
     if args.fakeboot is None:
-        com_full = ["desi_pipe_run --first bootcalib --last bootcalib {}".format(specstr)]
 
-        shell_path = os.path.join(scrdir, "bootcalib_all.sh")
-        shell_log = os.path.join(logdir, "bootcalib_all")
-        pipe.shell_job(shell_path, shell_log, envcom, setupfile, shell_run, com_full)
+        ntask = len(nights) * 3 * nspect
 
-        nersc_path = os.path.join(scrdir, "bootcalib_all.slurm")
-        nersc_log = os.path.join(logdir, "bootcalib_all")
+        compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
-        tot_tasks = 
+        for nt in nights:
 
-        pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, com_full, nodes=1, nodeproc=1, minutes=30, multisrun=True, openmp=False, multiproc=False)
+            ntask = 3 * nspect
 
+            compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
-pipe.nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False)
+    else:
 
-    for nt in nights:
+        cal2d = os.path.join(proddir, 'calib2d')
+        calpsf = os.path.join(cal2d, 'psf')
 
-        # bootcalib
+        for nt in nights:
 
-        
-
-            com = []
-            com.append("desi_pipe_run --first bootcalib --last bootcalib --nights {} --")
-
-
-        else:
-            cal2d = os.path.join(proddir, 'calib2d')
-            calpsf = os.path.join(cal2d, 'psf')
             calpsfnight = os.path.join(calpsf, nt)
             if not os.path.isdir(calpsfnight):
                 os.makedirs(calpsfnight)
@@ -154,238 +233,78 @@ pipe.nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1
                     if not os.path.islink(lnk):
                         os.symlink(target, lnk)
 
+    # specex
+
+    ntask = totcount['arc'] * 3 * nspect
+
+    compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    for nt in nights:
+
+        ntask = expnightcount[nt]['arc'] * 3 * nspect
+
+        compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    # psfcombine
+
+    ntask = len(nights) * 3 * nspect
+
+    compute_step(setupfile, rawdir, proddir, envcom, "psfcombine", "psfcombine", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    for nt in nights:
+
+        ntask = 3 * nspect
+
+        compute_step(setupfile, rawdir, proddir, envcom, "psfcombine", "psfcombine", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    # extract
+
+    ntask = (totcount['flat'] + totcount['science']) * 3 * nspect
+
+    compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    for nt in nights:
+
+        ntask = (expnightcount[nt]['flat'] + expnightcount[nt]['science']) * 3 * nspect
+
+        compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    # calibration
+
+    ntask = totcount['science'] * 3 * nspect
+
+    compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    for nt in nights:
+
+        ntask = expnightcount[nt]['science'] * 3 * nspect
+
+        compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    # make bricks - serial only for now!
+
+    scrdir = os.path.join(proddir, 'run', 'scripts')
+    logdir = os.path.join(proddir, 'run', 'logs')
+
+    brickcom = []
+    for nt in nights:
+        brickcom.append("desi_make_bricks --night {}".format(nt))
+
+    shell_path = os.path.join(scrdir, "bricks.sh")
+    shell_log = os.path.join(logdir, "bricks_sh.log")
+    pipe.shell_job(shell_path, shell_log, envcom, setupfile, brickcom, comrun=shell_mpi_run, mpiprocs=1, threads=1)
+
+    nersc_path = os.path.join(scrdir, "bricks.slurm")
+    nersc_log = os.path.join(logdir, "bricks_slurm.log")
+    pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, brickcom, nodes=1, nodeproc=1, minutes=30, multisrun=False, openmp=False, multiproc=False, queue='debug')
+
+    # redshift fitting
+
+    ntask = int(args.zfind_workers)
+
+    compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, nodecores, maxnodes)
 
 
-
-
-
-
-
-
-
-
-
-
-
-        # get the list of exposures and their types
-        (expid, exptype, fibermaps, fullraw) = pipe.find_raw(rawdir, nt, spectrographs=spectrographs)
-
-        print("Night {}:".format(nt))
-
-        allarcs = []
-        allflats = []
-        allscience = []
-        for ex in expid:
-            if exptype[ex] == "arc":
-                allarcs.append(ex)
-                print("  {:08d} : arc".format(ex))
-            elif exptype[ex] == "flat":
-                allflats.append(ex)
-                print("  {:08d} : flat".format(ex))
-            else:
-                allscience.append(ex)
-                print("  {:08d} : science".format(ex))
-
-        if len(allarcs) == 0:
-            raise RuntimeError("night {} has no calibration exposures".format(nt))
-        if len(allflats) == 0:
-            raise RuntimeError("night {} has no flats".format(nt))
-        if len(allscience) == 0:
-            raise RuntimeError("night {} has no science exposures".format(nt))
-        
-        # make nightly script and log directories
-        nsdir = os.path.join(scrdir, nt)
-        if not os.path.isdir(nsdir):
-            os.makedirs(nsdir)
-        nldir = os.path.join(logdir, nt)
-        if not os.path.isdir(nldir):
-            os.makedirs(nldir)
-
-        # create scripts to run bootcalib
-        if args.fakeboot is not None:
-            for band in ['b', 'r', 'z']:
-                truepsf = os.path.join(args.fakeboot, "psf-{}.fits".format(band))
-                for spec in spectrographs:
-                    lnk = os.path.join(calpsf, nt, "psfboot-{}{}.fits".format(band, spec))
-                    if not os.path.islink(lnk):
-                        os.symlink(truepsf, lnk)
-        else:
-            firstarc = allarcs[0]
-            firstflat = allflats[0]
-            commands = []
-            for cam in sorted(fullraw[firstarc].keys()):
-                spc = int(cam[1])
-                if spc in spectrographs:
-                    flatname = "{}-{}-{:08d}.fits".format(pixroot, cam, firstflat)
-                    flatfile = os.path.join(rawdir, nt, flatname)
-                    arcname = "{}-{}-{:08d}.fits".format(pixroot, cam, firstarc)
-                    arcfile = os.path.join(rawdir, nt, arcname)
-                    outname = "psfboot-{}.fits".format(cam)
-                    outfile = os.path.join(calpsf, nt, outname)
-                    commands.append("desi_bootcalib --triplet-matching --legendre-degree 5 --fiberflat {} --arcfile {} --outfile {}".format(flatfile, arcfile, outfile))
-            shell_file = os.path.join(nsdir, "bootcalib.sh")
-            nersc_file = os.path.join(nsdir, "bootcalib.nersc")
-            shell_log = os.path.join(nldir, "bootcalib_sh")
-            nersc_log = os.path.join(nldir, "bootcalib_nersc")
-            pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
-            pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=1, nodeproc=1, minutes=30, multisrun=True, openmp=False, multiproc=False)
-
-            com_master_shell.append("bash {}".format(shell_file))
-
-        # Create scripts to run specex
-
-        #lamplines = "/project/projectdirs/desi/software/edison/specex/specex-0.3.4/data/lamplines-specex.par"
-        lamplines = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt"
-
-        shell_file = os.path.join(nsdir, "specex.sh")
-        nersc_file = os.path.join(nsdir, "specex.nersc")
-        dump_file = os.path.join(nsdir, "specex_commands.txt")
-        shell_log = os.path.join(nldir, "specex_sh")
-        nersc_log = os.path.join(nldir, "specex_nersc")
-
-        comopts = "--lamplines {} --night {} --spectrographs {}".format(lamplines, nt, spectrostr)
-        
-        complan = "desi_plan_psf {} --dump {}".format(comopts, dump_file)
-        #spret = sp.call(complan, shell=True)
-
-        com = "desi_pipe_psf {}".format(comopts)
-
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
-
-        # we want to use enough nodes to run one exposure simultaneously.
-        nbundle = len(allarcs) * frames_per_exp * 20
-        nodeproc = 8
-        runnodes = int(nbundle / nodeproc)
-        if runnodes * nodeproc != nbundle:
-            runnodes += 1
-        # for one exposure, there are 600 bundles.  If we run 8 per node
-        # (which works well for 24 or 32 cores per node), then we want 
-        # 75 nodes.  Specex is OpenMP parallel.
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=runnodes, nodeproc=nodeproc, minutes=30, openmp=True, multiproc=False)
-
-        com_master_shell.append("bash {}".format(shell_file))
-
-        # Create script to generate best psf
-
-        commands = []
-        for cam in sorted(fullraw[allarcs[0]].keys()):
-            outname = "psf-{}.fits".format(cam)
-            outfile = os.path.join(calpsf, nt, outname)
-            infiles = []
-            for arc in allarcs:
-                spc = int(cam[1])
-                if spc in spectrographs:
-                    psfname = "psf-{}-{:08d}.fits".format(cam, arc)
-                    psffile = os.path.join(expdir, nt, "{:08d}".format(arc), psfname)
-                    infiles.append(psffile)
-            commands.append("specex_mean_psf --output {} --input {}".format(outfile, " ".join(infiles)))
-        
-        shell_file = os.path.join(nsdir, "meanpsf.sh")
-        nersc_file = os.path.join(nsdir, "meanpsf.nersc")
-        shell_log = os.path.join(nldir, "meanpsf_sh")
-        nersc_log = os.path.join(nldir, "meanpsf_nersc")
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=1, nodeproc=1, minutes=10, multisrun=True, openmp=False, multiproc=False)
-
-        com_master_shell.append("bash {}".format(shell_file))
-
-        # Create scripts to run exspec
-
-        shell_file = os.path.join(nsdir, "exspec.sh")
-        nersc_file = os.path.join(nsdir, "exspec.nersc")
-        dump_file = os.path.join(nsdir, "exspec_commands.txt")
-        shell_log = os.path.join(nldir, "exspec_sh")
-        nersc_log = os.path.join(nldir, "exspec_nersc")
-
-        comopts = "--night {} --spectrographs {}".format(nt, spectrostr)
-        
-        complan = "desi_plan_extract {} --dump {}".format(comopts, dump_file)
-        #spret = sp.call(complan, shell=True)
-
-        com = "desi_pipe_extract {}".format(comopts)
-        
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
-        # we want to run all tasks at once.  we use one core per task.
-        nbundle = (len(allscience) + len(allflats)) * frames_per_exp * 20
-        nodeproc = 8
-        runnodes = int(nbundle / nodeproc)
-        if runnodes * nodeproc != nbundle:
-            runnodes += 1
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=runnodes, nodeproc=nodeproc, minutes=30, openmp=False, multiproc=True)
-
-        com_master_shell.append("bash {}".format(shell_file))
-
-        # Create scripts to run calibration
-
-        shell_file = os.path.join(nsdir, "calib.sh")
-        nersc_file = os.path.join(nsdir, "calib.nersc")
-        dump_file = os.path.join(nsdir, "calib_commands.txt")
-        shell_log = os.path.join(nldir, "calib_sh")
-        nersc_log = os.path.join(nldir, "calib_nersc")
-
-        comopts = "--night {}".format(nt)
-        
-        complan = "desi_plan_calib {} --dump {}".format(comopts, dump_file)
-        #spret = sp.call(complan, shell=True)
-
-        com = "desi_pipe_calib {}".format(comopts)
-
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
-        # fiberflat is much more expensive than the other steps.
-        # so we use the number of flats to set the concurrency.
-        nframe = len(allflats) * frames_per_exp
-        nodeproc = nodecores
-        runnodes = int(nframe / nodeproc)
-        if runnodes * nodeproc != nframe:
-            runnodes += 1
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=runnodes, nodeproc=nodeproc, minutes=30, openmp=False, multiproc=True)
-
-        com_master_shell.append("bash {}".format(shell_file))
-
-        # Create scripts to run make bricks
-
-        commands = []
-        commands.append("desi_make_bricks --night {}".format(nt))
-        shell_file = os.path.join(nsdir, "bricks.sh")
-        nersc_file = os.path.join(nsdir, "bricks.nersc")
-        shell_log = os.path.join(nldir, "bricks_sh")
-        nersc_log = os.path.join(nldir, "bricks_nersc")
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, commands)
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, commands, nodes=1, nodeproc=1, minutes=30, openmp=False, multiproc=False)
-
-        com_master_shell.append("bash {}".format(shell_file))
-
-        # Create scripts to run zfind
-
-        shell_file = os.path.join(nsdir, "zfind.sh")
-        nersc_file = os.path.join(nsdir, "zfind.nersc")
-        dump_file = os.path.join(nsdir, "zfind_commands.txt")
-        shell_log = os.path.join(nldir, "zfind_sh")
-        nersc_log = os.path.join(nldir, "zfind_nersc")
-        
-        complan = "desi_plan_zfind --dump {}".format(dump_file)
-        #spret = sp.call(complan, shell=True)
-
-        com = "desi_pipe_zfind"
-
-        pipe.shell_job(shell_file, shell_log, envcom, setupfile, [com])
-
-        # one process per node for each brick
-        nbricks = len(pipe.get_fibermap_bricknames(fibermaps.values()))
-        pipe.nersc_job(nersc_file, nersc_log, envcom, setupfile, [com], nodes=nbricks, nodeproc=1, minutes=30, openmp=False, multiproc=True)
-
-        com_master_shell.append("bash {}".format(shell_file))
-
-    # Create master scripts with job dependencies
-    shell_master = os.path.join(scrdir, 'run.sh')
-    with open(shell_master, 'w') as f:
-        for com in com_master_shell:
-            f.write("{}\n".format(com))
-
-    shell_nersc = os.path.join(scrdir, 'run.nersc')
-    with open(shell_nersc, 'w') as f:
-        for com in com_master_nersc:
-            f.write("{}\n".format(com))
 
 
 if __name__ == "__main__":

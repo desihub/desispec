@@ -23,7 +23,7 @@ from .plan import (find_raw, tasks_exspec_exposure, tasks_exspec,
     graph_path_frame, graph_path_fiberflat, graph_path_sky, 
     graph_path_stdstars, graph_path_calib, graph_path_cframe, graph_name,
     graph_path, graph_merge_state, default_options, write_options, read_options,
-    create_prod)
+    create_prod, select_nights)
 
 from .run import (pid_exists, subprocess_list, shell_job,
 	nersc_job, qa_path,

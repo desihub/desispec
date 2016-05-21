@@ -15,10 +15,64 @@ import os
 import numpy as np
 import argparse
 import re
-import pickle
+import glob
+
+import yaml
 
 import desispec.io as io
 import desispec.pipeline as pipe
+
+
+def newest_completed(rundir, first, last):
+    file = ""
+    time = 0
+    for out in glob.glob(os.path.join(rundir, "outstate_{}-{}_*.yaml".format(first, last))):
+        cur = os.path.getmtime(out)
+        if cur > time:
+            time = cur
+            file = out
+    return file, time
+
+
+def check_runcrash(rundir, step):
+    started = False
+    running = False
+    jobpat = re.compile('.*running_{}_(.*)'.format(step))
+    slrmpat = re.compile(r'slurm-(.*)')
+    runfiles = []
+    for run in glob.glob(os.path.join(rundir, "running_{}_*".format(step))):
+        runfiles.append(run)
+    if len(runfiles) == 0:
+        return started, running
+
+    newest = runfiles[0]
+    tnewest = os.path.getmtime(newest)
+    if len(runfiles) > 1:
+        for r in range(1, len(runfiles))
+            t = os.path.getmtime(runfiles[r])
+            if t > tnewest:
+                newest = runfiles[r]
+                tnewest = t
+
+    started = True
+
+    jobmat = jobpat.match(newest)
+    if jobmat is None:
+        raise RuntimeError("running file matches glob but not regex- should never get here!")
+    jobid = jobmat.group(1)
+    slrmmat = slrmpat.match(jobid)
+    if slrmmat is None:
+        # we were just using bash...
+        pid = int(jobid)
+        if pipe.pid_exists(pid):
+            running = True
+    else:
+        slrmid = int(slrmmat.group(1))
+        state = sp.check_output("squeue -j {} | tail -1 | gawk '{{print $10}}'".format(slrmid), shell=True)
+        if state == 'R':
+            running = True
+
+    return started, running
 
 
 def main():
@@ -26,6 +80,8 @@ def main():
     parser.add_argument('--raw', required=False, default=None, help='raw data directory')
     parser.add_argument('--redux', required=False, default=None, help='output directory')
     parser.add_argument('--prod', required=False, default=None, help='output production name')
+    parser.add_argument('--cleanup', required=False, default=None, action="store_true", help='clean up stale files from crashed jobs')
+    parser.add_argument('--vis', required=False, default=None, action="store_true", help='use graphviz to display state')
     parser.add_argument('--failed', required=False, default=None, help='info about the failed yaml file')
     parser.add_argument('--retry', required=False, default=None, help='re-try to run the failed yaml file')
 
@@ -38,29 +94,41 @@ def main():
 
     specdir = args.redux
     if specdir is None:
-        specdir = io.specprod_root()
-    specdir = os.path.abspath(specdir)
+        if 'DESI_SPECTRO_REDUX' not in os.environ:
+            raise RuntimeError("You must set DESI_SPECTRO_REDUX in your environment or with a commandline option")
+        specdir = os.path.abspath(os.environ['DESI_SPECTRO_REDUX'])
 
-    proddir = args.prod
-    if proddir is None:
-        proddir = os.environ['PRODNAME']
+    prodname = args.prod
+    if prodname is None:
+        if 'PRODNAME' not in os.environ:
+            raise RuntimeError("You must set PRODNAME in your environment or with a commandline option")
+        prodname = os.environ['PRODNAME']
+
+    proddir = os.path.join(specdir, prodname)
 
     expdir = os.path.join(proddir, 'exposures')
 
-    faildir = os.path.join(proddir, 'failed')
+    rundir = os.path.join(proddir, 'run')
+
+    faildir = os.path.join(run, 'failed')
+
+    cal2d = os.path.join(proddir, 'calib2d')
+    calpsf = os.path.join(cal2d, 'psf')
+
+    # are we just working with a single failed task?
 
     if args.failed is not None:
-        fpkl = None
-        with open(args.failed, 'rb') as p:
-            fpkl = pickle.load(p)
+        fyml = None
+        with open(args.failed, 'r') as f:
+            fyml = yaml.load(f)
 
-        step = fpkl['step']
-        rawdir = fpkl['rawdir']
-        proddir = fpkl['proddir']
-        name = fpkl['task']
-        grph = fpkl['graph']
-        opts = fpkl['opts']
-        nproc = fpkl['procs']
+        step = fyml['step']
+        rawdir = fyml['rawdir']
+        proddir = fyml['proddir']
+        name = fyml['task']
+        grph = fyml['graph']
+        opts = fyml['opts']
+        nproc = fyml['procs']
 
         print("{} :".format(args.failed))
         print("    step = {}".format(step))
@@ -75,8 +143,59 @@ def main():
         print(grph)
         print("")
 
-    if args.retry is not None:
+    elif args.retry is not None:
         pipe.retry_task(args.retry)
+
+    else:
+        status = {}
+        steps = []
+
+        steps.append('bootcalib')
+
+        file, time = newest_completed(rundir, 'bootcalib', 'bootcalib')
+
+        if file == "":
+            # did we fake it?
+            nightpat = re.compile(r'([0-9]{8})')
+            for root, dirs, files in os.walk(calpsf, topdown=True):
+                for d in dirs:
+                    nightmat = nightpat.match(d)
+                    if nightmat is not None:
+                        night = nightmat.group(1)
+                        lnk = os.path.join(calpsf, night, 'psfboot-r0.fits')
+                        if os.path.islink(lnk):
+                            status['bootcalib'] = 'done'
+                break
+        else:
+            # are we running now?
+            started, running = check_runcrash(rundir, 'bootcalib')
+
+
+
+        previous_time = 0
+
+        steps.append('zfind')
+        file, time = newest_completed(rundir, 'zfind', 'zfind')
+
+
+        for s in steps:
+
+    steps = [
+        ('bootcalib', 'bootcalib'),
+        ('specex', 'specex'),
+        ('psfcombine', 'psfcombine'),
+        ('extract', 'extract'),
+        ('fiberflat', 'procexp'),
+        ('bricks', 'bricks'),
+        ('zfind', 'zfind')
+    ]
+
+
+
+    # dot -Tpdf -O <blah.dot>
+
+
+    
 
 
 
