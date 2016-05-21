@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+
+'''
+Preprocess a DESI raw data exposure, outputing individual pix files
+'''
+
+from desispec.scripts import preproc
+preproc.main(preproc.parse())

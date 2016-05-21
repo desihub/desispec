@@ -395,6 +395,10 @@ class TestIO(unittest.TestCase):
             x = desispec.io.findfile('brick', brickname='0000p123', band='r1')
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
             
+    def test_findfile_outdir(self):
+        outdir = '/blat/foo/bar'
+        x = desispec.io.findfile('fibermap', night='20150101', expid=123, outdir=outdir)
+        self.assertEqual(x, os.path.join(outdir, os.path.basename(x)))
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
     def test_download(self):

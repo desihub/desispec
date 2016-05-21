@@ -113,6 +113,10 @@ class QA_Frame(object):
 
         if self.camera[0] == 'b':
             flux_dict['ZP_WAVE'] = 4800.  # Ang
+        elif self.camera[0] == 'r':
+            flux_dict['ZP_WAVE'] = 6500.  # Ang
+        elif self.camera[0] == 'z':
+            flux_dict['ZP_WAVE'] = 8250.  # Ang
         else:
             raise ValueError("Not ready for this camera!")
 
