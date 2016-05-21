@@ -33,11 +33,11 @@ CREATE TABLE exposureflavor (
 --
 CREATE TABLE frame (
     frameid TEXT PRIMARY KEY, -- e.g. b0-00012345
-    band TEXT NOT NULL, -- b, r, z
+    band TEXT NOT NULL, -- b, r, z, might be called 'channel' or 'arm'
     spectrograph INTEGER NOT NULL, -- 0, 1, 2, ...
     expid INTEGER NOT NULL, -- exposure number
     night INTEGER NOT NULL, -- foreign key on night
-    flavor TEXT NOT NULL, -- foreign key on exposureflavor
+    flavor TEXT NOT NULL, -- foreign key on exposureflavor, might be called 'obstype'
     telra REAL NOT NULL,
     teldec REAL NOT NULL,
     tileid INTEGER NOT NULL DEFAULT -1, -- it is possible for the telescope to not point at a tile.
@@ -48,6 +48,8 @@ CREATE TABLE frame (
     FOREIGN KEY (night) REFERENCES night (night),
     FOREIGN KEY (flavor) REFERENCES exposureflavor (flavor)
 );
+-- If frame table becomes two big, create an exposure table to contain
+-- the data that is common to all frames in an exposure.
 --
 -- JOIN table
 --
