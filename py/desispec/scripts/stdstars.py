@@ -153,7 +153,7 @@ def main(args) :
         ivars.append((i,{"b":[frameIvar["b"][i]],"r":[frameIvar["r"][i,:]],"z":[frameIvar["z"][i,:]]}))
 
 
-    stdwave,stdflux,templateid=io.read_stdstar_templates(args.models)
+    stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.models)
 
     #- Withdrew trimming below to address filters with long tails
     #- Trim standard star wavelengths to just the range we need
@@ -196,7 +196,7 @@ def main(args) :
 
         # Now find the best Model
 
-        bestModelIndex[k],bestmodelWave,bestModelFlux,chi2dof[k]=match_templates(frameWave,flux,ivar,resol_star,stdwave,stdflux)
+        bestModelIndex[k],bestmodelWave,bestModelFlux,chi2dof[k]=match_templates(frameWave,flux,ivar,resol_star,stdwave,stdflux,teff,logg,feh)
 
         log.info('Star Fiber: {0}; Best Model Fiber: {1}; TemplateID: {2}; Chisq/dof: {3}'.format(j[0],bestModelIndex[k],templateid[bestModelIndex[k]],chi2dof[k]))
         # Normalize the best model using reported magnitude

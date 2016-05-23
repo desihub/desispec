@@ -127,8 +127,11 @@ def read_stdstar_templates(stellarmodelfile):
         wavebins=model_wave_step*numpy.arange(n_model_wave) + model_wave_offset
     paramData=phdu[1].data
     templateid=paramData["TEMPLATEID"]
+    teff=paramData["TEFF"]
+    logg=paramData["LOGG"]
+    feh=paramData["FEH"]
     fluxData=phdu[0].data
 
     phdu.close()
 
-    return wavebins,fluxData,templateid
+    return wavebins,fluxData,templateid,teff,logg,feh

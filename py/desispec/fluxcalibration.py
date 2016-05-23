@@ -15,6 +15,7 @@ import scipy, scipy.sparse, scipy.ndimage
 import sys
 from astropy import units
 import speclite.redshift
+import astropy.io.fits as fits
 
 #rebin spectra into new wavebins. This should be equivalent to desispec.interpolation.resample_flux. So may not be needed here
 #But should move from here anyway.
@@ -33,7 +34,7 @@ c=const.c
 erg=const.erg
 hc= h/erg*c*1.e10 #(in units of ergsA)
 
-def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
 
@@ -109,22 +110,25 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     bestId=-1
     red_Chisq=-1.
 
-    bconvolveFlux=convolveModel(wave["b"],resolution_data["b"],Models["b"][220])
-    rconvolveFlux=convolveModel(wave["r"],resolution_data["r"],Models["r"][220])
-    zconvolveFlux=convolveModel(wave["z"],resolution_data["z"],Models["z"][220])
+    # search stellar template metadata for canonical f-type model
+
+    tcm=np.where(teff==6000.0)[0]
+    lcm=np.where(logg==4.0)[0]
+    fcm=np.where(feh==-1.5)[0]
+    can_mod=list(set(tcm).intersection(set(lcm).intersection(fcm)))[0]
+
+    bconvolveFlux=convolveModel(wave["b"],resolution_data["b"],Models["b"][can_mod])
+    rconvolveFlux=convolveModel(wave["r"],resolution_data["r"],Models["r"][can_mod])
+    zconvolveFlux=convolveModel(wave["z"],resolution_data["z"],Models["z"][can_mod])
 
     b_models=bconvolveFlux/applySmoothingFilter(bconvolveFlux)
     r_models=rconvolveFlux/applySmoothingFilter(rconvolveFlux)
     z_models=zconvolveFlux/applySmoothingFilter(zconvolveFlux)
 
+    # find peculiar velocity that minimizes chisq before fitting to best model
+
     dof=len(wave["b"])+len(wave["r"])+len(wave["z"])
     chisq=[]
-    B_norm=[]
-    R_norm=[]
-    Z_norm=[]
-    B_ivar=[]
-    R_ivar=[]
-    Z_ivar=[]
     pec_vel=np.linspace(-600000,600000,1201.)
     for i in range(len(pec_vel)):
 
@@ -141,12 +145,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
         b_norm,b_ivar=resample_flux(wave["b"],bwave,bnorm,ivar=bivar)
         r_norm,r_ivar=resample_flux(wave["r"],rwave,rnorm,ivar=rivar)
         z_norm,z_ivar=resample_flux(wave["z"],zwave,znorm,ivar=zivar)
-        B_norm.append(b_norm)
-        R_norm.append(r_norm)
-        Z_norm.append(z_norm)
-        B_ivar.append(b_ivar)
-        R_ivar.append(r_ivar)
-        Z_ivar.append(z_ivar)
 
         bdelta=np.sum(((b_models-b_norm)**2)*b_ivar)
         rdelta=np.sum(((r_models-r_norm)**2)*r_ivar)
@@ -155,29 +153,27 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
         chi2=delta/dof
         chisq.append(chi2)
 
-    chi_min=np.where(chisq==np.min(chisq))
-    min_index=chi_min[0][0]
-    B_norm=B_norm[min_index-100:min_index+100]
-    R_norm=R_norm[min_index-100:min_index+100]
-    Z_norm=Z_norm[min_index-100:min_index+100]
-    B_ivar=B_ivar[min_index-100:min_index+100]
-    R_ivar=R_ivar[min_index-100:min_index+100]
-    Z_ivar=Z_ivar[min_index-100:min_index+100]
+    min_index=np.where(chisq==np.min(chisq))[0][0]
     fit_x=pec_vel[min_index-100:min_index+100]
     fit_y=chisq[min_index-100:min_index+100]
     fit=np.poly1d(np.polyfit(fit_x,fit_y,2))
     fit_vel=fit(fit_x)
-    vel_min=np.where(fit_vel==np.min(fit_vel))
-    vel_min_index=vel_min[0][0]
+    vel_min_index=np.where(fit_vel==np.min(fit_vel))[0][0]
     peculiar_velocity=fit_x[vel_min_index]
-    b_norm=B_norm[vel_min_index]
-    r_norm=R_norm[vel_min_index]
-    z_norm=Z_norm[vel_min_index]
-    b_ivar=B_ivar[vel_min_index]
-    r_ivar=R_ivar[vel_min_index]
-    z_ivar=Z_ivar[vel_min_index]
     redshift=peculiar_velocity/c
     print "Standard Star redshift =",redshift
+
+    bshift=speclite.redshift(z_in=redshift,z_out=0.0,rules=[dict(name='b_wave',exponent=1,array_in=wave["b"])])
+    rshift=speclite.redshift(z_in=redshift,z_out=0.0,rules=[dict(name='r_wave',exponent=1,array_in=wave["r"])])
+    zshift=speclite.redshift(z_in=redshift,z_out=0.0,rules=[dict(name='z_wave',exponent=1,array_in=wave["z"])])
+
+    bwave=bshift['b_wave']
+    rwave=rshift['r_wave']
+    zwave=zshift['z_wave']
+
+    b_norm,b_ivar=resample_flux(wave["b"],bwave,bnorm,ivar=bivar)
+    r_norm,r_ivar=resample_flux(wave["r"],rwave,rnorm,ivar=rivar)
+    z_norm,z_ivar=resample_flux(wave["z"],zwave,znorm,ivar=zivar)
 
     for i in range(nstd):
 
