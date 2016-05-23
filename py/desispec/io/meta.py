@@ -39,7 +39,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
     #-       specprod is just the environment variable $PRODNAME
 
     location = dict(
-        raw = '{rawdata_dir}/{night}/desi-{expid:08d}.fz',
+        raw = '{rawdata_dir}/{night}/desi-{expid:08d}.fits.fz',
         pix = '{rawdata_dir}/{night}/pix-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod_dir}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits',
         frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
