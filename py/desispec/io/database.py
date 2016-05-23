@@ -32,6 +32,9 @@ def load_brick(fitsfile, dbfile, fix_area=False):
         brickdata = f[1].data
     bricklist = [ brickdata[col].tolist() for col in brickdata.names ]
     if fix_area:
+        # This forumla is possibly incorrect.  The correct forumla is the difference inarea of the
+        # "cap"s delimited by the two declinations divided by the number of
+        # bricks in the row.
         area = np.degrees(
             (brickdata['ra2'] - brickdata['ra1'])
             * (np.sin(np.radians(brickdata['dec2'])) - np.sin(np.radians(brickdata['dec1']))))
