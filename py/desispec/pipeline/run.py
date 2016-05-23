@@ -814,49 +814,6 @@ def pid_exists( pid ):
         return True
 
 
-def subprocess_list(tasks, rank=0):
-    log = get_logger()
-    #pids = []
-    for tsk in tasks:
-        runcom = True
-        newest_in = 0
-        for dep in tsk['inputs']:
-            if not os.path.isfile(dep):
-                err = "dependency {} missing, cannot run task {}".format(dep, " ".join(tsk['command']))
-                log.error(err)
-                runcom = False
-            else:
-                t = os.path.getmtime(dep)
-                if t > newest_in:
-                    newest_in = t
-        alldone = True
-        if len(tsk['outputs']) == 0:
-            alldone = False
-        for outf in tsk['outputs']:
-            if not os.path.isfile(outf):
-                alldone = False
-            else:
-                t = os.path.getmtime(outf)
-                if t < newest_in:
-                    alldone = False
-        if alldone:
-            runcom = False
-        proc = None
-        if runcom:
-            # proc = sp.Popen(tsk['command'], stdout=sp.PIPE, stderr=sp.STDOUT)
-            # log.info("subproc[{}]: {}".format(proc.pid, " ".join(tsk['command'])))
-            # outs, errs = proc.communicate()
-            # for line in outs:
-            #     log.debug("subproc[{}]:   {}".format(proc.pid, line.rstrip()))
-            # proc.wait()
-            log.info("subproc: {}".format(" ".join(tsk['command'])))
-            ret = sp.call(tsk['command'])
-            for outf in tsk['outputs']:
-                ret = sp.call(['mv', '{}.part'.format(outf), outf])
-
-    return
-
-
 def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=1, threads=1):
     with open(path, 'w') as f:
         f.write("#!/bin/bash\n\n")
