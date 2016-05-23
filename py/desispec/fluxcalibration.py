@@ -15,7 +15,6 @@ import scipy, scipy.sparse, scipy.ndimage
 import sys
 from astropy import units
 import speclite.redshift
-import astropy.io.fits as fits
 
 #rebin spectra into new wavebins. This should be equivalent to desispec.interpolation.resample_flux. So may not be needed here
 #But should move from here anyway.
@@ -157,9 +156,10 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     fit_x=pec_vel[min_index-100:min_index+100]
     fit_y=chisq[min_index-100:min_index+100]
     fit=np.poly1d(np.polyfit(fit_x,fit_y,2))
-    fit_vel=fit(fit_x)
+    fit_x_fine=np.linspace(fit_x[0],fit_x[-1],2000.)
+    fit_vel=fit(fit_x_fine)    # fitting to 0.1 km/s resolution, perhaps too fine
     vel_min_index=np.where(fit_vel==np.min(fit_vel))[0][0]
-    peculiar_velocity=fit_x[vel_min_index]
+    peculiar_velocity=fit_x_fine[vel_min_index]
     redshift=peculiar_velocity/c
     print "Standard Star redshift =",redshift
 
