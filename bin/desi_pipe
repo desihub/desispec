@@ -132,6 +132,7 @@ def main():
         if 'DESI_SPECTRO_REDUX' not in os.environ:
             raise RuntimeError("You must set DESI_SPECTRO_REDUX in your environment or with a commandline option")
         specdir = os.path.abspath(os.environ['DESI_SPECTRO_REDUX'])
+    specdir = os.path.abspath(specdir)
 
     prodname = args.prod
     if prodname is None:

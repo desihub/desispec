@@ -875,6 +875,18 @@ def graph_path_cframe(proddir, name):
     return path
 
 
+def graph_path_brick(proddir, name):
+    patstr = "brick-([brz])-(.*)"
+    pat = re.compile(patstr)
+    mat = pat.match(name)
+    if mat is None:
+        raise RuntimeError("{} is not a valid brick name".format(name))
+    band = mat.group(1)
+    brick = mat.group(2)
+    path = os.path.join(proddir, 'bricks', brick, "brick-{}-{}.fits".format(band, brick))
+    return path
+
+
 def graph_path_zbest(proddir, name):
     patstr = "zbest-(.*)"
     pat = re.compile(patstr)
@@ -909,8 +921,12 @@ def graph_path(rawdir, proddir, name, type):
         return graph_path_calib(proddir, name)
     elif type == 'cframe':
         return graph_path_cframe(proddir, name)
+    elif type == 'brick':
+        return graph_path_brick(proddir, name)
     elif type == 'zbest':
         return graph_path_zbest(proddir, name)
+    elif type == 'night':
+        return os.path.join(proddir, 'exposures', name)
     else:
         raise RuntimeError("unknown type {}".format(type))
     return ""
@@ -1004,6 +1020,51 @@ def graph_read(path):
     grph = None
     with open(path, 'r') as f:
         grph = yaml.load(f)
+    return grph
+
+
+def graph_read_prod(proddir, nightstr=None, spectrographs=None):
+
+    plandir = os.path.join(proddir, 'plan')
+
+    allnights = []
+    planpat = re.compile(r'([0-9]{8})\.yaml')
+    for root, dirs, files in os.walk(plandir, topdown=True):
+        for f in files:
+            planmat = planpat.match(f)
+            if planmat is not None:
+                night = planmat.group(1)
+                allnights.append(night)
+        break
+
+    # select nights to use
+
+    nights = None
+    if nightstr is None:
+        nights = allnights
+    else:
+        nights = select_nights(allnights, nightstr)
+
+    # select the spectrographs to use
+
+    spects = []
+    if spectrographs is None:
+        for s in range(10):
+            spects.append(s)
+    else:
+        spc = spectrographs.split(',')
+        for s in spc:
+            spects.append(int(s))
+
+    # load the graphs from selected nights and merge
+
+    grph = {}
+    for n in nights:
+        nightfile = os.path.join(plandir, "{}.yaml".format(n))
+        ngrph = graph_read(nightfile)
+        sgrph = graph_slice_spec(ngrph, spectrographs=spects)
+        grph.update(sgrph)
+
     return grph
 
 

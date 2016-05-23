@@ -67,6 +67,27 @@ step_file_types = {
 }
 
 
+file_types_step = {
+    'psfboot' : 'bootcalib',
+    'psf' : 'specex',
+    'psfnight' : 'psfcombine',
+    'frame' : 'extract',
+    'fiberflat' : 'fiberflat',
+    'sky' : 'sky',
+    'stdstars' : 'stdstars',
+    'calib' : 'fluxcal',
+    'cframe' : 'procexp',
+    'zbest' : 'zfind'
+}
+
+
+run_states = [
+    'done',
+    'fail',
+    'wait'
+]
+
+
 def qa_path(datafile, suffix="_QA"):
     dir = os.path.dirname(datafile)
     base = os.path.basename(datafile)
@@ -85,12 +106,22 @@ def is_finished(rawdir, proddir, grph, name):
 
     type = grph[name]['type']
 
+    if type == 'night':
+        return True
+
     outpath = graph_path(rawdir, proddir, name, type)
     if not os.path.isfile(outpath):
         return False
 
+    if os.path.islink(outpath):
+        # this is a fake bootcalib symlink
+        return True
+
     tout = os.path.getmtime(outpath)
+
     for input in grph[name]['in']:
+        if grph[input]['type'] == 'night':
+            continue
         inpath = graph_path(rawdir, proddir, input, grph[input]['type'])
         # if the input file exists, check if its timestamp
         # is newer than the output.
@@ -99,6 +130,13 @@ def is_finished(rawdir, proddir, grph, name):
             if tin > tout:
                 return False
     return True
+
+
+def prod_state(rawdir, proddir, grph):
+    for name, nd in grph.items():
+        if is_finished(rawdir, proddir, grph, name):
+            nd['state'] = 'done'
+    return
 
 
 def run_task(step, rawdir, proddir, grph, opts, comm=None):
@@ -481,8 +519,9 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
         # For each task, prune if it is finished
         tasks = []
         for t in alltasks:
-            if is_finished(rawdir, proddir, grph, t):
-                graph_mark(grph, t, state='done', descend=False)
+            if 'state' in grph[t].keys():
+                if grph[t]['state'] != 'done':
+                    tasks.append(t)
             else:
                 tasks.append(t)
 
@@ -635,46 +674,10 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
         rank = comm.rank
         nproc = comm.size
 
-    # find the list of all nights which have been planned
+    # get the full graph
 
-    plandir = os.path.join(proddir, 'plan')
-
-    allnights = []
-    planpat = re.compile(r'([0-9]{8})\.yaml')
-    for root, dirs, files in os.walk(plandir, topdown=True):
-        for f in files:
-            planmat = planpat.match(f)
-            if planmat is not None:
-                night = planmat.group(1)
-                allnights.append(night)
-        break
-
-    # select nights to use
-
-    nights = select_nights(allnights, nightstr)
-
-    if rank == 0:
-        log.info("processing {} night(s)".format(len(nights)))
-
-    # select the spectrographs to use
-
-    spects = []
-    if spectrographs is None:
-        for s in range(10):
-            spects.append(s)
-    else:
-        spc = spectrographs.split(',')
-        for s in spc:
-            spects.append(int(s))
-
-    # load the graphs from selected nights and merge
-
-    grph = {}
-    for n in nights:
-        nightfile = os.path.join(plandir, "{}.yaml".format(n))
-        ngrph = graph_read(nightfile)
-        sgrph = graph_slice_spec(ngrph, spectrographs=spects)
-        grph.update(sgrph)
+    grph = graph_read_prod(proddir, nightstr=nightstr, spectrographs=spectrographs)
+    prod_state(rawdir, proddir, grph)
 
     # read run options from disk
 
@@ -724,9 +727,6 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     steptaskproc['procexp'] = 1
     steptaskproc['zfind'] = 1
 
-    # Run the steps.  Each step updates the graph in place to track
-    # the state of all nodes.
-
     jobid = None
     if rank == 0:
         if 'SLURM_JOBID' in os.environ.keys():
@@ -734,13 +734,32 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
         else:
             jobid = os.getpid()
 
+    statefile = None
+    statedot = None
+    if rank == 0:
+        stateroot = "state_{}-{}_{}".format(run_step_types[firststep], run_step_types[laststep-1], jobid)
+        statefile = os.path.join(rundir, "{}.yaml".format(stateroot))
+        statedot = os.path.join(rundir, "{}.dot".format(stateroot))
+
+    # Mark our steps as in progress
+
+    for st in range(firststep, laststep):
+        for name, nd in grph.items():
+            if nd['type'] == run_step_types[st]:
+                graph_mark(grph, name, 'wait')
+
+    if rank == 0:
+        graph_write(statefile, grph)
+        with open(statedot, 'w') as f:
+            graph_dot(grph, f)
+
+    # Run the steps.  Each step updates the graph in place to track
+    # the state of all nodes.
+
     for st in range(firststep, laststep):
         runfile = None
         if rank == 0:
             log.info("starting step {}".format(run_step_types[st]))
-            runfile = os.path.join(rundir, "running_{}_{}".format(run_step_types[st], jobid))
-            with open(runfile, 'w') as f:
-                f.write("")
         taskproc = steptaskproc[run_step_types[st]]
         if taskproc > nproc:
             taskproc = nproc
@@ -748,15 +767,11 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
         if comm is not None:
             comm.barrier()
         if rank == 0:
-            if os.path.isfile(runfile):
-                os.remove(runfile)
             log.info("completed step {}".format(run_step_types[st]))
 
     if rank == 0:
-        outroot = "outstate_{}-{}_{}".format(run_step_types[firststep], run_step_types[laststep-1], jobid)
-        outgrph = os.path.join(rundir, "{}.yaml".format(outroot))
-        graph_write(outgrph, grph)
-        with open(os.path.join(rundir, "{}.dot".format(outroot)), 'w') as f:
+        graph_write(statefile, grph)
+        with open(statedot, 'w') as f:
             graph_dot(grph, f)
         log.info("finished steps {} to {}".format(run_step_types[firststep], run_step_types[laststep-1]))
 

@@ -16,6 +16,7 @@ import numpy as np
 import argparse
 import re
 import glob
+import pprint
 
 import yaml
 
@@ -23,56 +24,42 @@ import desispec.io as io
 import desispec.pipeline as pipe
 
 
-def newest_completed(rundir, first, last):
+def get_state(rundir):
     file = ""
-    time = 0
-    for out in glob.glob(os.path.join(rundir, "outstate_{}-{}_*.yaml".format(first, last))):
-        cur = os.path.getmtime(out)
-        if cur > time:
-            time = cur
-            file = out
-    return file, time
-
-
-def check_runcrash(rundir, step):
-    started = False
+    stime = 0
+    first = ""
+    last = ""
+    jobid = 0
     running = False
-    jobpat = re.compile('.*running_{}_(.*)'.format(step))
+
+    statepat = re.compile(r'.*state_(.*)-(.*)_(.*).yaml')
     slrmpat = re.compile(r'slurm-(.*)')
-    runfiles = []
-    for run in glob.glob(os.path.join(rundir, "running_{}_*".format(step))):
-        runfiles.append(run)
-    if len(runfiles) == 0:
-        return started, running
 
-    newest = runfiles[0]
-    tnewest = os.path.getmtime(newest)
-    if len(runfiles) > 1:
-        for r in range(1, len(runfiles))
-            t = os.path.getmtime(runfiles[r])
-            if t > tnewest:
-                newest = runfiles[r]
-                tnewest = t
+    for stfile in glob.glob(os.path.join(rundir, "state_*.yaml")):
+        thistime = os.path.getmtime(stfile)
+        if thistime > stime:
+            file = stfile
+            stime = thistime
+            statemat = statepat.match(stfile)
+            if statemat is None:
+                raise RuntimeError("state file matches glob but not regex- should never get here!")
+            first = statemat.group(1)
+            last = statemat.group(2)
+            jobid = statemat.group(3)
 
-    started = True
+            slrmmat = slrmpat.match(jobid)
+            if slrmmat is None:
+                # we were just using bash...
+                pid = int(jobid)
+                if pipe.pid_exists(pid):
+                    running = True
+            else:
+                slrmid = int(slrmmat.group(1))
+                state = sp.check_output("squeue -j {} | tail -1 | gawk '{{print $10}}'".format(slrmid), shell=True)
+                if state == 'R':
+                    running = True
 
-    jobmat = jobpat.match(newest)
-    if jobmat is None:
-        raise RuntimeError("running file matches glob but not regex- should never get here!")
-    jobid = jobmat.group(1)
-    slrmmat = slrmpat.match(jobid)
-    if slrmmat is None:
-        # we were just using bash...
-        pid = int(jobid)
-        if pipe.pid_exists(pid):
-            running = True
-    else:
-        slrmid = int(slrmmat.group(1))
-        state = sp.check_output("squeue -j {} | tail -1 | gawk '{{print $10}}'".format(slrmid), shell=True)
-        if state == 'R':
-            running = True
-
-    return started, running
+    return (file, stime, first, last, jobid, running)
 
 
 def main():
@@ -84,6 +71,8 @@ def main():
     parser.add_argument('--vis', required=False, default=None, action="store_true", help='use graphviz to display state')
     parser.add_argument('--failed', required=False, default=None, help='info about the failed yaml file')
     parser.add_argument('--retry', required=False, default=None, help='re-try to run the failed yaml file')
+
+    pref = 'DESI:  '
 
     args = parser.parse_args()
 
@@ -108,9 +97,11 @@ def main():
 
     expdir = os.path.join(proddir, 'exposures')
 
+    plandir = os.path.join(proddir, 'plan')
+
     rundir = os.path.join(proddir, 'run')
 
-    faildir = os.path.join(run, 'failed')
+    faildir = os.path.join(rundir, 'failed')
 
     cal2d = os.path.join(proddir, 'calib2d')
     calpsf = os.path.join(cal2d, 'psf')
@@ -130,72 +121,66 @@ def main():
         opts = fyml['opts']
         nproc = fyml['procs']
 
-        print("{} :".format(args.failed))
-        print("    step = {}".format(step))
-        print("    processes = {}".format(nproc))
-        print("    rawdir = {}".format(step))
-        print("    proddir = {}".format(step))
-        print("    object = {}".format(name))
-        print("    opts:")
+        print("{}{} :".format(pref, args.failed))
+        print("{}    step = {}".format(pref, step))
+        print("{}    processes = {}".format(pref, nproc))
+        print("{}    rawdir = {}".format(pref, step))
+        print("{}    proddir = {}".format(pref, step))
+        print("{}    object = {}".format(pref, name))
+        print("{}    opts:".format(pref))
         for op in opts:
-            print("      {}".format(op))
-        print("    deps:")
-        print(grph)
+            print("{}      {}".format(pref, op))
+        print("{}    deps:".format(pref))
+        pp = pprint.PrettyPrinter(indent=4)
+        pp.pprint(grph)
         print("")
 
     elif args.retry is not None:
         pipe.retry_task(args.retry)
 
     else:
-        status = {}
-        steps = []
 
-        steps.append('bootcalib')
+        (file, ftime, first, last, jobid, running) = get_state(rundir)
 
-        file, time = newest_completed(rundir, 'bootcalib', 'bootcalib')
+        print("found state ",file)
 
+        grph = None
         if file == "":
-            # did we fake it?
-            nightpat = re.compile(r'([0-9]{8})')
-            for root, dirs, files in os.walk(calpsf, topdown=True):
-                for d in dirs:
-                    nightmat = nightpat.match(d)
-                    if nightmat is not None:
-                        night = nightmat.group(1)
-                        lnk = os.path.join(calpsf, night, 'psfboot-r0.fits')
-                        if os.path.islink(lnk):
-                            status['bootcalib'] = 'done'
-                break
+            # no state files exist- manually check all files
+            grph = pipe.graph_read_prod(proddir)
+            pipe.prod_state(rawdir, proddir, grph)
         else:
-            # are we running now?
-            started, running = check_runcrash(rundir, 'bootcalib')
+            # load the latest state
+            grph = pipe.graph_read(file)
 
+        # go through the current state and accumulate success / failure
 
+        status = {}
 
-        previous_time = 0
+        for st in pipe.run_step_types:
+            status[st] = {}
+            status[st]['total'] = 0
+            status[st]['none'] = 0
+            status[st]['wait'] = 0
+            status[st]['fail'] = 0
+            status[st]['done'] = 0
 
-        steps.append('zfind')
-        file, time = newest_completed(rundir, 'zfind', 'zfind')
+        fts = pipe.file_types_step
+        for name, nd in grph.items():
+            tp = nd['type']
+            if tp in fts.keys():
+                status[fts[tp]]['total'] += 1
+                if 'state' in nd.keys():
+                    status[fts[tp]][nd['state']] += 1
+                else:
+                    status[fts[tp]]['none'] += 1
 
-
-        for s in steps:
-
-    steps = [
-        ('bootcalib', 'bootcalib'),
-        ('specex', 'specex'),
-        ('psfcombine', 'psfcombine'),
-        ('extract', 'extract'),
-        ('fiberflat', 'procexp'),
-        ('bricks', 'bricks'),
-        ('zfind', 'zfind')
-    ]
-
-
-
-    # dot -Tpdf -O <blah.dot>
-
-
-    
+        for st in pipe.run_step_types:
+            print("{}{}:".format(pref, st))
+            print("{}  {} / {} done".format(pref, status[st]['done'], status[st]['total']))
+            print("{}  {} / {} not started".format(pref, status[st]['none'], status[st]['total']))
+            print("{}  {} / {} started".format(pref, status[st]['wait'], status[st]['total']))
+            print("{}  {} / {} failed".format(pref, status[st]['fail'], status[st]['total']))
 
 
 
