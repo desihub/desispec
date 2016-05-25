@@ -94,13 +94,14 @@ def integration_test(night=None, nspec=5, clobber=False):
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(flavor, expid))
 
-        cmd = "pixsim-desi --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, **params)
+        cmd = "pixsim-desi --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, **params)
         inputs = [fibermap, simspec]
         outputs = list()
+        outputs.append(fibermap.replace('fibermap-', 'simpix-'))
         for camera in ['b0', 'r0', 'z0']:
             pixfile = io.findfile('pix', night, expid, camera)
             outputs.append(pixfile)
-            outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
+            # outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
         if runcmd(cmd, inputs, outputs, clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(flavor, expid))
 
