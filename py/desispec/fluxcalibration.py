@@ -70,7 +70,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     bnorm=flux["b"]/applySmoothingFilter(flux["b"])
     znorm=flux["z"]/applySmoothingFilter(flux["z"])
 
-
    # propagate this normalization to ivar
 
     bivar=ivar["b"]*(applySmoothingFilter(flux["b"]))**2
@@ -128,7 +127,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
 
     dof=len(wave["b"])+len(wave["r"])+len(wave["z"])
     chisq=[]
-    pec_vel=np.linspace(-600000,600000,1201.)
+    pec_vel=np.linspace(-700000,700000,1401.)
     for i in range(len(pec_vel)):
 
         z=pec_vel[i]/c
@@ -152,11 +151,11 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         chi2=delta/dof
         chisq.append(chi2)
 
-    min_index=np.where(chisq==np.min(chisq))[0][0]
+    min_index=np.where(chisq==np.min(chisq[100:-100]))[0][0]
     fit_x=pec_vel[min_index-100:min_index+100]
     fit_y=chisq[min_index-100:min_index+100]
     fit=np.poly1d(np.polyfit(fit_x,fit_y,2))
-    fit_x_fine=np.linspace(fit_x[0],fit_x[-1],2000.)
+    fit_x_fine=np.linspace(fit_x[0],fit_x[-1],len(fit_x[0:-1])/10.)
     fit_vel=fit(fit_x_fine)    # fitting to 0.1 km/s resolution, perhaps too fine
     vel_min_index=np.where(fit_vel==np.min(fit_vel))[0][0]
     peculiar_velocity=fit_x_fine[vel_min_index]
