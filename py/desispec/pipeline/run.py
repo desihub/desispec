@@ -191,14 +191,17 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
-        options['qafile'] = qapath
+        #options['qafile'] = qapath
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
         args = bootcalib.parse(optarray)
 
         if rank == 0:
+            print("proc {} call bootcalib main".format(rank))
             bootcalib.main(args)
+            print("proc {} returned from bootcalib main".format(rank))
+        print("proc {} finish runtask bootcalib".format(rank))
 
     elif step == 'specex':
 
@@ -296,7 +299,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
 
         options = {}
         options['infile'] = framefile
-        options['qafile'] = qafile
+        #options['qafile'] = qafile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -329,7 +332,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        options['qafile'] = qafile
+        #options['qafile'] = qafile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -414,7 +417,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        options['qafile'] = qafile
+        #options['qafile'] = qafile
         options['sky'] = skyfile
         options['models'] = starfile
         options['outfile'] = outfile
@@ -490,6 +493,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     else:
         raise RuntimeError("Unknown pipeline step {}".format(step))
 
+    if comm is not None:
+        print("proc {} hit runtask barrier".format(rank))
+        comm.barrier()
+    print("proc {} finish runtask".format(rank))
+
     return
 
 
@@ -547,13 +555,14 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
         if taskproc > 1:
             ngroup = int(nproc / taskproc)
             group = int(rank / taskproc)
-            group_rank = rank % ngroup
+            group_rank = rank % taskproc
             comm_group = comm.Split(color=group, key=group_rank)
             comm_rank = comm.Split(color=group_rank, key=group)
         else:
-            from mpi4py import MPI
-            comm_group = MPI.COMM_SELF
+            comm_group = None
             comm_rank = comm
+
+    print("proc {}, group {}, group_rank {}, ngroup {}".format(rank, group, group_rank, ngroup))
 
     # Now we divide up the tasks among the groups of processes as
     # equally as possible.
@@ -561,38 +570,52 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     group_ntask = 0
     group_firsttask = 0
 
-    if ntask < ngroup:
-        if group < ntask:
-            group_ntask = 1
-            group_firsttask = group
+    if group < ngroup:
+        # only assign tasks to whole groups
+        if ntask < ngroup:
+            if group < ntask:
+                group_ntask = 1
+                group_firsttask = group
+            else:
+                group_ntask = 0
         else:
-            group_ntask = 0
-    else:
-        group_ntask = int(ntask / ngroup)
-        leftover = ntask % ngroup
-        if group < leftover:
-            group_ntask += 1
-            group_firsttask = group * group_ntask
-        else:
-            group_firsttask = ((group_ntask + 1) * leftover) + (group_ntask * (group - leftover))
+            group_ntask = int(ntask / ngroup)
+            leftover = ntask % ngroup
+            if group < leftover:
+                group_ntask += 1
+                group_firsttask = group * group_ntask
+            else:
+                group_firsttask = ((group_ntask + 1) * leftover) + (group_ntask * (group - leftover))
 
     # every group goes and does its tasks...
 
     faildir = os.path.join(proddir, 'run', 'failed')
 
+    if group_rank == 0:
+        print("group {}: tasks {}..{}".format(group, group_firsttask, group_firsttask+group_ntask-1))
+
     if group_ntask > 0:
         for t in range(group_firsttask, group_firsttask + group_ntask):
+            if group_rank == 0:
+                print("group {} starting task {}".format(group, tasks[t]))
             # slice out just the graph for this task
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             ffile = os.path.join(faildir, "{}_{}.yaml".format(step, tasks[t]))
 
             try:
                 # if the step previously failed, clear that file now
-                if os.path.isfile(ffile):
-                    os.remove(ffile)
+                if group_rank == 0:
+                    if os.path.isfile(ffile):
+                        os.remove(ffile)
+                if group_rank == 0:
+                    print("group {} runtask {}".format(group, tasks[t]))
                 run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
                 # mark step as done in our group's graph
+                if group_rank == 0:
+                    print("group {} start graph_mark {}".format(group, tasks[t]))
                 graph_mark(grph, tasks[t], state='done', descend=False)
+                if group_rank == 0:
+                    print("group {} end graph_mark {}".format(group, tasks[t]))
             except:
                 # The task threw an exception.  We want to dump all information
                 # that will be needed to re-run the run_task() function on just
@@ -607,19 +630,28 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 fyml['graph'] = tgraph
                 fyml['opts'] = options
                 fyml['procs'] = taskproc
-                if not os.path.isfile(ffile):
-                    # we are the first process to hit this
-                    with open(ffile, 'w') as f:
-                        yaml.dump(fyml, f, default_flow_style=False)
+                if group_rank == 0:
+                    if not os.path.isfile(ffile):
+                        # we are the first process to hit this
+                        with open(ffile, 'w') as f:
+                            yaml.dump(fyml, f, default_flow_style=False)
                 # mark the step as failed in our group's local graph
                 graph_mark(grph, tasks[t], state='fail', descend=True)
 
+            if group_rank == 0:
+                print("group {} ending task {}".format(group, tasks[t]))
+
     # Now we take the graphs from all groups and merge their states
 
-    # if comm is not None:
-    #     comm.barrier()
-    #     graph_merge_state(grph, comm=comm_rank)
-    #     grph = comm_group.bcast(grph, root=0)
+    if comm is not None:
+        print("proc {} hit merge barrier".format(rank))
+        comm.barrier()
+        if group_rank == 0:
+            print("proc {} joining merge".format(rank))
+            graph_merge_state(grph, comm=comm_rank)
+        if comm_group is not None:
+            print("proc {} joining bcast".format(rank))
+            grph = comm_group.bcast(grph, root=0)
 
     return grph
 
@@ -859,12 +891,14 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name=desipipe\n")
-        f.write("#SBATCH --output={}_slurm_%j.log\n".format(logroot))
+        f.write("#SBATCH --output={}_%j.log\n".format(logroot))
         f.write("#SBATCH --export=NONE\n\n")
         for com in envsetup:
             f.write("{}\n".format(com))
         f.write("\n")
         f.write("source {}\n\n".format(desisetup))
+        f.write("# Set TMPDIR to be on the ramdisk\n")
+        f.write("export TMPDIR=/dev/shm\n\n")
         f.write("node_cores=0\n")
         f.write("if [ ${NERSC_HOST} = edison ]; then\n")
         f.write("  node_cores=24\n")

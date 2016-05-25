@@ -22,7 +22,7 @@ import desispec.io as io
 import desispec.pipeline as pipe
 
 
-def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, ntask, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes, nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh):
+def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes, nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh):
     specstr = ""
     if specs is not None:
         specstr = " --spectrographs {}".format(','.join([ "{}".format(x) for x in specs ]))
@@ -45,10 +45,12 @@ def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, 
 
     com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
 
+    totproc = ntask * taskproc
+
     shell_maxprocs = int(shell_maxcores / shell_threads)
     shell_procs = shell_maxprocs
-    if ntask < shell_procs:
-        shell_procs = ntask
+    if totproc < shell_procs:
+        shell_procs = totproc
 
     shell_path = os.path.join(scrdir, "{}.sh".format(stepstr))
     shell_log = os.path.join(logdir, "{}_sh".format(stepstr))
@@ -61,7 +63,9 @@ def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, 
         core_per_proc = nersc_mp
 
     nodeproc = int(nersc_nodecores / core_per_proc)
-    nodes = int(ntask / nodeproc)
+    nodes = int(totproc / nodeproc)
+    if nodes * nodeproc != totproc:
+        nodes += 1
     if nodes > nersc_maxnodes:
         nodes = nersc_maxnodes
 
@@ -93,7 +97,10 @@ def main():
     parser.add_argument('--shell_mpi_run', required=False, default='mpirun -np', help='bash scripts command to launch MPI pipeline steps.  If --shell_max_cores is 1, this is ignored.')
     parser.add_argument('--shell_max_cores', required=False, default=2, help='bash scripts max cores to use.')
 
-    parser.add_argument('--fakeboot', required=False, default=False, action="store_true", help='path to input psf-{r,b,z}.fits files, to bypass bootcalib')
+    parser.add_argument('--fakeboot', required=False, default=False, action="store_true", help='bypass bootcalib')
+
+    parser.add_argument('--fakepsf', required=False, default=False, action="store_true", help='bypass specex')
+
     parser.add_argument('--spectrographs', required=False, default=None, help='process only this comma-separated list of spectrographs')
 
     parser.add_argument('--zfind_workers', required=False, default=20, help='number of zfind workers.')
@@ -203,17 +210,18 @@ def main():
 
     # bootcalib
 
-    if args.fakeboot is None:
+    if not args.fakeboot:
 
         ntask = len(nights) * 3 * nspect
+        taskproc = 1
 
-        compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
         for nt in nights:
 
             ntask = 3 * nspect
 
-            compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+            compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
     else:
 
@@ -236,51 +244,76 @@ def main():
 
     # specex
 
-    ntask = totcount['arc'] * 3 * nspect
+    if not args.fakepsf:
 
-    compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        ntask = totcount['arc'] * 3 * nspect
+        taskproc = 20
 
-    for nt in nights:
+        compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
-        ntask = expnightcount[nt]['arc'] * 3 * nspect
+        for nt in nights:
 
-        compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+            ntask = expnightcount[nt]['arc'] * 3 * nspect
 
-    # psfcombine
+            compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
-    ntask = len(nights) * 3 * nspect
+        # psfcombine
 
-    compute_step(setupfile, rawdir, proddir, envcom, "psfcombine", "psfcombine", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        ntask = len(nights) * 3 * nspect
+        taskproc = 1
 
-    for nt in nights:
+        compute_step(setupfile, rawdir, proddir, envcom, "psfcombine", "psfcombine", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
-        ntask = 3 * nspect
+        for nt in nights:
 
-        compute_step(setupfile, rawdir, proddir, envcom, "psfcombine", "psfcombine", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+            ntask = 3 * nspect
+
+            compute_step(setupfile, rawdir, proddir, envcom, "psfcombine", "psfcombine", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+
+    else:
+
+        cal2d = os.path.join(proddir, 'calib2d')
+        calpsf = os.path.join(cal2d, 'psf')
+
+        for nt in nights:
+
+            calpsfnight = os.path.join(calpsf, nt)
+            if not os.path.isdir(calpsfnight):
+                os.makedirs(calpsfnight)
+
+            for band in ['b', 'r', 'z']:
+                for spec in range(10):
+                    cam = "{}{}".format(band, spec)
+                    target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
+                    lnk = os.path.join(calpsfnight, "psfnight-{}{}.fits".format(band, spec))
+                    if not os.path.islink(lnk):
+                        os.symlink(target, lnk)
 
     # extract
 
     ntask = (totcount['flat'] + totcount['science']) * 3 * nspect
+    taskproc = 20
 
-    compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+    compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
     for nt in nights:
 
         ntask = (expnightcount[nt]['flat'] + expnightcount[nt]['science']) * 3 * nspect
 
-        compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
     # calibration
 
     ntask = totcount['science'] * 3 * nspect
+    taskproc = 1
 
-    compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+    compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
     for nt in nights:
 
         ntask = expnightcount[nt]['science'] * 3 * nspect
 
-        compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, nt, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
 
     # make bricks - serial only for now!
 
@@ -302,8 +335,9 @@ def main():
     # redshift fitting
 
     ntask = int(args.zfind_workers)
+    taskproc = 1
 
-    compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs, None, ntask, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, nodecores, maxnodes)
+    compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, nodecores, maxnodes)
 
 
 

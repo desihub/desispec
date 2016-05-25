@@ -265,4 +265,5 @@ def main(args):
         log.info("successfully wrote {:s}".format(args.qafile))
         pp.close()
     log.info("finishing..")
-
+    print("finished bootcalib {}".format(args.outfile))
+    return

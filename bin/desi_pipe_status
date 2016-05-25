@@ -17,6 +17,7 @@ import argparse
 import re
 import glob
 import pprint
+import subprocess as sp
 
 import yaml
 
@@ -141,8 +142,6 @@ def main():
     else:
 
         (file, ftime, first, last, jobid, running) = get_state(rundir)
-
-        print("found state ",file)
 
         grph = None
         if file == "":

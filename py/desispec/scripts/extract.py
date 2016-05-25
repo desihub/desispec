@@ -268,6 +268,13 @@ def main_mpi(args, comm=None):
         raise RuntimeError("extraction output file should have .fits extension")
     outroot = outmat.group(1)
 
+    outdir = os.path.dirname(outroot)
+    if rank == 0:
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
+
+    failcount = 0
+
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
         outbundle = "{}_{:02d}.fits".format(outroot, b)
 
@@ -275,27 +282,40 @@ def main_mpi(args, comm=None):
         bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
 
         #- The actual extraction
-        flux, ivar, Rdata = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b], 
-            bnspec[b], wave, regularize=args.regularize, ndecorr=True,
-            bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose)
+        try:
+            flux, ivar, Rdata = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b], 
+                bnspec[b], wave, regularize=args.regularize, ndecorr=True,
+                bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose)
 
-        #- Augment input image header for output
-        img.meta['NSPEC']   = (nspec, 'Number of spectra')
-        img.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
-        img.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
-        img.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
-        img.meta['SPECTER'] = (specter.__version__, 'https://github.com/desihub/specter')
-        img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
-        img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
+            #- Augment input image header for output
+            img.meta['NSPEC']   = (nspec, 'Number of spectra')
+            img.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
+            img.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
+            img.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
+            img.meta['SPECTER'] = (specter.__version__, 'https://github.com/desihub/specter')
+            img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
+            img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
 
-        frame = Frame(wave, flux, ivar, resolution_data=Rdata,
-                    fibers=fibers, meta=img.meta, fibermap=fibermap)
+            bfibermap = fibermap[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
+            bfibers = fibers[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
 
-        #- Write output
-        io.write_frame(outbundle, frame)
+            frame = Frame(wave, flux, ivar, resolution_data=Rdata,
+                        fibers=bfibers, meta=img.meta, fibermap=bfibermap)
 
-        print('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
-            specmin, specmin+nspec, time.asctime()))
+            #- Write output
+            io.write_frame(outbundle, frame)
+
+            print('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
+                bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
+        except:
+            failcount += 1
+
+    if comm is not None:
+        failcount = comm.allreduce(failcount)
+
+    if failcount > 0:
+        # all processes throw
+        raise RuntimeError("some extraction bundles failed")
 
     if rank == 0:
         opts = [

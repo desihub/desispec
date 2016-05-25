@@ -69,6 +69,11 @@ def run_frame(imgfile, bootfile, outfile, opts, specmin=0, nspec=500, bundlesize
         raise RuntimeError("specex output file should have .fits extension")
     outroot = outmat.group(1)
 
+    outdir = os.path.dirname(outroot)
+    if rank == 0:
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
+
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
         outbundle = "{}_{:02d}".format(outroot, b)
         outbundlefits = "{}.fits".format(outbundle)

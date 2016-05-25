@@ -45,6 +45,7 @@ _state_colors = {
     'none': '#000000',
     'done': '#00ff00',
     'fail': '#ff0000',
+    'wait': '#ffff00'
 }
 
 _graph_sep = '_'
@@ -55,7 +56,8 @@ def default_options():
 
     opts = {}
     opts['trace-only'] = False
-    opts['legendre-degree'] = 6
+    opts['legendre-degree'] = 5
+    opts['triplet-matching'] = True
     allopts['bootcalib'] = opts
 
     opts = {}
@@ -63,8 +65,8 @@ def default_options():
     # opts['ivar-hdu'] = 2
     # opts['mask-hdu'] = 3
     # opts['header-hdu'] = 1
-    # opts['xcoord-hdu'] = 1
-    # opts['ycoord-hdu'] = 1
+    opts['xcoord-hdu'] = 1
+    opts['ycoord-hdu'] = 2
     # opts['psfmodel'] = 'GAUSSHERMITE'
     # opts['half_size_x'] = 8
     # opts['half_size_y'] = 5
@@ -74,6 +76,7 @@ def default_options():
     # opts['legendre_deg_x'] = 1
     # opts['trace_deg_wave'] = 6
     # opts['trace_deg_x'] = 6
+    opts['lamplines'] = '/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt'
     allopts['specex'] = opts
 
     opts = {}
@@ -1041,7 +1044,7 @@ def graph_dot(grph, f):
 def graph_merge_state(grph, comm=None):
     if comm is None:
         return
-    if comm.size == 1:
+    elif comm.size == 1:
         return
     # check that we have the same list of nodes on all processes.  Then
     # merge the states.  "fail" overrides "None", and "done" overrides
