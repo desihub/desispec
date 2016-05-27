@@ -340,8 +340,9 @@ def main():
 
     ntask = int(args.zfind_workers)
     taskproc = 1
+    multip = 3
 
-    compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, nodecores, maxnodes)
+    compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 
 
 
