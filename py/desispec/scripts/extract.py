@@ -162,17 +162,19 @@ def main_mpi(args, comm=None):
 
     #- Load input files and broadcast
 
-    psf = None
+    # FIXME: after we have fixed the serialization
+    # of the PSF, read and broadcast here, to reduce
+    # disk contention.
+
     img = None
     if comm is None:
-        psf = load_psf(psf_file)
         img = io.read_image(input_file)
     else:
         if comm.rank == 0:
-            psf = load_psf(psf_file)
             img = io.read_image(input_file)
-        psf = comm.bcast(psf, root=0)
         img = comm.bcast(img, root=0)
+
+    psf = load_psf(psf_file)
 
     # get spectral range
 
