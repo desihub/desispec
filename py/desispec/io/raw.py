@@ -142,9 +142,13 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     #- Actually write or update the file
     if os.path.exists(filename):
         hdus = fits.open(filename, mode='append', memmap=False)
-        hdus.append(dataHDU)
-        hdus.flush()
-        hdus.close()
+        if extname in hdus:
+            hdus.close()
+            raise ValueError('Camera {} already in {}'.format(camera, filename))
+        else:
+            hdus.append(dataHDU)
+            hdus.flush()
+            hdus.close()
     else:
         hdus = fits.HDUList()
         hdus.append(fits.PrimaryHDU(None, header=primary_header))
