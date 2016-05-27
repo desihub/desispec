@@ -103,7 +103,7 @@ def main():
 
     parser.add_argument('--spectrographs', required=False, default=None, help='process only this comma-separated list of spectrographs')
 
-    parser.add_argument('--zfind_workers', required=False, default=20, help='number of zfind workers.')
+    parser.add_argument('--zfind_workers', required=False, default=64, help='number of zfind workers.')
 
     args = parser.parse_args()
 
