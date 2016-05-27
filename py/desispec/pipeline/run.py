@@ -611,12 +611,15 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             # slice out just the graph for this task
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             ffile = os.path.join(faildir, "{}_{}.yaml".format(step, tasks[t]))
+            tfile = os.path.join(faildir, "{}_{}.trace".format(step, tasks[t]))
 
             try:
                 # if the step previously failed, clear that file now
                 if group_rank == 0:
                     if os.path.isfile(ffile):
                         os.remove(ffile)
+                    if os.path.isfile(tfile):
+                        os.remove(tfile)
                 # if group_rank == 0:
                 #     print("group {} runtask {}".format(group, tasks[t]))
                 #     sys.stdout.flush()
@@ -635,6 +638,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 # this task.
                 msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
                 log.error(msg)
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
                 fyml = {}
                 fyml['step'] = step
                 fyml['rawdir'] = rawdir
@@ -643,11 +648,12 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 fyml['graph'] = tgraph
                 fyml['opts'] = options
                 fyml['procs'] = taskproc
-                if group_rank == 0:
-                    if not os.path.isfile(ffile):
-                        # we are the first process to hit this
-                        with open(ffile, 'w') as f:
-                            yaml.dump(fyml, f, default_flow_style=False)
+                if not os.path.isfile(ffile):
+                    # we are the first process to hit this
+                    with open(ffile, 'w') as f:
+                        yaml.dump(fyml, f, default_flow_style=False)
+                    with open(tfile, 'w') as f:
+                        f.write(lines)
                 # mark the step as failed in our group's local graph
                 graph_mark(grph, tasks[t], state='fail', descend=True)
 
@@ -693,12 +699,15 @@ def retry_task(failpath, newopts=None):
     nproc = fyml['procs']
 
     comm = None
+    rank = 0
+
     if nproc > 1:
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         nworld = comm.size
+        rank = comm.rank
         if nworld != nproc:
-            if comm.rank == 0:
+            if rank == 0:
                 log.warn("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
 
     opts = origopts
@@ -712,7 +721,8 @@ def retry_task(failpath, newopts=None):
         log.error("Retry Failed")
         raise
     else:
-        os.remove(failpath)
+        if rank == 0:
+            os.remove(failpath)
     return
 
 
