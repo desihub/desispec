@@ -92,8 +92,10 @@ def run_frame(imgfile, bootfile, outfile, opts, specmin=0, nspec=500, bundlesize
 
         optarray = option_list(opts)
         com.extend(optarray)
-
         sp.check_call(com)
+
+    if comm is not None:
+        comm.barrier()
 
     if rank == 0:
         outfits = "{}.fits".format(outroot)

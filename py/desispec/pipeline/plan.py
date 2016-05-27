@@ -12,6 +12,7 @@ Functions for planning and execution of pipeline operations
 from __future__ import absolute_import, division, print_function
 
 import os
+import sys
 import time
 import glob
 import re
@@ -78,6 +79,8 @@ def default_options():
     # opts['trace_deg_x'] = 6
     opts['lamplines'] = '/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt'
     allopts['specex'] = opts
+
+    allopts['psfcombine'] = {}
 
     opts = {}
     opts['regularize'] = 0.0
@@ -1056,35 +1059,46 @@ def graph_merge_state(grph, comm=None):
         if 'state' in grph[n].keys():
             states[n] = grph[n]['state']
         else:
-            states[n] = None
+            states[n] = 'none'
+
+    # print("proc {} has {} graph names".format(comm.rank, len(names)))
+    # sys.stdout.flush()
 
     for p in range(1, comm.size):
 
         if comm.rank == 0:
+            # print("proc {} receiving from {}".format(comm.rank, p))
+            # sys.stdout.flush()
             pstates = comm.recv(source=p, tag=p)
             pnames = sorted(list(pstates.keys()))
             if pnames != names:
                 raise RuntimeError("names of all objects must be the same when merging graph states")
             for n in names:
-                if states[n] is not None:
+                if states[n] != 'none':
                     if states[n] != 'done':
                         if pstates[n] == 'done':
                             states[n] = 'done'
                 else:
-                    if pstates[n] is not None:
+                    if pstates[n] != 'none':
                         states[n] = pstates[n]
 
         elif comm.rank == p:
-            comm.send(states, dest=0, tag=0)
+            # print("proc {} sending to {}".format(comm.rank, 0))
+            # sys.stdout.flush()
+            comm.send(states, dest=0, tag=p)
         comm.barrier()
 
     # broadcast final merged state back to all processes.
+    # print("proc {} hit bcast of states".format(comm.rank))
+    # sys.stdout.flush()
     states = comm.bcast(states, root=0)
 
     # update process-local graph
     for n in names:
-        if states[n] is not None:
+        if states[n] != 'none':
             grph[n]['state'] = states[n]
 
+    # print("proc {} ending merge".format(comm.rank))
+    # sys.stdout.flush()
     return
 

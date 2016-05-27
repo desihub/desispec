@@ -197,11 +197,15 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
         args = bootcalib.parse(optarray)
 
+        sys.stdout.flush()
         if rank == 0:
-            print("proc {} call bootcalib main".format(rank))
+            #print("proc {} call bootcalib main".format(rank))
+            #sys.stdout.flush()
             bootcalib.main(args)
-            print("proc {} returned from bootcalib main".format(rank))
-        print("proc {} finish runtask bootcalib".format(rank))
+            #print("proc {} returned from bootcalib main".format(rank))
+            #sys.stdout.flush()
+        #print("proc {} finish runtask bootcalib".format(rank))
+        #sys.stdout.flush()
 
     elif step == 'specex':
 
@@ -493,10 +497,13 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     else:
         raise RuntimeError("Unknown pipeline step {}".format(step))
 
+    #sys.stdout.flush()
     if comm is not None:
-        print("proc {} hit runtask barrier".format(rank))
+        #print("proc {} hit runtask barrier".format(rank))
+        #sys.stdout.flush()
         comm.barrier()
-    print("proc {} finish runtask".format(rank))
+    #print("proc {} finish runtask".format(rank))
+    #sys.stdout.flush()
 
     return
 
@@ -562,7 +569,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             comm_group = None
             comm_rank = comm
 
-    print("proc {}, group {}, group_rank {}, ngroup {}".format(rank, group, group_rank, ngroup))
+    #print("proc {}, group {}, group_rank {}, ngroup {}".format(rank, group, group_rank, ngroup))
+    #sys.stdout.flush()
 
     # Now we divide up the tasks among the groups of processes as
     # equally as possible.
@@ -591,13 +599,15 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
 
     faildir = os.path.join(proddir, 'run', 'failed')
 
-    if group_rank == 0:
-        print("group {}: tasks {}..{}".format(group, group_firsttask, group_firsttask+group_ntask-1))
+    # if group_rank == 0:
+    #     print("group {}: tasks {}..{}".format(group, group_firsttask, group_firsttask+group_ntask-1))
+    #     sys.stdout.flush()
 
     if group_ntask > 0:
         for t in range(group_firsttask, group_firsttask + group_ntask):
-            if group_rank == 0:
-                print("group {} starting task {}".format(group, tasks[t]))
+            # if group_rank == 0:
+            #     print("group {} starting task {}".format(group, tasks[t]))
+            #     sys.stdout.flush()
             # slice out just the graph for this task
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             ffile = os.path.join(faildir, "{}_{}.yaml".format(step, tasks[t]))
@@ -607,15 +617,18 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 if group_rank == 0:
                     if os.path.isfile(ffile):
                         os.remove(ffile)
-                if group_rank == 0:
-                    print("group {} runtask {}".format(group, tasks[t]))
+                # if group_rank == 0:
+                #     print("group {} runtask {}".format(group, tasks[t]))
+                #     sys.stdout.flush()
                 run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
                 # mark step as done in our group's graph
-                if group_rank == 0:
-                    print("group {} start graph_mark {}".format(group, tasks[t]))
+                # if group_rank == 0:
+                #     print("group {} start graph_mark {}".format(group, tasks[t]))
+                #     sys.stdout.flush()
                 graph_mark(grph, tasks[t], state='done', descend=False)
-                if group_rank == 0:
-                    print("group {} end graph_mark {}".format(group, tasks[t]))
+                # if group_rank == 0:
+                #     print("group {} end graph_mark {}".format(group, tasks[t]))
+                #     sys.stdout.flush()
             except:
                 # The task threw an exception.  We want to dump all information
                 # that will be needed to re-run the run_task() function on just
@@ -638,19 +651,24 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 # mark the step as failed in our group's local graph
                 graph_mark(grph, tasks[t], state='fail', descend=True)
 
-            if group_rank == 0:
-                print("group {} ending task {}".format(group, tasks[t]))
+            # if group_rank == 0:
+            #     print("group {} ending task {}".format(group, tasks[t]))
+            #     sys.stdout.flush()
 
     # Now we take the graphs from all groups and merge their states
 
+    #sys.stdout.flush()
     if comm is not None:
-        print("proc {} hit merge barrier".format(rank))
-        comm.barrier()
+        # print("proc {} hit merge barrier".format(rank))
+        # sys.stdout.flush()
+        # comm.barrier()
         if group_rank == 0:
-            print("proc {} joining merge".format(rank))
+            # print("proc {} joining merge".format(rank))
+            # sys.stdout.flush()
             graph_merge_state(grph, comm=comm_rank)
         if comm_group is not None:
-            print("proc {} joining bcast".format(rank))
+            # print("proc {} joining bcast".format(rank))
+            # sys.stdout.flush()
             grph = comm_group.bcast(grph, root=0)
 
     return grph
@@ -692,6 +710,7 @@ def retry_task(failpath, newopts=None):
         run_task(step, rawdir, proddir, grph, opts, comm=comm)
     except:
         log.error("Retry Failed")
+        raise
     else:
         os.remove(failpath)
     return

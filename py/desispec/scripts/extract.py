@@ -273,6 +273,9 @@ def main_mpi(args, comm=None):
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
+    if comm is not None:
+        comm.barrier()
+
     failcount = 0
 
     for b in range(myfirstbundle, myfirstbundle+mynbundle):

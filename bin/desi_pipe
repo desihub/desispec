@@ -214,14 +214,15 @@ def main():
 
         ntask = len(nights) * 3 * nspect
         taskproc = 1
+        multip = 3
 
-        compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 
         for nt in nights:
 
             ntask = 3 * nspect
 
-            compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+            compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 
     else:
 
@@ -248,14 +249,15 @@ def main():
 
         ntask = totcount['arc'] * 3 * nspect
         taskproc = 20
+        threads = 3
 
-        compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
 
         for nt in nights:
 
             ntask = expnightcount[nt]['arc'] * 3 * nspect
 
-            compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+            compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
 
         # psfcombine
 
@@ -293,27 +295,29 @@ def main():
 
     ntask = (totcount['flat'] + totcount['science']) * 3 * nspect
     taskproc = 20
+    threads = 3
 
-    compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+    compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
 
     for nt in nights:
 
         ntask = (expnightcount[nt]['flat'] + expnightcount[nt]['science']) * 3 * nspect
 
-        compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
 
     # calibration
 
     ntask = totcount['science'] * 3 * nspect
     taskproc = 1
+    multip = 3
 
-    compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+    compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 
     for nt in nights:
 
         ntask = expnightcount[nt]['science'] * 3 * nspect
 
-        compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, nt, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 
     # make bricks - serial only for now!
 
