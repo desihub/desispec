@@ -73,7 +73,8 @@ def bootcalib(deg,flatimage,arcimage):
     #- Also need wavelength solution not just trace
 
     arc=arcimage.pix
-    all_spec=extract_sngfibers_gaussianpsf(arc,xfit,gauss)
+    arc_ivar=arcimage.ivar
+    all_spec=extract_sngfibers_gaussianpsf(arc,arc_ivar,xfit,gauss)
     llist=load_arcline_list(camera)
     dlamb,wmark,gd_lines,line_guess=load_gdarc_lines(camera)
 
