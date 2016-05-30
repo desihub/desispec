@@ -138,12 +138,14 @@ def testconfig(outfilename="qlconfig.yaml"):
                        'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Calculate_SNR",
                                "Name":"Calculate Signal-to-Noise ratio",
-                               "kwargs":{'SkyFile':"%%SkyFile"
+                               "kwargs":{'SkyFile':"%%SkyFile",
+                                         'camera':"r0",
+                                         'expid':"%08d"%2
                                         }
                                }
                              ],
                        "StepName": "Sky Subtraction",
-                       "OutputFile":"sky_subtraction_QA.yaml"
+                       "OutputFile":"qa-r0-00000002.yaml"
                       }                       
                       ]
           }
@@ -402,6 +404,7 @@ def setup_pipeline(config):
         qas=[]
         for q in step["QAs"]:
             qa=getobject(q,log)
+            print qa
             if not qa.is_compatible(pa.get_output_type()):
                 log.warning("QA %s can not be used for output of %s. Skipping expecting %s got %s %s"%(qa.name,pa.name,qa.__inpType__,pa.get_output_type(),qa.is_compatible(pa.get_output_type())))
             else:

@@ -221,20 +221,70 @@ class Calculate_SNR(MonitoringAlg):
             raise qlexceptions.ParameterException("Need Skymodel file")
         input_frame=args[0]
         skymodel=kwargs["SkyFile"]
+        camera=kwargs["camera"]
+        expid=kwargs["expid"]
+        ampboundary=[250,input_frame.wave.shape[0]/2] #- TODO propagate amplifier boundary from kwargs. Dividing into quadrants for now. This may come from config also
+        return self.run_qa(input_frame,skymodel,ampboundary,camera,expid)
 
-        return self.run_qa(input_frame,skymodel)
-
-    def run_qa(self,input_frame,skymodel):
+    def run_qa(self,input_frame,skymodel,ampboundary,camera,expid):
         from desispec.sky import qa_skysub
 
         #- parameters (adopting from offline qa)
         sky_dict={'PCHI_RESID': 0.05, 'PER_RESID': 95.0}
         qadict=qa_skysub(sky_dict,input_frame,skymodel)
 
-        #- return values with expert level
+        #- return values
         retval={}
-        retval["VALUE"]={"Median SNR":qadict['MED_SNR'],"Total SNR":qadict['TOT_SNR']}
-        retval["EXPERT_LEVEL"]={"EXPERT LEVEL":"OBSERVER"}
+        retval["ARM"]=camera[0]
+        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["EXPID"]=expid
+        
+        if ampboundary is None:
+            retval["VALUE"]={"MED_SNR":qadict['MED_SNR'],"TOT_SNR":qadict['TOT_SNR']}
+
+        else:
+            
+            import desispec.frame as frame
+            import desispec.sky as sky
+            
+            top_left_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[:ampboundary[0],ampboundary[1]:],input_frame.ivar[:ampboundary[0],ampboundary[1]:],fibermap=input_frame.fibermap)
+            top_left_skymodel=sky.SkyModel(skymodel.wave[ampboundary[1]:],skymodel.flux[:ampboundary[0],ampboundary[1]:],skymodel.ivar[:ampboundary[0],ampboundary[1]:],skymodel.mask[:ampboundary[0],ampboundary[1]:])
+            qadict_01=qa_skysub(sky_dict,top_left_frame,top_left_skymodel)
+            average01=np.mean(qadict_01['MED_SNR'])
+            tot01=np.sum(qadict_01['TOT_SNR'])
+
+            bottom_left_frame=frame.Frame(input_frame.wave[:ampboundary[1]],input_frame.flux[:ampboundary[0],:ampboundary[1]],input_frame.ivar[:ampboundary[0],:ampboundary[1]],fibermap=input_frame.fibermap)
+            bottom_left_skymodel=sky.SkyModel(skymodel.wave[:ampboundary[1]],skymodel.flux[:ampboundary[0],:ampboundary[1]],skymodel.ivar[:ampboundary[0],:ampboundary[1]],skymodel.mask[:ampboundary[0],:ampboundary[1]])
+            qadict_00=qa_skysub(sky_dict,bottom_left_frame,bottom_left_skymodel)
+            average00=np.mean(qadict_00['MED_SNR'])
+            tot00=np.sum(qadict_00['TOT_SNR'])
+            if ampboundary[0] > 250:
+
+                bottom_right_frame=frame.Frame(input_frame.wave[:ampboundary[1]],input_frame.flux[ampboundary[0]:,:ampboundary[1]],input_frame.ivar[ampboundary[0]:,:ampboundary[1]],fibermap=input_frame.fibermap)
+                bottom_right_skymodel=sky.SkyModel(skymodel.wave[:ampboundary[1]],skymodel.flux[ampboundary[0]:,:ampboundary[1]],skymodel.ivar[ampboundary[0]:,:ampboundary[1]],skymodel.mask[ampboundary[0]:,:ampboundary[1]])
+                qadict_10=qa_skysub(sky_dict,bottom_right_frame,bottom_right_skymodel)
+                average10=np.mean(qadict_10['MED_SNR'])
+                tot10=np.sum(qadict_10['TOT_SNR'])
+            else:
+                average10=0.
+                tot10=0.
+            if ampboundary[0]> 250: #- only if nspec> 250 for the right quadrants
+
+                top_right_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[ampboundary[0]:,ampboundary[1]:],input_frame.ivar[ampboundary[0]:,ampboundary[1]:],fibermap=input_frame.fibermap)
+                top_right_skymodel=sky.SkyModel(skymodel.wave[ampboundary[1]:],skymodel.flux[ampboundary[0]:,ampboundary[1]:],skymodel.ivar[ampboundary[0]:,ampboundary[1]:],skymodel.mask[ampboundary[0]:,ampboundary[1]:])
+                qadict_11=qa_skysub(sky_dict,top_right_frame,top_right_skymodel)
+                average11=np.mean(qadict_11['MED_SNR'])
+                tot11=np.sum(qadict_11['TOT_SNR'])
+            else:
+                average11=0.
+                tot11=0.
+
+            average_amp=np.array([average01,average00,average10,average11])
+            tot_amp=np.array([tot01,tot00,tot10,tot11])
+
+            retval["VALUE"]={"MED_SNR":qadict["MED_SNR"],"TOT_SNR":qadict["TOT_SNR"],"TOT_AMP_SNR":tot_amp,"MED_AMP_SNR":average_amp}
+
+
         return retval
 
     def get_default_config(self):
