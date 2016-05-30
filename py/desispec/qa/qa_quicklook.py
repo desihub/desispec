@@ -206,6 +206,48 @@ class Bias_From_Overscan(MonitoringAlg):
         
         return retval
 
+class CountSpectralBins(MonitoringAlg):
+
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Count Bins above n"
+        from  desispec.frame import Frame as fr
+        MonitoringAlg.__init__(self,name,fr,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_frame=args[0]
+        threshold=kwargs["thresh"]
+        camera=kwargs["camera"]
+        expid=kwargs["expid"]
+       
+        return self.run_qa(input_frame,threshold,camera,expid)
+
+    def run_qa(self,input_frame,thresh,camera,expid):
+        nspec=input_frame.flux.shape[0]
+        counts=np.zeros(nspec)
+        for ii in range(nspec):
+            ok,=np.where(input_frame.flux[ii]>thresh)
+            counts[ii]=ok.shape[0]
+
+        #- return the qa dictionary 
+        retval={}
+        retval["ARM"]=camera[0]
+        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["EXPID"]=expid
+        retval["THRESHOLD"]=thresh
+        grid=np.gradient(input_frame.wave)
+        if not np.all(grid[0]==grid[1:]): 
+            log.info("grid_size is NOT UNIFORM")
+        grid_size=grid[0]
+        retval["WAVE_GRID"]=grid_size
+        retval["VALUE"]={"CNTS_ABOVE_THRESH":counts}
+
+        return retval
+
+
 class Calculate_SNR(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":

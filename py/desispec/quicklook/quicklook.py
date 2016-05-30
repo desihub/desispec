@@ -115,9 +115,17 @@ def testconfig(outfilename="qlconfig.yaml"):
                                        "FiberMap":"%%FiberMap" #need this for qa_skysub downstream as well.
                                        }
                              },
-                       'QAs':[],
+                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
+                               "ClassName":"CountSpectralBins",
+                               "Name":"Count Bins above n",
+                               "kwargs":{'thresh':100,
+                                         'camera':"r0",
+                                         'expid':"%08d"%2
+                                        }
+                               }
+                             ],
                        "StepName":"2D Extraction",
-                       "OutputFile":"2dextraction_QA.yaml"
+                       "OutputFile":"qa-extract-r0-00000002.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName": "ApplyFiberFlat",
