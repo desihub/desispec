@@ -7,6 +7,11 @@ import numpy as np
 import scipy.ndimage
 from desispec.quicklook.qas import MonitoringAlg
 from desispec.quicklook import qlexceptions
+from desispec.quicklook import qllogger
+
+qlog=qllogger.QLLogger("QuickLook",0)
+log=qlog.getlog()
+
 # Evaluate rms of pixel values after dark subtraction
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -245,6 +250,18 @@ class CountSpectralBins(MonitoringAlg):
         retval["WAVE_GRID"]=grid_size
         retval["VALUE"]={"CNTS_ABOVE_THRESH":counts}
 
+        #- http post if needed
+        try: 
+            import requests
+            url='http://www.desiqlf.com/' #- this does not exist. a placeholder now
+            response=requests.get(url)
+            #- Check if the api has json
+            api=response.json()
+            #- proceed with post
+            response=requests.post(url,json=retval) #- no need of json.dumps as the api has it
+        except:
+            log.info("Skipping HTTP post...")            
+
         return retval
 
 
@@ -326,7 +343,19 @@ class Calculate_SNR(MonitoringAlg):
 
             retval["VALUE"]={"MED_SNR":qadict["MED_SNR"],"TOT_SNR":qadict["TOT_SNR"],"TOT_AMP_SNR":tot_amp,"MED_AMP_SNR":average_amp}
 
-
+        #- http post if valid
+        try: 
+            import requests
+            url='http://www.desiqlf.com/' #- this does not exist. a placeholder now
+            response=requests.get(url)
+            #- Check if the api has json
+            api=response.json()
+            #- proceed with post
+            response=requests.post(url,json=retval) #- no need of json.dumps as the api has it
+        except:
+            
+            log.info("Skipping HTTP post...")
+            
         return retval
 
     def get_default_config(self):
