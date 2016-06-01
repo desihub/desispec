@@ -74,13 +74,19 @@ def get_models(nspec=10, nwave=1000, wavemin=0, wavemax=20):
     Returns basic model data:
     - [1D] modelwave [nmodelwave]
     - [2D] modelflux [nmodel,nmodelwave]
+    - [1D] modelteff [nmodel]
+    - [1D] modellogg [nmodel]
+    - [1D] modelfeh [nmodel]
     """
     #make 20 models
 
     model_wave=np.linspace(wavemin, wavemax, nwave)
     y=np.sin(model_wave)+5.0
     model_flux=np.tile(y,nspec).reshape(nspec,len(model_wave))
-    return model_wave,model_flux
+    model_teff=6000.0*np.ones(nspec)
+    model_logg=4.0*np.ones(nspec)
+    model_feh=-1.5*np.ones(nspec)
+    return model_wave,model_flux,model_teff,model_logg,model_feh
     
 
 class TestFluxCalibration(unittest.TestCase):
@@ -99,7 +105,7 @@ class TestFluxCalibration(unittest.TestCase):
         
         #model 
         
-        modelwave,modelflux=get_models()
+        modelwave,modelflux,modelteff,modellogg,modelfeh=get_models()
         # say there are 3 stdstars
         stdfibers=np.random.choice(9,3,replace=False)
         frame.fibermap['OBJTYPE'][stdfibers] = 'STD'
@@ -116,7 +122,7 @@ class TestFluxCalibration(unittest.TestCase):
             stdivar={"b":ivar["b"][i],"r":ivar["r"][i],"z":ivar["z"][i]}
             stdresol_data={"b":resol_data["b"][i],"r":resol_data["r"][i],"z":resol_data["z"][i]}
 
-            bestid[i],bestwave[i],bestflux[i],red_chisq[i]=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux)
+            bestid[i],bestwave[i],bestflux[i],red_chisq[i]=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux,modelteff,modellogg,modelfeh)
         
         # Now assert the outputs
         self.assertTrue(np.all(bestid>-0.1)) # test if fitting is done, otherwise bestid=-1
@@ -136,7 +142,7 @@ class TestFluxCalibration(unittest.TestCase):
         stdivar={"b":ivar["b"][stdfibers],"r":ivar["r"][stdfibers],"z":ivar["z"][stdfibers]}
         stdresol_data={"b":resol_data["b"][stdfibers],"r":resol_data["r"][stdfibers],"z":resol_data["z"][stdfibers]}
         
-        bestid,bestwave,bestflux,red_chisq=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux)
+        bestid,bestwave,bestflux,red_chisq=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux,modelteff,modellogg,modelfeh)
         
         self.assertEqual(bestid,-1) # no fitting (but this may occur from many different permutations)
 

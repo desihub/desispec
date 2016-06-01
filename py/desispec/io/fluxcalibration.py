@@ -109,10 +109,13 @@ def read_stdstar_templates(stellarmodelfile):
     Args:
         stellarmodelfile : input filename
     
-    Returns (wave, flux, templateid) tuple:
+    Returns (wave, flux, templateid, teff, logg, feh) tuple:
         wave : 1D[nwave] array of wavelengths [Angstroms]
         flux : 2D[nmodel, nwave] array of model fluxes
         templateid : 1D[nmodel] array of template IDs for each spectrum
+        teff : 1D[nmodel] array of effective temperature for each model
+        logg : 1D[nmodel] array of surface gravity for each model
+        feh : 1D[nmodel] array of metallicity for each model
     """
     phdu=fits.open(stellarmodelfile)
     hdr0=phdu[0].header
