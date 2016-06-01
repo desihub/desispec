@@ -112,10 +112,10 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
 
     #- Set EXTNAME=camera
     if camera is not None:
+        header['CAMERA'] = camera
         extname = camera.upper()
-        header['CAMERA'] = extname
     else:
-        extname = header['CAMERA']
+        extname = header['CAMERA'].upper()
 
     header['INHERIT'] = True
 
@@ -124,7 +124,8 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     header = fits.ImageHDU(rawdata, header=header, name=extname).header
 
     #- Bizarrely, compression of 64-bit integers isn't supported.
-    #- downcast to 32-bit if that won't lose precision
+    #- downcast to 32-bit if that won't lose precision.
+    #- Real raw data should be 32-bit or 16-bit anyway
     if rawdata.dtype == np.int64:
         if np.max(np.abs(rawdata)) < 2**31:
             rawdata = rawdata.astype(np.int32)
@@ -141,9 +142,13 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     #- Actually write or update the file
     if os.path.exists(filename):
         hdus = fits.open(filename, mode='append', memmap=False)
-        hdus.append(dataHDU)
-        hdus.flush()
-        hdus.close()
+        if extname in hdus:
+            hdus.close()
+            raise ValueError('Camera {} already in {}'.format(camera, filename))
+        else:
+            hdus.append(dataHDU)
+            hdus.flush()
+            hdus.close()
     else:
         hdus = fits.HDUList()
         hdus.append(fits.PrimaryHDU(None, header=primary_header))

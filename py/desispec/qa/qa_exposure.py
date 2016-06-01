@@ -118,7 +118,7 @@ class QA_Frame(object):
         elif self.camera[0] == 'z':
             flux_dict['ZP_WAVE'] = 8250.  # Ang
         else:
-            raise ValueError("Not ready for this camera!")
+            raise ValueError("Not ready for camera {}!".format(self.camera))
 
         # Init
         self.init_qatype('FLUXCALIB', flux_dict, re_init=re_init)
