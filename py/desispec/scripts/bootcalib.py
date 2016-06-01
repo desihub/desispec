@@ -82,7 +82,7 @@ def main(args):
         # Read flat
         flat_hdu = fits.open(args.fiberflat)
         header = flat_hdu[0].header
-        if len(flat_hdu)==3 :
+        if len(flat_hdu)>=3 :
             flat = flat_hdu[0].data*(flat_hdu[1].data>0)*(flat_hdu[2].data==0)
         else :
             flat = flat_hdu[0].data
@@ -143,7 +143,7 @@ def main(args):
         # Read arc
         log.info("reading arc")
         arc_hdu = fits.open(args.arcfile)
-        if len(arc_hdu)==3 :
+        if len(arc_hdu)>=3 :
             # set to zero ivar of masked pixels, force positive or null ivar
             arc_ivar = arc_hdu[1].data*(arc_hdu[2].data==0)*(arc_hdu[1].data>0)
             # and mask pixels below -5 sigma (cures unmasked dead columns in sims.)
