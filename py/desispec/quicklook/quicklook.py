@@ -17,6 +17,7 @@ def testconfig(outfilename="qlconfig.yaml"):
     """
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
+    qlf_post=False #- QA output will be posted to QLF if set true
 
     conf={'BiasImage':os.environ['BIASIMAGE'],# path to bias image
           'DarkImage':os.environ['DARKIMAGE'],# path to dark image
@@ -120,7 +121,8 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "Name":"Count Bins above n",
                                "kwargs":{'thresh':100,
                                          'camera':"r0",
-                                         'expid':"%08d"%2
+                                         'expid':"%08d"%2,
+                                         'qlf_post':qlf_post
                                         }
                                }
                              ],
@@ -148,7 +150,8 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "Name":"Calculate Signal-to-Noise ratio",
                                "kwargs":{'SkyFile':"%%SkyFile",
                                          'camera':"r0",
-                                         'expid':"%08d"%2
+                                         'expid':"%08d"%2,
+                                         'qlf_post':qlf_post
                                         }
                                }
                              ],
