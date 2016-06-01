@@ -208,9 +208,9 @@ def create_prod(rawdir, proddir, nightstr=None):
     # create per-night directories
 
     for nt in nights:
-        ndir = os.path.join(expdir, nt)
-        if not os.path.isdir(ndir):
-            os.makedirs(ndir)
+        nexpdir = os.path.join(expdir, nt)
+        if not os.path.isdir(nexpdir):
+            os.makedirs(nexpdir)
         ndir = os.path.join(cal2d, nt)
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
@@ -223,6 +223,12 @@ def create_prod(rawdir, proddir, nightstr=None):
         with open(os.path.join(plandir, "{}.dot".format(nt)), 'w') as f:
             graph_dot(grph, f)
         graph_write(os.path.join(plandir, "{}.yaml".format(nt)), grph)
+        # make per-exposure dirs
+        for name, node in grph.items():
+            if node['type'] == 'fibermap':
+                fdir = os.path.join(nexpdir, "{:08d}".format(node['id']))
+                if not os.path.isdir(fdir):
+                    os.makedirs(fdir)
 
     return expnightcount
 
