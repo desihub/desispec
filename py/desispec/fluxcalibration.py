@@ -105,7 +105,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
 
     chisq=[]
     dof=len(wave["b"])+len(wave["r"])+len(wave["z"])
-    pec_vel=np.linspace(-700000,700000,1401.)
+    pec_vel=np.linspace(-700000,700000,141.)
     for i in range(len(pec_vel)):
 
         z=pec_vel[i]/c
@@ -133,9 +133,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         chi2=delta
         chisq.append(chi2)
 
-    min_index=np.argmin(chisq[100:-100])
-    fit_x=pec_vel[min_index:min_index+200]
-    fit_y=chisq[min_index:min_index+200]
+    min_index=np.argmin(chisq[10:-10])
+    fit_x=pec_vel[min_index:min_index+20]
+    fit_y=chisq[min_index:min_index+20]
     fit=np.poly1d(np.polyfit(fit_x,fit_y,2))
     model_shift=fit.deriv().r[0]/c
     print "Standard Star redshift =",-model_shift
