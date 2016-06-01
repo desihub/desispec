@@ -19,6 +19,7 @@ import subprocess as sp
 import re
 import pickle
 import copy
+import traceback
 
 import yaml
 
@@ -653,7 +654,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                     with open(ffile, 'w') as f:
                         yaml.dump(fyml, f, default_flow_style=False)
                     with open(tfile, 'w') as f:
-                        f.write(lines)
+                        f.write(''.join(lines))
                 # mark the step as failed in our group's local graph
                 graph_mark(grph, tasks[t], state='fail', descend=True)
 
@@ -922,6 +923,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         f.write("#SBATCH --job-name=desipipe\n")
         f.write("#SBATCH --output={}_%j.log\n".format(logroot))
         f.write("#SBATCH --export=NONE\n\n")
+        f.write("echo Starting slurm script at `date`\n\n")
         for com in envsetup:
             f.write("{}\n".format(com))
         f.write("\n")
@@ -961,11 +963,15 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
             f.write("else\n")
             f.write("  app=${ex}\n")
             f.write("fi\n")
+            f.write("echo calling desi_pipe_run at `date`\n\n")
             f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(' '.join(comlist)))
             if multisrun:
                 f.write(" &")
             f.write("\n\n")
         if multisrun:
             f.write("wait\n\n")
+
+        f.write("echo done with slurm script at `date`\n")
+
     return
 

@@ -24,6 +24,7 @@ except ImportError:
 
 import sys
 import os
+import time
 import numpy as np
 import argparse
 import re
@@ -42,6 +43,7 @@ def main():
     args = parser.parse_args()
 
     log = get_logger()
+    log.info("rank {} starting at {}".format(rank, time.asctime()))
 
     # raw and production locations
 
