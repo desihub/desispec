@@ -142,6 +142,13 @@ install:
     - for p in $DESIHUB_PIP_DEPENDENCIES; do r=$(echo $p | cut -d= -f1); v=$(echo $p | cut -d= -f2); pip install git+https://github.com/desihub/${r}.git@${v}#egg=${r}; done
     # - source etc/travis_install_specex.sh
 
+# setup fake X11 server; QA tests may need this
+# see https://docs.travis-ci.com/user/gui-and-headless-browsers/
+before_script:
+    - "export DISPLAY=:99.0"
+    - "sh -e /etc/init.d/xvfb start"
+    - sleep 3  # give xvfb some time to start
+
 script:
     - $MAIN_CMD $SETUP_CMD
 
