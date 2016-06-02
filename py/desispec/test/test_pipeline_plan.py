@@ -70,21 +70,21 @@ class TestPipelinePlan(unittest.TestCase):
 
 
     def test_graph(self):
-        (grph, expcount) = graph_night(self.testraw, self.night)
+        (grph, expcount, bricks) = graph_night(self.testraw, self.night)
         with open(os.path.join(self.testraw, "{}.dot".format(self.night)), 'w') as f:
             graph_dot(grph, f)
         graph_write(os.path.join(self.testraw, "{}_graph.yml".format(self.night)), grph)
 
 
     def test_graph_slice_spec(self):
-        (grph, expcount) = graph_night(self.testraw, self.night)
+        (grph, expcount, bricks) = graph_night(self.testraw, self.night)
         grph4 = graph_slice_spec(grph, [4])
         with open(os.path.join(self.testraw, "{}-spec4.dot".format(self.night)), 'w') as f:
             graph_dot(grph4, f)
 
 
     def test_graph_make_fail(self):
-        (grph, expcount) = graph_night(self.testraw, self.night)
+        (grph, expcount, bricks) = graph_night(self.testraw, self.night)
         grph4 = graph_slice_spec(grph, [4])
         graph_mark(grph4, graph_name(self.night, "pix-r4-{:08d}".format(3)), 'fail', descend=True)
         with open(os.path.join(self.testraw, "{}-spec4_fail.dot".format(self.night)), 'w') as f:
@@ -92,7 +92,7 @@ class TestPipelinePlan(unittest.TestCase):
 
 
     def test_graph_slice(self):
-        (grph, expcount) = graph_night(self.testraw, self.night)
+        (grph, expcount, bricks) = graph_night(self.testraw, self.night)
         grph4 = graph_slice_spec(grph, [4])
         exgraph = graph_slice(grph4, types=['frame'], deps=True)
         with open(os.path.join(self.testraw, "{}-spec4_extract.dot".format(self.night)), 'w') as f:

@@ -103,8 +103,6 @@ def main():
 
     parser.add_argument('--spectrographs', required=False, default=None, help='process only this comma-separated list of spectrographs')
 
-    parser.add_argument('--zfind_workers', required=False, default=64, help='number of zfind workers.')
-
     args = parser.parse_args()
 
     nodecores = 0
@@ -152,7 +150,7 @@ def main():
     # Update output directories and plans
 
     print("Updating production {}".format(proddir))
-    expnightcount = pipe.create_prod(rawdir, proddir, nightstr=args.nights)
+    expnightcount, allbricks = pipe.create_prod(rawdir, proddir, nightstr=args.nights)
     totcount = {}
     totcount['flat'] = 0
     totcount['arc'] = 0
@@ -338,7 +336,7 @@ def main():
 
     # redshift fitting
 
-    ntask = int(args.zfind_workers)
+    ntask = len(allbricks)
     taskproc = 1
     multip = 3
 

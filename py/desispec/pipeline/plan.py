@@ -207,6 +207,8 @@ def create_prod(rawdir, proddir, nightstr=None):
 
     # create per-night directories
 
+    allbricks = set()
+
     for nt in nights:
         nexpdir = os.path.join(expdir, nt)
         if not os.path.isdir(nexpdir):
@@ -218,7 +220,8 @@ def create_prod(rawdir, proddir, nightstr=None):
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
 
-        grph, expcount = graph_night(rawdir, nt)
+        grph, expcount, nbricks = graph_night(rawdir, nt)
+        allbricks.update(nbricks)
         expnightcount[nt] = expcount
         with open(os.path.join(plandir, "{}.dot".format(nt)), 'w') as f:
             graph_dot(grph, f)
@@ -230,7 +233,7 @@ def create_prod(rawdir, proddir, nightstr=None):
                 if not os.path.isdir(fdir):
                     os.makedirs(fdir)
 
-    return expnightcount
+    return expnightcount, allbricks
 
 
 def graph_name(*args):
@@ -647,7 +650,7 @@ def graph_night(rawdir, rawnight):
                     grph[bname]['in'].append(cfname)
                     grph[cfname]['out'].append(bname)
 
-    return (grph, expcount)
+    return (grph, expcount, allbricks)
 
 
 def graph_path_fibermap(rawdir, name):
