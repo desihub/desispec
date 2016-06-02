@@ -50,7 +50,7 @@ def get_frame_data(nspec=10):
     """
     nwave = 100
 
-    wave, model_flux = get_models(nspec, nwave, wavemin=0, wavemax=10)
+    wave, model_flux, model_teff, model_logg, model_feh = get_models(nspec, nwave, wavemin=0, wavemax=10)
     resol_data=set_resolmatrix(nspec,nwave)
 
     calib = np.sin(wave * np.pi / np.max(wave))

@@ -19,7 +19,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
         wave : 1D array of wavelengths[nwave] in Angstroms
         fibers : 1D array of fiberids for these spectra
         data : meta data table about which templates best fit; should include
-            BESTMODEL, TEMPLATEID, CHI2DOF
+            BESTMODEL, TEMPLATEID, CHI2DOF, REDSHIFT
     """
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
@@ -39,7 +39,8 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     BESTMODEL=Column(name='BESTMODEL',format='K',array=data['BESTMODEL'])
     TEMPLATEID=Column(name='TEMPLATEID',format='K',array=data['TEMPLATEID'])
     CHI2DOF=Column(name='CHI2DOF',format='D',array=data['CHI2DOF'])
-    cols=fits.ColDefs([BESTMODEL,TEMPLATEID,CHI2DOF])
+    REDSHIFT=Column(name='REDSHIFT',format='D',array=data['REDSHIFT'])
+    cols=fits.ColDefs([BESTMODEL,TEMPLATEID,CHI2DOF,REDSHIFT])
     tbhdu=fits.BinTableHDU.from_columns(cols,header=hdr)
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])

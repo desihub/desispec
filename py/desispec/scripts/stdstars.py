@@ -149,7 +149,7 @@ def main(args) :
 
         stars.append((i,{"b":[frameFlux["b"][i]/fiberFlat["b"][i]-convolvedsky["b"][i],frameWave["b"]],
                          "r":[frameFlux["r"][i]/fiberFlat["r"][i]-convolvedsky["r"][i],frameWave["r"]],
-                         "z":[frameFlux["z"][i]/fiberFlat["z"][i]-convolvedsky["z"][i],frameWave]},fibers["MAG"][i]))
+                         "z":[frameFlux["z"][i]/fiberFlat["z"][i]-convolvedsky["z"][i],frameWave["z"]]},fibers["MAG"][i]))
         ivars.append((i,{"b":[frameIvar["b"][i]],"r":[frameIvar["r"][i,:]],"z":[frameIvar["z"][i,:]]}))
 
 
@@ -174,6 +174,7 @@ def main(args) :
     bestModelIndex=np.arange(len(stars))
     templateID=np.arange(len(stars))
     chi2dof=np.zeros(len(stars))
+    redshift=np.zeros(len(stars))
 
     for k,j in enumerate(stars):
         log.info("checking best model for star {0}".format(j[0]))
@@ -196,9 +197,9 @@ def main(args) :
 
         # Now find the best Model
 
-        bestModelIndex[k],bestmodelWave,bestModelFlux,chi2dof[k]=match_templates(frameWave,flux,ivar,resol_star,stdwave,stdflux,teff,logg,feh)
+        bestModelIndex[k],bestmodelWave,bestModelFlux,chi2dof[k],redshift[k]=match_templates(frameWave,flux,ivar,resol_star,stdwave,stdflux,teff,logg,feh)
 
-        log.info('Star Fiber: {0}; Best Model Fiber: {1}; TemplateID: {2}; Chisq/dof: {3}'.format(j[0],bestModelIndex[k],templateid[bestModelIndex[k]],chi2dof[k]))
+        log.info('Star Fiber: {0}; Best Model Fiber: {1}; TemplateID: {2}; Chisq/dof: {3}; Redshift: {4}'.format(j[0],bestModelIndex[k],templateid[bestModelIndex[k]],chi2dof[k],redshift[k]))
         # Normalize the best model using reported magnitude
         normalizedflux=normalize_templates(stdwave,stdflux[bestModelIndex[k]],mags,filters)
         normflux.append(normalizedflux)
@@ -210,6 +211,7 @@ def main(args) :
     data['BESTMODEL']=bestModelIndex
     data['CHI2DOF']=chi2dof
     data['TEMPLATEID']=templateid[bestModelIndex]
+    data['REDSHIFT']=redshift
     norm_model_file=args.outfile
     io.write_stdstar_models(norm_model_file,normflux,stdwave,stdfibers,data)
 

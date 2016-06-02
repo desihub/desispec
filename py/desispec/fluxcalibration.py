@@ -43,6 +43,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         resolution_data: resolution corresponding to the star's fiber
         stdwave : 1D standard star template wavelengths [Angstroms]
         stdflux : 2D[nstd, nwave] template flux
+        teff : effective model temperature
+        logg : model surface gravity
+        feh : model metallicity
 
     Returns:
         stdflux[nspec, nwave] : standard star flux sampled at input wave
@@ -138,7 +141,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     fit_y=chisq[min_index:min_index+20]
     fit=np.poly1d(np.polyfit(fit_x,fit_y,2))
     model_shift=fit.deriv().r[0]/c
-    print "Standard Star redshift =",-model_shift
+    redshift=-model_shift
 
     bwave=wave["b"]*(1.+model_shift)
     rwave=wave["r"]*(1.+model_shift)
@@ -175,7 +178,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                 maxDelta=bdelta+rdelta+zdelta
                 red_Chisq=maxDelta/dof
 
-    return bestId,stdwave,stdflux[bestId],red_Chisq
+    return bestId,stdwave,stdflux[bestId],red_Chisq,redshift
     #Should we skip those stars with very bad Chisq?
 
 def normalize_templates(stdwave, stdflux, mags, filters):
