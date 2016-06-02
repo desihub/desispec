@@ -15,10 +15,52 @@ import os
 import numpy as np
 import argparse
 import re
-import pickle
+import glob
+import pprint
+import subprocess as sp
+
+import yaml
 
 import desispec.io as io
 import desispec.pipeline as pipe
+
+
+def get_state(rundir):
+    file = ""
+    stime = 0
+    first = ""
+    last = ""
+    jobid = 0
+    running = False
+
+    statepat = re.compile(r'.*state_(.*)-(.*)_(.*).yaml')
+    slrmpat = re.compile(r'slurm-(.*)')
+
+    for stfile in glob.glob(os.path.join(rundir, "state_*.yaml")):
+        thistime = os.path.getmtime(stfile)
+        if thistime > stime:
+            file = stfile
+            stime = thistime
+            statemat = statepat.match(stfile)
+            if statemat is None:
+                raise RuntimeError("state file matches glob but not regex- should never get here!")
+            first = statemat.group(1)
+            last = statemat.group(2)
+            jobid = statemat.group(3)
+
+            slrmmat = slrmpat.match(jobid)
+            if slrmmat is None:
+                # we were just using bash...
+                pid = int(jobid)
+                if pipe.pid_exists(pid):
+                    running = True
+            else:
+                slrmid = int(slrmmat.group(1))
+                state = sp.check_output("squeue -j {} 2>/dev/null | tail -1 | gawk '{{print $10}}'".format(slrmid), shell=True)
+                if state == 'R':
+                    running = True
+
+    return (file, stime, first, last, jobid, running)
 
 
 def main():
@@ -26,8 +68,12 @@ def main():
     parser.add_argument('--raw', required=False, default=None, help='raw data directory')
     parser.add_argument('--redux', required=False, default=None, help='output directory')
     parser.add_argument('--prod', required=False, default=None, help='output production name')
+    parser.add_argument('--cleanup', required=False, default=None, action="store_true", help='clean up stale files from crashed jobs')
+    parser.add_argument('--vis', required=False, default=None, action="store_true", help='use graphviz to display state')
     parser.add_argument('--failed', required=False, default=None, help='info about the failed yaml file')
     parser.add_argument('--retry', required=False, default=None, help='re-try to run the failed yaml file')
+
+    pref = 'DESI:  '
 
     args = parser.parse_args()
 
@@ -38,45 +84,101 @@ def main():
 
     specdir = args.redux
     if specdir is None:
-        specdir = io.specprod_root()
-    specdir = os.path.abspath(specdir)
+        if 'DESI_SPECTRO_REDUX' not in os.environ:
+            raise RuntimeError("You must set DESI_SPECTRO_REDUX in your environment or with a commandline option")
+        specdir = os.path.abspath(os.environ['DESI_SPECTRO_REDUX'])
 
-    proddir = args.prod
-    if proddir is None:
-        proddir = os.environ['PRODNAME']
+    prodname = args.prod
+    if prodname is None:
+        if 'PRODNAME' not in os.environ:
+            raise RuntimeError("You must set PRODNAME in your environment or with a commandline option")
+        prodname = os.environ['PRODNAME']
+
+    proddir = os.path.join(specdir, prodname)
 
     expdir = os.path.join(proddir, 'exposures')
 
-    faildir = os.path.join(proddir, 'failed')
+    plandir = os.path.join(proddir, 'plan')
+
+    rundir = os.path.join(proddir, 'run')
+
+    faildir = os.path.join(rundir, 'failed')
+
+    cal2d = os.path.join(proddir, 'calib2d')
+    calpsf = os.path.join(cal2d, 'psf')
+
+    # are we just working with a single failed task?
 
     if args.failed is not None:
-        fpkl = None
-        with open(args.failed, 'rb') as p:
-            fpkl = pickle.load(p)
+        fyml = None
+        with open(args.failed, 'r') as f:
+            fyml = yaml.load(f)
 
-        step = fpkl['step']
-        rawdir = fpkl['rawdir']
-        proddir = fpkl['proddir']
-        name = fpkl['task']
-        grph = fpkl['graph']
-        opts = fpkl['opts']
-        nproc = fpkl['procs']
+        step = fyml['step']
+        rawdir = fyml['rawdir']
+        proddir = fyml['proddir']
+        name = fyml['task']
+        grph = fyml['graph']
+        opts = fyml['opts']
+        nproc = fyml['procs']
 
-        print("{} :".format(args.failed))
-        print("    step = {}".format(step))
-        print("    processes = {}".format(nproc))
-        print("    rawdir = {}".format(step))
-        print("    proddir = {}".format(step))
-        print("    object = {}".format(name))
-        print("    opts:")
-        for op in opts:
-            print("      {}".format(op))
-        print("    deps:")
-        print(grph)
+        pp = pprint.PrettyPrinter(indent=4)
+        print("{}{} :".format(pref, args.failed))
+        print("{}    step = {}".format(pref, step))
+        print("{}    processes = {}".format(pref, nproc))
+        print("{}    rawdir = {}".format(pref, step))
+        print("{}    proddir = {}".format(pref, step))
+        print("{}    object = {}".format(pref, name))
+        print("{}    opts:".format(pref))
+        pp.pprint(opts)
+        print("{}    graph:".format(pref))        
+        pp.pprint(grph)
         print("")
 
-    if args.retry is not None:
+    elif args.retry is not None:
         pipe.retry_task(args.retry)
+
+    else:
+
+        (file, ftime, first, last, jobid, running) = get_state(rundir)
+
+        grph = None
+        if file == "":
+            # no state files exist- manually check all files
+            grph = pipe.graph_read_prod(proddir)
+            pipe.prod_state(rawdir, proddir, grph)
+        else:
+            # load the latest state
+            grph = pipe.graph_read(file)
+
+        # go through the current state and accumulate success / failure
+
+        status = {}
+
+        for st in pipe.run_step_types:
+            status[st] = {}
+            status[st]['total'] = 0
+            status[st]['none'] = 0
+            status[st]['wait'] = 0
+            status[st]['fail'] = 0
+            status[st]['done'] = 0
+
+        fts = pipe.file_types_step
+        for name, nd in grph.items():
+            tp = nd['type']
+            if tp in fts.keys():
+                status[fts[tp]]['total'] += 1
+                if 'state' in nd.keys():
+                    status[fts[tp]][nd['state']] += 1
+                else:
+                    status[fts[tp]]['none'] += 1
+
+        for st in pipe.run_step_types:
+            print("{}{}:".format(pref, st))
+            print("{}  {} / {} done".format(pref, status[st]['done'], status[st]['total']))
+            print("{}  {} / {} not started".format(pref, status[st]['none'], status[st]['total']))
+            print("{}  {} / {} started".format(pref, status[st]['wait'], status[st]['total']))
+            print("{}  {} / {} failed".format(pref, status[st]['fail'], status[st]['total']))
 
 
 

@@ -19,7 +19,11 @@ import argparse
 
 
 def parse(options=None):
-    default_nproc = max(1, multiprocessing.cpu_count() // 2)
+    default_nproc = None
+    if 'SLURM_CPUS_PER_TASK' in os.environ.keys():
+        default_nproc = os.environ['SLURM_CPUS_PER_TASK']
+    else:
+        default_nproc = max(1, multiprocessing.cpu_count() // 2)
 
     parser = argparse.ArgumentParser(description="Fit redshifts and classifications on bricks.")
     parser.add_argument("-b", "--brick", type=str, required=False,

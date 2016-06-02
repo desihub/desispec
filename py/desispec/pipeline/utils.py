@@ -24,7 +24,6 @@ def option_list(opts):
         if isinstance(val, (bool,)):
             if val:
                 optlist.append(keystr)
-                optlist.append()
         else:
             optlist.append(keystr)
             if isinstance(val, (float,)):
