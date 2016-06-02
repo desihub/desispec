@@ -115,6 +115,7 @@ class TestFluxCalibration(unittest.TestCase):
         bestwave=np.zeros((bestid.shape[0],modelflux.shape[1]))
         bestflux=np.zeros((bestid.shape[0],modelflux.shape[1]))
         red_chisq=np.zeros(len(stdfibers))
+        redshift=np.zeros(len(stdfibers))
         
         for i in xrange(len(stdfibers)):
 
@@ -122,7 +123,7 @@ class TestFluxCalibration(unittest.TestCase):
             stdivar={"b":ivar["b"][i],"r":ivar["r"][i],"z":ivar["z"][i]}
             stdresol_data={"b":resol_data["b"][i],"r":resol_data["r"][i],"z":resol_data["z"][i]}
 
-            bestid[i],bestwave[i],bestflux[i],red_chisq[i]=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux,modelteff,modellogg,modelfeh)
+            bestid[i],bestwave[i],bestflux[i],red_chisq[i],redshift[i]=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux,modelteff,modellogg,modelfeh)
         
         # Now assert the outputs
         self.assertTrue(np.all(bestid>-0.1)) # test if fitting is done, otherwise bestid=-1
@@ -142,7 +143,7 @@ class TestFluxCalibration(unittest.TestCase):
         stdivar={"b":ivar["b"][stdfibers],"r":ivar["r"][stdfibers],"z":ivar["z"][stdfibers]}
         stdresol_data={"b":resol_data["b"][stdfibers],"r":resol_data["r"][stdfibers],"z":resol_data["z"][stdfibers]}
         
-        bestid,bestwave,bestflux,red_chisq=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux,modelteff,modellogg,modelfeh)
+        bestid,bestwave,bestflux,red_chisq,redshift=match_templates(wave,stdflux,stdivar,stdresol_data,modelwave,modelflux,modelteff,modellogg,modelfeh)
         
         self.assertEqual(bestid,-1) # no fitting (but this may occur from many different permutations)
 
@@ -195,7 +196,7 @@ class TestFluxCalibration(unittest.TestCase):
         #get frame data
         frame=get_frame_data()
         #get model data
-        modelwave,modelflux=get_models()
+        modelwave,modelflux,modelteff,modellogg,modelfeh=get_models()
         # pick std star fibers
         stdfibers=np.random.choice(9,3,replace=False) # take 3 std stars fibers
         frame.fibermap['OBJTYPE'][stdfibers] = 'STD'
@@ -212,7 +213,7 @@ class TestFluxCalibration(unittest.TestCase):
     def test_outliers(self):
         '''Test fluxcalib when input starts with large outliers'''
         frame = get_frame_data()
-        modelwave, modelflux = get_models()
+        modelwave, modelflux, modelteff, modellogg, modelfeh = get_models()
         nstd = 5
         frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
         nstd = np.count_nonzero(frame.fibermap['OBJTYPE'] == 'STD')
@@ -223,7 +224,7 @@ class TestFluxCalibration(unittest.TestCase):
         """Test compute_fluxcalibration with some ivar=0 data
         """
         frame = get_frame_data()
-        modelwave, modelflux = get_models()
+        modelwave, modelflux, modelteff, modellogg, modelfeh = get_models()
         nstd = 1
         frame.fibermap['OBJTYPE'][2:2+nstd] = 'STD'
         frame.ivar[2:2+nstd, 20:22] = 0
