@@ -56,10 +56,12 @@ def read_stdstar_models(filename):
     Returns:
         read_stdstar_models (tuple): flux[nspec, nwave], wave[nwave], fibers[nspec]
     """
-    flux = native_endian(fits.getdata(filename, 0))
-    wave = native_endian(fits.getdata(filename, 1))
-    fibers = native_endian(fits.getdata(filename, 2))
-    return flux,wave,fibers
+    with fits.open(filename) as fx:
+        flux = native_endian(fx['FLUX'].data)
+        wave = native_endian(fx['WAVE'].data)
+        fibers = native_endian(fx['FIBERS'].data)
+    
+    return flux, wave, fibers
 
 
 def write_flux_calibration(outfile, fluxcalib, header=None):
@@ -119,22 +121,29 @@ def read_stdstar_templates(stellarmodelfile):
         feh : 1D[nmodel] array of metallicity for each model
     """
     phdu=fits.open(stellarmodelfile)
-    hdr0=phdu[0].header
-    crpix1=hdr0['CRPIX1']
-    crval1=hdr0['CRVAL1']
-    cdelt1=hdr0['CDELT1']
-    if hdr0["LOGLAM"]==1: #log bins
-        wavebins=10**(crval1+cdelt1*numpy.arange(len(phdu[0].data[0])))
-    else: #lin bins
-        model_wave_step   = cdelt1
-        model_wave_offset = (crval1-cdelt1*(crpix1-1))
-        wavebins=model_wave_step*numpy.arange(n_model_wave) + model_wave_offset
+    
+    #- New templates have wavelength in HDU 2
+    if len(phdu) >= 3:
+        wavebins = native_endian(phdu[2].data)
+    #- Old templates define wavelength grid in HDU 0 keywords
+    else:        
+        hdr0=phdu[0].header
+        crpix1=hdr0['CRPIX1']
+        crval1=hdr0['CRVAL1']
+        cdelt1=hdr0['CDELT1']
+        if hdr0["LOGLAM"]==1: #log bins
+            wavebins=10**(crval1+cdelt1*numpy.arange(len(phdu[0].data[0])))
+        else: #lin bins
+            model_wave_step   = cdelt1
+            model_wave_offset = (crval1-cdelt1*(crpix1-1))
+            wavebins=model_wave_step*numpy.arange(n_model_wave) + model_wave_offset
+        
     paramData=phdu[1].data
     templateid=paramData["TEMPLATEID"]
     teff=paramData["TEFF"]
     logg=paramData["LOGG"]
     feh=paramData["FEH"]
-    fluxData=phdu[0].data
+    fluxData=native_endian(phdu[0].data)
 
     phdu.close()
 
