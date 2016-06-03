@@ -19,9 +19,12 @@ from astropy import units
 #But should move from here anyway.
 
 def rebinSpectra(spectra,oldWaveBins,newWaveBins):
-    tck=scipy.interpolate.splrep(oldWaveBins,spectra,s=0,k=5)
+    tck=scipy.interpolate.splrep(oldWaveBins,spectra,s=0,k=1)
     specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
     return specnew
+
+def applySmoothingFilter(flux):
+    return scipy.ndimage.filters.median_filter(flux,200) 
 
 #import some global constants
 import scipy.constants as const
@@ -32,7 +35,9 @@ c=const.c
 erg=const.erg
 hc= h/erg*c*1.e10 #(in units of ergsA)
 
-def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
+
+
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
 
@@ -43,10 +48,14 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
         resolution_data: resolution corresponding to the star's fiber
         stdwave : 1D standard star template wavelengths [Angstroms]
         stdflux : 2D[nstd, nwave] template flux
+        teff : effective model temperature
+        logg : model surface gravity
+        feh : model metallicity
 
     Returns:
-        stdflux[nspec, nwave] : standard star flux sampled at input wave
-        stdindices[nspec] : indices of input standards for each match
+        index : index of standard star
+        redshift : redshift of standard star
+        chipdf : reduced chi2
 
     Notes:
       - wave and stdwave can be on different grids that don't
@@ -61,76 +70,126 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     # flux should be already flat fielded and sky subtracted.
     # First normalize both data and model by dividing by median filter.
 
-    def applySmoothingFilter(flux):
-        return scipy.ndimage.filters.median_filter(flux,200) # bin range has to be optimized
 
+    # hardcoded parameters
+    ###########################
+    z_max = 0.005
+    z_res = 0.00005
+    ###########################
+    
+    cameras = flux.keys()
+    log = get_logger()
+    
+    # find canonical f-type model
+    #####################################
+    canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh-1.5)**2)
+    log.info("canonical model=%s"%str(canonical_model))
+    
+    # resampling on a log wavelength grid
+    #####################################
+    # need to go fast at the beginning ... so we resample both data and model on a log grid
 
-    rnorm=flux["r"]/applySmoothingFilter(flux["r"])
-    bnorm=flux["b"]/applySmoothingFilter(flux["b"])
-    znorm=flux["z"]/applySmoothingFilter(flux["z"])
+    # define grid
+    minwave = 100000.
+    maxwave = 0.
+    for cam in cameras :
+        minwave=min(minwave,np.min(wave[cam]))
+        maxwave=max(maxwave,np.max(wave[cam]))
+    # ala boss
+    lstep=np.log10(1+z_res)
+    margin=int(np.log10(1+z_max)/lstep)+1
+    minlwave=np.log10(minwave)
+    maxlwave=np.log10(maxwave) # desired, but readjusted
+    nstep=(maxlwave-minlwave)/lstep    
+    #print "nstep=",nstep
+    resampled_lwave=minlwave+lstep*np.arange(nstep)
+    resampled_wave=10**resampled_lwave
+    
+    # map data on grid
+    resampled_data={}
+    resampled_ivar={}
+    resampled_model={}    
+    for cam in cameras :
+        tmp_flux,tmp_ivar=resample_flux(resampled_wave,wave[cam],flux[cam],ivar[cam])        
+        resampled_data[cam]=tmp_flux
+        resampled_ivar[cam]=tmp_ivar
+        
+        # we need to have the model on a larger grid than the data wave for redshifting
+        dwave=wave[cam][-1]-wave[cam][-2]
+        npix=int((wave[cam][-1]*z_max)/dwave+2)
+        extended_cam_wave=np.append( wave[cam][0]+dwave*np.arange(-npix,0) ,  wave[cam])
+        extended_cam_wave=np.append( extended_cam_wave, wave[cam][-1]+dwave*np.arange(1,npix+1))
+        # ok now we also need to increase the resolution
+        tmp_res=np.zeros((resolution_data[cam].shape[0],resolution_data[cam].shape[1]+2*npix))
+        tmp_res[:,:npix] = np.tile(resolution_data[cam][:,0],(npix,1)).T
+        tmp_res[:,npix:-npix] = resolution_data[cam]
+        tmp_res[:,-npix:] = np.tile(resolution_data[cam][:,-1],(npix,1)).T
+        # resampled model at camera resolution, with margin
+        tmp=resample_flux(extended_cam_wave,stdwave,stdflux[canonical_model])
+        tmp=Resolution(tmp_res).dot(tmp)
+        # map on log lam grid
+        resampled_model[cam]=resample_flux(resampled_wave,extended_cam_wave,tmp)
+        
+        # we now normalize both model and data
+        tmp=applySmoothingFilter(resampled_data[cam])
+        resampled_data[cam]/=(tmp+(tmp==0))
+        resampled_ivar[cam]*=tmp**2
+        tmp=applySmoothingFilter(resampled_model[cam])
+        resampled_model[cam]/=(tmp+(tmp==0))
+        resampled_ivar[cam]*=(tmp!=0)
 
+    # fit the best redshift
+    chi2=np.zeros((2*margin+1))
+    for i in range(-margin,margin+1) :
+        for cam in cameras :
+            if i<margin :
+                chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:-margin+i])**2)
+            else :
+                chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:])**2)
+    i=np.argmin(chi2)-margin
+    z=10**(i*lstep)-1
+    log.info("Best z=%f"%z)
+    
+    normalized_flux={}
+    normalized_ivar={}
+    ndata=0
+    for cam in cameras :
+        tmp=applySmoothingFilter(flux[cam]) # this is fast
+        normalized_flux[cam] = flux[cam]/(tmp+(tmp==0))
+        normalized_ivar[cam] = ivar[cam]*tmp**2
+        # mask potential cosmics 
+        ok=np.where(normalized_ivar[cam]>0)[0]
+        if ok.size>0 :
+            normalized_ivar[cam][ok] *= (normalized_flux[cam][ok]<1.+3/np.sqrt(normalized_ivar[cam][ok]))
+        ndata += np.sum(normalized_ivar[cam]>0)
 
-   # propagate this normalization to ivar
-
-    bivar=ivar["b"]*(applySmoothingFilter(flux["b"]))**2
-    rivar=ivar["r"]*(applySmoothingFilter(flux["r"]))**2
-    zivar=ivar["z"]*(applySmoothingFilter(flux["z"]))**2
-
-    Chisq=1e100
-    bestId=-1
-    bchisq=0
-    rchisq=0
-    zchisq=0
-
-    bmodels={}
-    rmodels={}
-    zmodels={}
-    for i,v in enumerate(stdflux):
-        bmodels[i]=rebinSpectra(v,stdwave,wave["b"])
-        rmodels[i]=rebinSpectra(v,stdwave,wave["r"])
-        zmodels[i]=rebinSpectra(v,stdwave,wave["z"])
-
-    Models={"b":bmodels,"r":rmodels,"z":zmodels}
-
-    def convolveModel(wave,resolution,flux):
-
-        diags=np.arange(10,-11,-1)
-        nwave=len(wave)
-        convolved=np.zeros(nwave)
-        R=Resolution(resolution)
-        convolved=R.dot(flux)
-
-        return convolved
-
-    nstd=stdflux.shape[0]
-    nstdwave=stdwave.shape[0]
-    maxDelta=1e100
-    bestId=-1
-    red_Chisq=-1.
-
-    for i in range(nstd):
-
-        bconvolveFlux=convolveModel(wave["b"],resolution_data["b"],Models["b"][i])
-        rconvolveFlux=convolveModel(wave["r"],resolution_data["r"],Models["r"][i])
-        zconvolveFlux=convolveModel(wave["z"],resolution_data["z"],Models["z"][i])
-
-        b_models=bconvolveFlux/applySmoothingFilter(bconvolveFlux)
-        r_models=rconvolveFlux/applySmoothingFilter(rconvolveFlux)
-        z_models=zconvolveFlux/applySmoothingFilter(zconvolveFlux)
-
-        rdelta=np.sum(((r_models-rnorm)**2)*rivar)
-        bdelta=np.sum(((b_models-bnorm)**2)*bivar)
-        zdelta=np.sum(((z_models-znorm)**2)*zivar)
-        if (rdelta+bdelta+zdelta)<maxDelta:
-                bestmodel={"r":r_models,"b":b_models,"z":z_models}
-                bestId=i
-                maxDelta=(rdelta+bdelta+zdelta)
-                dof=len(wave["b"])+len(wave["r"])+len(wave["z"])
-                red_Chisq=maxDelta/dof
-
-    return bestId,stdwave,stdflux[bestId],red_Chisq
-    #Should we skip those stars with very bad Chisq?
-
+    # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
+    best_model=None
+    best_normalized_model=None # for debugging only
+    best_model_id=None
+    best_chi2=0.
+    nstars=stdflux.shape[0]
+    
+    for star in range(nstars) :
+        model={}
+        normalized_model={}
+        chi2=0.
+        for cam in cameras :
+            tmp=resample_flux(wave[cam],stdwave*(1+z),stdflux[star]) # this is slow
+            model[cam]=Resolution(resolution_data[cam]).dot(tmp) # this is slow
+            tmp=applySmoothingFilter(model[cam]) # this is fast
+            normalized_model[cam] = model[cam]/(tmp+(tmp==0))
+            chi2 += np.sum(normalized_ivar[cam]*(normalized_flux[cam]-normalized_model[cam])**2)
+        if best_chi2==0 or chi2<best_chi2 :
+            best_chi2=chi2
+            best_model=model
+            best_normalized_model=normalized_model
+            best_model_id=star
+        #log.info("model star#%d chi2/ndf=%f/%d=%f best chi2/ndf=%f"%(star,chi2,ndata,chi2/ndata,best_chi2/ndata))
+        log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
+    
+    return best_model_id,z,best_chi2/ndata
+    
 
 def normalize_templates(stdwave, stdflux, mags, filters):
     """Returns spectra normalized to input magnitudes.
