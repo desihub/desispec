@@ -27,7 +27,7 @@ import desispec
 
 from desispec.log import get_logger
 from .plan import *
-from .utils import *
+from .utils import option_list
 
 import desispec.scripts.bootcalib as bootcalib
 import desispec.scripts.specex as specex
@@ -373,12 +373,25 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         fmfile = graph_path_fibermap(rawdir, fm[0])
         outfile = graph_path_stdstars(proddir, name)
         qafile = qa_path(outfile)
+        
+        framefiles = [graph_path_frame(proddir, x) for x in frm]
+        skyfiles = [graph_path_sky(proddir, x) for x in sky]
+        flatfiles = [graph_path_fiberflat(proddir, x) for x in flat]
 
         options = {}
-        options['spectrograph'] = specgrph
-        options['fiberflatexpid'] = flatexp
-        options['fibermap'] = fmfile
+        #- Old-style options
+        # options['spectrograph'] = specgrph
+        # options['fiberflatexpid'] = flatexp
+        # options['fibermap'] = fmfile
+        # options['outfile'] = outfile
+        
+        #- New JG options
+        options['frames'] = framefiles
+        options['skymodels'] = skyfiles
+        options['fiberflats'] = flatfiles
         options['outfile'] = outfile
+        options['ncpu'] = 24        # hardcode!!! how should this be handled?
+        
         options.update(opts)
         optarray = option_list(options)
 
