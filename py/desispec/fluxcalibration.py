@@ -32,7 +32,7 @@ c=const.c
 erg=const.erg
 hc= h/erg*c*1.e10 #(in units of ergsA)
 
-def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
 
@@ -43,6 +43,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
         resolution_data: resolution corresponding to the star's fiber
         stdwave : 1D standard star template wavelengths [Angstroms]
         stdflux : 2D[nstd, nwave] template flux
+        teff : effective model temperature
+        logg : model surface gravity
+        feh : model metallicity
 
     Returns:
         stdflux[nspec, nwave] : standard star flux sampled at input wave
@@ -64,33 +67,15 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
     def applySmoothingFilter(flux):
         return scipy.ndimage.filters.median_filter(flux,200) # bin range has to be optimized
 
-
     rnorm=flux["r"]/applySmoothingFilter(flux["r"])
     bnorm=flux["b"]/applySmoothingFilter(flux["b"])
     znorm=flux["z"]/applySmoothingFilter(flux["z"])
-
 
    # propagate this normalization to ivar
 
     bivar=ivar["b"]*(applySmoothingFilter(flux["b"]))**2
     rivar=ivar["r"]*(applySmoothingFilter(flux["r"]))**2
     zivar=ivar["z"]*(applySmoothingFilter(flux["z"]))**2
-
-    Chisq=1e100
-    bestId=-1
-    bchisq=0
-    rchisq=0
-    zchisq=0
-
-    bmodels={}
-    rmodels={}
-    zmodels={}
-    for i,v in enumerate(stdflux):
-        bmodels[i]=rebinSpectra(v,stdwave,wave["b"])
-        rmodels[i]=rebinSpectra(v,stdwave,wave["r"])
-        zmodels[i]=rebinSpectra(v,stdwave,wave["z"])
-
-    Models={"b":bmodels,"r":rmodels,"z":zmodels}
 
     def convolveModel(wave,resolution,flux):
 
@@ -102,35 +87,99 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux):
 
         return convolved
 
+    Chisq=1e100
+    bchisq=0
+    rchisq=0
+    zchisq=0
     nstd=stdflux.shape[0]
     nstdwave=stdwave.shape[0]
     maxDelta=1e100
     bestId=-1
     red_Chisq=-1.
 
-    for i in range(nstd):
+    # search stellar template metadata for canonical f-type model
 
-        bconvolveFlux=convolveModel(wave["b"],resolution_data["b"],Models["b"][i])
-        rconvolveFlux=convolveModel(wave["r"],resolution_data["r"],Models["r"][i])
-        zconvolveFlux=convolveModel(wave["z"],resolution_data["z"],Models["z"][i])
+    tcm=np.where(teff==6000.0)[0]
+    lcm=np.where(logg==4.0)[0]
+    fcm=np.where(feh==-1.5)[0]
+    can_mod=list(set(tcm).intersection(set(lcm).intersection(fcm)))[0]
+
+    # find peculiar velocity that minimizes chisq before fitting to best model
+
+    chisq=[]
+    dof=len(wave["b"])+len(wave["r"])+len(wave["z"])
+    pec_vel=np.linspace(-700000,700000,141.)
+    for i in range(len(pec_vel)):
+
+        z=pec_vel[i]/c
+
+        bwave=wave["b"]*(1.+z)
+        rwave=wave["r"]*(1.+z)
+        zwave=wave["z"]*(1.+z)
+
+        bcm=rebinSpectra(stdflux[can_mod],stdwave,bwave)
+        rcm=rebinSpectra(stdflux[can_mod],stdwave,rwave)
+        zcm=rebinSpectra(stdflux[can_mod],stdwave,zwave)
+
+        bconvolveFlux=convolveModel(bwave,resolution_data["b"],bcm)
+        rconvolveFlux=convolveModel(rwave,resolution_data["r"],rcm)
+        zconvolveFlux=convolveModel(zwave,resolution_data["z"],zcm)
 
         b_models=bconvolveFlux/applySmoothingFilter(bconvolveFlux)
         r_models=rconvolveFlux/applySmoothingFilter(rconvolveFlux)
         z_models=zconvolveFlux/applySmoothingFilter(zconvolveFlux)
 
-        rdelta=np.sum(((r_models-rnorm)**2)*rivar)
         bdelta=np.sum(((b_models-bnorm)**2)*bivar)
+        rdelta=np.sum(((r_models-rnorm)**2)*rivar)
         zdelta=np.sum(((z_models-znorm)**2)*zivar)
-        if (rdelta+bdelta+zdelta)<maxDelta:
-                bestmodel={"r":r_models,"b":b_models,"z":z_models}
+        delta=bdelta+rdelta+zdelta
+        chi2=delta
+        chisq.append(chi2)
+
+    min_index=np.argmin(chisq[10:-10])
+    fit_x=pec_vel[min_index:min_index+20]
+    fit_y=chisq[min_index:min_index+20]
+    fit=np.poly1d(np.polyfit(fit_x,fit_y,2))
+    model_shift=fit.deriv().r[0]/c
+    redshift=-model_shift
+
+    bwave=wave["b"]*(1.+model_shift)
+    rwave=wave["r"]*(1.+model_shift)
+    zwave=wave["z"]*(1.+model_shift)
+
+    bmodels={}
+    rmodels={}
+    zmodels={}
+
+    for i,v in enumerate(stdflux):
+        
+        bmodels[i]=rebinSpectra(v,stdwave,bwave)
+        rmodels[i]=rebinSpectra(v,stdwave,rwave)
+        zmodels[i]=rebinSpectra(v,stdwave,zwave)
+
+    Models={"b":bmodels,"r":rmodels,"z":zmodels}
+
+    for i in range(nstd):
+
+        bconvolveFlux=convolveModel(bwave,resolution_data["b"],Models["b"][i])
+        rconvolveFlux=convolveModel(rwave,resolution_data["r"],Models["r"][i])
+        zconvolveFlux=convolveModel(zwave,resolution_data["z"],Models["z"][i])
+
+        b_models=bconvolveFlux/applySmoothingFilter(bconvolveFlux)
+        r_models=rconvolveFlux/applySmoothingFilter(rconvolveFlux)
+        z_models=zconvolveFlux/applySmoothingFilter(zconvolveFlux)
+
+        bdelta=np.sum(((b_models-bnorm)**2)*bivar)
+        rdelta=np.sum(((r_models-rnorm)**2)*rivar)
+        zdelta=np.sum(((z_models-znorm)**2)*zivar)
+        if (bdelta+rdelta+zdelta)<maxDelta:
+                bestmodel={"b":b_models,"r":r_models,"z":z_models}
                 bestId=i
-                maxDelta=(rdelta+bdelta+zdelta)
-                dof=len(wave["b"])+len(wave["r"])+len(wave["z"])
+                maxDelta=bdelta+rdelta+zdelta
                 red_Chisq=maxDelta/dof
 
-    return bestId,stdwave,stdflux[bestId],red_Chisq
+    return bestId,stdwave,stdflux[bestId],red_Chisq,redshift
     #Should we skip those stars with very bad Chisq?
-
 
 def normalize_templates(stdwave, stdflux, mags, filters):
     """Returns spectra normalized to input magnitudes.
