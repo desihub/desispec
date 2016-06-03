@@ -14,6 +14,7 @@ from .io.filters import load_filter
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 from astropy import units
+import multiprocessing
 
 #rebin spectra into new wavebins. This should be equivalent to desispec.interpolation.resample_flux. So may not be needed here
 #But should move from here anyway.
@@ -35,9 +36,23 @@ c=const.c
 erg=const.erg
 hc= h/erg*c*1.e10 #(in units of ergsA)
 
+def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,redshifted_stdwave,star_stdflux) :
+    try :
+        chi2=0.
+        for cam in normalized_flux.keys() :
+            tmp=resample_flux(wave[cam],redshifted_stdwave,star_stdflux) # this is slow
+            model=Resolution(resolution_data[cam]).dot(tmp) # this is slow
+            tmp=applySmoothingFilter(model) # this is fast
+            normalized_model = model/(tmp+(tmp==0))
+            chi2 += np.sum(normalized_ivar[cam]*(normalized_flux[cam]-normalized_model)**2)
+    except :
+        chi2 = 1e20    
+    return chi2
+    
+def _func(arg) :
+    return compute_chi2(**arg)
 
-
-def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh):
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
 
@@ -51,7 +66,8 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         teff : effective model temperature
         logg : model surface gravity
         feh : model metallicity
-
+        ncpu : number of cpu for multiprocessing
+    
     Returns:
         index : index of standard star
         redshift : redshift of standard star
@@ -164,29 +180,27 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         ndata += np.sum(normalized_ivar[cam]>0)
 
     # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
-    best_model=None
-    best_normalized_model=None # for debugging only
-    best_model_id=None
-    best_chi2=0.
-    nstars=stdflux.shape[0]
     
+    nstars=stdflux.shape[0]
+    redshifted_stdwave=stdwave*(1+z)
+    
+    func_args = []
+    # need to parallelize this
     for star in range(nstars) :
-        model={}
-        normalized_model={}
-        chi2=0.
-        for cam in cameras :
-            tmp=resample_flux(wave[cam],stdwave*(1+z),stdflux[star]) # this is slow
-            model[cam]=Resolution(resolution_data[cam]).dot(tmp) # this is slow
-            tmp=applySmoothingFilter(model[cam]) # this is fast
-            normalized_model[cam] = model[cam]/(tmp+(tmp==0))
-            chi2 += np.sum(normalized_ivar[cam]*(normalized_flux[cam]-normalized_model[cam])**2)
-        if best_chi2==0 or chi2<best_chi2 :
-            best_chi2=chi2
-            best_model=model
-            best_normalized_model=normalized_model
-            best_model_id=star
-        #log.info("model star#%d chi2/ndf=%f/%d=%f best chi2/ndf=%f"%(star,chi2,ndata,chi2/ndata,best_chi2/ndata))
-        log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
+        arguments={"wave":wave,
+                   "normalized_flux":normalized_flux,
+                   "normalized_ivar":normalized_ivar,
+                   "resolution_data":resolution_data,
+                   "redshifted_stdwave":redshifted_stdwave,
+                   "star_stdflux":stdflux[star]}
+        func_args.append( arguments )
+    
+    log.info("starting multiprocessing with %d cpus"%ncpu)
+    pool = multiprocessing.Pool(ncpu)
+    model_chi2 =  pool.map(_func, func_args)
+    best_model_id=np.argmin(np.array(model_chi2))
+    best_chi2=model_chi2[best_model_id]
+    #log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
     
     return best_model_id,z,best_chi2/ndata
     

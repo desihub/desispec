@@ -36,6 +36,7 @@ def parse(options=None):
                         help = 'list of path to DESI fiberflats fits files (needs to be same exposure, spectro)')
     parser.add_argument('--starmodels', type = str, help = 'path of spectro-photometric stellar spectra fits')
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
+    parser.add_argument('--ncpu', type = int, default = 1, required = False, help = 'use ncpu')
     
     args = None
     if options is None:
@@ -177,27 +178,28 @@ def main(args) :
     log.info("reading star models in %s"%args.starmodels)
     stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.starmodels)
     
-    # we don't need an infinite resolution even for z scanning here
-    # nor the full wavelength range
-    # but we cannot at this stage map directly the model on the extraction grid because 
-    # of the redshifts
-    minwave  = 100000.
-    maxwave  = 0.
-    mindwave = 1000. # wave step
-    for cam in frames :
-        minwave=min(minwave,np.min(frames[cam].wave))
-        maxwave=max(maxwave,np.max(frames[cam].wave))
-        mindwave=min(mindwave,np.min(np.gradient(frames[cam].wave)))
-    z_max = 0.01 # that's a huge velocity of 3000 km/s
-    minwave/=(1+z_max)
-    maxwave*=(1+z_max)
-    dwave=mindwave/2. # that's good enough
-    resampled_stdwave=minwave+dwave*np.arange(int((maxwave-minwave)/dwave))
-    log.info("first resampling of the standard star models (to go faster later) ...")
-    resampled_stdflux=np.zeros((stdflux.shape[0],resampled_stdwave.size))
-    for i in range(stdflux.shape[0]) :
-        resampled_stdflux[i]=resample_flux(resampled_stdwave,stdwave,stdflux[i])
-    
+    if 0 :
+        # we don't need an infinite resolution even for z scanning here
+        # nor the full wavelength range
+        # but we cannot at this stage map directly the model on the extraction grid because 
+        # of the redshifts
+        minwave  = 100000.
+        maxwave  = 0.
+        mindwave = 1000. # wave step
+        for cam in frames :
+            minwave=min(minwave,np.min(frames[cam].wave))
+            maxwave=max(maxwave,np.max(frames[cam].wave))
+            mindwave=min(mindwave,np.min(np.gradient(frames[cam].wave)))
+        z_max = 0.01 # that's a huge velocity of 3000 km/s
+        minwave/=(1+z_max)
+        maxwave*=(1+z_max)
+        dwave=mindwave/2. # that's good enough
+        resampled_stdwave=minwave+dwave*np.arange(int((maxwave-minwave)/dwave))
+        log.info("first resampling of the standard star models (to go faster later) ...")
+        resampled_stdflux=np.zeros((stdflux.shape[0],resampled_stdwave.size))
+        for i in range(stdflux.shape[0]) :
+            resampled_stdflux[i]=resample_flux(resampled_stdwave,stdwave,stdflux[i])
+
     # LOOP ON STARS TO FIND BEST MODEL
     ############################################
     bestModelIndex=np.arange(nstars)
@@ -223,7 +225,7 @@ def main(args) :
             resolution_data[band]=frames[camera].resolution_data[star]
         
         
-        bestModelIndex[star],redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,resampled_stdwave,resampled_stdflux, teff, logg, feh)
+        bestModelIndex[star],redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux, teff, logg, feh,ncpu=args.ncpu)
         
         log.info('Star Fiber: {0}; TemplateID: {1}; Redshift: {2}; Chisq/dof: {3}'.format(starfibers[star],bestModelIndex[star],redshift[star],chi2dof[star]))
         # Apply redshift to original spectrum at full resolution
