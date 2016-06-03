@@ -225,7 +225,7 @@ def main(args) :
             resolution_data[band]=frames[camera].resolution_data[star]
         
         
-        bestModelIndex[star],redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux, teff, logg, feh,ncpu=args.ncpu)
+        bestModelIndex[star],redshift[star],chi2dof[star],z=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux, teff, logg, feh,ncpu=args.ncpu)
         
         log.info('Star Fiber: {0}; TemplateID: {1}; Redshift: {2}; Chisq/dof: {3}'.format(starfibers[star],bestModelIndex[star],redshift[star],chi2dof[star]))
         # Apply redshift to original spectrum at full resolution

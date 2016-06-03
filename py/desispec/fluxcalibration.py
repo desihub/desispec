@@ -63,9 +63,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         resolution_data: resolution corresponding to the star's fiber
         stdwave : 1D standard star template wavelengths [Angstroms]
         stdflux : 2D[nstd, nwave] template flux
-        teff : effective model temperature
-        logg : model surface gravity
-        feh : model metallicity
+        teff : 1D[nstd] effective model temperature
+        logg : 1D[nstd] model surface gravity
+        feh : 1D[nstd] model metallicity
         ncpu : number of cpu for multiprocessing
     
     Returns:
@@ -96,9 +96,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     cameras = flux.keys()
     log = get_logger()
     
-    # find canonical f-type model
+    # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
     #####################################
-    canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh-1.5)**2)
+    canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh+1.5)**2)
     log.info("canonical model=%s"%str(canonical_model))
     
     # resampling on a log wavelength grid
@@ -202,7 +202,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     best_chi2=model_chi2[best_model_id]
     #log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
     
-    return best_model_id,z,best_chi2/ndata
+    return best_model_id,z,best_chi2/ndata, z
     
 
 def normalize_templates(stdwave, stdflux, mags, filters):
