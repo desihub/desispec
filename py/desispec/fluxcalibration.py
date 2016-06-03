@@ -36,11 +36,11 @@ c=const.c
 erg=const.erg
 hc= h/erg*c*1.e10 #(in units of ergsA)
 
-def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,redshifted_stdwave,star_stdflux) :
+def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,shifted_stdwave,star_stdflux) :
     try :
         chi2=0.
         for cam in normalized_flux.keys() :
-            tmp=resample_flux(wave[cam],redshifted_stdwave,star_stdflux) # this is slow
+            tmp=resample_flux(wave[cam],shifted_stdwave,star_stdflux) # this is slow
             model=Resolution(resolution_data[cam]).dot(tmp) # this is slow
             tmp=applySmoothingFilter(model) # this is fast
             normalized_model = model/(tmp+(tmp==0))
@@ -182,7 +182,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
     
     nstars=stdflux.shape[0]
-    redshifted_stdwave=stdwave*(1+z)
+    shifted_stdwave=stdwave/(1+z)
     
     func_args = []
     # need to parallelize this
@@ -191,7 +191,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                    "normalized_flux":normalized_flux,
                    "normalized_ivar":normalized_ivar,
                    "resolution_data":resolution_data,
-                   "redshifted_stdwave":redshifted_stdwave,
+                   "shifted_stdwave":shifted_stdwave,
                    "star_stdflux":stdflux[star]}
         func_args.append( arguments )
     
