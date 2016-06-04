@@ -202,7 +202,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     best_chi2=model_chi2[best_model_id]
     #log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
     
-    return best_model_id,z,best_chi2/ndata, z
+    return best_model_id,z,best_chi2/ndata
     
 
 def normalize_templates(stdwave, stdflux, mags, filters):
