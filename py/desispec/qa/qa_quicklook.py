@@ -227,11 +227,11 @@ class CountSpectralBins(MonitoringAlg):
         threshold=kwargs["thresh"]
         camera=kwargs["camera"]
         expid=kwargs["expid"]
-        qlf_post=kwargs["qlf_post"]
+        url=kwargs["url"]
        
-        return self.run_qa(input_frame,threshold,camera,expid,qlf_post=qlf_post)
+        return self.run_qa(input_frame,threshold,camera,expid,url=url)
 
-    def run_qa(self,input_frame,thresh,camera,expid,qlf_post=False):
+    def run_qa(self,input_frame,thresh,camera,expid,url=None):
         nspec=input_frame.flux.shape[0]
         counts=np.zeros(nspec)
         for ii in range(nspec):
@@ -252,10 +252,9 @@ class CountSpectralBins(MonitoringAlg):
         retval["VALUE"]={"CNTS_ABOVE_THRESH":counts}
 
         #- http post if needed
-        if qlf_post:
+        if url is not None:
             try: 
                 import requests
-                url='http://www.desiqlf.com/' #- this does not exist. a placeholder now
                 response=requests.get(url)
                 #- Check if the api has json
                 api=response.json()
@@ -285,10 +284,10 @@ class Calculate_SNR(MonitoringAlg):
         camera=kwargs["camera"]
         expid=kwargs["expid"]
         ampboundary=[250,input_frame.wave.shape[0]/2] #- TODO propagate amplifier boundary from kwargs. Dividing into quadrants for now. This may come from config also
-        qlf_post=kwargs["qlf_post"]
-        return self.run_qa(input_frame,skymodel,ampboundary,camera,expid,qlf_post=qlf_post)
+        url=kwargs["url"]
+        return self.run_qa(input_frame,skymodel,ampboundary,camera,expid,url=url)
 
-    def run_qa(self,input_frame,skymodel,ampboundary,camera,expid,qlf_post=False):
+    def run_qa(self,input_frame,skymodel,ampboundary,camera,expid,url=None):
         from desispec.sky import qa_skysub
 
         #- parameters (adopting from offline qa)
@@ -347,10 +346,9 @@ class Calculate_SNR(MonitoringAlg):
             retval["VALUE"]={"MED_SNR":qadict["MED_SNR"],"TOT_SNR":qadict["TOT_SNR"],"TOT_AMP_SNR":tot_amp,"MED_AMP_SNR":average_amp}
 
         #- http post if valid
-        if qlf_post:
+        if url is not None:
             try: 
                 import requests
-                url='http://www.desiqlf.com/' #- this does not exist. a placeholder now
                 response=requests.get(url)
                 #- Check if the api has json
                 api=response.json()

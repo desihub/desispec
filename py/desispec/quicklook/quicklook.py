@@ -17,7 +17,7 @@ def testconfig(outfilename="qlconfig.yaml"):
     """
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
-    qlf_post=False #- QA output will be posted to QLF if set true
+    url=None #- QA output will be posted to QLF if set true
 
     conf={'BiasImage':os.environ['BIASIMAGE'],# path to bias image
           'DarkImage':os.environ['DARKIMAGE'],# path to dark image
@@ -122,7 +122,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "kwargs":{'thresh':100,
                                          'camera':"r0",
                                          'expid':"%08d"%2,
-                                         'qlf_post':qlf_post
+                                         'url':url
                                         }
                                }
                              ],
@@ -151,7 +151,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "kwargs":{'SkyFile':"%%SkyFile",
                                          'camera':"r0",
                                          'expid':"%08d"%2,
-                                         'qlf_post':qlf_post
+                                         'url':url
                                         }
                                }
                              ],
