@@ -24,28 +24,31 @@ except ImportError:
 
 import sys
 import os
+import time
 import numpy as np
 import argparse
 import re
 
+import desispec.io as io
 from desispec.log import get_logger
 import desispec.pipeline as pipe
 
 
 def main():
     parser = argparse.ArgumentParser( description='Run steps of the pipeline at a given concurrency.' )
-    parser.add_argument( '--night', required=False, default=None, help='only use process this night (YYYYMMDD)' )
     parser.add_argument( '--first', required=False, default=None, help='first step of the pipeline to run' )
     parser.add_argument( '--last', required=False, default=None, help='last step of the pipeline to run')
+    parser.add_argument('--nights', required=False, default=None, help='comma separated (YYYYMMDD) or regex pattern')
+    parser.add_argument('--spectrographs', required=False, default=None, help='process only this comma-separated list of spectrographs')
     args = parser.parse_args()
 
     log = get_logger()
-
+    log.info("rank {} starting at {}".format(rank, time.asctime()))
 
     # raw and production locations
 
-    rawdir = os.environ['DESI_SPECTRO_DATA']
-    proddir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['PRODNAME'])
+    rawdir = os.path.abspath(io.rawdata_root())
+    proddir = os.path.abspath(io.specprod_root())
 
     if rank == 0:
         log.info("using raw dir {}".format(rawdir))
@@ -53,7 +56,7 @@ def main():
 
     # run it!
 
-    pipe.run_steps(args.first, args.last, rawdir, proddir, nights=[args.night], comm=comm)
+    pipe.run_steps(args.first, args.last, rawdir, proddir, spectrographs=args.spectrographs, nightstr=args.nights, comm=comm)
 
 
 if __name__ == "__main__":

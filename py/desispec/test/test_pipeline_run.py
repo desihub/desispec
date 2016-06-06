@@ -99,7 +99,7 @@ class TestPipelineRun(unittest.TestCase):
                     with open(pixfile, 'w') as p:
                         p.write("")
 
-        self.grph = graph_night(self.testraw, self.night)
+        self.grph, expcount, bricks = graph_night(self.testraw, self.night)
         graph_write(os.path.join(self.testraw, "{}_graph.yml".format(self.night)), self.grph)
 
 

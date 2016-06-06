@@ -58,7 +58,7 @@ def read_image(filename):
     meta = fx['IMAGE'].header
 
     if 'READNOISE' in fx:
-        readnoise = native_endian(fx['IMAGE'].data).astype(np.float64)
+        readnoise = native_endian(fx['READNOISE'].data).astype(np.float64)
     else:
         readnoise = fx['IMAGE'].header['RDNOISE']
 

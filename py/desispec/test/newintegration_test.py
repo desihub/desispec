@@ -8,6 +8,7 @@ import sys
 import os
 import random
 import time
+import subprocess as sp
 
 import numpy as np
 from astropy.io import fits
@@ -130,49 +131,26 @@ def integration_test(night=None, nspec=5, clobber=False):
     # simulate inputs
     sim(night, nspec=nspec, clobber=clobber)
 
+    # create production
+
+    com = "desi_pipe --zfind_workers 1 --fakeboot --spectrographs 0"
+    sp.call(com, shell=True)
+
     # raw and production locations
 
-    rawdir = os.environ['DESI_SPECTRO_DATA']
-    proddir = os.path.join(os.environ['DESI_SPECTRO_REDUX'], os.environ['PRODNAME'])
+    rawdir = os.path.abspath(io.rawdata_root())
+    proddir = os.path.abspath(io.specprod_root())
 
-    # create production output directories and modify the options to
-    # restrict the test to a smaller number of spectra.
+    # run the generated shell scripts
 
-    if not os.path.isdir(proddir):
-        pipe.create_prod(rawdir, proddir)
+    # for now, we also fake the specex runs
 
-        optfile = os.path.join(proddir, "run", "options.yaml")
-        opts = pipe.read_options(optfile)
-
-        opts['extract']['specmin'] = 0
-        opts['extract']['nspec'] = nspec
-        opts['stdstars']['models'] = '/home/kisner/scratch/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
-
-        pipe.write_options(optfile, opts)
-
-    # For this small size of dataset, bootcalib and specex do not yet work.
-    # instead we make symlinks to true PSFs used in the simulation.
-
-    # bootcalib
+    expdir = os.path.join(proddir, 'exposures')
+    expnight = os.path.join(expdir, night)
 
     cal2d = os.path.join(proddir, 'calib2d')
     calpsf = os.path.join(cal2d, 'psf')
     calpsfnight = os.path.join(calpsf, night)
-    if not os.path.isdir(calpsfnight):
-        os.makedirs(calpsfnight)
-
-    expnight = os.path.join(proddir, 'exposures', night)
-
-    for band in ['b', 'r', 'z']:
-        for spec in range(10):
-            cam = "{}{}".format(band, spec)
-            target = os.path.join(os.environ['DESIMODEL'], 'data', 'specpsf', "psf-{}.fits".format(band))
-            lnk = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
-            print("ln -s {} {}".format(target, lnk))
-            if not os.path.islink(lnk):
-                os.symlink(target, lnk)
-
-    # PSF estimation
 
     for expid in [0, 2]:
         expdir = os.path.join(expnight, "{:08d}".format(expid))
@@ -182,7 +160,6 @@ def integration_test(night=None, nspec=5, clobber=False):
             for spec in range(1):
                 target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
                 lnk = os.path.join(expdir, "psf-{}{}-{:08d}.fits".format(band, spec, expid))
-                print("ln -s {} {}".format(target, lnk))
                 if not os.path.islink(lnk):
                     os.symlink(target, lnk)
     for band in ['b', 'r', 'z']:
@@ -192,66 +169,74 @@ def integration_test(night=None, nspec=5, clobber=False):
             if not os.path.islink(lnk):
                 os.symlink(target, lnk)
 
-    # run the pipeline up to cframes
+    # com = os.path.join(proddir, "run", "scripts", "specex_all.sh")
+    # sp.check_call(["bash", com])
 
-    pipe.run_steps('extract', 'procexp', rawdir, proddir, nights=[night], comm=None)
+    # com = os.path.join(proddir, "run", "scripts", "psfcombine_all.sh")
+    # sp.check_call(["bash", com])
 
-    # make bricks
+    print("Running extraction script...")
+    com = os.path.join(proddir, "run", "scripts", "extract_all.sh")
+    sp.check_call(["bash", com])
 
-    args = makebricks.parse(['--night', night])
-    makebricks.main(args)
+    print("Running calibration script...")
+    com = os.path.join(proddir, "run", "scripts", "fiberflat-procexp_all.sh")
+    sp.check_call(["bash", com])
 
-    # run redshift fitting
+    print("Running makebricks script...")
+    com = os.path.join(proddir, "run", "scripts", "bricks.sh")
+    sp.check_call(["bash", com])
 
-    pipe.run_steps('zfind', 'zfind', rawdir, proddir, nights=[night], comm=None)
-
+    print("Running zfind script...")
+    com = os.path.join(proddir, "run", "scripts", "zfind_all.sh")
+    sp.check_call(["bash", com])
 
     # #-----
     # #- Did it work?
     # #- (this combination of fibermap, simspec, and zbest is a pain)
-    # simdir = os.path.dirname(io.findfile('fibermap', night=night, expid=expid))
-    # simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
-    # siminfo = fits.getdata(simspec, 'METADATA')
+    simdir = os.path.dirname(io.findfile('fibermap', night=night, expid=expid))
+    simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
+    siminfo = fits.getdata(simspec, 'METADATA')
 
-    # print()
-    # print("--------------------------------------------------")
-    # print("Brick     True  z        ->  Class  z        zwarn")
-    # # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
-    # for b in bricks:
-    #     zbest = io.read_zbest(io.findfile('zbest', brickname=b))
-    #     for i in range(len(zbest.z)):
-    #         if zbest.type[i] == 'ssp_em_galaxy':
-    #             objtype = 'GAL'
-    #         elif zbest.type[i] == 'spEigenStar':
-    #             objtype = 'STAR'
-    #         else:
-    #             objtype = zbest.type[i]
+    print()
+    print("--------------------------------------------------")
+    print("Brick     True  z        ->  Class  z        zwarn")
+    # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
+    for b in bricks:
+        zbest = io.read_zbest(io.findfile('zbest', brickname=b))
+        for i in range(len(zbest.z)):
+            if zbest.type[i] == 'ssp_em_galaxy':
+                objtype = 'GAL'
+            elif zbest.type[i] == 'spEigenStar':
+                objtype = 'STAR'
+            else:
+                objtype = zbest.type[i]
 
-    #         z, zwarn = zbest.z[i], zbest.zwarn[i]
+            z, zwarn = zbest.z[i], zbest.zwarn[i]
 
-    #         j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
-    #         truetype = siminfo['OBJTYPE'][j]
-    #         truez = siminfo['REDSHIFT'][j]
-    #         dv = 3e5*(z-truez)/(1+truez)
-    #         if truetype == 'SKY' and zwarn > 0:
-    #             status = 'ok'
-    #         elif zwarn == 0:
-    #             if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
-    #                 status = 'ok'
-    #             elif truetype == 'ELG' and objtype == 'GAL' and abs(dv) < 150:
-    #                 status = 'ok'
-    #             elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
-    #                 status = 'ok'
-    #             elif truetype == 'STD' and objtype == 'STAR':
-    #                 status = 'ok'
-    #             else:
-    #                 status = 'OOPS'
-    #         else:
-    #             status = 'OOPS'
-    #         print('{0}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
-    #             b, truetype, truez, objtype, z, zwarn, status))
+            j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
+            truetype = siminfo['OBJTYPE'][j]
+            truez = siminfo['REDSHIFT'][j]
+            dv = 3e5*(z-truez)/(1+truez)
+            if truetype == 'SKY' and zwarn > 0:
+                status = 'ok'
+            elif zwarn == 0:
+                if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
+                    status = 'ok'
+                elif truetype == 'ELG' and objtype == 'GAL' and abs(dv) < 150:
+                    status = 'ok'
+                elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
+                    status = 'ok'
+                elif truetype == 'STD' and objtype == 'STAR':
+                    status = 'ok'
+                else:
+                    status = 'OOPS'
+            else:
+                status = 'OOPS'
+            print('{0}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
+                b, truetype, truez, objtype, z, zwarn, status))
 
-    # print("--------------------------------------------------")
+    print("--------------------------------------------------")
 
 
 
