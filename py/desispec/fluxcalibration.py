@@ -194,6 +194,8 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     #log.info("starting multiprocessing with %d cpus"%ncpu)
     pool = multiprocessing.Pool(ncpu)
     model_chi2 =  pool.map(_func, func_args)
+    pool.close()
+    pool.join()
     best_model_id=np.argmin(np.array(model_chi2))
     best_chi2=model_chi2[best_model_id]
     #log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
