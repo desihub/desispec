@@ -27,7 +27,7 @@ def check_env():
     #- template locations
     missing_env = False
     if 'DESI_BASIS_TEMPLATES' not in os.environ:
-        log.warning('missing $DESI_BASIS_TEMPLATES needed for simulating spectra'.format(name))
+        log.warning('missing $DESI_BASIS_TEMPLATES needed for simulating spectra')
         missing_env = True
 
     if not os.path.isdir(os.getenv('DESI_BASIS_TEMPLATES')):
