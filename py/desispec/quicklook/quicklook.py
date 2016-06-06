@@ -345,7 +345,7 @@ def setup_pipeline(config):
     if "SkyFile" in config:
         skyfile=config["SkyFile"]
     
-
+    psf=None
     if "PSFFile" in config:
         #from specter.psf import load_psf
         import desispec.psf
@@ -359,7 +359,11 @@ def setup_pipeline(config):
     inp=imIO.read_image(inpname)
     hbeat.start("Reading fiberMap file %s"%fibname)
     fibfile,fibhdr=fibIO.read_fibermap(fibname,header=True)
-    convdict={"FiberMap":fibfile,"PSFFile":psf}
+
+    convdict={"FiberMap":fibfile}
+
+    if psf is not None:
+        convdict["PSFFile"]=psf
 
     if biasfile is not None:
         hbeat.start("Reading Bias Image %s"%biasfile)
