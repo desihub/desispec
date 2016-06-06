@@ -52,7 +52,7 @@ def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,shifted_st
 def _func(arg) :
     return compute_chi2(**arg)
 
-def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1):
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00005):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
 
@@ -85,13 +85,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
 
     # flux should be already flat fielded and sky subtracted.
     # First normalize both data and model by dividing by median filter.
-
-
-    # hardcoded parameters
-    ###########################
-    z_max = 0.005
-    z_res = 0.00005
-    ###########################
     
     cameras = flux.keys()
     log = get_logger()
@@ -99,7 +92,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
     #####################################
     canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh+1.5)**2)
-    log.info("canonical model=%s"%str(canonical_model))
+    #log.info("canonical model=%s"%str(canonical_model))
     
     # resampling on a log wavelength grid
     #####################################
@@ -164,7 +157,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                 chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:])**2)
     i=np.argmin(chi2)-margin
     z=10**(i*lstep)-1
-    log.info("Best z=%f"%z)
+    #log.info("Best z=%f"%z)
     
     normalized_flux={}
     normalized_ivar={}
@@ -178,6 +171,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         if ok.size>0 :
             normalized_ivar[cam][ok] *= (normalized_flux[cam][ok]<1.+3/np.sqrt(normalized_ivar[cam][ok]))
         ndata += np.sum(normalized_ivar[cam]>0)
+
+
+
 
     # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
     
@@ -195,7 +191,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                    "star_stdflux":stdflux[star]}
         func_args.append( arguments )
     
-    log.info("starting multiprocessing with %d cpus"%ncpu)
+    #log.info("starting multiprocessing with %d cpus"%ncpu)
     pool = multiprocessing.Pool(ncpu)
     model_chi2 =  pool.map(_func, func_args)
     best_model_id=np.argmin(np.array(model_chi2))

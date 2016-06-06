@@ -19,11 +19,13 @@ from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
+from desispec.io.filters import load_filter
 import argparse
 import numpy as np
 import os
 import sys
 from astropy.io import fits
+from astropy import units
 
 
 def parse(options=None):
@@ -37,6 +39,11 @@ def parse(options=None):
     parser.add_argument('--starmodels', type = str, help = 'path of spectro-photometric stellar spectra fits')
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
     parser.add_argument('--ncpu', type = int, default = 1, required = False, help = 'use ncpu')
+    parser.add_argument('--delta-color', type = float, default = 0.1, required = False, help = 'max delta-color for the selection of standard stars (on top of meas. errors)')
+    parser.add_argument('--color', type = str, default = "G-R", required = False, help = 'color for selection of standard stars')
+    parser.add_argument('--z-max', type = float, default = 0.005, required = False, help = 'max peculiar velocity (blue/red)shift range')
+    parser.add_argument('--z-res', type = float, default = 0.00005, required = False, help = 'dz grid resolution')
+    
     
     args = None
     if options is None:
@@ -56,7 +63,30 @@ def safe_read_key(header,key) :
         value=header[key.ljust(8).upper()]
     return value
         
+def get_color_filter_indices(filters,color_name) :
+    bands=color_name.strip().split("-")
+    if len(bands) != 2 :
+        log.error("cannot split color name '%s' as 'mag1-mag2'"%color_name)
+        raise ValueError("cannot split color name '%s' as 'mag1-mag2'"%color_name)
+    
+    index1 = -1
+    for i,fname in enumerate(filters):
+        if fname[-1]==bands[0] :
+            index1=i
+            break
+    index2 = -1
+    for i,fname in enumerate(filters):
+        if fname[-1]==bands[1] :
+            index2=i
+            break
+    return index1,index2
 
+def get_color(mags,filters,color_name) :
+    index1,index2=get_color_filter_indices(filters,color_name)
+    if index1<0 or index2<0 :
+        log.warning("cannot compute '%s' color from %s"%(color_name,filters))
+        return 0.
+    return mags[index1]-mags[index2]
 
 def main(args) :
     """ finds the best models of all standard stars in the frame
@@ -65,6 +95,7 @@ def main(args) :
 
     log = get_logger()
     
+    log.info("mag delta %s = %f (for the pre-selection of stellar models)"%(args.color,args.delta_color))
     
     frames={}
     flats={}
@@ -139,9 +170,14 @@ def main(args) :
         raise ValueError("no STD star found in fibermap")
     
     log.info("found %d STD stars"%starindices.size)
+
     
     imaging_filters=fibermap["FILTER"][starindices]
     imaging_mags=fibermap["MAG"][starindices]
+    
+    log.warning("NO MAG ERRORS IN FIBERMAP, I AM IGNORING MEASUREMENT ERRORS !!")
+    log.warning("NO EXTINCTION VALUES IN FIBERMAP, I AM IGNORING THIS FOR NOW !!")
+    
     
     # DIVIDE FLAT AND SUBTRACT SKY , TRIM DATA
     ############################################     
@@ -178,28 +214,23 @@ def main(args) :
     log.info("reading star models in %s"%args.starmodels)
     stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.starmodels)
     
-    if 0 :
-        # we don't need an infinite resolution even for z scanning here
-        # nor the full wavelength range
-        # but we cannot at this stage map directly the model on the extraction grid because 
-        # of the redshifts
-        minwave  = 100000.
-        maxwave  = 0.
-        mindwave = 1000. # wave step
-        for cam in frames :
-            minwave=min(minwave,np.min(frames[cam].wave))
-            maxwave=max(maxwave,np.max(frames[cam].wave))
-            mindwave=min(mindwave,np.min(np.gradient(frames[cam].wave)))
-        z_max = 0.01 # that's a huge velocity of 3000 km/s
-        minwave/=(1+z_max)
-        maxwave*=(1+z_max)
-        dwave=mindwave/2. # that's good enough
-        resampled_stdwave=minwave+dwave*np.arange(int((maxwave-minwave)/dwave))
-        log.info("first resampling of the standard star models (to go faster later) ...")
-        resampled_stdflux=np.zeros((stdflux.shape[0],resampled_stdwave.size))
-        for i in range(stdflux.shape[0]) :
-            resampled_stdflux[i]=resample_flux(resampled_stdwave,stdwave,stdflux[i])
-
+    # COMPUTE MAGS OF MODELS FOR EACH STD STAR MAG
+    ############################################
+    model_filters = []
+    for tmp in np.unique(imaging_filters) :
+        if len(tmp)>0 : # can be one empty entry
+            model_filters.append(tmp)
+    
+    log.info("computing model mags %s"%model_filters)
+    model_mags = np.zeros((stdflux.shape[0],len(model_filters)))
+    fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
+    for index in range(len(model_filters)) :
+        filter_response=load_filter(model_filters[index])
+        for m in range(stdflux.shape[0]) :
+            model_mags[m,index]=filter_response.get_ab_magnitude(stdflux[m]*fluxunits,stdwave)
+    log.info("done computing model mags")
+    
+    
     # LOOP ON STARS TO FIND BEST MODEL
     ############################################
     bestModelIndex=np.arange(nstars)
@@ -224,9 +255,38 @@ def main(args) :
             ivar[band]=frames[camera].ivar[star]
             resolution_data[band]=frames[camera].resolution_data[star]
         
+        # preselec models based on magnitudes
         
-        bestModelIndex[star],redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux, teff, logg, feh,ncpu=args.ncpu)
+        # compute star color
+        index1,index2=get_color_filter_indices(imaging_filters[star],args.color)
+        if index1<0 or index2<0 :
+            log.error("cannot compute '%s' color from %s"%(color_name,filters))
+        filter1=imaging_filters[star][index1]
+        filter2=imaging_filters[star][index2]        
+        star_color=imaging_mags[star][index1]-imaging_mags[star][index2]
         
+        # compute models color
+        model_index1=-1
+        model_index2=-1        
+        for i,fname in enumerate(model_filters) :
+            if fname==filter1 :
+                model_index1=i
+            elif fname==filter2 :
+                model_index2=i
+        
+        if model_index1<0 or model_index2<0 :
+            log.error("cannot compute '%s' model color from %s"%(color_name,filters))
+        model_colors = model_mags[:,model_index1]-model_mags[:,model_index2]
+
+        # selection
+        selection = np.where(np.abs(model_colors-star_color)<args.delta_color)[0]
+        
+        log.info("star#%d fiber #%d, %s = %s-%s = %f, number of pre-selected models = %d/%d"%(star,starfibers[star],args.color,filter1,filter2,star_color,selection.size,stdflux.shape[0]))
+        
+        index_in_selection,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux[selection], teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res)
+        
+        bestModelIndex[star] = selection[index_in_selection]
+
         log.info('Star Fiber: {0}; TemplateID: {1}; Redshift: {2}; Chisq/dof: {3}'.format(starfibers[star],bestModelIndex[star],redshift[star],chi2dof[star]))
         # Apply redshift to original spectrum at full resolution
         tmp=np.interp(stdwave,stdwave/(1+redshift[star]),stdflux[bestModelIndex[star]])
@@ -235,6 +295,7 @@ def main(args) :
         normflux.append(normalizedflux)
     
     
+
     # Now write the normalized flux for all best models to a file
     normflux=np.array(normflux)
     data={}
