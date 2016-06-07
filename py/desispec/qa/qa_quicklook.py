@@ -227,7 +227,10 @@ class CountSpectralBins(MonitoringAlg):
         threshold=kwargs["thresh"]
         camera=kwargs["camera"]
         expid=kwargs["expid"]
-        url=kwargs["url"]
+        if "url" in kwargs:
+            url=kwargs["url"]
+        else:
+            url=None
        
         return self.run_qa(input_frame,threshold,camera,expid,url=url)
 
@@ -273,6 +276,7 @@ class Calculate_SNR(MonitoringAlg):
         from  desispec.frame import Frame as fr
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
+        from desispec.io.sky import read_sky
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
@@ -280,11 +284,15 @@ class Calculate_SNR(MonitoringAlg):
         if "SkyFile" not in kwargs:
             raise qlexceptions.ParameterException("Need Skymodel file")
         input_frame=args[0]
-        skymodel=kwargs["SkyFile"]
+        skyfile=kwargs["SkyFile"]
+        skymodel=read_sky(skyfile)
         camera=kwargs["camera"]
         expid=kwargs["expid"]
         ampboundary=[250,input_frame.wave.shape[0]/2] #- TODO propagate amplifier boundary from kwargs. Dividing into quadrants for now. This may come from config also
-        url=kwargs["url"]
+        if "url" in kwargs:
+             url=kwargs["url"]
+        else: 
+             url=None
         return self.run_qa(input_frame,skymodel,ampboundary,camera,expid,url=url)
 
     def run_qa(self,input_frame,skymodel,ampboundary,camera,expid,url=None):
