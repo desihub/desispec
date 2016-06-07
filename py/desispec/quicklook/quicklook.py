@@ -17,6 +17,7 @@ def testconfig(outfilename="qlconfig.yaml"):
     """
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
+    url=None #- QA output will be posted to QLF if set true
 
     conf={'BiasImage':os.environ['BIASIMAGE'],# path to bias image
           'DarkImage':os.environ['DARKIMAGE'],# path to dark image
@@ -115,9 +116,18 @@ def testconfig(outfilename="qlconfig.yaml"):
                                        "FiberMap":"%%FiberMap" #need this for qa_skysub downstream as well.
                                        }
                              },
-                       'QAs':[],
+                       'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
+                               "ClassName":"CountSpectralBins",
+                               "Name":"Count Bins above n",
+                               "kwargs":{'thresh':100,
+                                         'camera':"r0",
+                                         'expid':"%08d"%2,
+                                         'url':url
+                                        }
+                               }
+                             ],
                        "StepName":"2D Extraction",
-                       "OutputFile":"2dextraction_QA.yaml"
+                       "OutputFile":"qa-extract-r0-00000002.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.procalgs",
                              "ClassName": "ApplyFiberFlat",
@@ -138,12 +148,15 @@ def testconfig(outfilename="qlconfig.yaml"):
                        'QAs':[{"ModuleName":"desispec.qa.qa_quicklook",
                                "ClassName":"Calculate_SNR",
                                "Name":"Calculate Signal-to-Noise ratio",
-                               "kwargs":{'SkyFile':"%%SkyFile"
+                               "kwargs":{'SkyFile':"%%SkyFile",
+                                         'camera':"r0",
+                                         'expid':"%08d"%2,
+                                         'url':url
                                         }
                                }
                              ],
                        "StepName": "Sky Subtraction",
-                       "OutputFile":"sky_subtraction_QA.yaml"
+                       "OutputFile":"qa-r0-00000002.yaml"
                       }                       
                       ]
           }
@@ -332,7 +345,7 @@ def setup_pipeline(config):
     if "SkyFile" in config:
         skyfile=config["SkyFile"]
     
-
+    psf=None
     if "PSFFile" in config:
         #from specter.psf import load_psf
         import desispec.psf
@@ -346,7 +359,11 @@ def setup_pipeline(config):
     inp=imIO.read_image(inpname)
     hbeat.start("Reading fiberMap file %s"%fibname)
     fibfile,fibhdr=fibIO.read_fibermap(fibname,header=True)
-    convdict={"FiberMap":fibfile,"PSFFile":psf}
+
+    convdict={"FiberMap":fibfile}
+
+    if psf is not None:
+        convdict["PSFFile"]=psf
 
     if biasfile is not None:
         hbeat.start("Reading Bias Image %s"%biasfile)
@@ -402,6 +419,7 @@ def setup_pipeline(config):
         qas=[]
         for q in step["QAs"]:
             qa=getobject(q,log)
+            print qa
             if not qa.is_compatible(pa.get_output_type()):
                 log.warning("QA %s can not be used for output of %s. Skipping expecting %s got %s %s"%(qa.name,pa.name,qa.__inpType__,pa.get_output_type(),qa.is_compatible(pa.get_output_type())))
             else:
