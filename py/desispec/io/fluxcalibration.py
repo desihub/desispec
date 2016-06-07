@@ -19,7 +19,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
         wave : 1D array of wavelengths[nwave] in Angstroms
         fibers : 1D array of fiberids for these spectra
         data : meta data table about which templates best fit; should include
-            BESTMODEL, TEMPLATEID, CHI2DOF
+            BESTMODEL, TEMPLATEID, CHI2DOF, REDSHIFT
     """
     hdr = fitsheader(header)
     hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
@@ -39,7 +39,8 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     BESTMODEL=Column(name='BESTMODEL',format='K',array=data['BESTMODEL'])
     TEMPLATEID=Column(name='TEMPLATEID',format='K',array=data['TEMPLATEID'])
     CHI2DOF=Column(name='CHI2DOF',format='D',array=data['CHI2DOF'])
-    cols=fits.ColDefs([BESTMODEL,TEMPLATEID,CHI2DOF])
+    REDSHIFT=Column(name='REDSHIFT',format='D',array=data['REDSHIFT'])
+    cols=fits.ColDefs([BESTMODEL,TEMPLATEID,CHI2DOF,REDSHIFT])
     tbhdu=fits.BinTableHDU.from_columns(cols,header=hdr)
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
@@ -55,10 +56,12 @@ def read_stdstar_models(filename):
     Returns:
         read_stdstar_models (tuple): flux[nspec, nwave], wave[nwave], fibers[nspec]
     """
-    flux = native_endian(fits.getdata(filename, 0))
-    wave = native_endian(fits.getdata(filename, 1))
-    fibers = native_endian(fits.getdata(filename, 2))
-    return flux,wave,fibers
+    with fits.open(filename) as fx:
+        flux = native_endian(fx['FLUX'].data)
+        wave = native_endian(fx['WAVE'].data)
+        fibers = native_endian(fx['FIBERS'].data)
+    
+    return flux, wave, fibers
 
 
 def write_flux_calibration(outfile, fluxcalib, header=None):
@@ -109,26 +112,39 @@ def read_stdstar_templates(stellarmodelfile):
     Args:
         stellarmodelfile : input filename
     
-    Returns (wave, flux, templateid) tuple:
+    Returns (wave, flux, templateid, teff, logg, feh) tuple:
         wave : 1D[nwave] array of wavelengths [Angstroms]
         flux : 2D[nmodel, nwave] array of model fluxes
         templateid : 1D[nmodel] array of template IDs for each spectrum
+        teff : 1D[nmodel] array of effective temperature for each model
+        logg : 1D[nmodel] array of surface gravity for each model
+        feh : 1D[nmodel] array of metallicity for each model
     """
     phdu=fits.open(stellarmodelfile)
-    hdr0=phdu[0].header
-    crpix1=hdr0['CRPIX1']
-    crval1=hdr0['CRVAL1']
-    cdelt1=hdr0['CDELT1']
-    if hdr0["LOGLAM"]==1: #log bins
-        wavebins=10**(crval1+cdelt1*numpy.arange(len(phdu[0].data[0])))
-    else: #lin bins
-        model_wave_step   = cdelt1
-        model_wave_offset = (crval1-cdelt1*(crpix1-1))
-        wavebins=model_wave_step*numpy.arange(n_model_wave) + model_wave_offset
+    
+    #- New templates have wavelength in HDU 2
+    if len(phdu) >= 3:
+        wavebins = native_endian(phdu[2].data)
+    #- Old templates define wavelength grid in HDU 0 keywords
+    else:        
+        hdr0=phdu[0].header
+        crpix1=hdr0['CRPIX1']
+        crval1=hdr0['CRVAL1']
+        cdelt1=hdr0['CDELT1']
+        if hdr0["LOGLAM"]==1: #log bins
+            wavebins=10**(crval1+cdelt1*numpy.arange(len(phdu[0].data[0])))
+        else: #lin bins
+            model_wave_step   = cdelt1
+            model_wave_offset = (crval1-cdelt1*(crpix1-1))
+            wavebins=model_wave_step*numpy.arange(n_model_wave) + model_wave_offset
+        
     paramData=phdu[1].data
     templateid=paramData["TEMPLATEID"]
-    fluxData=phdu[0].data
+    teff=paramData["TEFF"]
+    logg=paramData["LOGG"]
+    feh=paramData["FEH"]
+    fluxData=native_endian(phdu[0].data)
 
     phdu.close()
 
-    return wavebins,fluxData,templateid
+    return wavebins,fluxData,templateid,teff,logg,feh

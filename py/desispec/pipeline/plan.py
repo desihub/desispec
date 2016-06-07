@@ -96,7 +96,8 @@ def default_options():
     allopts['sky'] = {}
 
     opts = {}
-    opts['models'] = '/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+    opts['starmodels'] = '/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+    # opts['starmodels'] = '/project/projectdirs/desi/spectro/templates/basis_templates/v2.2/star_templates_v2.1.fits'
     allopts['stdstars'] = opts
 
     allopts['fluxcal'] = {}

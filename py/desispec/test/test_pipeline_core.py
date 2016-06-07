@@ -65,6 +65,21 @@ class TestRunCmd(unittest.TestCase):
         fx = open(self.testfile)
         line = fx.readline().strip()        
         self.assertNotEqual(token, line)
+        
+    def test_utils_default_nproc(self):
+        n = 4
+        tmp = os.getenv('SLURM_CPUS_PER_TASK')
+        os.environ['SLURM_CPUS_PER_TASK'] = str(n)
+        from desispec.pipeline import utils
+        reload(utils)
+        self.assertEqual(utils.default_nproc, n)
+        os.environ['SLURM_CPUS_PER_TASK'] = str(2*n)
+        reload(utils)
+        self.assertEqual(utils.default_nproc, 2*n)
+        del os.environ['SLURM_CPUS_PER_TASK']
+        reload(utils)
+        import multiprocessing
+        self.assertEqual(utils.default_nproc, multiprocessing.cpu_count()//2)
 
     @classmethod
     def setUpClass(cls):

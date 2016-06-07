@@ -217,6 +217,7 @@ class TestIO(unittest.TestCase):
         data['BESTMODEL'] = np.arange(nstd)
         data['TEMPLATEID'] = np.arange(nstd)
         data['CHI2DOF'] = np.ones(nstd)
+        data['REDSHIFT'] = np.zeros(nstd)
         desispec.io.write_stdstar_models(self.testfile, flux, wave, fibers, data)
         
         fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)
