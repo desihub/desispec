@@ -20,6 +20,7 @@ import re
 import pickle
 import copy
 import traceback
+import time
 
 import yaml
 
@@ -390,7 +391,6 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['skymodels'] = skyfiles
         options['fiberflats'] = flatfiles
         options['outfile'] = outfile
-        options['ncpu'] = 24        # hardcode!!! how should this be handled?
         
         options.update(opts)
         optarray = option_list(options)
@@ -834,7 +834,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     for st in range(firststep, laststep):
         runfile = None
         if rank == 0:
-            log.info("starting step {}".format(run_step_types[st]))
+            log.info("starting step {} at {}".format(run_step_types[st], time.asctime()))
         taskproc = steptaskproc[run_step_types[st]]
         if taskproc > nproc:
             taskproc = nproc
@@ -842,7 +842,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
         if comm is not None:
             comm.barrier()
         if rank == 0:
-            log.info("completed step {}".format(run_step_types[st]))
+            log.info("completed step {} at {}".format(run_step_types[st], time.asctime()))
 
     if rank == 0:
         graph_write(statefile, grph)
