@@ -15,27 +15,17 @@ desi_fit_stdstars.py
 #- TODO: refactor algorithmic code into a separate module/function
 
 import argparse
-import os
-import sys
 
 import numpy as np
 from astropy.io import fits
+from astropy import units
 
 from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
-<<<<<<< HEAD
 from desispec.pipeline.utils import default_nproc
-=======
 from desispec.io.filters import load_filter
-import argparse
-import numpy as np
-import os
-import sys
-from astropy.io import fits
-from astropy import units
->>>>>>> 8b147a301c80a983fab782a43715c9ff59a33ed4
 
 
 def parse(options=None):
@@ -48,16 +38,11 @@ def parse(options=None):
                         help = 'list of path to DESI fiberflats fits files (needs to be same exposure, spectro)')
     parser.add_argument('--starmodels', type = str, help = 'path of spectro-photometric stellar spectra fits')
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
-<<<<<<< HEAD
     parser.add_argument('--ncpu', type = int, default = default_nproc, required = False, help = 'use ncpu for multiprocessing')
-=======
-    parser.add_argument('--ncpu', type = int, default = 1, required = False, help = 'use ncpu')
     parser.add_argument('--delta-color', type = float, default = 0.1, required = False, help = 'max delta-color for the selection of standard stars (on top of meas. errors)')
     parser.add_argument('--color', type = str, default = "G-R", required = False, help = 'color for selection of standard stars')
     parser.add_argument('--z-max', type = float, default = 0.005, required = False, help = 'max peculiar velocity (blue/red)shift range')
     parser.add_argument('--z-res', type = float, default = 0.00005, required = False, help = 'dz grid resolution')
-    
->>>>>>> 8b147a301c80a983fab782a43715c9ff59a33ed4
     
     args = None
     if options is None:
