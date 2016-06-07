@@ -14,16 +14,18 @@ desi_fit_stdstars.py
 
 #- TODO: refactor algorithmic code into a separate module/function
 
+import argparse
+import os
+import sys
+
+import numpy as np
+from astropy.io import fits
 
 from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
-import argparse
-import numpy as np
-import os
-import sys
-from astropy.io import fits
+from desispec.pipeline.utils import default_nproc
 
 
 def parse(options=None):
@@ -36,7 +38,7 @@ def parse(options=None):
                         help = 'list of path to DESI fiberflats fits files (needs to be same exposure, spectro)')
     parser.add_argument('--starmodels', type = str, help = 'path of spectro-photometric stellar spectra fits')
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
-    parser.add_argument('--ncpu', type = int, default = 1, required = False, help = 'use ncpu')
+    parser.add_argument('--ncpu', type = int, default = default_nproc, required = False, help = 'use ncpu for multiprocessing')
     
     args = None
     if options is None:
