@@ -49,7 +49,7 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     hdus.append(x)
 
     hdus.append( fits.ImageHDU(frame.ivar.astype('f4'), name='IVAR') )
-    hdus.append( fits.ImageHDU(frame.mask, name='MASK') )
+    hdus.append( fits.CompImageHDU(frame.mask, name='MASK') )
     hdus.append( fits.ImageHDU(frame.wave.astype('f4'), name='WAVELENGTH') )
     hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     
@@ -58,7 +58,8 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     elif frame.fibermap is not None:
         hdus.append( fits.BinTableHDU(np.asarray(frame.fibermap), name='FIBERMAP' ) )
     
-    hdus.writeto(outfile, clobber=True)
+    hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
+    os.rename(outfile+'.tmp', outfile)
 
     return outfile
 

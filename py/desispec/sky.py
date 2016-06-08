@@ -170,7 +170,7 @@ class SkyModel(object):
             wave  : 1D[nwave] wavelength in Angstroms
             flux  : 2D[nspec, nwave] sky model to subtract
             ivar  : 2D[nspec, nwave] inverse variance of the sky model
-            mask  : 2D[nspec, nwave] 0=ok or >0 if problems
+            mask  : 2D[nspec, nwave] 0=ok or >0 if problems; 32-bit
             header : (optional) header from FITS file HDU0
             nrej : (optional) Number of rejected pixels in fit
             
@@ -185,7 +185,7 @@ class SkyModel(object):
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
-        self.mask = mask
+        self.mask = mask.astype(np.uint32)
         self.header = header
         self.nrej = nrej
 

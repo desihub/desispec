@@ -432,7 +432,7 @@ class FiberFlat(object):
             ivar: 2D[nspec, nwave] inverse variance of fiberflat
             
         Optional inputs:
-            mask: 2D[nspec, nwave] mask where 0=good; default ivar==0
+            mask: 2D[nspec, nwave] mask where 0=good; default ivar==0; 32-bit
             meanspec: (optional) 1D[nwave] mean deconvolved average flat lamp spectrum
             chi2pdf: (optional) Normalized chi^2 for fit to mean spectrum
             header: (optional) FITS header from HDU0
@@ -475,7 +475,7 @@ class FiberFlat(object):
         self.wave = wave
         self.fiberflat = fiberflat
         self.ivar = ivar
-        self.mask = mask
+        self.mask = mask.astype(np.uint32)
         self.meanspec = meanspec
         self.chi2pdf = chi2pdf
 

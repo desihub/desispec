@@ -8,6 +8,8 @@ import numpy as np
 
 from desispec.resolution import Resolution
 from desispec.coaddition import Spectrum
+from desispec.log import get_logger
+log = get_logger()
 
 # class Spectrum(object):
 #     def __init__(self, wave, flux, ivar, mask=None, R=None):
@@ -89,7 +91,9 @@ class Frame(object):
         if mask is None:
             self.mask = np.zeros(flux.shape, dtype=np.uint32)
         else:
-            self.mask = mask
+            if np.any(np.abs(np.asarray(mask)) > 2**32-1):
+                log.error('mask contains elements > 2**32-1; downcasting to 32-bit')
+            self.mask = np.asarray(mask, dtype=np.uint32)
 
         if resolution_data is not None:
             if resolution_data.ndim != 3 or \

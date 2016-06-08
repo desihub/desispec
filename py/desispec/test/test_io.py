@@ -160,9 +160,9 @@ class TestIO(unittest.TestCase):
             desispec.io.write_sky(self.testfile, sky)
             xsky = desispec.io.read_sky(self.testfile)
 
-            self.assertTrue(np.all(sky.wave  == xsky.wave))
-            self.assertTrue(np.all(sky.flux  == xsky.flux))
-            self.assertTrue(np.all(sky.ivar  == xsky.ivar))
+            self.assertTrue(np.all(sky.wave.astype('f4').astype('f8')  == xsky.wave))
+            self.assertTrue(np.all(sky.flux.astype('f4').astype('f8')  == xsky.flux))
+            self.assertTrue(np.all(sky.ivar.astype('f4').astype('f8')  == xsky.ivar))
             self.assertTrue(np.all(sky.mask  == xsky.mask))
             self.assertTrue(xsky.flux.dtype.isnative)
             self.assertEqual(sky.mask.dtype, xsky.mask.dtype)
@@ -181,11 +181,11 @@ class TestIO(unittest.TestCase):
         desispec.io.write_fiberflat(self.testfile, ff)
         xff = desispec.io.read_fiberflat(self.testfile)
 
-        self.assertTrue(np.all(ff.fiberflat == xff.fiberflat))
-        self.assertTrue(np.all(ff.ivar == xff.ivar))
+        self.assertTrue(np.all(ff.fiberflat.astype('f4').astype('f8') == xff.fiberflat))
+        self.assertTrue(np.all(ff.ivar.astype('f4').astype('f8') == xff.ivar))
         self.assertTrue(np.all(ff.mask == xff.mask))
-        self.assertTrue(np.all(ff.meanspec == xff.meanspec))
-        self.assertTrue(np.all(ff.wave == xff.wave))
+        self.assertTrue(np.all(ff.meanspec.astype('f4').astype('f8') == xff.meanspec))
+        self.assertTrue(np.all(ff.wave.astype('f4').astype('f8') == xff.wave))
 
         self.assertTrue(xff.fiberflat.dtype.isnative)
         self.assertTrue(xff.ivar.dtype.isnative)
@@ -243,9 +243,9 @@ class TestIO(unittest.TestCase):
         data['REDSHIFT'] = np.zeros(nstd)
         desispec.io.write_stdstar_models(self.testfile, flux, wave, fibers, data)
         
-        fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)
-        self.assertTrue(np.all(fx == flux))
-        self.assertTrue(np.all(wx == wave))
+        fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)        
+        self.assertTrue(np.all(fx == flux.astype('f4').astype('f8')))
+        self.assertTrue(np.all(wx == wave.astype('f4').astype('f8')))
         self.assertTrue(np.all(fibx == fibers))
 
     def test_fluxcalib(self):
@@ -260,9 +260,9 @@ class TestIO(unittest.TestCase):
         fc = FluxCalib(wave, calib, ivar, mask)
         desispec.io.write_flux_calibration(self.testfile, fc)
         fx = desispec.io.read_flux_calibration(self.testfile)
-        self.assertTrue(np.all(fx.wave == fc.wave))
-        self.assertTrue(np.all(fx.calib == fc.calib))
-        self.assertTrue(np.all(fx.ivar == fc.ivar))
+        self.assertTrue(np.all(fx.wave  == fc.wave.astype('f4').astype('f8')))
+        self.assertTrue(np.all(fx.calib == fc.calib.astype('f4').astype('f8')))
+        self.assertTrue(np.all(fx.ivar  == fc.ivar.astype('f4').astype('f8')))
         self.assertTrue(np.all(fx.mask == fc.mask))
 
     def test_brick(self):

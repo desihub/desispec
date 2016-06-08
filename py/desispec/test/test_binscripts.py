@@ -103,7 +103,7 @@ class TestBinScripts(unittest.TestCase):
         fibers = np.array([1,4]).astype(int)
         hdu1=fits.PrimaryHDU(stdflux)
         hdu1.header['EXTNAME'] = 'FLUX'
-        hdu2=fits.ImageHDU(wave, name='WAVE')
+        hdu2=fits.ImageHDU(wave, name='WAVELENGTH')
         hdu3=fits.ImageHDU(fibers, name='FIBERS')
         hdulist=fits.HDUList([hdu1,hdu2,hdu3])
         hdulist.writeto(self.stdfile,clobber=True)
