@@ -178,12 +178,27 @@ def integration_test(night=None, nspec=5, clobber=False):
         std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'
 
     stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
-    cmd = """desi_fit_stdstars --spectrograph 0 \
-      --fibermap {fibermap} \
-      --fiberflatexpid {flat_expid} \
-      --models {std_templates} --outfile {stdstars}""".format(
-        flat_expid=flat_expid, fibermap=fibermap, std_templates=std_templates,
-        stdstars=stdstarfile)
+    flats = list()
+    frames = list()
+    skymodels = list()
+    for channel in ['b', 'r', 'z']:
+        camera = channel+'0'
+        frames.append( io.findfile('frame', night, expid, camera) )
+        flats.append( io.findfile('fiberflat', night, flat_expid, camera) )
+        skymodels.append( io.findfile('sky', night, expid, camera) )
+
+    frames = ' '.join(frames)
+    flats = ' '.join(flats)
+    skymodels = ' '.join(skymodels)
+
+    cmd = """desi_fit_stdstars \
+      --frames {frames} \
+      --fiberflats {flats} \
+      --skymodels {skymodels} \
+      --starmodels {std_templates} \
+      -o {stdstars}""".format(
+        frames=frames, flats=flats, skymodels=skymodels,
+        std_templates=std_templates, stdstars=stdstarfile)
 
     inputs = [fibermap, std_templates]
     outputs = [stdstarfile,]

@@ -34,9 +34,3 @@ def option_list(opts):
                 optlist.append("{}".format(val))
     return optlist
 
-#- Default number of processes to use for multiprocessing
-if 'SLURM_CPUS_PER_TASK' in os.environ.keys():
-    default_nproc = int(os.environ['SLURM_CPUS_PER_TASK'])
-else:
-    import multiprocessing as _mp
-    default_nproc = max(1, _mp.cpu_count() // 2)
