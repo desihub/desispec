@@ -193,7 +193,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
-        #options['qafile'] = qapath
+        options['qafile'] = qapath
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
@@ -305,7 +305,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
 
         options = {}
         options['infile'] = framefile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -338,7 +338,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -435,7 +435,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
         options['sky'] = skyfile
         options['models'] = starfile
         options['outfile'] = outfile
@@ -482,7 +482,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
         options['sky'] = skyfile
         options['calib'] = calfile
         options['outfile'] = outfile

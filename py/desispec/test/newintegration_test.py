@@ -133,7 +133,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     # create production
 
-    com = "desi_pipe --zfind_workers 1 --fakeboot --spectrographs 0"
+    com = "desi_pipe --env env.txt --spectrographs 0"
     sp.call(com, shell=True)
 
     # raw and production locations
@@ -145,35 +145,41 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     # for now, we also fake the specex runs
 
-    expdir = os.path.join(proddir, 'exposures')
-    expnight = os.path.join(expdir, night)
+    # expdir = os.path.join(proddir, 'exposures')
+    # expnight = os.path.join(expdir, night)
 
-    cal2d = os.path.join(proddir, 'calib2d')
-    calpsf = os.path.join(cal2d, 'psf')
-    calpsfnight = os.path.join(calpsf, night)
+    # cal2d = os.path.join(proddir, 'calib2d')
+    # calpsf = os.path.join(cal2d, 'psf')
+    # calpsfnight = os.path.join(calpsf, night)
 
-    for expid in [0, 2]:
-        expdir = os.path.join(expnight, "{:08d}".format(expid))
-        if not os.path.isdir(expdir):
-            os.makedirs(expdir)
-        for band in ['b', 'r', 'z']:
-            for spec in range(1):
-                target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
-                lnk = os.path.join(expdir, "psf-{}{}-{:08d}.fits".format(band, spec, expid))
-                if not os.path.islink(lnk):
-                    os.symlink(target, lnk)
-    for band in ['b', 'r', 'z']:
-        for spec in range(1):
-            target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
-            lnk = os.path.join(calpsfnight, "psfnight-{}{}.fits".format(band, spec))
-            if not os.path.islink(lnk):
-                os.symlink(target, lnk)
+    # for expid in [0, 2]:
+    #     expdir = os.path.join(expnight, "{:08d}".format(expid))
+    #     if not os.path.isdir(expdir):
+    #         os.makedirs(expdir)
+    #     for band in ['b', 'r', 'z']:
+    #         for spec in range(1):
+    #             target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
+    #             lnk = os.path.join(expdir, "psf-{}{}-{:08d}.fits".format(band, spec, expid))
+    #             if not os.path.islink(lnk):
+    #                 os.symlink(target, lnk)
+    # for band in ['b', 'r', 'z']:
+    #     for spec in range(1):
+    #         target = os.path.join(calpsfnight, "psfboot-{}{}.fits".format(band, spec))
+    #         lnk = os.path.join(calpsfnight, "psfnight-{}{}.fits".format(band, spec))
+    #         if not os.path.islink(lnk):
+    #             os.symlink(target, lnk)
 
-    # com = os.path.join(proddir, "run", "scripts", "specex_all.sh")
-    # sp.check_call(["bash", com])
+    print("Running bootcalib script...")
+    com = os.path.join(proddir, "run", "scripts", "bootcalib_all.sh")
+    sp.check_call(["bash", com])
 
-    # com = os.path.join(proddir, "run", "scripts", "psfcombine_all.sh")
-    # sp.check_call(["bash", com])
+    print("Running specex script...")
+    com = os.path.join(proddir, "run", "scripts", "specex_all.sh")
+    sp.check_call(["bash", com])
+
+    print("Running psfcombine script...")
+    com = os.path.join(proddir, "run", "scripts", "psfcombine_all.sh")
+    sp.check_call(["bash", com])
 
     print("Running extraction script...")
     com = os.path.join(proddir, "run", "scripts", "extract_all.sh")
@@ -194,6 +200,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     # #-----
     # #- Did it work?
     # #- (this combination of fibermap, simspec, and zbest is a pain)
+    expid = 2
     simdir = os.path.dirname(io.findfile('fibermap', night=night, expid=expid))
     simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
     siminfo = fits.getdata(simspec, 'METADATA')

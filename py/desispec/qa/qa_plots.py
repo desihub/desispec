@@ -10,8 +10,10 @@ import pdb
 
 from desispec import fluxcalibration as dsflux
 
+from desispec.util import set_backend
+set_backend()
+
 import matplotlib
-#matplotlib.use('agg')
 from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 

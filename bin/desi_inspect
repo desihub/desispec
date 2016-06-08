@@ -12,6 +12,12 @@ import os.path
 
 import numpy as np
 
+# If we ever need to run this from a NERSC compute node, we would need
+# these lines...
+#
+#from desispec.util import set_backend
+#set_backend()
+
 import matplotlib.pyplot as plt
 
 import astropy.table

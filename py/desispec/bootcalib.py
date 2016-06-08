@@ -28,6 +28,9 @@ from astropy.stats import sigma_clip
 from astropy.table import Table, Column, vstack
 from astropy.io import fits
 
+from desispec.util import set_backend
+set_backend()
+
 from matplotlib import pyplot as plt
 import matplotlib
 import matplotlib.gridspec as gridspec
