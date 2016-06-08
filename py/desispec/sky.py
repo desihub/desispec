@@ -185,7 +185,7 @@ class SkyModel(object):
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
-        self.mask = mask.astype(np.uint32)
+        self.mask = util.mask32(mask)
         self.header = header
         self.nrej = nrej
 

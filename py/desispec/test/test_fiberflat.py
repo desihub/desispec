@@ -357,7 +357,7 @@ class TestFiberFlatObject(unittest.TestCase):
         self.wave = np.arange(self.nwave)
         self.fiberflat = np.random.uniform(size=(self.nspec, self.nwave))
         self.ivar = np.ones(self.fiberflat.shape)
-        self.mask = np.zeros(self.fiberflat.shape)
+        self.mask = np.zeros(self.fiberflat.shape, dtype=np.uint32)
         self.meanspec = np.random.uniform(size=self.nwave)
         self.ff = FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.meanspec)
 

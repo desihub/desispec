@@ -13,6 +13,7 @@ from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
+from desispec import util
 import scipy,scipy.sparse
 import sys
 from desispec.log import get_logger
@@ -475,7 +476,7 @@ class FiberFlat(object):
         self.wave = wave
         self.fiberflat = fiberflat
         self.ivar = ivar
-        self.mask = mask.astype(np.uint32)
+        self.mask = util.mask32(mask)
         self.meanspec = meanspec
         self.chi2pdf = chi2pdf
 

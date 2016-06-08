@@ -12,6 +12,49 @@ else:
     import multiprocessing as _mp
     default_nproc = max(1, _mp.cpu_count() // 2)
 
+def mask32(mask):
+    '''
+    Return an input mask as unsigned 32-bit
+    
+    Raises ValueError if 64-bit input can't be cast to 32-bit without losing
+    info (i.e. if it contains values > 2**32-1)
+    '''
+    if mask.dtype in (
+        np.dtype('i4'),  np.dtype('u4'),
+        np.dtype('>i4'), np.dtype('>u4'),
+        np.dtype('<i4'), np.dtype('<u4'),
+        ):
+        if mask.dtype.isnative:
+            return mask.view('u4')
+        else:
+            return mask.astype('u4')
+            
+    elif mask.dtype in (
+        np.dtype('i8'),  np.dtype('u8'),
+        np.dtype('>i8'), np.dtype('>u8'),
+        np.dtype('<i8'), np.dtype('<u8'),
+        ):
+        if mask.dtype.isnative:
+            mask64 = mask.view('u8')
+        else:
+            mask64 = mask.astype('i8')
+        if np.any(mask64 > 2**32-1):
+            raise ValueError("mask with values above 2**32-1 can't be cast to 32-bit")
+        return np.asarray(mask, dtype='u4')
+        
+    elif mask.dtype in (
+        np.dtype('bool'), np.dtype('bool8'),
+        np.dtype('i2'),  np.dtype('u2'),
+        np.dtype('>i2'), np.dtype('>u2'),
+        np.dtype('<i2'), np.dtype('<u2'),
+        np.dtype('i1'),  np.dtype('u1'),
+        np.dtype('>i1'), np.dtype('>u1'),
+        np.dtype('<i1'), np.dtype('<u1'),
+        ):
+        return np.asarray(mask, dtype='u4')
+    else:
+        raise ValueError("Can't cast dtype {} to unsigned 32-bit".format(mask.dtype))
+
 def night2ymd(night):
     """
     parse night YEARMMDD string into tuple of integers (year, month, day)

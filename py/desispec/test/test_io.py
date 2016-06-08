@@ -309,7 +309,7 @@ class TestIO(unittest.TestCase):
         #- Check output datatypes
         self.assertEqual(img2.pix.dtype, np.float64)
         self.assertEqual(img2.ivar.dtype, np.float64)
-        self.assertEqual(img2.mask.dtype, np.uint16)
+        self.assertEqual(img2.mask.dtype, np.uint32)
 
         #- Rounding from keeping np.float32 on disk means they aren't equal
         self.assertFalse(np.all(img1.pix == img2.pix))
@@ -325,7 +325,7 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.all(img1.mask == img2.mask))
         self.assertEqual(img1.readnoise, img2.readnoise)
         self.assertEqual(img1.camera, img2.camera)
-        self.assertEqual(img2.mask.dtype, np.uint16)
+        self.assertEqual(img2.mask.dtype, np.uint32)
 
         #- should work with various kinds of metadata header input
         meta = dict(BLAT='foo', BAR='quat', BIZ=1.0)
