@@ -24,9 +24,8 @@ from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
-from desispec.pipeline.utils import default_nproc
+from desispec.util import default_nproc
 from desispec.io.filters import load_filter
-
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
