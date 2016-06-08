@@ -6,51 +6,44 @@ from __future__ import print_function, absolute_import, division, unicode_litera
 
 import numpy as np
 
+from desispec.log import get_logger
+
+log=get_logger()
 
 class QA_Frame(object):
-    def __init__(self, frame=None, flavor='none', camera='none', in_data=None):
+    def __init__(self, inp):
         """
         Class to organize and execute QA for a DESI frame
 
-        x.flavor, x.data, x.camera
+        x.flavor, x.qa_data, x.camera
         
         Args:
-            frame: Frame object, optional (should contain meta data)
-            flavor: str, optional exposure type (e.g. flat, arc, science)
-              Will use value in frame.meta, if present
-            camera: str, optional camera (e.g. 'b0')
-              Will use value in frame.meta, if present
-            in_data: dict, optional -- Input data 
-              Mainly for reading from disk
+            inp : Frame object or dict
+              * Frame -- Must contain meta data
+              * dict -- Usually read from hard-drive
 
         Notes:
 
-        Attributes:
-            All input args become object attributes.
         """
-        # Parse from frame.meta
-        if frame is not None:
-            # Parse from meta, if possible
-            try:
-                flavor = frame.meta['FLAVOR']
-            except:
-                pass
-            else:
-                try:
-                    camera = frame.meta['CAMERA']
-                except KeyError:
-                    pass
-
-        assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
-        self.flavor = flavor
-        self.camera = camera
-        
-        # Initialize data
-        if in_data is None:
-            self.data = dict(flavor=self.flavor, camera=self.camera)
+        if isinstance(inp,dict):
+            assert len(inp.keys()) == 1
+            self.night = inp.keys()[0]  # Requires night in first key
+            assert len(inp[self.night].keys()) == 1
+            self.expid = inp[self.night].keys()[0]
+            assert len(inp[self.night][self.expid].keys()) == 2
+            self.flavor = inp[self.night][self.expid].pop('flavor')
+            self.camera = inp[self.night][self.expid].keys()[0]
+            assert self.camera[0] in ['b','r','z']
+            self.qa_data = inp[self.night][self.expid][self.camera]
         else:
-            assert isinstance(in_data,dict)
-            self.data = in_data
+            # Generate from Frame and init QA data
+            qkeys = ['flavor', 'camera', 'expid', 'night']
+            for key in qkeys:
+                setattr(self, key, inp.meta[key.upper()])
+            self.qa_data = dict(flavor=self.flavor)
+
+        # Final test
+        assert self.flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
 
     def init_qatype(self, qatype, param, re_init=False):
         """Initialize parameters for a given qatype
@@ -63,15 +56,15 @@ class QA_Frame(object):
           Code will always add new parameters if any exist
         """
         # Fill and return if not set previously or if re_init=True
-        if (qatype not in self.data.keys()) or re_init: 
-            self.data[qatype] = {}
-            self.data[qatype]['PARAM'] = param
+        if (qatype not in self.qa_data.keys()) or re_init:
+            self.qa_data[qatype] = {}
+            self.qa_data[qatype]['PARAM'] = param
             return
 
         # Update the new parameters only
         for key in param.keys():
-            if key not in self.data[qatype]['PARAM'].keys():
-                self.data[qatype]['PARAM'][key] = param[key]
+            if key not in self.qa_data[qatype]['PARAM'].keys():
+                self.qa_data[qatype]['PARAM'][key] = param[key]
 
     def init_fiberflat(self, re_init=False):
         """Initialize parameters for FIBERFLAT QA
@@ -118,7 +111,7 @@ class QA_Frame(object):
         elif self.camera[0] == 'z':
             flux_dict['ZP_WAVE'] = 8250.  # Ang
         else:
-            raise ValueError("Not ready for camera {}!".format(self.camera))
+            log.error("Not ready for camera {}!".format(self.camera))
 
         # Init
         self.init_qatype('FLUXCALIB', flux_dict, re_init=re_init)
@@ -161,7 +154,7 @@ class QA_Frame(object):
         # Check for previous QA if clobber==False
         if not clobber:
             # QA previously performed?
-            if 'QA' in self.data[qatype].keys():
+            if 'QA' in self.qa_data[qatype].keys():
                 return
         # Run
         if qatype == 'SKYSUB':
@@ -170,7 +163,7 @@ class QA_Frame(object):
             # Init parameters (as necessary)
             self.init_skysub()
             # Run
-            qadict = qa_skysub(self.data[qatype]['PARAM'],
+            qadict = qa_skysub(self.qa_data[qatype]['PARAM'],
                 inputs[0], inputs[1])
         elif qatype == 'FIBERFLAT':
             # Expecting: frame, fiberflat
@@ -178,14 +171,14 @@ class QA_Frame(object):
             # Init parameters (as necessary)
             self.init_fiberflat()
             # Run
-            qadict = qa_fiberflat(self.data[qatype]['PARAM'], inputs[0], inputs[1])
+            qadict = qa_fiberflat(self.qa_data[qatype]['PARAM'], inputs[0], inputs[1])
         elif qatype == 'FLUXCALIB':
             # Expecting: frame, fluxcalib, individual_outputs (star by star)
             assert len(inputs) == 3
             # Init parameters (as necessary)
             self.init_fluxcalib()
             # Run
-            qadict = qa_fluxcalib(self.data[qatype]['PARAM'],
+            qadict = qa_fluxcalib(self.qa_data[qatype]['PARAM'],
                                   inputs[0], inputs[1], inputs[2])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
@@ -274,8 +267,12 @@ class QA_Exposure(object):
                                   specprod_dir=self.specprod_dir)
         # Load into frames
         for camera,qadata_path in qadata.iteritems():
-            qa_data = desiio.read_qa_data(qadata_path)
-            assert qa_data['flavor'] == self.flavor
+            qa_frame = desiio.load_qa_frame(qadata_path)
+            #qa_data = desiio.read_qa_data(qadata_path)
+            # Test
+            for key in ['expid','night','flavor']:
+                assert getattr(qa_frame,key) == getattr(self, key)
+            #assert qa_data['flavor'] == self.flavor
             # Save
-            self.data['frames'][camera] = qa_data
+            self.data['frames'][camera] = qa_frame.qa_data
             self.data['frames'][camera]['file'] = qadata_path
