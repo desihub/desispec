@@ -14,17 +14,12 @@ from desispec.log import get_logger
 from desispec.zfind.redmonster import RedMonsterZfind
 from desispec.zfind import ZfindBase
 from desispec.io.qa import load_qa_brick, write_qa_brick
+from desispec.util import default_nproc
 
 import argparse
 
 
 def parse(options=None):
-    default_nproc = None
-    if 'SLURM_CPUS_PER_TASK' in os.environ.keys():
-        default_nproc = os.environ['SLURM_CPUS_PER_TASK']
-    else:
-        default_nproc = max(1, multiprocessing.cpu_count() // 2)
-
     parser = argparse.ArgumentParser(description="Fit redshifts and classifications on bricks.")
     parser.add_argument("-b", "--brick", type=str, required=False,
         help="input brickname")

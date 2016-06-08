@@ -216,7 +216,7 @@ def subtract_sky(frame, skymodel) :
     log.info("done")
 
 
-def qa_skysub(param, frame, skymodel):
+def qa_skysub(param, frame, skymodel, quick_look=False):
     """Calculate QA on SkySubtraction
     Note: Pixels rejected in generating the SkyModel (as above), are  
       not rejected in the stats calculated here.  Would need to carry
@@ -226,6 +226,8 @@ def qa_skysub(param, frame, skymodel):
         param : dict of QA parameters
         frame : desispec.Frame object
         skymodel : desispec.SkyModel object
+        quick_look : bool, optional
+          If True, do QuickLook specific QA (or avoid some)
     Returns:
         qadict: dict of QA outputs
           Need to record simple Python objects for yaml (str, float, int)
@@ -274,11 +276,12 @@ def qa_skysub(param, frame, skymodel):
     # Mean Sky Continuum from all skyfibers
     # need to limit in wavelength?
 
-    continuum=scipy.ndimage.filters.median_filter(flux,200) # taking 200 bins (somewhat arbitrarily)
-    mean_continuum=np.zeros(flux.shape[1])
-    for ii in range(flux.shape[1]):
-        mean_continuum[ii]=np.mean(continuum[:,ii])
-    qadict['MEAN_CONTIN'] = mean_continuum
+    if quick_look:
+        continuum=scipy.ndimage.filters.median_filter(flux,200) # taking 200 bins (somewhat arbitrarily)
+        mean_continuum=np.zeros(flux.shape[1])
+        for ii in range(flux.shape[1]):
+            mean_continuum[ii]=np.mean(continuum[:,ii])
+        qadict['MEAN_CONTIN'] = mean_continuum
 
     # Median Signal to Noise on sky subtracted spectra
     # first do the subtraction:

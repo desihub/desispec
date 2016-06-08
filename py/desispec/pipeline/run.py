@@ -20,6 +20,7 @@ import re
 import pickle
 import copy
 import traceback
+import time
 
 import yaml
 
@@ -27,7 +28,7 @@ import desispec
 
 from desispec.log import get_logger
 from .plan import *
-from .utils import *
+from .utils import option_list
 
 import desispec.scripts.bootcalib as bootcalib
 import desispec.scripts.specex as specex
@@ -373,12 +374,24 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         fmfile = graph_path_fibermap(rawdir, fm[0])
         outfile = graph_path_stdstars(proddir, name)
         qafile = qa_path(outfile)
+        
+        framefiles = [graph_path_frame(proddir, x) for x in frm]
+        skyfiles = [graph_path_sky(proddir, x) for x in sky]
+        flatfiles = [graph_path_fiberflat(proddir, x) for x in flat]
 
         options = {}
-        options['spectrograph'] = specgrph
-        options['fiberflatexpid'] = flatexp
-        options['fibermap'] = fmfile
+        #- Old-style options
+        # options['spectrograph'] = specgrph
+        # options['fiberflatexpid'] = flatexp
+        # options['fibermap'] = fmfile
+        # options['outfile'] = outfile
+        
+        #- New JG options
+        options['frames'] = framefiles
+        options['skymodels'] = skyfiles
+        options['fiberflats'] = flatfiles
         options['outfile'] = outfile
+        
         options.update(opts)
         optarray = option_list(options)
 
@@ -821,7 +834,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     for st in range(firststep, laststep):
         runfile = None
         if rank == 0:
-            log.info("starting step {}".format(run_step_types[st]))
+            log.info("starting step {} at {}".format(run_step_types[st], time.asctime()))
         taskproc = steptaskproc[run_step_types[st]]
         if taskproc > nproc:
             taskproc = nproc
@@ -829,7 +842,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
         if comm is not None:
             comm.barrier()
         if rank == 0:
-            log.info("completed step {}".format(run_step_types[st]))
+            log.info("completed step {} at {}".format(run_step_types[st], time.asctime()))
 
     if rank == 0:
         graph_write(statefile, grph)

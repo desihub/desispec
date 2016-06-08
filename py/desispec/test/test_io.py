@@ -217,6 +217,7 @@ class TestIO(unittest.TestCase):
         data['BESTMODEL'] = np.arange(nstd)
         data['TEMPLATEID'] = np.arange(nstd)
         data['CHI2DOF'] = np.ones(nstd)
+        data['REDSHIFT'] = np.zeros(nstd)
         desispec.io.write_stdstar_models(self.testfile, flux, wave, fibers, data)
         
         fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)
@@ -318,16 +319,23 @@ class TestIO(unittest.TestCase):
         for key in meta:
             self.assertEqual(meta[key], img3.meta[key], 'meta[{}] not propagated'.format(key))
 
-    def test_io_qa_frame(self):        
+    def test_io_qa_frame(self):
+        nspec = 3
+        nwave = 10
+        wave = np.arange(nwave)
+        flux = np.random.uniform(size=(nspec, nwave))
+        ivar = np.ones(flux.shape)
+        frame = Frame(wave, flux, ivar, spectrograph=0)
+        frame.meta = dict(CAMERA='b0', FLAVOR='dark', NIGHT='20160607', EXPID=1)
         #- Init 
-        qaframe = QA_Frame(flavor='dark')
+        qaframe = QA_Frame(frame)
         qaframe.init_skysub()
         # Write
         desio_qa.write_qa_frame(self.testyfile, qaframe)
         # Read
         xqaframe = desio_qa.read_qa_frame(self.testyfile)
         # Check
-        self.assertTrue(qaframe.data['SKYSUB']['PARAM']['PCHI_RESID'] == xqaframe.data['SKYSUB']['PARAM']['PCHI_RESID'])
+        self.assertTrue(qaframe.qa_data['SKYSUB']['PARAM']['PCHI_RESID'] == xqaframe.qa_data['SKYSUB']['PARAM']['PCHI_RESID'])
         self.assertTrue(qaframe.flavor == xqaframe.flavor)
 
     def test_native_endian(self):

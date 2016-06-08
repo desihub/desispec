@@ -28,6 +28,8 @@ def option_list(opts):
             optlist.append(keystr)
             if isinstance(val, (float,)):
                 optlist.append("{:.14e}".format(val))
+            elif isinstance(val, (list, tuple)):
+                optlist.extend(val)
             else:
                 optlist.append("{}".format(val))
     return optlist

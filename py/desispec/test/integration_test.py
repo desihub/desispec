@@ -14,6 +14,7 @@ from astropy.io import fits
 
 from desispec.pipeline import runcmd
 from desispec import io
+from desispec.qa import QA_Exposure
 from desispec.log import get_logger
 
 #- prevent nose from trying to run this test since it takes too long
@@ -84,7 +85,9 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     #-----
     #- Input fibermaps, spectra, and pixel-level raw data
-    for expid, flavor in zip([0,1,2], ['flat', 'arc', 'dark']):
+    raw_dict = {0: 'flat', 1: 'arc', 2: 'dark'}
+    #for expid, flavor in zip([0,1,2], ['flat', 'arc', 'dark']):
+    for expid, flavor in raw_dict.items():
         cmd = "newexp-desi --flavor {flavor} --nspec {nspec} --night {night} --expid {expid}".format(
             expid=expid, flavor=flavor, **params)
         fibermap = io.findfile('fibermap', night, expid)
@@ -175,12 +178,27 @@ def integration_test(night=None, nspec=5, clobber=False):
         std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'
 
     stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
-    cmd = """desi_fit_stdstars --spectrograph 0 \
-      --fibermap {fibermap} \
-      --fiberflatexpid {flat_expid} \
-      --models {std_templates} --outfile {stdstars}""".format(
-        flat_expid=flat_expid, fibermap=fibermap, std_templates=std_templates,
-        stdstars=stdstarfile)
+    flats = list()
+    frames = list()
+    skymodels = list()
+    for channel in ['b', 'r', 'z']:
+        camera = channel+'0'
+        frames.append( io.findfile('frame', night, expid, camera) )
+        flats.append( io.findfile('fiberflat', night, flat_expid, camera) )
+        skymodels.append( io.findfile('sky', night, expid, camera) )
+
+    frames = ' '.join(frames)
+    flats = ' '.join(flats)
+    skymodels = ' '.join(skymodels)
+
+    cmd = """desi_fit_stdstars \
+      --frames {frames} \
+      --fiberflats {flats} \
+      --skymodels {skymodels} \
+      --starmodels {std_templates} \
+      -o {stdstars}""".format(
+        frames=frames, flats=flats, skymodels=skymodels,
+        std_templates=std_templates, stdstars=stdstarfile)
 
     inputs = [fibermap, std_templates]
     outputs = [stdstarfile,]
@@ -224,7 +242,22 @@ def integration_test(night=None, nspec=5, clobber=False):
             raise RuntimeError('combining calibration steps failed for '+camera)
 
     #-----
+    #- Collate QA
+    # Collate data QA
+    expid = 2
+    qafile = io.findfile('qa_data_exp', night, expid)
+    qaexp_data = QA_Exposure(expid, night, raw_dict[expid])  # Removes camera files
+    io.write_qa_exposure(qafile, qaexp_data)
+    # Collate calib QA
+    calib_expid = [0,1]
+    for expid in calib_expid:
+        qafile = io.findfile('qa_calib_exp', night, expid)
+        qaexp_calib = QA_Exposure(expid, night, raw_dict[expid])
+        io.write_qa_exposure(qafile, qaexp_calib)
+
+    #-----
     #- Bricks
+    expid = 2
     inputs = list()
     for camera in ['b0', 'r0', 'z0']:
         inputs.append( io.findfile('cframe', night, expid, camera) )

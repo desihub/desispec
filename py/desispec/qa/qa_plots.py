@@ -451,12 +451,12 @@ def show_meta(ax, qaframe, qaflavor, outfil):
     i0 = outfil.rfind('/')
     ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
     yoff=0.10
-    for key in sorted(qaframe.data[qaflavor]['QA'].keys()):
+    for key in sorted(qaframe.qa_data[qaflavor]['QA'].keys()):
         if key in ['QA_FIG']:
             continue
         # Show
         ylbl -= yoff
-        ax.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data[qaflavor]['QA'][key]),
+        ax.text(xlbl+0.1, ylbl, key+': '+str(qaframe.qa_data[qaflavor]['QA'][key]),
             transform=ax.transAxes, ha='left', fontsize='x-small')
 
 def get_sty_otype():
