@@ -95,7 +95,7 @@ def main():
     parser.add_argument('--nersc_max_nodes', required=False, default=None, help='NERSC slurm scripts max nodes to use.  Default is size of debug queue max.')
 
     parser.add_argument('--shell_mpi_run', required=False, default='mpirun -np', help='bash scripts command to launch MPI pipeline steps.  If --shell_max_cores is 1, this is ignored.')
-    parser.add_argument('--shell_max_cores', required=False, default=2, help='bash scripts max cores to use.')
+    parser.add_argument('--shell_max_cores', required=False, default=1, help='bash scripts max cores to use.')
 
     parser.add_argument('--fakeboot', required=False, default=False, action="store_true", help='bypass bootcalib')
 

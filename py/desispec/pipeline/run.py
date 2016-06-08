@@ -303,6 +303,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         outfile = graph_path_fiberflat(proddir, name)
         qafile = qa_path(outfile)
 
+        # FIXME:  this is a hack, since fiberflat should get this from
+        # the bundled fibermap HDU.
+        night = name[:8]
+        fmfile = graph_path_fibermap(rawdir, "{}_fibermap-{:08d}".format(night, node['id']))
+
         options = {}
         options['infile'] = framefile
         options['qafile'] = qafile
@@ -338,6 +343,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
+        options['fibermap'] = fmfile
         options['qafile'] = qafile
         options['outfile'] = outfile
         options.update(opts)
@@ -477,12 +483,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         skyfile = graph_path_sky(proddir, sky[0])
         calfile = graph_path_calib(proddir, cal[0])
         outfile = graph_path_cframe(proddir, name)
-        qafile = qa_path(outfile)
 
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        options['qafile'] = qafile
         options['sky'] = skyfile
         options['calib'] = calfile
         options['outfile'] = outfile
