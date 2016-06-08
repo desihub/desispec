@@ -43,7 +43,6 @@ def main():
     args = parser.parse_args()
 
     log = get_logger()
-    log.info("rank {} starting at {}".format(rank, time.asctime()))
 
     # raw and production locations
 
@@ -51,13 +50,13 @@ def main():
     proddir = os.path.abspath(io.specprod_root())
 
     if rank == 0:
+        log.info("starting at {}".format(time.asctime()))
         log.info("using raw dir {}".format(rawdir))
         log.info("using spectro production dir {}".format(proddir))
 
     # run it!
 
     pipe.run_steps(args.first, args.last, rawdir, proddir, spectrographs=args.spectrographs, nightstr=args.nights, comm=comm)
-
 
 if __name__ == "__main__":
     main()

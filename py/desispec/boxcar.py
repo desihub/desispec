@@ -82,17 +82,16 @@ def do_boxcar(image,psf,boxwidth=2.5,dw=0.5,nspec=500):
     from desispec.interpolation import resample_flux
 
     wtarget=np.arange(wmin,wmax+dw/2.0,dw) #- using same wmin and wmax.
-    fflux=np.zeros((500,len(wtarget)))
-    ivar=np.zeros((500,len(wtarget)))
-    resolution=np.zeros((500,21,len(wtarget))) #- placeholder for online case. Offline should be usable
+    fflux=np.zeros((nspec,len(wtarget)))
+    ivar=np.zeros((nspec,len(wtarget)))
+    resolution=np.zeros((nspec,21,len(wtarget))) #- placeholder for online case. Offline should be usable
     #TODO get the approximate resolution matrix for online purpose or don't need them? How to perform fiberflat, sky subtraction etc or should have different version of them for online?
-    for spec in xrange(flux.shape[1]):
+    for spec in xrange(nspec):
         ww=psf.wavelength(spec)
         fflux[spec,:]=resample_flux(wtarget,ww,flux[:,spec])
         ivar[spec,:]=1./(fflux[spec,:].clip(0.0)+image.readnoise) #- taking only positive pixel counts
     dwave=np.gradient(wtarget)
     fflux/=dwave
     ivar*=dwave**2
-    #- Extracted the full image but write frame in [nspec,nwave]
     #- return a desispec.frame object
-    return Frame(wtarget,fflux[:nspec],ivar[:nspec],resolution_data=resolution[:nspec],spectrograph=spectrograph)
+    return Frame(wtarget,fflux,ivar,resolution_data=resolution,spectrograph=spectrograph)
