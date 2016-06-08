@@ -9,7 +9,7 @@ import numpy as np
 import os
 from desispec.frame import Frame
 from desispec.qa import QA_Frame, QA_Exposure, QA_Brick
-from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame
+from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure
 #from uuid import uuid4
 from shutil import rmtree
 
@@ -25,6 +25,7 @@ class TestQA(unittest.TestCase):
         cls.testDir = os.path.join(os.environ['HOME'],'desi_test_qa')
         cls.qafile_b0 = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-b0-{:08d}.yaml'.format(id,id)
         cls.qafile_b1 = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-b1-{:08d}.yaml'.format(id,id)
+        cls.qafile_exp = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-{:08d}.yaml'.format(id,id)
         cls.qafile_brick = cls.testDir+'/brick/3582m005/qa-3582m005.yaml'
         cls.flux_pdf = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-flux-{:08d}.pdf'.format(id,id)
 
@@ -124,13 +125,6 @@ class TestQA(unittest.TestCase):
         qafrm.init_skysub(re_init=True)
         assert qafrm.qa_data['SKYSUB']['PARAM']['PCHI_RESID'] > 0.
 
-    def test_init_qa_exposure(self):
-        # Simple init
-        os.environ['PRODNAME'] = './'
-        os.environ['DESI_SPECTRO_REDUX'] = './'
-        qaexp = QA_Exposure(1, '20150211')
-        assert qaexp.expid == 1
-
     def test_qa_frame_write_load_data(self):
         # Write
         frm0 = self._make_frame()
@@ -140,13 +134,22 @@ class TestQA(unittest.TestCase):
         qafrm2 = load_qa_frame(self.qafile_b0, frm0)
         assert qafrm2.night == qafrm0.night
 
-    def test_qa_exposure_load_data(self):
+
+    def test_init_qa_exposure(self):
+        # Simple init
+        os.environ['PRODNAME'] = './'
+        os.environ['DESI_SPECTRO_REDUX'] = './'
+        qaexp = QA_Exposure(1, '20150211', 'arc')
+        assert qaexp.expid == 1
+
+    def test_qa_exposure_load_write_data(self):
         #- Test loading data
         self._write_qaframes()
-        qaexp = QA_Exposure(self.expid, self.night, specprod_dir=self.testDir,
-                            flavor='dark')
+        qaexp = QA_Exposure(self.expid, self.night, 'dark', specprod_dir=self.testDir)
         assert 'b0' in qaexp.data['frames'].keys()
         assert 'b1' in qaexp.data['frames'].keys()
+        # Write
+        write_qa_exposure(self.qafile_exp, qaexp)
 
     """
     # This needs to run as a script for the figure generation to pass Travis..

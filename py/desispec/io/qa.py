@@ -148,3 +148,27 @@ def write_qa_frame(outfile, qaframe):
 
     return outfile
 
+
+def write_qa_exposure(outfile, qaexp):
+    """Write QA for a given exposure
+
+    Args:
+        outfile : str
+          filename
+        qa_exp : QA_Frame object, with the following attributes
+            qa_data: dict of QA info
+    """
+    outfile = makepath(outfile, 'qa')
+
+    # Generate the dict
+    odict = {qaexp.night: {qaexp.expid: {}}}
+    odict[qaexp.night][qaexp.expid]['flavor'] = qaexp.flavor
+    cameras = qaexp.data['frames'].keys()
+    for camera in cameras:
+        odict[qaexp.night][qaexp.expid][camera] = qaexp.data['frames'][camera]
+    ydict = yamlify(odict)
+    # Simple yaml
+    with open(outfile, 'w') as yamlf:
+        yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+
+    return outfile

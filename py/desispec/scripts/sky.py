@@ -8,12 +8,10 @@ from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
-from desispec.qa.qa_exposure import QA_Frame
 from desispec.qa import qa_plots
 from desispec.log import get_logger
 import argparse
 import numpy as np
-import sys, os
 
 
 def parse(options=None):
