@@ -13,6 +13,7 @@ from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
+from desispec import util
 import scipy,scipy.sparse
 import sys
 from desispec.log import get_logger
@@ -432,7 +433,7 @@ class FiberFlat(object):
             ivar: 2D[nspec, nwave] inverse variance of fiberflat
             
         Optional inputs:
-            mask: 2D[nspec, nwave] mask where 0=good; default ivar==0
+            mask: 2D[nspec, nwave] mask where 0=good; default ivar==0; 32-bit
             meanspec: (optional) 1D[nwave] mean deconvolved average flat lamp spectrum
             chi2pdf: (optional) Normalized chi^2 for fit to mean spectrum
             header: (optional) FITS header from HDU0
@@ -475,7 +476,7 @@ class FiberFlat(object):
         self.wave = wave
         self.fiberflat = fiberflat
         self.ivar = ivar
-        self.mask = mask
+        self.mask = util.mask32(mask)
         self.meanspec = meanspec
         self.chi2pdf = chi2pdf
 

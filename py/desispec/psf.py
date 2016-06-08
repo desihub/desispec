@@ -24,7 +24,7 @@ class PSF(object):
         load header, xcoeff, ycoeff from the file
         filename should have HDU1: Xcoeff, HDU2: Ycoeff
         """
-        psfdata=fits.open(filename)
+        psfdata=fits.open(filename, memmap=False)
         xcoeff=psfdata[0].data
         hdr=psfdata[0].header
         wmin=hdr['WAVEMIN']

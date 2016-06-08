@@ -31,7 +31,7 @@ class TestCosmics(unittest.TestCase):
                 self.psfpix[i,j] = np.exp(-r2/2.0)
                 
         #- a bad pixel mask that goes through the PSF-like object
-        self.badmask = np.zeros(self.pix.shape)
+        self.badmask = np.zeros(self.pix.shape, dtype=np.uint32)
         self.badmask[:, 39] = ccdmask.BAD        
 
     def test_rejection_ala_sdss(self):

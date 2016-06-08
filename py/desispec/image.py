@@ -4,6 +4,7 @@ Lightweight wrapper class for preprocessed image data
 import copy
 import numpy as np
 from desispec.maskbits import ccdmask
+from desispec import util
 
 class Image(object):
     def __init__(self, pix, ivar, mask=None, readnoise=0.0, camera='unknown',
@@ -32,9 +33,9 @@ class Image(object):
         self.ivar = ivar
         self.meta = meta
         if mask is not None:
-            self.mask = mask.astype(np.uint16)
+            self.mask = util.mask32(mask)
         else:
-            self.mask = np.zeros_like(self.ivar, dtype=np.uint16)
+            self.mask = np.zeros(self.ivar.shape, dtype=np.uint32)
             self.mask[self.ivar == 0] |= ccdmask.BAD
         
         #- Optional parameters
