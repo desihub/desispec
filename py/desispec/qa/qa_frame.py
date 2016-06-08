@@ -40,7 +40,7 @@ class QA_Frame(object):
             # Generate from Frame and init QA data
             qkeys = ['flavor', 'camera', 'expid', 'night']
             for key in qkeys:
-                setattr(self, key, inp.meta[key.upper()])
+                setattr(self, key, inp.meta[key.upper()])  # FITS header
             self.qa_data = {}
 
         # Final test
