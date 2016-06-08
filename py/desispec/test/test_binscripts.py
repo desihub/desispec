@@ -27,7 +27,8 @@ class TestBinScripts(unittest.TestCase):
         cls.fibermapfile = 'fibermap-'+id+'.fits'
         cls.skyfile = 'sky-'+id+'.fits'
         cls.stdfile = 'std-'+id+'.fits'
-        cls.qafile = 'qa-'+id+'.yaml'
+        cls.qa_calib_file = 'qa-calib-'+id+'.yaml'
+        cls.qa_data_file = 'qa-data-'+id+'.yaml'
         cls.qafig = 'qa-'+id+'.pdf'
         cls.topDir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         cls.binDir = os.path.join(cls.topDir,'bin')
@@ -42,7 +43,8 @@ class TestBinScripts(unittest.TestCase):
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
         for filename in [cls.framefile, cls.fiberflatfile, cls.fibermapfile, \
-            cls.skyfile, cls.calibfile, cls.stdfile, cls.qafile, cls.qafig]:
+            cls.skyfile, cls.calibfile, cls.stdfile, cls.qa_calib_file,
+                         cls.qa_data_file, cls.qafig]:
             if os.path.exists(filename):
                 os.remove(filename)
         if cls.origPath is None:
@@ -50,7 +52,7 @@ class TestBinScripts(unittest.TestCase):
         else:
             os.environ['PYTHONPATH'] = cls.origPath
 
-    def _write_frame(self, flavor='none', camera='b'):
+    def _write_frame(self, flavor='none', camera='b', expid=1, night='20160607'):
         """Write a fake frame"""
         wave = 5000+np.arange(self.nwave)
         flux = np.ones((self.nspec, self.nwave))
@@ -59,7 +61,7 @@ class TestBinScripts(unittest.TestCase):
         Rdata = np.ones((self.nspec, 1, self.nwave))
         fibermap = self._get_fibermap()
         frame = Frame(wave, flux, ivar, mask, Rdata, fibermap=fibermap,
-                      meta=dict(flavor=flavor, camera=camera))
+                      meta=dict(FLAVOR=flavor, CAMERA=camera, EXPID=expid, NIGHT=night))
         io.write_frame(self.framefile, frame)
 
     def _write_fiberflat(self):
@@ -116,10 +118,10 @@ class TestBinScripts(unittest.TestCase):
         # QA fig requires fibermapfile
         cmd = '{} {}/desi_compute_fiberflat --infile {} --fibermap {} --outfile {} --qafile {} --qafig {}'.format(
                 sys.executable, self.binDir, self.framefile, self.fibermapfile,
-                self.fiberflatfile, self.qafile, self.qafig)
+                self.fiberflatfile, self.qa_calib_file, self.qafig)
         err = runcmd(cmd,
                      inputs = [self.framefile, self.fibermapfile],
-                     outputs = [self.fiberflatfile,self.qafile,self.qafig], clobber=True)
+                     outputs = [self.fiberflatfile,self.qa_calib_file,self.qafig], clobber=True)
         self.assertEqual(err, 0)
 
         #- Confirm that the output file can be read as a fiberflat
@@ -129,7 +131,7 @@ class TestBinScripts(unittest.TestCase):
         """
         Tests desi_compute_sky --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
-        self._write_frame(flavor='dark', camera='b')
+        self._write_frame(flavor='dark', camera='b0')
         self._write_fiberflat()
         self._write_fibermap()
         self._write_skymodel()
@@ -137,25 +139,25 @@ class TestBinScripts(unittest.TestCase):
 
         cmd = "{} {}/desi_compute_fluxcalibration --infile {} --fibermap {} --fiberflat {} --sky {} --models {} --outfile {} --qafile {} --qafig {}".format(
             sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.stdfile,
-                self.calibfile, self.qafile, self.qafig)
+                self.calibfile, self.qa_data_file, self.qafig)
         err = runcmd(cmd,
                 inputs  = [self.framefile, self.fiberflatfile, self.fibermapfile, self.skyfile, self.stdfile],
-                outputs = [self.calibfile,self.qafile,self.qafig,], clobber=True )
+                outputs = [self.calibfile,self.qa_data_file,self.qafig,], clobber=True )
         self.assertEqual(err, 0)
 
     def test_compute_sky(self):
         """
         Tests desi_compute_sky --infile frame.fits --fibermap fibermap.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
-        self._write_frame(flavor='dark')
+        self._write_frame(flavor='dark', camera='b0')  # MUST MATCH FLUXCALIB ABOVE
         self._write_fiberflat()
         self._write_fibermap()
 
         cmd = "{} {}/desi_compute_sky --infile {} --fibermap {} --fiberflat {} --outfile {} --qafile {} --qafig {}".format(
-            sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.qafile, self.qafig)
+            sys.executable, self.binDir, self.framefile, self.fibermapfile, self.fiberflatfile, self.skyfile, self.qa_data_file, self.qafig)
         err = runcmd(cmd,
                 inputs  = [self.framefile, self.fiberflatfile, self.fibermapfile],
-                outputs = [self.skyfile,self.qafile,self.qafig,], clobber=True )
+                outputs = [self.skyfile,self.qa_data_file,self.qafig,], clobber=True )
         self.assertEqual(err, 0)
 
 
