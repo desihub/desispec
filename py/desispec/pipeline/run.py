@@ -658,6 +658,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 log.error(msg)
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                print(''.join(lines))
                 fyml = {}
                 fyml['step'] = step
                 fyml['rawdir'] = rawdir
@@ -667,6 +668,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 fyml['opts'] = options
                 fyml['procs'] = taskproc
                 if not os.path.isfile(ffile):
+                    log.error('Dumping traceback to '+tfile)
+                    log.error('Dumping yaml graph to '+ffile)
                     # we are the first process to hit this
                     with open(ffile, 'w') as f:
                         yaml.dump(fyml, f, default_flow_style=False)
@@ -908,7 +911,8 @@ def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=
             run = "{} {}".format(comrun, mpiprocs)
         for com in commands:
             executable = com.split(' ')[0]
-            f.write("which {}\n".format(executable))
+            # f.write("which {}\n".format(executable))
+            f.write("echo logging to ${log}\n")
             f.write("time {} {} >>${{log}} 2>&1\n\n".format(run, com))
     mode = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
     os.chmod(path, mode)

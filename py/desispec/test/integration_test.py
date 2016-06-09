@@ -170,20 +170,20 @@ def integration_test(night=None, nspec=5, clobber=False):
     # com = os.path.join(proddir, "run", "scripts", "psfcombine_all.sh")
     # sp.check_call(["bash", com])
 
-    print("Running extraction script...")
     com = os.path.join(proddir, "run", "scripts", "extract_all.sh")
+    print("Running extraction script "+com)
     sp.check_call(["bash", com])
 
-    print("Running calibration script...")
     com = os.path.join(proddir, "run", "scripts", "fiberflat-procexp_all.sh")
+    print("Running calibration script "+com)
     sp.check_call(["bash", com])
 
-    print("Running makebricks script...")
     com = os.path.join(proddir, "run", "scripts", "bricks.sh")
+    print("Running makebricks script "+com)
     sp.check_call(["bash", com])
 
-    print("Running zfind script...")
     com = os.path.join(proddir, "run", "scripts", "zfind_all.sh")
+    print("Running zfind script "+com)
     sp.check_call(["bash", com])
 
     # #-----
