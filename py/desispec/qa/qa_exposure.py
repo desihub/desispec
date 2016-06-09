@@ -99,7 +99,7 @@ class QA_Exposure(object):
             #qa_data = desiio.read_qa_data(qadata_path)
             # Test
             for key in ['expid','night']:
-                assert "{}".format(getattr(qa_frame, key)) == "{}".format(getattr(self, key))
+                assert getattr(qa_frame,key) == getattr(self, key)
             # Save
             self.data['frames'][camera] = qa_frame.qa_data
 
