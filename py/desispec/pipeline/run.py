@@ -311,6 +311,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['qafile'] = qafile
+        options['fibermap'] = fmfile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -343,7 +344,6 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        options['fibermap'] = fmfile
         options['qafile'] = qafile
         options['outfile'] = outfile
         options.update(opts)
