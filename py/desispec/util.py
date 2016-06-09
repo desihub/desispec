@@ -102,3 +102,16 @@ def combine_ivar(ivar1, ivar2):
         return np.asarray(ivar[0])
     else:
         return ivar
+
+
+_matplotlib_backend = None
+
+def set_backend(backend='agg'):
+    global _matplotlib_backend
+    if _matplotlib_backend is None:
+        _matplotlib_backend = backend
+        import matplotlib
+        matplotlib.use(_matplotlib_backend)
+    return
+
+

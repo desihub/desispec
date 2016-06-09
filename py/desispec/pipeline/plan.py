@@ -22,8 +22,8 @@ import yaml
 import astropy.io.fits as af
 
 import desispec.io as io
-import desispec.log as log
-
+from desispec.log import get_logger
+log = get_logger()
 
 graph_types = [
     'night',
@@ -96,7 +96,12 @@ def default_options():
     allopts['sky'] = {}
 
     opts = {}
-    opts['starmodels'] = '/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+    if 'DESI_ROOT' in os.environ:
+        opts['starmodels'] = os.environ['DESI_ROOT']+'/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+    else:
+        log.warning('$DESI_ROOT not set; using NERSC default /project/projectdirs/desi')
+        opts['starmodels'] = '/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
+
     # opts['starmodels'] = '/project/projectdirs/desi/spectro/templates/basis_templates/v2.2/star_templates_v2.1.fits'
     allopts['stdstars'] = opts
 

@@ -15,6 +15,10 @@ import numpy as np
 from desispec.log import get_logger
 from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
+
+from desispec.util import set_backend
+set_backend()
+
 from matplotlib.backends.backend_pdf import PdfPages
 import sys
 

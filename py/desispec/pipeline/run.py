@@ -193,7 +193,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
-        #options['qafile'] = qapath
+        options['qafile'] = qapath
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
@@ -303,9 +303,15 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         outfile = graph_path_fiberflat(proddir, name)
         qafile = qa_path(outfile)
 
+        # FIXME:  this is a hack, since fiberflat should get this from
+        # the bundled fibermap HDU.
+        night = name[:8]
+        fmfile = graph_path_fibermap(rawdir, "{}_fibermap-{:08d}".format(night, node['id']))
+
         options = {}
         options['infile'] = framefile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
+        options['fibermap'] = fmfile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -338,7 +344,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -435,7 +441,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
         options['sky'] = skyfile
         options['models'] = starfile
         options['outfile'] = outfile
@@ -477,12 +483,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         skyfile = graph_path_sky(proddir, sky[0])
         calfile = graph_path_calib(proddir, cal[0])
         outfile = graph_path_cframe(proddir, name)
-        qafile = qa_path(outfile)
 
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
         options['sky'] = skyfile
         options['calib'] = calfile
         options['outfile'] = outfile
@@ -654,6 +658,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 log.error(msg)
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                print(''.join(lines))
                 fyml = {}
                 fyml['step'] = step
                 fyml['rawdir'] = rawdir
@@ -663,6 +668,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 fyml['opts'] = options
                 fyml['procs'] = taskproc
                 if not os.path.isfile(ffile):
+                    log.error('Dumping traceback to '+tfile)
+                    log.error('Dumping yaml graph to '+ffile)
                     # we are the first process to hit this
                     with open(ffile, 'w') as f:
                         yaml.dump(fyml, f, default_flow_style=False)
@@ -904,7 +911,8 @@ def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=
             run = "{} {}".format(comrun, mpiprocs)
         for com in commands:
             executable = com.split(' ')[0]
-            f.write("which {}\n".format(executable))
+            # f.write("which {}\n".format(executable))
+            f.write("echo logging to ${log}\n")
             f.write("time {} {} >>${{log}} 2>&1\n\n".format(run, com))
     mode = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
     os.chmod(path, mode)
