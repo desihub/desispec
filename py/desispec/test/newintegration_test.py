@@ -188,14 +188,14 @@ def integration_test(night=None, nspec=5, clobber=False):
     # #- Did it work?
     # #- (this combination of fibermap, simspec, and zbest is a pain)
     expid = 2
-    simdir = os.path.dirname(io.findfile('fibermap', night=night, expid=expid))
+    fmfile = io.findfile('fibermap', night=night, expid=expid)
+    fibermap = io.read_fibermap(fmfile)
+    simdir = os.path.dirname(fmfile)
     simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
     siminfo = fits.getdata(simspec, 'METADATA')
 
     brickdirs = glob.glob(os.path.join(proddir, "bricks", "*"))
     bricks = [ os.path.basename(x) for x in brickdirs ]
-
-    print(bricks)
 
     print()
     print("--------------------------------------------------")
