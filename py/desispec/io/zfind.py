@@ -5,6 +5,8 @@ desispec.io.zfind
 IO routines for zfind.
 """
 
+import os
+
 import numpy as np
 from astropy.io import fits
 from desispec.zfind import ZfindBase
