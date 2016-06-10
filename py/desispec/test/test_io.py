@@ -110,7 +110,7 @@ class TestIO(unittest.TestCase):
             frx = Frame(wave, flux, ivar, mask, R, meta=meta)
             desispec.io.write_frame(self.testfile, frx)
             frame = desispec.io.read_frame(self.testfile)
-
+            
             flux2 = flux.astype('f4').astype('f8')
             ivar2 = ivar.astype('f4').astype('f8')
             wave2 = wave.astype('f4').astype('f8')

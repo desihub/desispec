@@ -7,6 +7,8 @@ IO routines for sky.
 import os
 from astropy.io import fits
 
+from desiutil.depend import add_dependencies
+
 from desispec.sky import SkyModel
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
@@ -30,6 +32,8 @@ def write_sky(outfile, skymodel, header=None):
         hdr = fitsheader(header)
     else:
         hdr = fitsheader(skymodel.header)
+
+    add_dependencies(hdr)
 
     hx = fits.HDUList()
 

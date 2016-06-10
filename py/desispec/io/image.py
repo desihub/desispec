@@ -11,6 +11,7 @@ import numpy as np
 from desispec.image import Image
 from desispec.io.util import fitsheader, native_endian, makepath
 from astropy.io import fits
+from desiutil.depend import add_dependencies
 
 def write_image(outfile, image, meta=None):
     """Writes image object to outfile
@@ -28,6 +29,8 @@ def write_image(outfile, image, meta=None):
         hdr = fitsheader(meta)
     else:
         hdr = fitsheader(image.meta)
+
+    add_dependencies(hdr)
 
     hx = fits.HDUList()
     hdu = fits.ImageHDU(image.pix.astype(np.float32), name='IMAGE', header=hdr)

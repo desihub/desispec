@@ -7,6 +7,8 @@ IO routines for fiberflat.
 import os
 from astropy.io import fits
 
+from desiutil.depend import add_dependencies
+
 from desispec.fiberflat import FiberFlat
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
@@ -28,6 +30,8 @@ def write_fiberflat(outfile,fiberflat,header=None):
         hdr = fitsheader(fiberflat.header)
     else:
         hdr = fitsheader(header)
+
+    add_dependencies(hdr)
 
     ff = fiberflat   #- shorthand
     
