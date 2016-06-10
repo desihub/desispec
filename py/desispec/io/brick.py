@@ -91,6 +91,7 @@ class BrickBase(object):
                 ])
             data = np.empty(shape = (0,),dtype = columns)
             hdr = desispec.io.util.fitsheader(header)
+            add_dependencies(hdr)
 
             #- ignore incorrect and harmless fits TDIM7 warning for
             #- FILTER column that is a 2D array of strings
