@@ -145,6 +145,8 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     if step not in step_file_types.keys():
         raise ValueError("step type {} not recognized".format(step))
 
+    log = get_logger()
+    
     # Verify that there is only a single node in the graph
     # of the desired step.  The graph should already have
     # been sliced before calling this task.
@@ -197,6 +199,12 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_bootcalib']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
         args = bootcalib.parse(optarray)
 
         sys.stdout.flush()
@@ -292,6 +300,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options.update(optscopy)
         optarray = option_list(options)
 
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_extract_spectra']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
         args = extract.parse(optarray)
         extract.main_mpi(args, comm=comm)
     
@@ -315,6 +328,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_fiberflat']
+        com.extend(optarray)
+        log.debug(" ".join(com))
 
         args = fiberflat.parse(optarray)
 
@@ -348,6 +366,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_sky']
+        com.extend(optarray)
+        log.debug(" ".join(com))
 
         args = skypkg.parse(optarray)
 
@@ -401,6 +424,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options.update(opts)
         optarray = option_list(options)
 
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_fit_stdstars']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
         args = stdstars.parse(optarray)
 
         if rank == 0:
@@ -448,6 +476,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options.update(opts)
         optarray = option_list(options)
 
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_fluxcalibration']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
         args = fluxcal.parse(optarray)
 
         if rank == 0:
@@ -493,6 +526,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options.update(opts)
         optarray = option_list(options)
 
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_process_exposure']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
         args = procexp.parse(optarray)
 
         if rank == 0:
@@ -507,6 +545,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_zfind']
+        com.extend(optarray)
+        log.debug(" ".join(com))
 
         args = zfind.parse(optarray)
         if rank == 0:
