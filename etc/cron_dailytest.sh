@@ -52,6 +52,7 @@ export DESI_SPECTRO_DATA=$DAILYTEST_ROOT/spectro/sim/$PIXPROD
 export DESI_SPECTRO_SIM=$DAILYTEST_ROOT/spectro/sim
 
 export PRODNAME=dailytest
+export SPECPROD=dailytest
 export DESI_SPECTRO_REDUX=$DAILYTEST_ROOT/spectro/redux
 
 #- Cleanup from previous tests
