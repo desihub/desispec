@@ -146,7 +146,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         raise ValueError("step type {} not recognized".format(step))
 
     log = get_logger()
-    
+
     # Verify that there is only a single node in the graph
     # of the desired step.  The graph should already have
     # been sliced before calling this task.
@@ -801,14 +801,22 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
 
     # get the full graph
 
-    grph = graph_read_prod(proddir, nightstr=nightstr, spectrographs=spectrographs)
-    prod_state(rawdir, proddir, grph)
+    grph = None
+    if rank == 0:
+        grph = graph_read_prod(proddir, nightstr=nightstr, spectrographs=spectrographs)
+        prod_state(rawdir, proddir, grph)
+    if comm is not None:
+        grph = comm.bcast(grph, root=0)
 
     # read run options from disk
 
     rundir = os.path.join(proddir, "run")
     optfile = os.path.join(rundir, "options.yaml")
-    opts = read_options(optfile)
+    opts = None
+    if rank == 0:
+        opts = read_options(optfile)
+    if comm is not None:
+        opts = comm.bcast(opts, root=0)
 
     # compute the ordered list of steps to run
 
@@ -871,7 +879,11 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     for st in range(firststep, laststep):
         for name, nd in grph.items():
             if nd['type'] == run_step_types[st]:
-                graph_mark(grph, name, 'wait')
+                if 'state' in nd.keys():
+                    if nd['state'] != 'done':
+                        graph_mark(grph, name, 'wait')
+                else:
+                    graph_mark(grph, name, 'wait')
 
     if rank == 0:
         graph_write(statefile, grph)
