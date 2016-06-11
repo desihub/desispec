@@ -38,6 +38,7 @@ erg=const.erg
 hc= h/erg*c*1.e10 #(in units of ergsA)
 
 def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,shifted_stdwave,star_stdflux) :
+    chi2 = None
     try :
         chi2=0.
         for cam in normalized_flux.keys() :
