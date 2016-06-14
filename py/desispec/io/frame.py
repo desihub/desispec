@@ -57,7 +57,11 @@ def write_frame(outfile, frame, header=None, fibermap=None):
         hdus.append( fits.BinTableHDU(np.asarray(fibermap), name='FIBERMAP' ) )
     elif frame.fibermap is not None:
         hdus.append( fits.BinTableHDU(np.asarray(frame.fibermap), name='FIBERMAP' ) )
-    
+    elif frame.spectrograph is not None:
+        x.header['FIBERMIN'] = 500*frame.spectrograph  # Hard-coded (as in desispec.frame)
+    else:
+        log.error("You are likely writing a frame without sufficient fiber info")
+
     hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
