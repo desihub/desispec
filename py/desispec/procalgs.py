@@ -230,14 +230,73 @@ class BoxcarExtraction(pas.PipelineAlg):
         input_image=args[0]
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
-        dw=kwargs["DeltaW"]
         nspec=kwargs["Nspec"]
 
-        return self.run_pa(input_image,psf,boxwidth,dw,nspec)
+        if "Wavelength" not in kwargs:
+            wstart = np.ceil(psf.wmin)
+            wstop = np.floor(psf.wmax)
+            dw = 0.5
+        else: 
+            wavelength=kwargs["Wavelength"]
+            if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw
+ format                
+                wstart, wstop, dw = map(float, wavelength.split(','))
+            else: 
+                wstart = np.ceil(psf.wmin)
+                wstop = np.floor(psf.wmax)
+                dw = 0.5            
+        wave = np.arange(wstart, wstop+dw/2.0, dw)
+        if "Specmin" not in kwargs:
+            specmin=0
+        else:
+            specmin=kwargs["Specmin"]
+            if kwargs["Specmin"] is None:
+               specmin=0
+
+        if "Nspec" not in kwargs:
+            nspec = psf.nspec
+        else:
+            nspec=kwargs["Nspec"]
+            if nspec is None:
+                nspec=psf.nspec
+
+        specmax = specmin + nspec
+
+        camera = input_image.meta['CAMERA']     #- b0, r1, .. z9
+        spectrograph = int(camera[1])
+        fibermin = spectrograph*500 + specmin
+        if "FiberMap" not in kwargs:
+            fibermap = None
+            fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+        else:
+            fibermap=kwargs["FiberMap"]
+            fibermap = fibermap[fibermin:fibermin+nspec]
+            fibers = fibermap['FIBER']
+        if "Outfile" in kwargs:
+            outfile=kwargs["Outfile"]
+        else:
+            outfile=None
+
+        return self.run_pa(input_image,psf,wave,boxwidth,nspec,fibers=fibers,fibermap=fibermap,outfile=outfile)
+
 
     def run_pa(self, input_image, psf, boxwidth, dw, nspec):
         from desispec.boxcar import do_boxcar
-        return do_boxcar(input_image, psf, boxwidth=boxwidth, dw=dw, nspec=nspec)
+        from desispec.frame import Frame as fr
+        
+        flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
+nspec=nspec)
+
+        #- write to a frame object
+        
+        frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
+        
+        if outfile is not None:  #- writing to a frame file if needed.
+            from desispec import io
+            io.write_frame(outfile,frame)
+            log.info("wrote frame output file  %s"%outfile)
+
+        return frame
 
   
     def get_default_config(self):
