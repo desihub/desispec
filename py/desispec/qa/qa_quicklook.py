@@ -399,12 +399,13 @@ class Calculate_SNR(MonitoringAlg):
              
                 log.info("Skipping HTTP post...")
             
-        return retval
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
             plot_SNR(retval,qafig)         
             log.info("Output QA fig %s"%qafig)
+
+        return retval
 
     def get_default_config(self):
         return {}
