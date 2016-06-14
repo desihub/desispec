@@ -26,6 +26,7 @@ import yaml
 
 import desispec
 
+import desispec.log
 from desispec.log import get_logger
 from .plan import *
 from .utils import option_list
@@ -237,7 +238,25 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         outfile = graph_path_psf(proddir, name)
         outdir = os.path.dirname(outfile)
 
-        specex.run_frame(imgfile, bootfile, outfile, opts, comm=comm)
+        options = {}
+        options['input'] = imgfile
+        options['bootfile'] = bootfile
+        options['output'] = outfile
+        if log.getEffectiveLevel() == desispec.log.DEBUG:
+            options['verbose'] = True
+        if len(opts) > 0:
+            extarray = option_list(opts)
+            options['extra'] = '"{}"'.format(" ".join(extarray))
+
+        optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_psf']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
+        args = specex.parse(optarray)
+        specex.main(args, comm=comm)
 
     elif step == 'psfcombine':
 
