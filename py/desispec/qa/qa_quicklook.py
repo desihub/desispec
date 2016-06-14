@@ -260,7 +260,7 @@ class CountSpectralBins(MonitoringAlg):
         return self.run_qa(input_frame,threshold,camera,expid,url=url,qafig=qafig)
 
 
-    def run_qa(self,input_frame,thresh,camera,expid,url=None):
+    def run_qa(self,input_frame,thresh,camera,expid,url=None,qafig=None):
         nspec=input_frame.flux.shape[0]
         counts=np.zeros(nspec)
         for ii in range(nspec):
@@ -349,22 +349,20 @@ class Calculate_SNR(MonitoringAlg):
             import desispec.frame as frame
             import desispec.sky as sky
             
-            top_left_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[:ampbou
-ndary[0],ampboundary[1]:],input_frame.ivar[:ampboundary[0],ampboundary[1]:],fibermap=input_frame.
-fibermap)
+            top_left_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[:ampboundary[0],ampboundary[1]:], input_frame.ivar[:ampboundary[0], ampboundary[1]:],fibermap=input_frame.fibermap)
            
             medsnr01,totsnr01=SN_ratio(top_left_frame.flux,top_left_frame.ivar)
             average01=np.mean(medsnr01)
             tot01=np.mean(totsnr01)
 
-            bottom_left_frame=frame.Frame(input_frame.wave[:ampboundary[1]],input_frame.flux[:ampboundary[0],:ampboundary[1]],input_frame.ivar[:ampboundary[0],:ampboundary[1]],fibermap=input_frame.fibermap)
+            bottom_left_frame=frame.Frame(input_frame.wave[:ampboundary[1]],input_frame.flux[:ampboundary[0],:ampboundary[1]], input_frame.ivar[:ampboundary[0],:ampboundary[1]],fibermap=input_frame.fibermap)
 
             medsnr00,totsnr00=SN_ratio(bottom_left_frame.flux,bottom_left_frame.ivar)
             average00=np.mean(medsnr00)
             tot00=np.mean(totsnr00)
             if ampboundary[0] > 250:
 
-                bottom_right_frame=frame.Frame(input_frame.wave[:ampboundar[1]],input_frame.flux[ampboundary[0]:,:ampboundary[1]],input_frame.ivar[ampboundary[0]:,:ampboundary[1]],fibermap=input_frame.fibermap)
+                bottom_right_frame=frame.Frame(input_frame.wave[:ampboundar[1]],input_frame.flux[ampboundary[0]:,:ampboundary[1]], input_frame.ivar[ampboundary[0]:,:ampboundary[1]],fibermap=input_frame.fibermap)
                 
                 medsnr10,totsnr10=SN_ratio(bottom_right_frame.flux,bottom_right_frame.ivar)
                 average10=np.mean(medsnr10)
@@ -374,7 +372,7 @@ fibermap)
                 tot10=0.
             if ampboundary[0]> 250: #- only if nspec> 250 for the right quadrants
 
-                top_right_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[ampboundary[0]:,ampboundary[1]:],input_frame.ivar[ampboundary[0]:,ampboundary[1]:],fibermap=input_frame.fibermap)
+                top_right_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[ampboundary[0]:,ampboundary[1]:], input_frame.ivar[ampboundary[0]:,ampboundary[1]:],fibermap=input_frame.fibermap)
                 
                 medsnr11,totsnr11=SN_ratio(top_right_frame.flux,top_right_frame.ivar)
                 average11=np.mean(medsnr11)

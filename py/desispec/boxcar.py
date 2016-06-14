@@ -102,7 +102,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
         fflux[spec,:]=resample_flux(wtarget,ww,flux[:,spec])
         #- image.readnoise is no more a scalar but a full CCD pixel size array
         #- TODO Using median readnoise here for now. Need to propagate per-pixel readnoise from top. 
-        readnoise=np.median(readnoise)
+        readnoise=np.median(image.readnoise)
         ivar[spec,:]=1./(fflux[spec,:].clip(0.0)+2*boxwidth*readnoise)#- 2*half width=boxsize
 
     return fflux,ivar,resolution
