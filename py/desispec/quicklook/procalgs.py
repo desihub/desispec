@@ -511,7 +511,7 @@ class ApplyFiberFlat_QL(pas.PipelineAlg):
 
     def run_pa(self,input_frame,fiberflat): 
      
-        from desispec.quickfiberflat import apply_fiberflat 
+        from desispec.quicklook.quickfiberflat import apply_fiberflat 
         fframe=apply_fiberflat(input_frame,fiberflat)
         return fframe
 
@@ -584,7 +584,7 @@ class ComputeSky_QL(pas.PipelineAlg):
     
     def run_pa(self,input_frame,outputfile,fibermap=None): #- input frame should be already fiberflat fielded
         from desispec.io.sky import write_sky
-        from desispec.quicksky import compute_sky
+        from desispec.quicklook.quicksky import compute_sky
        
         skymodel=compute_sky(input_frame,fibermap)                
         
@@ -656,7 +656,7 @@ class SubtractSky_QL(pas.PipelineAlg):
             else: outskyfile=None
 
             log.info("No sky file given. Computing sky first")
-            from desispec.quicksky import compute_sky
+            from desispec.quicklook.quicksky import compute_sky
             fibermap=input_frame.fibermap
             skymodel=compute_sky(input_frame,fibermap)
             if outskyfile is not None:
@@ -668,7 +668,7 @@ class SubtractSky_QL(pas.PipelineAlg):
         return self.run_pa(input_frame,skymodel)
     
     def run_pa(self,input_frame,skymodel):
-        from desispec.quicksky import subtract_sky
+        from desispec.quicklook.quicksky import subtract_sky
         sframe=subtract_sky(input_frame,skymodel)
         return sframe
 

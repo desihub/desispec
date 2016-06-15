@@ -10,7 +10,7 @@ PipeLine:
 - OutputFile: qa-extract-online-r0-00000002.yaml
   PA:
     ClassName: BoxcarExtraction
-    ModuleName: desispec.procalgs
+    ModuleName: desispec.quicklook.procalgs
     Name: Boxcar Extraction
     kwargs: {BoxWidth: 2.5, FiberMap: '%%FiberMap', Wavelength: '5635,7731,0.8', Nspec: 20, PSFFile: '%%PSFFile', Outfile: frame-boxcar-r0-00000002.fits}
   QAs:
@@ -22,7 +22,7 @@ PipeLine:
 - Outputfile: qa-apply-fiberflat-online-r0-00000002.yaml
   PA:
     ClassName: ApplyFiberFlat_QL
-    ModuleName: desispec.procalgs
+    ModuleName: desispec.quicklook.procalgs
     Name: Apply Fiberflat
     kwargs: {FiberFlatFile: '%%FiberFlatFile'}
   QAs: []
@@ -30,7 +30,7 @@ PipeLine:
 - OutputFile: qa-skysub-online-r0-00000002.yaml
   PA:
     ClassName: SubtractSky_QL
-    ModuleName: desispec.procalgs
+    ModuleName: desispec.quicklook.procalgs
     Name: Sky Subtraction
     kwargs: {}
   QAs:

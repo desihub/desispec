@@ -9,7 +9,7 @@ PipeLine:
 - OutputFile: qa-extract-offline-r0-00000002.yaml
   PA:
     ClassName: Extraction_2d
-    ModuleName: desispec.procalgs
+    ModuleName: desispec.quicklook.procalgs
     Name: 2D Extraction
     kwargs: {FiberMap: '%%FiberMap', Nspec: 20, PSFFile_sp: /home/govinda/Desi/desimodel/data/specpsf/psf-r.fits,
       Wavelength: '5635,7731,0.8', Outfile: frame-r0-00000002.fits}
@@ -22,7 +22,7 @@ PipeLine:
 - Outputfile: qa-apply-fiberflat-offline-r0-00000002.yaml
   PA:
     ClassName: ApplyFiberFlat
-    ModuleName: desispec.procalgs
+    ModuleName: desispec.quicklook.procalgs
     Name: Apply Fiberflat
     kwargs: {FiberFlatFile: '%%FiberFlatFile'}
   QAs: []
@@ -30,7 +30,7 @@ PipeLine:
 - OutputFile: qa-skysub-offline-r0-00000002.yaml
   PA:
     ClassName: SubtractSky
-    ModuleName: desispec.procalgs
+    ModuleName: desispec.quicklook.procalgs
     Name: Sky Subtraction
     kwargs: {SkyFile: '/home/govinda/Desi/Quicklook/20160611/sky-r0-00000002.fits'}
   QAs:
