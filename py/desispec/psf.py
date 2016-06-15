@@ -31,12 +31,22 @@ class PSF(object):
         wmax=hdr['WAVEMAX']
         ycoeff=psfdata[1].data
         
-        #- Hardcoding based on r band, not given in header. Agh!
-        #- camera??
-        #- TODO: read this from somewhere
-        npix_x=4114 
-        npix_y=4128 
+        #- camera should have come from header but not in the header. neither the npix_x,npix_y ....
+        #- getting the arm name from filename itself, filename convention: psfboot-r0.fits
+        arm=str.split(filename,'-')[1][0]  #- Is this convention correct?
+        
+        if arm=='r': 
+            npix_x=4114 
+            npix_y=4128 
+        if arm=='b':
+            npix_x=4096
+            npix_y=4096
+        if arm=='z':
+            npix_x=4114
+            npix_y=4128
 
+        if arm not in ['b','r','z']:
+            raise ValueError("arm not in b, r, or z. File should be of the form psfboot-r0.fits.")  
         #- Get the coeffiecients
         nspec=xcoeff.shape[0]
         ncoeff=xcoeff.shape[1]

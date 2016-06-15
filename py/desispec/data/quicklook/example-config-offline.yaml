@@ -1,0 +1,43 @@
+DataType: Exposure
+DebugLevel: 20
+DumpIntermediates: false
+FiberFlatFile: /home/govinda/Desi/Quicklook/20160611/fiberflat-r0-00000001.fits
+FiberMap: /home/govinda/Desi/Quicklook/20160611/fibermap-00000002.fits
+OutputFile: lastframe_offline-r0-00000002.fits
+Period: 5.0
+PipeLine:
+- OutputFile: qa-extract-offline-r0-00000002.yaml
+  PA:
+    ClassName: Extraction_2d
+    ModuleName: desispec.quicklook.procalgs
+    Name: 2D Extraction
+    kwargs: {FiberMap: '%%FiberMap', Nspec: 20, PSFFile_sp: /home/govinda/Desi/desimodel/data/specpsf/psf-r.fits,
+      Wavelength: '5635,7731,0.8', Outfile: frame-r0-00000002.fits}
+  QAs:
+  - ClassName: CountSpectralBins
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Count Bins above n
+    kwargs: {camera: r0, expid: '00000002', thresh: 100, qafig: qafig-extract-offline-r0-00000002.pdf}
+  StepName: 2D Extraction
+- Outputfile: qa-apply-fiberflat-offline-r0-00000002.yaml
+  PA:
+    ClassName: ApplyFiberFlat
+    ModuleName: desispec.quicklook.procalgs
+    Name: Apply Fiberflat
+    kwargs: {FiberFlatFile: '%%FiberFlatFile'}
+  QAs: []
+  StepName: Apply Fiberflat
+- OutputFile: qa-skysub-offline-r0-00000002.yaml
+  PA:
+    ClassName: SubtractSky
+    ModuleName: desispec.quicklook.procalgs
+    Name: Sky Subtraction
+    kwargs: {SkyFile: '/home/govinda/Desi/Quicklook/20160611/sky-r0-00000002.fits'}
+  QAs:
+  - ClassName: Calculate_SNR
+    ModuleName: desispec.qa.qa_quicklook
+    Name: Calculate Signal-to-Noise ratio
+    kwargs: {SkyFile: '/home/govinda/Desi/Quicklook/20160611/sky-r0-00000002.fits', camera: r0, expid: '00000002', qafig: qafig-skysub-offline-r0-00000002.pdf}
+  StepName: Sky Subtraction
+RawImage: /home/govinda/Desi/Quicklook/20160611/pix-r0-00000002.fits
+Timeout: 120.0
