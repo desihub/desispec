@@ -8,6 +8,9 @@ from __future__ import absolute_import
 import os
 from astropy.io import fits
 import numpy,scipy
+
+from desiutil.depend import add_dependencies
+
 from .util import fitsheader, native_endian, makepath
 
 def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
@@ -22,6 +25,8 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
             BESTMODEL, TEMPLATEID, CHI2DOF, REDSHIFT
     """
     hdr = fitsheader(header)
+    add_dependencies(hdr)
+    
     hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
     hdr['BUNIT'] = ('erg/s/cm2/A', 'Flux units')
     hdu1=fits.PrimaryHDU(normalizedFlux.astype('f4'), header=hdr.copy())
@@ -77,6 +82,8 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     hx = fits.HDUList()
     
     hdr = fitsheader(header)
+    add_dependencies(hdr)
+    
     hdr['EXTNAME'] = 'FLUXCALIB'
     hdr['BUNIT'] = ('(electrons/A) / (erg/s/cm2/A)', 'electrons per flux unit')
     hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f4'), header=hdr) )

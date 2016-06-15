@@ -9,6 +9,7 @@ import os
 
 import numpy as np
 from astropy.io import fits
+from desiutil.depend import add_dependencies
 from desispec.zfind import ZfindBase
 from desispec.log import get_logger
 
@@ -50,6 +51,9 @@ def write_zbest(filename, brickname, targetids, zfind, zspec=False):
     data['SUBTYPE']   = zfind.subtype
 
     hdus = fits.HDUList()
+    phdr = fits.Header()
+    add_dependencies(phdr)
+    hdus.append(fits.PrimaryHDU(None, header=phdr))
     hdus.append(fits.BinTableHDU(data, name='ZBEST', uint=True))
 
     if zspec:

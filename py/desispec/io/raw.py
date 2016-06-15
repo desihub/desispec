@@ -9,6 +9,8 @@ import os.path
 from astropy.io import fits
 import numpy as np
 
+from desiutil.depend import add_dependencies
+
 import desispec.io.util
 import desispec.preproc
 from desispec.log import get_logger
@@ -151,6 +153,7 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
             hdus.close()
     else:
         hdus = fits.HDUList()
+        add_dependencies(primary_header)
         hdus.append(fits.PrimaryHDU(None, header=primary_header))
         hdus.append(dataHDU)
         hdus.writeto(filename)

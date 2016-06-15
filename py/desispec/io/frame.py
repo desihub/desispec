@@ -10,6 +10,8 @@ import numpy as np
 import scipy,scipy.sparse
 from astropy.io import fits
 
+from desiutil.depend import add_dependencies
+
 from desispec.frame import Frame
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
@@ -40,8 +42,9 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     if header is not None:
         hdr = fitsheader(header)
     else:
-        #hdr = fitsheader(frame.header)
         hdr = fitsheader(frame.meta)
+        
+    add_dependencies(hdr)
 
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(frame.flux.astype('f4'), header=hdr)
