@@ -4,14 +4,14 @@ boxcar extraction for Spectra from Desi Image
 import numpy as np
 
 def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
-    """
-    Extracts spectra row by row, given the centroids  
-    Args:  
-         image  : desispec.image object 
-         psf: desispec.psf.PSF like object
-              Or do we just parse the traces here and write a separate wrapper to handle this? Leaving psf in the input argument now.           
-         outwave: wavelength array for the final spectra output
-         boxwidth: HW box size in pixels
+    """Extracts spectra row by row, given the centroids
+
+    Args:
+        image  : desispec.image object
+        psf: desispec.psf.PSF like object
+            Or do we just parse the traces here and write a separate wrapper to handle this? Leaving psf in the input argument now.
+        outwave: wavelength array for the final spectra output
+        boxwidth: HW box size in pixels
 
     Returns desispec.frame.Frame object
     """
@@ -23,7 +23,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
     wmax=psf.wmax
     waves=np.arange(wmin,wmax,0.25)
     xs=psf.x(None,waves) #- xtraces # doing the full image here.
-    ys=psf.y(None,waves) #- ytraces 
+    ys=psf.y(None,waves) #- ytraces
 
     camera=image.camera
     spectrograph=int(camera[1:]) #- first char is "r", "b", or "z"
@@ -37,8 +37,8 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
         for spec in xrange(0,xs.shape[0]):
             xpos=xs[spec][bin]
             ypos=int(ys[spec][bin])
-            if xpos<0 or xpos>maxx or ypos<0 or ypos>maxy : 
-                continue 
+            if xpos<0 or xpos>maxx or ypos<0 or ypos>maxy :
+                continue
             xmin=xpos-boxwidth
             xmax=xpos+boxwidth
             ixmin=int(math.floor(xmin))
@@ -72,7 +72,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
             if  ranges[ypos][sp]==0:
                 ranges[ypos][sp]=lastval
             lastval=ranges[ypos][sp]
-    
+
 
     maskedimg=(image.pix*mask.T)
     flux=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))
@@ -84,7 +84,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
 
     wtarget=outwave
     #- limit nspec to psf.nspec max
-    if nspec > psf.nspec: 
+    if nspec > psf.nspec:
         nspec=psf.nspec
         print "Warning! Extracting only %s spectra"%psf.nspec
 
@@ -101,9 +101,8 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
         flux[:,spec]/=dwave
         fflux[spec,:]=resample_flux(wtarget,ww,flux[:,spec])
         #- image.readnoise is no more a scalar but a full CCD pixel size array
-        #- TODO Using median readnoise here for now. Need to propagate per-pixel readnoise from top. 
+        #- TODO Using median readnoise here for now. Need to propagate per-pixel readnoise from top.
         readnoise=np.median(image.readnoise)
         ivar[spec,:]=1./(fflux[spec,:].clip(0.0)+2*boxwidth*readnoise**2)#- 2*half width=boxsize
 
     return fflux,ivar,resolution
-

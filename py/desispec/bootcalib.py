@@ -51,16 +51,16 @@ glbl_figsz = (16,9)
 
 def bootcalib(deg,flatimage,arcimage):
     """
-    deg: Legendre polynomial degree to use to fit
-    flatimage: desispec.image.Image object of flatfield
-    arcimage: desispec.image.Image object of arc
+    Args:
+        deg: Legendre polynomial degree to use to fit
+        flatimage: desispec.image.Image object of flatfield
+        arcimage: desispec.image.Image object of arc
 
-    #- Mostly inherited from desispec/bin/desi_bootcalib directly as needed
+    Mostly inherited from desispec/bin/desi_bootcalib directly as needed
 
-    returns xfit
-            fdicts
-            gauss
-            all_wave_soln
+    Returns:
+        xfit, fdicts, gauss, all_wave_soln
+
     TODO: document what those return objects are
     """
 
@@ -804,6 +804,7 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
 
 def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
     """ Uses the previous wavelength solution to fix the current
+
     Args:
         new_id:
         old_id:
@@ -811,7 +812,7 @@ def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
         old_pix:
 
     Returns:
-
+        Stuff
     """
     log=get_logger()
     # Find offset in pixels
@@ -842,6 +843,7 @@ def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
 
 def fix_poor_solutions(all_wv_soln, all_dlamb, ny, ldegree):
     """ Identify solutions with poor RMS and replace
+
     Args:
         all_wv_soln: list of solutions
         all_dlamb: list of dispersion values
@@ -1060,6 +1062,7 @@ def reject_lines(tbl,rej_dict, rej_tol=0.1):
 
 def parse_nist_tbl(tbl,parse_dict):
     """Parses a NIST table using various criteria
+
     Parameters
     ----------
     tbl : Table
@@ -1135,7 +1138,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
     Returns
     -------
     gauss
-    list of Gaussian sigma
+        list of Gaussian sigma
     """
     log=get_logger()
 
@@ -1222,14 +1225,14 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
     xtrc: ndarray of fiber traces
     xerr: ndarray of error in fiber traces
     box_radius: int, optinal
-          Radius of boxcar extraction in pixels
+        Radius of boxcar extraction in pixels
     max_iter : int, optional
-      Maximum number of iterations for rejection
+        Maximum number of iterations for rejection
 
     Returns
     -------
     gauss
-      list of Gaussian sigma
+        list of Gaussian sigma
     """
     log=get_logger()
     log.warn("fiber_gauss uses astropy.modeling.  Consider an alternative")
@@ -1324,16 +1327,17 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     """Find the peaks of the fiber flat spectra
     Preforms book-keeping error checking
 
-    args:
+    Args:
         flat : ndarray of fiber flat image
         ypos : int [optional] Row for finding peaks
            Default is half-way up the image
         nwidth : int [optional] Width of peak (end-to-end)
         debug: bool, optional
 
-    returns xpk, ypos, cut
-      list of xpk (nearest pixel) at ypos
-      ndarray of cut through the image
+    Returns:
+        xpk, ypos, cut
+            list of xpk (nearest pixel) at ypos
+            ndarray of cut through the image
     """
     log=get_logger()
     log.info("starting")
@@ -1397,7 +1401,7 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     """Fit the traces
     Default is 6th order Legendre polynomials
 
-    Parameter:
+    Parameters
     ----------
     xset : ndarray
       traces
@@ -1524,6 +1528,7 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=2.,
     """Python port of trace_crude_idl.pro from IDLUTILS
 
     Modified for initial guess
+
     Parameters
     ----------
     image : 2D ndarray
@@ -1585,8 +1590,8 @@ def trace_crude_init(image, xinit0, ypass, invvar=None, radius=2.,
 def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=2., debug=False):
     '''Python port of trace_fweight.pro from IDLUTILS
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     fimage: 2D ndarray
       Image for tracing
     xinit: ndarray
@@ -1761,9 +1766,9 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
 
 def script_bootcalib(arc_idx, flat_idx, cameras=None, channels=None, nproc=10):
     """ Runs desi_bootcalib on a series of pix files
-    Returns:
 
-    script_bootcalib([0,1,2,3,4,5,6,7,8,9], [10,11,12,13,14])
+    Returns:
+        script_bootcalib([0,1,2,3,4,5,6,7,8,9], [10,11,12,13,14])
 
     """
     from subprocess import Popen

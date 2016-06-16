@@ -14,12 +14,12 @@ log = get_logger()
 def _parse_sec_keyword(value):
     '''
     parse keywords like BIASSECB='[7:56,51:4146]' into python slices
-    
+
     python and FITS have almost opposite conventions,
       * FITS 1-indexed vs. python 0-indexed
       * FITS upperlimit-inclusive vs. python upperlimit-exclusive
       * FITS[x,y] vs. python[y,x]
-    
+
     i.e. BIASSEC2='[7:56,51:4146]' -> (slice(50,4146), slice(6,56))
     '''
     m = re.search('\[(\d+):(\d+)\,(\d+):(\d+)\]', value)
@@ -27,18 +27,18 @@ def _parse_sec_keyword(value):
         raise ValueError, 'unable to parse {} as [a:b, c:d]'.format(value)
     else:
         xmin, xmax, ymin, ymax = map(int, m.groups())
-        
+
     return np.s_[ymin-1:ymax, xmin-1:xmax]
 
 def _clipped_std_bias(nsigma):
     '''
     Returns the bias on the standard deviation of a sigma-clipped dataset
 
-    Divide by the returned bias to get a corrected value
+    Divide by the returned bias to get a corrected value::
 
-    a = nsigma
-    bias = sqrt((integrate x^2 exp(-x^2/2), x=-a..a) / (integrate exp(-x^2/2), x=-a..a))
-         = sqrt(1 - 2a exp(-a^2/2) / (sqrt(2pi) erf(a/sqrt(2))))
+        a = nsigma
+        bias = sqrt((integrate x^2 exp(-x^2/2), x=-a..a) / (integrate exp(-x^2/2), x=-a..a))
+             = sqrt(1 - 2a exp(-a^2/2) / (sqrt(2pi) erf(a/sqrt(2))))
 
     See http://www.wolframalpha.com/input/?i=(integrate+x%5E2+exp(-x%5E2%2F2),+x+%3D+-a+to+a)+%2F+(integrate+exp(-x%5E2%2F2),+x%3D-a+to+a)
     '''
@@ -81,13 +81,13 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     preprocess image using metadata in header
 
     image = ((rawimage-bias-overscan)*gain)/pixflat
-    
+
     Args:
         rawimage : 2D numpy array directly from raw data file
         header : dict-like metadata, e.g. from FITS header, with keywords
             CAMERA, BIASSECx, DATASECx, CCDSECx
             where x = 1, 2, 3, 4 for each of the 4 amplifiers.
-        
+
     Optional bias, pixflat, and mask can each be:
         False: don't apply that step
         True: use default calibration data for that night
@@ -101,7 +101,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         mask : 2D mask of image (0=good)
         readnoise : 2D per-pixel readnoise of image
         meta : metadata dictionary
-            TODO: define what keywords are included
+        TODO: define what keywords are included
 
     preprocessing includes the following steps:
         - bias image subtraction
@@ -112,16 +112,16 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         - cosmic ray masking
         - propagation of input known bad pixel mask
         - inverse variance estimation
-        
+
     Notes:
-    
+
     The bias image is subtracted before any other calculation to remove any
     non-uniformities in the overscan regions prior to calculating overscan
     levels and readnoise.
-    
+
     The readnoise is an image not just one number per amp, because the pixflat
     image also affects the interpreted readnoise.
-    
+
     The inverse variance is estimated from the readnoise and the image itself,
     and thus is biased.
     '''
@@ -129,7 +129,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
 
     #- Subtract bias image
     camera = header['CAMERA']
-    
+
     if bias is not False and bias is not None:
         if bias is True:
             #- use default bias file for this camera/night
@@ -138,7 +138,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         elif isinstance(bias, (str, unicode)):
             #- treat as filename
             bias = read_bias(filename=bias)
-            
+
         if bias.shape == rawimage.shape:
             rawimage = rawimage - bias
         else:
@@ -148,10 +148,10 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     yy, xx = _parse_sec_keyword(header['CCDSEC4'])  #- 4 = upper right
     image = np.zeros( (yy.stop, xx.stop) )
     readnoise = np.zeros_like(image)
-    
+
     for amp in ['1', '2', '3', '4']:
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
-        
+
         #- Initial teststand data may be missing GAIN* keywords; don't crash
         if 'GAIN'+amp in header:
             gain = header['GAIN'+amp]          #- gain = electrons / ADU
@@ -163,10 +163,10 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         rdnoise *= gain
         kk = _parse_sec_keyword(header['CCDSEC'+amp])
         readnoise[kk] = rdnoise
-        
+
         header['OVERSCN'+amp] = overscan
         header['OBSRDN'+amp] = rdnoise
-        
+
         #- Warn/error if measured readnoise is very different from expected
         if 'RDNOISE'+amp in header:
             expected_readnoise = header['RDNOISE'+amp]
@@ -184,7 +184,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
                     amp, rdnoise, expected_readnoise))
         else:
             log.warn('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
-        
+
         #- subtract overscan from data region and apply gain
         jj = _parse_sec_keyword(header['DATASEC'+amp])
         data = rawimage[jj] - overscan
@@ -222,7 +222,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
             image[good] /= pixflat[good]
             readnoise[good] /= pixflat[good]
             mask[~good] |= ccdmask.PIXFLATZERO
-            
+
         lowpixflat = (0 < pixflat) & (pixflat < 0.1)
         if np.any(lowpixflat):
             mask[lowpixflat] |= ccdmask.PIXFLATLOW
@@ -230,12 +230,12 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     #- Inverse variance, estimated directly from the data (BEWARE: biased!)
     var = image.clip(0) + readnoise**2
     ivar = 1.0 / var
-    
+
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- update img.mask to mask cosmic rays
     cosmics.reject_cosmic_rays(img)
-    
+
     return img
 
 #-------------------------------------------------------------------------
@@ -246,12 +246,12 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
 def read_bias(filename=None, camera=None, dateobs=None):
     '''
     Return calibration bias filename for camera on dateobs or night
-    
+
     Options:
         filename : input filename to read
         camera : e.g. 'b0', 'r1', 'z9'
         dateobs : DATE-OBS string, e.g. '2018-09-23T08:17:03.988'
-        
+
     Notes:
         must provide filename, or both camera and dateobs
     '''
@@ -265,12 +265,12 @@ def read_bias(filename=None, camera=None, dateobs=None):
 def read_pixflat(filename=None, camera=None, dateobs=None):
     '''
     Read calibration pixflat image for camera on dateobs.
-    
+
     Options:
         filename : input filename to read
         camera : e.g. 'b0', 'r1', 'z9'
         dateobs : DATE-OBS string, e.g. '2018-09-23T08:17:03.988'
-        
+
     Notes:
         must provide filename, or both camera and dateobs
     '''
@@ -284,12 +284,12 @@ def read_pixflat(filename=None, camera=None, dateobs=None):
 def read_mask(filename=None, camera=None, dateobs=None):
     '''
     Read bad pixel mask image for camera on dateobs.
-    
+
     Options:
         filename : input filename to read
         camera : e.g. 'b0', 'r1', 'z9'
         dateobs : DATE-OBS string, e.g. '2018-09-23T08:17:03.988'
-        
+
     Notes:
         must provide filename, or both camera and dateobs
     '''

@@ -110,16 +110,58 @@ The desispec API
 .. automodule:: desispec.preproc
     :members:
 
-.. automodule:: desispec.procalgs
-    :members:
-
 .. automodule:: desispec.psf
     :members:
 
 .. automodule:: desispec.qa
     :members:
 
+.. automodule:: desispec.qa.qa_brick
+    :members:
+
+.. automodule:: desispec.qa.qa_exposure
+    :members:
+
+.. automodule:: desispec.qa.qa_frame
+    :members:
+
+.. automodule:: desispec.qa.qa_plots_ql
+    :members:
+
+.. automodule:: desispec.qa.qa_plots
+    :members:
+
+.. automodule:: desispec.qa.qa_quicklook
+    :members:
+
 .. automodule:: desispec.quicklook
+    :members:
+
+.. automodule:: desispec.quicklook.pas
+    :members:
+
+.. automodule:: desispec.quicklook.procalgs
+    :members:
+
+.. automodule:: desispec.quicklook.qas
+    :members:
+
+.. automodule:: desispec.quicklook.qlexceptions
+    :members:
+
+.. automodule:: desispec.quicklook.qlheartbeat
+    :members:
+
+.. automodule:: desispec.quicklook.qllogger
+    :members:
+
+.. automodule:: desispec.quicklook.quickfiberflat
+    :members:
+
+.. automodule:: desispec.quicklook.quicklook
+    :members:
+
+.. automodule:: desispec.quicklook.quicksky
     :members:
 
 .. automodule:: desispec.resolution
