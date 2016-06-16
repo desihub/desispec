@@ -33,6 +33,9 @@ class RedMonsterZfind(ZfindBase):
         from redmonster.physics.zfitter import ZFitter
         from redmonster.physics.zpicker2 import ZPicker
         
+        log=get_logger()
+        
+
         #- RedMonster templates don't quite go far enough into the blue,
         #- so chop off some data
         ii, = np.where(wave>3965)
@@ -98,7 +101,10 @@ class RedMonsterZfind(ZfindBase):
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
             zfit = ZFitter(zfind.zchi2arr, zfind.zbase)
             zfit.z_refine2()
-
+            
+            for ifiber in range(zfit.z.shape[0]) :
+                log.debug("(after z_refine2) fiber #%d %s chi2s=%s zs=%s"%(ifiber,template,zfit.chi2vals[ifiber],zfit.z[ifiber]))
+            
             self.zfinders.append(zfind)
             self.zfitters.append(zfit)
 
@@ -119,6 +125,11 @@ class RedMonsterZfind(ZfindBase):
         self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
         self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
         self.model = self.zpicker.models[:,0]
+
+        for ifiber in range(self.z.size):
+            log.debug("(after zpicker) fiber #%d z=%s"%(ifiber,self.z[ifiber]))
+            
+        
 
 #- This is a container class needed by Redmonster zpicker
 class _RedMonsterSpecObj(object):
