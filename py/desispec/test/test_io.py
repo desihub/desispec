@@ -88,6 +88,14 @@ class TestIO(unittest.TestCase):
         #- Can't convert and int into a fits Header
         self.assertRaises(ValueError, desispec.io.util.fitsheader, (1,))
 
+    def _make_frame(self, nspec=5, nwave=10, ndiag=3):
+        wave = np.arange(nwave)
+        flux = np.random.uniform(size=(nspec, nwave))
+        ivar = np.random.uniform(size=(nspec, nwave))
+        mask = np.zeros((nspec, nwave), dtype=int)
+        R = np.random.uniform( size=(nspec, ndiag, nwave) )
+        return Frame(wave, flux, ivar, mask, R)
+
     def test_frame_rw(self):
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
@@ -103,15 +111,30 @@ class TestIO(unittest.TestCase):
             desispec.io.write_frame(self.testfile, frx)
             frame = desispec.io.read_frame(self.testfile)
 
-            self.assertTrue(np.all(flux == frame.flux))
-            self.assertTrue(np.all(ivar == frame.ivar))
-            self.assertTrue(np.all(wave == frame.wave))
+            flux2 = flux.astype('f4').astype('f8')
+            ivar2 = ivar.astype('f4').astype('f8')
+            wave2 = wave.astype('f4').astype('f8')
+            R2    = R.astype('f4').astype('f8')
+
+            self.assertTrue(frame.wave.dtype == np.float64)
+            self.assertTrue(frame.flux.dtype == np.float64)
+            self.assertTrue(frame.ivar.dtype == np.float64)
+            self.assertTrue(frame.resolution_data.dtype == np.float64)
+
+            self.assertTrue(np.all(flux2 == frame.flux))
+            self.assertTrue(np.all(ivar2 == frame.ivar))
+            self.assertTrue(np.all(wave2 == frame.wave))
             self.assertTrue(np.all(mask == frame.mask))
-            self.assertTrue(np.all(R == frame.resolution_data))
+            self.assertTrue(np.all(R2 == frame.resolution_data))
             self.assertTrue(frame.resolution_data.dtype.isnative)
             self.assertEqual(frame.meta['BLAT'], meta['BLAT'])
             self.assertEqual(frame.meta['FOO'], meta['FOO'])
-            
+
+        #- Test float32 on disk vs. float64 in memory
+        for extname in ['FLUX', 'IVAR', 'WAVELENGTH', 'RESOLUTION']:
+            data = fits.getdata(self.testfile, extname)
+            self.assertEqual(data.dtype, np.dtype('>f4'), '{} not type >f4'.format(extname))
+
         #- with and without fibermap
         self.assertEqual(frame.fibermap, None)
         fibermap = desispec.io.empty_fibermap(nspec)
@@ -137,9 +160,9 @@ class TestIO(unittest.TestCase):
             desispec.io.write_sky(self.testfile, sky)
             xsky = desispec.io.read_sky(self.testfile)
 
-            self.assertTrue(np.all(sky.wave  == xsky.wave))
-            self.assertTrue(np.all(sky.flux  == xsky.flux))
-            self.assertTrue(np.all(sky.ivar  == xsky.ivar))
+            self.assertTrue(np.all(sky.wave.astype('f4').astype('f8')  == xsky.wave))
+            self.assertTrue(np.all(sky.flux.astype('f4').astype('f8')  == xsky.flux))
+            self.assertTrue(np.all(sky.ivar.astype('f4').astype('f8')  == xsky.ivar))
             self.assertTrue(np.all(sky.mask  == xsky.mask))
             self.assertTrue(xsky.flux.dtype.isnative)
             self.assertEqual(sky.mask.dtype, xsky.mask.dtype)
@@ -158,11 +181,11 @@ class TestIO(unittest.TestCase):
         desispec.io.write_fiberflat(self.testfile, ff)
         xff = desispec.io.read_fiberflat(self.testfile)
 
-        self.assertTrue(np.all(ff.fiberflat == xff.fiberflat))
-        self.assertTrue(np.all(ff.ivar == xff.ivar))
+        self.assertTrue(np.all(ff.fiberflat.astype('f4').astype('f8') == xff.fiberflat))
+        self.assertTrue(np.all(ff.ivar.astype('f4').astype('f8') == xff.ivar))
         self.assertTrue(np.all(ff.mask == xff.mask))
-        self.assertTrue(np.all(ff.meanspec == xff.meanspec))
-        self.assertTrue(np.all(ff.wave == xff.wave))
+        self.assertTrue(np.all(ff.meanspec.astype('f4').astype('f8') == xff.meanspec))
+        self.assertTrue(np.all(ff.wave.astype('f4').astype('f8') == xff.wave))
 
         self.assertTrue(xff.fiberflat.dtype.isnative)
         self.assertTrue(xff.ivar.dtype.isnative)
@@ -220,9 +243,9 @@ class TestIO(unittest.TestCase):
         data['REDSHIFT'] = np.zeros(nstd)
         desispec.io.write_stdstar_models(self.testfile, flux, wave, fibers, data)
         
-        fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)
-        self.assertTrue(np.all(fx == flux))
-        self.assertTrue(np.all(wx == wave))
+        fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)        
+        self.assertTrue(np.all(fx == flux.astype('f4').astype('f8')))
+        self.assertTrue(np.all(wx == wave.astype('f4').astype('f8')))
         self.assertTrue(np.all(fibx == fibers))
 
     def test_fluxcalib(self):
@@ -237,9 +260,9 @@ class TestIO(unittest.TestCase):
         fc = FluxCalib(wave, calib, ivar, mask)
         desispec.io.write_flux_calibration(self.testfile, fc)
         fx = desispec.io.read_flux_calibration(self.testfile)
-        self.assertTrue(np.all(fx.wave == fc.wave))
-        self.assertTrue(np.all(fx.calib == fc.calib))
-        self.assertTrue(np.all(fx.ivar == fc.ivar))
+        self.assertTrue(np.all(fx.wave  == fc.wave.astype('f4').astype('f8')))
+        self.assertTrue(np.all(fx.calib == fc.calib.astype('f4').astype('f8')))
+        self.assertTrue(np.all(fx.ivar  == fc.ivar.astype('f4').astype('f8')))
         self.assertTrue(np.all(fx.mask == fc.mask))
 
     def test_brick(self):
@@ -286,7 +309,7 @@ class TestIO(unittest.TestCase):
         #- Check output datatypes
         self.assertEqual(img2.pix.dtype, np.float64)
         self.assertEqual(img2.ivar.dtype, np.float64)
-        self.assertEqual(img2.mask.dtype, np.uint16)
+        self.assertEqual(img2.mask.dtype, np.uint32)
 
         #- Rounding from keeping np.float32 on disk means they aren't equal
         self.assertFalse(np.all(img1.pix == img2.pix))
@@ -302,7 +325,7 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.all(img1.mask == img2.mask))
         self.assertEqual(img1.readnoise, img2.readnoise)
         self.assertEqual(img1.camera, img2.camera)
-        self.assertEqual(img2.mask.dtype, np.uint16)
+        self.assertEqual(img2.mask.dtype, np.uint32)
 
         #- should work with various kinds of metadata header input
         meta = dict(BLAT='foo', BAR='quat', BIZ=1.0)

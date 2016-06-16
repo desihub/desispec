@@ -11,6 +11,7 @@ from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
 from .interpolation import resample_flux
 from .log import get_logger
 from .io.filters import load_filter
+from desispec import util
 import scipy, scipy.sparse, scipy.ndimage
 import sys
 from astropy import units
@@ -37,6 +38,7 @@ erg=const.erg
 hc= h/erg*c*1.e10 #(in units of ergsA)
 
 def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,shifted_stdwave,star_stdflux) :
+    chi2 = None
     try :
         chi2=0.
         for cam in normalized_flux.keys() :
@@ -487,7 +489,7 @@ class FluxCalib(object):
         self.wave = wave
         self.calib = calib
         self.ivar = ivar
-        self.mask = mask
+        self.mask = util.mask32(mask)
         self.meancalib = meancalib
 
 def apply_flux_calibration(frame, fluxcalib):

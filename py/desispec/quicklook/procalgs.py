@@ -230,14 +230,72 @@ class BoxcarExtraction(pas.PipelineAlg):
         input_image=args[0]
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
-        dw=kwargs["DeltaW"]
         nspec=kwargs["Nspec"]
 
-        return self.run_pa(input_image,psf,boxwidth,dw,nspec)
+        if "Wavelength" not in kwargs:
+            wstart = np.ceil(psf.wmin)
+            wstop = np.floor(psf.wmax)
+            dw = 0.5
+        else: 
+            wavelength=kwargs["Wavelength"]
+            if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
+                wstart, wstop, dw = map(float, wavelength.split(','))
+            else: 
+                wstart = np.ceil(psf.wmin)
+                wstop = np.floor(psf.wmax)
+                dw = 0.5            
+        wave = np.arange(wstart, wstop+dw/2.0, dw)
+        if "Specmin" not in kwargs:
+            specmin=0
+        else:
+            specmin=kwargs["Specmin"]
+            if kwargs["Specmin"] is None:
+               specmin=0
 
-    def run_pa(self, input_image, psf, boxwidth, dw, nspec):
+        if "Nspec" not in kwargs:
+            nspec = psf.nspec
+        else:
+            nspec=kwargs["Nspec"]
+            if nspec is None:
+                nspec=psf.nspec
+
+        specmax = specmin + nspec
+
+        camera = input_image.meta['CAMERA']     #- b0, r1, .. z9
+        spectrograph = int(camera[1])
+        fibermin = spectrograph*500 + specmin
+        if "FiberMap" not in kwargs:
+            fibermap = None
+            fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+        else:
+            fibermap=kwargs["FiberMap"]
+            fibermap = fibermap[fibermin:fibermin+nspec]
+            fibers = fibermap['FIBER']
+        if "Outfile" in kwargs:
+            outfile=kwargs["Outfile"]
+        else:
+            outfile=None
+
+        return self.run_pa(input_image,psf,wave,boxwidth,nspec,fibers=fibers,fibermap=fibermap,outfile=outfile)
+
+
+    def run_pa(self, input_image, psf, outwave, boxwidth, nspec,fibers=None, fibermap=None,outfile=None):
         from desispec.boxcar import do_boxcar
-        return do_boxcar(input_image, psf, boxwidth=boxwidth, dw=dw, nspec=nspec)
+        from desispec.frame import Frame as fr
+        
+        flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
+nspec=nspec)
+
+        #- write to a frame object
+        
+        frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
+        
+        if outfile is not None:  #- writing to a frame file if needed.
+            from desispec import io
+            io.write_frame(outfile,frame)
+            log.info("wrote frame output file  %s"%outfile)
+
+        return frame
 
   
     def get_default_config(self):
@@ -427,6 +485,36 @@ class ApplyFiberFlat(pas.PipelineAlg):
         apply_fiberflat(input_frame,fiberflat)
         return input_frame
 
+class ApplyFiberFlat_QL(pas.PipelineAlg):
+    """
+       PA to Apply the fiberflat field (QL) to the given frame
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Apply FiberFlat"
+        from desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if "FiberFlatFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need Fiberflat file")
+        
+        input_frame=args[0]
+        fiberflat=kwargs["FiberFlatFile"]
+        
+        return self.run_pa(input_frame,fiberflat)
+
+    def run_pa(self,input_frame,fiberflat): 
+     
+        from desispec.quicklook.quickfiberflat import apply_fiberflat 
+        fframe=apply_fiberflat(input_frame,fiberflat)
+        return fframe
+
 class ComputeSky(pas.PipelineAlg):
     """ PA to compute sky model from a DESI frame
     """
@@ -468,6 +556,42 @@ class ComputeSky(pas.PipelineAlg):
         sys.exit(0)
 
 
+class ComputeSky_QL(pas.PipelineAlg):
+    """ PA to compute sky model from a DESI frame
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Compute Sky"
+        from desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_frame=args[0] #- frame object to calculate sky from. Should be fiber flat corrected
+        if "FiberMap" in kwargs:
+            fibermap=kwargs["FiberMap"]
+        else: fibermap=None
+
+        if "Outfile" not in kwargs:
+            raise qlexceptions.ParameterException("Need output file name to write skymodel")
+
+        outputfile=kwargs["Outfile"]
+        return self.run_pa(input_frame,outputfile,fibermap=fibermap)
+    
+    def run_pa(self,input_frame,outputfile,fibermap=None): #- input frame should be already fiberflat fielded
+        from desispec.io.sky import write_sky
+        from desispec.quicklook.quicksky import compute_sky
+       
+        skymodel=compute_sky(input_frame,fibermap)                
+        
+        write_sky(outputfile,skymodel,input_frame.meta)
+        log.info("Sky Model file wrtten. Exiting the pipeline for this configuration")
+        sys.exit(0)
+
 class SubtractSky(pas.PipelineAlg):
 
     def __init__(self,name,config,logger=None):
@@ -496,3 +620,55 @@ class SubtractSky(pas.PipelineAlg):
         from desispec.sky import subtract_sky
         subtract_sky(input_frame,skymodel)
         return input_frame
+
+class SubtractSky_QL(pas.PipelineAlg):
+    """
+       This is for QL Sky subtraction. The input frame object should be fiber flat corrected.
+       Unlike offline, if no skymodel file is given as input, a sky compute method is called
+       to create a skymodel object and then subtraction is performed. Outputing that skymodel
+       to a file is optional and can be configured.
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Sky Subtraction"
+        from  desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
+        input_frame=args[0] #- this must be flat field applied before sky subtraction in the pipeline
+
+        if "SkyFile" in kwargs:
+            from desispec.io.sky import read_sky
+            skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
+            log.info("Using given sky file %s for subtraction"%skyfile)
+
+            skymodel=read_sky(skyfile)
+
+        else:
+            if "Outskyfile" in kwargs:
+                outskyfile=kwargs["Outskyfile"]
+            else: outskyfile=None
+
+            log.info("No sky file given. Computing sky first")
+            from desispec.quicklook.quicksky import compute_sky
+            fibermap=input_frame.fibermap
+            skymodel=compute_sky(input_frame,fibermap)
+            if outskyfile is not None:
+                from desispec.io.sky import write_sky
+                log.info("writing an output sky model file %s "%outskyfile)
+                write_sky(outputfile,skymodel,input_frame.meta)
+
+        #- now do the subtraction                   
+        return self.run_pa(input_frame,skymodel)
+    
+    def run_pa(self,input_frame,skymodel):
+        from desispec.quicklook.quicksky import subtract_sky
+        sframe=subtract_sky(input_frame,skymodel)
+        return sframe
+

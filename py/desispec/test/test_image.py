@@ -12,7 +12,7 @@ class TestImage(unittest.TestCase):
         self.pix = np.random.uniform(size=shape)
         self.ivar = np.random.uniform(size=shape)
         self.ivar[0] = 0.0
-        self.mask = np.random.randint(0, 3, size=shape)
+        self.mask = np.random.randint(0, 3, size=shape).astype(np.uint32)
 
     def test_init(self):
         image = Image(self.pix, self.ivar)
@@ -22,14 +22,14 @@ class TestImage(unittest.TestCase):
     def test_mask(self):
         image = Image(self.pix, self.ivar)
         self.assertTrue(np.all(image.mask == (self.ivar==0)*ccdmask.BAD))
-        self.assertEqual(image.mask.dtype, np.uint16)
+        self.assertEqual(image.mask.dtype, np.uint32)
 
         image = Image(self.pix, self.ivar, self.mask)
         self.assertTrue(np.all(image.mask == self.mask))
-        self.assertEqual(image.mask.dtype, np.uint16)
+        self.assertEqual(image.mask.dtype, np.uint32)
 
         image = Image(self.pix, self.ivar, self.mask.astype(np.int16))
-        self.assertEqual(image.mask.dtype, np.uint16)
+        self.assertEqual(image.mask.dtype, np.uint32)
 
     def test_readnoise(self):
         image = Image(self.pix, self.ivar)

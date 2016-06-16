@@ -115,9 +115,9 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     #- Write the data and header
     hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
     if clobber:
-        astropy.io.fits.writeto(filename, hdu.data, hdu.header, clobber=True)
+        astropy.io.fits.writeto(filename, hdu.data, hdu.header, clobber=True, checksum=True)
     else:
-        astropy.io.fits.append(filename, hdu.data, hdu.header)
+        astropy.io.fits.append(filename, hdu.data, hdu.header, checksum=True)
 
     #- Allow comments and units to be None
     if comments is None:

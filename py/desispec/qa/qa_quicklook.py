@@ -12,6 +12,29 @@ from desispec.quicklook import qllogger
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
 
+#- Few utility functions that a corresponding method of a QA class may call
+
+def SN_ratio(flux,ivar):
+    """
+    flux: 2d [nspec,nwave] : the signal (typically for spectra, this comes from frame object
+    ivar: 2d [nspec,nwave] : corresponding inverse variance
+
+    Note: At current QL setting, can't use offline QA for S/N calculation for sky subtraction, as 
+    that requires frame before sky subtration as QA itself does the sky subtration. QL should take frame
+    after sky subtration. 
+    Also a S/N calculation there needs skymodel object (as it is specific to Sky subtraction), that is not needed for S/N calculation itself.
+    """
+
+    #- we calculate median and total S/N assuming no correlation bin by bin
+    medsnr=np.zeros(flux.shape[0])
+    totsnr=np.zeros(flux.shape[0])
+    for ii in range(flux.shape[0]):
+        signalmask=flux[ii,:]>0 #- mask negative values
+        snr=flux[ii,signalmask]*np.sqrt(ivar[ii,signalmask])
+        medsnr[ii]=np.median(snr)
+        totsnr[ii]=np.sqrt(np.sum(snr**2))
+    return medsnr, totsnr
+
 # Evaluate rms of pixel values after dark subtraction
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -231,10 +254,13 @@ class CountSpectralBins(MonitoringAlg):
             url=kwargs["url"]
         else:
             url=None
-       
-        return self.run_qa(input_frame,threshold,camera,expid,url=url)
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig=None
 
-    def run_qa(self,input_frame,thresh,camera,expid,url=None):
+        return self.run_qa(input_frame,threshold,camera,expid,url=url,qafig=qafig)
+
+
+    def run_qa(self,input_frame,thresh,camera,expid,url=None,qafig=None):
         nspec=input_frame.flux.shape[0]
         counts=np.zeros(nspec)
         for ii in range(nspec):
@@ -246,6 +272,7 @@ class CountSpectralBins(MonitoringAlg):
         retval["ARM"]=camera[0]
         retval["SPECTROGRAPH"]=int(camera[1])
         retval["EXPID"]=expid
+        retval["QANAME"]="Count_Bins"
         retval["THRESHOLD"]=thresh
         grid=np.gradient(input_frame.wave)
         if not np.all(grid[0]==grid[1:]): 
@@ -264,8 +291,14 @@ class CountSpectralBins(MonitoringAlg):
                 #- proceed with post
                 response=requests.post(url,json=retval) #- no need of json.dumps as the api has it
             except:
-                log.info("Skipping HTTP post...")            
+                log.info("Skipping HTTP post...")    
 
+        if qafig is not None:
+            from desispec.qa.qa_plots_ql import plot_countspectralbins
+            plot_countspectralbins(retval,qafig)
+            
+            log.info("Output QA fig %s"%qafig)                   
+        
         return retval
 
 
@@ -281,11 +314,7 @@ class Calculate_SNR(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "SkyFile" not in kwargs:
-            raise qlexceptions.ParameterException("Need Skymodel file")
         input_frame=args[0]
-        skyfile=kwargs["SkyFile"]
-        skymodel=read_sky(skyfile)
         camera=kwargs["camera"]
         expid=kwargs["expid"]
         ampboundary=[250,input_frame.wave.shape[0]/2] #- TODO propagate amplifier boundary from kwargs. Dividing into quadrants for now. This may come from config also
@@ -293,57 +322,61 @@ class Calculate_SNR(MonitoringAlg):
              url=kwargs["url"]
         else: 
              url=None
-        return self.run_qa(input_frame,skymodel,ampboundary,camera,expid,url=url)
 
-    def run_qa(self,input_frame,skymodel,ampboundary,camera,expid,url=None):
-        from desispec.sky import qa_skysub
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+
+        return self.run_qa(input_frame,ampboundary,camera,expid,url=url,qafig=qafig)
+
+    def run_qa(self,input_frame,ampboundary,camera,expid,url=None,qafig=None):
 
         #- parameters (adopting from offline qa)
-        sky_dict={'PCHI_RESID': 0.05, 'PER_RESID': 95.0}
-        qadict=qa_skysub(sky_dict,input_frame,skymodel)
+        # sky_dict={'PCHI_RESID': 0.05, 'PER_RESID': 95.0}
+        # qadict=qa_skysub(sky_dict,input_frame,skymodel)
 
         #- return values
         retval={}
         retval["ARM"]=camera[0]
         retval["SPECTROGRAPH"]=int(camera[1])
         retval["EXPID"]=expid
-        
-        if ampboundary is None:
-            retval["VALUE"]={"MED_SNR":qadict['MED_SNR'],"TOT_SNR":qadict['TOT_SNR']}
+        retval["QANAME"]="SNR"
 
-        else:
+        medsnr, totsnr=SN_ratio(input_frame.flux,input_frame.ivar)
+        retval["VALUE"]={"MED_SNR":medsnr,"TOT_SNR":totsnr}
+        
+        if ampboundary is not None:
             
             import desispec.frame as frame
             import desispec.sky as sky
             
-            top_left_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[:ampboundary[0],ampboundary[1]:],input_frame.ivar[:ampboundary[0],ampboundary[1]:],fibermap=input_frame.fibermap)
-            top_left_skymodel=sky.SkyModel(skymodel.wave[ampboundary[1]:],skymodel.flux[:ampboundary[0],ampboundary[1]:],skymodel.ivar[:ampboundary[0],ampboundary[1]:],skymodel.mask[:ampboundary[0],ampboundary[1]:])
-            qadict_01=qa_skysub(sky_dict,top_left_frame,top_left_skymodel)
-            average01=np.mean(qadict_01['MED_SNR'])
-            tot01=np.sum(qadict_01['TOT_SNR'])
+            top_left_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[:ampboundary[0],ampboundary[1]:], input_frame.ivar[:ampboundary[0], ampboundary[1]:],fibermap=input_frame.fibermap)
+           
+            medsnr01,totsnr01=SN_ratio(top_left_frame.flux,top_left_frame.ivar)
+            average01=np.mean(medsnr01)
+            tot01=np.mean(totsnr01)
 
-            bottom_left_frame=frame.Frame(input_frame.wave[:ampboundary[1]],input_frame.flux[:ampboundary[0],:ampboundary[1]],input_frame.ivar[:ampboundary[0],:ampboundary[1]],fibermap=input_frame.fibermap)
-            bottom_left_skymodel=sky.SkyModel(skymodel.wave[:ampboundary[1]],skymodel.flux[:ampboundary[0],:ampboundary[1]],skymodel.ivar[:ampboundary[0],:ampboundary[1]],skymodel.mask[:ampboundary[0],:ampboundary[1]])
-            qadict_00=qa_skysub(sky_dict,bottom_left_frame,bottom_left_skymodel)
-            average00=np.mean(qadict_00['MED_SNR'])
-            tot00=np.sum(qadict_00['TOT_SNR'])
+            bottom_left_frame=frame.Frame(input_frame.wave[:ampboundary[1]],input_frame.flux[:ampboundary[0],:ampboundary[1]], input_frame.ivar[:ampboundary[0],:ampboundary[1]],fibermap=input_frame.fibermap)
+
+            medsnr00,totsnr00=SN_ratio(bottom_left_frame.flux,bottom_left_frame.ivar)
+            average00=np.mean(medsnr00)
+            tot00=np.mean(totsnr00)
             if ampboundary[0] > 250:
 
-                bottom_right_frame=frame.Frame(input_frame.wave[:ampboundary[1]],input_frame.flux[ampboundary[0]:,:ampboundary[1]],input_frame.ivar[ampboundary[0]:,:ampboundary[1]],fibermap=input_frame.fibermap)
-                bottom_right_skymodel=sky.SkyModel(skymodel.wave[:ampboundary[1]],skymodel.flux[ampboundary[0]:,:ampboundary[1]],skymodel.ivar[ampboundary[0]:,:ampboundary[1]],skymodel.mask[ampboundary[0]:,:ampboundary[1]])
-                qadict_10=qa_skysub(sky_dict,bottom_right_frame,bottom_right_skymodel)
-                average10=np.mean(qadict_10['MED_SNR'])
-                tot10=np.sum(qadict_10['TOT_SNR'])
+                bottom_right_frame=frame.Frame(input_frame.wave[:ampboundar[1]],input_frame.flux[ampboundary[0]:,:ampboundary[1]], input_frame.ivar[ampboundary[0]:,:ampboundary[1]],fibermap=input_frame.fibermap)
+                
+                medsnr10,totsnr10=SN_ratio(bottom_right_frame.flux,bottom_right_frame.ivar)
+                average10=np.mean(medsnr10)
+                tot10=np.mean(totsnr10)
             else:
                 average10=0.
                 tot10=0.
             if ampboundary[0]> 250: #- only if nspec> 250 for the right quadrants
 
-                top_right_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[ampboundary[0]:,ampboundary[1]:],input_frame.ivar[ampboundary[0]:,ampboundary[1]:],fibermap=input_frame.fibermap)
-                top_right_skymodel=sky.SkyModel(skymodel.wave[ampboundary[1]:],skymodel.flux[ampboundary[0]:,ampboundary[1]:],skymodel.ivar[ampboundary[0]:,ampboundary[1]:],skymodel.mask[ampboundary[0]:,ampboundary[1]:])
-                qadict_11=qa_skysub(sky_dict,top_right_frame,top_right_skymodel)
-                average11=np.mean(qadict_11['MED_SNR'])
-                tot11=np.sum(qadict_11['TOT_SNR'])
+                top_right_frame=frame.Frame(input_frame.wave[ampboundary[1]:],input_frame.flux[ampboundary[0]:,ampboundary[1]:], input_frame.ivar[ampboundary[0]:,ampboundary[1]:],fibermap=input_frame.fibermap)
+                
+                medsnr11,totsnr11=SN_ratio(top_right_frame.flux,top_right_frame.ivar)
+                average11=np.mean(medsnr11)
+                tot11=np.mean(totsnr11)
             else:
                 average11=0.
                 tot11=0.
@@ -351,7 +384,7 @@ class Calculate_SNR(MonitoringAlg):
             average_amp=np.array([average01,average00,average10,average11])
             tot_amp=np.array([tot01,tot00,tot10,tot11])
 
-            retval["VALUE"]={"MED_SNR":qadict["MED_SNR"],"TOT_SNR":qadict["TOT_SNR"],"TOT_AMP_SNR":tot_amp,"MED_AMP_SNR":average_amp}
+            retval["VALUE"]={"MED_SNR":medsnr,"TOT_SNR":totsnr,"TOT_AMP_SNR":tot_amp,"MED_AMP_SNR":average_amp}
 
         #- http post if valid
         if url is not None:
@@ -366,6 +399,12 @@ class Calculate_SNR(MonitoringAlg):
              
                 log.info("Skipping HTTP post...")
             
+
+        if qafig is not None:
+            from desispec.qa.qa_plots_ql import plot_SNR
+            plot_SNR(retval,qafig)         
+            log.info("Output QA fig %s"%qafig)
+
         return retval
 
     def get_default_config(self):

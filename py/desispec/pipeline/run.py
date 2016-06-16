@@ -26,6 +26,7 @@ import yaml
 
 import desispec
 
+import desispec.log
 from desispec.log import get_logger
 from .plan import *
 from .utils import option_list
@@ -145,6 +146,8 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     if step not in step_file_types.keys():
         raise ValueError("step type {} not recognized".format(step))
 
+    log = get_logger()
+
     # Verify that there is only a single node in the graph
     # of the desired step.  The graph should already have
     # been sliced before calling this task.
@@ -193,10 +196,16 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
-        #options['qafile'] = qapath
+        options['qafile'] = qapath
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_bootcalib']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
         args = bootcalib.parse(optarray)
 
         sys.stdout.flush()
@@ -229,7 +238,25 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         outfile = graph_path_psf(proddir, name)
         outdir = os.path.dirname(outfile)
 
-        specex.run_frame(imgfile, bootfile, outfile, opts, comm=comm)
+        options = {}
+        options['input'] = imgfile
+        options['bootfile'] = bootfile
+        options['output'] = outfile
+        if log.getEffectiveLevel() == desispec.log.DEBUG:
+            options['verbose'] = True
+        if len(opts) > 0:
+            extarray = option_list(opts)
+            options['extra'] = " ".join(extarray)
+
+        optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_psf']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
+        args = specex.parse(optarray)
+        specex.main(args, comm=comm)
 
     elif step == 'psfcombine':
 
@@ -292,6 +319,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options.update(optscopy)
         optarray = option_list(options)
 
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_extract_spectra']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
         args = extract.parse(optarray)
         extract.main_mpi(args, comm=comm)
     
@@ -303,12 +335,23 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         outfile = graph_path_fiberflat(proddir, name)
         qafile = qa_path(outfile)
 
+        # FIXME:  this is a hack, since fiberflat should get this from
+        # the bundled fibermap HDU.
+        night = name[:8]
+        fmfile = graph_path_fibermap(rawdir, "{}_fibermap-{:08d}".format(night, node['id']))
+
         options = {}
         options['infile'] = framefile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
+        options['fibermap'] = fmfile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_fiberflat']
+        com.extend(optarray)
+        log.debug(" ".join(com))
 
         args = fiberflat.parse(optarray)
 
@@ -338,10 +381,15 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_sky']
+        com.extend(optarray)
+        log.debug(" ".join(com))
 
         args = skypkg.parse(optarray)
 
@@ -395,6 +443,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options.update(opts)
         optarray = option_list(options)
 
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_fit_stdstars']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
         args = stdstars.parse(optarray)
 
         if rank == 0:
@@ -435,12 +488,17 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
+        options['qafile'] = qafile
         options['sky'] = skyfile
         options['models'] = starfile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_fluxcalibration']
+        com.extend(optarray)
+        log.debug(" ".join(com))
 
         args = fluxcal.parse(optarray)
 
@@ -477,17 +535,20 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         skyfile = graph_path_sky(proddir, sky[0])
         calfile = graph_path_calib(proddir, cal[0])
         outfile = graph_path_cframe(proddir, name)
-        qafile = qa_path(outfile)
 
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
-        #options['qafile'] = qafile
         options['sky'] = skyfile
         options['calib'] = calfile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_process_exposure']
+        com.extend(optarray)
+        log.debug(" ".join(com))
 
         args = procexp.parse(optarray)
 
@@ -503,6 +564,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_zfind']
+        com.extend(optarray)
+        log.debug(" ".join(com))
 
         args = zfind.parse(optarray)
         if rank == 0:
@@ -583,9 +649,6 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             comm_group = None
             comm_rank = comm
 
-    #print("proc {}, group {}, group_rank {}, ngroup {}".format(rank, group, group_rank, ngroup))
-    #sys.stdout.flush()
-
     # Now we divide up the tasks among the groups of processes as
     # equally as possible.
 
@@ -612,10 +675,6 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     # every group goes and does its tasks...
 
     faildir = os.path.join(proddir, 'run', 'failed')
-
-    # if group_rank == 0:
-    #     print("group {}: tasks {}..{}".format(group, group_firsttask, group_firsttask+group_ntask-1))
-    #     sys.stdout.flush()
 
     if group_ntask > 0:
         for t in range(group_firsttask, group_firsttask + group_ntask):
@@ -654,6 +713,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 log.error(msg)
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                print(''.join(lines))
                 fyml = {}
                 fyml['step'] = step
                 fyml['rawdir'] = rawdir
@@ -663,6 +723,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                 fyml['opts'] = options
                 fyml['procs'] = taskproc
                 if not os.path.isfile(ffile):
+                    log.error('Dumping traceback to '+tfile)
+                    log.error('Dumping yaml graph to '+ffile)
                     # we are the first process to hit this
                     with open(ffile, 'w') as f:
                         yaml.dump(fyml, f, default_flow_style=False)
@@ -751,14 +813,22 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
 
     # get the full graph
 
-    grph = graph_read_prod(proddir, nightstr=nightstr, spectrographs=spectrographs)
-    prod_state(rawdir, proddir, grph)
+    grph = None
+    if rank == 0:
+        grph = graph_read_prod(proddir, nightstr=nightstr, spectrographs=spectrographs)
+        prod_state(rawdir, proddir, grph)
+    if comm is not None:
+        grph = comm.bcast(grph, root=0)
 
     # read run options from disk
 
     rundir = os.path.join(proddir, "run")
     optfile = os.path.join(rundir, "options.yaml")
-    opts = read_options(optfile)
+    opts = None
+    if rank == 0:
+        opts = read_options(optfile)
+    if comm is not None:
+        opts = comm.bcast(opts, root=0)
 
     # compute the ordered list of steps to run
 
@@ -821,7 +891,11 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     for st in range(firststep, laststep):
         for name, nd in grph.items():
             if nd['type'] == run_step_types[st]:
-                graph_mark(grph, name, 'wait')
+                if 'state' in nd.keys():
+                    if nd['state'] != 'done':
+                        graph_mark(grph, name, 'wait')
+                else:
+                    graph_mark(grph, name, 'wait')
 
     if rank == 0:
         graph_write(statefile, grph)
@@ -904,7 +978,8 @@ def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=
             run = "{} {}".format(comrun, mpiprocs)
         for com in commands:
             executable = com.split(' ')[0]
-            f.write("which {}\n".format(executable))
+            # f.write("which {}\n".format(executable))
+            f.write("echo logging to ${log}\n")
             f.write("time {} {} >>${{log}} 2>&1\n\n".format(run, com))
     mode = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
     os.chmod(path, mode)

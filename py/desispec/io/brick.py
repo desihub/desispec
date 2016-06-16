@@ -19,6 +19,7 @@ import warnings
 import numpy as np
 import astropy.io.fits
 
+from desiutil.depend import add_dependencies
 import desispec.io.util
 
 #- For backwards compatibility, derive brickname from filename
@@ -74,6 +75,7 @@ class BrickBase(object):
                 os.makedirs(head)
             # Create empty HDUs. It would be good to refactor io.frame to avoid any duplication here.
             hdr = desispec.io.util.fitsheader(header)
+            add_dependencies(hdr)
             hdr['EXTNAME'] = ('FLUX', 'no dimension')
             hdu0 = astropy.io.fits.PrimaryHDU(header = hdr)
             hdr['EXTNAME'] = ('IVAR', 'no dimension')

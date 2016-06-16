@@ -9,6 +9,8 @@ import warnings
 import numpy as np
 from astropy.io import fits
 
+from desiutil.depend import add_dependencies
+
 from desispec.io.util import fitsheader, write_bintable, makepath
 
 fibermap_columns = [
@@ -85,6 +87,8 @@ def write_fibermap(outfile, fibermap, header=None):
     #- Temporarily turn off warnings to avoid this; desispec.test.test_io will
     #- catch it if the arrays actually are written incorrectly.
     hdr = fitsheader(header)
+    add_dependencies(hdr)
+    
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,

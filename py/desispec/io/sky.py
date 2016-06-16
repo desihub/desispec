@@ -7,6 +7,8 @@ IO routines for sky.
 import os
 from astropy.io import fits
 
+from desiutil.depend import add_dependencies
+
 from desispec.sky import SkyModel
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
@@ -31,20 +33,18 @@ def write_sky(outfile, skymodel, header=None):
     else:
         hdr = fitsheader(skymodel.header)
 
+    add_dependencies(hdr)
+
+    hx = fits.HDUList()
+
     hdr['EXTNAME'] = ('SKY', 'no dimension')
-    fits.writeto(outfile, skymodel.flux,header=hdr, clobber=True)
+    hx.append( fits.PrimaryHDU(skymodel.flux.astype('f4'), header=hdr) )
+    hx.append( fits.ImageHDU(skymodel.ivar.astype('f4'), name='IVAR') )
+    hx.append( fits.CompImageHDU(skymodel.mask, name='MASK') )
+    hx.append( fits.ImageHDU(skymodel.wave.astype('f4'), name='WAVELENGTH') )
 
-    hdr['EXTNAME'] = ('IVAR', 'no dimension')
-    hdu = fits.ImageHDU(skymodel.ivar, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('MASK', 'no dimension')
-    hdu = fits.ImageHDU(skymodel.mask, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
-
-    hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
-    hdu = fits.ImageHDU(skymodel.wave, header=hdr)
-    fits.append(outfile, hdu.data, header=hdu.header)
+    hx.writeto(outfile+'.tmp', clobber=True, checksum=True)
+    os.rename(outfile+'.tmp', outfile)
 
     return outfile
 
@@ -59,11 +59,14 @@ def read_sky(filename) :
         night, expid, camera = filename
         filename = findfile('sky', night, expid, camera)
 
-    hdr = fits.getheader(filename, 0)
-    wave = native_endian(fits.getdata(filename, "WAVELENGTH"))
-    skyflux = native_endian(fits.getdata(filename, "SKY"))
-    ivar = native_endian(fits.getdata(filename, "IVAR"))
-    mask = native_endian(fits.getdata(filename, "MASK", uint=True))
+    fx = fits.open(filename, memmap=False, uint=True)
+
+    hdr = fx[0].header
+    wave = native_endian(fx["WAVELENGTH"].data.astype('f8'))
+    skyflux = native_endian(fx["SKY"].data.astype('f8'))
+    ivar = native_endian(fx["IVAR"].data.astype('f8'))
+    mask = native_endian(fx["MASK"].data)
+    fx.close()
 
     skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr)
 

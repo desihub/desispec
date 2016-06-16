@@ -16,7 +16,29 @@ class TestNight(unittest.TestCase):
         self.assertRaises(ValueError, util.night2ymd, '20150100')
         self.assertRaises(ValueError, util.night2ymd, '20150132')
         self.assertRaises(ValueError, util.night2ymd, '20151302')
+
+    def test_mask32(self):
+        for dtype in (
+            int, 'int64', 'uint64', 'i8', 'u8',
+            'int32', 'uint32', 'i4', 'u4',
+            'int16', 'uint16', 'i2', 'u2',
+            'int8', 'uint8', 'i1', 'u1',
+            ):
+            x = np.ones(10, dtype=np.dtype(dtype))
+            m32 = util.mask32(x)                
+            self.assertTrue(np.all(m32 == 1))
+            
+        x = util.mask32( np.array([-1,0,1], dtype='i4') )
+        self.assertEqual(x[0], 2**32-1)
+        self.assertEqual(x[1], 0)
+        self.assertEqual(x[2], 1)
         
+        with self.assertRaises(ValueError):
+            util.mask32(np.arange(2**35, 2**35+5))
+
+        with self.assertRaises(ValueError):
+            util.mask32(np.arange(-2**35, -2**35+5))
+
     def test_combine_ivar(self):
         #- input inverse variances with some zeros (1D)
         ivar1 = np.random.uniform(-1, 10, size=200).clip(0)

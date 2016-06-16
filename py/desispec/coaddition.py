@@ -16,6 +16,7 @@ import scipy.linalg
 import scipy.sparse.linalg
 
 import desispec.resolution
+from desispec import util
 
 from desispec.log import get_logger
 
@@ -44,6 +45,10 @@ class Spectrum(object):
         self.flux = flux
         self.ivar = ivar
         self.mask = mask
+        # if mask is None:
+        #     self.mask = np.zeros(self.flux.shape, dtype=np.uint32)
+        # else:
+        #     self.mask = util.mask32(mask)
         self.resolution = resolution
         self.R = resolution #- shorthand
         self.log = get_logger()
@@ -103,7 +108,7 @@ class Spectrum(object):
         """
         # Create self.mask if needed to merge with other.mask
         if self.mask is None and other.mask is not None:
-            self.mask = np.zeros(len(self.wave), dtype=int)
+            self.mask = np.zeros(len(self.wave), dtype=np.uint32)
         
         # Accumulate weighted deconvolved fluxes.
         if np.array_equal(self.wave,other.wave):

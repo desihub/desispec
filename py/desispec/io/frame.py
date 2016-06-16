@@ -10,6 +10,8 @@ import numpy as np
 import scipy,scipy.sparse
 from astropy.io import fits
 
+from desiutil.depend import add_dependencies
+
 from desispec.frame import Frame
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
@@ -40,25 +42,31 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     if header is not None:
         hdr = fitsheader(header)
     else:
-        #hdr = fitsheader(frame.header)
         hdr = fitsheader(frame.meta)
+        
+    add_dependencies(hdr)
 
     hdus = fits.HDUList()
-    x = fits.PrimaryHDU(frame.flux, header=hdr)
+    x = fits.PrimaryHDU(frame.flux.astype('f4'), header=hdr)
     x.header['EXTNAME'] = 'FLUX'
     hdus.append(x)
 
-    hdus.append( fits.ImageHDU(frame.ivar, name='IVAR') )
-    hdus.append( fits.ImageHDU(frame.mask, name='MASK') )
-    hdus.append( fits.ImageHDU(frame.wave, name='WAVELENGTH') )
-    hdus.append( fits.ImageHDU(frame.resolution_data, name='RESOLUTION' ) )
+    hdus.append( fits.ImageHDU(frame.ivar.astype('f4'), name='IVAR') )
+    hdus.append( fits.CompImageHDU(frame.mask, name='MASK') )
+    hdus.append( fits.ImageHDU(frame.wave.astype('f4'), name='WAVELENGTH') )
+    hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     
     if fibermap is not None:
         hdus.append( fits.BinTableHDU(np.asarray(fibermap), name='FIBERMAP' ) )
     elif frame.fibermap is not None:
         hdus.append( fits.BinTableHDU(np.asarray(frame.fibermap), name='FIBERMAP' ) )
-    
-    hdus.writeto(outfile, clobber=True)
+    elif frame.spectrograph is not None:
+        x.header['FIBERMIN'] = 500*frame.spectrograph  # Hard-coded (as in desispec.frame)
+    else:
+        log.error("You are likely writing a frame without sufficient fiber info")
+
+    hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
+    os.rename(outfile+'.tmp', outfile)
 
     return outfile
 
@@ -84,15 +92,15 @@ def read_frame(filename, nspec=None):
 
     fx = fits.open(filename, uint=True, memmap=False)
     hdr = fx[0].header
-    flux = native_endian(fx['FLUX'].data)
-    ivar = native_endian(fx['IVAR'].data)
-    wave = native_endian(fx['WAVELENGTH'].data)
+    flux = native_endian(fx['FLUX'].data.astype('f8'))
+    ivar = native_endian(fx['IVAR'].data.astype('f8'))
+    wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
     if 'MASK' in fx:
         mask = native_endian(fx['MASK'].data)
     else:
         mask = None   #- let the Frame object create the default mask
         
-    resolution_data = native_endian(fx['RESOLUTION'].data)
+    resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
     
     if 'FIBERMAP' in fx:
         fibermap = fx['FIBERMAP'].data

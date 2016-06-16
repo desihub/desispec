@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import unittest
+import os
 import os.path
 from astropy.io import fits
 import numpy as np

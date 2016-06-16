@@ -37,7 +37,7 @@ def testconfig(outfilename="qlconfig.yaml"):
           #'PSFFile_sp':os.environ['PSFFILE_sp'], # .../desimodel/data/specpsf/psf-r.fits (for running 2d extraction)
           'basePath':os.environ['DESIMODEL'],
           'OutputFile':'lastframe_QL-r0-00000004.fits', # output file from last pipeline step. Need to output intermediate steps? Most likely after boxcar extraction?
-          'PipeLine':[{'PA':{"ModuleName":"desispec.procalgs",
+          'PipeLine':[{'PA':{"ModuleName":"desispec.quicklook.procalgs",
                              "ClassName":"BiasSubtraction",
                              "Name":"Bias Subtraction",
                              "kwargs":{"BiasImage":"%%BiasImage"}
@@ -56,7 +56,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                        "StepName":"Preprocessing-Bias Subtraction",
                        "OutputFile":"QA_biassubtraction.yaml"
                        },
-                      {'PA':{"ModuleName":"desispec.procalgs",
+                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
                              "ClassName":"DarkSubtraction",
                              "Name":"Dark Subtraction",
                              "kwargs":{"DarkImage":"%%DarkImage"}
@@ -75,7 +75,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                        "StepName":"Preprocessing-Dark Subtraction",
                        "OutputFile":"QA_darksubtraction.yaml"
                        },
-                      {'PA':{"ModuleName":"desispec.procalgs",
+                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
                              "ClassName":"PixelFlattening",
                              "Name":"Pixel Flattening",
                              "kwargs":{"PixelFlat":"%%PixelFlat"}
@@ -94,7 +94,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                        "StepName":"Preprocessing-Pixel Flattening",
                        "OutputFile":"QA_pixelflattening.yaml"
                        },
-                      #{'PA':{"ModuleName":"desispec.procalgs",
+                      #{'PA':{"ModuleName":"desispec.quicklook.procalgs",
                       #       "ClassName":"BoxcarExtraction",
                       #       "Name":"Boxcar Extraction",
                       #       "kwargs":{"PSFFile":"%%PSFFile",
@@ -107,7 +107,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                       # "StepName":"Boxcar Extration",
                       # "OutputFile":"QA_boxcarextraction.yaml"
                       # },
-                      {'PA':{"ModuleName":"desispec.procalgs",
+                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
                              "ClassName":"Extraction_2d",
                              "Name":"2D Extraction",
                              "kwargs":{"PSFFile_sp":"/home/govinda/Desi/desimodel/data/specpsf/psf-r.fits",
@@ -129,7 +129,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                        "StepName":"2D Extraction",
                        "OutputFile":"qa-extract-r0-00000002.yaml"
                        },
-                      {'PA':{"ModuleName":"desispec.procalgs",
+                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
                              "ClassName": "ApplyFiberFlat",
                              "Name": "Apply Fiberflat",
                              "kwargs":{"FiberFlatFile":"%%FiberFlatFile"
@@ -139,7 +139,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                        "StepName":"Apply Fiberflat",
                        "Outputfile":"apply_fiberflat_QA.yaml"
                       },
-                      {'PA':{"ModuleName":"desispec.procalgs",
+                      {'PA':{"ModuleName":"desispec.quicklook.procalgs",
                              "ClassName":"SubtractSky",
                              "Name": "Sky Subtraction",
                              "kwargs":{"SkyFile":"%%SkyFile"
@@ -280,7 +280,7 @@ def setup_pipeline(config):
     import desispec.image as im
     import desispec.io.frame as frIO
     import desispec.frame as dframe
-    import desispec.procalgs as procalgs
+    from desispec.quicklook import procalgs
     from desispec.boxcar import do_boxcar
 
     qlog=qllogger.QLLogger("QuickLook",20)
@@ -419,7 +419,6 @@ def setup_pipeline(config):
         qas=[]
         for q in step["QAs"]:
             qa=getobject(q,log)
-            print qa
             if not qa.is_compatible(pa.get_output_type()):
                 log.warning("QA %s can not be used for output of %s. Skipping expecting %s got %s %s"%(qa.name,pa.name,qa.__inpType__,pa.get_output_type(),qa.is_compatible(pa.get_output_type())))
             else:

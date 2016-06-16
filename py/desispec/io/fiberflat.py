@@ -7,6 +7,8 @@ IO routines for fiberflat.
 import os
 from astropy.io import fits
 
+from desiutil.depend import add_dependencies
+
 from desispec.fiberflat import FiberFlat
 from desispec.io import findfile
 from desispec.io.util import fitsheader, native_endian, makepath
@@ -29,16 +31,19 @@ def write_fiberflat(outfile,fiberflat,header=None):
     else:
         hdr = fitsheader(header)
 
+    add_dependencies(hdr)
+
     ff = fiberflat   #- shorthand
     
     hdus = fits.HDUList()
-    hdus.append(fits.PrimaryHDU(ff.fiberflat, header=hdr))
-    hdus.append(fits.ImageHDU(ff.ivar,     name='IVAR'))
-    hdus.append(fits.ImageHDU(ff.mask,     name='MASK'))
-    hdus.append(fits.ImageHDU(ff.meanspec, name='MEANSPEC'))
-    hdus.append(fits.ImageHDU(ff.wave,     name='WAVELENGTH'))
+    hdus.append(fits.PrimaryHDU(ff.fiberflat.astype('f4'), header=hdr))
+    hdus.append(fits.ImageHDU(ff.ivar.astype('f4'),     name='IVAR'))
+    hdus.append(fits.CompImageHDU(ff.mask,              name='MASK'))
+    hdus.append(fits.ImageHDU(ff.meanspec.astype('f4'), name='MEANSPEC'))
+    hdus.append(fits.ImageHDU(ff.wave.astype('f4'),     name='WAVELENGTH'))
     
-    hdus.writeto(outfile, clobber=True)
+    hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
+    os.rename(outfile+'.tmp', outfile)
     return outfile
 
 
@@ -63,9 +68,9 @@ def read_fiberflat(filename):
 
     header    = fits.getheader(filename, 0)
     fiberflat = native_endian(fits.getdata(filename, 0))
-    ivar      = native_endian(fits.getdata(filename, "IVAR"))
+    ivar      = native_endian(fits.getdata(filename, "IVAR").astype('f8'))
     mask      = native_endian(fits.getdata(filename, "MASK", uint=True))
-    meanspec  = native_endian(fits.getdata(filename, "MEANSPEC"))
-    wave      = native_endian(fits.getdata(filename, "WAVELENGTH"))
+    meanspec  = native_endian(fits.getdata(filename, "MEANSPEC").astype('f8'))
+    wave      = native_endian(fits.getdata(filename, "WAVELENGTH").astype('f8'))
 
     return FiberFlat(wave, fiberflat, ivar, mask, meanspec, header=header)

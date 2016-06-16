@@ -5,8 +5,11 @@ desispec.io.zfind
 IO routines for zfind.
 """
 
+import os
+
 import numpy as np
 from astropy.io import fits
+from desiutil.depend import add_dependencies
 from desispec.zfind import ZfindBase
 from desispec.log import get_logger
 
@@ -48,26 +51,30 @@ def write_zbest(filename, brickname, targetids, zfind, zspec=False):
     data['SUBTYPE']   = zfind.subtype
 
     hdus = fits.HDUList()
+    phdr = fits.Header()
+    add_dependencies(phdr)
+    hdus.append(fits.PrimaryHDU(None, header=phdr))
     hdus.append(fits.BinTableHDU(data, name='ZBEST', uint=True))
 
     if zspec:
-        hdus.append(fits.ImageHDU(zfind.wave, name='WAVELENGTH'))
-        hdus.append(fits.ImageHDU(zfind.flux, name='FLUX'))
-        hdus.append(fits.ImageHDU(zfind.ivar, name='IVAR'))
-        hdus.append(fits.ImageHDU(zfind.model, name='MODEL'))
+        hdus.append(fits.ImageHDU(zfind.wave.astype('f4'), name='WAVELENGTH'))
+        hdus.append(fits.ImageHDU(zfind.flux.astype('f4'), name='FLUX'))
+        hdus.append(fits.ImageHDU(zfind.ivar.astype('f4'), name='IVAR'))
+        hdus.append(fits.ImageHDU(zfind.model.astype('f4'), name='MODEL'))
 
-    hdus.writeto(filename, clobber=True)
+    hdus.writeto(filename+'.tmp', clobber=True, checksum=True)
+    os.rename(filename+'.tmp', filename)
 
 
 def read_zbest(filename):
     """Returns a desispec.zfind.ZfindBase object with contents from filename.
     """
-    fx = fits.open(filename)
+    fx = fits.open(filename, memmap=False)
     zbest = fx['ZBEST'].data
     if 'WAVELENGTH' in fx:
-        wave = fx['WAVELENGTH'].data
-        flux = fx['FLUX'].data
-        ivar = fx['IVAR'].data
+        wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
+        flux = native_endian(fx['FLUX'].data.astype('f8'))
+        ivar = native_endian(fx['IVAR'].data.astype('f8'))
         model = fx['MODEL'].data
 
         zf = ZfindBase(wave, flux, ivar, results=zbest)
