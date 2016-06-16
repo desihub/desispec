@@ -26,6 +26,7 @@ import yaml
 
 import desispec
 
+import desispec.log
 from desispec.log import get_logger
 from .plan import *
 from .utils import option_list
@@ -237,7 +238,25 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         outfile = graph_path_psf(proddir, name)
         outdir = os.path.dirname(outfile)
 
-        specex.run_frame(imgfile, bootfile, outfile, opts, comm=comm)
+        options = {}
+        options['input'] = imgfile
+        options['bootfile'] = bootfile
+        options['output'] = outfile
+        if log.getEffectiveLevel() == desispec.log.DEBUG:
+            options['verbose'] = True
+        if len(opts) > 0:
+            extarray = option_list(opts)
+            options['extra'] = " ".join(extarray)
+
+        optarray = option_list(options)
+
+        # at debug level, write out the equivalent commandline
+        com = ['RUN', 'desi_compute_psf']
+        com.extend(optarray)
+        log.debug(" ".join(com))
+
+        args = specex.parse(optarray)
+        specex.main(args, comm=comm)
 
     elif step == 'psfcombine':
 
@@ -630,9 +649,6 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             comm_group = None
             comm_rank = comm
 
-    #print("proc {}, group {}, group_rank {}, ngroup {}".format(rank, group, group_rank, ngroup))
-    #sys.stdout.flush()
-
     # Now we divide up the tasks among the groups of processes as
     # equally as possible.
 
@@ -659,10 +675,6 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     # every group goes and does its tasks...
 
     faildir = os.path.join(proddir, 'run', 'failed')
-
-    # if group_rank == 0:
-    #     print("group {}: tasks {}..{}".format(group, group_firsttask, group_firsttask+group_ntask-1))
-    #     sys.stdout.flush()
 
     if group_ntask > 0:
         for t in range(group_firsttask, group_firsttask + group_ntask):

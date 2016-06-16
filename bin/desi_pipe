@@ -103,6 +103,8 @@ def main():
 
     parser.add_argument('--spectrographs', required=False, default=None, help='process only this comma-separated list of spectrographs')
 
+    parser.add_argument('--debug', required=False, default=False, action="store_true", help='in setup script, set log level to DEBUG')
+
     args = parser.parse_args()
 
     if args.prod is None:
@@ -177,6 +179,8 @@ def main():
         s.write("export DESI_SPECTRO_REDUX={}\n".format(specdir))
         s.write("export PRODNAME={}\n".format(prodname))
         s.write("\n")
+        if args.debug:
+            s.write("export DESI_LOGLEVEL=\"DEBUG\"\n\n")
 
     # load those same things into the environment.
 
