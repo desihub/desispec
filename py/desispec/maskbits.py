@@ -72,6 +72,15 @@ specmask:
 
 #-------------------------------------------------------------------------
 #- The actual masks
-specmask = BitMask('specmask', _bitdefs)
-ccdmask = BitMask('ccdmask', _bitdefs)
-fibermask = BitMask('fibermask', _bitdefs)
+try:
+    specmask = BitMask('specmask', _bitdefs)
+    ccdmask = BitMask('ccdmask', _bitdefs)
+    fibermask = BitMask('fibermask', _bitdefs)
+except TypeError:
+    #
+    # This is needed to allow documentation to build even if desiutil is not
+    # installed.
+    #
+    specmask = object()
+    ccdmask = object()
+    fibermask = object()
