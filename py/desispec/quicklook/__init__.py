@@ -1,6 +1,6 @@
 """
-QuickLook
-==========
+desispec.quicklook
+==================
 """
 
 #from . import rawimage
