@@ -6,18 +6,29 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 def plot_countspectralbins(qa_dict,outfile):
-    """
-    qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
-    qa_dict example: 
-                   {'EXPID': '00000002', 'SPECTROGRAPH': 0, 'THRESHOLD': 100, 'ARM': 'r', 'VALUE': {'CNTS_ABOVE_THRESH': array([ 4171.,  3492.,  3637.,  3524.,  3554.,  3595.,  3513.,  3612., 3497.,  3496.])}, 'WAVE_GRID': 0.5}
-    
-    While reading from yaml output file, qa_dict is the value to the first top level key, which is the name of that QA  
+    """Plot count spectral bins.
+
+    While reading from yaml output file, qa_dict is the value to the first top level key, which is the name of that QA
+
+    `qa_dict` example::
+
+        {'EXPID': '00000002',
+        'SPECTROGRAPH': 0,
+        'THRESHOLD': 100, 'ARM': 'r',
+        'VALUE': {
+            'CNTS_ABOVE_THRESH': array([ 4171.,  3492.,  3637.,  3524.,  3554.,  3595.,  3513.,  3612., 3497.,  3496.])
+        },
+        'WAVE_GRID': 0.5}
+
+    Args:
+        qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
+        outfile: Name of figure.
     """
     counts=qa_dict["VALUE"]["CNTS_ABOVE_THRESH"]
     fiberindex=np.arange(counts.shape[0])
     arm=qa_dict["ARM"]
     spectrograph=qa_dict["SPECTROGRAPH"]
-    expid=qa_dict["EXPID"]    
+    expid=qa_dict["EXPID"]
 
     fig,ax=plt.subplots()
     plt.suptitle("Counts above threshold after Extraction, Camera: %s%s, ExpID: %s"%(arm,spectrograph,expid))
@@ -34,20 +45,25 @@ def plot_countspectralbins(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_SNR(qa_dict,outfile):
-    """
-    qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
-    qa_dict example:
-    {'ARM': 'r',
-  'EXPID': '00000002',
-  'SPECTROGRAPH': 0,
-  'VALUE': {'MED_AMP_SNR': array([ 4.06939214,  3.38182425,  0.        ,  0.        ]),
-   'MED_SNR': array([ 17.11461103,   2.20929805,   2.7827068 ,   2.5686027 ,
-            2.21004108,   2.71689086,   2.8345871 ,   2.93099466,
-            2.17110525,   2.41165487]),
-   'TOT_AMP_SNR': array([ 1116.43412277,   842.90823424,     0.        ,     0.        ]),
-   'TOT_SNR': array([ 742.38974703,   99.72438062,  111.37616747,   99.19502236,
-            93.49246903,  114.45615701,  104.71081645,  101.26104959,
-            66.90231848,   68.12932419])}}    
+    """Plot SNR
+
+    `qa_dict` example::
+
+        {'ARM': 'r',
+         'EXPID': '00000002',
+         'SPECTROGRAPH': 0,
+         'VALUE': {'MED_AMP_SNR': array([ 4.06939214,  3.38182425,  0.        ,  0.        ]),
+         'MED_SNR': array([ 17.11461103,   2.20929805,   2.7827068 ,   2.5686027 ,
+                2.21004108,   2.71689086,   2.8345871 ,   2.93099466,
+                2.17110525,   2.41165487]),
+         'TOT_AMP_SNR': array([ 1116.43412277,   842.90823424,     0.        ,     0.        ]),
+         'TOT_SNR': array([ 742.38974703,   99.72438062,  111.37616747,   99.19502236,
+                93.49246903,  114.45615701,  104.71081645,  101.26104959,
+                66.90231848,   68.12932419])}}
+
+    Args:
+        qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
+        outfile: Name of figure.
     """
 
     med_snr=qa_dict["VALUE"]["MED_SNR"]
@@ -61,7 +77,7 @@ def plot_SNR(qa_dict,outfile):
 
     fig=plt.figure()
     plt.suptitle("Signal/Noise after Sky subtraction, Camera: %s%s, ExpID: %s"%(arm,spectrograph,expid))
-    
+
 
     ax1=fig.add_subplot(221)
     hist_med=ax1.bar(index,med_snr)
@@ -94,7 +110,7 @@ def plot_SNR(qa_dict,outfile):
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    
+
     ax3.annotate("Amp 4\n%.3f"%med_amp_snr[3],
                  xy=(1.4,1.4),
                  fontsize=10
@@ -118,12 +134,10 @@ def plot_SNR(qa_dict,outfile):
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    
+
     ax4.annotate("Amp 4\n%.3f"%tot_amp_snr[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
 
     fig.savefig(outfile)
-   
-    

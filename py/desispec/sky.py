@@ -26,7 +26,7 @@ def compute_sky(frame, nsig_clipping=4.) :
     Input flux are expected to be flatfielded!
     We don't check this in this routine.
 
-    args:
+    Args:
         frame : Frame object, which includes attributes
           - wave : 1D wavelength grid in Angstroms
           - flux : 2D flux[nspec, nwave] density
@@ -47,7 +47,7 @@ def compute_sky(frame, nsig_clipping=4.) :
 
     nwave=frame.nwave
     nfibers=len(skyfibers)
-    
+
     current_ivar=frame.ivar[skyfibers].copy()
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
@@ -146,7 +146,7 @@ def compute_sky(frame, nsig_clipping=4.) :
     cskycovar=R.dot(skycovar).dot(R.T.todense())
     cskyvar=np.diagonal(cskycovar)
     cskyivar=(cskyvar>0)/(cskyvar+(cskyvar==0))
-    
+
     # convert cskyivar to 2D; today it is the same for all spectra,
     # but that may not be the case in the future
     cskyivar = np.tile(cskyivar, frame.nspec).reshape(frame.nspec, nwave)
@@ -165,7 +165,7 @@ def compute_sky(frame, nsig_clipping=4.) :
 class SkyModel(object):
     def __init__(self, wave, flux, ivar, mask, header=None, nrej=0):
         """Create SkyModel object
-        
+
         Args:
             wave  : 1D[nwave] wavelength in Angstroms
             flux  : 2D[nspec, nwave] sky model to subtract
@@ -173,14 +173,14 @@ class SkyModel(object):
             mask  : 2D[nspec, nwave] 0=ok or >0 if problems; 32-bit
             header : (optional) header from FITS file HDU0
             nrej : (optional) Number of rejected pixels in fit
-            
+
         All input arguments become attributes
         """
         assert wave.ndim == 1
         assert flux.ndim == 2
         assert ivar.shape == flux.shape
         assert mask.shape == flux.shape
-        
+
         self.nspec, self.nwave = flux.shape
         self.wave = wave
         self.flux = flux
@@ -192,7 +192,7 @@ class SkyModel(object):
 
 def subtract_sky(frame, skymodel) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
-    
+
     Args:
         frame : desispec.Frame object
         skymodel : desispec.SkyModel object
@@ -218,9 +218,10 @@ def subtract_sky(frame, skymodel) :
 
 def qa_skysub(param, frame, skymodel, quick_look=False):
     """Calculate QA on SkySubtraction
-    Note: Pixels rejected in generating the SkyModel (as above), are  
-      not rejected in the stats calculated here.  Would need to carry
-      along current_ivar to do so.
+
+    Note: Pixels rejected in generating the SkyModel (as above), are
+    not rejected in the stats calculated here.  Would need to carry
+    along current_ivar to do so.
 
     Args:
         param : dict of QA parameters
@@ -249,10 +250,10 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
 
     # Subtract
     res = flux - skymodel.flux[skyfibers] # Residuals
-    res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers]) 
+    res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers])
 
     # Chi^2 and Probability
-    chi2_fiber = np.sum(res_ivar*(res**2),1) 
+    chi2_fiber = np.sum(res_ivar*(res**2),1)
     chi2_prob = np.zeros(nfibers)
     for ii in range(nfibers):
         # Stats
@@ -298,6 +299,6 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
         totsnr[ii]=np.sqrt(np.sum(snr**2))
     qadict['MED_SNR']=medsnr  # for each fiber
     qadict['TOT_SNR']=totsnr  # for each fiber
-     
+
     # Return
     return qadict

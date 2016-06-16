@@ -22,13 +22,14 @@ from desispec import util
 
 def brick_zbest(outfil, zf, qabrick):
     """ QA plots for Flux calibration in a Frame
+
     Args:
         outfil:
         qabrick:
         zf: ZfindBase object
 
     Returns:
-
+        Stuff?
     """
     sty_otype = get_sty_otype()
     # Convert types (this should become obsolete)
@@ -86,11 +87,11 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     """
     Generate QA plots and files for sky residuals of a given frame
 
-    Parameters:
-    -------------
+    Parameters
+    ----------
     outfil: str
-      Name of output file
-    frame: Frame object 
+        Name of output file
+    frame: Frame object
     skymodel: SkyModel object
     qaframe: QAFrame object
     """
@@ -101,7 +102,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
 
     # Residuals
     res = frame.flux[skyfibers] - skymodel.flux[skyfibers] # Residuals
-    res_ivar = util.combine_ivar(frame.ivar[skyfibers], skymodel.ivar[skyfibers]) 
+    res_ivar = util.combine_ivar(frame.ivar[skyfibers], skymodel.ivar[skyfibers])
     med_res = np.median(res,0)
 
     # Deviates
@@ -134,7 +135,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     #ax_flux.plot(wave,true_flux*scl, label='Truth')
     #ax_flux.get_xaxis().set_ticks([]) # Suppress labeling
 
-    # 
+    #
     ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
     ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
     ax0.set_xlabel('Wavelength')
@@ -190,7 +191,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
             continue
         # Show
         ylbl -= yoff
-        ax2.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data['SKYSUB']['QA'][key]), 
+        ax2.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data['SKYSUB']['QA'][key]),
             transform=ax2.transAxes, ha='left', fontsize='small')
     """
 
@@ -232,6 +233,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
 
 def exposure_fluxcalib(outfil, qa_data):
     """ QA plots for Flux calibration in an Exposure
+
     Args:
         outfil: str -- Name of PDF file
         qa_data: dict -- QA data, including that of the individual frames
@@ -280,12 +282,13 @@ def exposure_fluxcalib(outfil, qa_data):
 
 def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
     """ QA plots for Flux calibration in a Frame
+
     Args:
         outfil:
         qaframe:
 
     Returns:
-
+        Stuff?
     """
     # Unpack star data
     sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
@@ -354,6 +357,7 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
 
 def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
     """ QA plots for fiber flat
+
     Args:
         outfil:
         qaframe:
@@ -362,7 +366,7 @@ def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
         fiberflat:
 
     Returns:
-
+        Stuff?
     """
     # Setup
     gdp = fiberflat.mask == 0
@@ -440,12 +444,13 @@ def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
 
 def show_meta(ax, qaframe, qaflavor, outfil):
     """ Show meta data on the figure
+
     Args:
         ax:
         qadict:
 
     Returns:
-
+        Stuff?
     """
     # Meta
     xlbl = 0.05
