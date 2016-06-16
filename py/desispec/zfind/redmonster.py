@@ -18,7 +18,7 @@ class RedMonsterZfind(ZfindBase):
     """Class documentation goes here.
     """
     def __init__(self, wave, flux, ivar, R=None, dloglam=1e-4, objtype=None,
-                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005),nproc=1):
+                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005),nproc=1,npoly=2):
         """Uses Redmonster to classify and find redshifts.
 
         See :class:`desispec.zfind.zfind.ZfindBase` class for inputs/outputs.
@@ -97,7 +97,7 @@ class RedMonsterZfind(ZfindBase):
         self.zfinders = list()
         self.zfitters = list()
         for template, zmin, zmax in self.templates:
-            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=2, zmin=zmin, zmax=zmax,nproc=nproc)
+            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=npoly, zmin=zmin, zmax=zmax,nproc=nproc)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
             zfit = ZFitter(zfind.zchi2arr, zfind.zbase)
             zfit.z_refine2()

@@ -48,10 +48,12 @@ def parse(options=None):
         help='path of QA figure file')
     parser.add_argument("--nproc", type=int, default=default_nproc,
         help="number of parallel processes for multiprocessing")
+    parser.add_argument("--npoly", type=int, default=2,
+        help="number of parameters for additive polynomial")
     parser.add_argument("brickfiles", nargs="*")
 
     parser.add_argument("--print-info",type=str,help="print an info table on each spectrum and exit")
-
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -74,6 +76,14 @@ def _func(arg) :
 def main(args) :
 
     log = get_logger()
+
+    if args.npoly < 1 :
+        log.warning("Need npoly>=1 for now, changing this %d -> 1"%args.npoly)
+        args.npoly=1
+    if args.nproc < 1 :
+        log.warning("Need nproc>=1, changing this %d -> 1"%args.nproc)
+        args.nproc=1
+    
 
     if args.objtype is not None:
         args.objtype = args.objtype.split(',')
@@ -190,7 +200,7 @@ def main(args) :
     zf = RedMonsterZfind(wave= wave,flux= flux,ivar=ivar,
                          objtype=args.objtype,zrange_galaxy= args.zrange_galaxy,
                          zrange_qso=args.zrange_qso,zrange_star=args.zrange_star,
-                         nproc=args.nproc)
+                         nproc=args.nproc,npoly=args.npoly)
     
     
 
