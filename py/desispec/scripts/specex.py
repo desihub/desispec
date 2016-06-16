@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 import sys
 import os
 import re
+import argparse
 import numpy as np
 
 import subprocess as sp
@@ -98,6 +99,7 @@ def main(args, comm=None):
 
     if rank == 0:
         # Print parameters
+        log.info("specex:  using {} processes".format(nproc))
         log.info("specex:  input image = {}".format(imgfile))
         log.info("specex:  bootcalib PSF = {}".format(bootfile))
         log.info("specex:  output = {}".format(outfile))
@@ -140,10 +142,10 @@ def main(args, comm=None):
 
         com.extend(optarray)
 
-        proc = sp.Popen(com, bufsize=4096, stdout=sp.PIPE, stderr=sp.PIPE)
+        log.debug("proc {} spawning {}".format(rank, " ".join(com)))
+
+        proc = sp.Popen(com, bufsize=8192)
         outs, errs = proc.communicate()
-        pid = proc.pid
-        proc.wait()
         retval = proc.returncode
 
         if retval != 0:
@@ -173,10 +175,8 @@ def main(args, comm=None):
         com.extend(['--out-xml', outxml])
         com.extend([ "{}_{:02d}.xml".format(outroot, x) for x in bundles ])
 
-        proc = sp.Popen(com, bufsize=4096, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc = sp.Popen(com, bufsize=8192)
         outs, errs = proc.communicate()
-        pid = proc.pid
-        proc.wait()
         retval = proc.returncode
         if retval != 0:
             comstr = " ".join(com)
@@ -187,10 +187,8 @@ def main(args, comm=None):
         com.extend(['--out', outspots])
         com.extend([ "{}_{:02d}-spots.fits".format(outroot, x) for x in bundles ])
 
-        proc = sp.Popen(com, bufsize=4096, stdout=sp.PIPE, stderr=sp.PIPE)
+        proc = sp.Popen(com, bufsize=8192)
         outs, errs = proc.communicate()
-        pid = proc.pid
-        proc.wait()
         retval = proc.returncode
         if retval != 0:
             comstr = " ".join(com)
@@ -204,10 +202,8 @@ def main(args, comm=None):
 
         if failcount == 0:
             # only remove the per-bundle files if the merge was good
-            proc = sp.Popen(com, bufsize=4096, stdout=sp.PIPE, stderr=sp.PIPE)
+            proc = sp.Popen(com, bufsize=8192)
             outs, errs = proc.communicate()
-            pid = proc.pid
-            proc.wait()
             retval = proc.returncode
             if retval != 0:
                 comstr = " ".join(com)
