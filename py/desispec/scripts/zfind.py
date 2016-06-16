@@ -7,6 +7,7 @@ import sys
 import os
 import numpy as np
 import multiprocessing
+import traceback
 
 from desispec import io
 from desispec.interpolation import resample_flux
@@ -25,6 +26,8 @@ def parse(options=None):
         help="input brickname")
     parser.add_argument("-n", "--nspec", type=int, required=False,
         help="number of spectra to fit [default: all]")
+    parser.add_argument("--first-spec", type=int, required=False,default=0,
+        help="first spectrum to fit in file")
     parser.add_argument("-o", "--outfile", type=str, required=False,
         help="output file name")
     parser.add_argument("--specprod_dir", type=str, required=False, default=None, 
@@ -47,6 +50,8 @@ def parse(options=None):
         help="number of parallel processes for multiprocessing")
     parser.add_argument("brickfiles", nargs="*")
 
+    parser.add_argument("--print-info",type=str,help="print an info table on each spectrum and exit")
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -57,7 +62,13 @@ def parse(options=None):
 
 #- function for multiprocessing
 def _func(arg) :
-    return RedMonsterZfind(**arg)
+    try:
+    	ret = RedMonsterZfind(**arg)
+    except Exception,e:
+	print str(e)
+	traceback.print_tb(sys.exc_info()[2])
+	raise
+    return ret
 
 
 def main(args) :
@@ -111,44 +122,75 @@ def main(args) :
     nwave = len(wave)
 
     #- flux and ivar arrays to fill for all targets
-    flux = np.zeros((nspec, nwave))
-    ivar = np.zeros((nspec, nwave))
-    targetids = brick['b'].get_target_ids()[0:nspec]
+    #flux = np.zeros((nspec, nwave))
+    #ivar = np.zeros((nspec, nwave))
+    flux = []
+    ivar = []
+    good_targetids=[]
+    targetids = brick['b'].get_target_ids()
 
-    func_args = []
+    if not args.print_info is None:
+	    fpinfo=open(args.print_info,"w")
 
     for i, targetid in enumerate(targetids):
         #- wave, flux, and ivar for this target; concatenate
         xwave = list()
         xflux = list()
         xivar = list()
+
+	good=True
         for channel in filters:
             exp_flux, exp_ivar, resolution, info = brick[channel].get_target(targetid)
             weights = np.sum(exp_ivar, axis=0)
-            ii, = np.where(weights > 0)
+	    ii, = np.where(weights > 0)
+	    if len(ii)==0:
+		    good=False
+		    break
             xwave.extend(brick[channel].get_wavelength_grid()[ii])
-            #- Average multiple exposures on the same wavelength grid for each channel
-            xflux.extend(np.average(exp_flux[:,ii], weights=exp_ivar[:,ii], axis=0))
-            xivar.extend(weights[ii])
+             #- Average multiple exposures on the same wavelength grid for each channel
+	    xflux.extend(np.average(exp_flux[:,ii], weights=exp_ivar[:,ii], axis=0))
+	    xivar.extend(weights[ii])
+
+	if not good:continue
 
         xwave = np.array(xwave)
         xivar = np.array(xivar)
         xflux = np.array(xflux)
 
         ii = np.argsort(xwave)
-        flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
+	#flux[i], ivar[i] = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
+	fl, iv = resample_flux(wave, xwave[ii], xflux[ii], xivar[ii])
+	flux.append(fl)
+	ivar.append(iv)
+	good_targetids.append(targetid)
+	if not args.print_info is None:
+		s2n=np.median(fl[:-1]*np.sqrt(iv[:-1])/np.sqrt(wave[1:]-wave[:-1]))
+		print targetid,s2n
+		fpinfo.write(str(targetid)+" "+str(s2n)+"\n")
+
+    if not args.print_info is None:
+    	    fpinfo.close()
+	    sys.exit()
+
+    good_targetids=good_targetids[args.first_spec:]
+    nspec=len(good_targetids)
+    print nspec
+    flux=np.array(flux[args.first_spec:])
+    ivar=np.array(ivar[args.first_spec:])
+    print flux.shape
 
     #- distribute the spectra in nspec groups
     if args.nproc > nspec:
         args.nproc = nspec
 
+    func_args = []
     ii = np.linspace(0, nspec, args.nproc+1).astype(int)
     for i in range(args.nproc):
         lo, hi = ii[i], ii[i+1]
         log.debug('CPU {} spectra {}:{}'.format(i, lo, hi))
         arguments = {"wave": wave, "flux": flux[lo:hi], "ivar": ivar[lo:hi],
                      "objtype": args.objtype, "zrange_galaxy": args.zrange_galaxy,
-                     "zrange_qso": args.zrange_qso, "zrange_star": args.zrange_star}
+		     "zrange_qso": args.zrange_qso, "zrange_star": args.zrange_star}
         func_args.append( arguments )
 
     #- Do the redshift fit
@@ -218,6 +260,7 @@ def main(args) :
         args.outfile = io.findfile('zbest', brickname=args.brick)
 
     log.info("Writing "+args.outfile)
-    io.write_zbest(args.outfile, args.brick, targetids, zfi, zspec=args.zspec)
+    #io.write_zbest(args.outfile, args.brick, targetids, zfi, zspec=args.zspec)
+    io.write_zbest(args.outfile, args.brick, good_targetids, zfi, zspec=args.zspec)
 
 
