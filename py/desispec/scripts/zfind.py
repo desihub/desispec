@@ -103,14 +103,12 @@ def main(args) :
 
     #- Assume all channels have the same number of targets
     #- TODO: generalize this to allow missing channels
-    if args.nspec is None:
-        args.nspec = brick['b'].get_num_targets()
-        log.info("Fitting {} targets".format(args.nspec))
-    else:
-        log.info("Fitting {} of {} targets".format(args.nspec, brick['b'].get_num_targets()))
-
-    nspec = args.nspec
-
+    #if args.nspec is None:
+    #    args.nspec = brick['b'].get_num_targets()
+    #    log.info("Fitting {} targets".format(args.nspec))
+    #else:
+    #    log.info("Fitting {} of {} targets".format(args.nspec, brick['b'].get_num_targets()))
+    
     #- Coadd individual exposures and combine channels
     #- Full coadd code is a bit slow, so try something quick and dirty for
     #- now to get something going for redshifting
@@ -173,66 +171,49 @@ def main(args) :
 	    sys.exit()
 
     good_targetids=good_targetids[args.first_spec:]
-    nspec=len(good_targetids)
-    print nspec
     flux=np.array(flux[args.first_spec:])
     ivar=np.array(ivar[args.first_spec:])
-    print flux.shape
+    nspec=len(good_targetids)
+    log.info("number of good targets = %d"%nspec)
+    if args.nspec is not None and args.nspec<nspec :
+        log.info("Fitting {} of {} targets".format(args.nspec, nspec))
+        nspec=args.nspec
+        good_targetids=good_targetids[:nspec]
+        flux=flux[:nspec]
+        ivar=ivar[:nspec]
+    else :
+        log.info("Fitting {} targets".format(nspec))
+    
+    log.debug("flux.shape=",flux.shape)
+    
+    
+    zf = RedMonsterZfind(wave= wave,flux= flux,ivar=ivar,
+                         objtype=args.objtype,zrange_galaxy= args.zrange_galaxy,
+                         zrange_qso=args.zrange_qso,zrange_star=args.zrange_star)
+    
+    
 
-    #- distribute the spectra in nspec groups
-    if args.nproc > nspec:
-        args.nproc = nspec
 
-    func_args = []
-    ii = np.linspace(0, nspec, args.nproc+1).astype(int)
-    for i in range(args.nproc):
-        lo, hi = ii[i], ii[i+1]
-        log.debug('CPU {} spectra {}:{}'.format(i, lo, hi))
-        arguments = {"wave": wave, "flux": flux[lo:hi], "ivar": ivar[lo:hi],
-                     "objtype": args.objtype, "zrange_galaxy": args.zrange_galaxy,
-		     "zrange_qso": args.zrange_qso, "zrange_star": args.zrange_star}
-        func_args.append( arguments )
 
-    #- Do the redshift fit
-
-    if args.nproc==1 : # No parallelization, simple loop over arguments
-
-        zf = list()
-        for arg in func_args:
-            zff = RedMonsterZfind(**arg)
-            zf.append(zff)
-
-    else: # Multiprocessing
-        log.info("starting multiprocessing with {} cpus for {} spectra in {} groups".format(args.nproc, nspec, len(func_args)))
-        pool = multiprocessing.Pool(args.nproc)
-        zf = pool.map(_func, func_args)
-        pool.close()
-        pool.join()
 
     # reformat results
     dtype = list()
 
     dtype = [
-        ('Z',         zf[0].z.dtype),
-        ('ZERR',      zf[0].zerr.dtype),
-        ('ZWARN',     zf[0].zwarn.dtype),
-        ('TYPE',      zf[0].type.dtype),
-        ('SUBTYPE',   zf[0].subtype.dtype),    
+        ('Z',         zf.z.dtype),
+        ('ZERR',      zf.zerr.dtype),
+        ('ZWARN',     zf.zwarn.dtype),
+        ('TYPE',      zf.type.dtype),
+        ('SUBTYPE',   zf.subtype.dtype),    
     ]
 
-    formatted_data = np.empty(nspec, dtype=dtype)
-
-    i = 0
-    for result in zf:
-        n = result.nspec
-        formatted_data['Z'][i:i+n]       = result.z
-        formatted_data['ZERR'][i:i+n]    = result.zerr
-        formatted_data['ZWARN'][i:i+n]   = result.zwarn
-        formatted_data['TYPE'][i:i+n]    = result.type
-        formatted_data['SUBTYPE'][i:i+n] = result.subtype
-        i += n
-
-    assert i == nspec
+    formatted_data  = np.empty(nspec, dtype=dtype)
+    formatted_data['Z']       = zf.z
+    formatted_data['ZERR']    = zf.zerr
+    formatted_data['ZWARN']   = zf.zwarn
+    formatted_data['TYPE']    = zf.type
+    formatted_data['SUBTYPE'] = zf.subtype
+    
 
     # Create a ZfindBase object with formatted results
     zfi = ZfindBase(None, None, None, results=formatted_data)
