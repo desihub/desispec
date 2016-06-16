@@ -189,7 +189,8 @@ def main(args) :
     
     zf = RedMonsterZfind(wave= wave,flux= flux,ivar=ivar,
                          objtype=args.objtype,zrange_galaxy= args.zrange_galaxy,
-                         zrange_qso=args.zrange_qso,zrange_star=args.zrange_star)
+                         zrange_qso=args.zrange_qso,zrange_star=args.zrange_star,
+                         nproc=args.nproc)
     
     
 
