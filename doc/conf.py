@@ -128,6 +128,42 @@ keep_warnings = True
 # Include functions that begin with an underscore, e.g. _private().
 napoleon_include_private_with_doc = True
 
+# This value contains a list of modules to be mocked up. This is useful when
+# some external dependencies are not met at build time and break the
+# building process.
+autodoc_mock_imports = ['astropy',
+                        'astropy.io',
+                        'astropy.io.fits',
+                        'astropy.modeling',
+                        'astropy.stats',
+                        'astropy.table',
+                        'desiutil',
+                        'desiutil.bitmask',
+                        'desiutil.depend',
+                        'desiutil.io',
+                        'matplotlib',
+                        'matplotlib.backends',
+                        'matplotlib.backends.backend_pdf',
+                        'matplotlib.cm',
+                        'matplotlib.gridspec',
+                        'numpy',
+                        'numpy.polynomial',
+                        'numpy.polynomial.legendre',
+                        'scipy',
+                        'scipy.constants',
+                        'scipy.interpolate',
+                        'scipy.linalg',
+                        'scipy.ndimage',
+                        'scipy.optimize',
+                        'scipy.sparse',
+                        'scipy.sparse.linalg',
+                        'scipy.special',
+                        'scipy.stats',
+                        'speclite',
+                        'specter',
+                        'specter.psf',
+                        'specter.extract']
+
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for

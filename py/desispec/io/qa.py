@@ -66,14 +66,15 @@ def read_qa_frame(filename):
 
 def load_qa_frame(filename, frame=None, flavor=None):
     """ Load an existing QA_Frame or generate one, as needed
+
     Args:
         filename: str
         frame: Frame object, optional
         flavor: str, optional
-          Type of QA_Frame
+            Type of QA_Frame
 
     Returns:
-    qa_frame: QA_Frame object
+        qa_frame: QA_Frame object
     """
     if os.path.isfile(filename): # Read from file, if it exists
         qaframe = read_qa_frame(filename)
