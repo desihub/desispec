@@ -27,6 +27,8 @@ def parse(options=None):
         help="input brickname")
     parser.add_argument("-n", "--nspec", type=int, required=False,
         help="number of spectra to fit [default: all]")
+    parser.add_argument("--first-spec", type=int, required=False,default=0,
+        help="first spectrum to fit in file")
     parser.add_argument("-o", "--outfile", type=str, required=False,
         help="output file name")
     parser.add_argument("--specprod_dir", type=str, required=False, default=None, 
@@ -48,6 +50,8 @@ def parse(options=None):
     parser.add_argument("--nproc", type=int, default=default_nproc,
         help="number of parallel processes for multiprocessing")
     parser.add_argument("brickfiles", nargs="*")
+
+    parser.add_argument("--print-info",type=str,help="print an info table on each spectrum and exit")
 
     args = None
     if options is None:
@@ -124,7 +128,10 @@ def main(args) :
     flux = []
     ivar = []
     good_targetids=[]
-    targetids = brick['b'].get_target_ids()[0:nspec]
+    targetids = brick['b'].get_target_ids()
+
+    if not args.print_info is None:
+	    fpinfo=open(args.print_info,"w")
 
     for i, targetid in enumerate(targetids):
         #- wave, flux, and ivar for this target; concatenate
@@ -157,10 +164,20 @@ def main(args) :
 	flux.append(fl)
 	ivar.append(iv)
 	good_targetids.append(targetid)
+	if not args.print_info is None:
+		s2n=np.median(fl[:-1]*np.sqrt(iv[:-1])/np.sqrt(wave[1:]-wave[:-1]))
+		print targetid,s2n
+		fpinfo.write(str(targetid)+" "+str(s2n)+"\n")
 
+    if not args.print_info is None:
+    	    fpinfo.close()
+	    sys.exit()
+
+    good_targetids=good_targetids[args.first_spec:]
     nspec=len(good_targetids)
-    flux=np.array(flux)
-    ivar=np.array(ivar)
+    print nspec
+    flux=np.array(flux[args.first_spec:])
+    ivar=np.array(ivar[args.first_spec:])
     print flux.shape
 
     #- distribute the spectra in nspec groups
