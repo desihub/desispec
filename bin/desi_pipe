@@ -108,9 +108,7 @@ def main():
     args = parser.parse_args()
 
     if args.prod is None:
-        if 'SPECPROD' in os.environ:
-            args.prod = os.environ['SPECPROD']
-        elif 'PRODNAME' in os.environ:
+        if 'PRODNAME' in os.environ:
             args.prod = os.environ['PRODNAME']
         else:
             args.prod = 'test'
