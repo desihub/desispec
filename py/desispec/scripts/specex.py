@@ -31,17 +31,17 @@ if libspecex is not None:
     libspecex.cspecex_desi_psf_fit.restype = ct.c_int
     libspecex.cspecex_desi_psf_fit.argtypes = [
         ct.c_int,
-        ct.POINTER(ct.c_char_p)
+        ct.POINTER(ct.POINTER(ct.c_char))
     ]
     libspecex.cspecex_psf_merge.restype = ct.c_int
     libspecex.cspecex_psf_merge.argtypes = [
         ct.c_int,
-        ct.POINTER(ct.c_char_p)
+        ct.POINTER(ct.POINTER(ct.c_char))
     ]
     libspecex.cspecex_spot_merge.restype = ct.c_int
     libspecex.cspecex_spot_merge.argtypes = [
         ct.c_int,
-        ct.POINTER(ct.c_char_p)
+        ct.POINTER(ct.POINTER(ct.c_char))
     ]
 
 
@@ -172,14 +172,12 @@ def main(args, comm=None):
 
         com.extend(optarray)
 
-        log.debug("proc {} spawning {}".format(rank, " ".join(com)))
+        log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
         argc = len(com)
-        maxstr = np.max([ len(x) for x in com ])
-        arg_buffers = [ct.create_string_buffer(maxstr+1) for i in range(argc)]
-        arg_pointers = (ct.c_char_p*argc)(*map(ct.addressof, arg_buffers))
-        for c in range(argc):
-            arg_buffers[c] = com[c]
+        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
+        arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
         retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
 
@@ -211,11 +209,9 @@ def main(args, comm=None):
         com.extend([ "{}_{:02d}.xml".format(outroot, x) for x in bundles ])
 
         argc = len(com)
-        maxstr = np.max([ len(x) for x in com ])
-        arg_buffers = [ct.create_string_buffer(maxstr+1) for i in range(argc)]
-        arg_pointers = (ct.c_char_p*argc)(*map(ct.addressof, arg_buffers))
-        for c in range(argc):
-            arg_buffers[c] = com[c]
+        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
+        arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
         retval = libspecex.cspecex_psf_merge(argc, arg_pointers)
 
@@ -229,11 +225,9 @@ def main(args, comm=None):
         com.extend([ "{}_{:02d}-spots.fits".format(outroot, x) for x in bundles ])
 
         argc = len(com)
-        maxstr = np.max([ len(x) for x in com ])
-        arg_buffers = [ct.create_string_buffer(maxstr+1) for i in range(argc)]
-        arg_pointers = (ct.c_char_p*argc)(*map(ct.addressof, arg_buffers))
-        for c in range(argc):
-            arg_buffers[c] = com[c]
+        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
+        arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
         retval = libspecex.cspecex_spot_merge(argc, arg_pointers)
 
