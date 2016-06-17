@@ -75,7 +75,7 @@ def main(args):
         nspec = psf.nspec
     specmax = specmin + nspec
 
-    camera = img.meta['CAMERA']     #- b0, r1, .. z9
+    camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
     spectrograph = int(camera[1])
     fibermin = spectrograph * psf.nspec + specmin
 
@@ -182,7 +182,7 @@ def main_mpi(args, comm=None):
         nspec = psf.nspec
     specmax = specmin + nspec
 
-    camera = img.meta['CAMERA']     #- b0, r1, .. z9
+    camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
     spectrograph = int(camera[1])
     fibermin = spectrograph * psf.nspec + specmin
 
