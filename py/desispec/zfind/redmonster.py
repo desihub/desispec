@@ -96,6 +96,7 @@ class RedMonsterZfind(ZfindBase):
         #- Find and refine best redshift per template
         self.zfinders = list()
         self.zfitters = list()
+        
         for template, zmin, zmax in self.templates:
             zfind = ZFinder(os.path.join(self.template_dir, template), npoly=npoly, zmin=zmin, zmax=zmax,nproc=nproc)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)

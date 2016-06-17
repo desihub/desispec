@@ -77,9 +77,9 @@ def main(args) :
 
     log = get_logger()
 
-    if args.npoly < 1 :
-        log.warning("Need npoly>=1 for now, changing this %d -> 1"%args.npoly)
-        args.npoly=1
+    if args.npoly < 0 :
+        log.warning("Need npoly>=0, changing this %d -> 1"%args.npoly)
+        args.npoly=0
     if args.nproc < 1 :
         log.warning("Need nproc>=1, changing this %d -> 1"%args.nproc)
         args.nproc=1
