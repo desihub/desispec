@@ -108,7 +108,7 @@ class RedMonsterZfind(ZfindBase):
             zfit = ZFitter(zfind.zchi2arr, zfind.zbase)
             zfit.z_refine2()
             stop=time.clock()
-            log.info("Time to refine the redshift fit of %d fibers for template =%f sec"%(zfit.z.shape[0],template,stop-start))
+            log.info("Time to refine the redshift fit of %d fibers for template %s =%f sec"%(zfit.z.shape[0],template,stop-start))
             
             for ifiber in range(zfit.z.shape[0]) :
                 log.debug("(after z_refine2) fiber #%d %s chi2s=%s zs=%s"%(ifiber,template,zfit.chi2vals[ifiber],zfit.z[ifiber]))
