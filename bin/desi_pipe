@@ -15,7 +15,6 @@ import os
 import numpy as np
 import argparse
 import re
-import subprocess as sp
 
 import desispec.io as io
 

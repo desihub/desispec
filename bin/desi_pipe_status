@@ -17,7 +17,6 @@ import argparse
 import re
 import glob
 import pprint
-import subprocess as sp
 
 import yaml
 

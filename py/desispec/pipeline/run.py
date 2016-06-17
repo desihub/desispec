@@ -15,7 +15,6 @@ import os
 import stat
 import errno
 import sys
-import subprocess as sp
 import re
 import pickle
 import copy
@@ -265,13 +264,8 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         for input in node['in']:
             infiles.append(graph_path_psf(proddir, input))
 
-        com = ['specex_mean_psf.py']
-        com.extend(['--output', outfile])
-        com.extend(['--input'])
-        com.extend(infiles)
-
         if rank == 0:
-            sp.check_call(com)
+            specex.mean_psf(infiles, outfile)
 
     elif step == 'extract':
         
