@@ -69,7 +69,7 @@ def main(args):
     ndiag = R1.shape[1]
     hdr = fits.getheader(args.files[0])
 
-    camera = hdr['CAMERA']     #- b0, r1, .. z9
+    camera = hdr['CAMERA'].lower()     #- b0, r1, .. z9
     spectrograph = int(camera[1])
     fibermin = spectrograph*nspec
 

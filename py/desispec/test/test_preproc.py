@@ -149,11 +149,20 @@ class TestPreProc(unittest.TestCase):
 
     def test_io(self):
         io.write_raw(self.rawfile, self.rawimage, self.header, camera='b0')
-        io.write_raw(self.rawfile, self.rawimage, self.header, camera='r1')
+        io.write_raw(self.rawfile, self.rawimage, self.header, camera='R1')
         io.write_raw(self.rawfile, self.rawimage, self.header, camera='z9')
+        self.header['CAMERA'] = 'B1'
+        io.write_raw(self.rawfile, self.rawimage, self.header)
+
         b0 = io.read_raw(self.rawfile, 'b0')
+        b1 = io.read_raw(self.rawfile, 'b1')
         r1 = io.read_raw(self.rawfile, 'r1')
-        z9 = io.read_raw(self.rawfile, 'z9')
+        z9 = io.read_raw(self.rawfile, 'Z9')
+        
+        self.assertEqual(b0.meta['CAMERA'], 'b0')
+        self.assertEqual(b1.meta['CAMERA'], 'b1')
+        self.assertEqual(r1.meta['CAMERA'], 'r1')
+        self.assertEqual(z9.meta['CAMERA'], 'z9')
         
     def test_32_64(self):
         '''

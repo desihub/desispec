@@ -128,7 +128,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     #- TODO: Check for required keywords first
 
     #- Subtract bias image
-    camera = header['CAMERA']
+    camera = header['CAMERA'].lower()
 
     if bias is not False and bias is not None:
         if bias is True:

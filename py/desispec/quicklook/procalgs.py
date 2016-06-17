@@ -261,7 +261,7 @@ class BoxcarExtraction(pas.PipelineAlg):
 
         specmax = specmin + nspec
 
-        camera = input_image.meta['CAMERA']     #- b0, r1, .. z9
+        camera = input_image.meta['CAMERA'].lower()     #- b0, r1, .. z9
         spectrograph = int(camera[1])
         fibermin = spectrograph*500 + specmin
         if "FiberMap" not in kwargs:
@@ -365,7 +365,7 @@ class Extraction_2d(pas.PipelineAlg):
 
         specmax = specmin + nspec
 
-        camera = input_image.meta['CAMERA']     #- b0, r1, .. z9
+        camera = input_image.meta['CAMERA'].lower()     #- b0, r1, .. z9
         spectrograph = int(camera[1])
         fibermin = spectrograph*500 + specmin
   
