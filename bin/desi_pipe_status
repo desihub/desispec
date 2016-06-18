@@ -17,7 +17,7 @@ import argparse
 import re
 import glob
 import pprint
-import subprocess as sp
+import subprocess
 
 import yaml
 
@@ -56,7 +56,7 @@ def get_state(rundir):
                     running = True
             else:
                 slrmid = int(slrmmat.group(1))
-                state = sp.check_output("squeue -j {} 2>/dev/null | tail -1 | gawk '{{print $10}}'".format(slrmid), shell=True)
+                state = subprocess.check_output("squeue -j {} 2>/dev/null | tail -1 | gawk '{{print $10}}'".format(slrmid), shell=True)
                 if state == 'R':
                     running = True
 
