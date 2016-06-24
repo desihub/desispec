@@ -1384,12 +1384,10 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     clusters.append(cluster)
     
     # Record max of each cluster
-    xpk=np.zeros((len(clusters)))
+    xpk=np.zeros((len(clusters)), dtype=np.int64)
     for i in xrange(len(clusters)) :
         t=np.argmax(cut[clusters[i]])
         xpk[i]=clusters[i][t]
-
-
 
     if debug:
         #pdb.xplot(cut, xtwo=xpk, ytwo=cut[xpk],mtwo='o')
