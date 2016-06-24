@@ -225,6 +225,12 @@ def create_prod(rawdir, proddir, nightstr=None):
         ndir = os.path.join(calpsf, nt)
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
+        nfail = os.path.join(faildir, nt)
+        if not os.path.isdir(nfail):
+            os.makedirs(nfail)
+        nlog = os.path.join(logdir, nt)
+        if not os.path.isdir(nlog):
+            os.makedirs(nlog)
 
         grph, expcount, nbricks = graph_night(rawdir, nt)
         allbricks.update(nbricks)
@@ -247,6 +253,18 @@ def graph_name(*args):
         return _graph_sep.join(args)
     else:
         return ""
+
+
+def graph_name_split(name):
+    patstr = "([0-9]{{8}}){}(.*)".format(_graph_sep)
+    pat = re.compile(patstr)
+    mat = pat.match(name)
+    ret = ("", name)
+    if mat is not None:
+        night = mat.group(1)
+        obj = mat.group(2)
+        ret = (night, obj)
+    return ret
 
 
 # Each node of the graph is a dictionary, with required keys 'type',
@@ -948,14 +966,14 @@ def graph_write(path, grph):
     return
 
 
-def graph_read(path):
+def graph_read(path, progress=None):
     grph = None
     with open(path, 'r') as f:
-        grph = yaml.load(f)
+        grph = yaml.load(f, Loader=yaml.CLoader)
     return grph
 
 
-def graph_read_prod(proddir, nightstr=None, spectrographs=None):
+def graph_read_prod(proddir, nightstr=None, spectrographs=None, progress=None):
 
     plandir = os.path.join(proddir, 'plan')
 
@@ -1079,6 +1097,13 @@ def graph_merge_state(grph, comm=None):
     # print("proc {} has {} graph names".format(comm.rank, len(names)))
     # sys.stdout.flush()
 
+    priority = {
+        'none' : 0,
+        'wait' : 1,
+        'fail' : 2,
+        'done' : 3
+    }
+
     for p in range(1, comm.size):
 
         if comm.rank == 0:
@@ -1089,13 +1114,8 @@ def graph_merge_state(grph, comm=None):
             if pnames != names:
                 raise RuntimeError("names of all objects must be the same when merging graph states")
             for n in names:
-                if states[n] != 'none':
-                    if states[n] != 'done':
-                        if pstates[n] == 'done':
-                            states[n] = 'done'
-                else:
-                    if pstates[n] != 'none':
-                        states[n] = pstates[n]
+                if priority[pstates[n]] > priority[states[n]]:
+                    states[n] = pstates[n]
 
         elif comm.rank == p:
             # print("proc {} sending to {}".format(comm.rank, 0))
