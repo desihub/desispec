@@ -1350,25 +1350,51 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
 
     # Cut image
     cutimg = flat[ypos-15:ypos+15, :]
+    
 
     # Smash
     cut = np.median(cutimg, axis=0)
-
+    
     # Set flux threshold
     srt = np.sort(cutimg.flatten())
     thresh = srt[int(cutimg.size*0.95)] / 2.
-    gdp = cut > thresh
-
+    
+    # JG : this algorithm is fragile 
+    # 
+    #gdp = cut > thresh
     # Roll to find peaks (simple algorithm)
-    nstep = nwidth // 2
-    for kk in xrange(-nstep,nstep):
-        if kk < 0:
-            test = np.roll(cut,kk) < np.roll(cut,kk+1)
-        else:
-            test = np.roll(cut,kk) > np.roll(cut,kk+1)
-        # Compare
-        gdp = gdp & test
-    xpk = np.where(gdp)[0]
+    #nstep = nwidth // 2
+    # 
+    #for kk in xrange(-nstep,nstep):
+    #    if kk < 0:
+    #        test = np.roll(cut,kk) < np.roll(cut,kk+1)
+    #    else:
+    #        test = np.roll(cut,kk) > np.roll(cut,kk+1)
+    #    # Compare
+    #    gdp = gdp & test
+    # xpk = np.where(gdp)[0]
+
+    # Find clusters of adjacent points
+    clusters=[]
+    gdp=np.where(cut > thresh)[0]
+    cluster=[gdp[0]]
+    for i in gdp[1:] :
+        if i==cluster[-1]+1 :
+            cluster.append(i)
+        else :
+            clusters.append(cluster)
+            cluster=[i]
+    clusters.append(cluster)
+    
+    # Record max of each cluster
+    xpk=np.zeros((len(clusters)))
+    for i in xrange(len(clusters)) :
+        t=np.argmax(cut[clusters[i]])
+        xpk[i]=clusters[i][t]
+    
+    #print ("xpk.size=",xpk.size)
+    #print ("xpk=",xpk)
+    
     if debug:
         #pdb.xplot(cut, xtwo=xpk, ytwo=cut[xpk],mtwo='o')
         pdb.set_trace()
