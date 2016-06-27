@@ -27,13 +27,14 @@ class Tile(object):
     """
     radius = 1.605  # degrees
 
-    def __init__(self, tileid, ra, dec, in_desi):
+    def __init__(self, tileid, ra, dec, obs_pass, in_desi):
         self._id = tileid
         self._ra = ra
         self._dec = dec
+        self._obs_pass = obs_pass
         self._in_desi = bool(in_desi)
         self.cos_radius = np.cos(np.radians(self.radius))
-        self.area = 2.0*np.pi*(1.0 - np.cos(np.radians(radius)))  # steradians
+        self.area = 2.0*np.pi*(1.0 - np.cos(np.radians(self.radius)))  # steradians
         self._circum_square = None
 
     @property
@@ -47,6 +48,10 @@ class Tile(object):
     @property
     def dec(self):
         return self._dec
+
+    @property
+    def obs_pass(self):
+        return self._obs_pass
 
     @property
     def in_desi(self):
@@ -180,6 +185,7 @@ class Tile(object):
             return petal2brick
         return bricks
 
+
 class RawDataCursor(sqlite3.Cursor):
     """Allow simple object-oriented interaction with raw data database.
     """
@@ -217,7 +223,7 @@ class RawDataCursor(sqlite3.Cursor):
         self.executemany(insert, zip(*bricklist))
         return
 
-    def load_tile(tilefile):
+    def load_tile(self, tilefile):
         """Load tile FITS file into the database.
 
         Parameters
@@ -225,7 +231,7 @@ class RawDataCursor(sqlite3.Cursor):
         tilefile : :class:`str`
             The name of a tile file.
         """
-        with fits.open(filefile) as f:
+        with fits.open(tilefile) as f:
             tile_data = f[1].data
         tile_list = [tile_data['TILEID'].tolist(), tile_data['RA'].tolist(),
                      tile_data['DEC'].tolist(), tile_data['PASS'].tolist(),
@@ -410,12 +416,12 @@ class RawDataCursor(sqlite3.Cursor):
             i = np.random.randint(1, N_tiles+1)
         else:
             i = tileid
-        q = "SELECT tileid, ra, dec, in_desi FROM tiles WHERE tileid = ?";
+        q = "SELECT * FROM tile WHERE tileid = ?";
         self.execute(q, (i,))
         rows = self.fetchall()
         return Tile(*(rows[0]))
 
-    def get_all_tiles(obs_pass=0, limit=0):
+    def get_all_tiles(self, obs_pass=0, limit=0):
         """Get all tiles from the database.
 
         Parameters
@@ -430,7 +436,7 @@ class RawDataCursor(sqlite3.Cursor):
         :class:`list`
             A lit of Tiles.
         """
-        q = "SELECT tileid, ra, dec, in_desi FROM tiles WHERE in_desi = ?"
+        q = "SELECT * FROM tile WHERE in_desi = ?"
         params = (1, )
         if obs_pass > 0:
             q += " AND pass = ?"
@@ -457,7 +463,7 @@ class RawDataCursor(sqlite3.Cursor):
         for tile in tiles:
             # petal2brick[tile.id] = dict()
             candidate_bricks = self.get_bricks(tile)
-            petal2brick = tile.get_overlapping_bricks(candidate_bricks, map_petals=True)
+            petal2brick = tile.overlapping_bricks(candidate_bricks, map_petals=True)
             for p in petal2brick:
                 nb = len(petal2brick[p])
                 self.executemany(insert, zip([tile.id]*nb, [p]*nb, petal2brick[p]))
@@ -578,7 +584,7 @@ def main():
     #
     # Create the file.
     #
-    dbfile = os.path.join(options.datapath, 'etc', options.dbfile)
+    dbfile = os.path.join(options.datapath, options.dbfile)
     if options.clobber and os.path.exists(dbfile):
         log.info("Removing file: {0}.".format(dbfile))
         os.remove(dbfile)
@@ -602,6 +608,7 @@ def main():
     tilefile = os.path.join(options.datapath, options.tilefile)
     if os.path.exists(tilefile):
         c.load_tile(tilefile)
+        log.info("Loaded tiles from {0}.".format(tilefile))
         c.connection.commit()
     if options.simulate:
         c.load_tile2brick(obs_pass=1)
@@ -612,7 +619,7 @@ def main():
         for e in exposurepaths:
             log.info("Loading exposures in {0}.".format(e))
             exposures += c.load_data(e)
+        log.info("Loaded exposures: {0}".format(', '.join(map(str,exposures))))
     c.connection.commit()
     c.connection.close()
-    log.info("Loaded exposures: {0}".format(', '.join(map(str,exposures))))
     return 0
