@@ -2,6 +2,20 @@
 -- Schema for DESI pipeline raw data tracking database.
 -- Note: the SQL flavor is tuned to SQLite.
 --
+-- This schema might be used for both simulations and real data.  For
+-- simple simulations, the tile table will be filled, while for realistic
+-- simulations and real data, the frame table will be filled.
+--
+CREATE TABLE tile (
+    tileid INTEGER PRIMARY KEY,
+    ra REAL NOT NULL,
+    dec REAL NOT NULL,
+    pass INTEGER NOT NULL,
+    in_desi INTEGER NOT NULL
+);
+--
+--
+--
 CREATE TABLE brick (
     brickid INTEGER PRIMARY KEY,
     brickname TEXT UNIQUE NOT NULL,
@@ -61,6 +75,17 @@ CREATE TABLE frame2brick (
     FOREIGN KEY (brickid) REFERENCES brick (brickid)
 );
 --
+-- JOIN table
+--
+CREATE TABLE tile2brick (
+    tileid INTEGER NOT NULL,
+    petalid INTEGER NOT NULL,
+    brickid INTEGER NOT NULL,
+    PRIMARY KEY (tileid, petalid, brickid),
+    FOREIGN KEY (tileid) REFERENCES tile (tileid),
+    FOREIGN KEY (brickid) REFERENCES brick (brickid)
+);
+--
 -- Status
 --
 CREATE TABLE statuses (
@@ -84,4 +109,10 @@ CREATE TABLE brickstatus (
     stamp TIMESTAMP NOT NULL,
     FOREIGN KEY (status) REFERENCES statuses (status)
 );
-r
+--
+-- Index
+--
+CREATE INDEX brick_ra1_idx ON brick (ra1);
+CREATE INDEX brick_ra2_idx ON brick (ra2);
+CREATE INDEX brick_dec1_idx ON brick (dec1);
+CREATE INDEX brick_dec2_idx ON brick (dec2);
