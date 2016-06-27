@@ -15,7 +15,6 @@ import os
 import numpy as np
 import argparse
 import re
-import subprocess as sp
 
 import desispec.io as io
 
@@ -179,6 +178,8 @@ def main():
         s.write("\n")
         if args.debug:
             s.write("export DESI_LOGLEVEL=\"DEBUG\"\n\n")
+        else:
+            s.write("#export DESI_LOGLEVEL=\"DEBUG\"\n\n")
 
     # load those same things into the environment.
 
@@ -222,7 +223,7 @@ def main():
 
         ntask = len(nights) * 3 * nspect
         taskproc = 1
-        multip = 3
+        multip = 2
 
         compute_step(setupfile, rawdir, proddir, envcom, "bootcalib", "bootcalib", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 
@@ -257,7 +258,7 @@ def main():
 
         ntask = totcount['arc'] * 3 * nspect
         taskproc = 20
-        threads = 3
+        threads = 2
 
         compute_step(setupfile, rawdir, proddir, envcom, "specex", "specex", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
 
@@ -303,7 +304,7 @@ def main():
 
     ntask = (totcount['flat'] + totcount['science']) * 3 * nspect
     taskproc = 20
-    threads = 3
+    threads = 2
 
     compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
 
@@ -317,7 +318,7 @@ def main():
 
     ntask = totcount['science'] * 3 * nspect
     taskproc = 1
-    multip = 3
+    multip = 2
 
     compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 
@@ -348,7 +349,7 @@ def main():
 
     ntask = len(allbricks)
     taskproc = 1
-    multip = 3
+    multip = 2
 
     compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 

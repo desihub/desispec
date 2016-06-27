@@ -17,7 +17,7 @@ from .plan import (graph_night, graph_dot, graph_slice, graph_slice_spec,
     graph_path_frame, graph_path_fiberflat, graph_path_sky, 
     graph_path_stdstars, graph_path_calib, graph_path_cframe, graph_name,
     graph_path, graph_merge_state, default_options, write_options, read_options,
-    create_prod, select_nights, graph_read_prod)
+    create_prod, select_nights, graph_read_prod, graph_name_split)
 
 from .run import (finish_task, is_finished, run_task, run_step, retry_task,
     step_file_types, run_step_types, run_steps, prod_state, file_types_step,

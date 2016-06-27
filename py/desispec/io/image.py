@@ -35,7 +35,7 @@ def write_image(outfile, image, meta=None):
     hx = fits.HDUList()
     hdu = fits.ImageHDU(image.pix.astype(np.float32), name='IMAGE', header=hdr)
     if 'CAMERA' not in hdu.header:
-        hdu.header.append( ('CAMERA', image.camera, 'Spectograph Camera') )
+        hdu.header.append( ('CAMERA', image.camera.lower(), 'Spectograph Camera') )
 
     if 'RDNOISE' not in hdu.header and np.isscalar(image.readnoise):
         hdu.header.append( ('RDNOISE', image.readnoise, 'Read noise [RMS electrons/pixel]'))
@@ -59,7 +59,7 @@ def read_image(filename):
     image = native_endian(fx['IMAGE'].data).astype(np.float64)
     ivar = native_endian(fx['IVAR'].data).astype(np.float64)
     mask = native_endian(fx['MASK'].data).astype(np.uint16)
-    camera = fx['IMAGE'].header['CAMERA']
+    camera = fx['IMAGE'].header['CAMERA'].lower()
     meta = fx['IMAGE'].header
 
     if 'READNOISE' in fx:

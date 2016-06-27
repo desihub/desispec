@@ -44,7 +44,7 @@ class QA_Frame(object):
             self.qa_data = {}
 
         # Final test
-        assert self.flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
+        assert self.flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso', 'gray']
 
     def init_qatype(self, qatype, param, re_init=False):
         """Initialize parameters for a given qatype
@@ -98,7 +98,7 @@ class QA_Frame(object):
         Returns:
 
         """
-        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso']
+        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso','gray']
 
         # Standard FLUXCALIB input parameters
         flux_dict = dict(ZP_WAVE=0.,        # Wavelength for ZP evaluation (camera dependent)
@@ -127,7 +127,7 @@ class QA_Frame(object):
           Re-initialize SKYSUB parameter dict
         """
         #
-        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso']
+        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso','gray']
 
         # Standard SKYSUB input parameters
         sky_dict = dict(

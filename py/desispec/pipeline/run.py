@@ -15,12 +15,13 @@ import os
 import stat
 import errno
 import sys
-import subprocess as sp
 import re
 import pickle
 import copy
 import traceback
 import time
+import logging
+from contextlib import contextmanager
 
 import yaml
 
@@ -265,13 +266,8 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         for input in node['in']:
             infiles.append(graph_path_psf(proddir, input))
 
-        com = ['specex_mean_psf.py']
-        com.extend(['--output', outfile])
-        com.extend(['--input'])
-        com.extend(infiles)
-
         if rank == 0:
-            sp.check_call(com)
+            specex.mean_psf(infiles, outfile)
 
     elif step == 'extract':
         
@@ -588,6 +584,65 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     return
 
 
+def redirect_logging():
+    log = get_logger()
+    while len(log.handlers) > 0:
+        h = log.handlers[0]
+        log.removeHandler(h)
+    # Add the current stdout.
+    ch = logging.StreamHandler(sys.stdout)
+    log.addHandler(ch)
+    return
+
+
+@contextmanager
+def stdouterr_redirected(to=os.devnull, comm=None):
+    '''
+    Based on http://stackoverflow.com/questions/5081657
+
+    import os
+
+    with stdouterr_redirected(to=filename):
+        print("from Python")
+        os.system("echo non-Python applications are also supported")
+    '''
+    fd = sys.stdout.fileno()
+
+    ##### assert that Python and C stdio write using the same file descriptor
+    ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
+
+    def _redirect_stdout(to):
+        sys.stdout.close() # + implicit flush()
+        os.dup2(to.fileno(), fd) # fd writes to 'to' file
+        sys.stdout = os.fdopen(fd, 'w') # Python writes to fd
+        # update desi logging to use new stdout
+        log = get_logger()
+        while len(log.handlers) > 0:
+            h = log.handlers[0]
+            log.removeHandler(h)
+        # Add the current stdout.
+        ch = logging.StreamHandler(sys.stdout)
+        log.addHandler(ch)
+
+    with os.fdopen(os.dup(fd), 'w') as old_stdout:
+        if comm is None:
+            with open(to, 'w') as file:
+                _redirect_stdout(to=file)
+        else:
+            for p in range(comm.size):
+                if p == comm.rank:
+                    with open(to, 'w') as file:
+                        _redirect_stdout(to=file)
+                comm.barrier()
+        try:
+            yield # allow code to be run with the redirected stdout
+        finally:
+            _redirect_stdout(to=old_stdout) # restore stdout.
+                                            # buffering and flags such as
+                                            # CLOEXEC may be different
+    return
+
+
 def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     log = get_logger()
 
@@ -675,6 +730,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     # every group goes and does its tasks...
 
     faildir = os.path.join(proddir, 'run', 'failed')
+    logdir = os.path.join(proddir, 'run', 'logs')
 
     if group_ntask > 0:
         for t in range(group_firsttask, group_firsttask + group_ntask):
@@ -682,60 +738,62 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             #     print("group {} starting task {}".format(group, tasks[t]))
             #     sys.stdout.flush()
             # slice out just the graph for this task
+
+            (night, gname) = graph_name_split(tasks[t])
+            nfaildir = os.path.join(faildir, night)
+            nlogdir = os.path.join(logdir, night)
+
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
-            ffile = os.path.join(faildir, "{}_{}.yaml".format(step, tasks[t]))
-            tfile = os.path.join(faildir, "{}_{}.trace".format(step, tasks[t]))
+            ffile = os.path.join(nfaildir, "{}_{}.yaml".format(step, tasks[t]))
+            
+            # For this task, we will temporarily redirect stdout and stderr
+            # to a task-specific log file.
 
-            try:
-                # if the step previously failed, clear that file now
-                if group_rank == 0:
-                    if os.path.isfile(ffile):
-                        os.remove(ffile)
-                    if os.path.isfile(tfile):
-                        os.remove(tfile)
-                # if group_rank == 0:
-                #     print("group {} runtask {}".format(group, tasks[t]))
-                #     sys.stdout.flush()
-                run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
-                # mark step as done in our group's graph
-                # if group_rank == 0:
-                #     print("group {} start graph_mark {}".format(group, tasks[t]))
-                #     sys.stdout.flush()
-                graph_mark(grph, tasks[t], state='done', descend=False)
-                # if group_rank == 0:
-                #     print("group {} end graph_mark {}".format(group, tasks[t]))
-                #     sys.stdout.flush()
-            except:
-                # The task threw an exception.  We want to dump all information
-                # that will be needed to re-run the run_task() function on just
-                # this task.
-                msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
-                log.error(msg)
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-                print(''.join(lines))
-                fyml = {}
-                fyml['step'] = step
-                fyml['rawdir'] = rawdir
-                fyml['proddir'] = proddir
-                fyml['task'] = tasks[t]
-                fyml['graph'] = tgraph
-                fyml['opts'] = options
-                fyml['procs'] = taskproc
-                if not os.path.isfile(ffile):
-                    log.error('Dumping traceback to '+tfile)
-                    log.error('Dumping yaml graph to '+ffile)
-                    # we are the first process to hit this
-                    with open(ffile, 'w') as f:
-                        yaml.dump(fyml, f, default_flow_style=False)
-                    with open(tfile, 'w') as f:
-                        f.write(''.join(lines))
-                # mark the step as failed in our group's local graph
-                graph_mark(grph, tasks[t], state='fail', descend=True)
+            with stdouterr_redirected(to=os.path.join(nlogdir, "{}.log".format(gname)), comm=comm_group):
+                try:
+                    # if the step previously failed, clear that file now
+                    if group_rank == 0:
+                        if os.path.isfile(ffile):
+                            os.remove(ffile)
+                    # if group_rank == 0:
+                    #     print("group {} runtask {}".format(group, tasks[t]))
+                    #     sys.stdout.flush()
+                    run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+                    # mark step as done in our group's graph
+                    # if group_rank == 0:
+                    #     print("group {} start graph_mark {}".format(group, tasks[t]))
+                    #     sys.stdout.flush()
+                    graph_mark(grph, tasks[t], state='done', descend=False)
+                    # if group_rank == 0:
+                    #     print("group {} end graph_mark {}".format(group, tasks[t]))
+                    #     sys.stdout.flush()
+                except:
+                    # The task threw an exception.  We want to dump all information
+                    # that will be needed to re-run the run_task() function on just
+                    # this task.
+                    msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
+                    log.error(msg)
+                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                    log.error(''.join(lines))
+                    fyml = {}
+                    fyml['step'] = step
+                    fyml['rawdir'] = rawdir
+                    fyml['proddir'] = proddir
+                    fyml['task'] = tasks[t]
+                    fyml['graph'] = tgraph
+                    fyml['opts'] = options
+                    fyml['procs'] = taskproc
+                    if not os.path.isfile(ffile):
+                        log.error('Dumping yaml graph to '+ffile)
+                        # we are the first process to hit this
+                        with open(ffile, 'w') as f:
+                            yaml.dump(fyml, f, default_flow_style=False)
+                    # mark the step as failed in our group's local graph
+                    graph_mark(grph, tasks[t], state='fail', descend=True)
 
-            # if group_rank == 0:
-            #     print("group {} ending task {}".format(group, tasks[t]))
-            #     sys.stdout.flush()
+        if comm_group is not None:
+            comm_group.barrier()
 
     # Now we take the graphs from all groups and merge their states
 
@@ -890,7 +948,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
 
     for st in range(firststep, laststep):
         for name, nd in grph.items():
-            if nd['type'] == run_step_types[st]:
+            if nd['type'] in step_file_types[run_step_types[st]]:
                 if 'state' in nd.keys():
                     if nd['state'] != 'done':
                         graph_mark(grph, name, 'wait')
