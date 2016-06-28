@@ -221,13 +221,13 @@ class Tile(object):
         :func:`tuple`
             A tuple suitable for loading into the frame table.
         """
-        dateobs = (datetime(2017+self.id, 1, 1, 0, 0, 0) +
+        dateobs = (datetime(2017+self.obs_pass, 1, 1, 0, 0, 0) +
                    timedelta(seconds=(exptime*(self.id%2140))))
         frameid = "{0}{1:d}-{2:08d}".format(band, spectrograph, self.id)
         night = int(dateobs.strftime("%Y%m%d"))
         return (frameid, band, spectrograph, self.id, night, flavor,
-                tile.ra, tile.dec, tile.id, exptime, dateobs,
-                tile.ra, tile.dec)
+                self.ra, self.dec, self.id, exptime, dateobs,
+                self.ra, self.dec)
 
 
 class RawDataCursor(sqlite3.Cursor):
@@ -545,7 +545,7 @@ class RawDataCursor(sqlite3.Cursor):
         """
         q = "SELECT * from tile2brick WHERE tileid = ?;"
         self.execute(q, (tile.id,))
-        rows = c.fetchall()
+        rows = self.fetchall()
         petal2brick = dict()
         for r in rows:
             try:
@@ -585,6 +585,7 @@ class RawDataCursor(sqlite3.Cursor):
         tiles = self.get_all_tiles(obs_pass=obs_pass)
         status = 'succeeded'
         for t in tiles:
+            petal2brick = self.get_tile_bricks(t)
             frame_data = list()
             frame2brick_data = list()
             framestatus_data = list()
@@ -592,17 +593,17 @@ class RawDataCursor(sqlite3.Cursor):
             for band in 'brz':
                 for spectrograph in range(10):
                     f = t.to_frame(band, spectrograph)
-                    if not c.is_night(f[4]):
-                        c.load_night(f[4])
-                    if not c.is_flavor(f[5]):
-                        c.load_flavor(f[5])
-                    if not c.is_status(status):
-                        c.load_status(status)
+                    if not self.is_night(f[4]):
+                        self.load_night(f[4])
+                    if not self.is_flavor(f[5]):
+                        self.load_flavor(f[5])
+                    if not self.is_status(status):
+                        self.load_status(status)
                     frame_data.append(f)
-                    framestatus_data.append((f[0], status, dateobs))
+                    framestatus_data.append((f[0], status, f[10]))
                     for brick in petal2brick[spectrograph]:
                         frame2brick_data.append((f[0], brick))
-                        brickstatus_data.append((brick, status, dateobs))
+                        brickstatus_data.append((brick, status, f[10]))
             #
             #
             #
@@ -610,22 +611,22 @@ class RawDataCursor(sqlite3.Cursor):
             (frameid, band, spectrograph, expid, night, flavor, telra, teldec, tileid, exptime, dateobs, alt, az)
             VALUES
             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
-            c.executemany(q1, frame_data)
+            self.executemany(q1, frame_data)
             q2 = """INSERT INTO frame2brick
             (frameid, brickid)
             VALUES
             (?, ?);"""
-            c.executemany(q2, frame2brick_data)
+            self.executemany(q2, frame2brick_data)
             q3 = """INSERT INTO framestatus
             (frameid, status, stamp)
             VALUES
             (?, ?, ?);"""
-            c.executemany(q3, framestatus_data)
+            self.executemany(q3, framestatus_data)
             q4 = """INSERT INTO brickstatus
             (brickid, status, stamp)
             VALUES
             (?, ?, ?);"""
-            c.executemany(q4, brickstatus_data)
+            self.executemany(q4, brickstatus_data)
             log.info("Completed insert of tileid = {0:d}.".format(t.id))
         return
 
@@ -770,13 +771,20 @@ def main():
         log.info("Loaded bricks from {0}.".format(brickfile))
     tilefile = os.path.join(options.datapath, options.tilefile)
     if os.path.exists(tilefile):
-        c.load_tile(tilefile)
-        log.info("Loaded tiles from {0}.".format(tilefile))
-        c.connection.commit()
+        c.execute("SELECT COUNT(*) FROM tile;")
+        rows = c.fetchall()
+        if rows[0][0] == 0:
+            c.load_tile(tilefile)
+            log.info("Loaded tiles from {0}.".format(tilefile))
+            c.connection.commit()
     if options.simulate:
-        c.load_tile2brick(obs_pass=1)
-        log.info("Completed tile2brick mapping.")
-        c.load_simulated_data(obs_pass=1)
+        c.execute("SELECT COUNT(*) FROM tile2brick;")
+        rows = c.fetchall()
+        if rows[0][0] == 0:
+            c.load_tile2brick(obs_pass=options.obs_pass)
+            log.info("Completed tile2brick mapping.")
+            c.connection.commit()
+        c.load_simulated_data(obs_pass=options.obs_pass)
     else:
         exposurepaths = glob(os.path.join(options.datapath,
                                           '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'))
