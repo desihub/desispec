@@ -271,28 +271,6 @@ Where supported commands are:
         tracepath = os.path.join(nfaildir, "{}_{}.trace".format(pipe.file_types_step[nd['type']], args.task))
         ymlpath = os.path.join(nfaildir, "{}_{}.yaml".format(pipe.file_types_step[nd['type']], args.task))
 
-        print("{}{}:".format(self.pref, args.task))
-        print("{}    state = {}{}{}".format(self.pref, beg, stat, clr.ENDC))
-        print("{}    path = {}".format(self.pref, filepath))
-        print("{}    logfile = {}".format(self.pref, logpath))
-        print("{}    inputs required:".format(self.pref))
-        for d in sorted(nd['in']):
-            print("{}      {}".format(self.pref, d))
-        print("{}    output dependents:".format(self.pref))
-        for d in sorted(nd['out']):
-            print("{}      {}".format(self.pref, d))
-        print("")
-
-        if args.log:
-            print("=========== Begin Log =============")
-            print("")
-            with open(logpath, 'r') as f:
-                logdata = f.read()
-                print(logdata)
-            print("")
-            print("============ End Log ==============")
-            print("")
-
         if args.retry:
             if stat != 'fail':
                 print("Task {} has not failed, cannot retry".format(args.task))
@@ -301,6 +279,30 @@ Where supported commands are:
                     pipe.retry_task(ymlpath)
                 else:
                     print("Failure yaml dump does not exist!")
+        else:
+            print("{}{}:".format(self.pref, args.task))
+            print("{}    state = {}{}{}".format(self.pref, beg, stat, clr.ENDC))
+            print("{}    path = {}".format(self.pref, filepath))
+            print("{}    logfile = {}".format(self.pref, logpath))
+            print("{}    inputs required:".format(self.pref))
+            for d in sorted(nd['in']):
+                print("{}      {}".format(self.pref, d))
+            print("{}    output dependents:".format(self.pref))
+            for d in sorted(nd['out']):
+                print("{}      {}".format(self.pref, d))
+            print("")
+
+            if args.log:
+                print("=========== Begin Log =============")
+                print("")
+                with open(logpath, 'r') as f:
+                    logdata = f.read()
+                    print(logdata)
+                print("")
+                print("============ End Log ==============")
+                print("")
+
+
 
         return
 
