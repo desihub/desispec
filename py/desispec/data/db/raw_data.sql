@@ -42,6 +42,9 @@ CREATE TABLE night (
 CREATE TABLE exposureflavor (
     flavor TEXT PRIMARY KEY -- arc, flat, science, etc.
 );
+INSERT INTO exposureflavor (flavor) VALUES ('science');
+INSERT INTO exposureflavor (flavor) VALUES ('arc');
+INSERT INTO exposureflavor (flavor) VALUES ('flat');
 --
 --
 --
@@ -88,9 +91,12 @@ CREATE TABLE tile2brick (
 --
 -- Status
 --
-CREATE TABLE statuses (
+CREATE TABLE status (
     status TEXT PRIMARY KEY  -- not processed, failed, succeeded
 );
+INSERT INTO status (status) VALUES ('not processed');
+INSERT INTO status (status) VALUES ('failed');
+INSERT INTO status (status) VALUES ('succeeded');
 --
 --
 --
@@ -98,7 +104,7 @@ CREATE TABLE framestatus (
     frameid TEXT NOT NULL,
     status TEXT NOT NULL,
     stamp TIMESTAMP NOT NULL,
-    FOREIGN KEY (status) REFERENCES statuses (status)
+    FOREIGN KEY (status) REFERENCES status (status)
 );
 --
 --
@@ -107,7 +113,7 @@ CREATE TABLE brickstatus (
     brickid INTEGER NOT NULL,
     status TEXT NOT NULL,
     stamp TIMESTAMP NOT NULL,
-    FOREIGN KEY (status) REFERENCES statuses (status)
+    FOREIGN KEY (status) REFERENCES status (status)
 );
 --
 -- Index

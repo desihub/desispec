@@ -11,7 +11,7 @@ import numpy as np
 from glob import glob
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from .crc import cksum
 from ..log import get_logger, DEBUG
 from collections import namedtuple
@@ -21,6 +21,7 @@ from matplotlib.collections import PatchCollection
 
 Brick = namedtuple('Brick', ['id', 'name', 'q', 'row', 'col', 'ra', 'dec',
                              'ra1', 'ra2', 'dec1', 'dec2', 'area'])
+
 
 class Tile(object):
     """Simple object to store individual tile data.
@@ -33,9 +34,13 @@ class Tile(object):
         self._dec = dec
         self._obs_pass = obs_pass
         self._in_desi = bool(in_desi)
-        self.cos_radius = np.cos(np.radians(self.radius))
-        self.area = 2.0*np.pi*(1.0 - np.cos(np.radians(self.radius)))  # steradians
+        self._cos_radius = None
+        self._area = None
         self._circum_square = None
+
+    def __repr__(self):
+        return ("Tile(tileid={0.id:d}, ra={0.ra:f}, dec={0.ra:f}, " +
+                "obs_pass={0.obs_pass:d}, in_desi={0.in_desi})").format(self)
 
     @property
     def id(self):
@@ -56,6 +61,42 @@ class Tile(object):
     @property
     def in_desi(self):
         return self._in_desi
+
+    @property
+    def cos_radius(self):
+        if self._cos_radius is None:
+            self._cos_radius = np.cos(np.radians(self.radius))
+        return self._cos_radius
+
+    @property
+    def area(self):
+        if self._area is None:
+            self._area = 2.0*np.pi*(1.0 - self.cos_radius)  # steradians
+        return self._area
+
+    @property
+    def circum_square(self):
+        """Given a `tile`, return the square that circumscribes it.
+
+        Returns
+        -------
+        :func:`tuple`
+            A tuple of RA, Dec, suitable for plotting.
+        """
+        if self._circum_square is None:
+            tile_ra = self.ra + self.offset()
+            ra = [tile_ra - self.radius,
+                  tile_ra + self.radius,
+                  tile_ra + self.radius,
+                  tile_ra - self.radius,
+                  tile_ra - self.radius]
+            dec = [self.dec - self.radius,
+                   self.dec - self.radius,
+                   self.dec + self.radius,
+                   self.dec + self.radius,
+                   self.dec - self.radius]
+            self._circum_square = (ra, dec)
+        return self._circum_square
 
     def offset(self, shift=10.0):
         """Provide an offset to move RA away from wrap-around.
@@ -100,30 +141,6 @@ class Tile(object):
         if brick_ra2 > 360.0:
             brick_ra2 -= 360.0
         return (brick_ra1, brick_ra2)
-
-    @property
-    def circum_square(self):
-        """Given a `tile`, return the square that circumscribes it.
-
-        Returns
-        -------
-        :func:`tuple`
-            A tuple of RA, Dec, suitable for plotting.
-        """
-        if self._circum_square is None:
-            tile_ra = self.ra + self.offset()
-            ra = [tile_ra - self.radius,
-                  tile_ra + self.radius,
-                  tile_ra + self.radius,
-                  tile_ra - self.radius,
-                  tile_ra - self.radius]
-            dec = [self.dec - self.radius,
-                   self.dec - self.radius,
-                   self.dec + self.radius,
-                   self.dec + self.radius,
-                   self.dec - self.radius]
-            self._circum_square = (ra, dec)
-        return self._circum_square
 
     def petals(self, Npetals=10):
         """Convert a tile into a set of Wedge objects.
@@ -184,6 +201,33 @@ class Tile(object):
         if map_petals:
             return petal2brick
         return bricks
+
+    def to_frame(self, band, spectrograph, flavor='science', exptime=1000.0):
+        """Simulate a DESI frame given a Tile object.
+
+        Parameters
+        ----------
+        band : :class:`str`
+            'b', 'r', 'z'
+        spectrograph : :class:`int`
+            Spectrograph number [0-9].
+        flavor : :class:`str`, optional
+            Exposure flavor.
+        exptime : :class:`float`, optional
+            Exposure time.
+
+        Returns
+        -------
+        :func:`tuple`
+            A tuple suitable for loading into the frame table.
+        """
+        dateobs = (datetime(2017+self.id, 1, 1, 0, 0, 0) +
+                   timedelta(seconds=(exptime*(self.id%2140))))
+        frameid = "{0}{1:d}-{2:08d}".format(band, spectrograph, self.id)
+        night = int(dateobs.strftime("%Y%m%d"))
+        return (frameid, band, spectrograph, self.id, night, flavor,
+                tile.ra, tile.dec, tile.id, exptime, dateobs,
+                tile.ra, tile.dec)
 
 
 class RawDataCursor(sqlite3.Cursor):
@@ -282,6 +326,42 @@ class RawDataCursor(sqlite3.Cursor):
         self.executemany(insert, zip(my_nights))
         return
 
+    def is_status(self, status):
+        """Returns ``True`` if `status` is in the status table.
+
+        Parameters
+        ----------
+        status : :class:`str`
+            Status name.
+
+        Returns
+        -------
+        :class:`bool`
+            ``True`` if `status` is in the status table.
+        """
+        s = (status, )
+        q = "SELECT status FROM status WHERE status = ?;"
+        self.execute(q, s)
+        rows = self.fetchall()
+        return len(rows) == 1
+
+    def load_status(self, statuses):
+        """Load a status or multiple statuses into the status table.
+
+        Parameters
+        ----------
+        statuses : :class:`str` or :class:`list`
+            A single night or list of nights.
+        """
+        if isinstance(statuses, str):
+            my_statuses = [statuses]
+        else:
+            my_statuses = statuses
+        insert = """INSERT INTO status (status)
+            VALUES (?);"""
+        self.executemany(insert, zip(my_statuses))
+        return
+
     def is_flavor(self, flavor):
         """Returns ``True`` if the flavor is in the exposureflavor table.
 
@@ -323,7 +403,7 @@ class RawDataCursor(sqlite3.Cursor):
 
         Parameters
         ----------
-        tile : Tile
+        tile : :class:`Tile`
             A Tile object.
 
         Returns
@@ -406,7 +486,7 @@ class RawDataCursor(sqlite3.Cursor):
 
         Returns
         -------
-        Tile
+        :class:`Tile`
             A tile object.
         """
         #
@@ -434,7 +514,7 @@ class RawDataCursor(sqlite3.Cursor):
         Returns
         -------
         :class:`list`
-            A lit of Tiles.
+            A list of Tiles.
         """
         q = "SELECT * FROM tile WHERE in_desi = ?"
         params = (1, )
@@ -449,6 +529,30 @@ class RawDataCursor(sqlite3.Cursor):
         for row in self.fetchall():
             tiles.append(Tile(*row))
         return tiles
+
+    def get_tile_bricks(self, tile):
+        """Get the bricks that overlap `tile`.
+
+        Parameters
+        ----------
+        tile : :class:`Tile`
+            A Tile object.
+
+        Returns
+        -------
+        :class:`dict`
+            The overlapping bricks in a mapping from petal number to brickid.
+        """
+        q = "SELECT * from tile2brick WHERE tileid = ?;"
+        self.execute(q, (tile.id,))
+        rows = c.fetchall()
+        petal2brick = dict()
+        for r in rows:
+            try:
+                petal2brick[r[1]].append(r[2])
+            except KeyError:
+                petal2brick[r[1]] = [r[2]]
+        return petal2brick
 
     def load_tile2brick(self, obs_pass=0):
         """Load the tile2brick table using simulated tiles.
@@ -467,6 +571,62 @@ class RawDataCursor(sqlite3.Cursor):
             for p in petal2brick:
                 nb = len(petal2brick[p])
                 self.executemany(insert, zip([tile.id]*nb, [p]*nb, petal2brick[p]))
+        return
+
+    def load_simulated_data(self, obs_pass=0):
+        """Load simulated frame and brick data.
+
+        Parameters
+        ----------
+        obs_pass : :class:`int`, optional
+            If set, only simulate one pass.
+        """
+        log = get_logger()
+        tiles = self.get_all_tiles(obs_pass=obs_pass)
+        status = 'succeeded'
+        for t in tiles:
+            frame_data = list()
+            frame2brick_data = list()
+            framestatus_data = list()
+            brickstatus_data = list()
+            for band in 'brz':
+                for spectrograph in range(10):
+                    f = t.to_frame(band, spectrograph)
+                    if not c.is_night(f[4]):
+                        c.load_night(f[4])
+                    if not c.is_flavor(f[5]):
+                        c.load_flavor(f[5])
+                    if not c.is_status(status):
+                        c.load_status(status)
+                    frame_data.append(f)
+                    framestatus_data.append((f[0], status, dateobs))
+                    for brick in petal2brick[spectrograph]:
+                        frame2brick_data.append((f[0], brick))
+                        brickstatus_data.append((brick, status, dateobs))
+            #
+            #
+            #
+            q1 = """INSERT INTO frame
+            (frameid, band, spectrograph, expid, night, flavor, telra, teldec, tileid, exptime, dateobs, alt, az)
+            VALUES
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
+            c.executemany(q1, frame_data)
+            q2 = """INSERT INTO frame2brick
+            (frameid, brickid)
+            VALUES
+            (?, ?);"""
+            c.executemany(q2, frame2brick_data)
+            q3 = """INSERT INTO framestatus
+            (frameid, status, stamp)
+            VALUES
+            (?, ?, ?);"""
+            c.executemany(q3, framestatus_data)
+            q4 = """INSERT INTO brickstatus
+            (brickid, status, stamp)
+            VALUES
+            (?, ?, ?);"""
+            c.executemany(q4, brickstatus_data)
+            log.info("Completed insert of tileid = {0:d}.".format(t.id))
         return
 
     def load_data(self, datapath):
@@ -566,6 +726,9 @@ def main():
     parser.add_argument('-f', '--filename', action='store', dest='dbfile',
         default='metadata.db', metavar='FILE',
         help="Store data in FILE.")
+    parser.add_argument('-p', '--pass', action='store', dest='obs_pass',
+        default=0, type=int, metavar='PASS',
+        help="Only simulate frames associated with PASS.")
     parser.add_argument('-s', '--simulate', action='store_true',
         dest='simulate', help="Run a simulation using DESI tiles.")
     parser.add_argument('-t', '--tiles', action='store', dest='tilefile',
@@ -612,6 +775,8 @@ def main():
         c.connection.commit()
     if options.simulate:
         c.load_tile2brick(obs_pass=1)
+        log.info("Completed tile2brick mapping.")
+        c.load_simulated_data(obs_pass=1)
     else:
         exposurepaths = glob(os.path.join(options.datapath,
                                           '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'))
