@@ -233,6 +233,28 @@ class Tile(object):
 class RawDataCursor(sqlite3.Cursor):
     """Allow simple object-oriented interaction with raw data database.
     """
+    insert_brick = """INSERT INTO brick
+        (brickname, brickid, brickq, brickrow, brickcol,
+        ra, dec, ra1, ra2, dec1, dec2, area)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?);"""
+    insert_tile = """INSERT INTO tile (tileid, ra, dec, pass, in_desi)
+        VALUES (?, ?, ?, ?, ?);"""
+    select_tile = "SELECT * FROM tile WHERE tileid = ?;"
+    insert_tile2brick = "INSERT INTO tile2brick (tileid, petalid, brickid) VALUES (?, ?, ?);"
+    select_tile2brick = "SELECT * from tile2brick WHERE tileid = ?;"
+    insert_frame = """INSERT INTO frame
+        (frameid, band, spectrograph, expid, night, flavor, telra, teldec, tileid, exptime, dateobs, alt, az)
+        VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
+    insert_frame2brick = "INSERT INTO frame2brick (frameid, brickid) VALUES (?, ?);"
+    insert_framestatus = "INSERT INTO framestatus (frameid, status, stamp) VALUES (?, ?, ?);"
+    insert_brickstatus = "INSERT INTO brickstatus (brickid, status, stamp) VALUES (?, ?, ?);"
+    insert_night = "INSERT INTO night (night) VALUES (?);"
+    select_night = "SELECT night FROM night WHERE night = ?;"
+    insert_status = "INSERT INTO status (status) VALUES (?);"
+    select_status = "SELECT status FROM status WHERE status = ?;"
+    insert_flavor = "INSERT INTO exposureflavor (flavor) VALUES (?);"
+    select_flavor = "SELECT flavor FROM exposureflavor WHERE flavor = ?;"
 
     def __init__(self, *args, **kwargs):
         super(RawDataCursor, self).__init__(*args, **kwargs)
@@ -260,11 +282,7 @@ class RawDataCursor(sqlite3.Cursor):
                     (np.sin(np.radians(brickdata['dec2'])) -
                      np.sin(np.radians(brickdata['dec1']))))
             bricklist.append(area.tolist())
-        insert = """INSERT INTO brick
-            (brickname, brickid, brickq, brickrow, brickcol,
-            ra, dec, ra1, ra2, dec1, dec2, area)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?);"""
-        self.executemany(insert, zip(*bricklist))
+        self.executemany(self.insert_brick, zip(*bricklist))
         return
 
     def load_tile(self, tilefile):
@@ -280,9 +298,7 @@ class RawDataCursor(sqlite3.Cursor):
         tile_list = [tile_data['TILEID'].tolist(), tile_data['RA'].tolist(),
                      tile_data['DEC'].tolist(), tile_data['PASS'].tolist(),
                      tile_data['IN_DESI'].tolist()]
-        insert = """INSERT INTO tile (tileid, ra, dec, pass, in_desi)
-                    VALUES (?, ?, ?, ?, ?);"""
-        self.executemany(insert, zip(*tile_list))
+        self.executemany(self.insert_tile, zip(*tile_list))
         return
 
     def is_night(self, night):
@@ -302,8 +318,7 @@ class RawDataCursor(sqlite3.Cursor):
             n = (int(night),)
         else:
             n = (night,)
-        q = "SELECT night FROM night WHERE night = ?;"
-        self.execute(q, n)
+        self.execute(self.select_night, n)
         rows = self.fetchall()
         return len(rows) == 1
 
@@ -321,9 +336,7 @@ class RawDataCursor(sqlite3.Cursor):
             my_nights = [nights]
         else:
             my_nights = [int(n) for n in nights]
-        insert = """INSERT INTO night (night)
-            VALUES (?);"""
-        self.executemany(insert, zip(my_nights))
+        self.executemany(self.insert_night, zip(my_nights))
         return
 
     def is_status(self, status):
@@ -340,8 +353,7 @@ class RawDataCursor(sqlite3.Cursor):
             ``True`` if `status` is in the status table.
         """
         s = (status, )
-        q = "SELECT status FROM status WHERE status = ?;"
-        self.execute(q, s)
+        self.execute(self.select_status, s)
         rows = self.fetchall()
         return len(rows) == 1
 
@@ -357,9 +369,7 @@ class RawDataCursor(sqlite3.Cursor):
             my_statuses = [statuses]
         else:
             my_statuses = statuses
-        insert = """INSERT INTO status (status)
-            VALUES (?);"""
-        self.executemany(insert, zip(my_statuses))
+        self.executemany(self.insert_status, zip(my_statuses))
         return
 
     def is_flavor(self, flavor):
@@ -376,8 +386,7 @@ class RawDataCursor(sqlite3.Cursor):
             ``True`` if the flavor is in the flavor table.
         """
         f = (flavor,)
-        q = "SELECT flavor FROM exposureflavor WHERE flavor = ?;"
-        self.execute(q, f)
+        self.execute(self.select_flavor, f)
         rows = self.fetchall()
         return len(rows) == 1
 
@@ -393,9 +402,7 @@ class RawDataCursor(sqlite3.Cursor):
             my_flavors = [flavors]
         else:
             my_flavors = flavors
-        insert = """INSERT INTO exposureflavor (flavor)
-            VALUES (?);"""
-        self.executemany(insert, zip(my_flavors))
+        self.executemany(self.insert_flavor, zip(my_flavors))
         return
 
     def get_bricks(self, tile):
@@ -496,8 +503,7 @@ class RawDataCursor(sqlite3.Cursor):
             i = np.random.randint(1, N_tiles+1)
         else:
             i = tileid
-        q = "SELECT * FROM tile WHERE tileid = ?";
-        self.execute(q, (i,))
+        self.execute(self.select_tile, (i,))
         rows = self.fetchall()
         return Tile(*(rows[0]))
 
@@ -543,8 +549,7 @@ class RawDataCursor(sqlite3.Cursor):
         :class:`dict`
             The overlapping bricks in a mapping from petal number to brickid.
         """
-        q = "SELECT * from tile2brick WHERE tileid = ?;"
-        self.execute(q, (tile.id,))
+        self.execute(self.select_tile2brick, (tile.id,))
         rows = self.fetchall()
         petal2brick = dict()
         for r in rows:
@@ -563,14 +568,13 @@ class RawDataCursor(sqlite3.Cursor):
             Select only tiles from this pass.
         """
         tiles = self.get_all_tiles(obs_pass=obs_pass)
-        insert = "INSERT INTO tile2brick (tileid, petalid, brickid) VALUES (?, ?, ?);"
         for tile in tiles:
             # petal2brick[tile.id] = dict()
             candidate_bricks = self.get_bricks(tile)
             petal2brick = tile.overlapping_bricks(candidate_bricks, map_petals=True)
             for p in petal2brick:
                 nb = len(petal2brick[p])
-                self.executemany(insert, zip([tile.id]*nb, [p]*nb, petal2brick[p]))
+                self.executemany(self.insert_tile2brick, zip([tile.id]*nb, [p]*nb, petal2brick[p]))
         return
 
     def load_simulated_data(self, obs_pass=0):
@@ -607,26 +611,8 @@ class RawDataCursor(sqlite3.Cursor):
             #
             #
             #
-            q1 = """INSERT INTO frame
-            (frameid, band, spectrograph, expid, night, flavor, telra, teldec, tileid, exptime, dateobs, alt, az)
-            VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
-            self.executemany(q1, frame_data)
-            q2 = """INSERT INTO frame2brick
-            (frameid, brickid)
-            VALUES
-            (?, ?);"""
-            self.executemany(q2, frame2brick_data)
-            q3 = """INSERT INTO framestatus
-            (frameid, status, stamp)
-            VALUES
-            (?, ?, ?);"""
-            self.executemany(q3, framestatus_data)
-            q4 = """INSERT INTO brickstatus
-            (brickid, status, stamp)
-            VALUES
-            (?, ?, ?);"""
-            self.executemany(q4, brickstatus_data)
+            self.insert_frame_data(frame_data, frame2brick_data,
+                                   framestatus_data, brickstatus_data)
             log.info("Completed insert of tileid = {0:d}.".format(t.id))
         return
 
@@ -643,7 +629,7 @@ class RawDataCursor(sqlite3.Cursor):
         :class:`list`
             A list of the exposure numbers found.
         """
-        from ..log import desi_logger
+        log = get_logger()
         fibermaps = glob(os.path.join(datapath, 'fibermap*.fits'))
         if len(fibermaps) == 0:
             return []
@@ -652,50 +638,89 @@ class RawDataCursor(sqlite3.Cursor):
         exposures = [ int(fibermapre.findall(f)[0]) for f in fibermaps ]
         frame_data = list()
         frame2brick_data = list()
+        framestatus_data = list()
+        brickstatus_data = list()
+        status = 'succeeded'
         for k, f in enumerate(fibermaps):
             with fits.open(f) as hdulist:
-                fiberhdr = hdulist['FIBERMAP'].header
-                night = int(fiberhdr['NIGHT'])
-                dateobs = datetime.strptime(fiberhdr['DATE-OBS'],
-                                            '%Y-%m-%dT%H:%M:%S')
+                # fiberhdr = hdulist['FIBERMAP'].header
+                # night = int(fiberhdr['NIGHT'])
+                # dateobs = datetime.strptime(fiberhdr['DATE-OBS'],
+                #                             '%Y-%m-%dT%H:%M:%S')
                 bricknames = list(set(hdulist['FIBERMAP'].data['BRICKNAME'].tolist()))
-            datafiles = glob(os.path.join(datapath, 'desi-*-{0:08d}.fits'.format(exposures[k])))
-            if len(datafiles) == 0:
-                datafiles = glob(os.path.join(datapath, 'pix-*-{0:08d}.fits'.format(exposures[k])))
-            desi_logger.debug("Found datafiles: {0}.".format(", ".join(datafiles)))
-            # datafile_ids = self.load_file(datafiles)
-            with fits.open(datafiles[0]) as hdulist:
-                exptime = hdulist[0].header['EXPTIME']
-                flavor = hdulist[0].header['FLAVOR']
-            if not self.is_night(night):
-                self.load_night(night)
-            if not self.is_flavor(flavor):
-                self.load_flavor(flavor)
-            frame_data.append((
-                frames[k], # frameid, e.g. b0-00012345
-                band, # b, r, z
-                spectrograph, # 0-9
-                exposures[k], # expid
-                night, # night
-                flavor, # flavor
-                0.0, # telra
-                0.0, # teldec
-                -1, # tileid
-                exptime, # exptime
-                dateobs, # dateobs
-                0.0, # alt
-                0.0)) # az
             brickids = self.get_brickid_by_name(bricknames)
-            for i in brickids:
-                frame2brick_data.append( (frames[k], brickids[i]) )
-        insert = """INSERT INTO frame
-            (expid, night, flavor, telra, teldec, tileid, exptime, dateobs, alt, az)
-            VALUES (?,?,?,?,?,?,?,?,?,?);"""
-        self.executemany(insert, frame_data)
-        insert = """INSERT INTO frame2brick
-            (expid,brickid) VALUES (?,?);"""
-        self.executemany(insert, frame2brick_data)
+            # datafiles = glob(os.path.join(datapath, 'desi-*-{0:08d}.fits'.format(exposures[k])))
+            # if len(datafiles) == 0:
+            datafiles = glob(os.path.join(datapath, 'pix-[brz][0-9]-{0:08d}.fits'.format(exposures[k])))
+            log.info("Found datafiles: {0}.".format(", ".join(datafiles)))
+            # datafile_ids = self.load_file(datafiles)
+            for f in datafiles:
+                with fits.open(f) as hdulist:
+                    camera = hdulist[0].header['CAMERA']
+                    expid = int(hdulist[0].header['EXPID'])
+                    night = int(hdulist[0].header['NIGHT'])
+                    flavor = hdulist[0].header['FLAVOR']
+                    telra = hdulist[0].header['TELRA']
+                    teldec = hdulist[0].header['TELDEC']
+                    tileid = hdulist[0].header['TILEID']
+                    exptime = hdulist[0].header['EXPTIME']
+                    dateobs = datetime.strptime(hdulist[0].header['DATE-OBS'], '%Y-%m-%dT%H:%M:%S')
+                band = camera[0]
+                assert band in 'brz'
+                spectrograph = int(camera[1])
+                assert 0 <= spectrograph <= 9
+                frameid = "{0}-{1:08d}".format(camera, expid)
+                if not self.is_night(night):
+                    self.load_night(night)
+                if not self.is_flavor(flavor):
+                    self.load_flavor(flavor)
+                if not self.is_status(status):
+                    self.load_status(status)
+                frame_data.append((
+                    frameid, # frameid, e.g. b0-00012345
+                    band, # b, r, z
+                    spectrograph, # 0-9
+                    expid, # expid
+                    night, # night
+                    flavor, # flavor
+                    telra, # telra
+                    teldec, # teldec
+                    tileid, # tileid
+                    exptime, # exptime
+                    dateobs, # dateobs
+                    0.0, # alt
+                    0.0)) # az
+                framestatus_data.append( (frameid, status, dateobs) )
+                for i in brickids:
+                    frame2brick_data.append( (frameid, brickids[i]) )
+                    brickstatus_data.append( (brickids[i], status, dateobs) )
+        #
+        #
+        #
+        self.insert_frame_data(frame_data, frame2brick_data,
+                               framestatus_data, brickstatus_data)
+        log.info("Completed insert of frame data.")
         return exposures
+
+    def insert_frame_data(self, frame, frame2brick, framestatus, brickstatus):
+        """Actually insert the data loaded from raw data files or simulations.
+
+        Parameters
+        ----------
+        frame : :class:`list`
+            Data to be inserted into the ``frame`` table.
+        frame : :class:`list`
+            Data to be inserted into the ``frame`` table.
+        frame : :class:`list`
+            Data to be inserted into the ``frame`` table.
+        frame : :class:`list`
+            Data to be inserted into the ``frame`` table.
+        """
+        self.executemany(self.insert_frame, frame)
+        self.executemany(self.insert_frame2brick, frame2brick)
+        self.executemany(self.insert_framestatus, framestatus)
+        self.executemany(self.insert_brickstatus, brickstatus)
+        return
 
 
 def main():
