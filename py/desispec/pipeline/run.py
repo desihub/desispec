@@ -759,6 +759,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                     # if group_rank == 0:
                     #     print("group {} runtask {}".format(group, tasks[t]))
                     #     sys.stdout.flush()
+                    log.debug("running step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc))
                     run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
                     # mark step as done in our group's graph
                     # if group_rank == 0:
