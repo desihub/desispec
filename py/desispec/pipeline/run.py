@@ -584,17 +584,6 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     return
 
 
-def redirect_logging():
-    log = get_logger()
-    while len(log.handlers) > 0:
-        h = log.handlers[0]
-        log.removeHandler(h)
-    # Add the current stdout.
-    ch = logging.StreamHandler(sys.stdout)
-    log.addHandler(ch)
-    return
-
-
 @contextmanager
 def stdouterr_redirected(to=os.devnull, comm=None):
     '''
@@ -607,6 +596,7 @@ def stdouterr_redirected(to=os.devnull, comm=None):
         os.system("echo non-Python applications are also supported")
     '''
     fd = sys.stdout.fileno()
+    fde = sys.stderr.fileno()
 
     ##### assert that Python and C stdio write using the same file descriptor
     ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
@@ -615,6 +605,9 @@ def stdouterr_redirected(to=os.devnull, comm=None):
         sys.stdout.close() # + implicit flush()
         os.dup2(to.fileno(), fd) # fd writes to 'to' file
         sys.stdout = os.fdopen(fd, 'w') # Python writes to fd
+        sys.stderr.close() # + implicit flush()
+        os.dup2(to.fileno(), fde) # fd writes to 'to' file
+        sys.stderr = os.fdopen(fde, 'w') # Python writes to fd
         # update desi logging to use new stdout
         log = get_logger()
         while len(log.handlers) > 0:
@@ -622,6 +615,8 @@ def stdouterr_redirected(to=os.devnull, comm=None):
             log.removeHandler(h)
         # Add the current stdout.
         ch = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter('%(levelname)s:%(filename)s:%(lineno)s:%(funcName)s: %(message)s')
+        ch.setFormatter(formatter)
         log.addHandler(ch)
 
     with os.fdopen(os.dup(fd), 'w') as old_stdout:
@@ -635,8 +630,14 @@ def stdouterr_redirected(to=os.devnull, comm=None):
                         _redirect_stdout(to=file)
                 comm.barrier()
         try:
+            if (comm is None) or (comm.rank == 0):
+                log.info("Begin log redirection to {} at {}".format(to, time.asctime()))
+            sys.stdout.flush()
             yield # allow code to be run with the redirected stdout
         finally:
+            if (comm is None) or (comm.rank == 0):
+                log.info("End log redirection to {} at {}".format(to, time.asctime()))
+            sys.stdout.flush()
             _redirect_stdout(to=old_stdout) # restore stdout.
                                             # buffering and flags such as
                                             # CLOEXEC may be different
@@ -975,12 +976,11 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
             comm.barrier()
         if rank == 0:
             log.info("completed step {} at {}".format(run_step_types[st], time.asctime()))
-
-    if rank == 0:
-        graph_write(statefile, grph)
-        with open(statedot, 'w') as f:
-            graph_dot(grph, f)
-        log.info("finished steps {} to {}".format(run_step_types[firststep], run_step_types[laststep-1]))
+        if rank == 0:
+            graph_write(statefile, grph)
+            with open(statedot, 'w') as f:
+                graph_dot(grph, f)
+            log.info("finished steps {} to {}".format(run_step_types[firststep], run_step_types[laststep-1]))
 
     return
 
