@@ -29,6 +29,7 @@ import desispec
 
 import desispec.log
 from desispec.log import get_logger
+from desispec.util import default_nproc
 from .plan import *
 from .utils import option_list
 
@@ -435,8 +436,9 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['skymodels'] = skyfiles
         options['fiberflats'] = flatfiles
         options['outfile'] = outfile
+        options['ncpu'] = str(default_nproc)
         
-        options.update(opts)
+        options.update(opts)        
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
@@ -663,7 +665,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     if rank == 0:
         # For this step, compute all the tasks that we need to do
         alltasks = []
-        for name, nd in grph.items():
+        for name, nd in sorted(grph.items()):
             if nd['type'] in step_file_types[step]:
                 alltasks.append(name)
 
@@ -1111,6 +1113,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
             f.write("  app=${ex}\n")
             f.write("fi\n")
             f.write("echo calling desi_pipe_run at `date`\n\n")
+            f.write("echo ${{run}} ${{app}} {}\n".format(' '.join(comlist)))
             f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(' '.join(comlist)))
             if multisrun:
                 f.write(" &")

@@ -21,7 +21,11 @@ import desispec.io as io
 import desispec.pipeline as pipe
 
 
-def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes, nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh):
+def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, 
+    ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes,
+    nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
+    queue='debug', minutes=30,
+    ):
     specstr = ""
     if specs is not None:
         specstr = " --spectrographs {}".format(','.join([ "{}".format(x) for x in specs ]))
@@ -68,14 +72,16 @@ def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, 
     if nodes > nersc_maxnodes:
         nodes = nersc_maxnodes
 
-    queue = 'debug'
-    if nodes > nersc_queue_thresh:
+    if nodes > nersc_queue_thresh and queue == 'debug':
+        print('{} nodes too big for debug queue; switching to regular')
         queue = 'regular'
 
     nersc_path = os.path.join(scrdir, "{}.slurm".format(stepstr))
     nersc_log = os.path.join(logdir, "{}_slurm".format(stepstr))
 
-    pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, com, nodes=nodes, nodeproc=nodeproc, minutes=30, multisrun=False, openmp=(nersc_threads > 1), multiproc=(nersc_mp > 1), queue=queue)
+    pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, com, nodes=nodes,
+        nodeproc=nodeproc, minutes=minutes, multisrun=False, openmp=(nersc_threads > 1),
+        multiproc=(nersc_mp > 1), queue=queue)
 
     return
 
@@ -318,7 +324,7 @@ def main():
 
     ntask = totcount['science'] * 3 * nspect
     taskproc = 1
-    multip = 2
+    multip = 1      #- turning off multiprocessing
 
     compute_step(setupfile, rawdir, proddir, envcom, "fiberflat", "procexp", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
 
@@ -349,9 +355,11 @@ def main():
 
     ntask = len(allbricks)
     taskproc = 1
-    multip = 2
+    multip = 12
 
-    compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
+    compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs,
+        None, ntask, taskproc, shell_mpi_run, shell_maxcores,
+        1, maxnodes, nodecores, 1, multip, maxnodes, queue='regular', minutes=60)
 
 
 
