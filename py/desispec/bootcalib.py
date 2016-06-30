@@ -1690,6 +1690,49 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=2., debug=False)
     # Return
     return xnew, xerr
 
+def fix_coeff_outliers(coeff, deg=5, sigma_clip=5):
+    '''
+    Fix outliers in coefficients, assuming that neighboring fibers are similar
+    
+    Args:
+        coeff[nfiber, ncoeff] : 2D array of Legendre coefficients
+    
+    Options:
+        deg : integer degree of polynomial to fit
+        sigma_clip : replace outliers larger than sigma_clip stddev
+        
+    Returns:
+        newcoeff[nfiber, ncoeff] with outliers replaced by interpolations
+        
+    For each coefficient, fit a polynomial vs. fiber number with one
+    pass of sigma clipping.  Remaining outliers are than replaced with
+    the interpolated fit value.
+    '''
+    #- Map fiber number to xx in [-1,1] for polynomial robustness
+    x = np.arange(coeff.shape[0], dtype=float)
+    xx = 2*(x - np.min(x)) / (np.max(x) - np.min(x)) - 1
+
+    newcoeff = coeff.copy()
+    for i in range(coeff.shape[1]):
+        #- First pass fit
+        y = coeff[:, i]
+        c = np.polyfit(xx, y, deg)
+        diff = y - np.polyval(c, xx)
+        sigma = 1.4826 * np.median(np.abs(diff))  #- robust Gaussian sigma
+        good = (np.abs(diff) < sigma_clip*sigma)
+
+        #- Refit
+        c = np.polyfit(xx[good], y[good], deg)
+        diff = y - np.polyval(c, xx)
+        sigma = 1.4826 * np.median(np.abs(diff))
+        good = (np.abs(diff) < sigma_clip*sigma)
+        bad = ~good
+
+        if np.any(bad):
+            newcoeff[bad,i] = np.polyval(c, xx[bad])
+
+    return newcoeff
+
 #####################################################################
 #####################################################################
 # Output
@@ -1761,18 +1804,23 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5, sig_rej=100000.)
             XCOEFF[ii, :] = xleg_fit['coeff']
 
+    # Fix outliers assuming that coefficients vary smoothly vs. fiber number
+    XCOEFF = fix_coeff_outliers(XCOEFF)
+    YCOEFF = fix_coeff_outliers(YCOEFF)
+
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)
     prihdu.header['WAVEMIN'] = WAVEMIN
     prihdu.header['WAVEMAX'] = WAVEMAX
+    prihdu.header['EXTNAME'] = 'XCOEFF'
 
-    yhdu = fits.ImageHDU(YCOEFF)
+    yhdu = fits.ImageHDU(YCOEFF, name='YCOEFF')
 
     # also save wavemin wavemax in yhdu
     yhdu.header['WAVEMIN'] = WAVEMIN
     yhdu.header['WAVEMAX'] = WAVEMAX
 
-    gausshdu = fits.ImageHDU(np.array(gauss))
+    gausshdu = fits.ImageHDU(np.array(gauss), name='XSIGMA')
 
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
     hdulist.writeto(outfile, clobber=True)
