@@ -438,7 +438,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['outfile'] = outfile
         options['ncpu'] = str(default_nproc)
         
-        options.update(opts)        
+        options.update(opts)
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
