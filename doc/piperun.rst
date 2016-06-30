@@ -7,7 +7,7 @@ Running a Production
 Now that we have seen how to create a production and use the individual pipeline tools, we can now look at a detailed example.  For this example, we'll assume that the raw data is located in ${SCRATCH}/desi/raw.  We'll also assume that our data reduction directory is ${SCRATCH}/desi/redux.
 
 
-Make a Small Production
+Create a Small Production
 -------------------------
 
 One useful way of testing on a small dataset is to limit the analysis to a single spectrograph.  We'll assume that all of our environment setup discussed in :ref:`install` is done by running a shell function "desi".  We put this command (and any others) into a snippet of text that will be inserted into the pipeline running scripts to initialize our environment::
@@ -38,6 +38,16 @@ This will create the production directory structure and also make a shell snippe
 
     %> source setup.sh
 
-Now go into the "run" directory.  The "logs" subdirectory contains nightly directories with the logs from each task.  The high
+
+Generated Scripts
+---------------------
+
+Now go into the "run" directory.  Look in the "run/scripts" subdirectory.  This contains two versions of each pipeline script.  One is a slurm batch script which is designed to work at NERSC.  The other is a simple bash script which does the same tasks by calling desi_pipe_run directly.  Note that if you are using a simple cluster with MPI configured, then you can use the --shell_mpi_run and --shell_max_cores options to desi_pipe to configure these generated bash scripts to use MPI directly.
+
+
+Logging
+----------------
+
+The "run/logs" subdirectory is where log files for all pipeline jobs will be written.  The top level directory contains contains the high-level logs from each pipeline job that is run.  The nightly directories within the logs directory contain with the logs from each task.  The high
 
 
