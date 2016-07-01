@@ -194,7 +194,7 @@ def main(args) :
     else :
         log.info("Fitting {} targets".format(nspec))
     
-    log.debug("flux.shape=",flux.shape)
+    log.debug("flux.shape={}".format(flux.shape))
     
     
     zf = RedMonsterZfind(wave= wave,flux= flux,ivar=ivar,

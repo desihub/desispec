@@ -4,7 +4,7 @@ desispec.io.fluxcalibration
 
 IO routines for flux calibration.
 """
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
 import os
 from astropy.io import fits
 import numpy,scipy
@@ -48,8 +48,9 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     tbhdu=fits.BinTableHDU.from_columns(cols,header=hdr)
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
-    hdulist.writeto(norm_modelfile+'.tmp',clobber=True, checksum=True)
-    os.rename(norm_modelfile+'.tmp', norm_modelfile)
+    tmpfile = norm_modelfile+".tmp"
+    hdulist.writeto(tmpfile, clobber=True, checksum=True)
+    os.rename(tmpfile, norm_modelfile)
     #fits.append(norm_modelfile,cols,header=tbhdu.header)
 
 def read_stdstar_models(filename):
