@@ -12,7 +12,7 @@ Tools for data and metadata I/O.
 # help with 2to3 support
 from __future__ import absolute_import, division
 
-from .meta import (findfile, get_exposures, get_files, get_raw_files, 
+from .meta import (findfile, get_exposures, get_files, get_raw_files,
     rawdata_root, specprod_root, validate_night)
 from .frame import read_frame, write_frame
 from .sky import read_sky, write_sky
@@ -30,8 +30,6 @@ from .fluxcalibration import (
 from .filters import load_filter
 from .download import download, filepath2url
 from .crc import memcrc, cksum
-from .database import (load_brick, is_night, load_night, is_flavor, load_flavor,
-    get_bricks_by_name, get_brickid_by_name, load_data)
 
 from desispec.preproc import read_bias, read_pixflat, read_mask
 from desispec.io.raw import read_raw, write_raw
