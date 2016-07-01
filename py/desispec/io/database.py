@@ -224,7 +224,7 @@ class Tile(object):
         dateobs = (datetime(2017+self.obs_pass, 1, 1, 0, 0, 0) +
                    timedelta(seconds=(exptime*(self.id%2140))))
         frameid = "{0}{1:d}-{2:08d}".format(band, spectrograph, self.id)
-        night = int(dateobs.strftime("%Y%m%d"))
+        night = dateobs.strftime("%Y%m%d")
         return (frameid, band, spectrograph, self.id, night, flavor,
                 self.ra, self.dec, self.id, exptime, dateobs,
                 self.ra, self.dec)
@@ -306,7 +306,7 @@ class RawDataCursor(sqlite3.Cursor):
 
         Parameters
         ----------
-        night : :class:`int` or :class:`str`
+        night : :class:`str`
             Night name.
 
         Returns
@@ -314,10 +314,7 @@ class RawDataCursor(sqlite3.Cursor):
         :class:`bool`
             ``True`` if the night is in the night table.
         """
-        if isinstance(night, str):
-            n = (int(night),)
-        else:
-            n = (night,)
+        n = (night,)
         self.execute(self.select_night, n)
         rows = self.fetchall()
         return len(rows) == 1
@@ -327,15 +324,13 @@ class RawDataCursor(sqlite3.Cursor):
 
         Parameters
         ----------
-        nights : :class:`int`, :class:`str` or :class:`list`
+        nights : :class:`str` or :class:`list`
             A single night or list of nights.
         """
         if isinstance(nights, str):
-            my_nights = [int(nights)]
-        elif isinstance(nights, int):
             my_nights = [nights]
         else:
-            my_nights = [int(n) for n in nights]
+            my_nights = nights
         self.executemany(self.insert_night, zip(my_nights))
         return
 
@@ -644,7 +639,7 @@ class RawDataCursor(sqlite3.Cursor):
         for k, f in enumerate(fibermaps):
             with fits.open(f) as hdulist:
                 # fiberhdr = hdulist['FIBERMAP'].header
-                # night = int(fiberhdr['NIGHT'])
+                # night = fiberhdr['NIGHT']
                 # dateobs = datetime.strptime(fiberhdr['DATE-OBS'],
                 #                             '%Y-%m-%dT%H:%M:%S')
                 bricknames = list(set(hdulist['FIBERMAP'].data['BRICKNAME'].tolist()))
@@ -658,13 +653,21 @@ class RawDataCursor(sqlite3.Cursor):
                 with fits.open(f) as hdulist:
                     camera = hdulist[0].header['CAMERA']
                     expid = int(hdulist[0].header['EXPID'])
-                    night = int(hdulist[0].header['NIGHT'])
+                    night = hdulist[0].header['NIGHT']
                     flavor = hdulist[0].header['FLAVOR']
                     telra = hdulist[0].header['TELRA']
                     teldec = hdulist[0].header['TELDEC']
                     tileid = hdulist[0].header['TILEID']
                     exptime = hdulist[0].header['EXPTIME']
                     dateobs = datetime.strptime(hdulist[0].header['DATE-OBS'], '%Y-%m-%dT%H:%M:%S')
+                    try:
+                        alt = hdulist[0].header['ALT']
+                    except KeyError:
+                        alt = 0.0
+                    try:
+                        az = hdulist[0].header['AZ']
+                    except KeyError:
+                        az = 0.0
                 band = camera[0]
                 assert band in 'brz'
                 spectrograph = int(camera[1])
@@ -688,8 +691,8 @@ class RawDataCursor(sqlite3.Cursor):
                     tileid, # tileid
                     exptime, # exptime
                     dateobs, # dateobs
-                    0.0, # alt
-                    0.0)) # az
+                    alt, # alt
+                    az)) # az
                 framestatus_data.append( (frameid, status, dateobs) )
                 for i in brickids:
                     frame2brick_data.append( (frameid, brickids[i]) )

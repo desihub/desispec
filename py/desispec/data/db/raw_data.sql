@@ -34,7 +34,7 @@ CREATE TABLE brick (
 --
 --
 CREATE TABLE night (
-    night INTEGER PRIMARY KEY -- e.g. 20150510
+    night TEXT PRIMARY KEY -- e.g. 20150510; even though this can be represented as an integer, elsewhere night is used as a string.
 );
 --
 --
@@ -53,7 +53,7 @@ CREATE TABLE frame (
     band TEXT NOT NULL, -- b, r, z, might be called 'channel' or 'arm'
     spectrograph INTEGER NOT NULL, -- 0, 1, 2, ...
     expid INTEGER NOT NULL, -- exposure number
-    night INTEGER NOT NULL, -- foreign key on night
+    night TEXT NOT NULL, -- foreign key on night
     flavor TEXT NOT NULL, -- foreign key on exposureflavor, might be called 'obstype'
     telra REAL NOT NULL,
     teldec REAL NOT NULL,
