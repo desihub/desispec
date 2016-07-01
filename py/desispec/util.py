@@ -12,6 +12,31 @@ else:
     import multiprocessing as _mp
     default_nproc = max(1, _mp.cpu_count() // 2)
 
+
+# Distribute some number of things among some number
+# of workers
+
+def dist_work(nwork, workers, id):
+    ntask = 0
+    firsttask = 0
+
+    # if ID is out of range, ignore it
+    if id < workers:
+        if nwork < workers:
+            if id < nwork:
+                ntask = 1
+                firsttask = id
+        else:
+            ntask = int(nwork / workers)
+            leftover = nwork % workers
+            if id < leftover:
+                ntask += 1
+                firsttask = id * ntask
+            else:
+                firsttask = ((ntask + 1) * leftover) + (ntask * (id - leftover))
+    return (firsttask, ntask)
+
+
 def mask32(mask):
     '''
     Return an input mask as unsigned 32-bit

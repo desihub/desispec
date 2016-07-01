@@ -353,14 +353,13 @@ def main():
 
     # redshift fitting
 
+    # these parameters run one brick on 2 nodes, with one process per core.
     ntask = len(allbricks)
-    taskproc = 1
-    multip = 12
+    taskproc = 2 * nodecores
 
     compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs,
         None, ntask, taskproc, shell_mpi_run, shell_maxcores,
-        1, maxnodes, nodecores, 1, multip, maxnodes, queue='regular', minutes=60)
-
+        1, maxnodes, nodecores, 1, 1, maxnodes, queue='debug')
 
 
 

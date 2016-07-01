@@ -569,8 +569,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         log.debug(" ".join(com))
 
         args = zfind.parse(optarray)
-        if rank == 0:
-            zfind.main(args)
+        zfind.main(args, comm=comm)
 
     else:
         raise RuntimeError("Unknown pipeline step {}".format(step))
