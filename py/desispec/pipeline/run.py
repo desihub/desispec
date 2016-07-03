@@ -931,7 +931,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     steptaskproc['stdstars'] = 1
     steptaskproc['fluxcal'] = 1
     steptaskproc['procexp'] = 1
-    steptaskproc['zfind'] = 40
+    steptaskproc['zfind'] = 24
 
     jobid = None
     if rank == 0:

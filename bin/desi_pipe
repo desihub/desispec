@@ -357,7 +357,7 @@ def main():
     ntask = len(allbricks)
 
     # NOTE: if you change this, also change it in pipeline.run.run_steps
-    taskproc = 40
+    taskproc = 24
 
     compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs,
         None, ntask, taskproc, shell_mpi_run, shell_maxcores,
