@@ -355,7 +355,9 @@ def main():
 
     # these parameters run one brick on 2 nodes, with one process per core.
     ntask = len(allbricks)
-    taskproc = 2 * nodecores
+
+    # NOTE: if you change this, also change it in pipeline.run.run_steps
+    taskproc = 40
 
     compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs,
         None, ntask, taskproc, shell_mpi_run, shell_maxcores,

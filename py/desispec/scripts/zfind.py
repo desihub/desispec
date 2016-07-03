@@ -90,6 +90,7 @@ def main(args, comm=None) :
         if len(args.brickfiles) != 0:
             raise RuntimeError('Give -b/--brick or input brickfiles but not both')
         for channel in ('b', 'r', 'z'):
+            filename = None
             if (comm is None) or (comm.rank == 0):
                 filename = io.findfile('brick', band=channel, brickname=args.brick,
                                         specprod_dir=args.specprod_dir)
@@ -157,8 +158,8 @@ def main(args, comm=None) :
             if len(ii)==0:
                 good=False
                 break
-                xwave.extend(brick[channel].get_wavelength_grid()[ii])
-                 #- Average multiple exposures on the same wavelength grid for each channel
+            xwave.extend(brick[channel].get_wavelength_grid()[ii])
+            #- Average multiple exposures on the same wavelength grid for each channel
             xflux.extend(np.average(exp_flux[:,ii], weights=exp_ivar[:,ii], axis=0))
             xivar.extend(weights[ii])
 
@@ -221,6 +222,14 @@ def main(args, comm=None) :
         # distribute the spectra among processes
         my_firstspec, my_nspec = dist_work(nspec, comm.size, comm.rank)
         my_specs = slice(my_firstspec, my_firstspec + my_nspec)
+        for p in range(comm.size):
+            if p == comm.rank:
+                if my_nspec > 0:
+                    log.info("process {} fitting spectra {} - {}".format(p, my_firstspec, my_firstspec+my_nspec-1))
+                else:
+                    log.info("process {} idle".format(p))
+                sys.stdout.flush()
+            comm.barrier()
 
         # do redshift fitting on each process
         myzf = None
@@ -235,12 +244,14 @@ def main(args, comm=None) :
         # processes, and point-to-point communication is easier for people to
         # understand.
 
-        zf = ZfindBase(wave, flux, ivar, R=None, results=None)
+        zf = ZfindBase(myzf.wave, np.zeros((nspec, myzf.nwave)), np.zeros((nspec, myzf.nwave)), R=None, results=None)
         
         for p in range(comm.size):
             if comm.rank == 0:
                 if p == 0:
                     # root process copies its own data into output
+                    zf.flux[my_specs] = myzf.flux
+                    zf.ivar[my_specs] = myzf.ivar
                     zf.model[my_specs] = myzf.model
                     zf.z[my_specs] = myzf.z
                     zf.zerr[my_specs] = myzf.zerr
@@ -257,22 +268,28 @@ def main(args, comm=None) :
                         p_firstspec = comm.recv(source=p, tag=1)
                         p_slice = slice(p_firstspec, p_firstspec+p_nspec)
 
-                        p_model = comm.recv(source=p, tag=2)
+                        p_flux = comm.recv(source=p, tag=2)
+                        zf.flux[p_slice] = p_flux
+
+                        p_ivar = comm.recv(source=p, tag=3)
+                        zf.ivar[p_slice] = p_ivar
+
+                        p_model = comm.recv(source=p, tag=4)
                         zf.model[p_slice] = p_model
 
-                        p_z = comm.recv(source=p, tag=3)
+                        p_z = comm.recv(source=p, tag=5)
                         zf.z[p_slice] = p_z
 
-                        p_zerr = comm.recv(source=p, tag=4)
+                        p_zerr = comm.recv(source=p, tag=6)
                         zf.zerr[p_slice] = p_zerr
 
-                        p_zwarn = comm.recv(source=p, tag=5)
+                        p_zwarn = comm.recv(source=p, tag=7)
                         zf.zwarn[p_slice] = p_zwarn
                         
-                        p_type = comm.recv(source=p, tag=6)
+                        p_type = comm.recv(source=p, tag=8)
                         zf.type[p_slice] = p_type
                         
-                        p_subtype = comm.recv(source=p, tag=7)
+                        p_subtype = comm.recv(source=p, tag=9)
                         zf.subtype[p_slice] = p_subtype
             else:
                 if p == comm.rank:
@@ -280,12 +297,14 @@ def main(args, comm=None) :
                     comm.send(my_nspec, dest=0, tag=0)
                     if my_nspec > 0:
                         comm.send(my_firstspec, dest=0, tag=1)
-                        comm.send(myzf.model, dest=0, tag=2)
-                        comm.send(myzf.z, dest=0, tag=3)
-                        comm.send(myzf.zerr, dest=0, tag=4)
-                        comm.send(myzf.zwarn, dest=0, tag=5)
-                        comm.send(myzf.type, dest=0, tag=6)
-                        comm.send(myzf.subtype, dest=0, tag=7)
+                        comm.send(myzf.flux, dest=0, tag=2)
+                        comm.send(myzf.ivar, dest=0, tag=3)
+                        comm.send(myzf.model, dest=0, tag=4)
+                        comm.send(myzf.z, dest=0, tag=5)
+                        comm.send(myzf.zerr, dest=0, tag=6)
+                        comm.send(myzf.zwarn, dest=0, tag=7)
+                        comm.send(myzf.type, dest=0, tag=8)
+                        comm.send(myzf.subtype, dest=0, tag=9)
             comm.barrier()
 
     if (comm is None) or (comm.rank == 0):
