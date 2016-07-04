@@ -1358,13 +1358,15 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     #srt = np.sort(cutimg.flatten()) # this does not work for sparse fibers
     #thresh = srt[int(cutimg.size*0.95)] / 2. # this does not work for sparse fibers
     
-    thresh = np.max(cut)/100.
+    thresh = np.max(cut)/50.
     pixels_below_threshold=np.where(cut<thresh)[0]
     if pixels_below_threshold.size>2 :
-        values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=4,iters=5)
+        values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,iters=200)
         if values_below_threshold.size>2 :
             rms=np.std(values_below_threshold)
-            new_thresh=max(thresh,5*rms)
+            nsig=7
+            new_thresh=max(thresh,nsig*rms)
+            log.info("Threshold: {:f} -> {:f} ({:d}*rms: {:f})".format(thresh,new_thresh,nsig,nsig*rms))
             thresh=new_thresh
     
     #gdp = cut > thresh
@@ -1391,9 +1393,9 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
             cluster=[i]
     clusters.append(cluster)
     
-    log.info("Threshold: {:f}".format(thresh))
-    log.info("Number of clusters found: {:d}".format(len(clusters)))
     
+    log.info("Number of clusters found: {:d}".format(len(clusters)))
+        
     # Record max of each cluster
     xpk=np.zeros((len(clusters)), dtype=np.int64)
     for i in xrange(len(clusters)) :
