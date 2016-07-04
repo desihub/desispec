@@ -1393,11 +1393,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     
     log.info("Threshold: {:f}".format(thresh))
     log.info("Number of clusters found: {:d}".format(len(clusters)))
-    import sys,pyfits
-    pyfits.writeto("cut.fits",cut,clobber=True)
-    sys.exit(12)
     
-
     # Record max of each cluster
     xpk=np.zeros((len(clusters)), dtype=np.int64)
     for i in xrange(len(clusters)) :
