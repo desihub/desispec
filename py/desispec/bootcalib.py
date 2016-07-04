@@ -39,6 +39,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 from desispec.log import get_logger
 from desiutil import funcfits as dufits
+from numpy.polynomial.legendre import legval
 
 glbl_figsz = (16,9)
 
@@ -1703,48 +1704,80 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=2., debug=False)
     # Return
     return xnew, xerr
 
-def fix_coeff_outliers(coeff, deg=5, sigma_clip=5):
+
+def fix_ycoeff_outliers(xcoeff, ycoeff, deg=7, sigma_clip=5):
     '''
-    Fix outliers in coefficients, assuming that neighboring fibers are similar
+    Fix outliers in coefficients for wavelength solution, assuming a continuous function of CCD coordinates
     
     Args:
-        coeff[nfiber, ncoeff] : 2D array of Legendre coefficients
+        xcoeff[nfiber, ncoeff] : 2D array of Legendre coefficients for X(wavelength)
+        ycoeff[nfiber, ncoeff] : 2D array of Legendre coefficients for Y(wavelength)
     
     Options:
         deg : integer degree of polynomial to fit
         sigma_clip : replace outliers larger than sigma_clip stddev
         
     Returns:
-        newcoeff[nfiber, ncoeff] with outliers replaced by interpolations
+        new_ycoeff[nfiber, ncoeff] with outliers replaced by interpolations
         
     For each coefficient, fit a polynomial vs. fiber number with one
     pass of sigma clipping.  Remaining outliers are than replaced with
     the interpolated fit value.
     '''
-    #- Map fiber number to xx in [-1,1] for polynomial robustness
-    x = np.arange(coeff.shape[0], dtype=float)
-    xx = 2*(x - np.min(x)) / (np.max(x) - np.min(x)) - 1
+    
+    log = get_logger()
+    
+    nfibers=ycoeff.shape[0]
+    if nfibers < 3 :
+        log.warning("only {:d} fibers, cannot interpolate coefs".format(nfibers))
+        return
+    deg=min(deg,nfibers-1)
+    
+    nwave=ycoeff.shape[1]+1
+    wave_nodes = np.linspace(-1,1,nwave)
+    
+    # get traces using fit coefs
+    x=np.zeros((nfibers,nwave))
+    y=np.zeros((nfibers,nwave))
+    
+    for i in range(nfibers) :
+        x[i] = legval(wave_nodes,xcoeff[i])
+        y[i] = legval(wave_nodes,ycoeff[i])
 
-    newcoeff = coeff.copy()
-    for i in range(coeff.shape[1]):
-        #- First pass fit
-        y = coeff[:, i]
-        c = np.polyfit(xx, y, deg)
-        diff = y - np.polyval(c, xx)
-        sigma = 1.4826 * np.median(np.abs(diff))  #- robust Gaussian sigma
-        good = (np.abs(diff) < sigma_clip*sigma)
+    # polynomial fit as a function of x for each wave
+    yf=np.zeros((nfibers,nwave)) 
+    xx=2*(x - np.min(x)) / (np.max(x) - np.min(x)) - 1
+    for i in range(nwave) :
+        c=np.polyfit(xx[:,i], y[:,i], deg)
+        yf[:,i]=np.polyval(c, xx[:,i])
+        
+    chi2=np.sum((y-yf)**2,axis=1)
+    mchi2=np.median(chi2)
+    # normalize chi2 (we don't know the errors)
+    if mchi2<=0 :
+        log.warning("median chi2= {:f}".format(mchi2))
+        return
+    norm=(nwave/mchi2)
+    chi2 *= norm
+    mchi2 *= norm
+    
+    good_traces = (chi2 < mchi2 + sigma_clip**5)
+    bad_traces = ~good_traces
 
-        #- Refit
-        c = np.polyfit(xx[good], y[good], deg)
-        diff = y - np.polyval(c, xx)
-        sigma = 1.4826 * np.median(np.abs(diff))
-        good = (np.abs(diff) < sigma_clip*sigma)
-        bad = ~good
+    new_ycoeff=ycoeff.copy()
 
-        if np.any(bad):
-            newcoeff[bad,i] = np.polyval(c, xx[bad])
+    if np.any(bad_traces):
+        traces = np.where(bad_traces)[0]
+        log.warning("Bad traces : {:s}".format(str(traces)))
+        # refit the coeffs
+        for fiber in traces :
+            leg_fit,mask = dufits.iter_fit(wave_nodes, yf[fiber], 'legendre', ycoeff.shape[1]-1, xmin=-1, xmax=1)
+            new_ycoeff[fiber] = leg_fit['coeff']            
+    else :
+        log.info("No bad traces identified")
 
-    return newcoeff
+    return new_ycoeff
+
 
 #####################################################################
 #####################################################################
@@ -1817,10 +1850,9 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             xleg_fit,mask = dufits.iter_fit(wv_array, xtrc, 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=5, sig_rej=100000.)
             XCOEFF[ii, :] = xleg_fit['coeff']
 
-    # Fix outliers assuming that coefficients vary smoothly vs. fiber number
-    XCOEFF = fix_coeff_outliers(XCOEFF)
-    YCOEFF = fix_coeff_outliers(YCOEFF)
-
+    # Fix outliers assuming that coefficients vary smoothly vs. CCD coordinates
+    YCOEFF = fix_ycoeff_outliers(XCOEFF,YCOEFF,sigma_clip=5)
+    
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)
     prihdu.header['WAVEMIN'] = WAVEMIN
