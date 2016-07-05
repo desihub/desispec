@@ -260,8 +260,8 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
                             #8786.1660, 8921.9496, 8991.024,  9151.1829, 9204.2841, 9222.59, 9227.03, 9303.4053,
                             #9329.0663, 9375.8796, 9427.9655,9461.806,9489.2849,9536.7793,9550.0241,9668.0709]
             lines["KrI"] = [7603.6384,7696.6579,7856.9844,8061.7211,8106.5945,8192.3082,8300.3907,8779.1607,8931.1447]
-            lines["ArI"] = [9125.471]
-            lines["HgI"] = []
+            lines["ArI"] = [9125.471,9227.030,9356.787,9660.435,9787.186]
+            lines["HgI"] = [9125.471]
             lines["CdI"] = []
             wmark = 8593.6184 # Ne
         else :
@@ -1705,7 +1705,7 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=2., debug=False)
     return xnew, xerr
 
 
-def fix_ycoeff_outliers(xcoeff, ycoeff, deg=7, sigma_clip=5):
+def fix_ycoeff_outliers(xcoeff, ycoeff, deg=5, tolerance=2):
     '''
     Fix outliers in coefficients for wavelength solution, assuming a continuous function of CCD coordinates
     
@@ -1715,7 +1715,7 @@ def fix_ycoeff_outliers(xcoeff, ycoeff, deg=7, sigma_clip=5):
     
     Options:
         deg : integer degree of polynomial to fit
-        sigma_clip : replace outliers larger than sigma_clip stddev
+        tolerance : replace fibers with difference of wavelength solution larger than this number of pixels after interpolation
         
     Returns:
         new_ycoeff[nfiber, ncoeff] with outliers replaced by interpolations
@@ -1743,39 +1743,39 @@ def fix_ycoeff_outliers(xcoeff, ycoeff, deg=7, sigma_clip=5):
     for i in range(nfibers) :
         x[i] = legval(wave_nodes,xcoeff[i])
         y[i] = legval(wave_nodes,ycoeff[i])
-
-    # polynomial fit as a function of x for each wave
-    yf=np.zeros((nfibers,nwave)) 
-    xx=2*(x - np.min(x)) / (np.max(x) - np.min(x)) - 1
-    for i in range(nwave) :
-        c=np.polyfit(xx[:,i], y[:,i], deg)
-        yf[:,i]=np.polyval(c, xx[:,i])
-        
-    chi2=np.sum((y-yf)**2,axis=1)
-    mchi2=np.median(chi2)
-    # normalize chi2 (we don't know the errors)
-    if mchi2<=0 :
-        log.warning("median chi2= {:f}".format(mchi2))
-        return
-    norm=(nwave/mchi2)
-    chi2 *= norm
-    mchi2 *= norm
     
-    good_traces = (chi2 < mchi2 + sigma_clip**5)
-    bad_traces = ~good_traces
-
     new_ycoeff=ycoeff.copy()
+    
+    bad_fibers=None
+    while True : # loop to discard one fiber at a time
 
-    if np.any(bad_traces):
-        traces = np.where(bad_traces)[0]
-        log.warning("Bad traces : {:s}".format(str(traces)))
-        # refit the coeffs
-        for fiber in traces :
-            leg_fit,mask = dufits.iter_fit(wave_nodes, yf[fiber], 'legendre', ycoeff.shape[1]-1, xmin=-1, xmax=1)
-            new_ycoeff[fiber] = leg_fit['coeff']            
-    else :
-        log.info("No bad traces identified")
-
+        # polynomial fit as a function of x for each wave
+        yf=np.zeros((nfibers,nwave)) 
+        xx=2*(x - np.min(x)) / (np.max(x) - np.min(x)) - 1
+        for i in range(nwave) :
+            c=np.polyfit(xx[:,i], y[:,i], deg)
+            yf[:,i]=np.polyval(c, xx[:,i])
+        
+        diff=np.max(np.abs(y-yf),axis=1)
+        
+        for f in range(nfibers) :
+            log.info("fiber {:d} maxdiff= {:f}".format(f,diff[f]))
+        
+            
+        worst = np.argmax(diff)
+        if diff[worst] > tolerance :
+            log.warning("replace fiber {:d} trace by interpolation".format(worst))
+            leg_fit = dufits.func_fit(wave_nodes, yf[worst], 'legendre', ycoeff.shape[1]-1, xmin=-1, xmax=1)
+            new_ycoeff[worst] = leg_fit['coeff']
+            y[worst] = legval(wave_nodes,new_ycoeff[worst])
+            if bad_fibers is None :
+                bad_fibers = np.array([worst])
+            else :
+                bad_fibers=np.append(bad_fibers, worst)
+                bad_fibers=np.unique(bad_fibers)
+            continue
+        break
+    
     return new_ycoeff
 
 
@@ -1851,7 +1851,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             XCOEFF[ii, :] = xleg_fit['coeff']
 
     # Fix outliers assuming that coefficients vary smoothly vs. CCD coordinates
-    YCOEFF = fix_ycoeff_outliers(XCOEFF,YCOEFF,sigma_clip=5)
+    YCOEFF = fix_ycoeff_outliers(XCOEFF,YCOEFF,tolerance=2)
     
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)
