@@ -20,6 +20,7 @@ import glob
 import math
 import time
 import os
+import sys
 import argparse
 from pkg_resources import resource_exists, resource_filename
 
@@ -165,7 +166,7 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     return xpk
 
 
-def load_gdarc_lines(camera, vacuum=True,lamps=None):
+def load_gdarc_lines(camera, llist, vacuum=True,lamps=None):
 
     """Loads a select set of arc lines for initial calibrating
 
@@ -192,66 +193,49 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
 
     if lamps is None :
         lamps=np.array(["HgI","CdI","ArI","NeI"])
+    
+    lines={}
+
+    dlamb=0.6
+    if camera[0] == 'b':
+        dlamb = 0.589
+    elif camera[0] == 'r':  
+        dlamb = 0.527
+    elif camera[0] == 'z':  
+        dlamb = 0.599  # Ang
 
     if camera[0] == 'b':
-
-        lines={}
         if vacuum :
             lines["HgI"]=[3651.198, 3655.883, 3664.327, 4047.708, 4078.988, 4359.56, 5462.268, 5771.210, 5792.276]
             lines["CdI"]=[3611.5375, 4679.4587, 4801.2540, 5087.2393]
             lines["NeI"]=[5854.1101, 5883.5252, 5946.4810]
             lines["ArI"]=[]
             lines["KrI"]=[]
-            wmark = 4359.56  # Hg
+            
         else :
             lines["HgI"]=[4046.57, 4077.84, 4358.34, 5460.75, 5769.598, 5790.670]
             lines["CdI"]=[3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
             lines["NeI"]=[5881.895, 5944.834]
             lines["ArI"]=[]
             lines["KrI"]=[]
-            wmark = 4358.34  # Hg
-
-        gd_lines=np.array([])
-        for lamp in lamps :
-            gd_lines=np.append(gd_lines,lines[lamp])
-
-        dlamb = 0.589
-        line_guess = None
-
     elif camera[0] == 'r':
-
-        lines={}
         if vacuum :
             lines["HgI"] = [5771.210]
             lines["NeI"] = [5854.1101, 5946.481, 6144.7629, 6404.018, 6508.3255,
-                   6680.1205, 6718.8974, 6931.3787, 7034.3520,
+                   6680.1205, 6931.3787, 7034.3520,
                    7175.9154, 7247.1631, 7440.9469]
-            lines["ArI"] = [6965.431]#, 7635.106, 7723.761]
+            lines["ArI"] = [6967.352]
             lines["KrI"] = [7603.6384,7696.6579]
             lines["CdI"] = []
-            wmark = 6718.8974 # Ne
-
         else :
             lines["HgI"] = [5769.598]
             lines["NeI"] = [5852.4878, 5944.834, 6143.062, 6402.246, 6506.528,
-                            #6532.8824, #6598.9528,
                             6678.2766, 6717.043, 6929.4672, 7032.4128,
                             7173.9380, 7245.1665, 7438.898]
-            lines["ArI"] = [6965.431]#, 7635.106, 7723.761]
+            lines["ArI"] = [6965.431]
             lines["KrI"] = [7601.55,7694.54]
             lines["CdI"] = []
-            wmark = 6717.043  # Ne
-
-        gd_lines=np.array([])
-        for lamp in lamps :
-            gd_lines=np.append(gd_lines,lines[lamp])
-
-        dlamb = 0.527
-        line_guess = 24
-
     elif camera[0] == 'z':
-
-        lines={}
         if vacuum :
             lines["NeI"] = [7440.9469, 7490.9335, 7537.8488,
                             7945.3654, 8138.6432, 8302.6062,
@@ -261,9 +245,9 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
                             #9329.0663, 9375.8796, 9427.9655,9461.806,9489.2849,9536.7793,9550.0241,9668.0709]
             lines["KrI"] = [7603.6384,7696.6579,7856.9844,8061.7211,8106.5945,8192.3082,8300.3907,8779.1607,8931.1447]
             lines["ArI"] = [9125.471,9227.030,9356.787,9660.435,9787.186]
-            lines["HgI"] = [9125.471]
+            lines["HgI"] = []
             lines["CdI"] = []
-            wmark = 8593.6184 # Ne
+            
         else :
             lines["NeI"] = [7438.898, 7488.8712, 7535.7739,
                             7943.1805, 8136.4061, 8300.3248,
@@ -273,281 +257,36 @@ def load_gdarc_lines(camera, vacuum=True,lamps=None):
             lines["ArI"] = [9122.97,9784.50]
             lines["HgI"] = []
             lines["CdI"] = []
-            wmark = 8591.2583
-
-        gd_lines=np.array([])
-        for lamp in lamps :
-            gd_lines=np.append(gd_lines,lines[lamp])
-
-        dlamb = 0.599  # Ang
-        line_guess = 17
-
     else:
         log.error('Bad camera')
 
+    
+    # check consistency with full line list
+    nbad=0
+    for ion in lines.keys() :
+        ii=np.where(llist["Ion"]==ion)[0]
+        all_waves=np.array(llist["wave"][ii])
+        for j,w in enumerate(lines[ion]) :
+            i=np.argmin(np.abs(w-all_waves))
+            if np.abs(w-all_waves[i])>0.2 :
+                log.error("cannot find good line {:f} of {:s} in full line list. nearest is {:f}".format(w,ion,all_waves[i]))
+                nbad += 1
+            elif np.abs(w-all_waves[i])>0.001 :
+                log.warning("adjusting hardcoded {:s} line {:f} -> {:f} (the NIST line list is the truth)".format(w,ion,all_waves[i]))
+                lines[ion][j]=all_waves[i]
+    if nbad>0 :
+        log.error("{:d} inconsistent hardcoded lines, exiting".format(nbad))
+        sys.exit(12)
+
+    gd_lines=np.array([])
+    for lamp in lamps :
+        gd_lines=np.append(gd_lines,lines[lamp])
+    
     # Sort and return
     gd_lines.sort()
-    return dlamb, wmark, gd_lines, line_guess
+    return dlamb, gd_lines
 
-
-def add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=2, toler=10., verbose=False, debug=False):
-    """Attempt to identify and add additional goodlines
-
-    Parameters
-    ----------
-    id_dict : dict
-      dict of ID info
-    pixpk : ndarray
-      Pixel locations of detected arc lines
-    toler : float
-      Tolerance for a match (pixels)
-    gd_lines : ndarray
-      array of expected arc lines to be detected and identified
-    inpoly : int, optional
-      Order of polynomial for fitting for initial set of lines
-
-    Returns
-    -------
-    id_dict : dict
-      Filled with complete set of IDs and the final polynomial fit
-    """
-    log=get_logger()
-    # Init
-    ilow = id_dict['icen']-(len(id_dict['first_id_pix'])//2)
-    ihi = id_dict['icen']+(len(id_dict['first_id_pix'])//2)
-    pos=True
-    idx = list(id_dict['first_id_idx'])
-    wvval = list(id_dict['first_id_wave'])
-    xval = list(id_dict['first_id_pix'])
-    if 'first_fit' not in id_dict.keys():
-        id_dict['first_fit'] = copy.deepcopy(id_dict['fit'])
-
-    # Loop on additional lines for identification
-    while ((ilow > 0) or (ihi < gd_lines.size-1)):
-        # index to add (step on each side)
-        if pos:
-            ihi += 1
-            inew = ihi
-            pos=False
-        else:
-            ilow -= 1
-            inew = ilow
-            pos=True
-        if ilow < 0:
-            continue
-        if ihi > (gd_lines.size-1):
-            continue
-        # New line
-        new_wv = gd_lines[inew]
-        # newx
-        newx = dufits.func_val(new_wv, id_dict['fit'])
-        # Match
-        mnm = np.min(np.abs(pixpk-newx))
-        if mnm > toler:
-            log.warn("No match for {:g} in fiber {:d}".format(new_wv, id_dict['fiber']))
-            continue
-        imin = np.argmin(np.abs(pixpk-newx))
-        if debug:
-            print(new_wv, np.min(np.abs(pixpk-newx)))
-        # Append and sort
-        wvval.append(new_wv)
-        wvval.sort()
-        newtc = pixpk[imin]
-        idx.append(imin)
-        idx.sort()
-        xval.append(newtc)
-        xval.sort()
-        # Fit (should reject 1 someday)
-        if len(xval) > 7:
-            npoly = inpoly+1
-        else:
-            npoly = inpoly
-        npoly=min(len(xval)-1,npoly)
-        new_fit = dufits.func_fit(np.array(wvval),np.array(xval),'polynomial',npoly,xmin=0.,xmax=1.)
-        id_dict['fit'] = new_fit
-    # RMS
-    resid2 = (np.array(xval)-dufits.func_val(np.array(wvval),id_dict['fit']))**2
-    rms = np.sqrt(np.sum(resid2)/len(xval))
-    id_dict['rms'] = rms
-    if verbose:
-        log=get_logger()
-        log.info('rms = {:g}'.format(rms))
-    # Finish
-    id_dict['id_idx'] = idx
-    id_dict['id_pix'] = xval
-    id_dict['id_wave'] = wvval
-
-
-
-def id_remainder(id_dict, pixpk, llist, toler=3., verbose=False):
-    """Attempt to identify the remainder of detected lines
-
-    Parameters
-    ----------
-    id_dict : dict
-      dict of ID info
-    pixpk : ndarray
-      Pixel locations of detected arc lines
-    llist : Table
-      Line list
-    toler : float
-      Tolerance for matching
-    """
-    wv_toler = 3.*id_dict['dlamb'] # Ang
-    # Generate a fit for pixel to wavelength
-    deg=max(1,min(len(id_dict['id_pix'])-2,3))
-    pixwv_fit = dufits.func_fit(np.array(id_dict['id_pix']),np.array(id_dict['id_wave']),'polynomial',deg,xmin=0.,xmax=1.)
-    # Loop on detected lines, skipping those with an ID
-    for ii,ixpk in enumerate(pixpk):
-        # Already ID?
-        if ii in id_dict['id_idx']:
-            continue
-        # Predict wavelength
-        wv_pk = dufits.func_val(ixpk,pixwv_fit)
-        # Search for a match
-        mt = np.where(np.abs(llist['wave']-wv_pk)<wv_toler)[0]
-        if len(mt) == 1:
-            if verbose:
-                log=get_logger()
-                log.info('Matched {:g} to {:g}'.format(ixpk,llist['wave'][mt[0]]))
-            id_dict['id_idx'].append(ii)
-            id_dict['id_pix'].append(ixpk)
-            id_dict['id_wave'].append(llist['wave'][mt[0]])
-    # Sort
-    id_dict['id_idx'].sort()
-    id_dict['id_pix'].sort()
-    id_dict['id_wave'].sort()
-
-
-def id_arc_lines(pixpk, gd_lines, dlamb, wmark, toler=0.2,
-                 line_guess=None, verbose=False):
-    """Match (as best possible), a set of the input list of expected arc lines to the detected list
-
-    Parameters
-    ----------
-    pixpk : ndarray
-      Pixel locations of detected arc lines
-    gd_lines : ndarray
-      array of expected arc lines to be detected and identified
-    dlamb : float
-      Average dispersion in the spectrum
-    wmark : float
-      Center of 5 gd_lines to key on (camera dependent)
-    toler : float, optional
-      Tolerance for matching (20%)
-    line_guess : int, optional
-      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
-
-    Returns
-    -------
-    id_dict : dict
-      dict of identified lines
-    """
-    log=get_logger()
-    # List of dicts for diagnosis
-    rms_dicts = []
-    ## Assign a line to center on
-    icen = np.where(np.abs(gd_lines-wmark)<1e-3)[0]
-    icen = icen[0]
-    ##
-    ndet = pixpk.size
-    # Set up detected lines to search over
-    if line_guess is None:
-        line_guess = ndet//2
-    guesses = line_guess + np.arange(-4, 7)
-    for guess in guesses:
-        # Setup
-        tc = pixpk[guess]
-        if verbose:
-            log.info('tc = {:g}'.format(tc))
-        rms_dict = dict(tc=tc,guess=guess)
-        # Match to i-2 line
-        line_m2 = gd_lines[icen-2]
-        Dm2 = wmark-line_m2
-        mtm2 = np.where(np.abs((tc-pixpk)*dlamb - Dm2)/Dm2 < toler)[0]
-        if len(mtm2) == 0:
-            if verbose:
-                log.info('No im2 lines found for guess={:g}'.format(tc))
-            continue
-        # Match to i+2 line
-        line_p2 = gd_lines[icen+2]
-        Dp2 = line_p2-wmark
-        mtp2 = np.where(np.abs((pixpk-tc)*dlamb - Dp2)/Dp2 < toler)[0]
-        if len(mtp2) == 0:
-            if verbose:
-                log.info('No ip2 lines found for guess={:g}'.format(tc))
-            continue
-            #
-        all_guess_rms = [] # One per set of guesses, of course
-        # Loop on i-2 line
-        for imtm2 in mtm2:
-            if imtm2==(icen-1):
-                if verbose:
-                    log.info('No im1 lines found for guess={:g}'.format(tc))
-                continue
-            # Setup
-            tcm2 = pixpk[imtm2]
-            xm1_wv = (gd_lines[icen-1]-gd_lines[icen-2])/(wmark-gd_lines[icen-2])
-            # Best match
-            xm1 = (pixpk-tcm2)/(tc-tcm2)
-            itm1 = np.argmin(np.abs(xm1-xm1_wv))
-            # Now loop on ip2
-            for imtp2 in mtp2:
-                guess_rms = dict(guess=guess, im1=itm1, im2=imtm2,
-                                 rms=999., ip1=None, ip2=imtp2)
-                all_guess_rms.append(guess_rms)
-                if imtp2 == (icen-1):
-                    if verbose:
-                        print('No ip1 lines found for guess={:g}'.format(tc))
-                    continue
-                #
-                tcp2 = float(pixpk[imtp2])
-                xp1_wv = (gd_lines[icen+2]-gd_lines[icen+1])/(gd_lines[icen+2]-wmark)
-                # Best match
-                xp1 = (tcp2-pixpk)/(tcp2-tc)
-                itp1 = np.argmin(np.abs(xp1-xp1_wv))
-                guess_rms['ip1'] = itp1
-                # Time to fit
-                xval = np.array([tcm2,pixpk[itm1],tc,pixpk[itp1],tcp2])
-                wvval = gd_lines[icen-2:icen+3]
-                deg=max(1,min(wvval.size-2,2))
-                pfit = dufits.func_fit(wvval,xval,'polynomial',deg,xmin=0.,xmax=1.)
-                # Clip one here and refit
-                #   NOT IMPLEMENTED YET
-                # RMS (in pixel space)
-                rms = np.sqrt(np.sum((xval-dufits.func_val(wvval,pfit))**2)/xval.size)
-                guess_rms['rms'] = rms
-                #if guess == 22:
-                #    pdb.set_trace()
-                # Save fit too
-                guess_rms['fit'] = pfit
-        # Take best RMS
-        if len(all_guess_rms) > 0:
-            all_rms = np.array([idict['rms'] for idict in all_guess_rms])
-            imn = np.argmin(all_rms)
-            rms_dicts.append(all_guess_rms[imn])
-    # Find the best one
-    all_rms = np.array([idict['rms'] for idict in rms_dicts])
-    # Allow for (very rare) failed solutions
-    imin = np.argmin(all_rms)
-    id_dict = rms_dicts[imin]
-    id_dict['status'] = 'ok'
-    # Finish
-    id_dict['wmark'] = wmark
-    id_dict['dlamb'] = dlamb
-    id_dict['icen'] = icen
-    id_dict['first_id_wave'] = wvval
-    id_idx = []
-    id_pix = []
-    for key in ['im2','im1','guess','ip1','ip2']:
-        id_idx.append(id_dict[key])
-        id_pix.append(pixpk[id_dict[key]])
-    id_dict['first_id_idx'] = id_idx
-    id_dict['first_id_pix'] = np.array(id_pix)
-    # Return
-    return id_dict
-
-def remove_duplicates(wy,w,y_id,w_id) :
+def remove_duplicates_w_id(wy,w,y_id,w_id) :
     # might be several identical w_id
     y_id=np.array(y_id).astype(int)
     w_id=np.array(w_id).astype(int)
@@ -560,7 +299,6 @@ def remove_duplicates(wy,w,y_id,w_id) :
             y_id2.append(ii[0])
         else :
             i=np.argmin(np.abs(wy[ii]-w[j]))
-            #print("rm duplicate %d : %s -> %d"%(j,str(ii),ii[i]))
             y_id2.append(ii[i])
     y_id2=np.array(y_id2).astype(int)
     w_id2=np.array(w_id2).astype(int)
@@ -569,12 +307,45 @@ def remove_duplicates(wy,w,y_id,w_id) :
     w_id2=w_id2[tmp]
     return y_id2,w_id2
 
+def remove_duplicates_y_id(yw,y,y_id,w_id) :
+    # might be several identical y_id
+    w_id=np.array(w_id).astype(int)
+    y_id=np.array(y_id).astype(int)
+    w_id2=[]
+    y_id2=[]
+    for j in np.unique(y_id) :
+        y_id2.append(j)
+        ii=w_id[y_id==j]
+        if ii.size==1 :
+            w_id2.append(ii[0])
+        else :
+            i=np.argmin(np.abs(yw[ii]-y[j]))
+            w_id2.append(ii[i])
+    w_id2=np.array(w_id2).astype(int)
+    y_id2=np.array(y_id2).astype(int)
+    tmp=np.argsort(y[y_id2])
+    w_id2=w_id2[tmp]
+    y_id2=y_id2[tmp]
+    return y_id2,w_id2
+
 
 def refine_solution(y,w,y_id,w_id,deg=3) :
-    log=get_logger()
+
+    log = get_logger()
+        
+    # remove duplicates
     transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=deg))
     wy=transfo(y)
-    y_id,w_id=remove_duplicates(wy,w,y_id,w_id)
+    y_id,w_id=remove_duplicates_w_id(wy,w,y_id,w_id)
+    transfo=np.poly1d(np.polyfit(w[w_id],y[y_id],deg=deg))
+    yw=transfo(w)
+    y_id,w_id=remove_duplicates_y_id(yw,y,y_id,w_id)
+    
+    if len(y_id) != len(np.unique(y_id)) :
+        log.error("duplicate AT INIT y_id={:s}".format(str(y_id)))
+    if len(w_id) != len(np.unique(w_id)) :
+        log.error("duplicate AT INIT  w_id={:s}".format(str(w_id)))
+
     nmatch=len(y_id)
     #log.info("init nmatch=%d rms=%f wave=%s"%(nmatch,np.std(wy[y_id]-w[w_id]),w[w_id]))
     #log.info("init nmatch=%d rms=%f"%(nmatch,np.std(wy[y_id]-w[w_id])))
@@ -592,6 +363,7 @@ def refine_solution(y,w,y_id,w_id,deg=3) :
 
         # apply transfo to measurements
         wy=transfo(y)
+                
         previous_rms = rms+0.
         rms=np.std(wy[y_id]-w[w_id])
 
@@ -608,6 +380,8 @@ def refine_solution(y,w,y_id,w_id,deg=3) :
                 if dist[j]<mdiff0 or ( o<jj.size-1 and dist[j]<mdiff1 and dist[j]<0.3*dist[jj[o+1]]) :
                     y_id=np.append(y_id,i)
                     w_id=np.append(w_id,j)
+                    break
+        
         previous_nmatch = nmatch+0
         nmatch=len(y_id)
 
@@ -624,10 +398,37 @@ def refine_solution(y,w,y_id,w_id,deg=3) :
         if nmatch>=min(w.size,y.size) :
             #print("break because %d>=min(%d,%d)"%(nmatch,w.size,y.size))
             break
-
+    
     return y_id,w_id,rms,loop
 
+def id_remainder(id_dict, llist, deg=4, verbose=False) :
+    
+    log = get_logger()
+    
+    y_id=np.array(id_dict['id_idx']).astype(int)
+    all_y=np.array(id_dict['pixpk'])
+    
+    all_known_waves  = np.sort(np.array(llist["wave"]))
+    identified_waves = np.array(id_dict["id_wave"]) # lines identified at previous steps
+    
+    w_id=[]
+    for w in identified_waves :
+        ii=np.where(all_known_waves==w)[0]
+        if ii.size == 0 :
+            log.error("FATAL didn't find wave={:f} in full list of waves",format(all_known_waves))
+            return
+        w_id.append(ii[0])
+    w_id = np.array(w_id).astype(int)
+    y_id,w_id,rms,niter=refine_solution(all_y,all_known_waves,y_id,w_id,deg)
+    
+    id_dict['id_idx']  = np.sort(y_id)
+    id_dict['id_pix']  = np.sort(all_y[y_id])
+    id_dict['id_wave'] = np.sort(all_known_waves[w_id])
+    id_dict['rms'] = rms 
+    
+    log.info("result : {:d} matched for {:d} detected and {:d} known, rms = {:g}".format(len(y_id),len(all_y),len(all_known_waves),rms))
 
+    
 def compute_triplets(wave) :
 
     triplets=[]
@@ -782,25 +583,16 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
 
     id_dict={}
     id_dict["status"]="ok"
-    id_dict["first_id_idx"]=best_y_id
-    id_dict["first_id_pix"]=y[best_y_id]
-    id_dict["first_id_wave"]=w[best_w_id]
+    id_dict["pixpk"]=y
+    id_dict["id_idx"]=best_y_id
+    id_dict["id_pix"]=y[best_y_id]
+    id_dict["id_wave"]=w[best_w_id]
     id_dict["rms"]=best_rms
-
-    id_dict["dlamb"]=dwdy_prior
-    id_dict["icen"]=best_w_id[best_w_id.size/2]
-    id_dict["wmark"]=w[id_dict["icen"]]
-
     deg=max(1,min(3,best_y_id.size-2))
     id_dict["fit"]= dufits.func_fit(w[best_w_id],y[best_y_id],'polynomial',deg,xmin=0.,xmax=1.)
-
+    
     log.info("{:d} matched for {:d} detected and {:d} known as good, rms = {:g}".format(len(best_y_id),len(y),len(w),best_rms))
-
-    #message="matched :"
-    #for i,j in zip(best_y_id,best_w_id) :
-    #    message += " y=%d:w=%d"%(y[i],w[j])
-    #log.info(message)
-
+    
     return id_dict
 
 def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):

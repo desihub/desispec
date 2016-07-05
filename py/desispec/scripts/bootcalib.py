@@ -63,6 +63,10 @@ def main(args):
 
     log.info("starting")
 
+    if args.triplet_matching :
+        log.warning("triplet_matching option deprecated, this algorithm is now used for all cases")
+    
+
     lamps=None
     if args.lamps :
         lamps=np.array(args.lamps.split(","))
@@ -183,48 +187,91 @@ def main(args):
         camera = header['CAMERA'].lower()
         log.info("Loading line list")
         llist = desiboot.load_arcline_list(camera,vacuum=True,lamps=lamps)
-        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera,vacuum=True,lamps=lamps)
+        dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist,vacuum=True,lamps=lamps)
+
+        
+        
 
         #####################################
         # Loop to solve for wavelengths
         all_wv_soln = []
         all_dlamb = []
         debug=False
+
+        pixpk_of_fibers=[]
+        matched_lines_of_fibers=[]
+        # first loop to find arc lines and do a first matching
         for ii in range(all_spec.shape[1]):
             spec = all_spec[:,ii]
             if (ii % 20) == 0:
                 log.info("working on spectrum {:d}".format(ii))
-            # Find Lines
             pixpk = desiboot.find_arc_lines(spec)
-            # Match a set of 5 gd_lines to detected lines
+            pixpk_of_fibers.append(pixpk)
+            
             try:
-                if args.triplet_matching :
-                    id_dict = desiboot.id_arc_lines_using_triplets(pixpk, gd_lines, dlamb,ntrack=args.ntrack)
-                else :
-                    id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)
+                id_dict = desiboot.id_arc_lines_using_triplets(pixpk, gd_lines, dlamb,ntrack=args.ntrack)
+            except : 
+                print(sys.exc_info())
+                continue
+            
+            # Add to dict
+            id_dict['fiber'] = ii
+            if len(id_dict['pixpk'])>len(id_dict['id_pix']) :
+                desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
+            
+            # save this
+            matched_lines_of_fibers.append(np.array(id_dict['id_wave']))
+        
+        min_ndet=max(1,all_spec.shape[1]/2)
+        
+        # now record the list of waves identified in several fibers 
+        matched_lines=np.array([])
+        for matched_lines_of_fiber in matched_lines_of_fibers :
+            matched_lines = np.append(matched_lines,matched_lines_of_fiber)
+        matched_lines = np.unique(matched_lines)
+        matched_lines_with_several_detections = []
+        for line in matched_lines :
+            ndet=0
+            for matched_lines_of_fiber in matched_lines_of_fibers :
+                if np.sum(matched_lines_of_fiber==line) >0 :
+                    ndet += 1
+            print(line,"ndet=",ndet)
+            if ndet>min_ndet :
+                matched_lines_with_several_detections.append(line)
+        
+        matched_lines_with_several_detections = np.array(matched_lines_with_several_detections)
+
+        # try to find all of those lines
+        for ii in range(all_spec.shape[1]):
+            spec = all_spec[:,ii]
+            if (ii % 20) == 0:
+                log.info("working on spectrum {:d}".format(ii))
+                
+            # Found Lines
+            pixpk = pixpk_of_fibers[ii]
+            try:
+                id_dict = desiboot.id_arc_lines_using_triplets(pixpk,  matched_lines_with_several_detections, dlamb,ntrack=args.ntrack)
             except:
                 log.warn("ID_ARC failed on fiber {:d}".format(ii))
                 id_dict = dict(status='junk')
-            # Add to dict
+                id_dict['rms'] = 999.
+                
+            
             id_dict['fiber'] = ii
-            id_dict['pixpk'] = pixpk
+            id_dict['pixpk'] = pixpk            
             if id_dict['status'] == 'junk':
                 id_dict['rms'] = 999.
                 all_wv_soln.append(id_dict)
                 all_dlamb.append(0.)
                 continue
-            # Find the other good ones
-            if camera == 'z':
-                inpoly = 3  # The solution in the z-camera has greater curvature
-            else:
-                inpoly = 2
-            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=inpoly, debug=debug)
-            # Now the rest
-            desiboot.id_remainder(id_dict, pixpk, llist)
+
+            if len(id_dict['pixpk'])>len(id_dict['id_pix']) :
+                desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
+            
             # Final fit wave vs. pix too
             id_wave=np.array(id_dict['id_wave'])
             id_pix=np.array(id_dict['id_pix'])
-            deg=max(1,min(3,id_wave.size-2))
+            deg=max(1,min(args.legendre_degree,id_wave.size-2))
             final_fit, mask = dufits.iter_fit(id_wave,id_pix, 'polynomial', deg, xmin=0., xmax=1.)
             rms = np.sqrt(np.mean((dufits.func_val(id_wave[mask==0], final_fit)-id_pix[mask==0])**2))
             deg=max(1,min(args.legendre_degree,(id_wave[mask==0]).size-2))
