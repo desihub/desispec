@@ -329,7 +329,7 @@ def remove_duplicates_y_id(yw,y,y_id,w_id) :
     return y_id2,w_id2
 
 
-def refine_solution(y,w,y_id,w_id,deg=3) :
+def refine_solution(y,w,y_id,w_id,deg=3,tolerance=10.) :
 
     log = get_logger()
         
@@ -368,8 +368,8 @@ def refine_solution(y,w,y_id,w_id,deg=3) :
         rms=np.std(wy[y_id]-w[w_id])
 
         # match lines
-        mdiff0=max(2.,rms*2.) # this is a difficult parameter to tune, either loose lever arm, or have false matches !!
-        mdiff1=10. # this is a difficult parameter to tune, either loose lever arm, or have false matches !!
+        mdiff0=min(tolerance,max(2.,rms*2.)) # this is a difficult parameter to tune, either loose lever arm, or have false matches !!
+        mdiff1=tolerance # this is a difficult parameter to tune, either loose lever arm, or have false matches !!
         unmatched_indices=np.setdiff1d(np.arange(y.size),y_id)
         for i,wi in zip(unmatched_indices,wy[unmatched_indices]) :
             dist=np.abs(wi-w)
@@ -401,7 +401,7 @@ def refine_solution(y,w,y_id,w_id,deg=3) :
     
     return y_id,w_id,rms,loop
 
-def id_remainder(id_dict, llist, deg=4, verbose=False) :
+def id_remainder(id_dict, llist, deg=4, tolerance=1., verbose=False) :
     
     log = get_logger()
     
@@ -419,7 +419,7 @@ def id_remainder(id_dict, llist, deg=4, verbose=False) :
             return
         w_id.append(ii[0])
     w_id = np.array(w_id).astype(int)
-    y_id,w_id,rms,niter=refine_solution(all_y,all_known_waves,y_id,w_id,deg)
+    y_id,w_id,rms,niter=refine_solution(all_y,all_known_waves,y_id,w_id,deg=deg,tolerance=tolerance)
     
     id_dict['id_idx']  = np.sort(y_id)
     id_dict['id_pix']  = np.sort(all_y[y_id])

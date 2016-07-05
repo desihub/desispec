@@ -188,93 +188,111 @@ def main(args):
         log.info("Loading line list")
         llist = desiboot.load_arcline_list(camera,vacuum=True,lamps=lamps)
         dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist,vacuum=True,lamps=lamps)
-
         
-        
-
         #####################################
         # Loop to solve for wavelengths
         all_wv_soln = []
         all_dlamb = []
         debug=False
 
-        pixpk_of_fibers=[]
-        matched_lines_of_fibers=[]
+        id_dict_of_fibers=[]
         # first loop to find arc lines and do a first matching
         for ii in range(all_spec.shape[1]):
             spec = all_spec[:,ii]
             if (ii % 20) == 0:
                 log.info("working on spectrum {:d}".format(ii))
             pixpk = desiboot.find_arc_lines(spec)
-            pixpk_of_fibers.append(pixpk)
             
             try:
                 id_dict = desiboot.id_arc_lines_using_triplets(pixpk, gd_lines, dlamb,ntrack=args.ntrack)
             except : 
-                print(sys.exc_info())
+                log.warn(sys.exc_info())
+                log.warn("ID_ARC failed on fiber {:d}".format(ii))
+                id_dict = dict(status='junk')
+                id_dict['rms'] = 999.
+                id_dict['id_wave'] = []
+                id_dict['id_pix'] = []
+                id_dict['id_idx'] = []
+                id_dict["fit"] = None
+                id_dict["fiber"] = ii
+                id_dict_of_fibers.append(id_dict)
                 continue
             
             # Add to dict
             id_dict['fiber'] = ii
+            
+            # Add lines 
             if len(id_dict['pixpk'])>len(id_dict['id_pix']) :
                 desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
-            
-            # save this
-            matched_lines_of_fibers.append(np.array(id_dict['id_wave']))
+
+            # Save
+            id_dict_of_fibers.append(id_dict)
+
         
-        min_ndet=max(1,all_spec.shape[1]/2)
+        min_ndet=min(5,all_spec.shape[1])
         
         # now record the list of waves identified in several fibers 
         matched_lines=np.array([])
-        for matched_lines_of_fiber in matched_lines_of_fibers :
-            matched_lines = np.append(matched_lines,matched_lines_of_fiber)
+        for ii in range(all_spec.shape[1]):
+            matched_lines = np.append(matched_lines,id_dict_of_fibers[ii]['id_wave'])
         matched_lines = np.unique(matched_lines)
         matched_lines_with_several_detections = []
         for line in matched_lines :
             ndet=0
-            for matched_lines_of_fiber in matched_lines_of_fibers :
-                if np.sum(matched_lines_of_fiber==line) >0 :
+            for ii in range(all_spec.shape[1]):
+                if np.sum(id_dict_of_fibers[ii]['id_wave']==line) >0 :
                     ndet += 1
             print(line,"ndet=",ndet)
             if ndet>min_ndet :
                 matched_lines_with_several_detections.append(line)
-        
         matched_lines_with_several_detections = np.array(matched_lines_with_several_detections)
-
-        # try to find all of those lines
+        
+        # look at the median number of lines found per fibers
+        nlines=[]
+        for ii in range(all_spec.shape[1]):
+            nlines.append(len(id_dict_of_fibers[ii]['id_wave']))
+        median_nlines=int(np.median(nlines))
+        log.info("median number of lines per fiber=%d"%median_nlines)
+        
+        # loop again on all fibers
         for ii in range(all_spec.shape[1]):
             spec = all_spec[:,ii]
             if (ii % 20) == 0:
                 log.info("working on spectrum {:d}".format(ii))
-                
-            # Found Lines
-            pixpk = pixpk_of_fibers[ii]
-            try:
-                id_dict = desiboot.id_arc_lines_using_triplets(pixpk,  matched_lines_with_several_detections, dlamb,ntrack=args.ntrack)
-            except:
-                log.warn("ID_ARC failed on fiber {:d}".format(ii))
-                id_dict = dict(status='junk')
-                id_dict['rms'] = 999.
-                
+
+            id_dict = id_dict_of_fibers[ii]
+            n_matched_lines=len(id_dict['id_wave'])
+            n_detected_lines=len(id_dict['pixpk'])
             
-            id_dict['fiber'] = ii
-            id_dict['pixpk'] = pixpk            
+            if id_dict['status']=="ok" and n_matched_lines  < median_nlines-2 and n_matched_lines < n_detected_lines : 
+                log.info("Try to refit fiber {:d} with only {:d}/{:d} matched lines when the median is {:d}".format(ii,n_matched_lines,n_detected_lines,median_nlines))
+                pixpk = id_dict['pixpk']
+                try:
+                    id_dict = desiboot.id_arc_lines_using_triplets(pixpk,  matched_lines_with_several_detections, dlamb,ntrack=args.ntrack)
+                except:
+                    log.warn("ID_ARC failed on fiber {:d}".format(ii))
+                    id_dict = dict(status='junk')
+                    id_dict['rms'] = 999.
+                if len(id_dict['pixpk'])>len(id_dict['id_pix']) :
+                    desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
+            else :
+                log.info("Do not refit fiber {:d} with {:d}/{:d} matched lines when the median is {:d}".format(ii,n_matched_lines,n_detected_lines,median_nlines))
+                    
             if id_dict['status'] == 'junk':
-                id_dict['rms'] = 999.
                 all_wv_soln.append(id_dict)
                 all_dlamb.append(0.)
                 continue
 
-            if len(id_dict['pixpk'])>len(id_dict['id_pix']) :
-                desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
+            
             
             # Final fit wave vs. pix too
             id_wave=np.array(id_dict['id_wave'])
             id_pix=np.array(id_dict['id_pix'])
+            
             deg=max(1,min(args.legendre_degree,id_wave.size-2))
-            final_fit, mask = dufits.iter_fit(id_wave,id_pix, 'polynomial', deg, xmin=0., xmax=1.)
+            
+            final_fit, mask = dufits.iter_fit(id_wave,id_pix, 'polynomial', deg, xmin=0., xmax=1., sig_rej=100000.)
             rms = np.sqrt(np.mean((dufits.func_val(id_wave[mask==0], final_fit)-id_pix[mask==0])**2))
-            deg=max(1,min(args.legendre_degree,(id_wave[mask==0]).size-2))
             final_fit_pix,mask2 = dufits.iter_fit(id_pix[mask==0],id_wave[mask==0],'legendre',deg , sig_rej=100000.)
             rms_pix = np.sqrt(np.mean((dufits.func_val(id_pix[mask==0], final_fit_pix)-id_wave[mask==0])**2))
             
@@ -289,7 +307,8 @@ def main(args):
             id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
             id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
             id_dict['mask'] = mask
-            log.info("Fiber #{:d} final fit rms(y->wave) = {:g} A ; rms(wave->y) = {:g} pix ; nlines = {:d}".format(ii,rms,rms_pix,id_pix[mask==0].size))
+            
+            log.info("Fiber #{:d} final fit rms(y->wave) = {:g} A ; rms(wave->y) = {:g} pix ; nlines = {:d}".format(ii,rms,rms_pix,id_pix.size))
     
             all_wv_soln.append(id_dict)
 
