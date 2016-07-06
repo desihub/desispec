@@ -272,7 +272,7 @@ def main(args):
             n_good = np.intersect1d(id_dict['id_wave'],good_matched_lines).size
             
 
-            if id_dict['status']=="ok" and ( n_bad>0 or n_good < good_matched_lines.size-1 ) :
+            if id_dict['status']=="ok" and ( n_bad>0 or n_good < good_matched_lines.size-1 ) and n_good<40 :
                 log.info("Try to refit fiber {:d} with n_bad={:d} and n_good={:d} when n_good_all={:d}".format(ii,n_bad,n_good,good_matched_lines.size))
                 pixpk = id_dict['pixpk']
                 try:
