@@ -229,30 +229,32 @@ def main(args):
             id_dict_of_fibers.append(id_dict)
 
         
-        min_ndet=min(5,all_spec.shape[1])
+       
         
         # now record the list of waves identified in several fibers 
         matched_lines=np.array([])
         for ii in range(all_spec.shape[1]):
             matched_lines = np.append(matched_lines,id_dict_of_fibers[ii]['id_wave'])
         matched_lines = np.unique(matched_lines)
-        matched_lines_with_several_detections = []
+        number_of_detections = []
         for line in matched_lines :
             ndet=0
             for ii in range(all_spec.shape[1]):
                 if np.sum(id_dict_of_fibers[ii]['id_wave']==line) >0 :
                     ndet += 1
             print(line,"ndet=",ndet)
-            if ndet>min_ndet :
-                matched_lines_with_several_detections.append(line)
-        matched_lines_with_several_detections = np.array(matched_lines_with_several_detections)
+            number_of_detections.append(ndet)
         
-        # look at the median number of lines found per fibers
-        nlines=[]
-        for ii in range(all_spec.shape[1]):
-            nlines.append(len(id_dict_of_fibers[ii]['id_wave']))
-        median_nlines=int(np.median(nlines))
-        log.info("median number of lines per fiber=%d"%median_nlines)
+        # choose which lines are ok and 
+        # ok if 5 detections (coincidental error very low)
+        min_number_of_detections=min(5,all_spec.shape[1])
+        number_of_detections=np.array(number_of_detections)
+        good_matched_lines = matched_lines[number_of_detections>=min_number_of_detections]
+        bad_matched_lines  = matched_lines[number_of_detections<min_number_of_detections]
+        
+        log.info("good_matched_lines = {:s}".format(str(good_matched_lines)))
+        log.info("bad_matched_lines  = {:s}".format(str(bad_matched_lines)))
+        
         
         # loop again on all fibers
         for ii in range(all_spec.shape[1]):
@@ -264,19 +266,26 @@ def main(args):
             n_matched_lines=len(id_dict['id_wave'])
             n_detected_lines=len(id_dict['pixpk'])
             
-            if id_dict['status']=="ok" and n_matched_lines  < median_nlines-2 and n_matched_lines < n_detected_lines : 
-                log.info("Try to refit fiber {:d} with only {:d}/{:d} matched lines when the median is {:d}".format(ii,n_matched_lines,n_detected_lines,median_nlines))
+            # did we find any bad line for this fiber?
+            n_bad = np.intersect1d(id_dict['id_wave'],bad_matched_lines).size
+            # how many good lines did we find
+            n_good = np.intersect1d(id_dict['id_wave'],good_matched_lines).size
+            
+
+            if id_dict['status']=="ok" and ( n_bad>0 or n_good < good_matched_lines.size-1 ) :
+                log.info("Try to refit fiber {:d} with n_bad={:d} and n_good={:d} when n_good_all={:d}".format(ii,n_bad,n_good,good_matched_lines.size))
                 pixpk = id_dict['pixpk']
                 try:
-                    id_dict = desiboot.id_arc_lines_using_triplets(pixpk,  matched_lines_with_several_detections, dlamb,ntrack=args.ntrack)
+                    id_dict = desiboot.id_arc_lines_using_triplets(pixpk,  good_matched_lines, dlamb,ntrack=args.ntrack)
                 except:
+                    log.warn(sys.exc_info())
                     log.warn("ID_ARC failed on fiber {:d}".format(ii))
                     id_dict = dict(status='junk')
                     id_dict['rms'] = 999.
-                if len(id_dict['pixpk'])>len(id_dict['id_pix']) :
+                if id_dict['status']=="ok" and  len(id_dict['pixpk'])>len(id_dict['id_pix']) :
                     desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
             else :
-                log.info("Do not refit fiber {:d} with {:d}/{:d} matched lines when the median is {:d}".format(ii,n_matched_lines,n_detected_lines,median_nlines))
+                log.info("Do not refit fiber {:d} with n_bad={:d} and n_good={:d} when n_good_all={:d}".format(ii,n_bad,n_good,good_matched_lines.size))
                     
             if id_dict['status'] == 'junk':
                 all_wv_soln.append(id_dict)
