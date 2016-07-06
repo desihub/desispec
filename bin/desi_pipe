@@ -18,6 +18,7 @@ import argparse
 import re
 
 import desispec.io as io
+from desispec.util import dist_discrete
 
 import desispec.pipeline as pipe
 
@@ -385,15 +386,34 @@ def main():
 
     # redshift fitting
 
-    # these parameters run one brick on 2 nodes, with one process per core.
-    ntask = len(allbricks)
-
     # NOTE: if you change this, also change it in pipeline.run.run_steps
-    taskproc = 24
+    # this number is way too high to be efficient.  The current
+    # redmonster code should be run at lower concurrency for longer
+    # wallclock.  We are doing this to fit in the debug queue...
+    taskproc = 48
+
+    # We guess at the job size to use.  In order for the load balancing
+    # to be effective, we use a smaller number of workers and a larger
+    # process group size.
+
+    ntask = len(allbricks.keys())
+    efftask = int( ntask / 4 )
+
+    # redmonster can do about 10 targets in 30 minutes.  We
+    # add an extra fudge factor since the load balancing above
+    # means that most workers will have at least 2 tasks, even
+    # if one is very large.
+    redtime = 30
+    redqueue = 'debug'
+    largest = np.max([ allbricks[x] for x in allbricks.keys() ])
+    increments = int(2.0 * (float(largest) / 10.0) / float(taskproc)) + 1
+    if increments > 1:
+        redqueue = 'regular'
+        redtime = 30 * increments
 
     scr_shell, scr_slurm = compute_step(setupfile, rawdir, proddir, envcom, "zfind", "zfind", specs,
-        None, ntask, taskproc, shell_mpi_run, shell_maxcores,
-        1, maxnodes, nodecores, 1, 1, maxnodes, queue='debug')
+        None, efftask, taskproc, shell_mpi_run, shell_maxcores,
+        1, maxnodes, nodecores, 1, 1, maxnodes, queue=redqueue, minutes=redtime)
     all_shell.append(scr_shell)
     all_slurm.append(scr_slurm)
 

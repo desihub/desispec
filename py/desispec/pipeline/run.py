@@ -23,13 +23,15 @@ import time
 import logging
 from contextlib import contextmanager
 
+import numpy as np
+
 import yaml
 
 import desispec
 
 import desispec.log
 from desispec.log import get_logger
-from desispec.util import default_nproc
+from desispec.util import default_nproc, dist_uniform, dist_discrete
 from .plan import *
 from .utils import option_list
 
@@ -721,13 +723,33 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             else:
                 group_ntask = 0
         else:
-            group_ntask = int(ntask / ngroup)
-            leftover = ntask % ngroup
-            if group < leftover:
-                group_ntask += 1
-                group_firsttask = group * group_ntask
+            if step == 'zfind':
+                # We load balance the bricks across process groups based
+                # on the number of targets per brick.  All bricks with 
+                # < taskproc targets are weighted the same.
+
+                if ntask <= ngroup:
+                    # distribute uniform in this case
+                    group_firsttask, group_ntask = dist_uniform(ntask, ngroup, group)
+                else:
+                    bricksizes = [ grph[x]['ntarget'] for x in tasks ]
+                    worksizes = [ taskproc if (x < taskproc) else x for x in bricksizes ]
+
+                    if rank == 0:
+                        log.debug("zfind {} groups".format(ngroup))
+                        workstr = ""
+                        for w in worksizes:
+                            workstr = "{}{} ".format(workstr, w)
+                        log.debug("zfind work sizes = {}".format(workstr))
+
+                    group_firsttask, group_ntask = dist_discrete(worksizes, ngroup, group)
+
+                if group_rank == 0:
+                    worksum = np.sum(worksizes[group_firsttask:group_firsttask+group_ntask])
+                    log.debug("group {} has tasks {}-{} sum = {}".format(group, group_firsttask, group_firsttask+group_ntask-1, worksum))
+
             else:
-                group_firsttask = ((group_ntask + 1) * leftover) + (group_ntask * (group - leftover))
+                group_firsttask, group_ntask = dist_uniform(ntask, ngroup, group)
 
     # every group goes and does its tasks...
 
@@ -931,7 +953,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     steptaskproc['stdstars'] = 1
     steptaskproc['fluxcal'] = 1
     steptaskproc['procexp'] = 1
-    steptaskproc['zfind'] = 24
+    steptaskproc['zfind'] = 48
 
     jobid = None
     if rank == 0:

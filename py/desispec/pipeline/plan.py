@@ -213,7 +213,7 @@ def create_prod(rawdir, proddir, nightstr=None):
 
     # create per-night directories
 
-    allbricks = set()
+    allbricks = {}
 
     for nt in nights:
         nexpdir = os.path.join(expdir, nt)
@@ -233,7 +233,13 @@ def create_prod(rawdir, proddir, nightstr=None):
             os.makedirs(nlog)
 
         grph, expcount, nbricks = graph_night(rawdir, nt)
-        allbricks.update(nbricks)
+
+        for brk in nbricks.keys():
+            if brk in allbricks.keys():
+                allbricks[brk] += nbricks[brk]
+            else:
+                allbricks[brk] = nbricks[brk]
+
         expnightcount[nt] = expcount
         with open(os.path.join(plandir, "{}.dot".format(nt)), 'w') as f:
             graph_dot(grph, f)
@@ -284,7 +290,7 @@ def graph_night(rawdir, rawnight):
     node['out'] = []
     grph[rawnight] = node
 
-    allbricks = set()
+    allbricks = {}
 
     expcount = {}
     expcount['flat'] = 0
@@ -310,13 +316,18 @@ def graph_night(rawdir, rawnight):
 
         fmdata, fmheader = io.read_fibermap(fibermap, header=True)
         flavor = fmheader['flavor']
-        bricks = set()
-        fmbricks = []
+        fmbricks = {}
         for fmb in fmdata['BRICKNAME']:
             if len(fmb) > 0:
-                fmbricks.append(fmb)
-        bricks.update(fmbricks)
-        allbricks.update(bricks)
+                if fmb in fmbricks.keys():
+                    fmbricks[fmb] += 1
+                else:
+                    fmbricks[fmb] = 1
+        for fmb in fmbricks.keys():
+            if fmb in allbricks.keys():
+                allbricks[fmb] += fmbricks[fmb]
+            else:
+                allbricks[fmb] = fmbricks[fmb]
 
         if flavor == 'arc':
             expcount['arc'] += 1
@@ -329,7 +340,7 @@ def graph_night(rawdir, rawnight):
         node['type'] = 'fibermap'
         node['id'] = ex
         node['flavor'] = flavor
-        node['bricks'] = bricks
+        node['bricks'] = fmbricks
         node['in'] = [rawnight]
         node['out'] = []
         name = graph_name(rawnight, "fibermap-{:08d}".format(ex))
@@ -637,7 +648,7 @@ def graph_night(rawdir, rawnight):
 
     # Brick / Zbest dependencies
 
-    for b in allbricks:
+    for b in allbricks.keys():
         zbname = "zbest-{}".format(b)
         inb = []
         for band in ['b', 'r', 'z']:
@@ -653,6 +664,7 @@ def graph_night(rawdir, rawnight):
         node = {}
         node['type'] = 'zbest'
         node['brick'] = b
+        node['ntarget'] = allbricks[b]
         node['in'] = inb
         node['out'] = []
         grph[zbname] = node

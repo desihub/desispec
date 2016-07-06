@@ -14,9 +14,9 @@ else:
 
 
 # Distribute some number of things among some number
-# of workers
+# of workers as evenly as possible.
 
-def dist_work(nwork, workers, id):
+def dist_uniform(nwork, workers, id):
     ntask = 0
     firsttask = 0
 
@@ -35,6 +35,81 @@ def dist_work(nwork, workers, id):
             else:
                 firsttask = ((ntask + 1) * leftover) + (ntask * (id - leftover))
     return (firsttask, ntask)
+
+
+# This is effectively the "Painter's Partition Problem".
+
+def distribute_required_groups(A, max_per_group):
+    ngroup = 1
+    total = 0
+    for i in range(A.shape[0]):
+        total += A[i]
+        if total > max_per_group:
+            total = A[i]
+            ngroup += 1
+    return ngroup
+
+def distribute_partition(A, k):
+    low = np.max(A)
+    high = np.sum(A)
+    while low < high:
+        mid = low + int((high - low) / 2)
+        required = distribute_required_groups(A, mid)
+        if required <= k:
+            high = mid
+        else:
+            low = mid + 1
+    return low
+
+def dist_discrete(worksizes, workers, id, pow=1.0):
+    """
+    Distribute indivisible blocks of items between groups.
+
+    Given some contiguous blocks of items which cannot be 
+    subdivided, distribute these blocks to the specified
+    number of groups in a way which minimizes the maximum
+    total items given to any group.  Optionally weight the
+    blocks by a power of their size when computing the
+    distribution.
+
+    Args:
+        worksizes (list): The sizes of the indivisible blocks.
+        workers (int): The number of workers.
+        id (int): The worker ID whose range should be returned.
+        pow (float): The power to use for weighting
+
+    Returns:
+        A tuple.  The first element of the tuple is the first 
+        item assigned to the worker ID, and the second element 
+        is the number of items assigned to the worker.
+    """
+    chunks = np.array(worksizes, dtype=np.int64)
+    weights = np.power(chunks.astype(np.float64), pow)
+    max_per_proc = float(distribute_partition(weights.astype(np.int64), workers))
+
+    target = np.sum(weights) / workers
+
+    dist = []
+
+    off = 0
+    curweight = 0.0
+    proc = 0
+    for cur in range(0, weights.shape[0]):
+        if curweight + weights[cur] > max_per_proc:
+            dist.append( (off, cur-off) )
+            over = curweight - target
+            curweight = weights[cur] + over
+            off = cur
+            proc += 1
+        else:
+            curweight += weights[cur]
+
+    dist.append( (off, weights.shape[0]-off) )
+
+    if len(dist) != workers:
+        raise RuntimeError("Number of distributed groups different than number requested")
+
+    return dist[id]
 
 
 def mask32(mask):

@@ -15,7 +15,7 @@ from desispec.log import get_logger, WARNING
 from desispec.zfind.redmonster import RedMonsterZfind
 from desispec.zfind import ZfindBase
 from desispec.io.qa import load_qa_brick, write_qa_brick
-from desispec.util import default_nproc, dist_work
+from desispec.util import default_nproc, dist_uniform
 
 import argparse
 
@@ -220,7 +220,7 @@ def main(args, comm=None) :
         # Use MPI
 
         # distribute the spectra among processes
-        my_firstspec, my_nspec = dist_work(nspec, comm.size, comm.rank)
+        my_firstspec, my_nspec = dist_uniform(nspec, comm.size, comm.rank)
         my_specs = slice(my_firstspec, my_firstspec + my_nspec)
         for p in range(comm.size):
             if p == comm.rank:
