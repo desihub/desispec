@@ -693,7 +693,7 @@ def load_parse_dict():
     return arcline_parse
 
 
-def load_gdarc_lines(camera, llist, vacuum=True,lamps=None):
+def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=None):
 
     """Loads a select set of arc lines for initial calibrating
 
@@ -732,10 +732,13 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None):
         dlamb = 0.599  # Ang
 
     # read good lines
-    if vacuum :
-        filename = resource_filename('desispec', "data/arc_lines/goodlines_vacuum.ascii")
-    else :
-        filename = resource_filename('desispec', "data/arc_lines/goodlines_air.ascii")
+    if good_lines_filename is not None :
+        filename = good_lines_filename
+    else : 
+        if vacuum :
+            filename = resource_filename('desispec', "data/arc_lines/goodlines_vacuum.ascii")
+        else :
+            filename = resource_filename('desispec', "data/arc_lines/goodlines_air.ascii")
     
     log.info("Reading good lines in {:s}".format(filename))
     lines={}

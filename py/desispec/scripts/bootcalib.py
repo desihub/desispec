@@ -42,6 +42,9 @@ def parse(options=None):
                         help = 'path of QA figure file')
     parser.add_argument('--lamps', type = str, default = None, required=False,
                         help = 'comma-separated used lamp elements, ex: HgI,NeI,ArI,CdI,KrI')
+    parser.add_argument('--good-lines', type = str, default = None, required=False,
+                        help = 'ascii files with good lines (default is data/arc_lines/goodlines_vacuum.ascii)')
+    
     parser.add_argument("--test", help="Debug?", default=False, action="store_true")
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
@@ -187,7 +190,7 @@ def main(args):
         camera = header['CAMERA'].lower()
         log.info("Loading line list")
         llist = desiboot.load_arcline_list(camera,vacuum=True,lamps=lamps)
-        dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist,vacuum=True,lamps=lamps)
+        dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist,vacuum=True,lamps=lamps,good_lines_filename=args.good_lines)
         
         #####################################
         # Loop to solve for wavelengths
