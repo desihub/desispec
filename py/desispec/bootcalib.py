@@ -204,64 +204,35 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None):
     elif camera[0] == 'z':  
         dlamb = 0.599  # Ang
 
-    if camera[0] == 'b':
-        if vacuum :
-            lines["HgI"]=[3651.198, 3655.883, 3664.327, 4047.708, 4078.988, 4359.56, 5462.268, 5771.210, 5792.276]
-            lines["CdI"]=[3611.5375, 4679.4587, 4801.2540, 5087.2393]
-            lines["NeI"]=[5854.1101, 5874.4552, 5883.5252, 5946.4810]
-            lines["ArI"]=[]
-            lines["KrI"]=[]
-            
-        else :
-            lines["HgI"]=[4046.57, 4077.84, 4358.34, 5460.75, 5769.598, 5790.670]
-            lines["CdI"]=[3610.51, 3650.157, 4678.15, 4799.91, 5085.822]
-            lines["NeI"]=[5881.895, 5944.834]
-            lines["ArI"]=[]
-            lines["KrI"]=[]
-    elif camera[0] == 'r':
-        if vacuum :
-            lines["HgI"] = [5771.210,5792.276]
-            lines["NeI"] = [5854.1101, 5874.4552, 5883.5252, 5946.481, 5967.1235, 6031.6666, 6097.8506, 6165.2994, 6144.7629, 6404.018, 6508.3255,
-                   6680.1205, 6931.3787, 7034.3520,
-                   7175.9154, 7247.1631, 7440.9469]
-            lines["ArI"] = [7637.208]
-            lines["KrI"] = [7603.6384,7696.6579]
-            lines["CdI"] = [6440.249]
-        else :
-            lines["HgI"] = [5769.598]
-            lines["NeI"] = [5852.4878, 5944.834, 6143.062, 6402.246, 6506.528,
-                            6678.2766, 6717.043, 6929.4672, 7032.4128,
-                            7173.9380, 7245.1665, 7438.898]
-            lines["ArI"] = []
-            lines["KrI"] = [7601.55,7694.54]
-            lines["CdI"] = []
-    elif camera[0] == 'z':
-        if vacuum :
-            lines["NeI"] = [7440.9469, 7490.9335, 7537.8488,
-                            7945.3654, 8138.6432, 8302.6062,
-                            8379.9093, 8497.6932, 8593.6184, 8637.0190, 8656.7599,
-                            8786.1660, 8921.9496, 9151.1829, 9204.2841, 9427.9655,9536.7793,9668.0709]
-                            #8786.1660, 8921.9496, 8991.024,  9151.1829, 9204.2841, 9222.59, 9227.03, 9303.4053,
-                            #9329.0663, 9375.8796, 9427.9655,9461.806,9489.2849,9536.7793,9550.0241,9668.0709]
-            lines["KrI"] = [7603.6384,7696.6579,7856.9844,8061.7211,8106.5945,8192.3082,8300.3907,8779.1607,8931.1447]
-            lines["ArI"] = [9125.471,9227.030,9356.787,9660.435,9787.186]
-            lines["HgI"] = []
-            lines["CdI"] = []
-            
-        else :
-            lines["NeI"] = [7438.898, 7488.8712, 7535.7739,
-                            7943.1805, 8136.4061, 8300.3248,
-                            8377.6070, 8495.3591, 8591.2583, 8634.6472, 8654.3828,
-                            8783.7539, 8919.5007, 9148.6720, 9201.7588, 9425.3797]
-            lines["KrI"] = [7601.55,7694.54,7854.82,8059.50,8104.36,8190.06,8298.11,8776.75,8928.69]
-            lines["ArI"] = [9122.97,9784.50]
-            lines["HgI"] = []
-            lines["CdI"] = []
-    else:
-        log.error('Bad camera')
-
+    # read good lines
+    if vacuum :
+        filename = resource_filename('desispec', "data/arc_lines/goodlines_vacuum.ascii")
+    else :
+        filename = resource_filename('desispec', "data/arc_lines/goodlines_air.ascii")
     
-    # check consistency with full line list
+    log.info("Reading good lines in {:s}".format(filename))
+    lines={}
+    ifile=open(filename)
+    for line in ifile.readlines() :
+        if line[0]=="#" :
+            continue
+        vals=line.strip().split()
+        if len(vals)<3 :
+            log.warning("ignoring line '{:s}' in {:s}".format(line.strip(),filename))
+            continue
+        cameras=vals[2]
+        if cameras.find(camera[0].upper()) < 0 :
+            continue
+        ion=vals[1]
+        wave=float(vals[0])
+        if lines.has_key(ion) :
+            lines[ion].append(wave)
+        else :
+            lines[ion]=[wave,]
+    ifile.close()
+    log.info("Good lines = {:s}".format(str(lines)))
+        
+    log.info("Checking consistency with full line list")
     nbad=0
     for ion in lines.keys() :
         ii=np.where(llist["Ion"]==ion)[0]
@@ -280,7 +251,8 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None):
 
     gd_lines=np.array([])
     for lamp in lamps :
-        gd_lines=np.append(gd_lines,lines[lamp])
+        if lines.has_key(lamp) :
+            gd_lines=np.append(gd_lines,lines[lamp])
     
     # Sort and return
     gd_lines.sort()
