@@ -112,9 +112,10 @@ class TestBoot(unittest.TestCase):
         for ii in range(1):
             spec = all_spec[:,ii]
             # Find Lines
-            pixpk = desiboot.find_arc_lines(spec)
+            pixpk, flux = desiboot.find_arc_lines(spec)
+            id_dict = {"pixpk":pixpk,"flux":flux}
             # Match a set of 5 gd_lines to detected lines
-            id_dict = desiboot.id_arc_lines_using_triplets(pixpk,gd_lines,dlamb)
+            desiboot.id_arc_lines_using_triplets(id_dict,gd_lines,dlamb)
             # Now the rest
             desiboot.id_remainder(id_dict, llist, deg=3)
             # Final fit wave vs. pix too
