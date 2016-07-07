@@ -157,13 +157,16 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     gdpix = np.where(gdp)[0]
     ngd = gdpix.size
     xpk = np.zeros(ngd)
+    flux = np.zeros(ngd)
+    
     for jj,igdpix in enumerate(gdpix):
         # Simple flux-weight
         pix = np.arange(igdpix-nstep,igdpix+nstep+1,dtype=int)
-        xpk[jj] = np.sum(pix*spec[pix]) / np.sum(spec[pix])
-
+        flux[jj] =  np.sum(spec[pix])
+        xpk[jj] = np.sum(pix*spec[pix]) / flux[jj]
+    
     # Finish
-    return xpk
+    return xpk , flux
 
 
 
@@ -210,7 +213,7 @@ def remove_duplicates_y_id(yw,y,y_id,w_id) :
     return y_id2,w_id2
 
 
-def refine_solution(y,w,y_id,w_id,deg=3,tolerance=10.) :
+def refine_solution(y,w,y_id,w_id,deg=3,tolerance=5.) :
 
     log = get_logger()
         
@@ -307,7 +310,7 @@ def id_remainder(id_dict, llist, deg=4, tolerance=1., verbose=False) :
     id_dict['id_wave'] = np.sort(all_known_waves[w_id])
     id_dict['rms'] = rms 
     
-    log.info("result : {:d} matched for {:d} detected and {:d} known, rms = {:g}".format(len(y_id),len(all_y),len(all_known_waves),rms))
+    log.info("{:d} matched for {:d} detected and {:d} known, rms = {:g}".format(len(y_id),len(all_y),len(all_known_waves),rms))
 
     
 def compute_triplets(wave) :
@@ -323,13 +326,12 @@ def compute_triplets(wave) :
                 triplets.append(triplet)
     return np.array(triplets)
 
-def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntrack=50):
+def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntrack=50,nmax=40):
     """Match (as best possible), a set of the input list of expected arc lines to the detected list
 
     Parameters
     ----------
-    y : ndarray
-      Pixel locations of detected arc lines
+    id_dict : dictionnary with Pixel locations of detected arc lines in "pixpk" and fluxes in "flux"
     w : ndarray
       array of expected arc lines to be detected and identified
     dwdy : float
@@ -349,7 +351,24 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
     log=get_logger()
     #log.info("y=%s"%str(y))
     #log.info("w=%s"%str(w))
-
+    
+    y = id_dict["pixpk"]
+    
+    if nmax<10 :
+        nmax=10
+        log.warning("force nmax=10 (arg was too small: {:d})".format(nmax))
+    
+    if len(y)>nmax :
+        # log.info("down-selecting the number of detected lines from {:d} to {:d}".format(len(y),nmax))
+        # keep at least the edges
+        margin=3
+        new_y=np.append(y[:margin],y[-margin:])
+        # now look at the flux to select the other ones 
+        flux=id_dict["flux"][margin:-margin]
+        ii=np.argsort(flux)
+        new_y=np.append(new_y,y[margin:-margin][ii[-(nmax-2*margin):]])
+        y = np.sort(new_y)
+    
     # compute triplets of waves of y positions
     y_triplets = compute_triplets(y)
     w_triplets = compute_triplets(w)
@@ -451,7 +470,7 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
         y_id,w_id,rms,niter=refine_solution(y,w,y_id,w_id)
         #log.info("get solution with %d match and rms=%f (niter=%d)"%(len(y_id),rms,niter))
         if (len(y_id)>len(best_y_id) and rms<max(1,best_rms)) or (len(y_id)==len(best_y_id) and rms<best_rms) or (best_rms>1 and rms<1 and len(y_id)>=8) :
-            log.info("new best solution #%d with %d match and rms=%f (niter=%d)"%(count,len(y_id),rms,niter))
+            #log.info("new best solution #%d with %d match and rms=%f (niter=%d)"%(count,len(y_id),rms,niter))
             #log.info("previous had %d match and rms=%f"%(len(best_y_id),best_rms))
             best_y_id = y_id
             best_w_id = w_id
@@ -461,10 +480,18 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
         if best_rms<0.2 and len(y_id)>=min(15,min(len(y),len(w))) :
             #log.info("stop here because we have a correct solution")
             break
+        
+    if len(y) != len(id_dict["pixpk"]) :
+        #log.info("re-indexing the result")        
+        tmp_y_id = []
+        for i in best_y_id :
+            tmp_y_id.append(np.argmin(np.abs(id_dict["pixpk"]-y[i])))
+        best_y_id = np.array(tmp_y_id).astype(int)
+        y = id_dict["pixpk"]
+        
 
-    id_dict={}
+
     id_dict["status"]="ok"
-    id_dict["pixpk"]=y
     id_dict["id_idx"]=best_y_id
     id_dict["id_pix"]=y[best_y_id]
     id_dict["id_wave"]=w[best_w_id]
@@ -474,7 +501,7 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
     
     log.info("{:d} matched for {:d} detected and {:d} known as good, rms = {:g}".format(len(best_y_id),len(y),len(w),best_rms))
     
-    return id_dict
+    
 
 ########################################################
 # Linelist routines
