@@ -52,6 +52,7 @@ def parse(options=None):
     parser.add_argument("--triplet-matching", default=False, action="store_true", help="use triplet matching method for line identification (slower but expected more robust)")
     parser.add_argument("--ntrack", type = int, default=5, required=False, help="Number of solutions to be tracked (only used with triplet-matching, more is safer but slower)")
     parser.add_argument("--nmax", type = int, default=100, required=False, help="Max number of measured emission lines kept in triplet-matching algorithm")
+    parser.add_argument("--out-line-list", type = str, default=False, required=False, help="Write to the list of lines found (can be used as input to specex)")
     
     args = None
     if options is None:
@@ -344,6 +345,11 @@ def main(args):
                        XCOEFF=XCOEFF,fiberflat_header=fiberflat_header,arc_header=arc_header)
     log.info("Successfully wrote {:s}".format(args.outfile))
 
+    if ( not args.trace_only ) and args.out_line_list :
+         log.info("Writing list of lines found in {:s}".format(args.out_line_list))
+         desiboot.write_line_list(args.out_line_list,all_wv_soln,llist)
+         log.info("Successfully wrote {:s}".format(args.out_line_list))
+    
     ###########
     # All done
     if QA:

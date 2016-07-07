@@ -1586,6 +1586,23 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     
     hdulist.writeto(outfile, clobber=True)
 
+def write_line_list(filename,all_wv_soln,llist) :
+    wave = np.array([])
+    for id_dict in all_wv_soln :
+        wave=np.append(wave,id_dict["id_wave"])
+    wave=np.unique(wave)
+
+    ofile=open(filename,"w")
+    ofile.write("# from bootcalib\n")
+    ofile.write("Ion wave score RelInt\n")
+    for w in wave :
+        ii=np.argmin(np.abs(llist["wave"]-w))
+        print(w,llist["wave"][ii],llist["Ion"][ii])
+        ofile.write("{:s} {:f} 1 1\n".format(llist["Ion"][ii],w))
+    ofile.close()
+
+    
+
 
 
 #####################################################################
