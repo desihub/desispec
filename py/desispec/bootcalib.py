@@ -166,97 +166,6 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     return xpk
 
 
-def load_gdarc_lines(camera, llist, vacuum=True,lamps=None):
-
-    """Loads a select set of arc lines for initial calibrating
-
-    Parameters
-    ----------
-    camera : str
-      Camera ('b', 'g', 'r')
-    vacuum : bool, optional
-      Use vacuum wavelengths
-    lamps : optional numpy array of ions, ex np.array(["HgI","CdI","ArI","NeI"])
-
-    Returns
-    -------
-    dlamb : float
-      Dispersion for input camera
-    wmark : float
-      wavelength to key off of [???]
-    gd_lines : ndarray
-      Array of lines expected to be recorded and good for ID
-    line_guess : int or None
-      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
-    """
-    log=get_logger()
-
-    if lamps is None :
-        lamps=np.array(["HgI","CdI","ArI","NeI"])
-    
-    lines={}
-
-    dlamb=0.6
-    if camera[0] == 'b':
-        dlamb = 0.589
-    elif camera[0] == 'r':  
-        dlamb = 0.527
-    elif camera[0] == 'z':  
-        dlamb = 0.599  # Ang
-
-    # read good lines
-    if vacuum :
-        filename = resource_filename('desispec', "data/arc_lines/goodlines_vacuum.ascii")
-    else :
-        filename = resource_filename('desispec', "data/arc_lines/goodlines_air.ascii")
-    
-    log.info("Reading good lines in {:s}".format(filename))
-    lines={}
-    ifile=open(filename)
-    for line in ifile.readlines() :
-        if line[0]=="#" :
-            continue
-        vals=line.strip().split()
-        if len(vals)<3 :
-            log.warning("ignoring line '{:s}' in {:s}".format(line.strip(),filename))
-            continue
-        cameras=vals[2]
-        if cameras.find(camera[0].upper()) < 0 :
-            continue
-        ion=vals[1]
-        wave=float(vals[0])
-        if lines.has_key(ion) :
-            lines[ion].append(wave)
-        else :
-            lines[ion]=[wave,]
-    ifile.close()
-    log.info("Good lines = {:s}".format(str(lines)))
-        
-    log.info("Checking consistency with full line list")
-    nbad=0
-    for ion in lines.keys() :
-        ii=np.where(llist["Ion"]==ion)[0]
-        all_waves=np.array(llist["wave"][ii])
-        for j,w in enumerate(lines[ion]) :
-            i=np.argmin(np.abs(w-all_waves))
-            if np.abs(w-all_waves[i])>0.2 :
-                log.error("cannot find good line {:f} of {:s} in full line list. nearest is {:f}".format(w,ion,all_waves[i]))
-                nbad += 1
-            elif np.abs(w-all_waves[i])>0.001 :
-                log.warning("adjusting hardcoded {:s} line {:f} -> {:f} (the NIST line list is the truth)".format(w,ion,all_waves[i]))
-                lines[ion][j]=all_waves[i]
-    if nbad>0 :
-        log.error("{:d} inconsistent hardcoded lines, exiting".format(nbad))
-        sys.exit(12)
-
-    gd_lines=np.array([])
-    for lamp in lamps :
-        if lines.has_key(lamp) :
-            gd_lines=np.append(gd_lines,lines[lamp])
-    
-    # Sort and return
-    gd_lines.sort()
-    return dlamb, gd_lines
 
 def remove_duplicates_w_id(wy,w,y_id,w_id) :
     # might be several identical w_id
@@ -571,6 +480,7 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
 # Linelist routines
 ########################################################
 
+
 def parse_nist(ion, vacuum=True):
     """Parse a NIST ASCII table.
 
@@ -781,6 +691,99 @@ def load_parse_dict():
     arcline_parse['KrI'] = copy.deepcopy(dict_parse)
     arcline_parse['KrI']['min_intensity'] = 50.
     return arcline_parse
+
+
+def load_gdarc_lines(camera, llist, vacuum=True,lamps=None):
+
+    """Loads a select set of arc lines for initial calibrating
+
+    Parameters
+    ----------
+    camera : str
+      Camera ('b', 'g', 'r')
+    vacuum : bool, optional
+      Use vacuum wavelengths
+    lamps : optional numpy array of ions, ex np.array(["HgI","CdI","ArI","NeI"])
+
+    Returns
+    -------
+    dlamb : float
+      Dispersion for input camera
+    wmark : float
+      wavelength to key off of [???]
+    gd_lines : ndarray
+      Array of lines expected to be recorded and good for ID
+    line_guess : int or None
+      Guess at the line index corresponding to wmark (default is to guess the 1/2 way point)
+    """
+    log=get_logger()
+
+    if lamps is None :
+        lamps=np.array(["HgI","CdI","ArI","NeI"])
+    
+    lines={}
+
+    dlamb=0.6
+    if camera[0] == 'b':
+        dlamb = 0.589
+    elif camera[0] == 'r':  
+        dlamb = 0.527
+    elif camera[0] == 'z':  
+        dlamb = 0.599  # Ang
+
+    # read good lines
+    if vacuum :
+        filename = resource_filename('desispec', "data/arc_lines/goodlines_vacuum.ascii")
+    else :
+        filename = resource_filename('desispec', "data/arc_lines/goodlines_air.ascii")
+    
+    log.info("Reading good lines in {:s}".format(filename))
+    lines={}
+    ifile=open(filename)
+    for line in ifile.readlines() :
+        if line[0]=="#" :
+            continue
+        vals=line.strip().split()
+        if len(vals)<3 :
+            log.warning("ignoring line '{:s}' in {:s}".format(line.strip(),filename))
+            continue
+        cameras=vals[2]
+        if cameras.find(camera[0].upper()) < 0 :
+            continue
+        ion=vals[1]
+        wave=float(vals[0])
+        if lines.has_key(ion) :
+            lines[ion].append(wave)
+        else :
+            lines[ion]=[wave,]
+    ifile.close()
+    log.info("Good lines = {:s}".format(str(lines)))
+        
+    log.info("Checking consistency with full line list")
+    nbad=0
+    for ion in lines.keys() :
+        ii=np.where(llist["Ion"]==ion)[0]
+        all_waves=np.array(llist["wave"][ii])
+        for j,w in enumerate(lines[ion]) :
+            i=np.argmin(np.abs(w-all_waves))
+            if np.abs(w-all_waves[i])>0.2 :
+                log.error("cannot find good line {:f} of {:s} in full line list. nearest is {:f}".format(w,ion,all_waves[i]))
+                nbad += 1
+            elif np.abs(w-all_waves[i])>0.001 :
+                log.warning("adjusting hardcoded {:s} line {:f} -> {:f} (the NIST line list is the truth)".format(w,ion,all_waves[i]))
+                lines[ion][j]=all_waves[i]
+    if nbad>0 :
+        log.error("{:d} inconsistent hardcoded lines, exiting".format(nbad))
+        sys.exit(12)
+
+    gd_lines=np.array([])
+    for lamp in lamps :
+        if lines.has_key(lamp) :
+            gd_lines=np.append(gd_lines,lines[lamp])
+    
+    # Sort and return
+    gd_lines.sort()
+    return dlamb, gd_lines
 
 ########################################################
 # Fiber routines
