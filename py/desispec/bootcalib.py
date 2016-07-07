@@ -567,44 +567,6 @@ def id_arc_lines_using_triplets(y,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0.2,ntr
     
     return id_dict
 
-def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
-    """ Uses the previous wavelength solution to fix the current
-
-    Args:
-        new_id:
-        old_id:
-        new_pix:
-        old_pix:
-
-    Returns:
-        Stuff
-    """
-    log=get_logger()
-    # Find offset in pixels
-    min_off = []
-    for pix in new_pix:
-        imin = np.argmin(np.abs(old_pix-pix))
-        min_off.append(old_pix[imin]-pix)
-    off = np.median(min_off)
-
-    # Find closest with small tolerance
-    id_pix = []
-    id_wave = []
-    # Insure enough pixels (some failures are bad extractions)
-    if len(new_pix) > len(old_pix)-5:
-        for kk,oldpix in enumerate(old_id['id_pix']):
-            mt = np.where(np.abs(new_pix-(oldpix-off)) < tol)[0]
-            if len(mt) == 1:
-                id_pix.append(new_pix[mt][0])
-                id_wave.append(old_id['id_wave'][kk])
-    else:  # Just apply offset
-        log.warn("Completely kludging this fiber wavelength")
-        id_wave = old_id['id_wave']
-        id_pix = old_id['id_pix']-off
-    # Fit
-    new_id['id_wave'] = id_wave
-    new_id['id_pix'] = id_pix
-
 ########################################################
 # Linelist routines
 ########################################################
