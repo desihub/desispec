@@ -605,65 +605,6 @@ def use_previous_wave(new_id, old_id, new_pix, old_pix, tol=0.5):
     new_id['id_wave'] = id_wave
     new_id['id_pix'] = id_pix
 
-
-def fix_poor_solutions(all_wv_soln, all_dlamb, ny, ldegree):
-    """ Identify solutions with poor RMS and replace
-
-    Args:
-        all_wv_soln: list of solutions
-        all_dlamb: list of dispersion values
-
-    Returns:
-        Updated lists if there were poor RMS solutions
-
-    """
-    from scipy.signal import medfilt
-
-    log=get_logger()
-    #
-    nfiber = len(all_dlamb)
-    #med_dlamb = np.median(all_dlamb)
-    dlamb_fit, dlamb_mask = dufits.iter_fit(np.arange(nfiber), np.array(all_dlamb), 'legendre', 4, xmin=0., xmax=1., sig_reg=10., max_rej=20)
-    #med_res = np.median(np.abs(med_dlamb-np.array(all_dlamb)))
-    #xval = np.linspace(0,nfiber,num=1000)
-    #yval = dufits.func_val(xval, dlamb_fit)
-
-    for ii,dlamb in enumerate(all_dlamb):
-        id_dict = all_wv_soln[ii]
-        #if (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (id_dict['rms'] > 0.7):
-        #if (np.abs(dlamb - med_dlamb[ii]) > 10*med_res) or (id_dict['rms'] > 0.7):
-        if (dlamb_mask[ii] == 1) or (id_dict['rms'] > 0.7):
-            log.warn('Bad wavelength solution for fiber {:d}.  Using closest good one to guide..'.format(ii))
-            if ii > nfiber/2:
-                off = -1
-            else:
-                off = +1
-            jj = ii + off
-
-            jdict = all_wv_soln[jj]
-            jdlamb = all_dlamb[jj]
-            #while (np.abs(dlamb - med_dlamb)/med_dlamb > 0.1) or (jdict['rms'] > 0.7):
-            #while (np.abs(jdlamb - med_dlamb[jj]) > 10*med_res) or (jdict['rms'] > 0.7):
-            while (dlamb_mask[jj] == 1) or (jdict['rms'] > 0.7):
-                jj += off
-                jdict = all_wv_soln[jj]
-                #jdlamb = all_dlamb[jj]
-            # Bad solution; shifting to previous
-            use_previous_wave(id_dict, jdict, id_dict['pixpk'], jdict['pixpk'])
-            final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']),
-                                              np.array(id_dict['id_pix']), 'polynomial', 3, xmin=0., xmax=1.)
-            rms = np.sqrt(np.mean((dufits.func_val(np.array(id_dict['id_wave'])[mask==0], final_fit)-
-                                   np.array(id_dict['id_pix'])[mask==0])**2))
-            final_fit_pix,mask2 = dufits.iter_fit(np.array(id_dict['id_pix']),
-                                                  np.array(id_dict['id_wave']),'legendre',ldegree , niter=5)
-            # Save
-            id_dict['final_fit'] = final_fit
-            id_dict['rms'] = rms
-            id_dict['final_fit_pix'] = final_fit_pix
-            id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
-            id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
-            id_dict['mask'] = mask
-
 ########################################################
 # Linelist routines
 ########################################################

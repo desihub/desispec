@@ -320,10 +320,7 @@ def main(args):
             log.info("Fiber #{:d} final fit rms(y->wave) = {:g} A ; rms(wave->y) = {:g} pix ; nlines = {:d}".format(ii,rms,rms_pix,id_pix.size))
     
             all_wv_soln.append(id_dict)
-
-        # Fix solutions with poor RMS (failures)
-        # desiboot.fix_poor_solutions(all_wv_soln, all_dlamb, ny, args.legendre_degree)
-
+        
         if QA:
             desiboot.qa_arc_spec(all_spec, all_wv_soln, pp)
             desiboot.qa_fiber_arcrms(all_wv_soln, pp)
