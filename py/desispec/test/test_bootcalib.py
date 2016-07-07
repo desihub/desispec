@@ -77,8 +77,10 @@ class TestBoot(unittest.TestCase):
         np.testing.assert_allclose(np.median(gauss), 1.06, rtol=0.05)
 
     def test_load_gdarc_lines(self):
+        
         for camera in ['b', 'r', 'z']:
-            dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
+            llist = desiboot.load_arcline_list(camera)
+            dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist)
 
     def test_wavelengths(self):
         # Read flat
@@ -104,20 +106,18 @@ class TestBoot(unittest.TestCase):
         # Line list
         camera = header['CAMERA']
         llist = desiboot.load_arcline_list(camera)
-        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
+        dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist)
         #
         all_wv_soln = []
         for ii in range(1):
             spec = all_spec[:,ii]
             # Find Lines
-            pixpk = desiboot.find_arc_lines(spec)
+            pixpk, flux = desiboot.find_arc_lines(spec)
+            id_dict = {"pixpk":pixpk,"flux":flux}
             # Match a set of 5 gd_lines to detected lines
-            id_dict = desiboot.id_arc_lines(pixpk,gd_lines,dlamb,wmark,
-                                            line_guess=line_guess)
-            # Find the other good ones
-            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines)
+            desiboot.id_arc_lines_using_triplets(id_dict,gd_lines,dlamb)
             # Now the rest
-            desiboot.id_remainder(id_dict, pixpk, llist)
+            desiboot.id_remainder(id_dict, llist, deg=3)
             # Final fit wave vs. pix too
             final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']),
                                               np.array(id_dict['id_pix']),

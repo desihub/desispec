@@ -42,12 +42,17 @@ def parse(options=None):
                         help = 'path of QA figure file')
     parser.add_argument('--lamps', type = str, default = None, required=False,
                         help = 'comma-separated used lamp elements, ex: HgI,NeI,ArI,CdI,KrI')
+    parser.add_argument('--good-lines', type = str, default = None, required=False,
+                        help = 'ascii files with good lines (default is data/arc_lines/goodlines_vacuum.ascii)')
+    
     parser.add_argument("--test", help="Debug?", default=False, action="store_true")
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
-    parser.add_argument("--legendre-degree", type = int, default=6, required=False, help="Legendre polynomial degree for traces")
+    parser.add_argument("--legendre-degree", type = int, default=5, required=False, help="Legendre polynomial degree for traces")
     parser.add_argument("--triplet-matching", default=False, action="store_true", help="use triplet matching method for line identification (slower but expected more robust)")
     parser.add_argument("--ntrack", type = int, default=5, required=False, help="Number of solutions to be tracked (only used with triplet-matching, more is safer but slower)")
+    parser.add_argument("--nmax", type = int, default=100, required=False, help="Max number of measured emission lines kept in triplet-matching algorithm")
+    parser.add_argument("--out-line-list", type = str, default=False, required=False, help="Write to the list of lines found (can be used as input to specex)")
     
     args = None
     if options is None:
@@ -61,7 +66,11 @@ def main(args):
     
     log=get_logger()
 
-    log.info("starting")
+    log.info("Starting")
+
+    if args.triplet_matching :
+        log.warning("triplet_matching option deprecated, this algorithm is now used for all cases")
+    
 
     lamps=None
     if args.lamps :
@@ -81,10 +90,13 @@ def main(args):
     else:
         QA = True
 
+    fiberflat_header = None
+    
     if args.psffile is None:
         ###########
         # Read flat
         flat_hdu = fits.open(args.fiberflat)
+        fiberflat_header = flat_hdu[0].header
         header = flat_hdu[0].header
         if len(flat_hdu)>=3 :
             flat = flat_hdu[0].data*(flat_hdu[1].data>0)*(flat_hdu[2].data==0)
@@ -95,7 +107,7 @@ def main(args):
 
         ###########
         # Find fibers
-        log.info("finding the fibers")
+        log.info("Finding the fibers")
         xpk, ypos, cut = desiboot.find_fiber_peaks(flat)
         if QA:
             desiboot.qa_fiber_peaks(xpk, cut, pp)
@@ -109,12 +121,12 @@ def main(args):
 
         ###########
         # Trace the fiber flat spectra
-        log.info("tracing the fiber flat spectra")
+        log.info("Tracing the fiber flat spectra")
         # Crude first
-        log.info("crudely..")
+        log.info("Crudely..")
         xset, xerr = desiboot.trace_crude_init(flat,xpk,ypos)
         # Polynomial fits
-        log.info("fitting the traces")
+        log.info("Fitting the traces")
         xfit, fdicts = desiboot.fit_traces(xset,xerr)
         # QA
         if QA:
@@ -122,7 +134,7 @@ def main(args):
 
         ###########
         # Model the PSF with Gaussian
-        log.info("modeling the PSF with a Gaussian, be patient..")
+        log.info("Modeling the PSF with a Gaussian, be patient..")
         gauss = desiboot.fiber_gauss(flat,xfit,xerr)
         if QA:
             desiboot.qa_fiber_gauss(gauss, pp)
@@ -139,14 +151,17 @@ def main(args):
         XCOEFF = psf_hdu[0].data
         xfit = None
         fdicts = None
+    
+    arc_header = None
 
     # ARCS
     if not args.trace_only:
 
         ###########
         # Read arc
-        log.info("reading arc")
+        log.info("Reading arc")
         arc_hdu = fits.open(args.arcfile)
+        arc_header = arc_hdu[0].header
         if len(arc_hdu)>=3 :
             # set to zero ivar of masked pixels, force positive or null ivar
             arc_ivar = arc_hdu[1].data*(arc_hdu[2].data==0)*(arc_hdu[1].data>0)
@@ -164,7 +179,7 @@ def main(args):
 
         #####################################
         # Extract arc spectra (one per fiber)
-        log.info("extracting arcs")
+        log.info("Extracting arcs")
         if xfit is None:
             wv_array = np.linspace(WAVEMIN, WAVEMAX, num=arc.shape[0])
             nfiber = XCOEFF.shape[0]
@@ -183,52 +198,121 @@ def main(args):
         camera = header['CAMERA'].lower()
         log.info("Loading line list")
         llist = desiboot.load_arcline_list(camera,vacuum=True,lamps=lamps)
-        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera,vacuum=True,lamps=lamps)
-
+        dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist,vacuum=True,lamps=lamps,good_lines_filename=args.good_lines)
+        
         #####################################
         # Loop to solve for wavelengths
         all_wv_soln = []
         all_dlamb = []
         debug=False
+
+        id_dict_of_fibers=[]
+        # first loop to find arc lines and do a first matching
         for ii in range(all_spec.shape[1]):
             spec = all_spec[:,ii]
-            if (ii % 20) == 0:
-                log.info("working on spectrum {:d}".format(ii))
-            # Find Lines
-            pixpk = desiboot.find_arc_lines(spec)
-            # Match a set of 5 gd_lines to detected lines
+            
+            id_dict={}
+            id_dict["fiber"]  = ii 
+            id_dict["status"] = "none"            
+            id_dict['id_pix'] = []
+            id_dict['id_idx'] = []
+            id_dict['id_wave'] = []
+            
+            pixpk, flux = desiboot.find_arc_lines(spec)
+            
+            id_dict["pixpk"] =  pixpk
+            id_dict["flux"]  =  flux
+            
             try:
-                if args.triplet_matching :
-                    id_dict = desiboot.id_arc_lines_using_triplets(pixpk, gd_lines, dlamb,ntrack=args.ntrack)
-                else :
-                    id_dict = desiboot.id_arc_lines(pixpk, gd_lines, dlamb, wmark, line_guess=line_guess)
-            except:
-                log.warn("ID_ARC failed on fiber {:d}".format(ii))
-                id_dict = dict(status='junk')
-            # Add to dict
-            id_dict['fiber'] = ii
-            id_dict['pixpk'] = pixpk
+                desiboot.id_arc_lines_using_triplets(id_dict, gd_lines, dlamb,ntrack=args.ntrack,nmax=args.nmax)
+            except : 
+                log.warn(sys.exc_info())
+                log.warn("fiber {:d} ID_ARC failed".format(ii))
+                id_dict['status'] = "failed"                
+                id_dict_of_fibers.append(id_dict)
+                continue
+                        
+            # Add lines 
+            if len(id_dict['pixpk'])>len(id_dict['id_pix']) :
+                desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
+            log.info("Fiber #{:d} n_match={:d} n_detec={:d}".format(ii,len(id_dict['id_pix']),len(id_dict['pixpk'])))
+            # Save
+            id_dict_of_fibers.append(id_dict)
+
+        
+       
+        
+        # now record the list of waves identified in several fibers 
+        matched_lines=np.array([])
+        for ii in range(all_spec.shape[1]):
+            matched_lines = np.append(matched_lines,id_dict_of_fibers[ii]['id_wave'])
+        matched_lines = np.unique(matched_lines)
+        number_of_detections = []
+        for line in matched_lines :
+            ndet=0
+            for ii in range(all_spec.shape[1]):
+                if np.sum(id_dict_of_fibers[ii]['id_wave']==line) >0 :
+                    ndet += 1
+            print(line,"ndet=",ndet)
+            number_of_detections.append(ndet)
+        
+        # choose which lines are ok and 
+        # ok if 5 detections (coincidental error very low)
+        min_number_of_detections=min(5,all_spec.shape[1])
+        number_of_detections=np.array(number_of_detections)
+        good_matched_lines = matched_lines[number_of_detections>=min_number_of_detections]
+        bad_matched_lines  = matched_lines[number_of_detections<min_number_of_detections]
+        
+        log.info("good matched lines = {:s}".format(str(good_matched_lines)))
+        log.info("bad matched lines  = {:s}".format(str(bad_matched_lines)))
+        
+        
+        # loop again on all fibers
+        for ii in range(all_spec.shape[1]):
+            spec = all_spec[:,ii]
+            
+            id_dict = id_dict_of_fibers[ii]
+            n_matched_lines=len(id_dict['id_wave'])
+            n_detected_lines=len(id_dict['pixpk'])
+            
+            # did we find any bad line for this fiber?
+            n_bad = np.intersect1d(id_dict['id_wave'],bad_matched_lines).size
+            # how many good lines did we find
+            n_good = np.intersect1d(id_dict['id_wave'],good_matched_lines).size
+            
+
+            if id_dict['status']=="ok" and ( n_bad>0 or (n_good < good_matched_lines.size-1 and n_good<30) ) and  n_good<40 :
+                
+                log.info("Try to refit fiber {:d} with n_bad={:d} and n_good={:d} when n_good_all={:d} n_detec={:d}".format(ii,n_bad,n_good,good_matched_lines.size,n_detected_lines))
+                
+                try:
+                    desiboot.id_arc_lines_using_triplets(id_dict,  good_matched_lines, dlamb,ntrack=args.ntrack,nmax=args.nmax)
+                except:
+                    log.warn(sys.exc_info())
+                    log.warn("ID_ARC failed on fiber {:d}".format(ii))
+                    id_dict["status"]=failed
+
+                if id_dict['status']=="ok" and  len(id_dict['pixpk'])>len(id_dict['id_pix']) :
+                    desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
+            else :
+                log.info("Do not refit fiber {:d} with n_bad={:d} and n_good={:d} when n_good_all={:d} n_detec={:d}".format(ii,n_bad,n_good,good_matched_lines.size,n_detected_lines))
+                    
             if id_dict['status'] == 'junk':
-                id_dict['rms'] = 999.
                 all_wv_soln.append(id_dict)
                 all_dlamb.append(0.)
                 continue
-            # Find the other good ones
-            if camera == 'z':
-                inpoly = 3  # The solution in the z-camera has greater curvature
-            else:
-                inpoly = 2
-            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines, inpoly=inpoly, debug=debug)
-            # Now the rest
-            desiboot.id_remainder(id_dict, pixpk, llist)
+
+            
+            
             # Final fit wave vs. pix too
             id_wave=np.array(id_dict['id_wave'])
             id_pix=np.array(id_dict['id_pix'])
-            deg=max(1,min(3,id_wave.size-2))
-            final_fit, mask = dufits.iter_fit(id_wave,id_pix, 'polynomial', deg, xmin=0., xmax=1.)
+            
+            deg=max(1,min(args.legendre_degree,id_wave.size-2))
+            
+            final_fit, mask = dufits.iter_fit(id_wave,id_pix, 'polynomial', deg, xmin=0., xmax=1., sig_rej=3.)
             rms = np.sqrt(np.mean((dufits.func_val(id_wave[mask==0], final_fit)-id_pix[mask==0])**2))
-            deg=max(1,min(args.legendre_degree,(id_wave[mask==0]).size-2))
-            final_fit_pix,mask2 = dufits.iter_fit(id_pix[mask==0],id_wave[mask==0],'legendre',deg , sig_rej=100000.)
+            final_fit_pix,mask2 = dufits.iter_fit(id_pix[mask==0],id_wave[mask==0],'legendre',deg , sig_rej=100000000.)
             rms_pix = np.sqrt(np.mean((dufits.func_val(id_pix[mask==0], final_fit_pix)-id_wave[mask==0])**2))
             
             # Append
@@ -242,13 +326,11 @@ def main(args):
             id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
             id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
             id_dict['mask'] = mask
-            log.info("Fiber #{:d} final fit rms(y->wave) = {:g} A ; rms(wave->y) = {:g} pix ; nlines = {:d}".format(ii,rms,rms_pix,id_pix[mask==0].size))
+            
+            log.info("Fiber #{:d} final fit rms(y->wave) = {:g} A ; rms(wave->y) = {:g} pix ; nlines = {:d}".format(ii,rms,rms_pix,id_pix.size))
     
             all_wv_soln.append(id_dict)
-
-        # Fix solutions with poor RMS (failures)
-        # desiboot.fix_poor_solutions(all_wv_soln, all_dlamb, ny, args.legendre_degree)
-
+        
         if QA:
             desiboot.qa_arc_spec(all_spec, all_wv_soln, pp)
             desiboot.qa_fiber_arcrms(all_wv_soln, pp)
@@ -258,16 +340,21 @@ def main(args):
 
     ###########
     # Write PSF file
-    log.info("writing PSF file")
+    log.info("Writing PSF file")
     desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, legendre_deg=args.legendre_degree , without_arc=args.trace_only,
-                       XCOEFF=XCOEFF)
-    log.info("successfully wrote {:s}".format(args.outfile))
+                       XCOEFF=XCOEFF,fiberflat_header=fiberflat_header,arc_header=arc_header)
+    log.info("Successfully wrote {:s}".format(args.outfile))
 
+    if ( not args.trace_only ) and args.out_line_list :
+         log.info("Writing list of lines found in {:s}".format(args.out_line_list))
+         desiboot.write_line_list(args.out_line_list,all_wv_soln,llist)
+         log.info("Successfully wrote {:s}".format(args.out_line_list))
+    
     ###########
     # All done
     if QA:
-        log.info("successfully wrote {:s}".format(args.qafile))
+        log.info("Successfully wrote {:s}".format(args.qafile))
         pp.close()
-    log.info("finishing..")
-    print("finished bootcalib {}".format(args.outfile))
+    log.info("end")
+    
     return
