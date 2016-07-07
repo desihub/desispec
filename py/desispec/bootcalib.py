@@ -294,11 +294,11 @@ def id_remainder(id_dict, llist, deg=4, tolerance=1., verbose=False) :
     
     w_id=[]
     for w in identified_waves :
-        ii=np.where(all_known_waves==w)[0]
-        if ii.size == 0 :
-            log.error("FATAL didn't find wave={:f} in full list of waves",format(all_known_waves))
-            return
-        w_id.append(ii[0])
+        i=np.argmin(np.abs(all_known_waves-w))
+        diff=np.abs(all_known_waves[i]-w)
+        if diff>0.1 :
+            log.warning("discrepant wavelength".format(w,all_known_waves[i]))
+        w_id.append(i)
     w_id = np.array(w_id).astype(int)
     y_id,w_id,rms,niter=refine_solution(all_y,all_known_waves,y_id,w_id,deg=deg,tolerance=tolerance)
     
