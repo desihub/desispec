@@ -88,10 +88,13 @@ def main(args):
     else:
         QA = True
 
+    fiberflat_header = None
+    
     if args.psffile is None:
         ###########
         # Read flat
         flat_hdu = fits.open(args.fiberflat)
+        fiberflat_header = flat_hdu[0].header
         header = flat_hdu[0].header
         if len(flat_hdu)>=3 :
             flat = flat_hdu[0].data*(flat_hdu[1].data>0)*(flat_hdu[2].data==0)
@@ -146,6 +149,8 @@ def main(args):
         XCOEFF = psf_hdu[0].data
         xfit = None
         fdicts = None
+    
+    arc_header = None
 
     # ARCS
     if not args.trace_only:
@@ -154,6 +159,7 @@ def main(args):
         # Read arc
         log.info("reading arc")
         arc_hdu = fits.open(args.arcfile)
+        arc_header = arc_hdu[0].header
         if len(arc_hdu)>=3 :
             # set to zero ivar of masked pixels, force positive or null ivar
             arc_ivar = arc_hdu[1].data*(arc_hdu[2].data==0)*(arc_hdu[1].data>0)
@@ -335,7 +341,7 @@ def main(args):
     # Write PSF file
     log.info("writing PSF file")
     desiboot.write_psf(args.outfile, xfit, fdicts, gauss, all_wv_soln, legendre_deg=args.legendre_degree , without_arc=args.trace_only,
-                       XCOEFF=XCOEFF)
+                       XCOEFF=XCOEFF,fiberflat_header=fiberflat_header,arc_header=arc_header)
     log.info("successfully wrote {:s}".format(args.outfile))
 
     ###########

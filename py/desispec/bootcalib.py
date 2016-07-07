@@ -1458,7 +1458,7 @@ def fix_ycoeff_outliers(xcoeff, ycoeff, deg=5, tolerance=2):
 #####################################################################
 
 def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_arc=False,
-              XCOEFF=None):
+              XCOEFF=None, fiberflat_header=None, arc_header=None):
     """ Write the output to a Base PSF format
 
     Parameters
@@ -1532,6 +1532,20 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     prihdu.header['WAVEMAX'] = WAVEMAX
     prihdu.header['EXTNAME'] = 'XCOEFF'
 
+    # Add informations for headers
+    if arc_header is not None :
+        if "NIGHT" in arc_header.keys() :
+            prihdu.header["ARCNIGHT"] = arc_header["NIGHT"]
+        if "EXPID" in arc_header.keys() :
+            prihdu.header["ARCEXPID"] = arc_header["EXPID"]
+        if "CAMERA" in arc_header.keys() :
+            prihdu.header["CAMERA"] = arc_header["CAMERA"]
+    if fiberflat_header is not None :
+        if "NIGHT" in fiberflat_header.keys() :
+            prihdu.header["FLANIGHT"] = fiberflat_header["NIGHT"]
+        if "EXPID" in fiberflat_header.keys() :
+            prihdu.header["FLAEXPID"] = fiberflat_header["EXPID"]
+    
     yhdu = fits.ImageHDU(YCOEFF, name='YCOEFF')
 
     # also save wavemin wavemax in yhdu
@@ -1541,6 +1555,8 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     gausshdu = fits.ImageHDU(np.array(gauss), name='XSIGMA')
 
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
+
+    
     hdulist.writeto(outfile, clobber=True)
 
 
