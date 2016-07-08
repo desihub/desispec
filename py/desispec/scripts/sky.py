@@ -19,8 +19,6 @@ def parse(options=None):
 
     parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fibermap', type = str, default = None, required=False,
-                        help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
     parser.add_argument('--outfile', type = str, default = None, required=True,
@@ -43,9 +41,6 @@ def main(args) :
     log=get_logger()
 
     log.info("starting")
-
-    if args.fibermap is not None:
-        log.warn('--fibermap is deprecated (and not used at all)')
 
     # read exposure to load data and get range of spectra
     frame = read_frame(args.infile)

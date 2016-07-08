@@ -334,15 +334,9 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         outfile = graph_path_fiberflat(proddir, name)
         qafile = qa_path(outfile)
 
-        # FIXME:  this is a hack, since fiberflat should get this from
-        # the bundled fibermap HDU.
-        night = name[:8]
-        fmfile = graph_path_fibermap(rawdir, "{}_fibermap-{:08d}".format(night, node['id']))
-
         options = {}
         options['infile'] = framefile
         options['qafile'] = qafile
-        options['fibermap'] = fmfile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -400,7 +394,6 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         frm = []
         flat = []
         sky = []
-        fm = []
         flatexp = None
         specgrph = None
         for input in node['in']:
@@ -413,12 +406,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
                 flatexp = inode['id']
             elif inode['type'] == 'sky':
                 sky.append(input)
-            elif inode['type'] == 'fibermap':
-                fm.append(input)
-        if len(fm) != 1:
-            raise RuntimeError("stdstars needs exactly one fibermap file")
 
-        fmfile = graph_path_fibermap(rawdir, fm[0])
         outfile = graph_path_stdstars(proddir, name)
         qafile = qa_path(outfile)
         
@@ -427,13 +415,6 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         flatfiles = [graph_path_fiberflat(proddir, x) for x in flat]
 
         options = {}
-        #- Old-style options
-        # options['spectrograph'] = specgrph
-        # options['fiberflatexpid'] = flatexp
-        # options['fibermap'] = fmfile
-        # options['outfile'] = outfile
-        
-        #- New JG options
         options['frames'] = framefiles
         options['skymodels'] = skyfiles
         options['fiberflats'] = flatfiles

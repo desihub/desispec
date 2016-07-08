@@ -355,20 +355,20 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
 
-def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
+def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     """ QA plots for fiber flat
 
     Args:
         outfil:
         qaframe:
         frame:
-        fibermap:
         fiberflat:
 
     Returns:
         Stuff?
     """
     # Setup
+    fibermap = frame.fibermap
     gdp = fiberflat.mask == 0
     nfiber = len(frame.fibers)
     xfiber = np.zeros(nfiber)
