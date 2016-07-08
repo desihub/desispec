@@ -418,8 +418,8 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
         d2wdy2_bin = ((idet*(dy_13*w_triplet[6]-dy_12*w_triplet[7])-d2wdy2_min)/d2wdy2_step).astype(int)
         pairs_in_histo=np.where((dwdy_bin>=0)&(dwdy_bin<ndwdy)&(d2wdy2_bin>=0)&(d2wdy2_bin<nd2wdy2))[0]
         # fill histo
-        iw=w_triplet[3]
-        for a,b,c in zip(dwdy_bin[pairs_in_histo],d2wdy2_bin[pairs_in_histo],y_triplets[pairs_in_histo,3]) :
+        iw=int(w_triplet[3])
+        for a,b,c in zip(dwdy_bin[pairs_in_histo],d2wdy2_bin[pairs_in_histo],y_triplets[pairs_in_histo,3].astype(int)) :
             histogram[a,b,c,iw] += 1
 
     # find max bins in the histo
@@ -866,8 +866,8 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
 
         # collect data
         central_xpix=np.floor(xtrc[:,ii]+0.5)
-        begin_xpix=central_xpix-box_radius
-        end_xpix=central_xpix+box_radius+1
+        begin_xpix=(central_xpix-box_radius).astype(int)
+        end_xpix=(central_xpix+box_radius+1).astype(int)
         dx=[]
         flux=[]
         for y in xrange(ny) :
