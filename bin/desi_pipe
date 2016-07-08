@@ -69,7 +69,13 @@ def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night,
 
     shell_path = os.path.join(scrdir, "{}.sh".format(stepstr))
     shell_log = os.path.join(logdir, "{}_sh".format(stepstr))
+
+    #- no MPI for shell job version so that it can be run from interactive node
+    com = ["desi_pipe_run --nompi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
     pipe.shell_job(shell_path, shell_log, envcom, setupfile, com, comrun=shell_mpi_run, mpiprocs=shell_procs, threads=shell_threads)
+
+    #- MPI for standard batch job (to be written below)
+    com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
 
     core_per_proc = 1
     if nersc_threads > 1:
