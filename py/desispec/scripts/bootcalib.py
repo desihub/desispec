@@ -290,16 +290,17 @@ def main(args):
                 except:
                     log.warn(sys.exc_info())
                     log.warn("ID_ARC failed on fiber {:d}".format(ii))
-                    id_dict["status"]=failed
+                    id_dict["status"]="failed"
 
                 if id_dict['status']=="ok" and  len(id_dict['pixpk'])>len(id_dict['id_pix']) :
                     desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
             else :
                 log.info("Do not refit fiber {:d} with n_bad={:d} and n_good={:d} when n_good_all={:d} n_detec={:d}".format(ii,n_bad,n_good,good_matched_lines.size,n_detected_lines))
                     
-            if id_dict['status'] == 'junk':
+            if id_dict['status'] != 'ok':
                 all_wv_soln.append(id_dict)
                 all_dlamb.append(0.)
+                log.warning("Fiber #{:d} failed, no final fit".format(ii))
                 continue
 
             
@@ -307,14 +308,14 @@ def main(args):
             # Final fit wave vs. pix too
             id_wave=np.array(id_dict['id_wave'])
             id_pix=np.array(id_dict['id_pix'])
-            
+
             deg=max(1,min(args.legendre_degree,id_wave.size-2))
-            
+
             final_fit, mask = dufits.iter_fit(id_wave,id_pix, 'polynomial', deg, xmin=0., xmax=1., sig_rej=3.)
             rms = np.sqrt(np.mean((dufits.func_val(id_wave[mask==0], final_fit)-id_pix[mask==0])**2))
             final_fit_pix,mask2 = dufits.iter_fit(id_pix[mask==0],id_wave[mask==0],'legendre',deg , sig_rej=100000000.)
             rms_pix = np.sqrt(np.mean((dufits.func_val(id_pix[mask==0], final_fit_pix)-id_wave[mask==0])**2))
-            
+
             # Append
             wave = dufits.func_val(np.arange(spec.size),final_fit_pix)
             idlamb = np.median(np.abs(wave-np.roll(wave,1)))

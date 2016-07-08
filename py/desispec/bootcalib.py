@@ -489,7 +489,15 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
         best_y_id = np.array(tmp_y_id).astype(int)
         y = id_dict["pixpk"]
         
-
+    if len(best_w_id) == 0 :
+        log.error("failed, no match")
+        id_dict["status"]="failed"
+        id_dict["id_idx"]=[]
+        id_dict["id_pix"]=[]
+        id_dict["id_wave"]=[]
+        id_dict["rms"]=999.
+        id_dict["fit"]=None
+        return
 
     id_dict["status"]="ok"
     id_dict["id_idx"]=best_y_id
@@ -1509,9 +1517,10 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     if not without_arc:
         nlines=10000
         for ii,id_dict in enumerate(wv_solns):
-            nlines_in_fiber=(np.array(id_dict['id_pix'])[id_dict['mask']==0]).size
-            #print("fiber #%d nlines=%d"%(ii,nlines_in_fiber))
-            nlines=min(nlines,nlines_in_fiber)
+            if len(id_dict['id_pix']) > 0 : 
+                nlines_in_fiber=(np.array(id_dict['id_pix'])[id_dict['mask']==0]).size
+                #print("fiber #%d nlines=%d"%(ii,nlines_in_fiber))
+                nlines=min(nlines,nlines_in_fiber)
         if nlines < legendre_deg+2 :
             legendre_deg=nlines-2
             print("reducing legendre degree to %d because the min. number of emission lines found is %d"%(legendre_deg,nlines))
@@ -1529,17 +1538,37 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
         WAVEMAX = ny-1.
         wv_solns = [None]*nfiber
     else:
-        WAVEMIN = np.min([id_dict['wave_min'] for id_dict in wv_solns]) - 1.
-        WAVEMAX = np.max([id_dict['wave_max'] for id_dict in wv_solns]) + 1.
+        WAVEMIN = 10000000.
+        WAVEMAX = 0.
+        for id_dict in wv_solns :
+            if 'wave_min' in id_dict :
+                WAVEMIN = min(WAVEMIN,id_dict['wave_min'])
+            if 'wave_max' in id_dict :
+                WAVEMAX = max(WAVEMAX,id_dict['wave_max'])
+        WAVEMIN -= 1.
+        WAVEMAX += 1.
+    
     wv_array = np.linspace(WAVEMIN, WAVEMAX, num=ny)
     # Fit Legendre to y vs. wave
     for ii,id_dict in enumerate(wv_solns):
+        
+        
+
         # Fit y vs. wave
         if without_arc:
             yleg_fit, mask = dufits.iter_fit(wv_array, np.arange(ny), 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, niter=1)
         else:
-            yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave'])[id_dict['mask']==0], np.array(id_dict['id_pix'])[id_dict['mask']==0], 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, sig_rej=100000.)
+            if len(id_dict['id_wave']) > 0 :
+                yleg_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave'])[id_dict['mask']==0], np.array(id_dict['id_pix'])[id_dict['mask']==0], 'legendre', ncoeff-1, xmin=WAVEMIN, xmax=WAVEMAX, sig_rej=100000.)
+            else :
+                yleg_fit = None
+                mask = None
+        
+        if yleg_fit is None :
+            continue
+
         YCOEFF[ii, :] = yleg_fit['coeff']
+        
         # Fit x vs. wave
         yval = dufits.func_val(wv_array, yleg_fit)
         if fdicts is None:
