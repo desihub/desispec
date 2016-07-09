@@ -22,10 +22,10 @@ class TestIO(unittest.TestCase):
         cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
         cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
         cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
-        cls.origEnv = {'PRODNAME':None,
+        cls.origEnv = {'SPECPROD':None,
             "DESI_SPECTRO_DATA":None,
             "DESI_SPECTRO_REDUX":None}
-        cls.testEnv = {'PRODNAME':'dailytest',
+        cls.testEnv = {'SPECPROD':'dailytest',
             "DESI_SPECTRO_DATA":os.path.join(cls.testDir,'spectro','data'),
             "DESI_SPECTRO_REDUX":os.path.join(cls.testDir,'spectro','redux')}
         for e in cls.origEnv:
@@ -386,7 +386,7 @@ class TestIO(unittest.TestCase):
                     kwargs['camera'] = 'sp{spectrograph:d}'.format(**kwargs)
                 filenames1.append(desispec.io.findfile(i,**kwargs))
                 filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                    os.environ['PRODNAME'],'exposures',kwargs['night'],
+                    os.environ['SPECPROD'],'exposures',kwargs['night'],
                     '{expid:08d}'.format(**kwargs),
                     '{i}-{camera}-{expid:08d}.fits'.format(i=i,camera=kwargs['camera'],expid=kwargs['expid'])))
         for k,f in enumerate(filenames1):
@@ -395,7 +395,7 @@ class TestIO(unittest.TestCase):
             self.assertEqual(filenames1[k],filenames2[k])
             self.assertEqual(desispec.io.filepath2url(filenames1[k]),
                 os.path.join('https://portal.nersc.gov/project/desi',
-                'collab','spectro','redux',os.environ['PRODNAME'],'exposures',
+                'collab','spectro','redux',os.environ['SPECPROD'],'exposures',
                 kwargs['night'],'{expid:08d}'.format(**kwargs),
                 os.path.basename(filenames2[k])))
         #

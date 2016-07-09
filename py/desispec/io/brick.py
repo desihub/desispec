@@ -4,7 +4,7 @@ desispec.io.brick
 
 I/O routines for working with per-brick files.
 
-See ``doc/DESI_SPECTRO_REDUX/PRODNAME/bricks/BRICKID/*-BRICKID.rst`` in desiDataModel
+See ``doc/DESI_SPECTRO_REDUX/SPECPROD/bricks/BRICKID/*-BRICKID.rst`` in desidatamodel
 for a description of the relevant data models.
 
 See :doc:`coadd` and `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_

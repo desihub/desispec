@@ -37,7 +37,7 @@ def check_env():
         missing_env = True
 
     for name in (
-        'DESI_SPECTRO_SIM', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'PRODNAME'):
+        'DESI_SPECTRO_SIM', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'SPECPROD'):
         if name not in os.environ:
             log.warning("missing ${0}".format(name))
             missing_env = True
@@ -46,7 +46,7 @@ def check_env():
         log.warning("Why are these needed?")
         log.warning("    Simulations written to $DESI_SPECTRO_SIM/$PIXPROD/")
         log.warning("    Raw data read from $DESI_SPECTRO_DATA/")
-        log.warning("    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$PRODNAME/")
+        log.warning("    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$SPECPROD/")
         log.warning("    Templates are read from $DESI_BASIS_TEMPLATES")
 
     #- Wait until end to raise exception so that we report everything that
