@@ -757,10 +757,6 @@ class Calculate_SNR(MonitoringAlg):
             retval["VALUE"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp}
 
         else: retval["VALUE"]={"MEDIAN_SNR":medsnr}
-
-
-        medsnr, totsnr=SN_ratio(input_frame.flux,input_frame.ivar)
-        retval["VALUE"]={"MED_SNR":medsnr,"TOT_SNR":totsnr}
         
         #- http post if valid
         if url is not None:
@@ -777,8 +773,7 @@ class Calculate_SNR(MonitoringAlg):
                 response=requests.post(api['job'],json=job,auth=("username","password"))
             except:
              
-                log.info("Skipping HTTP post...")
-            
+                log.info("Skipping HTTP post...")            
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
