@@ -22,7 +22,14 @@ from desispec.util import dist_discrete
 
 import desispec.pipeline as pipe
 
+def get_script_dir(proddir):
+    '''returns standardized script directory location under base production dir'''
+    return os.path.join(proddir, 'run', 'scripts')
 
+def get_log_dir(proddir):
+    '''returns standardized log directory location under base production dir'''
+    return os.path.join(proddir, 'run', 'logs')
+    
 def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night, 
     ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes,
     nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
@@ -32,8 +39,8 @@ def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night,
     if specs is not None:
         specstr = " --spectrographs {}".format(','.join([ "{}".format(x) for x in specs ]))
 
-    scrdir = os.path.join(proddir, 'run', 'scripts')
-    logdir = os.path.join(proddir, 'run', 'logs')
+    scrdir = get_script_dir(proddir)
+    logdir = get_log_dir(proddir)
 
     if (nersc_threads > 1) and (nersc_mp > 1):
         raise RuntimeError("set either nersc_threads or nersc_mp, but not both")
@@ -44,9 +51,12 @@ def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night,
         nstr = " --nights {}".format(night)
         scrstr = "{}".format(night)
 
-    stepstr = "{}-{}_{}".format(first, last, scrstr)
     if first == last:
         stepstr = "{}_{}".format(first, scrstr)
+        jobname = first
+    else:
+        stepstr = "{}-{}_{}".format(first, last, scrstr)
+        jobname = "{}_{}".format(first, last)
 
     com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
 
@@ -83,7 +93,7 @@ def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night,
 
     pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, com, nodes=nodes,
         nodeproc=nodeproc, minutes=minutes, multisrun=False, openmp=(nersc_threads > 1),
-        multiproc=(nersc_mp > 1), queue=queue)
+        multiproc=(nersc_mp > 1), queue=queue, jobname=jobname)
 
     return (shell_path, nersc_path)
 
@@ -223,7 +233,7 @@ def main():
 
     # create scripts for processing
 
-    print("Generating scripts")
+    print("Generating scripts in {}".format(get_script_dir(proddir)))
 
     all_slurm = []
     all_shell = []
@@ -332,7 +342,7 @@ def main():
 
     ntask = (totcount['flat'] + totcount['science']) * 3 * nspect
     taskproc = 20
-    threads = 2
+    threads = 1
 
     scr_shell, scr_slurm = compute_step(setupfile, rawdir, proddir, envcom, "extract", "extract", specs, None, ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
     all_shell.append(scr_shell)
@@ -379,7 +389,9 @@ def main():
 
     nersc_path = os.path.join(scrdir, "bricks.slurm")
     nersc_log = os.path.join(logdir, "bricks_slurm.log")
-    pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, brickcom, nodes=1, nodeproc=1, minutes=30, multisrun=False, openmp=False, multiproc=False, queue='debug')
+    pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, brickcom, nodes=1,
+        nodeproc=1, minutes=30, multisrun=False, openmp=False, multiproc=False,
+        queue='debug', jobname='bricks')
 
     all_shell.append(shell_path)
     all_slurm.append(nersc_path)
