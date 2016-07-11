@@ -260,7 +260,7 @@ def main(args, comm=None) :
                     zf.z[my_specs] = myzf.z
                     zf.zerr[my_specs] = myzf.zerr
                     zf.zwarn[my_specs] = myzf.zwarn
-                    zf.type[my_specs] = myzf.type
+                    zf.spectype[my_specs] = myzf.spectype
                     zf.subtype[my_specs] = myzf.subtype
                 else:
                     # root process receives from process p and copies
@@ -291,7 +291,7 @@ def main(args, comm=None) :
                         zf.zwarn[p_slice] = p_zwarn
                         
                         p_type = comm.recv(source=p, tag=8)
-                        zf.type[p_slice] = p_type
+                        zf.spectype[p_slice] = p_type
                         
                         p_subtype = comm.recv(source=p, tag=9)
                         zf.subtype[p_slice] = p_subtype
@@ -307,7 +307,7 @@ def main(args, comm=None) :
                         comm.send(myzf.z, dest=0, tag=5)
                         comm.send(myzf.zerr, dest=0, tag=6)
                         comm.send(myzf.zwarn, dest=0, tag=7)
-                        comm.send(myzf.type, dest=0, tag=8)
+                        comm.send(myzf.spectype, dest=0, tag=8)
                         comm.send(myzf.subtype, dest=0, tag=9)
             comm.barrier()
 
@@ -321,16 +321,16 @@ def main(args, comm=None) :
             ('Z',         zf.z.dtype),
             ('ZERR',      zf.zerr.dtype),
             ('ZWARN',     zf.zwarn.dtype),
-            ('TYPE',      zf.type.dtype),
+            ('SPECTYPE',  zf.spectype.dtype),
             ('SUBTYPE',   zf.subtype.dtype),    
         ]
 
         formatted_data  = np.empty(nspec, dtype=dtype)
-        formatted_data['Z']       = zf.z
-        formatted_data['ZERR']    = zf.zerr
-        formatted_data['ZWARN']   = zf.zwarn
-        formatted_data['TYPE']    = zf.type
-        formatted_data['SUBTYPE'] = zf.subtype
+        formatted_data['Z']        = zf.z
+        formatted_data['ZERR']     = zf.zerr
+        formatted_data['ZWARN']    = zf.zwarn
+        formatted_data['SPECTYPE'] = zf.spectype
+        formatted_data['SUBTYPE']  = zf.subtype
         
         # Create a ZfindBase object with formatted results
         zfi = ZfindBase(None, None, None, results=formatted_data)

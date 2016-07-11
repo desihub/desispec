@@ -296,6 +296,36 @@ class TestIO(unittest.TestCase):
         self.assertTrue( np.all(flux2[0] == flux[0]) )
         self.assertTrue( np.all(ivar2[0] == ivar[0]) )
         bx.close()
+        
+    def test_zbest_io(self):
+        from desispec.zfind import ZfindBase
+        nspec, nflux = 10, 20
+        wave = np.arange(nflux)
+        flux = np.random.uniform(size=(nspec, nflux))
+        ivar = np.random.uniform(size=(nspec, nflux))
+        zfind1 = ZfindBase(wave, flux, ivar)
+
+        brickname = '1234p567'
+        targetids = np.random.randint(0,12345678, size=nspec)
+
+        desispec.io.write_zbest(self.testfile, brickname, targetids, zfind1)
+        zfind2 = desispec.io.read_zbest(self.testfile)
+
+        assert np.all(zfind2.z == zfind1.z)
+        assert np.all(zfind2.zerr == zfind1.zerr)
+        assert np.all(zfind2.zwarn == zfind1.zwarn)
+        assert np.all(zfind2.spectype == zfind1.spectype)
+        assert np.all(zfind2.subtype == zfind1.subtype)
+        assert np.all(zfind2.brickname == brickname)
+        assert np.all(zfind2.targetid == targetids)
+
+        desispec.io.write_zbest(self.testfile, brickname, targetids, zfind1, zspec=True)
+        zfind3 = desispec.io.read_zbest(self.testfile)
+        
+        assert np.all(zfind3.wave == zfind1.wave)
+        assert np.all(zfind3.flux == zfind1.flux.astype(np.float32))
+        assert np.all(zfind3.ivar == zfind1.ivar.astype(np.float32))
+        assert np.all(zfind3.model == zfind1.model)
 
     def test_image_rw(self):
         shape = (5,5)

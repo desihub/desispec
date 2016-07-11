@@ -35,7 +35,7 @@ def brick_zbest(outfil, zf, qabrick):
     # Convert types (this should become obsolete)
     param = qabrick.data['ZBEST']['PARAM']
     zftypes = []
-    for ztype in zf.type:
+    for ztype in zf.spectype:
         if ztype in param['ELG_TYPES']:
             zftypes.append('ELG')
         elif ztype in param['QSO_TYPES']:

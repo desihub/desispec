@@ -127,7 +127,7 @@ class RedMonsterZfind(ZfindBase):
         self.zpicker = ZPicker(specobj, self.zfinders, self.zfitters, flags)
 
         #- Fill in outputs
-        self.type = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
+        self.spectype = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
         self.subtype = np.asarray([repr(self.zpicker.subtype[i][0]) for i in range(nspec)])
         self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
         self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])

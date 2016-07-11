@@ -31,8 +31,8 @@ class ZfindBase(object):
             z     : 1D[nspec] best fit redshift
             zerr  : 1D[nspec] redshift uncertainty estimate
             zwarn : 1D[nspec] integer redshift warning bitmask (details TBD)
-            type  : 1D[nspec] classification [GALAXY, QSO, STAR, ...]
-            subtype : 1D[nspec] sub-classification
+            spectype : 1D[nspec] classification [GALAXY, QSO, STAR, ...]
+            subtype  : 1D[nspec] sub-classification
             wave  : 1D[nwave] wavelength grid used; may be resampled from input
             flux  : 2D[nspec, nwave] flux used; may be resampled from input
             ivar  : 2D[nspec, nwave] ivar of flux
@@ -61,7 +61,7 @@ class ZfindBase(object):
             self.z = np.zeros(nspec)
             self.zerr = np.zeros(nspec)
             self.zwarn = np.zeros(nspec, dtype=int)
-            self.type = np.zeros(nspec, dtype='S20')
+            self.spectype = np.zeros(nspec, dtype='S10')
             self.subtype = np.zeros(nspec, dtype='S20')
         else:
             for key in results.dtype.names:
@@ -105,7 +105,7 @@ def qa_zbest(param, zf, brick):
 
     # Types (ELG, QSO, LRG, STAR, ??) -- Need to allow for multiple of target options
     qadict['NTYPE'] = dict(ELG=0, QSO=0, LRG=0, STAR=0, UNKWN=0, MATCH=0)
-    for kk,ztype in enumerate(zf.type):
+    for kk,ztype in enumerate(zf.spectype):
         # Brick index
         idx = srt[left[kk]]
         #

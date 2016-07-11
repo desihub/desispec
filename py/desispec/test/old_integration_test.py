@@ -306,12 +306,12 @@ def integration_test(night=None, nspec=5, clobber=False):
     for b in bricks:
         zbest = io.read_zbest(io.findfile('zbest', brickname=b))
         for i in range(len(zbest.z)):
-            if zbest.type[i] == 'ssp_em_galaxy':
+            if zbest.spectype[i] == 'ssp_em_galaxy':
                 objtype = 'GAL'
-            elif zbest.type[i] == 'spEigenStar':
+            elif zbest.spectype[i] == 'spEigenStar':
                 objtype = 'STAR'
             else:
-                objtype = zbest.type[i]
+                objtype = zbest.spectype[i]
 
             z, zwarn = zbest.z[i], zbest.zwarn[i]
 
