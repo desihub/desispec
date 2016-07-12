@@ -30,13 +30,13 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
 
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
-        specprod_dir : overrides $DESI_SPECTRO_REDUX/$PRODNAME/
+        specprod_dir : overrides $DESI_SPECTRO_REDUX/$SPECPROD/
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
     """
 
-    #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$PRODNAME,
-    #-       specprod is just the environment variable $PRODNAME
+    #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
+    #-       specprod is just the environment variable $SPECPROD
 
     location = dict(
         raw = '{rawdata_dir}/{night}/desi-{expid:08d}.fits.fz',
@@ -82,8 +82,8 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
         specprod_dir = specprod_root()
 
     if 'specprod' in required_inputs:
-        #- Replace / with _ in $PRODNAME so we can use it in a filename
-        specprod = os.getenv('PRODNAME').replace('/', '_')
+        #- Replace / with _ in $SPECPROD so we can use it in a filename
+        specprod = os.getenv('SPECPROD').replace('/', '_')
     else:
         specprod = None
 
@@ -262,11 +262,11 @@ def rawdata_root():
 
 def specprod_root():
     """Return directory root for spectro production, i.e.
-    ``$DESI_SPECTRO_REDUX/$PRODNAME``.
+    ``$DESI_SPECTRO_REDUX/$SPECPROD``.
 
     Raises:
         AssertionError: if these environment variables aren't set.
     """
-    assert 'PRODNAME' in os.environ, 'Missing $PRODNAME environment variable'
+    assert 'SPECPROD' in os.environ, 'Missing $SPECPROD environment variable'
     assert 'DESI_SPECTRO_REDUX' in os.environ, 'Missing $DESI_SPECTRO_REDUX environment variable'
-    return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('PRODNAME'))
+    return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'))

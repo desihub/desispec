@@ -19,7 +19,7 @@ def parse(options=None):
     parser.add_argument('--night', type = str, default = None, metavar = 'YYYYMMDD',
         help = 'Night to process in the format YYYYMMDD')
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
-        help = 'Override default path ($DESI_SPECTRO_REDUX/$PRODNAME) to processed data.')
+        help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
 
     args = None
     if options is None:

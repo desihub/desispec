@@ -750,7 +750,7 @@ def main():
         help='Delete any existing file before loading.')
     parser.add_argument('-d', '--data', action='store', dest='datapath',
         default=os.path.join(os.environ['DESI_SPECTRO_SIM'],
-                             os.environ['PRODNAME']),
+                             os.environ['SPECPROD']),
         metavar='DIR', help='Load the data in DIR.')
     parser.add_argument('-f', '--filename', action='store', dest='dbfile',
         default='metadata.db', metavar='FILE',

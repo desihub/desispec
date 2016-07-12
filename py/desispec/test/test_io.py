@@ -22,10 +22,10 @@ class TestIO(unittest.TestCase):
         cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
         cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
         cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
-        cls.origEnv = {'PRODNAME':None,
+        cls.origEnv = {'SPECPROD':None,
             "DESI_SPECTRO_DATA":None,
             "DESI_SPECTRO_REDUX":None}
-        cls.testEnv = {'PRODNAME':'dailytest',
+        cls.testEnv = {'SPECPROD':'dailytest',
             "DESI_SPECTRO_DATA":os.path.join(cls.testDir,'spectro','data'),
             "DESI_SPECTRO_REDUX":os.path.join(cls.testDir,'spectro','redux')}
         for e in cls.origEnv:
@@ -296,6 +296,36 @@ class TestIO(unittest.TestCase):
         self.assertTrue( np.all(flux2[0] == flux[0]) )
         self.assertTrue( np.all(ivar2[0] == ivar[0]) )
         bx.close()
+        
+    def test_zbest_io(self):
+        from desispec.zfind import ZfindBase
+        nspec, nflux = 10, 20
+        wave = np.arange(nflux)
+        flux = np.random.uniform(size=(nspec, nflux))
+        ivar = np.random.uniform(size=(nspec, nflux))
+        zfind1 = ZfindBase(wave, flux, ivar)
+
+        brickname = '1234p567'
+        targetids = np.random.randint(0,12345678, size=nspec)
+
+        desispec.io.write_zbest(self.testfile, brickname, targetids, zfind1)
+        zfind2 = desispec.io.read_zbest(self.testfile)
+
+        assert np.all(zfind2.z == zfind1.z)
+        assert np.all(zfind2.zerr == zfind1.zerr)
+        assert np.all(zfind2.zwarn == zfind1.zwarn)
+        assert np.all(zfind2.spectype == zfind1.spectype)
+        assert np.all(zfind2.subtype == zfind1.subtype)
+        assert np.all(zfind2.brickname == brickname)
+        assert np.all(zfind2.targetid == targetids)
+
+        desispec.io.write_zbest(self.testfile, brickname, targetids, zfind1, zspec=True)
+        zfind3 = desispec.io.read_zbest(self.testfile)
+        
+        assert np.all(zfind3.wave == zfind1.wave)
+        assert np.all(zfind3.flux == zfind1.flux.astype(np.float32))
+        assert np.all(zfind3.ivar == zfind1.ivar.astype(np.float32))
+        assert np.all(zfind3.model == zfind1.model)
 
     def test_image_rw(self):
         shape = (5,5)
@@ -386,7 +416,7 @@ class TestIO(unittest.TestCase):
                     kwargs['camera'] = 'sp{spectrograph:d}'.format(**kwargs)
                 filenames1.append(desispec.io.findfile(i,**kwargs))
                 filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],
-                    os.environ['PRODNAME'],'exposures',kwargs['night'],
+                    os.environ['SPECPROD'],'exposures',kwargs['night'],
                     '{expid:08d}'.format(**kwargs),
                     '{i}-{camera}-{expid:08d}.fits'.format(i=i,camera=kwargs['camera'],expid=kwargs['expid'])))
         for k,f in enumerate(filenames1):
@@ -395,7 +425,7 @@ class TestIO(unittest.TestCase):
             self.assertEqual(filenames1[k],filenames2[k])
             self.assertEqual(desispec.io.filepath2url(filenames1[k]),
                 os.path.join('https://portal.nersc.gov/project/desi',
-                'collab','spectro','redux',os.environ['PRODNAME'],'exposures',
+                'collab','spectro','redux',os.environ['SPECPROD'],'exposures',
                 kwargs['night'],'{expid:08d}'.format(**kwargs),
                 os.path.basename(filenames2[k])))
         #
