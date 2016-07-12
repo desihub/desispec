@@ -2,12 +2,14 @@
 #
 # Test installing and running DESI pipeline from a "bare" account.
 #
-# This script must be invoked with
-# /usr/bin/env -i HOME=/global/homes/d/desi SHELL=/bin/bash USER=desi GROUP=desi bash -l test_anaconda.sh
+# For a truly bare-bones test, this script should be invoked with
+#     /usr/bin/env -i HOME=/global/homes/d/desi SHELL=/bin/bash USER=desi GROUP=desi bash -l anaconda_integration_test.sh
+# replace "desi" with the account name, as needed.
 #
 # Exit if anything goes wrong.
 #
 # set -e
+echo `date` Running anaconda_integration_test on `hostname`
 #
 # Set up software directories.
 #
