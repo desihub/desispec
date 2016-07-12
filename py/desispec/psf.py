@@ -31,19 +31,19 @@ class PSF(object):
         wmax=hdr['WAVEMAX']
         ycoeff=psfdata[1].data
         
-        #- camera should have come from header but not in the header. neither the npix_x,npix_y ....
-        #- getting the arm name from filename itself, filename convention: psfboot-r0.fits
-        arm=str.split(filename,'-')[1][0]  #- Is this convention correct?
+        arm = hdr['CAMERA'].lower()[0]
+        npix_x = hdr['NPIX_X']
+        npix_y = hdr['NPIX_Y']
         
-        if arm=='r': 
-            npix_x=4114 
-            npix_y=4128 
-        if arm=='b':
-            npix_x=4096
-            npix_y=4096
-        if arm=='z':
-            npix_x=4114
-            npix_y=4128
+        # if arm=='r': 
+        #     npix_x=4114 
+        #     npix_y=4128 
+        # if arm=='b':
+        #     npix_x=4096
+        #     npix_y=4096
+        # if arm=='z':
+        #     npix_x=4114
+        #     npix_y=4128
 
         if arm not in ['b','r','z']:
             raise ValueError("arm not in b, r, or z. File should be of the form psfboot-r0.fits.")  
@@ -126,8 +126,10 @@ class PSF(object):
                 fit_dictx=dufits.mk_fit_dict(self.xcoeff[ispec],self.ncoeff,'legendre',self.wmin,self.wmax)
                 x=dufits.func_val(wave,fit_dictx)
                 return np.array(x)
-    
-        if isinstance(ispec,int): #- wavelength not None but a 1D-vector here and below
+        
+        #- wavelength not None but a scalar or 1D-vector here and below
+        wavelength = np.asarray(wavelength)
+        if isinstance(ispec,int):
             fit_dictx=dufits.mk_fit_dict(self.xcoeff[ispec],self.ncoeff,'legendre',self.wmin,self.wmax)
             x=dufits.func_val(wavelength,fit_dictx)
             return np.array(x)
@@ -149,6 +151,8 @@ class PSF(object):
         """
         if wavelength is None:
             raise ValueError, "PSF.y requires wavelength 1D vector"
+            
+        wavelength = np.asarray(wavelength)
         if ispec is None:
             ispec=np.arange(self.nspec)
             y=list()
