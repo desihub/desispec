@@ -24,6 +24,7 @@ class TestBoot(unittest.TestCase):
         self.testarc = 'test_arc.fits.gz'
         self.testflat = 'test_flat.fits.gz'
         self.testout = 'test_bootcalib_{}.fits'.format(uuid1())
+        self.qafile = 'test-qa-123jkkjiuc4h123h12h3423sadfew.pdf'
 
         # Grab the data
         afil = glob.glob(self.testarc)
@@ -43,6 +44,9 @@ class TestBoot(unittest.TestCase):
     def tearDown(self):
         if os.path.isfile(self.testout):
             os.unlink(self.testout)
+
+        if os.path.isfile(self.qafile):
+            os.unlink(self.qafile)
 
     
     def test_fiber_peaks(self):
@@ -139,15 +143,26 @@ class TestBoot(unittest.TestCase):
 
         self.assertLess(all_wv_soln[0]['rms'], 0.25)
 
+    #- desispec.bootcalib.bootcalib may be redundant with
+    #- desispec.scripts.bootcalib.main.  Include tests for both for now.
+    
+    #- bootcalib.bootcalib is broken; see https://github.com/desihub/desispec/issues/174
+    @unittest.expectedFailure
+    def test_bootcalib(self):        
+        from desispec.bootcalib import bootcalib
+        from desispec.image import Image
+        arc = fits.getdata(self.testarc)
+        flat = fits.getdata(self.testflat)
+        arcimage = Image(arc, np.ones_like(arc), camera='b0')
+        flatimage = Image(flat, np.ones_like(flat), camera='b0')
+        results = bootcalib(3, flatimage, arcimage)
 
     def test_main(self):
         argstr = [
-            '--fiberflat',
-            self.testflat,
-            '--arcfile',
-            self.testarc,
-            '--outfile',
-            self.testout
+            '--fiberflat', self.testflat,
+            '--arcfile', self.testarc,
+            '--outfile', self.testout,
+            '--qafile', self.qafile,
         ]
         args = bootscript.parse(options=argstr)
         bootscript.main(args)

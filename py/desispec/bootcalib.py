@@ -81,7 +81,8 @@ def bootcalib(deg,flatimage,arcimage):
     arc_ivar=arcimage.ivar
     all_spec=extract_sngfibers_gaussianpsf(arc,arc_ivar,xfit,gauss)
     llist=load_arcline_list(camera)
-    dlamb,wmark,gd_lines,line_guess=load_gdarc_lines(camera)
+    ### dlamb,wmark,gd_lines,line_guess=load_gdarc_lines(camera)
+    dlamb, gd_lines = load_gdarc_lines(camera, llist)
 
     #- Solve for wavelengths
     all_wv_soln=[]
@@ -736,6 +737,7 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
     ----------
     camera : str
       Camera ('b', 'g', 'r')
+    llist : table of lines to use, with columns Ion, wave
     vacuum : bool, optional
       Use vacuum wavelengths
     lamps : optional numpy array of ions, ex np.array(["HgI","CdI","ArI","NeI"])
