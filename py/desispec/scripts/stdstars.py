@@ -2,14 +2,6 @@
 
 """
 Get the normalized best template to do flux calibration.
-
-desi_fit_stdstars.py
-    --indir INDIR
-    --fiberflat FILENAME
-    --models STDSTAR_MODELS
-    --fibermapdir FMDIR
-    --spectrograph N
-    --outfile X
 """
 
 #- TODO: refactor algorithmic code into a separate module/function
