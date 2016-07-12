@@ -89,7 +89,7 @@ def sim(night, nspec=5, clobber=False):
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
-        if pipe.runcmd(cmd, inputs, outputs, clobber) != 0:
+        if pipe.runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(flavor, expid))
 
         cmd = "pixsim-desi --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
@@ -100,7 +100,7 @@ def sim(night, nspec=5, clobber=False):
             pixfile = io.findfile('pix', night, expid, camera)
             outputs.append(pixfile)
             #outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
-        if pipe.runcmd(cmd, inputs, outputs, clobber) != 0:
+        if pipe.runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(flavor, expid))
 
     return

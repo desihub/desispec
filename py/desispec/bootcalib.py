@@ -1587,6 +1587,10 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     prihdu.header['WAVEMIN'] = WAVEMIN
     prihdu.header['WAVEMAX'] = WAVEMAX
     prihdu.header['EXTNAME'] = 'XCOEFF'
+    prihdu.header['PSFTYPE'] = 'bootcalib'
+    
+    from desiutil.depend import add_dependencies
+    add_dependencies(prihdu.header)
 
     # Add informations for headers
     if arc_header is not None :
@@ -1596,7 +1600,12 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             prihdu.header["ARCEXPID"] = arc_header["EXPID"]
         if "CAMERA" in arc_header.keys() :
             prihdu.header["CAMERA"] = arc_header["CAMERA"]
+        prihdu.header['NPIX_X'] = arc_header['NAXIS1']
+        prihdu.header['NPIX_Y'] = arc_header['NAXIS2']
     if fiberflat_header is not None :
+        if 'NPIX_X' not in prihdu.header.keys():
+            prihdu.header['NPIX_X'] = fiberflat_header['NAXIS1']
+            prihdu.header['NPIX_Y'] = fiberflat_header['NAXIS2']
         if "NIGHT" in fiberflat_header.keys() :
             prihdu.header["FLANIGHT"] = fiberflat_header["NIGHT"]
         if "EXPID" in fiberflat_header.keys() :
