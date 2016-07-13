@@ -12,7 +12,6 @@ from glob import glob
 import os
 import re
 from datetime import datetime, timedelta
-from .crc import cksum
 from ..log import get_logger, DEBUG
 from collections import namedtuple
 from matplotlib.patches import Circle, Polygon, Wedge

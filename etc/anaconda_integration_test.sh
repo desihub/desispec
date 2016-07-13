@@ -26,13 +26,13 @@ source activate ${condaDir}
 #
 # Install base packages.
 #
-# conda install -q astropy scipy matplotlib ipython pyyaml requests
-conda install -q astropy=1.1.1 scipy matplotlib ipython pyyaml requests
+conda install -q astropy scipy matplotlib ipython pyyaml requests
+# conda install -q astropy=1.1.1 scipy matplotlib ipython pyyaml requests
 pip install fitsio
 #
 # Install desiutil.
 #
-pip install git+https://github.com/desihub/desiutil.git@1.4.0#egg=desiutil
+pip install git+https://github.com/desihub/desiutil.git@1.6.0#egg=desiutil
 pip install git+https://github.com/desihub/desimodel.git@0.4.4#egg=desimodel
 export DESIMODEL=${userDir}/desimodel/0.4.4
 /bin/mkdir -p ${DESIMODEL}
@@ -41,20 +41,21 @@ install_desimodel_data -D 0.4.4
 # Install DESI pipeline packages.
 #
 pip install git+https://github.com/dkirkby/speclite.git@v0.4#egg=speclite
-pip install git+https://github.com/desihub/specter.git@0.4.1#egg=specter
+pip install git+https://github.com/desihub/specter.git@0.5.0#egg=specter
 pip install git+https://github.com/desihub/specsim.git@v0.4#egg=specsim
-pip install git+https://github.com/desihub/desitarget.git@0.3.3#egg=desitarget
-pip install git+https://github.com/desihub/desispec.git@0.5.0#egg=desispec
-pip install git+https://github.com/desihub/desisim.git#egg=desisim
+pip install git+https://github.com/desihub/desitarget.git@0.4.0#egg=desitarget
+pip install git+https://github.com/desihub/desispec.git@0.6.0#egg=desispec
+pip install git+https://github.com/desihub/desisim.git@0.11.0#egg=desisim
 #
 # Install redmonster.
 #
+REDMONSTER_VERSION=1.1.0
+wget --no-verbose --output-document=${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION}.tar.gz https://github.com/desihub/redmonster/archive/1.1.0.tar.gz
 export DESI_PRODUCT_ROOT=${userDir}
-wget --no-verbose --output-document=${DESI_PRODUCT_ROOT}/redmonster-v0.3.0.tar.gz https://bitbucket.org/redmonster/redmonster/get/v0.3.0.tar.gz
 /bin/mkdir -p ${DESI_PRODUCT_ROOT}/redmonster
-tar -x -z -C ${DESI_PRODUCT_ROOT} -f ${DESI_PRODUCT_ROOT}/redmonster-v0.3.0.tar.gz
-/bin/mv -v ${DESI_PRODUCT_ROOT}/redmonster-redmonster-67e35df2b697 ${DESI_PRODUCT_ROOT}/redmonster/0.3.0
-export REDMONSTER=${DESI_PRODUCT_ROOT}/redmonster/0.3.0
+tar -x -z -C ${DESI_PRODUCT_ROOT} -f ${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION}.tar.gz
+/bin/mv -v ${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION} ${DESI_PRODUCT_ROOT}/redmonster/${REDMONSTER_VERSION}
+export REDMONSTER=${DESI_PRODUCT_ROOT}/redmonster/${REDMONSTER_VERSION}
 if [[ -z "${PYTHONPATH}" ]]; then
     export PYTHONPATH=${REDMONSTER}/python
 else
@@ -65,7 +66,7 @@ export REDMONSTER_TEMPLATES_DIR=${REDMONSTER}/templates
 # Set environment variables.
 #
 export DESI_ROOT=/project/projectdirs/desi
-export DESI_BASIS_TEMPLATES=${DESI_ROOT}/spectro/templates/basis_templates/v2.0
+export DESI_BASIS_TEMPLATES=${DESI_ROOT}/spectro/templates/basis_templates/v2.2
 #
 # Reproduce the daily integration test.
 #
@@ -81,12 +82,13 @@ export PIXPROD=dailytest
 export DESI_SPECTRO_DATA=${DAILYTEST_ROOT}/spectro/sim/${PIXPROD}
 export DESI_SPECTRO_SIM=${DAILYTEST_ROOT}/spectro/sim
 export PRODNAME=dailytest
+export SPECPROD=dailytest
 export DESI_SPECTRO_REDUX=${DAILYTEST_ROOT}/spectro/redux
 #
 # Cleanup from previous tests
 #
 simDir=${DESI_SPECTRO_SIM}/${PIXPROD}
-outDir=${DESI_SPECTRO_REDUX}/${PRODNAME}
+outDir=${DESI_SPECTRO_REDUX}/${SPECPROD}
 /bin/rm -rf ${simDir}
 /bin/rm -rf ${outDir}
 #
@@ -95,10 +97,12 @@ outDir=${DESI_SPECTRO_REDUX}/${PRODNAME}
 export DESI_LOGLEVEL=DEBUG
 /bin/mkdir -p ${simDir}
 /bin/mkdir -p ${outDir}
-# newexp-desi --flavor flat --nspec 5 --night 20160510 --expid 0
-# pixsim-desi --nspec 5 --night 20160510 --expid 0
-# newexp-desi --flavor arc --nspec 5 --night 20160510 --expid 1
-# pixsim-desi --nspec 5 --night 20160510 --expid 1
-newexp-desi --flavor dark --nspec 5 --night 20160510 --expid 2
-# pixsim-desi --nspec 5 --night 20160510 --expid 2
-# python -m desispec.test.integration_test
+python -m desispec.test.integration_test > ${outDir}/dailytest.log
+
+echo
+echo "[...]"
+echo
+
+tail -10 ${outDir}/dailytest.log
+
+echo `date` done with anaconda_integration_test

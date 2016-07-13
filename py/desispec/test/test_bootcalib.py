@@ -7,7 +7,7 @@ from uuid import uuid1
 import os
 
 import numpy as np
-import urllib2
+import requests
 import glob
 
 from astropy.io import fits
@@ -20,32 +20,45 @@ from desispec.scripts import bootcalib as bootscript
 
 class TestBoot(unittest.TestCase):
 
-    def setUp(self):
-        self.testarc = 'test_arc.fits.gz'
-        self.testflat = 'test_flat.fits.gz'
-        self.testout = 'test_bootcalib_{}.fits'.format(uuid1())
+    @classmethod
+    def setUpClass(cls):
+        cls.testarc = 'test_arc.fits.gz'
+        cls.testflat = 'test_flat.fits.gz'
+        cls.testout = 'test_bootcalib_{}.fits'.format(uuid1())
+        cls.data_unavailable = False
 
         # Grab the data
-        afil = glob.glob(self.testarc)
-        if len(afil) == 0:
+        if not os.path.exists(cls.testarc):
             url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
-            f = urllib2.urlopen(url_arc)
-            with open(self.testarc, "wb") as code:
-                code.write(f.read())
-        ffil = glob.glob(self.testflat)
-        if len(ffil) == 0:
+            try:
+                f = requests.get(url_arc)
+            except:
+                cls.data_unavailable = True
+            else:
+                with open(cls.testarc, "wb") as code:
+                    code.write(f.content)
+        if not os.path.exists(cls.testflat):
             url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
-            f = urllib2.urlopen(url_flat)
-            with open(self.testflat, "wb") as code:
-                code.write(f.read())
+            try:
+                f = requests.get(url_flat)
+            except:
+                cls.data_unavailable = True
+            else:
+                with open(cls.testflat, "wb") as code:
+                    code.write(f.content)
 
+    @classmethod
+    def tearDownClass(cls):
+        if os.path.exists(cls.testarc):
+            os.unlink(cls.testarc)
+        if os.path.exists(cls.testflat):
+            os.unlink(cls.testflat)
+        if os.path.exists(cls.testout):
+            os.unlink(cls.testout)
 
-    def tearDown(self):
-        if os.path.isfile(self.testout):
-            os.unlink(self.testout)
-
-    
     def test_fiber_peaks(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         ###########
@@ -54,6 +67,8 @@ class TestBoot(unittest.TestCase):
         assert len(xpk) == 25
 
     def test_tracing(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         # Find fibers (necessary)
@@ -63,6 +78,8 @@ class TestBoot(unittest.TestCase):
         xfit, fdicts = desiboot.fit_traces(xset,xerr)
 
     def test_gauss(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         # Find fibers (necessary)
@@ -77,12 +94,14 @@ class TestBoot(unittest.TestCase):
         np.testing.assert_allclose(np.median(gauss), 1.06, rtol=0.05)
 
     def test_load_gdarc_lines(self):
-        
+
         for camera in ['b', 'r', 'z']:
             llist = desiboot.load_arcline_list(camera)
             dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist)
 
     def test_wavelengths(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         # Read flat
         flat_hdu = fits.open(self.testflat)
         header = flat_hdu[0].header
@@ -139,8 +158,9 @@ class TestBoot(unittest.TestCase):
 
         self.assertLess(all_wv_soln[0]['rms'], 0.25)
 
-
     def test_main(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         argstr = [
             '--fiberflat',
             self.testflat,
@@ -153,8 +173,5 @@ class TestBoot(unittest.TestCase):
         bootscript.main(args)
 
 
-    def runTest(self):
-        pass
-                
 if __name__ == '__main__':
     unittest.main()

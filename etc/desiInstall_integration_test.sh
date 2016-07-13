@@ -2,12 +2,14 @@
 #
 # Test installing and running DESI pipeline from a "bare" account.
 #
-# This script must be invoked with
-# /usr/bin/env -i HOME=/global/homes/d/desi SHELL=/bin/bash USER=desi GROUP=desi bash -l test_desiInstall.sh
+# For a truly bare-bones test, this script should be invoked with
+#     /usr/bin/env -i HOME=/global/homes/d/desi SHELL=/bin/bash USER=desi GROUP=desi bash -l desiInstall_integration_test.sh
+# replace "desi" with the account name, as needed.
 #
 # Exit if anything goes wrong.
 #
 # set -e
+echo `date` Running desiInstall_integration_test on `hostname`
 #
 # Set up software directories.
 #
@@ -62,12 +64,12 @@ module list
 # Install DESI pipeline packages.
 #
 desiInstall -d -v -c test_desiInstall.ini speclite v0.4
-desiInstall -d -v -c test_desiInstall.ini specter 0.4.1
+desiInstall -d -v -c test_desiInstall.ini specter 0.5.0
 desiInstall -d -v -c test_desiInstall.ini specsim v0.4
 desiInstall -d -v -c test_desiInstall.ini desimodel 0.4.4
-desiInstall -d -v -c test_desiInstall.ini desitarget 0.3.3
-desiInstall -d -v -c test_desiInstall.ini desispec 0.5.0
-desiInstall -d -v -c test_desiInstall.ini desisim master
+desiInstall -d -v -c test_desiInstall.ini desitarget 0.4.0
+desiInstall -d -v -c test_desiInstall.ini desispec 0.6.0
+desiInstall -d -v -c test_desiInstall.ini desisim 0.11.0
 module switch desimodel/0.4.4
 module load speclite
 module load specter
@@ -79,14 +81,24 @@ module list
 #
 # Install redmonster.
 #
-wget --no-verbose --output-document=${DESI_PRODUCT_ROOT}/redmonster-v0.3.0.tar.gz https://bitbucket.org/redmonster/redmonster/get/v0.3.0.tar.gz
+REDMONSTER_VERSION=1.1.0
+wget --no-verbose --output-document=${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION}.tar.gz https://github.com/desihub/redmonster/archive/1.1.0.tar.gz
+export DESI_PRODUCT_ROOT=${userDir}
 /bin/mkdir -p ${DESI_PRODUCT_ROOT}/redmonster
-tar -x -z -C ${DESI_PRODUCT_ROOT} -f ${DESI_PRODUCT_ROOT}/redmonster-v0.3.0.tar.gz
-/bin/mv -v ${DESI_PRODUCT_ROOT}/redmonster-redmonster-67e35df2b697 ${DESI_PRODUCT_ROOT}/redmonster/0.3.0
-/bin/mkdir -p ${moduleDir}/redmonster
-cat /project/projectdirs/desi/software/modules/${NERSC_HOST}/redmonster/master | sed 's/version master/version 0.3.0/' > ${moduleDir}/redmonster/0.3.0
-module load redmonster/0.3.0
-module list
+tar -x -z -C ${DESI_PRODUCT_ROOT} -f ${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION}.tar.gz
+/bin/mv -v ${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION} ${DESI_PRODUCT_ROOT}/redmonster/${REDMONSTER_VERSION}
+export REDMONSTER=${DESI_PRODUCT_ROOT}/redmonster/${REDMONSTER_VERSION}
+if [[ -z "${PYTHONPATH}" ]]; then
+    export PYTHONPATH=${REDMONSTER}/python
+else
+    export PYTHONPATH=${REDMONSTER}/python:${PYTHONPATH}
+fi
+export REDMONSTER_TEMPLATES_DIR=${REDMONSTER}/templates
+#
+# Set environment variables.
+#
+export DESI_ROOT=/project/projectdirs/desi
+export DESI_BASIS_TEMPLATES=${DESI_ROOT}/spectro/templates/basis_templates/v2.2
 #
 # Reproduce the daily integration test.
 #
@@ -102,17 +114,27 @@ export PIXPROD=dailytest
 export DESI_SPECTRO_DATA=${DAILYTEST_ROOT}/spectro/sim/${PIXPROD}
 export DESI_SPECTRO_SIM=${DAILYTEST_ROOT}/spectro/sim
 export PRODNAME=dailytest
+export SPECPROD=dailytest
 export DESI_SPECTRO_REDUX=${DAILYTEST_ROOT}/spectro/redux
 #
 # Cleanup from previous tests
 #
 simDir=${DESI_SPECTRO_SIM}/${PIXPROD}
-outDir=${DESI_SPECTRO_REDUX}/${PRODNAME}
+outDir=${DESI_SPECTRO_REDUX}/${SPECPROD}
 /bin/rm -rf ${simDir}
 /bin/rm -rf ${outDir}
 #
 # Run the test
 #
+export DESI_LOGLEVEL=DEBUG
 /bin/mkdir -p ${simDir}
 /bin/mkdir -p ${outDir}
-python -m desispec.test.integration_test
+python -m desispec.test.integration_test > ${outDir}/dailytest.log
+
+echo
+echo "[...]"
+echo
+
+tail -10 ${outDir}/dailytest.log
+
+echo `date` done with desiInstall_integration_test
