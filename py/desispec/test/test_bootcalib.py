@@ -7,7 +7,7 @@ from uuid import uuid1
 import os
 
 import numpy as np
-import requests
+import urllib2
 import glob
 
 from astropy.io import fits
@@ -31,28 +31,28 @@ class TestBoot(unittest.TestCase):
         if not os.path.exists(cls.testarc):
             url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
             try:
-                f = requests.get(url_arc)
+                f = urllib2.urlopen(url_arc)
             except:
                 cls.data_unavailable = True
             else:
                 with open(cls.testarc, "wb") as code:
-                    code.write(f.content)
+                    code.write(f.read())
         if not os.path.exists(cls.testflat):
             url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
             try:
-                f = requests.get(url_flat)
+                f = urllib2.urlopen(url_flat)
             except:
                 cls.data_unavailable = True
             else:
                 with open(cls.testflat, "wb") as code:
-                    code.write(f.content)
+                    code.write(f.read())
 
     @classmethod
     def tearDownClass(cls):
-        if os.path.exists(cls.testarc):
-            os.unlink(cls.testarc)
-        if os.path.exists(cls.testflat):
-            os.unlink(cls.testflat)
+        # if os.path.exists(cls.testarc):
+        #     os.unlink(cls.testarc)
+        # if os.path.exists(cls.testflat):
+        #     os.unlink(cls.testflat)
         if os.path.exists(cls.testout):
             os.unlink(cls.testout)
 
