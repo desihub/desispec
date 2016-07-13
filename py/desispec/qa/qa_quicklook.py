@@ -456,7 +456,7 @@ class Sky_Continuum(MonitoringAlg):
 
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
-            retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMPS":skycont_amps}
+            retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps}
 
         else: 
             retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}

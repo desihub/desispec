@@ -334,7 +334,7 @@ def plot_sky_continuum(qa_dict,outfile):
            'PANAME': 'APPLY_FIBERFLAT',
            'SPECTROGRAPH': 0,
            'VALUE': {'SKYCONT': 359.70078667259668,
-                     'SKYCONT_AMPS': array([ 374.19163643,    0.        ,  344.76184662,    0.        ]),
+                     'SKYCONT_AMP': array([ 374.19163643,    0.        ,  344.76184662,    0.        ]),
                      'SKYCONT_FIBER': [357.23814787655738,   358.14982775192709,   359.34380640332847,   361.55526717275529,
     360.46690568746544,   360.49561926858325,   359.08761654248656,   361.26910267767016],
                      'SKYFIBERID': [4, 19, 30, 38, 54, 55, 57, 62]}}
@@ -347,7 +347,7 @@ def plot_sky_continuum(qa_dict,outfile):
     arm=qa_dict["ARM"]
     paname=qa_dict["PANAME"]
     skycont_fiber=np.array(qa_dict["VALUE"]["SKYCONT_FIBER"])
-    skycont_amps=np.array(qa_dict["VALUE"]["SKYCONT_AMPS"])
+    skycont_amps=np.array(qa_dict["VALUE"]["SKYCONT_AMP"])
     index=np.arange(skycont_fiber.shape[0])
     fiberid=qa_dict["VALUE"]["SKYFIBERID"]
     fig=plt.figure()

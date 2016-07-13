@@ -1,0 +1,67 @@
+DataType: Exposure
+DebugLevel: 20
+DumpIntermediates: false
+FiberFlatFile: /scratch2/scratchdirs/govinda/Desi/quicklook/20160707/fiberflat-r0-00000001.fits
+FiberMap: /scratch2/scratchdirs/govinda/Desi/quicklook/20160707/fibermap-00000002.fits
+OutputFile: lastframe_boxcar-r0-00000002.fits
+PSFFile: /scratch2/scratchdirs/govinda/Desi/quicklook/20160707/psfboot-r0.fits
+Period: 5.0
+PipeLine:
+- OutputFile: qa-preproc-r0-00000002.yaml
+  PA:
+    ClassName: Preproc_test
+    ModuleName: desispec.quicklook.procalgs
+    Name: Preproc Test
+    kwargs: {}
+  QAs:
+  - ClassName: Get_RMS
+    ModuleName: desispec.qa.qa_quicklook
+    Name: RMS
+    kwargs: {camera: r0, expid: '00000002', paname: PREPROC, amps: True, qafig: qafig-rms-r0-00000002.pdf}
+  - ClassName: Count_Pixels
+    ModuleName: desispec.qa.qa_quicklook
+    Name: COUNTPIX
+    kwargs: {camera: r0, expid: '00000002', paname: PREPROC, amps: True, qafig: qafig-countpix-r0-00000002.pdf}
+  - ClassName: Bias_From_Overscan
+    ModuleName: desispec.qa.qa_quicklook
+    Name: BIAS_OVERSCAN
+    kwargs: {camera: r0, expid: '00000002', paname: PREPROC, amps: True, qafig: qafig-biasoverscan-r0-00000002.pdf}   
+  StepName: Preprocessing
+- OutputFile: qa-extract-r0-00000002.yaml
+  PA:
+    ClassName: BoxcarExtraction
+    ModuleName: desispec.quicklook.procalgs
+    Name: Boxcar Extraction
+    kwargs: {BoxWidth: 2.5, FiberMap: '%%FiberMap', Wavelength: '5635,7731,0.8', Nspec: 10, PSFFile: '%%PSFFile', Outfile: frame-countbins-r0-00000002.fits}
+  QAs:
+  - ClassName: CountSpectralBins
+    ModuleName: desispec.qa.qa_quicklook
+    Name: COUNTBINS
+    kwargs: {camera: r0, expid: '00000002', paname: BOXCAR, PSFFile: '%%PSFFile', amps: True, qafig: qafig-countbins-r0-00000002.pdf}
+  StepName: Boxcar Extration
+- OutputFile: qa-apfiberflat-r0-00000002.yaml
+  PA:
+    ClassName: ApplyFiberFlat_QL
+    ModuleName: desispec.quicklook.procalgs
+    Name: Apply Fiberflat
+    kwargs: {FiberFlatFile: '%%FiberFlatFile'}
+  QAs:
+  - ClassName: Sky_Continuum
+    ModuleName: desispec.qa.qa_quicklook
+    Name: SKYCONT
+    kwargs: {camera: r0, expid: '00000002', paname: APPLY_FIBERFLAT, PSFFile: '%%PSFFile', amps: True, qafig: qafig-continuum-r0-00000002.pdf}
+  StepName: Apply Fiberflat
+- OutputFile: qa-skysub-online-r0-00000002.yaml
+  PA:
+    ClassName: SubtractSky_QL
+    ModuleName: desispec.quicklook.procalgs
+    Name: Sky Subtraction
+    kwargs: {}
+  QAs:
+  - ClassName: Calculate_SNR
+    ModuleName: desispec.qa.qa_quicklook
+    Name: SNR
+    kwargs: {camera: r0, expid: '00000002', paname: SKYSUB, PSFFile: '%%PSFFile', amps: True , url: 'http://localhost:8000/dashboard/api/', qafig: qafig-snr-r0-00000002.pdf}
+  StepName: Sky Subtraction
+RawImage: /scratch2/scratchdirs/govinda/Desi/quicklook/20160707/pix-r0-00000002.fits
+Timeout: 120.0
