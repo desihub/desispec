@@ -45,6 +45,13 @@ class TestRunCmd(unittest.TestCase):
         #- command should have run, so tokens should be equal
         self.assertEqual(token, line)
 
+    def test_function(self):
+        def blat(*args):
+            return list(args)
+        
+        self.assertEqual(runcmd(blat, args=[1,2,3]), [1,2,3])
+        self.assertEqual(runcmd(blat), [])
+
     def test_zz(self):
         """
         Even if clobber=False and outputs exist, run cmd if inputs are

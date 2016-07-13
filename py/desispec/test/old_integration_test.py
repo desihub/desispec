@@ -94,7 +94,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
-        if runcmd(cmd, inputs, outputs, clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(flavor, expid))
 
         cmd = "pixsim-desi --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, **params)
@@ -105,7 +105,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             pixfile = io.findfile('pix', night, expid, camera)
             outputs.append(pixfile)
             # outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
-        if runcmd(cmd, inputs, outputs, clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(flavor, expid))
 
     #-----
@@ -130,7 +130,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
             inputs = [pixfile, psffile, fiberfile]
             outputs = [framefile,]
-            if runcmd(cmd, inputs, outputs, clobber) != 0:
+            if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
                 raise RuntimeError('extraction failed for {} expid {}'.format(camera, expid))
 
     #-----
@@ -147,7 +147,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             frame=framefile, fibermap=fibermap, fiberflat=fiberflat, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile,fibermap,]
         outputs = [fiberflat,qafile,qafig,]
-        if runcmd(cmd, inputs, outputs, clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('fiberflat failed for '+camera)
 
     #-----
@@ -166,7 +166,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile, fibermap, fiberflat]
         outputs = [skyfile, qafile, qafig,]
-        if runcmd(cmd, inputs, outputs, clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('sky model failed for '+camera)
 
 
@@ -202,7 +202,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     inputs = [fibermap, std_templates]
     outputs = [stdstarfile,]
-    if runcmd(cmd, inputs, outputs, clobber) != 0:
+    if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
         raise RuntimeError('fitting stdstars failed')
 
 
@@ -227,7 +227,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             )
         inputs = [framefile, fibermap, fiberflat, skyfile, stdstarfile]
         outputs = [calibfile, qafile, qafig]
-        if runcmd(cmd, inputs, outputs, clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('flux calibration failed for '+camera)
 
         #- Apply the flux calibration to write a cframe file
@@ -238,7 +238,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             fiberflat=fiberflat, sky=skyfile, calib=calibfile, cframe=cframefile)
         inputs = [framefile, fiberflat, skyfile, calibfile]
         outputs = [cframefile, ]
-        if runcmd(cmd, inputs, outputs, clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('combining calibration steps failed for '+camera)
 
     #-----
@@ -270,7 +270,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             outputs.append( io.findfile('brick', brickname=b, band=channel))
 
     cmd = "desi_make_bricks --night "+night
-    if runcmd(cmd, inputs, outputs, clobber) != 0:
+    if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
         raise RuntimeError('brick generation failed')
 
     #-----
@@ -280,7 +280,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         zbestfile = io.findfile('zbest', brickname=b)
         outputs = [zbestfile, ]
         cmd = "desi_zfind --brick {} -o {}".format(b, zbestfile)
-        if runcmd(cmd, inputs, outputs, clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('redshifts failed for brick '+b)
     # ztruth QA
     qafile = io.findfile('qa_ztruth', night)
@@ -289,7 +289,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         night=night, qafile=qafile, qafig=qafig)
     inputs = []
     outputs = [qafile, qafig]
-    if runcmd(cmd, inputs, outputs, clobber) != 0:
+    if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
         raise RuntimeError('redshift QA failed for night '+night)
 
     #-----
