@@ -16,7 +16,7 @@ import time
 
 import desispec.log
 
-def runcmd(cmd, inputs=[], outputs=[], clobber=False):
+def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     """
     Runs a command, checking for inputs and outputs
 
@@ -64,13 +64,13 @@ def runcmd(cmd, inputs=[], outputs=[], clobber=False):
                 break
 
     if already_done:
-        log.info("SKIPPING: "+ cmd)
+        log.info("SKIPPING: {}".format(cmd))
         return 0
 
     #- Green light to go; print input/output info
     #- Use log.level to decide verbosity, but avoid long prefixes
     log.info(time.asctime())
-    log.info("RUNNING: " + cmd)
+    log.info("RUNNING: {}".format(cmd))
     if log.level <= desispec.log.INFO:
         if len(inputs) > 0:
             print("  Inputs")
@@ -82,10 +82,21 @@ def runcmd(cmd, inputs=[], outputs=[], clobber=False):
                 print("   ", x)
 
     #- run command
-    err = os.system(cmd)
+    if callable(cmd):
+        if args is None:
+            return cmd()
+        else:
+            return cmd(*args)
+    else:
+        if args is None:
+            err = os.system(cmd)
+        else:
+            raise ValueError("Don't provide args unless cmd is function")
+                
+    
     log.info(time.asctime())
     if err > 0:
-        log.critical("FAILED: "+cmd)
+        log.critical("FAILED {}".format(cmd))
         return err
 
     #- Check for outputs
@@ -97,5 +108,5 @@ def runcmd(cmd, inputs=[], outputs=[], clobber=False):
     if err > 0:
         return err
 
-    log.info("SUCCESS: " + cmd)
+    log.info("SUCCESS: {}".format(cmd))
     return 0

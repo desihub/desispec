@@ -81,7 +81,8 @@ def bootcalib(deg,flatimage,arcimage):
     arc_ivar=arcimage.ivar
     all_spec=extract_sngfibers_gaussianpsf(arc,arc_ivar,xfit,gauss)
     llist=load_arcline_list(camera)
-    dlamb,wmark,gd_lines,line_guess=load_gdarc_lines(camera)
+    ### dlamb,wmark,gd_lines,line_guess=load_gdarc_lines(camera)
+    dlamb, gd_lines = load_gdarc_lines(camera, llist)
 
     #- Solve for wavelengths
     all_wv_soln=[]
@@ -736,6 +737,7 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
     ----------
     camera : str
       Camera ('b', 'g', 'r')
+    llist : table of lines to use, with columns Ion, wave
     vacuum : bool, optional
       Use vacuum wavelengths
     lamps : optional numpy array of ions, ex np.array(["HgI","CdI","ArI","NeI"])
@@ -1587,6 +1589,10 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     prihdu.header['WAVEMIN'] = WAVEMIN
     prihdu.header['WAVEMAX'] = WAVEMAX
     prihdu.header['EXTNAME'] = 'XCOEFF'
+    prihdu.header['PSFTYPE'] = 'bootcalib'
+    
+    from desiutil.depend import add_dependencies
+    add_dependencies(prihdu.header)
 
     # Add informations for headers
     if arc_header is not None :
@@ -1596,7 +1602,12 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             prihdu.header["ARCEXPID"] = arc_header["EXPID"]
         if "CAMERA" in arc_header.keys() :
             prihdu.header["CAMERA"] = arc_header["CAMERA"]
+        prihdu.header['NPIX_X'] = arc_header['NAXIS1']
+        prihdu.header['NPIX_Y'] = arc_header['NAXIS2']
     if fiberflat_header is not None :
+        if 'NPIX_X' not in prihdu.header.keys():
+            prihdu.header['NPIX_X'] = fiberflat_header['NAXIS1']
+            prihdu.header['NPIX_Y'] = fiberflat_header['NAXIS2']
         if "NIGHT" in fiberflat_header.keys() :
             prihdu.header["FLANIGHT"] = fiberflat_header["NIGHT"]
         if "EXPID" in fiberflat_header.keys() :

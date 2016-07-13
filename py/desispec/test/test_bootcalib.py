@@ -25,6 +25,7 @@ class TestBoot(unittest.TestCase):
         cls.testarc = 'test_arc.fits.gz'
         cls.testflat = 'test_flat.fits.gz'
         cls.testout = 'test_bootcalib_{}.fits'.format(uuid1())
+        cls.qafile = 'test-qa-123jkkjiuc4h123h12h3423sadfew.pdf'
         cls.data_unavailable = False
 
         # Grab the data
@@ -55,6 +56,9 @@ class TestBoot(unittest.TestCase):
         #     os.unlink(cls.testflat)
         if os.path.exists(cls.testout):
             os.unlink(cls.testout)
+
+        if os.path.isfile(cls.qafile):
+            os.unlink(cls.qafile)
 
     def test_fiber_peaks(self):
         if self.data_unavailable:
@@ -158,20 +162,57 @@ class TestBoot(unittest.TestCase):
 
         self.assertLess(all_wv_soln[0]['rms'], 0.25)
 
+    #- desispec.bootcalib.bootcalib may be redundant with
+    #- desispec.scripts.bootcalib.main.  Include tests for both for now.
+
+    #- bootcalib.bootcalib is broken; see https://github.com/desihub/desispec/issues/174
+    @unittest.expectedFailure
+    def test_bootcalib(self):        
+        from desispec.bootcalib import bootcalib
+        from desispec.image import Image
+        arc = fits.getdata(self.testarc)
+        flat = fits.getdata(self.testflat)
+        arcimage = Image(arc, np.ones_like(arc), camera='b0')
+        flatimage = Image(flat, np.ones_like(flat), camera='b0')
+        results = bootcalib(3, flatimage, arcimage)
+
     def test_main(self):
         if self.data_unavailable:
             self.skipTest("Failed to download test data.")
         argstr = [
-            '--fiberflat',
-            self.testflat,
-            '--arcfile',
-            self.testarc,
-            '--outfile',
-            self.testout
+            '--fiberflat', self.testflat,
+            '--arcfile', self.testarc,
+            '--outfile', self.testout,
+            '--qafile', self.qafile,
         ]
         args = bootscript.parse(options=argstr)
         bootscript.main(args)
+        
+        #- Ensure the PSF class can read that file
+        from desispec.psf import PSF
+        psf = PSF(self.testout)
+        
+        #- While we're at it, test some PSF accessor functions
+        w = psf.wavelength()
+        w = psf.wavelength(ispec=0)
+        w = psf.wavelength(ispec=[0,1])
+        w = psf.wavelength(ispec=[0,1], y=0)
+        w = psf.wavelength(ispec=[0,1], y=[0,1])
+        
+        x = psf.x()
+        x = psf.x(ispec=0)
+        x = psf.x(ispec=[0,1])
+        x = psf.x(ispec=None, wavelength=psf.wmin)
+        x = psf.x(ispec=1, wavelength=psf.wmin)
+        x = psf.x(ispec=[0,1], wavelength=psf.wmin)
+        x = psf.x(ispec=[0,1], wavelength=[psf.wmin, psf.wmin+1])
 
+        y = psf.y(ispec=None, wavelength=psf.wmin)
+        y = psf.y(ispec=0, wavelength=psf.wmin)
+        y = psf.y(ispec=[0,1], wavelength=psf.wmin)
+        y = psf.y(ispec=[0,1], wavelength=[psf.wmin, psf.wmin+1])
+        
+        t = psf.invert()        
 
 if __name__ == '__main__':
     unittest.main()
