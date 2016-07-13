@@ -82,7 +82,7 @@ module list
 # Install redmonster.
 #
 REDMONSTER_VERSION=1.1.0
-wget --no-verbose --output-document=${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION}.tar.gz https://github.com/desihub/redmonster/archive/1.1.0.tar.gz
+wget --no-verbose --output-document=${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION}.tar.gz https://github.com/desihub/redmonster/archive/${REDMONSTER_VERSION}.tar.gz
 export DESI_PRODUCT_ROOT=${userDir}
 /bin/mkdir -p ${DESI_PRODUCT_ROOT}/redmonster
 tar -x -z -C ${DESI_PRODUCT_ROOT} -f ${DESI_PRODUCT_ROOT}/redmonster-${REDMONSTER_VERSION}.tar.gz
