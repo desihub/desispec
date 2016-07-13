@@ -113,10 +113,10 @@ Where supported commands are:
             sys.exit(1)
         self.specdir = os.path.abspath(os.environ['DESI_SPECTRO_REDUX'])
 
-        if 'PRODNAME' not in os.environ:
-            print("You must set PRODNAME in your environment")
+        if 'SPECPROD' not in os.environ:
+            print("You must set SPECPROD in your environment")
             sys.exit(1)
-        self.prodname = os.environ['PRODNAME']
+        self.prodname = os.environ['SPECPROD']
 
         self.proddir = os.path.join(self.specdir, self.prodname)
         self.expdir = os.path.join(self.proddir, 'exposures')

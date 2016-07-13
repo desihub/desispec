@@ -41,9 +41,6 @@ The desispec API
 .. automodule:: desispec.io.brick
     :members:
 
-.. automodule:: desispec.io.crc
-    :members:
-
 .. automodule:: desispec.io.database
     :members:
 

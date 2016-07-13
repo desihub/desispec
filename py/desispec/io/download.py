@@ -37,7 +37,7 @@ def filepath2url(path,baseurl='https://portal.nersc.gov/project/desi',release='c
     if release != 'collab':
         if not release.startswith('release'):
             release = join('release',release)
-    return path.replace(specprod,join(baseurl,release,'spectro','redux',environ['PRODNAME']))
+    return path.replace(specprod,join(baseurl,release,'spectro','redux',environ['SPECPROD']))
 
 def download(filenames,single_thread=False,workers=None):
     """Download files from the DESI repository.

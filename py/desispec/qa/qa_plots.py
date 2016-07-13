@@ -35,7 +35,7 @@ def brick_zbest(outfil, zf, qabrick):
     # Convert types (this should become obsolete)
     param = qabrick.data['ZBEST']['PARAM']
     zftypes = []
-    for ztype in zf.type:
+    for ztype in zf.spectype:
         if ztype in param['ELG_TYPES']:
             zftypes.append('ELG')
         elif ztype in param['QSO_TYPES']:
@@ -355,20 +355,20 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
 
-def frame_fiberflat(outfil, qaframe, frame, fibermap, fiberflat):
+def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     """ QA plots for fiber flat
 
     Args:
         outfil:
         qaframe:
         frame:
-        fibermap:
         fiberflat:
 
     Returns:
         Stuff?
     """
     # Setup
+    fibermap = frame.fibermap
     gdp = fiberflat.mask == 0
     nfiber = len(frame.fibers)
     xfiber = np.zeros(nfiber)

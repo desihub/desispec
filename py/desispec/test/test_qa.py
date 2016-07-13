@@ -137,7 +137,7 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_exposure(self):
         # Simple init
-        os.environ['PRODNAME'] = './'
+        os.environ['SPECPROD'] = './'
         os.environ['DESI_SPECTRO_REDUX'] = './'
         qaexp = QA_Exposure(1, '20150211', 'arc')
         assert qaexp.expid == 1

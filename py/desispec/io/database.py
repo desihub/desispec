@@ -12,7 +12,6 @@ from glob import glob
 import os
 import re
 from datetime import datetime, timedelta
-from .crc import cksum
 from ..log import get_logger, DEBUG
 from collections import namedtuple
 from matplotlib.patches import Circle, Polygon, Wedge
@@ -750,7 +749,7 @@ def main():
         help='Delete any existing file before loading.')
     parser.add_argument('-d', '--data', action='store', dest='datapath',
         default=os.path.join(os.environ['DESI_SPECTRO_SIM'],
-                             os.environ['PRODNAME']),
+                             os.environ['SPECPROD']),
         metavar='DIR', help='Load the data in DIR.')
     parser.add_argument('-f', '--filename', action='store', dest='dbfile',
         default='metadata.db', metavar='FILE',

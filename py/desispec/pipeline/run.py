@@ -334,15 +334,9 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         outfile = graph_path_fiberflat(proddir, name)
         qafile = qa_path(outfile)
 
-        # FIXME:  this is a hack, since fiberflat should get this from
-        # the bundled fibermap HDU.
-        night = name[:8]
-        fmfile = graph_path_fibermap(rawdir, "{}_fibermap-{:08d}".format(night, node['id']))
-
         options = {}
         options['infile'] = framefile
         options['qafile'] = qafile
-        options['fibermap'] = fmfile
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -400,7 +394,6 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         frm = []
         flat = []
         sky = []
-        fm = []
         flatexp = None
         specgrph = None
         for input in node['in']:
@@ -413,12 +406,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
                 flatexp = inode['id']
             elif inode['type'] == 'sky':
                 sky.append(input)
-            elif inode['type'] == 'fibermap':
-                fm.append(input)
-        if len(fm) != 1:
-            raise RuntimeError("stdstars needs exactly one fibermap file")
 
-        fmfile = graph_path_fibermap(rawdir, fm[0])
         outfile = graph_path_stdstars(proddir, name)
         qafile = qa_path(outfile)
         
@@ -427,13 +415,6 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         flatfiles = [graph_path_fiberflat(proddir, x) for x in flat]
 
         options = {}
-        #- Old-style options
-        # options['spectrograph'] = specgrph
-        # options['fiberflatexpid'] = flatexp
-        # options['fibermap'] = fmfile
-        # options['outfile'] = outfile
-        
-        #- New JG options
         options['frames'] = framefiles
         options['skymodels'] = skyfiles
         options['fiberflats'] = flatfiles
@@ -1049,6 +1030,7 @@ def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=
     with open(path, 'w') as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write('export STARTTIME=${now}\n')
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         for com in envsetup:
             f.write("{}\n".format(com))
@@ -1068,7 +1050,9 @@ def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=
     return
 
 
-def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, queue='debug'):
+def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, \
+    nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
+    queue='debug', jobname='desipipe'):
     hours = int(minutes/60)
     fullmin = int(minutes - 60*hours)
     timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
@@ -1090,7 +1074,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
-        f.write("#SBATCH --job-name=desipipe\n")
+        f.write("#SBATCH --job-name={}\n".format(jobname))
         f.write("#SBATCH --output={}_%j.log\n".format(logroot))
         f.write("#SBATCH --export=NONE\n\n")
         f.write("echo Starting slurm script at `date`\n\n")
@@ -1134,6 +1118,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, nodeproc=1,
             f.write("  app=${ex}\n")
             f.write("fi\n")
             f.write("echo calling desi_pipe_run at `date`\n\n")
+            f.write('export STARTTIME=`date +%Y%m%d-%H:%M:%S`\n')
             f.write("echo ${{run}} ${{app}} {}\n".format(' '.join(comlist)))
             f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(' '.join(comlist)))
             if multisrun:
