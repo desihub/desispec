@@ -1,8 +1,8 @@
 import unittest, os
 from uuid import uuid1
-
+from pkg_resources import resource_filename
 import numpy as np
-
+import sqlite3
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
@@ -42,13 +42,13 @@ class TestIO(unittest.TestCase):
                 testpath = os.path.normpath(os.path.dirname(testfile))
                 if testpath != '.':
                     os.removedirs(testpath)
-                    
+
         for e in cls.origEnv:
             if cls.origEnv[e] is None:
                 del os.environ[e]
             else:
                 os.environ[e] = cls.origEnv[e]
-                
+
         if os.path.exists(cls.testDir):
             rmtree(cls.testDir)
 
@@ -242,8 +242,8 @@ class TestIO(unittest.TestCase):
         data['CHI2DOF'] = np.ones(nstd)
         data['REDSHIFT'] = np.zeros(nstd)
         desispec.io.write_stdstar_models(self.testfile, flux, wave, fibers, data)
-        
-        fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)        
+
+        fx, wx, fibx = desispec.io.read_stdstar_models(self.testfile)
         self.assertTrue(np.all(fx == flux.astype('f4').astype('f8')))
         self.assertTrue(np.all(wx == wave.astype('f4').astype('f8')))
         self.assertTrue(np.all(fibx == fibers))
@@ -256,7 +256,7 @@ class TestIO(unittest.TestCase):
         calib = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
         mask = np.random.uniform(0, 2, size=(nspec, nwave)).astype('i4')
-        
+
         fc = FluxCalib(wave, calib, ivar, mask)
         desispec.io.write_flux_calibration(self.testfile, fc)
         fx = desispec.io.read_flux_calibration(self.testfile)
@@ -282,7 +282,7 @@ class TestIO(unittest.TestCase):
         brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid)
         brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid+1)
         brick.close()
-        
+
         bx = Brick(self.testfile)
         self.assertTrue(np.all(bx.get_wavelength_grid() == wave))
         self.assertEqual(bx.get_num_targets(), nspec)
@@ -296,7 +296,7 @@ class TestIO(unittest.TestCase):
         self.assertTrue( np.all(flux2[0] == flux[0]) )
         self.assertTrue( np.all(ivar2[0] == ivar[0]) )
         bx.close()
-        
+
     def test_zbest_io(self):
         from desispec.zfind import ZfindBase
         nspec, nflux = 10, 20
@@ -321,7 +321,7 @@ class TestIO(unittest.TestCase):
 
         desispec.io.write_zbest(self.testfile, brickname, targetids, zfind1, zspec=True)
         zfind3 = desispec.io.read_zbest(self.testfile)
-        
+
         assert np.all(zfind3.wave == zfind1.wave)
         assert np.all(zfind3.flux == zfind1.flux.astype(np.float32))
         assert np.all(zfind3.ivar == zfind1.ivar.astype(np.float32))
@@ -380,7 +380,7 @@ class TestIO(unittest.TestCase):
         ivar = np.ones(flux.shape)
         frame = Frame(wave, flux, ivar, spectrograph=0)
         frame.meta = dict(CAMERA='b0', FLAVOR='dark', NIGHT='20160607', EXPID=1)
-        #- Init 
+        #- Init
         qaframe = QA_Frame(frame)
         qaframe.init_skysub()
         # Write
@@ -455,7 +455,7 @@ class TestIO(unittest.TestCase):
         with self.assertRaises(AssertionError):
             x = desispec.io.findfile('brick', brickname='0000p123', band='r1')
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
-            
+
     def test_findfile_outdir(self):
         outdir = '/blat/foo/bar'
         x = desispec.io.findfile('fibermap', night='20150101', expid=123, outdir=outdir)
@@ -479,13 +479,15 @@ class TestIO(unittest.TestCase):
         self.assertIsNone(paths[0])
         # self.assertFalse(os.path.exists(paths[0]))
 
-    def test_memcrc(self):
-        test_strings = ('The quick brown fox jumped over the lazy dog.',
-            "The sixth sick sheik's sixth sheep's sick.",
-            'Jackdaws love my big sphinx of quartz.')
-        test_results = (2142034932,2348585565,358631216)
-        for k,t in enumerate(test_strings):
-            self.assertEqual(desispec.io.memcrc(t),test_results[k])
+    def test_database(self):
+        conn = sqlite3.connect(':memory:')
+        c = conn.cursor(desispec.io.RawDataCursor)
+        schema = resource_filename('desispec', 'data/db/raw_data.sql')
+        with open(schema) as sql:
+            script = sql.read()
+        c.executescript(script)
+        c.connection.commit()
+
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

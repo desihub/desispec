@@ -29,7 +29,6 @@ from .fluxcalibration import (
     read_flux_calibration, write_flux_calibration)
 from .filters import load_filter
 from .download import download, filepath2url
-from .crc import memcrc, cksum
-
+from .database import RawDataCursor
 from desispec.preproc import read_bias, read_pixflat, read_mask
 from desispec.io.raw import read_raw, write_raw
