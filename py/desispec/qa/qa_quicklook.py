@@ -93,6 +93,17 @@ def fiducialregion(frame,psf):
  
     return pixboundary,fidboundary
 
+
+def getrms(image):
+    """
+    calculate the rms of the pixel values)
+    args: image : 2d array
+    """
+    pixdata=image.ravel()
+    rms=np.std(pixdata)
+    return rms
+
+
 def countpix(image,nsig=None,ncounts=None):
     """
     count the pixels above a given threshold
@@ -162,11 +173,11 @@ def SN_ratio(flux,ivar):
         # totsnr[ii]=np.sqrt(np.sum(snr**2))
     return medsnr #, totsnr
 
-# Evaluate rms of pixel values after dark subtraction
+
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Get_RMS"
+            name="RMS"
         from desispec.image import Image as im
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
@@ -174,24 +185,73 @@ class Get_RMS(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
-        return self.get_rms(args[0])
+
+        input_image=args[0]
+        camera=kwargs["camera"]
+        expid=kwargs["expid"] 
+
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+
+        amps=False
+        if "amps" in kwargs:
+            amps=kwargs["amps"]
+
+        if "url" in kwargs:
+             url=kwargs["url"]
+        else: 
+             url=None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+
+        return self.run_qa(input_image,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
+
+    def run_qa(self,image,camera,expid,paname=None,amps=False,url=None,qafig=None):
+        retval={}
+        retval["EXPID"]=expid
+        retval["ARM"]=camera[0]
+        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["PANAME"]=paname
+        t=datetime.datetime.now()
+        retval["MJD"]=Time(t).mjd
+        rmsccd=getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
+        if amps:
+            rms_amps=[]
+            #- get amp boundary in pixels
+            from desispec.preproc import _parse_sec_keyword
+            for kk in ['1','2','3','4']:
+                ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
+                rmsamp=getrms(image.pix[ampboundary])
+                rms_amps.append(rmsamp)
+            retval["VALUE"]={"RMS":rmsccd,"RMS_AMP":np.array(rms_amps)}
+        else:
+            retval["VALUE"]={"RMS":rmsccd}     
+
+        if url is not None:
+            try: 
+                import requests
+                response=requests.get(url)
+                #- Check if the api has json
+                api=response.json()
+                #- proceed with post
+                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
+                response=requests.post(api['job'],json=job,auth=("username","password")) #- username, password not real but placeholder here.
+            except:
+                log.info("Skipping HTTP post...")    
+
+        if qafig is not None:
+            from desispec.qa.qa_plots_ql import plot_RMS
+            plot_RMS(retval,qafig)
+            
+            log.info("Output QA fig %s"%qafig)      
+
+        return retval    
+
     def get_default_config(self):
         return {}
-    def get_rms(self,image): 
-        """ 
-        image: desispec.image.Image like object
-        attributes: image(image, ivar, mask, readnoise,
-        camera, meta)
-        
-        """
-        value=image.pix
-    #TODO might need to use mask to filter?
-        vals=value.ravel()
-        rms=np.std(vals)
-        retval={}
-        retval["VALUE"]={"RMS":rms}
-        retval["EXPERT_LEVEL"]={"EXPERT_LEVEL":"OBSERVER"}
-        return retval
 
 class Count_Pixels(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -216,8 +276,7 @@ class Count_Pixels(MonitoringAlg):
         ncounts=None
         if "ncounts" in kwargs:
             ncounts=kwargs["ncounts"]
-        
-        #ampboundary=[250,input_frame.wave.shape[0]/2] #- TODO propagate amplifier boundary from kwargs. Dividing into quadrants for now. This may come from config also
+
         if "paname" not in kwargs:
             paname=None
         else:
@@ -397,10 +456,10 @@ class Sky_Continuum(MonitoringAlg):
 
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
-            retval["VALUE"]={"SKY":skycont, "SKY_FIBER":meancontfiber,"SKY_AMPS":skycont_amps}
+            retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMPS":skycont_amps}
 
         else: 
-            retval["VALUE"]={"SKY":skycont, "SKY_FIBER":meancontfiber}
+            retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
 
         if url is not None:
             try: 

@@ -49,21 +49,21 @@ def plot_countspectralbins(qa_dict,outfile):
 
 
     ax1=fig.add_subplot(231)
-    hist_med=ax1.bar(index,bins100,color='b')
+    hist_med=ax1.bar(index,bins100,color='b',align='center')
     ax1.set_xlabel('Fiber #',fontsize=10)
     ax1.set_ylabel('Counts > 100',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
 
     ax2=fig.add_subplot(232)
-    hist_med=ax2.bar(index,bins250,color='r')
+    hist_med=ax2.bar(index,bins250,color='r',align='center')
     ax2.set_xlabel('Fiber #',fontsize=10)
     ax2.set_ylabel('Counts > 250',fontsize=10)
     ax2.tick_params(axis='x',labelsize=10)
     ax2.tick_params(axis='y',labelsize=10)
 
     ax3=fig.add_subplot(233)
-    hist_med=ax3.bar(index,bins500,color='g')
+    hist_med=ax3.bar(index,bins500,color='g',align='center')
     ax3.set_xlabel('Fiber #',fontsize=10)
     ax3.set_ylabel('Counts > 500',fontsize=10)
     ax3.tick_params(axis='x',labelsize=10)
@@ -276,18 +276,68 @@ def plot_bias_overscan(qa_dict,outfile):
                  )
     fig.savefig(outfile)
     
+def plot_RMS(qa_dict,outfile):
+    """Plot RMS
+    `qa_dict` example:
+        {'ARM': 'r',
+         'EXPID': '00000006',
+         'MJD': 57581.91467038749,
+         'PANAME': 'PREPROC',
+         'SPECTROGRAPH': 0,
+         'VALUE': {'RMS': 40.218151021598679,
+                   'RMS_AMP': array([ 55.16847779,   2.91397089,  55.26686528,   2.91535373])}}
+     Args:
+        qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
+        outfile: Name of plot output file
+    """
+
+    rms_amp=qa_dict["VALUE"]["RMS_AMP"]
+    arm=qa_dict["ARM"]
+    spectrograph=qa_dict["SPECTROGRAPH"]
+    expid=qa_dict["EXPID"]
+    mjd=qa_dict["MJD"]
+    pa=qa_dict["PANAME"]
+
+    fig=plt.figure()
+    plt.suptitle("RMS image counts per amplifier, Camera: %s%s, ExpID: %s"%(arm,spectrograph,expid))
+    ax1=fig.add_subplot(111)
+    heatmap1=ax1.pcolor(rms_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
+    ax1.set_xlabel("RMS (per Amp)",fontsize=10)
+    ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
+    ax1.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax1.annotate("Amp 1\n%.3f"%rms_amp[0],
+                 xy=(0.4,0.4),
+                 fontsize=10
+                 )
+    ax1.annotate("Amp 2\n%.3f"%rms_amp[1],
+                 xy=(1.4,0.4),
+                 fontsize=10
+                 )
+    ax1.annotate("Amp 3\n%.3f"%rms_amp[2],
+                 xy=(0.4,1.4),
+                 fontsize=10
+                 )
+
+    ax1.annotate("Amp 4\n%.3f"%rms_amp[3],
+                 xy=(1.4,1.4),
+                 fontsize=10
+                 )
+    fig.savefig(outfile)
+
 def plot_sky_continuum(qa_dict,outfile):
     """
        plot mean sky continuum from lower and higher wavelength range for each fiber and accross amps
        example qa_dict:
           {'ARM': 'r',
            'EXPID': '00000006',
-           'MJD': 57578.78115332748,
+           'MJD': 57582.49011861168,
            'PANAME': 'APPLY_FIBERFLAT',
            'SPECTROGRAPH': 0,
-           'VALUE': {'SKY': 359.70078667259668,
-                     'SKY_AMPS': array([ 374.19163643,    0.        ,  344.76184662,    0.        ]),
-                     'SKY_FIBER': [357.23814787655738,  358.14982775192709,  359.34380640332847,  361.55526717275529,   360.46690568746544,  360.49561926858325,  359.08761654248656,  361.26910267767016]}}}
+           'VALUE': {'SKYCONT': 359.70078667259668,
+                     'SKYCONT_AMPS': array([ 374.19163643,    0.        ,  344.76184662,    0.        ]),
+                     'SKYCONT_FIBER': [357.23814787655738,   358.14982775192709,   359.34380640332847,   361.55526717275529,
+    360.46690568746544,   360.49561926858325,   359.08761654248656,   361.26910267767016],
+                     'SKYFIBERID': [4, 19, 30, 38, 54, 55, 57, 62]}}
 
        args: qa_dict: dictionary from sky continuum QA
              outfile: pdf file to save the plot
@@ -296,37 +346,40 @@ def plot_sky_continuum(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     arm=qa_dict["ARM"]
     paname=qa_dict["PANAME"]
-    sky_fiber=np.array(qa_dict["VALUE"]["SKY_FIBER"])
-    sky_amps=np.array(qa_dict["VALUE"]["SKY_AMPS"])
-    index=np.arange(sky_fiber.shape[0])
+    skycont_fiber=np.array(qa_dict["VALUE"]["SKYCONT_FIBER"])
+    skycont_amps=np.array(qa_dict["VALUE"]["SKYCONT_AMPS"])
+    index=np.arange(skycont_fiber.shape[0])
+    fiberid=qa_dict["VALUE"]["SKYFIBERID"]
     fig=plt.figure()
     plt.suptitle("Mean Sky Continuum after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
     
     ax1=fig.add_subplot(211)
-    hist_med=ax1.bar(index,sky_fiber,color='b')
-    ax1.set_xlabel('Sky fibers',fontsize=10)
+    hist_med=ax1.bar(index,skycont_fiber,color='b',align='center')
+    ax1.set_xlabel('SKY fibers',fontsize=10)
     ax1.set_ylabel('Sky Continuum',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
-
+    ax1.set_xticks(index)
+    ax1.set_xticklabels(fiberid)
+    
     ax2=fig.add_subplot(212)
-    heatmap1=ax2.pcolor(sky_amps.reshape(2,2).T,cmap=plt.cm.coolwarm)
+    heatmap1=ax2.pcolor(skycont_amps.reshape(2,2).T,cmap=plt.cm.coolwarm)
     ax2.set_xlabel("Avg. sky continuum (per Amp)",fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n%.1f"%sky_amps[0],
+    ax2.annotate("Amp 1\n%.1f"%skycont_amps[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n%.1f"%sky_amps[1],
+    ax2.annotate("Amp 2\n%.1f"%skycont_amps[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n%.1f"%sky_amps[2],
+    ax2.annotate("Amp 3\n%.1f"%skycont_amps[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n%.1f"%sky_amps[3],
+    ax2.annotate("Amp 4\n%.1f"%skycont_amps[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
