@@ -25,7 +25,7 @@ class TestBoot(unittest.TestCase):
         cls.testarc = 'test_arc.fits.gz'
         cls.testflat = 'test_flat.fits.gz'
         cls.testout = 'test_bootcalib_{}.fits'.format(uuid1())
-        self.qafile = 'test-qa-123jkkjiuc4h123h12h3423sadfew.pdf'
+        cls.qafile = 'test-qa-123jkkjiuc4h123h12h3423sadfew.pdf'
         cls.data_unavailable = False
 
         # Grab the data
@@ -57,8 +57,8 @@ class TestBoot(unittest.TestCase):
         if os.path.exists(cls.testout):
             os.unlink(cls.testout)
 
-        if os.path.isfile(self.qafile):
-            os.unlink(self.qafile)
+        if os.path.isfile(cls.qafile):
+            os.unlink(cls.qafile)
 
     def test_fiber_peaks(self):
         if self.data_unavailable:
