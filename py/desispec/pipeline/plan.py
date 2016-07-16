@@ -213,7 +213,7 @@ def create_prod(rawdir, proddir, nightstr=None):
 
     # create per-night directories
 
-    allbricks = set()
+    allbricks = {}
 
     for nt in nights:
         nexpdir = os.path.join(expdir, nt)
@@ -225,9 +225,21 @@ def create_prod(rawdir, proddir, nightstr=None):
         ndir = os.path.join(calpsf, nt)
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
+        nfail = os.path.join(faildir, nt)
+        if not os.path.isdir(nfail):
+            os.makedirs(nfail)
+        nlog = os.path.join(logdir, nt)
+        if not os.path.isdir(nlog):
+            os.makedirs(nlog)
 
         grph, expcount, nbricks = graph_night(rawdir, nt)
-        allbricks.update(nbricks)
+
+        for brk in nbricks.keys():
+            if brk in allbricks.keys():
+                allbricks[brk] += nbricks[brk]
+            else:
+                allbricks[brk] = nbricks[brk]
+
         expnightcount[nt] = expcount
         with open(os.path.join(plandir, "{}.dot".format(nt)), 'w') as f:
             graph_dot(grph, f)
@@ -249,6 +261,18 @@ def graph_name(*args):
         return ""
 
 
+def graph_name_split(name):
+    patstr = "([0-9]{{8}}){}(.*)".format(_graph_sep)
+    pat = re.compile(patstr)
+    mat = pat.match(name)
+    ret = ("", name)
+    if mat is not None:
+        night = mat.group(1)
+        obj = mat.group(2)
+        ret = (night, obj)
+    return ret
+
+
 # Each node of the graph is a dictionary, with required keys 'type',
 # 'in', and 'out'.  Where 'in' and 'out' are lists of other nodes.  
 # Extra keys for each type are allowed.  Some keys (band, spec, etc)
@@ -266,7 +290,7 @@ def graph_night(rawdir, rawnight):
     node['out'] = []
     grph[rawnight] = node
 
-    allbricks = set()
+    allbricks = {}
 
     expcount = {}
     expcount['flat'] = 0
@@ -292,13 +316,18 @@ def graph_night(rawdir, rawnight):
 
         fmdata, fmheader = io.read_fibermap(fibermap, header=True)
         flavor = fmheader['flavor']
-        bricks = set()
-        fmbricks = []
+        fmbricks = {}
         for fmb in fmdata['BRICKNAME']:
             if len(fmb) > 0:
-                fmbricks.append(fmb)
-        bricks.update(fmbricks)
-        allbricks.update(bricks)
+                if fmb in fmbricks.keys():
+                    fmbricks[fmb] += 1
+                else:
+                    fmbricks[fmb] = 1
+        for fmb in fmbricks.keys():
+            if fmb in allbricks.keys():
+                allbricks[fmb] += fmbricks[fmb]
+            else:
+                allbricks[fmb] = fmbricks[fmb]
 
         if flavor == 'arc':
             expcount['arc'] += 1
@@ -311,7 +340,7 @@ def graph_night(rawdir, rawnight):
         node['type'] = 'fibermap'
         node['id'] = ex
         node['flavor'] = flavor
-        node['bricks'] = bricks
+        node['bricks'] = fmbricks
         node['in'] = [rawnight]
         node['out'] = []
         name = graph_name(rawnight, "fibermap-{:08d}".format(ex))
@@ -619,7 +648,7 @@ def graph_night(rawdir, rawnight):
 
     # Brick / Zbest dependencies
 
-    for b in allbricks:
+    for b in allbricks.keys():
         zbname = "zbest-{}".format(b)
         inb = []
         for band in ['b', 'r', 'z']:
@@ -635,6 +664,7 @@ def graph_night(rawdir, rawnight):
         node = {}
         node['type'] = 'zbest'
         node['brick'] = b
+        node['ntarget'] = allbricks[b]
         node['in'] = inb
         node['out'] = []
         grph[zbname] = node
@@ -948,14 +978,14 @@ def graph_write(path, grph):
     return
 
 
-def graph_read(path):
+def graph_read(path, progress=None):
     grph = None
     with open(path, 'r') as f:
-        grph = yaml.load(f)
+        grph = yaml.load(f, Loader=yaml.CLoader)
     return grph
 
 
-def graph_read_prod(proddir, nightstr=None, spectrographs=None):
+def graph_read_prod(proddir, nightstr=None, spectrographs=None, progress=None):
 
     plandir = os.path.join(proddir, 'plan')
 
@@ -1079,6 +1109,13 @@ def graph_merge_state(grph, comm=None):
     # print("proc {} has {} graph names".format(comm.rank, len(names)))
     # sys.stdout.flush()
 
+    priority = {
+        'none' : 0,
+        'wait' : 1,
+        'fail' : 2,
+        'done' : 3
+    }
+
     for p in range(1, comm.size):
 
         if comm.rank == 0:
@@ -1089,13 +1126,8 @@ def graph_merge_state(grph, comm=None):
             if pnames != names:
                 raise RuntimeError("names of all objects must be the same when merging graph states")
             for n in names:
-                if states[n] != 'none':
-                    if states[n] != 'done':
-                        if pstates[n] == 'done':
-                            states[n] = 'done'
-                else:
-                    if pstates[n] != 'none':
-                        states[n] = pstates[n]
+                if priority[pstates[n]] > priority[states[n]]:
+                    states[n] = pstates[n]
 
         elif comm.rank == p:
             # print("proc {} sending to {}".format(comm.rank, 0))

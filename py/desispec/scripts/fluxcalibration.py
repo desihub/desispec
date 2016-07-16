@@ -27,8 +27,6 @@ def parse(options=None):
 
     parser.add_argument('--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
-    parser.add_argument('--fibermap', type = str, default = None, required=False,
-                        help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
     parser.add_argument('--sky', type = str, default = None, required=True,
@@ -53,9 +51,6 @@ def parse(options=None):
 def main(args) :
 
     log=get_logger()
-
-    if args.fibermap is not None:
-        log.warn('--fibermap is deprecated (and not used at all)')
 
     log.info("read frame")
     # read frame

@@ -20,32 +20,49 @@ from desispec.scripts import bootcalib as bootscript
 
 class TestBoot(unittest.TestCase):
 
-    def setUp(self):
-        self.testarc = 'test_arc.fits.gz'
-        self.testflat = 'test_flat.fits.gz'
-        self.testout = 'test_bootcalib_{}.fits'.format(uuid1())
+    @classmethod
+    def setUpClass(cls):
+        cls.testarc = 'test_arc.fits.gz'
+        cls.testflat = 'test_flat.fits.gz'
+        cls.testout = 'test_bootcalib_{}.fits'.format(uuid1())
+        cls.qafile = 'test-qa-123jkkjiuc4h123h12h3423sadfew.pdf'
+        cls.data_unavailable = False
 
         # Grab the data
-        afil = glob.glob(self.testarc)
-        if len(afil) == 0:
+        if not os.path.exists(cls.testarc):
             url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
-            f = urllib2.urlopen(url_arc)
-            with open(self.testarc, "wb") as code:
-                code.write(f.read())
-        ffil = glob.glob(self.testflat)
-        if len(ffil) == 0:
+            try:
+                f = urllib2.urlopen(url_arc)
+            except:
+                cls.data_unavailable = True
+            else:
+                with open(cls.testarc, "wb") as code:
+                    code.write(f.read())
+        if not os.path.exists(cls.testflat):
             url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
-            f = urllib2.urlopen(url_flat)
-            with open(self.testflat, "wb") as code:
-                code.write(f.read())
+            try:
+                f = urllib2.urlopen(url_flat)
+            except:
+                cls.data_unavailable = True
+            else:
+                with open(cls.testflat, "wb") as code:
+                    code.write(f.read())
 
+    @classmethod
+    def tearDownClass(cls):
+        # if os.path.exists(cls.testarc):
+        #     os.unlink(cls.testarc)
+        # if os.path.exists(cls.testflat):
+        #     os.unlink(cls.testflat)
+        if os.path.exists(cls.testout):
+            os.unlink(cls.testout)
 
-    def tearDown(self):
-        if os.path.isfile(self.testout):
-            os.unlink(self.testout)
+        if os.path.isfile(cls.qafile):
+            os.unlink(cls.qafile)
 
-    
     def test_fiber_peaks(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         ###########
@@ -54,6 +71,8 @@ class TestBoot(unittest.TestCase):
         assert len(xpk) == 25
 
     def test_tracing(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         # Find fibers (necessary)
@@ -63,6 +82,8 @@ class TestBoot(unittest.TestCase):
         xfit, fdicts = desiboot.fit_traces(xset,xerr)
 
     def test_gauss(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         flat_hdu = fits.open(self.testflat)
         flat = flat_hdu[0].data
         # Find fibers (necessary)
@@ -77,10 +98,14 @@ class TestBoot(unittest.TestCase):
         np.testing.assert_allclose(np.median(gauss), 1.06, rtol=0.05)
 
     def test_load_gdarc_lines(self):
+
         for camera in ['b', 'r', 'z']:
-            dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
+            llist = desiboot.load_arcline_list(camera)
+            dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist)
 
     def test_wavelengths(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         # Read flat
         flat_hdu = fits.open(self.testflat)
         header = flat_hdu[0].header
@@ -104,20 +129,18 @@ class TestBoot(unittest.TestCase):
         # Line list
         camera = header['CAMERA']
         llist = desiboot.load_arcline_list(camera)
-        dlamb, wmark, gd_lines, line_guess = desiboot.load_gdarc_lines(camera)
+        dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist)
         #
         all_wv_soln = []
         for ii in range(1):
             spec = all_spec[:,ii]
             # Find Lines
-            pixpk = desiboot.find_arc_lines(spec)
+            pixpk, flux = desiboot.find_arc_lines(spec)
+            id_dict = {"pixpk":pixpk,"flux":flux}
             # Match a set of 5 gd_lines to detected lines
-            id_dict = desiboot.id_arc_lines(pixpk,gd_lines,dlamb,wmark,
-                                            line_guess=line_guess)
-            # Find the other good ones
-            desiboot.add_gdarc_lines(id_dict, pixpk, gd_lines)
+            desiboot.id_arc_lines_using_triplets(id_dict,gd_lines,dlamb)
             # Now the rest
-            desiboot.id_remainder(id_dict, pixpk, llist)
+            desiboot.id_remainder(id_dict, llist, deg=3)
             # Final fit wave vs. pix too
             final_fit, mask = dufits.iter_fit(np.array(id_dict['id_wave']),
                                               np.array(id_dict['id_pix']),
@@ -139,22 +162,57 @@ class TestBoot(unittest.TestCase):
 
         self.assertLess(all_wv_soln[0]['rms'], 0.25)
 
+    #- desispec.bootcalib.bootcalib may be redundant with
+    #- desispec.scripts.bootcalib.main.  Include tests for both for now.
+
+    #- bootcalib.bootcalib is broken; see https://github.com/desihub/desispec/issues/174
+    @unittest.expectedFailure
+    def test_bootcalib(self):        
+        from desispec.bootcalib import bootcalib
+        from desispec.image import Image
+        arc = fits.getdata(self.testarc)
+        flat = fits.getdata(self.testflat)
+        arcimage = Image(arc, np.ones_like(arc), camera='b0')
+        flatimage = Image(flat, np.ones_like(flat), camera='b0')
+        results = bootcalib(3, flatimage, arcimage)
 
     def test_main(self):
+        if self.data_unavailable:
+            self.skipTest("Failed to download test data.")
         argstr = [
-            '--fiberflat',
-            self.testflat,
-            '--arcfile',
-            self.testarc,
-            '--outfile',
-            self.testout
+            '--fiberflat', self.testflat,
+            '--arcfile', self.testarc,
+            '--outfile', self.testout,
+            '--qafile', self.qafile,
         ]
         args = bootscript.parse(options=argstr)
         bootscript.main(args)
+        
+        #- Ensure the PSF class can read that file
+        from desispec.psf import PSF
+        psf = PSF(self.testout)
+        
+        #- While we're at it, test some PSF accessor functions
+        w = psf.wavelength()
+        w = psf.wavelength(ispec=0)
+        w = psf.wavelength(ispec=[0,1])
+        w = psf.wavelength(ispec=[0,1], y=0)
+        w = psf.wavelength(ispec=[0,1], y=[0,1])
+        
+        x = psf.x()
+        x = psf.x(ispec=0)
+        x = psf.x(ispec=[0,1])
+        x = psf.x(ispec=None, wavelength=psf.wmin)
+        x = psf.x(ispec=1, wavelength=psf.wmin)
+        x = psf.x(ispec=[0,1], wavelength=psf.wmin)
+        x = psf.x(ispec=[0,1], wavelength=[psf.wmin, psf.wmin+1])
 
+        y = psf.y(ispec=None, wavelength=psf.wmin)
+        y = psf.y(ispec=0, wavelength=psf.wmin)
+        y = psf.y(ispec=[0,1], wavelength=psf.wmin)
+        y = psf.y(ispec=[0,1], wavelength=[psf.wmin, psf.wmin+1])
+        
+        t = psf.invert()        
 
-    def runTest(self):
-        pass
-                
 if __name__ == '__main__':
     unittest.main()

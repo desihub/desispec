@@ -1,0 +1,6 @@
+This is a small example script which attempts to test mpi4py combined
+with multiprocessing.  Edit the template slurm script and then do:
+
+$>  ./gen_slrm.sh template
+
+to make a bunch of slurm scripts at different concurrencies.

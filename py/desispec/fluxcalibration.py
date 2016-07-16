@@ -14,6 +14,7 @@ from .io.filters import load_filter
 from desispec import util
 import scipy, scipy.sparse, scipy.ndimage
 import sys
+import time
 from astropy import units
 import multiprocessing
 
@@ -101,6 +102,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
 
     cameras = flux.keys()
     log = get_logger()
+    log.debug(time.asctime())
 
     # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
     #####################################
@@ -204,14 +206,24 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                    "star_stdflux":stdflux[star]}
         func_args.append( arguments )
 
-    #log.info("starting multiprocessing with %d cpus"%ncpu)
-    pool = multiprocessing.Pool(ncpu)
-    model_chi2 =  pool.map(_func, func_args)
-    pool.close()
-    pool.join()
+    if ncpu > 1:
+        log.debug("creating multiprocessing pool with %d cpus"%ncpu); sys.stdout.flush()
+        pool = multiprocessing.Pool(ncpu)
+        log.debug("Running pool.map() for {} items".format(len(func_args))); sys.stdout.flush()
+        model_chi2 =  pool.map(_func, func_args)
+        log.debug("Finished pool.map()"); sys.stdout.flush()
+        pool.close()
+        pool.join()
+        log.debug("Finished pool.join()"); sys.stdout.flush()
+    else:
+        log.debug("Not using multiprocessing for {} cpus".format(ncpu))
+        model_chi2 = [_func(x) for x in func_args]
+        log.debug("Finished serial loop over compute_chi2")
+        
     best_model_id=np.argmin(np.array(model_chi2))
     best_chi2=model_chi2[best_model_id]
-    #log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
+    log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
+    # log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
 
     return best_model_id,z,best_chi2/ndata
 

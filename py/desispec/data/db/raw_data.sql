@@ -1,6 +1,20 @@
 --
--- Schema for DESI pipeline file-tracking database.
+-- Schema for DESI pipeline raw data tracking database.
 -- Note: the SQL flavor is tuned to SQLite.
+--
+-- This schema might be used for both simulations and real data.  For
+-- simple simulations, the tile table will be filled, while for realistic
+-- simulations and real data, the frame table will be filled.
+--
+CREATE TABLE tile (
+    tileid INTEGER PRIMARY KEY,
+    ra REAL NOT NULL,
+    dec REAL NOT NULL,
+    pass INTEGER NOT NULL,
+    in_desi INTEGER NOT NULL
+);
+--
+--
 --
 CREATE TABLE brick (
     brickid INTEGER PRIMARY KEY,
@@ -19,60 +33,28 @@ CREATE TABLE brick (
 --
 --
 --
-CREATE TABLE filetype (
-    type TEXT PRIMARY KEY
-);
---
---
---
-CREATE TABLE file (
-    id TEXT PRIMARY KEY, -- Checksum of the file.  SHA1 preferred.
-    filename TEXT NOT NULL,
-    directory TEXT NOT NULL,
-    prodname TEXT NOT NULL,
-    filetype TEXT NOT NULL, -- Foreign key on filetype
-    FOREIGN KEY (filetype) REFERENCES filetype (type)
-);
---
--- Both fileid and requires are primary keys in file.
--- 'requires' == 'needs this file'
---
-CREATE TABLE filedependency (
-    fileid TEXT NOT NULL,
-    requires TEXT NOT NULL, -- Primary key on the two columns (fileid, requires)
-    PRIMARY KEY (fileid, requires),
-    FOREIGN KEY (fileid) REFERENCES file (id),
-    FOREIGN KEY (requires) REFERENCES file (id)
-);
---
--- JOIN table
---
-CREATE TABLE file2brick (
-    fileid TEXT NOT NULL,
-    brickid INTEGER NOT NULL,
-    PRIMARY KEY (fileid, brickid),
-    FOREIGN KEY (fileid) REFERENCES file (id),
-    FOREIGN KEY (brickid) REFERENCES brick (brickid)
-);
---
---
---
 CREATE TABLE night (
-    night INTEGER PRIMARY KEY -- e.g. 20150510
+    night TEXT PRIMARY KEY -- e.g. 20150510; even though this can be represented as an integer, elsewhere night is used as a string.
 );
 --
 --
 --
 CREATE TABLE exposureflavor (
-    flavor TEXT PRIMARY KEY
+    flavor TEXT PRIMARY KEY -- arc, flat, science, etc.
 );
+INSERT INTO exposureflavor (flavor) VALUES ('science');
+INSERT INTO exposureflavor (flavor) VALUES ('arc');
+INSERT INTO exposureflavor (flavor) VALUES ('flat');
 --
 --
 --
-CREATE TABLE exposure (
-    expid INTEGER PRIMARY KEY,
-    night INTEGER NOT NULL, -- foreign key on night
-    flavor TEXT NOT NULL, -- arc, flat, science, etc. might want a separate table?
+CREATE TABLE frame (
+    frameid TEXT PRIMARY KEY, -- e.g. b0-00012345
+    band TEXT NOT NULL, -- b, r, z, might be called 'channel' or 'arm'
+    spectrograph INTEGER NOT NULL, -- 0, 1, 2, ...
+    expid INTEGER NOT NULL, -- exposure number
+    night TEXT NOT NULL, -- foreign key on night
+    flavor TEXT NOT NULL, -- foreign key on exposureflavor, might be called 'obstype'
     telra REAL NOT NULL,
     teldec REAL NOT NULL,
     tileid INTEGER NOT NULL DEFAULT -1, -- it is possible for the telescope to not point at a tile.
@@ -83,23 +65,60 @@ CREATE TABLE exposure (
     FOREIGN KEY (night) REFERENCES night (night),
     FOREIGN KEY (flavor) REFERENCES exposureflavor (flavor)
 );
+-- If frame table becomes two big, create an exposure table to contain
+-- the data that is common to all frames in an exposure.
 --
 -- JOIN table
 --
-CREATE TABLE file2exposure (
-    fileid TEXT NOT NULL,
-    expid INTEGER NOT NULL,
-    PRIMARY KEY (fileid, expid),
-    FOREIGN KEY (fileid) REFERENCES file (id),
-    FOREIGN KEY (expid) REFERENCES exposure (expid)
-);
---
--- JOIN table
---
-CREATE TABLE exposure2brick (
-    expid INTEGER NOT NULL,
+CREATE TABLE frame2brick (
+    frameid TEXT NOT NULL,
     brickid INTEGER NOT NULL,
-    PRIMARY KEY (expid, brickid),
-    FOREIGN KEY (expid) REFERENCES exposure (expid),
+    PRIMARY KEY (frameid, brickid),
+    FOREIGN KEY (frameid) REFERENCES frame (frameid),
     FOREIGN KEY (brickid) REFERENCES brick (brickid)
 );
+--
+-- JOIN table
+--
+CREATE TABLE tile2brick (
+    tileid INTEGER NOT NULL,
+    petalid INTEGER NOT NULL,
+    brickid INTEGER NOT NULL,
+    PRIMARY KEY (tileid, petalid, brickid),
+    FOREIGN KEY (tileid) REFERENCES tile (tileid),
+    FOREIGN KEY (brickid) REFERENCES brick (brickid)
+);
+--
+-- Status
+--
+CREATE TABLE status (
+    status TEXT PRIMARY KEY  -- not processed, failed, succeeded
+);
+INSERT INTO status (status) VALUES ('not processed');
+INSERT INTO status (status) VALUES ('failed');
+INSERT INTO status (status) VALUES ('succeeded');
+--
+--
+--
+CREATE TABLE framestatus (
+    frameid TEXT NOT NULL,
+    status TEXT NOT NULL,
+    stamp TIMESTAMP NOT NULL,
+    FOREIGN KEY (status) REFERENCES status (status)
+);
+--
+--
+--
+CREATE TABLE brickstatus (
+    brickid INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    stamp TIMESTAMP NOT NULL,
+    FOREIGN KEY (status) REFERENCES status (status)
+);
+--
+-- Index
+--
+CREATE INDEX brick_ra1_idx ON brick (ra1);
+CREATE INDEX brick_ra2_idx ON brick (ra2);
+CREATE INDEX brick_dec1_idx ON brick (dec1);
+CREATE INDEX brick_dec2_idx ON brick (dec2);

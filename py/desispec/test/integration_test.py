@@ -42,7 +42,7 @@ def check_env():
         missing_env = True
 
     for name in (
-        'DESI_SPECTRO_SIM', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'PRODNAME', 'DESIMODEL'):
+        'DESI_SPECTRO_SIM', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'SPECPROD', 'DESIMODEL'):
         if name not in os.environ:
             log.warning("missing ${0}".format(name))
             missing_env = True
@@ -51,7 +51,7 @@ def check_env():
         log.warning("Why are these needed?")
         log.warning("    Simulations written to $DESI_SPECTRO_SIM/$PIXPROD/")
         log.warning("    Raw data read from $DESI_SPECTRO_DATA/")
-        log.warning("    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$PRODNAME/")
+        log.warning("    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$SPECPROD/")
         log.warning("    Templates are read from $DESI_BASIS_TEMPLATES")
 
     #- Wait until end to raise exception so that we report everything that
@@ -89,7 +89,7 @@ def sim(night, nspec=5, clobber=False):
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
-        if pipe.runcmd(cmd, inputs, outputs, clobber) != 0:
+        if pipe.runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(flavor, expid))
 
         cmd = "pixsim-desi --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
@@ -100,7 +100,7 @@ def sim(night, nspec=5, clobber=False):
             pixfile = io.findfile('pix', night, expid, camera)
             outputs.append(pixfile)
             #outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
-        if pipe.runcmd(cmd, inputs, outputs, clobber) != 0:
+        if pipe.runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(flavor, expid))
 
     return
@@ -204,14 +204,14 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Brick     True  z        ->  Class  z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for b in bricks:
-        zbest = io.read_zbest(io.findfile('zbest', brickname=b))
+        zbest = io.read_zbest(io.findfile('zbest', brickname=b))        
         for i in range(len(zbest.z)):
-            if zbest.type[i] == 'ssp_em_galaxy':
+            if zbest.spectype[i] == 'ssp_em_galaxy':
                 objtype = 'GAL'
-            elif zbest.type[i] == 'spEigenStar':
+            elif zbest.spectype[i] == 'spEigenStar':
                 objtype = 'STAR'
             else:
-                objtype = zbest.type[i]
+                objtype = zbest.spectype[i]
 
             z, zwarn = zbest.z[i], zbest.zwarn[i]
 

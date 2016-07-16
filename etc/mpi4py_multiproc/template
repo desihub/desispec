@@ -1,0 +1,40 @@
+#!/bin/bash -l
+
+#SBATCH --partition=debug
+#SBATCH --account=desi
+#SBATCH --nodes=@NODES@
+#SBATCH --time=00:10:00
+#SBATCH --job-name=desi_@CORES@
+#SBATCH --output=out_@CORES@_%j.log
+#SBATCH --export=NONE
+
+hpcports gnu
+module load desideps-hpcp
+desi
+
+echo "PYTHONPATH = "
+echo $PYTHONPATH
+echo ""
+
+# set procs and threads
+
+NODES=@NODES@
+NODE_PROC=12
+NODE_THREAD=$(( 24 / NODE_PROC ))
+NPROC=$(( NODES * NODE_PROC ))
+
+export OMP_NUM_THREADS=$NODE_THREAD
+
+# Run it
+
+run="srun -n ${NPROC} -N ${NODES} -c ${NODE_THREAD} --export=ALL"
+
+com="python desi_test_multiprocess \
+--groupsize 8 \
+--ntask 10 \
+--tasksize 100 \
+"
+
+echo ${run} ${com}
+time ${run} ${com}
+

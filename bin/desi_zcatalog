@@ -42,8 +42,14 @@ for zbestfile in io.iterfiles(opts.indir, 'zbest'):
     zbest = Table.read(zbestfile, format='fits')
     if opts.verbose:
         print(zbestfile, len(zbest))
+
+    #- Remove metadata keys that don't make sense for merging
+    for key in ['CHECKSUM', 'DATASUM']:
+        if key in zbest.meta.keys():
+            del zbest.meta[key]
+
     data.append(zbest)
-    
+
 #- Combine those into a single table and write it out
 zcat = vstack(data)
 zcat.meta['EXTNAME'] = 'ZCATALOG'

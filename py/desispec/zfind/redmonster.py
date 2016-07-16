@@ -9,6 +9,7 @@ from __future__ import division, absolute_import
 import os
 
 import numpy as np
+import time
 
 from desispec.zfind import ZfindBase
 from desispec.interpolation import resample_flux
@@ -18,7 +19,7 @@ class RedMonsterZfind(ZfindBase):
     """Class documentation goes here.
     """
     def __init__(self, wave, flux, ivar, R=None, dloglam=1e-4, objtype=None,
-                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005)):
+                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005),nproc=1,npoly=2):
         """Uses Redmonster to classify and find redshifts.
 
         See :class:`desispec.zfind.zfind.ZfindBase` class for inputs/outputs.
@@ -32,6 +33,9 @@ class RedMonsterZfind(ZfindBase):
         from redmonster.physics.zfinder import ZFinder
         from redmonster.physics.zfitter import ZFitter
         from redmonster.physics.zpicker2 import ZPicker
+        
+        log=get_logger()
+        
 
         #- RedMonster templates don't quite go far enough into the blue,
         #- so chop off some data
@@ -93,12 +97,22 @@ class RedMonsterZfind(ZfindBase):
         #- Find and refine best redshift per template
         self.zfinders = list()
         self.zfitters = list()
+        
         for template, zmin, zmax in self.templates:
-            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=2, zmin=zmin, zmax=zmax)
+            start=time.time()
+            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=npoly, zmin=zmin, zmax=zmax,nproc=nproc)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
+            stop=time.time()
+            log.debug("Time to find the redshifts of %d fibers for template %s =%f sec"%(self.flux.shape[0],template,stop-start))
+            start=time.time()
             zfit = ZFitter(zfind.zchi2arr, zfind.zbase)
             zfit.z_refine2()
-
+            stop=time.time()
+            log.debug("Time to refine the redshift fit of %d fibers for template %s =%f sec"%(zfit.z.shape[0],template,stop-start))
+            
+            for ifiber in range(zfit.z.shape[0]) :
+                log.debug("(after z_refine2) fiber #%d %s chi2s=%s zs=%s"%(ifiber,template,zfit.chi2vals[ifiber],zfit.z[ifiber]))
+            
             self.zfinders.append(zfind)
             self.zfitters.append(zfit)
 
@@ -113,12 +127,17 @@ class RedMonsterZfind(ZfindBase):
         self.zpicker = ZPicker(specobj, self.zfinders, self.zfitters, flags)
 
         #- Fill in outputs
-        self.type = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
+        self.spectype = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
         self.subtype = np.asarray([repr(self.zpicker.subtype[i][0]) for i in range(nspec)])
         self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
         self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
         self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
         self.model = self.zpicker.models[:,0]
+
+        for ifiber in range(self.z.size):
+            log.debug("(after zpicker) fiber #%d z=%s"%(ifiber,self.z[ifiber]))
+            
+        
 
 #- This is a container class needed by Redmonster zpicker
 class _RedMonsterSpecObj(object):

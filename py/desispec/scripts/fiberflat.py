@@ -11,7 +11,6 @@ import numpy as np
 
 from desispec.io import read_frame
 from desispec.io import write_fiberflat
-from desispec.io import read_fibermap
 from desispec.fiberflat import compute_fiberflat
 from desispec.log import get_logger
 from desispec.io.qa import load_qa_frame
@@ -27,11 +26,9 @@ def parse(options=None):
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
     parser.add_argument('--qafile', type=str, default=None, required=False,
-                        help='path of QA file.')
-    parser.add_argument('--fibermap', type = str, default = None, required=False,
-                        help = 'path of DESI exposure fiber map file')
+                        help='path of QA file')
     parser.add_argument('--qafig', type = str, default = None, required=False,
-                        help = 'path of QA figure file (requires fiber map file)')
+                        help = 'path of QA figure file')
     args = None
     if options is None:
         args = parser.parse_args()
@@ -43,12 +40,7 @@ def parse(options=None):
 def main(args) :
 
     log=get_logger()
-
     log.info("starting")
-
-    # I/O checking
-    if (args.qafig is not None) and (args.fibermap is None):
-        raise IOError("Must provide fibermap file to generate QA fig")
 
     # Process
     frame = read_frame(args.infile)
@@ -67,8 +59,7 @@ def main(args) :
             log.info("successfully wrote {:s}".format(args.qafile))
         # Figure(s)
         if args.qafig is not None:
-            fibermap = read_fibermap(args.fibermap)
-            qa_plots.frame_fiberflat(args.qafig, qaframe, frame, fibermap, fiberflat)
+            qa_plots.frame_fiberflat(args.qafig, qaframe, frame, fiberflat)
 
     # Write
     write_fiberflat(args.outfile, fiberflat, frame.meta)
