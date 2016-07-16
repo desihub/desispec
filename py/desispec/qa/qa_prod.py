@@ -103,7 +103,6 @@ class QA_Prod(object):
                         if remake_plots:
                             qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                             qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib, model_tuple)
-                            pdb.set_trace()
                     # Write
                     write_qa_frame(qafile, qaframe)
             #pdb.set_trace()

@@ -487,7 +487,7 @@ class FiberFlat(object):
         else:
             try:
                 self.chi2pdf = header['chi2pdf']
-            except KeyError:
+            except (KeyError, TypeError):
                 self.chi2pdf = None
 
         self.spectrograph = spectrograph
