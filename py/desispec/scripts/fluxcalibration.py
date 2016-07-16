@@ -100,7 +100,7 @@ def main(args) :
             log.info("successfully wrote {:s}".format(args.qafile))
         # Figure(s)
         if args.qafig is not None:
-            qa_plots.frame_fluxcalib(args.qafig, qaframe, fluxcalib)#, indiv_stars)
+            qa_plots.frame_fluxcalib(args.qafig, qaframe, frame, fluxcalib, model_tuple)
 
     # write result
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)

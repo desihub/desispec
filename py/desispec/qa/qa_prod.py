@@ -66,6 +66,7 @@ class QA_Prod(object):
                 for camera,frame_fil in frames_dict.items():
                     # Load frame
                     frame = read_frame(frame_fil)
+                    spectro = int(frame.meta['CAMERA'][-1])
                     if frame.meta['FLAVOR'] in ['flat','arc']:
                         qatype = 'qa_calib'
                     else:
@@ -81,7 +82,7 @@ class QA_Prod(object):
                         if remake_plots:
                             # Do it
                             qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                            qa_plots.frame_fiberflat(qafig, qaframe, frame, frame.fibermap, fiberflat)
+                            qa_plots.frame_fiberflat(qafig, qaframe, frame, fiberflat)
                     # SkySub QA
                     if qatype == 'qa_data':
                         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
@@ -93,13 +94,19 @@ class QA_Prod(object):
                     # FluxCalib QA
                     if qatype == 'qa_data':
                         # Standard stars
-                        stdstar_fil = meta.findfile('stdstars', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                        stdstar_fil = meta.findfile('stdstars', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir,
+                                                    spectrograph=spectro)
                         model_tuple=read_stdstar_models(stdstar_fil)
                         flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                         fluxcalib = read_flux_calibration(flux_fil)
                         qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, model_tuple))#, indiv_stars))
+                        if remake_plots:
+                            qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                            qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib, model_tuple)
+                            pdb.set_trace()
                     # Write
                     write_qa_frame(qafile, qaframe)
+            #pdb.set_trace()
 
     def slurp(self, remake=False, remove=True):
         """ Slurp all the individual QA files into one master QA file

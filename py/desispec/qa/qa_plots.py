@@ -8,8 +8,8 @@ from scipy import signal
 import scipy
 import pdb
 
+from desispec.log import get_logger
 from desispec import fluxcalibration as dsflux
-
 from desispec.util import set_backend
 set_backend()
 
@@ -280,21 +280,37 @@ def exposure_fluxcalib(outfil, qa_data):
     print('Wrote QA FluxCalib Exposure file: {:s}'.format(outfil))
 
 
-def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
+def frame_fluxcalib(outfil, qaframe, frame, fluxcalib, model_tuple):
     """ QA plots for Flux calibration in a Frame
 
     Args:
         outfil:
         qaframe:
+        frame:
 
     Returns:
         Stuff?
     """
+    from desispec.fluxcalibration import resample_flux
+    log = get_logger()
     # Unpack star data
-    sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
+    #sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
 
-    # Mean spectrum
-    ZP_AB = dsflux.ZP_from_calib(fluxcalib.wave, fluxcalib.meancalib)
+    # Unpack model
+    input_model_flux,input_model_wave,input_model_fibers=model_tuple
+
+    # Standard stars
+    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    stdstars = frame[stdfibers]
+    nstds = np.sum(stdfibers)
+    try:
+        assert np.array_equal(frame.fibers[stdfibers], input_model_fibers)
+    except AssertionError:
+        log.error("Bad indexing in standard stars")
+
+    # Median spectrum
+    medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)
+    ZP_AB = dsflux.ZP_from_calib(fluxcalib.wave, medcalib)
 
 
     # Plot
@@ -323,11 +339,13 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
     #    transform=ax_flux.transAxes, ha='center')
 
     # Other stars
-    nstars = sqrtwflux.shape[0]
-    for ii in range(nstars):
+    for ii in range(nstds):
+        # Model flux
+        model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
+        convolved_model_flux=stdstars.R[ii].dot(model_flux)
         # Good pixels
-        gdp = current_ivar[ii, :] > 0.
-        icalib = sqrtwflux[ii, gdp] / sqrtwmodel[ii, gdp]
+        gdp = stdstars.ivar[ii, :] > 0.
+        icalib = stdstars.flux[ii, gdp] / convolved_model_flux[gdp]
         i_wave = fluxcalib.wave[gdp]
         ZP_star = dsflux.ZP_from_calib(i_wave, icalib)
         # Plot
@@ -336,7 +354,7 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
         else:
             lbl = None
         ax0.plot(i_wave, ZP_star, ':', label=lbl)
-    ax0.plot(fluxcalib.wave, ZP_AB, color='black', label='Mean Calib')
+    ax0.plot(fluxcalib.wave, ZP_AB, color='black', label='Median Calib')
 
     # Legend
     legend = ax0.legend(loc='lower left', borderpad=0.3,
