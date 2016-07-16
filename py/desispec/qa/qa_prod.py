@@ -53,7 +53,7 @@ class QA_Prod(object):
         from desispec.io.sky import read_sky
         from desispec.io.fluxcalibration import read_flux_calibration
         from desispec.qa import qa_plots
-        from desispec.io import read_fibermap
+        from desispec.io.fluxcalibration import read_stdstar_models
 
         # Loop on nights
         path_nights = glob.glob(self.specprod_dir+'/exposures/*')
@@ -79,11 +79,9 @@ class QA_Prod(object):
                         fiberflat = read_fiberflat(fiberflat_fil)
                         qaframe.run_qa('FIBERFLAT', (frame, fiberflat))
                         if remake_plots:
-                            qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                            fibermap_fil = meta.findfile('fibermap', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                             # Do it
-                            fibermap = read_fibermap(fibermap_fil)
-                            qa_plots.frame_fiberflat(qafig, qaframe, frame, fibermap, fiberflat)
+                            qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                            qa_plots.frame_fiberflat(qafig, qaframe, frame, frame.fibermap, fiberflat)
                     # SkySub QA
                     if qatype == 'qa_data':
                         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
@@ -94,9 +92,12 @@ class QA_Prod(object):
                             qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
                     # FluxCalib QA
                     if qatype == 'qa_data':
+                        # Standard stars
+                        stdstar_fil = meta.findfile('stdstars', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                        model_tuple=read_stdstar_models(stdstar_fil)
                         flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                         fluxcalib = read_flux_calibration(flux_fil)
-                        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))#, indiv_stars))
+                        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, model_tuple))#, indiv_stars))
                     # Write
                     write_qa_frame(qafile, qaframe)
 

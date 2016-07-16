@@ -340,7 +340,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     # chi2 = sum (sqrtw*data_flux -diag(sqrtw)*R*diag(model_flux)*calib)
 
     sqrtw=np.sqrt(current_ivar)
-    sqrtwmodel=np.sqrt(current_ivar)*convolved_model_flux # used only for QA
+    #sqrtwmodel=np.sqrt(current_ivar)*convolved_model_flux # used only for QA
     sqrtwflux=np.sqrt(current_ivar)*stdstars.flux
 
     # diagonal sparse matrices
@@ -569,13 +569,13 @@ def ZP_from_calib(wave, calib):
     # Return
     return ZP_AB
 
-def qa_fluxcalib(param, frame, fluxcalib):#, indiv_stars):
+def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     """
     Args:
         param: dict of QA parameters
         frame: Frame
         fluxcalib: FluxCalib
-        indiv_stars : tuple of data on individual star fibers
+        model_tuple : tuple of model data for standard stars (read from stdstars-...fits)
 
     Returns:
         qadict: dict of QA outputs
@@ -583,30 +583,48 @@ def qa_fluxcalib(param, frame, fluxcalib):#, indiv_stars):
 
     """
     log = get_logger()
-
     qadict = {}
 
+    # Unpack model
+    input_model_flux,input_model_wave,input_model_fibers=model_tuple
+
     # Calculate ZP for mean spectrum
-    import pdb
-    pdb.set_trace()
-    ZP_AB = ZP_from_calib(fluxcalib.wave, fluxcalib.meancalib)  # erg/s/cm^2/A
+    medcalib = np.median(fluxcalib.calib,axis=0)
+    ZP_AB = ZP_from_calib(fluxcalib.wave, medcalib)  # erg/s/cm^2/A
+    nwave = fluxcalib.wave.size
 
     # ZP at fiducial wavelength (AB mag for 1 photon/s/A)
     iZP = np.argmin(np.abs(fluxcalib.wave-param['ZP_WAVE']))
     qadict['ZP'] = float(np.median(ZP_AB[iZP-10:iZP+10]))
 
+    # Standard stars
+    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    stdstars = frame[stdfibers]
+    nstds = len(stdfibers)
+
     # Unpack star data
-    sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
+    #sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
+    # resample model to data grid and convolve by resolution
+    model_flux=np.zeros((nstds, nwave))
+    convolved_model_flux=np.zeros((nstds, nwave))
+    for fiber in range(model_flux.shape[0]) :
+        model_flux[fiber]=resample_flux(stdstars.wave,input_model_wave,input_model_flux[fiber])
+        convolved_model_flux[fiber]=stdstars.R[fiber].dot(model_flux[fiber])
+
 
     # RMS
-    nstars = sqrtwflux.shape[0]
-    qadict['NSTARS_FIBER'] = int(nstars)
-    ZP_stars = np.zeros_like(sqrtwflux)
-    ZP_fiducial = np.zeros(nstars)
-    for ii in range(nstars):
+    qadict['NSTARS_FIBER'] = int(nstds)
+    ZP_stars = np.zeros_like(stdstars.flux)
+    import pdb
+    pdb.set_trace()
+    ZP_fiducial = np.zeros(nstds)
+    for ii in range(nstds):
+        # Model flux
+        model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
+        convolved_model_flux=stdstars.R[ii].dot(model_flux)
         # Good pixels
-        gdp = current_ivar[ii, :] > 0.
-        icalib = sqrtwflux[ii, gdp] / sqrtwmodel[ii, gdp]
+        gdp = stdstars.ivar[ii, :] > 0.
+        icalib = stdstars.flux[ii, gdp] / convolved_model_flux[ii, gdp]
         i_wave = fluxcalib.wave[gdp]
         ZP_stars = ZP_from_calib(i_wave, icalib)
         iZP = np.argmin(np.abs(i_wave-param['ZP_WAVE']))
