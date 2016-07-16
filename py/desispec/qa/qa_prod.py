@@ -38,12 +38,23 @@ class QA_Prod(object):
         """
         self.specprod_dir = specprod_dir
 
-    def remake_frame_qa(self):
+    def remake_frame_qa(self, remake_plots=False):
         """ Work through the Production and remake QA for all frames
 
+        Parameters:
+            remake_plots: bool, optional
+              Remake the plots too?
         Returns:
 
         """
+        # imports
+        from desispec.io.qa import load_qa_frame, write_qa_frame
+        from desispec.io.fiberflat import read_fiberflat
+        from desispec.io.sky import read_sky
+        from desispec.io.fluxcalibration import read_flux_calibration
+        from desispec.qa import qa_plots
+        from desispec.io import read_fibermap
+
         # Loop on nights
         path_nights = glob.glob(self.specprod_dir+'/exposures/*')
         nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
@@ -55,10 +66,39 @@ class QA_Prod(object):
                 for camera,frame_fil in frames_dict.items():
                     # Load frame
                     frame = read_frame(frame_fil)
+                    if frame.meta['FLAVOR'] in ['flat','arc']:
+                        qatype = 'qa_calib'
+                    else:
+                        qatype = 'qa_data'
+                    qafile = meta.findfile(qatype, night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                    # Load
+                    qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
                     # Flat QA
-                    fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                    pdb.set_trace()
-                    #fiberflat =
+                    if frame.meta['FLAVOR'] in ['flat']:
+                        fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                        fiberflat = read_fiberflat(fiberflat_fil)
+                        qaframe.run_qa('FIBERFLAT', (frame, fiberflat))
+                        if remake_plots:
+                            qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                            fibermap_fil = meta.findfile('fibermap', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                            # Do it
+                            fibermap = read_fibermap(fibermap_fil)
+                            qa_plots.frame_fiberflat(qafig, qaframe, frame, fibermap, fiberflat)
+                    # SkySub QA
+                    if qatype == 'qa_data':
+                        sky_fil = meta.findfile('sky', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                        skymodel = read_sky(sky_fil)
+                        qaframe.run_qa('SKYSUB', (frame, skymodel))
+                        if remake_plots:
+                            qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                            qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
+                    # FluxCalib QA
+                    if qatype == 'qa_data':
+                        flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                        fluxcalib = read_flux_calibration(flux_fil)
+                        #qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, indiv_stars))
+                    # Write
+                    write_qa_frame(qafile, qaframe)
 
     def slurp(self, remake=False, remove=True):
         """ Slurp all the individual QA files into one master QA file

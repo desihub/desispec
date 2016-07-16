@@ -30,6 +30,8 @@ def write_fiberflat(outfile,fiberflat,header=None):
         hdr = fitsheader(fiberflat.header)
     else:
         hdr = fitsheader(header)
+    if fiberflat.chi2pdf is not None:
+        hdr['chi2pdf'] = float(fiberflat.chi2pdf)
 
     add_dependencies(hdr)
 
