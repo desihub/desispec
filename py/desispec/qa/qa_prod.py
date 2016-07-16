@@ -96,7 +96,7 @@ class QA_Prod(object):
                     if qatype == 'qa_data':
                         flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                         fluxcalib = read_flux_calibration(flux_fil)
-                        #qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, indiv_stars))
+                        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))#, indiv_stars))
                     # Write
                     write_qa_frame(qafile, qaframe)
 

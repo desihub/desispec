@@ -468,8 +468,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     mask = (ccalibivar==0).astype(np.int32)
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration)), (
-        sqrtwmodel, sqrtwflux, current_ivar, chi2)
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration))\
+        #, (sqrtwmodel, sqrtwflux, current_ivar, chi2)
 
 
 
@@ -557,7 +557,7 @@ def ZP_from_calib(wave, calib):
     # Return
     return ZP_AB
 
-def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
+def qa_fluxcalib(param, frame, fluxcalib):#, indiv_stars):
     """
     Args:
         param: dict of QA parameters
@@ -575,6 +575,8 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
     qadict = {}
 
     # Calculate ZP for mean spectrum
+    import pdb
+    pdb.set_trace()
     ZP_AB = ZP_from_calib(fluxcalib.wave, fluxcalib.meancalib)  # erg/s/cm^2/A
 
     # ZP at fiducial wavelength (AB mag for 1 photon/s/A)
