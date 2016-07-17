@@ -500,7 +500,7 @@ class FluxCalib(object):
 
         The calib vector should be such that
 
-            [erg/s/cm^2/A] = [photons/A] / calib
+            [1e-17 erg/s/cm^2/A] = [photons/A] / calib
         """
         assert wave.ndim == 1
         assert calib.ndim == 2
@@ -563,7 +563,7 @@ def ZP_from_calib(wave, calib):
       ZP_AB: 1D array of ZP values in AB magnitudes
 
     """
-    ZP_flambda = 1. / calib  # erg/s/cm^2/A
+    ZP_flambda = 1e-17 / calib  # erg/s/cm^2/A
     ZP_fnu = ZP_flambda * wave**2 / (2.9979e18)  # c in A/s
     ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
     # Return

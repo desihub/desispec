@@ -4,8 +4,7 @@
 from __future__ import print_function, absolute_import, division, unicode_literals
 
 import numpy as np
-import os, glob
-import pdb
+import glob
 
 from desispec.io import get_exposures
 from desispec.io import get_files
@@ -18,19 +17,12 @@ log=get_logger()
 
 
 class QA_Prod(object):
-    def __init__(self, specprod_dir, in_data=None):
+    def __init__(self, specprod_dir):
         """ Class to organize and execute QA for a DESI production
 
         Args:
-            expid: int -- Exposure ID
-            night: str -- YYYYMMDD
-            flavor: str
-              exposure type (e.g. flat, arc, science)
             specprod_dir(str): Path containing the exposures/ directory to use. If the value
                 is None, then the value of :func:`specprod_root` is used instead.
-            in_data: dict, optional -- Input data
-              Mainly for reading from disk
-
         Notes:
 
         Attributes:
