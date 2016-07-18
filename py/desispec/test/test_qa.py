@@ -8,7 +8,7 @@ import pdb
 import numpy as np
 import os
 from desispec.frame import Frame
-from desispec.qa import QA_Frame, QA_Exposure, QA_Brick
+from desispec.qa import QA_Frame, QA_Exposure, QA_Brick, QA_Prod
 from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure
 #from uuid import uuid4
 from shutil import rmtree
@@ -168,6 +168,9 @@ class TestQA(unittest.TestCase):
         #
         qabrck.init_zbest()
         assert qabrck.data['ZBEST']['PARAM']['MAX_NFAIL'] > 0
+
+    def test_init_qa_prod(self):
+        qaprod = QA_Prod(self.testDir)
 
     def runTest(self):
         pass

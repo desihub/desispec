@@ -1,11 +1,12 @@
-==================
-desisim change log
-==================
+===================
+desispec change log
+===================
 
 0.8.1 (unreleased)
 ------------------
 
-* no changes yet
+* added QA_Prod
+* refactor of fluxcalib QA
 
 0.8.0 (2016-07-14)
 ------------------
