@@ -85,7 +85,11 @@ class QA_Exposure(object):
 
     def load_qa_data(self, remove=True):
         """ Load the QA data files for a given exposure (currently yaml)
+        Args:
+            remove: bool, optional
+              Remove frame files
         """
+
         from desispec import io as desiio
         qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
                                   expid=self.expid,
