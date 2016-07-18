@@ -10,6 +10,7 @@ from desispec.io import get_exposures
 from desispec.io import get_files
 from desispec.io import read_frame
 from desispec.io import meta
+from desispec.io import write_qa_prod
 
 from desispec.log import get_logger
 
@@ -26,9 +27,11 @@ class QA_Prod(object):
         Notes:
 
         Attributes:
-            All input args become object attributes.
+            qa_exps : list
+              List of QA_Exposure classes, one per exposure in production
         """
         self.specprod_dir = specprod_dir
+        self.qa_exps = []
 
     def remake_frame_qa(self, remake_plots=False):
         """ Work through the Production and remake QA for all frames
@@ -99,7 +102,7 @@ class QA_Prod(object):
                     write_qa_frame(qafile, qaframe)
             #pdb.set_trace()
 
-    def slurp(self, remake=False, remove=True):
+    def slurp(self, remake=False, remove=True, **kwargs):
         """ Slurp all the individual QA files into one master QA file
         Args:
             remake: bool, optional
@@ -110,6 +113,36 @@ class QA_Prod(object):
         Returns:
 
         """
+        from desispec.qa import QA_Exposure
+        import pdb
+        # Remake?
+        if remake:
+            self.remake_frame_qa(**kwargs)
+        # Loop on nights
+        path_nights = glob.glob(self.specprod_dir+'/exposures/*')
+        nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
+        # Reset
+        log.info("Resetting qa_exps in qa_prod")
+        self.qa_exps = []
+        # Loop
+        for night in nights:
+            # Loop on exposures
+            for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
+                frames_dict = get_files(filetype = str('frame'), night = night,
+                                        expid = exposure, specprod_dir = self.specprod_dir)
+                if len(frames_dict.keys()) == 0:
+                    continue
+                # Load any frame (for the type)
+                key = frames_dict.keys()[0]
+                frame_fil = frames_dict[key]
+                frame = read_frame(frame_fil)
+                qa_exp = QA_Exposure(exposure, night, frame.meta['FLAVOR'],
+                                         specprod_dir=self.specprod_dir)
+                qa_exp.load_qa_data(remove=remove)
+                # Append
+                self.qa_exps.append(qa_exp)
+        # Write
+        write_qa_prod(outfile, self)
 
     def __repr__(self):
         """ Print formatting
