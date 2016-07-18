@@ -143,8 +143,7 @@ class QA_Prod(object):
                 frame_fil = frames_dict[key]
                 frame = read_frame(frame_fil)
                 qa_exp = QA_Exposure(exposure, night, frame.meta['FLAVOR'],
-                                         specprod_dir=self.specprod_dir)
-                qa_exp.load_qa_data(remove=remove)
+                                         specprod_dir=self.specprod_dir, remove=remove)
                 # Append
                 self.qa_exps.append(qa_exp)
         # Write
