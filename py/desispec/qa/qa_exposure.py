@@ -95,6 +95,7 @@ class QA_Exposure(object):
             qa_frame = desiio.load_qa_frame(qadata_path)
             # Remove?
             if remove:
+                import pdb; pdb.set_trace()
                 os.remove(qadata_path)
             #qa_data = desiio.read_qa_data(qadata_path)
             # Test

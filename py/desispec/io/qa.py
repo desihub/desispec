@@ -150,12 +150,12 @@ def write_qa_frame(outfile, qaframe):
     return outfile
 
 
-def write_qa_exposure(outfile, qaexp, ret_dict=False):
+def write_qa_exposure(outroot, qaexp, ret_dict=False):
     """Write QA for a given exposure
 
     Args:
-        outfile : str
-          filename
+        outroot : str
+          filename without format extension
         qa_exp : QA_Exposure object
         ret_dict : bool, optional
           Return dict only?  [for qa_prod, mainly]
@@ -173,6 +173,7 @@ def write_qa_exposure(outfile, qaexp, ret_dict=False):
         return odict
     # Simple yaml
     ydict = yamlify(odict)
+    outfile = outroot+'.yaml'
     outfile = makepath(outfile, 'qa')
     with open(outfile, 'w') as yamlf:
         yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
@@ -180,29 +181,54 @@ def write_qa_exposure(outfile, qaexp, ret_dict=False):
     return outfile
 
 
-def write_qa_prod(outfile, qaprod):
+def write_qa_prod(outroot, qaprod):
     """Write QA for a given production
 
     Args:
-        outfile : str
-          filename
+        outroot : str
+          filename without format extension
         qa_prod : QA_Prod object
+    Returns:
+        outfile or odict : str or dict
     """
+    outfile = outroot+'.yaml'
     outfile = makepath(outfile, 'qa')
 
     # Loop on exposures
     odict = {}
     for qaexp in qaprod.qa_exps:
-        # Generate the dict
+        # Get the exposure dict
         idict = write_qa_exposure('foo', qaexp, ret_dict=True)
+        odict = combineDicts(odict, idict)
+        """
+        # Check
+        assert len(idict.keys()) == 1
+        night = idict.keys()[0]
         # Add
-        odict.update(idict)
+        if night not in odict.keys():
+            odict[night] = {}
+        assert len(idict[night].keys()) == 1
+        expid = idict[night].keys()[0]
+        odict[night][expid] = idict[night][expid]
+        """
     #
-    import pdb
-    pdb.set_trace()
     ydict = yamlify(odict)
+    import pdb; pdb.set_trace()
     # Simple yaml
     with open(outfile, 'w') as yamlf:
         yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+    log.info('Wrote QA_Prod file: {:s}'.format(outfile))
 
     return outfile
+
+def combineDicts(dictionary1, dictionary2):
+    output = {}
+    for item, value in dictionary1.iteritems():
+        if dictionary2.has_key(item):
+            if isinstance(dictionary2[item], dict):
+                output[item] = combineDicts(value, dictionary2.pop(item))
+        else:
+            output[item] = value
+    for item, value in dictionary2.iteritems():
+         output[item] = value
+    return output

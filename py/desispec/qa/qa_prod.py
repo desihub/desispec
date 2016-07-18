@@ -4,7 +4,7 @@
 from __future__ import print_function, absolute_import, division, unicode_literals
 
 import numpy as np
-import glob
+import glob, os
 
 from desispec.io import get_exposures
 from desispec.io import get_files
@@ -14,7 +14,7 @@ from desispec.io import write_qa_prod
 
 from desispec.log import get_logger
 
-log=get_logger()
+log = get_logger()
 
 
 class QA_Prod(object):
@@ -31,14 +31,17 @@ class QA_Prod(object):
               List of QA_Exposure classes, one per exposure in production
         """
         self.specprod_dir = specprod_dir
+        tmp = specprod_dir.split('/')
+        self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
         self.qa_exps = []
 
-    def remake_frame_qa(self, remake_plots=False):
+    def remake_frame_qa(self, remake_plots=False, clobber=True):
         """ Work through the Production and remake QA for all frames
 
         Parameters:
             remake_plots: bool, optional
               Remake the plots too?
+            clobber: bool, optional
         Returns:
 
         """
@@ -67,13 +70,16 @@ class QA_Prod(object):
                     else:
                         qatype = 'qa_data'
                     qafile = meta.findfile(qatype, night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                    if (not clobber) & os.path.isfile(qafile):
+                        log.info("qafile={:s} exists.  Not over-writing.  Consider clobber=True".format(qafile))
+                        continue
                     # Load
                     qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
                     # Flat QA
                     if frame.meta['FLAVOR'] in ['flat']:
                         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                         fiberflat = read_fiberflat(fiberflat_fil)
-                        qaframe.run_qa('FIBERFLAT', (frame, fiberflat))
+                        qaframe.run_qa('FIBERFLAT', (frame, fiberflat), clobber=clobber)
                         if remake_plots:
                             # Do it
                             qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
@@ -142,7 +148,8 @@ class QA_Prod(object):
                 # Append
                 self.qa_exps.append(qa_exp)
         # Write
-        write_qa_prod(outfile, self)
+        outroot = self.specprod_dir+'/'+self.prod_name+'_qa'
+        write_qa_prod(outroot, self)
 
     def __repr__(self):
         """ Print formatting
