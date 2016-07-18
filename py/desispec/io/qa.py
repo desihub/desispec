@@ -188,6 +188,7 @@ def write_qa_prod(outroot, qaprod):
         outroot : str
           filename without format extension
         qa_prod : QA_Prod object
+
     Returns:
         outfile or odict : str or dict
     """
