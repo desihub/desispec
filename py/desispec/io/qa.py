@@ -150,26 +150,64 @@ def write_qa_frame(outfile, qaframe):
     return outfile
 
 
-def write_qa_exposure(outfile, qaexp):
+def write_qa_exposure(outroot, qaexp, ret_dict=False):
     """Write QA for a given exposure
 
     Args:
-        outfile : str
-          filename
-        qa_exp : QA_Frame object, with the following attributes
-            qa_data: dict of QA info
+        outroot : str
+          filename without format extension
+        qa_exp : QA_Exposure object
+        ret_dict : bool, optional
+          Return dict only?  [for qa_prod, mainly]
+    Returns:
+        outfile or odict : str or dict
     """
-    outfile = makepath(outfile, 'qa')
-
     # Generate the dict
     odict = {qaexp.night: {qaexp.expid: {}}}
     odict[qaexp.night][qaexp.expid]['flavor'] = qaexp.flavor
     cameras = qaexp.data['frames'].keys()
     for camera in cameras:
         odict[qaexp.night][qaexp.expid][camera] = qaexp.data['frames'][camera]
-    ydict = yamlify(odict)
+    # Return dict only?
+    if ret_dict:
+        return odict
     # Simple yaml
+    ydict = yamlify(odict)
+    outfile = outroot+'.yaml'
+    outfile = makepath(outfile, 'qa')
     with open(outfile, 'w') as yamlf:
         yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
 
     return outfile
+
+
+def write_qa_prod(outroot, qaprod):
+    """Write QA for a given production
+
+    Args:
+        outroot : str
+          filename without format extension
+        qa_prod : QA_Prod object
+
+    Returns:
+        outfile or odict : str or dict
+    """
+    from desiutil.io import combine_dicts
+    outfile = outroot+'.yaml'
+    outfile = makepath(outfile, 'qa')
+
+    # Loop on exposures
+    odict = {}
+    for qaexp in qaprod.qa_exps:
+        # Get the exposure dict
+        idict = write_qa_exposure('foo', qaexp, ret_dict=True)
+        odict = combine_dicts(odict, idict)
+    ydict = yamlify(odict)
+    # Simple yaml
+    with open(outfile, 'w') as yamlf:
+        yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+    log.info('Wrote QA_Prod file: {:s}'.format(outfile))
+
+    return outfile
+
+

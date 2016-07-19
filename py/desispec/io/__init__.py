@@ -19,7 +19,7 @@ from .sky import read_sky, write_sky
 from .fiberflat import read_fiberflat, write_fiberflat
 from .fibermap import read_fibermap, write_fibermap, empty_fibermap
 from .brick import Brick
-from .qa import read_qa_frame, read_qa_data, write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure
+from .qa import read_qa_frame, read_qa_data, write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure, write_qa_prod
 from .zfind import read_zbest, write_zbest
 from .image import read_image, write_image
 from .util import (header2wave, fitsheader, native_endian, makepath,

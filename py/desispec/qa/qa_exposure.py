@@ -13,7 +13,7 @@ log=get_logger()
 
 
 class QA_Exposure(object):
-    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None):
+    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None, **kwargs):
         """
         Class to organize and execute QA for a DESI Exposure
 
@@ -48,7 +48,7 @@ class QA_Exposure(object):
         if in_data is None:
             self.data = dict(flavor=self.flavor, expid=self.expid,
                              night=self.night, frames={})
-            self.load_qa_data()
+            self.load_qa_data(**kwargs)
         else:
             assert isinstance(in_data,dict)
             self.data = in_data
@@ -85,7 +85,11 @@ class QA_Exposure(object):
 
     def load_qa_data(self, remove=True):
         """ Load the QA data files for a given exposure (currently yaml)
+        Args:
+            remove: bool, optional
+              Remove QA frame files
         """
+
         from desispec import io as desiio
         qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
                                   expid=self.expid,
@@ -95,8 +99,8 @@ class QA_Exposure(object):
             qa_frame = desiio.load_qa_frame(qadata_path)
             # Remove?
             if remove:
+                #import pdb; pdb.set_trace()
                 os.remove(qadata_path)
-            #qa_data = desiio.read_qa_data(qadata_path)
             # Test
             for key in ['expid','night']:
                 assert getattr(qa_frame,key) == getattr(self, key)

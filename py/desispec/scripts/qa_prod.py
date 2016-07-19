@@ -14,8 +14,12 @@ def parse(options=None):
                         help = 'Path containing the exposures/directory to use')
     parser.add_argument('--remake_frame', type = int, default = 0,
                         help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')
-    #parser.add_argument('--outfile', type = str, default = None, required=True,
-    #                    help = 'path of DESI sky fits file')
+    parser.add_argument('--slurp', default = False, action='store_true',
+                        help = 'slurp production QA files into one?')
+    parser.add_argument('--remove', default = False, action='store_true',
+                        help = 'remove files when running?')
+    parser.add_argument('--clobber', default = True, action='store_true',
+                        help = 'clobber existing files?')
     #parser.add_argument('--qafile', type = str, default = None, required=False,
     #                    help = 'path of QA file. Will calculate for Sky Subtraction')
     #parser.add_argument('--qafig', type = str, default = None, required=False,
@@ -45,7 +49,9 @@ def main(args) :
         else:
             remake_plots = False
         # Run
-        qa_prod.remake_frame_qa(remake_plots=remake_plots)
+        qa_prod.remake_frame_qa(remake_plots=remake_plots, clobber=args.clobber)
 
-
+    # Slurp?
+    if args.slurp:
+        qa_prod.slurp(remake=(args.remake_frame > 0), remove=args.remove)
 
