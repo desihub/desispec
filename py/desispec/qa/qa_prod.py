@@ -27,11 +27,59 @@ class QA_Prod(object):
         Attributes:
             qa_exps : list
               List of QA_Exposure classes, one per exposure in production
+            data : dict
         """
         self.specprod_dir = specprod_dir
         tmp = specprod_dir.split('/')
         self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
         self.qa_exps = []
+        #
+        self.data = {}
+
+    def get_qa_array(self, qatype, metric, nights='all', cameras='all'):
+        """ Generate an array of QA values from .data
+        Args:
+            qatype: str
+              FIBERFLAT, SKYSUB
+            metric: str
+            nights: str or list of str, optional
+            cameras: str or list of str, optional
+              'b', 'r', 'z'
+
+        Returns:
+            array: ndarray
+        """
+        import pdb
+        out_list = []
+        # Nights
+        for night in self.data.keys():
+            if (night not in nights) and (nights != 'all'):
+                continue
+            # Exposures
+            for expid in self.data[night].keys():
+                # Cameras
+                for camera in self.data[night][expid].keys():
+                    if camera == 'flavor':
+                        continue
+                    if (camera[0] not in cameras) and (cameras != 'all'):
+                        continue
+                    # Grab
+                    try:
+                        out_list.append(self.data[night][expid][camera][qatype]['QA'][metric])
+                    except KeyError:  # Each exposure has limited qatype
+                        pass
+                    except TypeError:  # Each exposure has limited qatype
+                        pdb.set_trace()
+        # Return
+        return np.array(out_list)
+
+    def load_data(self):
+        """ Load QA data from disk
+        """
+        from desispec.io.qa import load_qa_prod
+        #
+        inroot = self.specprod_dir+'/'+self.prod_name+'_qa'
+        self.data = load_qa_prod(inroot)
 
     def remake_frame_qa(self, remake_plots=False, clobber=True):
         """ Work through the Production and remake QA for all frames
