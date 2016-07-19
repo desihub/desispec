@@ -24,8 +24,6 @@ def parse(options=None):
                         help='Generate channel histogram(s)')
     #parser.add_argument('--qafile', type = str, default = None, required=False,
     #                    help = 'path of QA file. Will calculate for Sky Subtraction')
-    #parser.add_argument('--qafig', type = str, default = None, required=False,
-    #                    help = 'path of QA figure file')
 
     args = None
     if options is None:
