@@ -95,7 +95,7 @@ run_states = [
 ]
 
 
-def qa_path(datafile, suffix="_QA", figformat='pdf'):
+def qa_path(datafile, suffix="_QA", figformat='pdf', qaformat='yaml'):
     '''
     Transforms a data filename into the QA filenames
     
@@ -112,7 +112,7 @@ def qa_path(datafile, suffix="_QA", figformat='pdf'):
     dir = os.path.dirname(datafile)
     base = os.path.basename(datafile)
     root, ext = os.path.splitext(base)
-    qafile = os.path.join(dir, "{}{}.yaml".format(root, suffix))
+    qafile = os.path.join(dir, "{}{}.{}".format(root, suffix, qaformat))
     qafig = os.path.join(dir, "{}{}.{}".format(root, suffix, figformat))
     return qafile, qafig
 

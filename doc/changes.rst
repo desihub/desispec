@@ -5,7 +5,7 @@ desisim change log
 0.8.1 (unreleased)
 ------------------
 
-* no changes yet
+* fixed pipeline QA figure output (pdf vs. yaml)
 
 0.8.0 (2016-07-14)
 ------------------
