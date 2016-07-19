@@ -7,6 +7,7 @@ desispec change log
 
 * added QA_Prod
 * refactor of fluxcalib QA
+* fixed pipeline QA figure output (pdf vs. yaml)
 
 0.8.0 (2016-07-14)
 ------------------
