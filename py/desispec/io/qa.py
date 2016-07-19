@@ -202,20 +202,7 @@ def write_qa_prod(outroot, qaprod):
         # Get the exposure dict
         idict = write_qa_exposure('foo', qaexp, ret_dict=True)
         odict = combineDicts(odict, idict)
-        """
-        # Check
-        assert len(idict.keys()) == 1
-        night = idict.keys()[0]
-        # Add
-        if night not in odict.keys():
-            odict[night] = {}
-        assert len(idict[night].keys()) == 1
-        expid = idict[night].keys()[0]
-        odict[night][expid] = idict[night][expid]
-        """
-    #
     ydict = yamlify(odict)
-    import pdb; pdb.set_trace()
     # Simple yaml
     with open(outfile, 'w') as yamlf:
         yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
