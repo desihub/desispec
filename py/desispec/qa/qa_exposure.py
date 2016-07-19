@@ -87,7 +87,7 @@ class QA_Exposure(object):
         """ Load the QA data files for a given exposure (currently yaml)
         Args:
             remove: bool, optional
-              Remove frame files
+              Remove QA frame files
         """
 
         from desispec import io as desiio
