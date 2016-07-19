@@ -1,5 +1,4 @@
-"""
-Module for QA plots
+""" Module for QA plots
 """
 from __future__ import print_function, absolute_import, division, unicode_literals
 
@@ -460,15 +459,16 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
+
 def show_meta(ax, qaframe, qaflavor, outfil):
     """ Show meta data on the figure
 
     Args:
-        ax:
-        qadict:
+        ax: matplotlib.ax
+        qaframe: QA_Frame
+        qaflavor: str
 
     Returns:
-        Stuff?
     """
     # Meta
     xlbl = 0.05
@@ -484,6 +484,7 @@ def show_meta(ax, qaframe, qaflavor, outfil):
         ax.text(xlbl+0.1, ylbl, key+': '+str(qaframe.qa_data[qaflavor]['QA'][key]),
             transform=ax.transAxes, ha='left', fontsize='x-small')
 
+
 def get_sty_otype():
     """Styles for plots"""
     sty_otype = dict(ELG={'color':'green', 'lbl':'ELG'},
@@ -493,3 +494,73 @@ def get_sty_otype():
                      QSO_L={'color':'blue', 'lbl':'QSO z>2.1'},
                      QSO_T={'color':'cyan', 'lbl':'QSO z<2.1'})
     return sty_otype
+
+
+def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None, close=True):
+    """ Generate a series of histrograms (one per channel)
+
+    Args:
+        qa_prod: QA_Prod class
+        qatype: str
+        metric: str
+        xlim: tuple, optional
+        outfile: str, optional
+        pp: PdfPages, optional
+        close: bool, optional
+
+    Returns:
+
+    """
+    # Setup
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2,2)
+
+    # Loop on channel
+    clrs = dict(b='blue', r='red', z='purple')
+    for qq, channel in enumerate(['b', 'r', 'z']):
+        ax = plt.subplot(gs[qq])
+        #ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
+
+        # Grab QA
+        qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
+        # Histogram
+        ax.hist(qa_arr, color=clrs[channel])
+        # Label
+        ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
+        ax.set_xlabel('{:s} :: {:s}'.format(qatype,metric))
+        if xlim is not None:
+            ax.set_xlim(xlim)
+
+    # Meta
+    ax = plt.subplot(gs[3])
+    ax.set_axis_off()
+    xlbl = 0.05
+    ylbl = 0.85
+    yoff = 0.1
+    ax.text(xlbl, ylbl, qa_prod.prod_name, color='black', transform=ax.transAxes, ha='left')
+    nights = ne_dict.keys()
+    #
+    ylbl -= yoff
+    ax.text(xlbl+0.1, ylbl, 'Nights: {}'.format(nights),
+            transform=ax.transAxes, ha='left', fontsize='x-small')
+    #
+    ylbl -= yoff
+    expids = []
+    for night in nights:
+        expids += ne_dict[night]
+    ax.text(xlbl+0.1, ylbl, 'Exposures: {}'.format(expids),
+            transform=ax.transAxes, ha='left', fontsize='x-small')
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
