@@ -192,6 +192,7 @@ def write_qa_prod(outroot, qaprod):
     Returns:
         outfile or odict : str or dict
     """
+    from desiutil.io import combineDicts
     outfile = outroot+'.yaml'
     outfile = makepath(outfile, 'qa')
 
