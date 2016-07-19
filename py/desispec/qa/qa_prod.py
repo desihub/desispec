@@ -9,7 +9,6 @@ import glob, os
 from desispec.io import get_exposures
 from desispec.io import get_files
 from desispec.io import read_frame
-from desispec.io import meta
 from desispec.io import write_qa_prod
 
 from desispec.log import get_logger
@@ -46,6 +45,7 @@ class QA_Prod(object):
 
         """
         # imports
+        from desispec.io import meta
         from desispec.io.qa import load_qa_frame, write_qa_frame
         from desispec.io.fiberflat import read_fiberflat
         from desispec.io.sky import read_sky
@@ -119,6 +119,7 @@ class QA_Prod(object):
         Returns:
 
         """
+        from desispec.io import meta
         from desispec.qa import QA_Exposure
         import pdb
         # Remake?
