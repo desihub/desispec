@@ -10,11 +10,13 @@ from desispec.quicklook import qlexceptions,qllogger
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
-class DarkSubtraction(pas.PipelineAlg):
+class Preproc_test(pas.PipelineAlg):
+
+    #- this is not real preproc, but only for testing QAs, now input taking pix = output pix
 
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Dark Subtraction"
+            name="Preproc Test"
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,im,im,config,logger)
 
@@ -23,148 +25,15 @@ class DarkSubtraction(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "DarkImage" not in kwargs:
-            raise qlexceptions.ParameterException("Need Dark Image")
-        return self.do_darkSubtract(args[0],**kwargs)
-
-    def get_default_config(self):
-        return {("DarkImage","%%DarkImage","Dark image to subtract")}
-        
-    def do_darkSubtract(self,rawimage,**kwargs):
-        """ 
-        rawimage: raw DESI object Should come from Read_rawimage
-        darkimage: DESI dark onject Should come from Read_darkframe
-        """
-
-        # subtract pixel by pixel dark # may need to subtract separately each quadrant. For now assuming 
-        # a single set.
-        darkimage=kwargs["DarkImage"]
-        rimage=rawimage.pix
-        camera=rawimage.camera
-        meta=rawimage.meta
-        dimage=darkimage.pix
-
-        rx=rimage.shape[0]
-        ry=rimage.shape[1]
-        value=np.zeros((rx,ry))
-    # check dimensionality:
-        assert rx ==dimage.shape[0]
-        assert ry==dimage.shape[1]
-        value=rimage-dimage
-        dknoise=dimage.std()  # or some values read from somewhere?
-        ivar_new=1./(rimage+dimage+dknoise**2)
-        mask=rawimage.mask
-        from desispec.image import Image as im
-        return im(value,ivar_new,mask,camera=camera,meta=meta)
-
-class PixelFlattening(pas.PipelineAlg):
-    from desispec.image import Image as im
-
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="Pixel Flattening"
-        from desispec.image import Image as im
-        pas.PipelineAlg.__init__(self,name,im,im,config,logger)
-    
-    def run(self,*args,**kwargs):        
-        if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
-        if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "PixelFlat" not in kwargs:
-            raise qlexceptions.ParameterException("Need Pixel Flat image")   
-        
-        #-export kwargs 
         input_image=args[0]
-        pixelflat=kwargs["PixelFlat"]
         
-        return self.run_pa(input_image,pixelflat)
+        return self.run_pa(input_image)
 
-    def run_pa(self,input_image,pixelflat): #- explicit arguments
-        """
-           input_image: image to apply pixelflat to
-           pixelflat object
-        """ 
-        return self.do_pixelFlat(input_image,pixelflat)
+    def run_pa(self,image):
+        return image
 
     def get_default_config(self):
-        return {("PixelFlat","%%PixelFlat","Pixel Flat image to apply")}
-
-    def do_pixelFlat(self,image, pixelflat):
-
-        """
-        image: image object typically after dark subtraction)
-        pixelflat: a pixel flat object
-        """
-        pflat=pixelflat.pix # should be read from desispec.io
-        camera=image.camera
-        meta=image.meta
-        rx=pflat.shape[0]
-        ry=pflat.shape[1]
-        
-    # check dimensionality
-        assert rx ==image.pix.shape[0]
-        assert ry==image.pix.shape[1]
-        value=image.pix/pflat
-        ivar=image.ivar 
-        #TODO ivar from pixel flat need to be propagated
-        mask=image.mask 
-        from desispec.image import Image as im
-        return im(value,ivar,mask,camera=camera,meta=meta)
-
-class BiasSubtraction(pas.PipelineAlg):
-    from desispec.image import Image as im
-
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="Bias Subtraction"
-        from desispec.image import Image as im
-        pas.PipelineAlg.__init__(self,name,im,im,config,logger)
-
-    def run(self,*args,**kwargs):
-        if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
-        if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "BiasImage" not in kwargs:
-            raise qlexceptions.ParameterException("Need Bias image")
-
-        input_image=args[0]
-        biasimage=kwargs["BiasImage"]
-
-        return self.run_pa(input_image,biasimage)
-
-    def run_pa(self,input_image,biasimage):
-        return self.do_biasSubtract(input_image,biasimage)
-
-    def get_default_config(self):
-        return {("BiasImage","%%BiasImage","Bias image to subtract")}
-
-    def do_biasSubtract(self,rawimage,biasimage):
-        """ rawimage: rawimage object
-        bias: bias object
-        Should this be similar to BOSS 4 quadrants?
-        """
-        # subtract pixel by pixel dark # may need to subtract separately each quadrant. For now assuming 
-        # a single set.
-
-        rimage=rawimage.pix
-        camera=rawimage.camera
-        meta=rawimage.meta
-        bimage=biasimage.pix
-
-        rx=rimage.shape[0]
-        ry=rimage.shape[1]
-        value=np.zeros((rx,ry))
-    # check dimensionality:
-        assert rx ==bimage.shape[0]
-        assert ry==bimage.shape[1]
-        value=rimage-bimage
-        dknoise=bimage.std()  # or some values read from somewhere?
-        ivar_new=1./(rimage+bimage+dknoise**2)
-        mask=rawimage.mask
-        from desispec.image import Image as im
-        return im(value,ivar_new,mask,camera=camera,meta=meta)
+        return {}
 
 
 class BootCalibration(pas.PipelineAlg):

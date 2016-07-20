@@ -413,7 +413,7 @@ class TestIO(unittest.TestCase):
                 if i == 'sky':
                     kwargs['camera'] = '{band}{spectrograph:d}'.format(**kwargs)
                 else:
-                    kwargs['camera'] = 'sp{spectrograph:d}'.format(**kwargs)
+                    kwargs['camera'] = '{spectrograph:d}'.format(**kwargs)
                 filenames1.append(desispec.io.findfile(i,**kwargs))
                 filenames2.append(os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                     os.environ['SPECPROD'],'exposures',kwargs['night'],

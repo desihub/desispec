@@ -340,7 +340,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     # chi2 = sum (sqrtw*data_flux -diag(sqrtw)*R*diag(model_flux)*calib)
 
     sqrtw=np.sqrt(current_ivar)
-    sqrtwmodel=np.sqrt(current_ivar)*convolved_model_flux # used only for QA
+    #sqrtwmodel=np.sqrt(current_ivar)*convolved_model_flux # used only for QA
     sqrtwflux=np.sqrt(current_ivar)*stdstars.flux
 
     # diagonal sparse matrices
@@ -408,7 +408,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
                 worst_entry=np.argmax(chi2[:,i])
                 current_ivar[worst_entry,i]=0
                 sqrtw[worst_entry,i]=0
-                sqrtwmodel[worst_entry,i]=0
+                #sqrtwmodel[worst_entry,i]=0
                 sqrtwflux[worst_entry,i]=0
                 nout_iter += 1
 
@@ -417,7 +417,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
             bad=(chi2>nsig_clipping**2)
             current_ivar *= (bad==0)
             sqrtw *= (bad==0)
-            sqrtwmodel *= (bad==0)
+            #sqrtwmodel *= (bad==0)
             sqrtwflux *= (bad==0)
             nout_iter += np.sum(bad)
 
@@ -480,8 +480,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     mask = (ccalibivar==0).astype(np.int32)
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration)), (
-        sqrtwmodel, sqrtwflux, current_ivar, chi2)
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration))\
+        #, (sqrtwmodel, sqrtwflux, current_ivar, chi2)
 
 
 
@@ -500,7 +500,7 @@ class FluxCalib(object):
 
         The calib vector should be such that
 
-            [erg/s/cm^2/A] = [photons/A] / calib
+            [1e-17 erg/s/cm^2/A] = [photons/A] / calib
         """
         assert wave.ndim == 1
         assert calib.ndim == 2
@@ -563,19 +563,19 @@ def ZP_from_calib(wave, calib):
       ZP_AB: 1D array of ZP values in AB magnitudes
 
     """
-    ZP_flambda = 1. / calib  # erg/s/cm^2/A
+    ZP_flambda = 1e-17 / calib  # erg/s/cm^2/A
     ZP_fnu = ZP_flambda * wave**2 / (2.9979e18)  # c in A/s
     ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
     # Return
     return ZP_AB
 
-def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
+def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     """
     Args:
         param: dict of QA parameters
         frame: Frame
         fluxcalib: FluxCalib
-        indiv_stars : tuple of data on individual star fibers
+        model_tuple : tuple of model data for standard stars (read from stdstars-...fits)
 
     Returns:
         qadict: dict of QA outputs
@@ -583,28 +583,44 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
 
     """
     log = get_logger()
-
     qadict = {}
 
+    # Unpack model
+    input_model_flux,input_model_wave,input_model_fibers=model_tuple
+
+    # Standard stars
+    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    stdstars = frame[stdfibers]
+    nstds = np.sum(stdfibers)
+    try:
+        assert np.array_equal(frame.fibers[stdfibers], input_model_fibers)
+    except AssertionError:
+        log.error("Bad indexing in standard stars")
+
     # Calculate ZP for mean spectrum
-    ZP_AB = ZP_from_calib(fluxcalib.wave, fluxcalib.meancalib)  # erg/s/cm^2/A
+    #medcalib = np.median(fluxcalib.calib,axis=0)
+    medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)
+    ZP_AB = ZP_from_calib(fluxcalib.wave, medcalib)  # erg/s/cm^2/A
+    nwave = fluxcalib.wave.size
 
     # ZP at fiducial wavelength (AB mag for 1 photon/s/A)
     iZP = np.argmin(np.abs(fluxcalib.wave-param['ZP_WAVE']))
     qadict['ZP'] = float(np.median(ZP_AB[iZP-10:iZP+10]))
 
     # Unpack star data
-    sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
+    #sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
 
     # RMS
-    nstars = sqrtwflux.shape[0]
-    qadict['NSTARS_FIBER'] = int(nstars)
-    ZP_stars = np.zeros_like(sqrtwflux)
-    ZP_fiducial = np.zeros(nstars)
-    for ii in range(nstars):
+    qadict['NSTARS_FIBER'] = int(nstds)
+    ZP_stars = np.zeros_like(stdstars.flux)
+    ZP_fiducial = np.zeros(nstds)
+    for ii in range(nstds):
+        # Model flux
+        model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
+        convolved_model_flux=stdstars.R[ii].dot(model_flux)
         # Good pixels
-        gdp = current_ivar[ii, :] > 0.
-        icalib = sqrtwflux[ii, gdp] / sqrtwmodel[ii, gdp]
+        gdp = stdstars.ivar[ii, :] > 0.
+        icalib = stdstars.flux[ii, gdp] / convolved_model_flux[gdp]
         i_wave = fluxcalib.wave[gdp]
         ZP_stars = ZP_from_calib(i_wave, icalib)
         iZP = np.argmin(np.abs(i_wave-param['ZP_WAVE']))
@@ -612,13 +628,12 @@ def qa_fluxcalib(param, frame, fluxcalib, indiv_stars):
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # MAX ZP Offset
-    stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
+    #stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
     ZPoffset = np.abs(ZP_fiducial-qadict['ZP'])
     qadict['MAX_ZP_OFF'] = [float(np.max(ZPoffset)),
                             int(stdfibers[np.argmax(ZPoffset)])]
     if qadict['MAX_ZP_OFF'] > param['MAX_ZP_OFF']:
         log.warn("Bad standard star ZP {:g}, in fiber {:d}".format(
                 qadict['MAX_ZP_OFF'][0], qadict['MAX_ZP_OFF'][1]))
-
     # Return
     return qadict

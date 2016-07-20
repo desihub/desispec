@@ -95,12 +95,26 @@ run_states = [
 ]
 
 
-def qa_path(datafile, suffix="_QA"):
+def qa_path(datafile, suffix="_QA", figformat='pdf', qaformat='yaml'):
+    '''
+    Transforms a data filename into the QA filenames
+    
+    Args:
+        datafile : full path to a data file
+        
+    Options:
+        suffix : add to the data file name before the extension
+        figformat : 'pdf', 'jpg', or 'png' format of figure
+    
+    Returns (qafile, qafig)
+        full path names to output QA data file (yaml) and plot files
+    '''
     dir = os.path.dirname(datafile)
     base = os.path.basename(datafile)
     root, ext = os.path.splitext(base)
-    qafile = os.path.join(dir, "{}{}.pdf".format(root, suffix))
-    return qafile
+    qafile = os.path.join(dir, "{}{}.{}".format(root, suffix, qaformat))
+    qafig = os.path.join(dir, "{}{}.{}".format(root, suffix, figformat))
+    return qafile, qafig
 
 
 def finish_task(name, node):
@@ -196,11 +210,12 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         arcpath = graph_path_pix(rawdir, firstarc)
         flatpath = graph_path_pix(rawdir, firstflat)
         outpath = graph_path_psfboot(proddir, name)
-        qapath = qa_path(outpath)
+        qafile, qafig = qa_path(outpath)
         options = {}
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
-        options['qafile'] = qapath
+        options['qafile'] = qafile
+        options['qafig'] = qafig
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
@@ -332,11 +347,12 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
             raise RuntimeError('fiberflat should have only one input frame')
         framefile = graph_path_frame(proddir, node['in'][0])
         outfile = graph_path_fiberflat(proddir, name)
-        qafile = qa_path(outfile)
+        qafile, qafig = qa_path(outfile)
 
         options = {}
         options['infile'] = framefile
         options['qafile'] = qafile
+        options['qafig'] = qafig
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -369,12 +385,13 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         framefile = graph_path_frame(proddir, frm[0])
         flatfile = graph_path_fiberflat(proddir, flat[0])
         outfile = graph_path_sky(proddir, name)
-        qafile = qa_path(outfile)
+        qafile, qafig = qa_path(outfile)
 
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
         options['qafile'] = qafile
+        options['qafig'] = qafig
         options['outfile'] = outfile
         options.update(opts)
         optarray = option_list(options)
@@ -408,7 +425,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
                 sky.append(input)
 
         outfile = graph_path_stdstars(proddir, name)
-        qafile = qa_path(outfile)
+        qafile, qafig = qa_path(outfile)
         
         framefiles = [graph_path_frame(proddir, x) for x in frm]
         skyfiles = [graph_path_sky(proddir, x) for x in sky]
@@ -420,6 +437,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['fiberflats'] = flatfiles
         options['outfile'] = outfile
         options['ncpu'] = str(default_nproc)
+        #- TODO: no QA for fitting standard stars yet
         
         options.update(opts)
         optarray = option_list(options)
@@ -464,12 +482,13 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         skyfile = graph_path_sky(proddir, sky[0])
         starfile = graph_path_stdstars(proddir, star[0])
         outfile = graph_path_calib(proddir, name)
-        qafile = qa_path(outfile)
+        qafile, qafig = qa_path(outfile)
 
         options = {}
         options['infile'] = framefile
         options['fiberflat'] = flatfile
         options['qafile'] = qafile
+        options['qafig'] = qafig
         options['sky'] = skyfile
         options['models'] = starfile
         options['outfile'] = outfile
@@ -539,10 +558,11 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
     elif step == 'zfind':
         brick = node['brick']
         outfile = graph_path_zbest(proddir, name)
-        qafile = qa_path(outfile)
+        qafile, qafig = qa_path(outfile)
         options = {}
         options['brick'] = brick
         options['outfile'] = outfile
+        #- TODO: no QA for desi_zfind yet
         options.update(opts)
         optarray = option_list(options)
 

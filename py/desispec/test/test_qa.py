@@ -8,7 +8,7 @@ import pdb
 import numpy as np
 import os
 from desispec.frame import Frame
-from desispec.qa import QA_Frame, QA_Exposure, QA_Brick
+from desispec.qa import QA_Frame, QA_Exposure, QA_Brick, QA_Prod
 from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure
 #from uuid import uuid4
 from shutil import rmtree
@@ -25,7 +25,7 @@ class TestQA(unittest.TestCase):
         cls.testDir = os.path.join(os.environ['HOME'],'desi_test_qa')
         cls.qafile_b0 = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-b0-{:08d}.yaml'.format(id,id)
         cls.qafile_b1 = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-b1-{:08d}.yaml'.format(id,id)
-        cls.qafile_exp = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-{:08d}.yaml'.format(id,id)
+        cls.qafile_exp = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-{:08d}'.format(id,id)
         cls.qafile_brick = cls.testDir+'/brick/3582m005/qa-3582m005.yaml'
         cls.flux_pdf = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-flux-{:08d}.pdf'.format(id,id)
 
@@ -168,6 +168,9 @@ class TestQA(unittest.TestCase):
         #
         qabrck.init_zbest()
         assert qabrck.data['ZBEST']['PARAM']['MAX_NFAIL'] > 0
+
+    def test_init_qa_prod(self):
+        qaprod = QA_Prod(self.testDir)
 
     def runTest(self):
         pass

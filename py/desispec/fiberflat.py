@@ -478,11 +478,18 @@ class FiberFlat(object):
         self.ivar = ivar
         self.mask = util.mask32(mask)
         self.meanspec = meanspec
-        self.chi2pdf = chi2pdf
 
         self.nspec, self.nwave = self.fiberflat.shape
         self.header = header
-        
+
+        if chi2pdf is not None:
+            self.chi2pdf = chi2pdf
+        else:
+            try:
+                self.chi2pdf = header['chi2pdf']
+            except (KeyError, TypeError):
+                self.chi2pdf = None
+
         self.spectrograph = spectrograph
         if fibers is None:
             self.fibers = self.spectrograph + np.arange(self.nspec, dtype=int)
@@ -513,7 +520,7 @@ class FiberFlat(object):
     def __repr__(self):
         """ Print formatting
         """
-        return ('{:s}: nspec={:d}, spectrograph={:s}'.format(
+        return ('{:s}: nspec={:d}, spectrograph={:d}'.format(
                 self.__class__.__name__, self.nspec, self.spectrograph))
 
 
@@ -540,7 +547,10 @@ def qa_fiberflat(param, frame, fiberflat):
         log.warn("Low counts in meanspec = {:g}".format(qadict['MAX_MEANSPEC']))
 
     # Record chi2pdf
-    qadict['CHI2PDF'] = float(fiberflat.chi2pdf)
+    try:
+        qadict['CHI2PDF'] = float(fiberflat.chi2pdf)
+    except TypeError:
+        qadict['CHI2PDF'] = 0.
 
     # N mask
     qadict['N_MASK'] = int(np.sum(fiberflat.mask > 0))

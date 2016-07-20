@@ -1,5 +1,4 @@
-"""
-Module for QA plots
+""" Module for QA plots
 """
 from __future__ import print_function, absolute_import, division, unicode_literals
 
@@ -8,8 +7,8 @@ from scipy import signal
 import scipy
 import pdb
 
+from desispec.log import get_logger
 from desispec import fluxcalibration as dsflux
-
 from desispec.util import set_backend
 set_backend()
 
@@ -280,21 +279,37 @@ def exposure_fluxcalib(outfil, qa_data):
     print('Wrote QA FluxCalib Exposure file: {:s}'.format(outfil))
 
 
-def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
+def frame_fluxcalib(outfil, qaframe, frame, fluxcalib, model_tuple):
     """ QA plots for Flux calibration in a Frame
 
     Args:
         outfil:
         qaframe:
+        frame:
 
     Returns:
         Stuff?
     """
+    from desispec.fluxcalibration import resample_flux
+    log = get_logger()
     # Unpack star data
-    sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
+    #sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
 
-    # Mean spectrum
-    ZP_AB = dsflux.ZP_from_calib(fluxcalib.wave, fluxcalib.meancalib)
+    # Unpack model
+    input_model_flux,input_model_wave,input_model_fibers=model_tuple
+
+    # Standard stars
+    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    stdstars = frame[stdfibers]
+    nstds = np.sum(stdfibers)
+    try:
+        assert np.array_equal(frame.fibers[stdfibers], input_model_fibers)
+    except AssertionError:
+        log.error("Bad indexing in standard stars")
+
+    # Median spectrum
+    medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)
+    ZP_AB = dsflux.ZP_from_calib(fluxcalib.wave, medcalib)
 
 
     # Plot
@@ -323,11 +338,13 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
     #    transform=ax_flux.transAxes, ha='center')
 
     # Other stars
-    nstars = sqrtwflux.shape[0]
-    for ii in range(nstars):
+    for ii in range(nstds):
+        # Model flux
+        model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
+        convolved_model_flux=stdstars.R[ii].dot(model_flux)
         # Good pixels
-        gdp = current_ivar[ii, :] > 0.
-        icalib = sqrtwflux[ii, gdp] / sqrtwmodel[ii, gdp]
+        gdp = stdstars.ivar[ii, :] > 0.
+        icalib = stdstars.flux[ii, gdp] / convolved_model_flux[gdp]
         i_wave = fluxcalib.wave[gdp]
         ZP_star = dsflux.ZP_from_calib(i_wave, icalib)
         # Plot
@@ -336,7 +353,7 @@ def frame_fluxcalib(outfil, qaframe, fluxcalib, indiv_stars):
         else:
             lbl = None
         ax0.plot(i_wave, ZP_star, ':', label=lbl)
-    ax0.plot(fluxcalib.wave, ZP_AB, color='black', label='Mean Calib')
+    ax0.plot(fluxcalib.wave, ZP_AB, color='black', label='Median Calib')
 
     # Legend
     legend = ax0.legend(loc='lower left', borderpad=0.3,
@@ -442,15 +459,16 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
+
 def show_meta(ax, qaframe, qaflavor, outfil):
     """ Show meta data on the figure
 
     Args:
-        ax:
-        qadict:
+        ax: matplotlib.ax
+        qaframe: QA_Frame
+        qaflavor: str
 
     Returns:
-        Stuff?
     """
     # Meta
     xlbl = 0.05
@@ -466,6 +484,7 @@ def show_meta(ax, qaframe, qaflavor, outfil):
         ax.text(xlbl+0.1, ylbl, key+': '+str(qaframe.qa_data[qaflavor]['QA'][key]),
             transform=ax.transAxes, ha='left', fontsize='x-small')
 
+
 def get_sty_otype():
     """Styles for plots"""
     sty_otype = dict(ELG={'color':'green', 'lbl':'ELG'},
@@ -475,3 +494,73 @@ def get_sty_otype():
                      QSO_L={'color':'blue', 'lbl':'QSO z>2.1'},
                      QSO_T={'color':'cyan', 'lbl':'QSO z<2.1'})
     return sty_otype
+
+
+def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None, close=True):
+    """ Generate a series of histrograms (one per channel)
+
+    Args:
+        qa_prod: QA_Prod class
+        qatype: str
+        metric: str
+        xlim: tuple, optional
+        outfile: str, optional
+        pp: PdfPages, optional
+        close: bool, optional
+
+    Returns:
+
+    """
+    # Setup
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2,2)
+
+    # Loop on channel
+    clrs = dict(b='blue', r='red', z='purple')
+    for qq, channel in enumerate(['b', 'r', 'z']):
+        ax = plt.subplot(gs[qq])
+        #ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
+
+        # Grab QA
+        qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
+        # Histogram
+        ax.hist(qa_arr, color=clrs[channel])
+        # Label
+        ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
+        ax.set_xlabel('{:s} :: {:s}'.format(qatype,metric))
+        if xlim is not None:
+            ax.set_xlim(xlim)
+
+    # Meta
+    ax = plt.subplot(gs[3])
+    ax.set_axis_off()
+    xlbl = 0.05
+    ylbl = 0.85
+    yoff = 0.1
+    ax.text(xlbl, ylbl, qa_prod.prod_name, color='black', transform=ax.transAxes, ha='left')
+    nights = ne_dict.keys()
+    #
+    ylbl -= yoff
+    ax.text(xlbl+0.1, ylbl, 'Nights: {}'.format(nights),
+            transform=ax.transAxes, ha='left', fontsize='x-small')
+    #
+    ylbl -= yoff
+    expids = []
+    for night in nights:
+        expids += ne_dict[night]
+    ax.text(xlbl+0.1, ylbl, 'Exposures: {}'.format(expids),
+            transform=ax.transAxes, ha='left', fontsize='x-small')
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
