@@ -181,6 +181,23 @@ def write_qa_exposure(outroot, qaexp, ret_dict=False):
     return outfile
 
 
+def load_qa_prod(inroot):
+    """Load QA for a given production
+
+    Args:
+        inroot : str
+          filename without format extension
+    Returns:
+        odict : dict
+    """
+    infile = inroot+'.yaml'
+    log.info("Loading QA prod file: {:s}".format(infile))
+    # Read
+    odict = read_qa_data(infile)
+    # Return
+    return odict
+
+
 def write_qa_prod(outroot, qaprod):
     """Write QA for a given production
 

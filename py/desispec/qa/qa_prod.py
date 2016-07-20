@@ -27,17 +27,78 @@ class QA_Prod(object):
         Attributes:
             qa_exps : list
               List of QA_Exposure classes, one per exposure in production
+            data : dict
         """
         self.specprod_dir = specprod_dir
         tmp = specprod_dir.split('/')
         self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
         self.qa_exps = []
+        #
+        self.data = {}
 
-    def remake_frame_qa(self, remake_plots=False, clobber=True):
-        """ Work through the Production and remake QA for all frames
+    def get_qa_array(self, qatype, metric, nights='all', channels='all'):
+        """ Generate an array of QA values from .data
+        Args:
+            qatype: str
+              FIBERFLAT, SKYSUB
+            metric: str
+            nights: str or list of str, optional
+            channels: str or list of str, optional
+              'b', 'r', 'z'
+
+        Returns:
+            array: ndarray
+            ne_dict: dict
+              dict of nights and exposures contributing to the array
+        """
+        import pdb
+        out_list = []
+        ne_dict = {}
+        # Nights
+        for night in self.data.keys():
+            if (night not in nights) and (nights != 'all'):
+                continue
+            # Exposures
+            for expid in self.data[night].keys():
+                # Cameras
+                for camera in self.data[night][expid].keys():
+                    if camera == 'flavor':
+                        continue
+                    if (camera[0] not in channels) and (channels != 'all'):
+                        continue
+                    # Grab
+                    try:
+                        val = self.data[night][expid][camera][qatype]['QA'][metric]
+                    except KeyError:  # Each exposure has limited qatype
+                        pass
+                    except TypeError:
+                        pdb.set_trace()
+                    else:
+                        if isinstance(val, (list,tuple)):
+                            out_list.append(val[0])
+                        else:
+                            out_list.append(val)
+                        # dict
+                        if night not in ne_dict.keys():
+                            ne_dict[night] = []
+                        if expid not in ne_dict[night]:
+                            ne_dict[night].append(expid)
+        # Return
+        return np.array(out_list), ne_dict
+
+    def load_data(self):
+        """ Load QA data from disk
+        """
+        from desispec.io.qa import load_qa_prod
+        #
+        inroot = self.specprod_dir+'/'+self.prod_name+'_qa'
+        self.data = load_qa_prod(inroot)
+
+    def make_frameqa(self, make_plots=False, clobber=True):
+        """ Work through the Production and make QA for all frames
 
         Parameters:
-            remake_plots: bool, optional
+            make_plots: bool, optional
               Remake the plots too?
             clobber: bool, optional
         Returns:
@@ -79,7 +140,7 @@ class QA_Prod(object):
                         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                         fiberflat = read_fiberflat(fiberflat_fil)
                         qaframe.run_qa('FIBERFLAT', (frame, fiberflat), clobber=clobber)
-                        if remake_plots:
+                        if make_plots:
                             # Do it
                             qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                             qa_plots.frame_fiberflat(qafig, qaframe, frame, fiberflat)
@@ -88,7 +149,7 @@ class QA_Prod(object):
                         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                         skymodel = read_sky(sky_fil)
                         qaframe.run_qa('SKYSUB', (frame, skymodel))
-                        if remake_plots:
+                        if make_plots:
                             qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                             qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
                     # FluxCalib QA
@@ -100,17 +161,17 @@ class QA_Prod(object):
                         flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                         fluxcalib = read_flux_calibration(flux_fil)
                         qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, model_tuple))#, indiv_stars))
-                        if remake_plots:
+                        if make_plots:
                             qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                             qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib, model_tuple)
                     # Write
                     write_qa_frame(qafile, qaframe)
             #pdb.set_trace()
 
-    def slurp(self, remake=False, remove=True, **kwargs):
+    def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files into one master QA file
         Args:
-            remake: bool, optional
+            make_frameqa: bool, optional
               Regenerate the individual QA files (at the frame level first)
             remove: bool, optional
               Remove
@@ -123,8 +184,8 @@ class QA_Prod(object):
         from desispec.io import write_qa_prod
         import pdb
         # Remake?
-        if remake:
-            self.remake_frame_qa(**kwargs)
+        if make_frameqa:
+            self.make_frameqa(**kwargs)
         # Loop on nights
         path_nights = glob.glob(self.specprod_dir+'/exposures/*')
         nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
