@@ -209,7 +209,7 @@ def write_qa_prod(outroot, qaprod):
     Returns:
         outfile or odict : str or dict
     """
-    from desiutil.io import combineDicts
+    from desiutil.io import combine_dicts
     outfile = outroot+'.yaml'
     outfile = makepath(outfile, 'qa')
 
@@ -218,7 +218,7 @@ def write_qa_prod(outroot, qaprod):
     for qaexp in qaprod.qa_exps:
         # Get the exposure dict
         idict = write_qa_exposure('foo', qaexp, ret_dict=True)
-        odict = combineDicts(odict, idict)
+        odict = combine_dicts(odict, idict)
     ydict = yamlify(odict)
     # Simple yaml
     with open(outfile, 'w') as yamlf:
