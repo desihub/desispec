@@ -485,34 +485,6 @@ class Sky_Continuum(MonitoringAlg):
         return {}
 
 
-class Count_Fibers(MonitoringAlg):
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="Count_Fibers"
-        from  desispec.frame import Frame as fr
-        MonitoringAlg.__init__(self,name,fr,config,logger)
-    def run(self,*args,**kwargs):
-        if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
-        if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        return self.count_fibers(args[0])
-    def get_default_config(self):
-        return {}
-                            
-    def count_fibers(self,frame): # after extraction, i.e. boxcar
-        """
-        image: an image that has mask keyword like desispec.image.Image object
-        """
-    
-        good=np.where(frame['MASK'].data[:,1]==0) # Although this seems to be bin mask ?? 
-        count=good.shape[0]
-        retval={}
-        retval["VALUE"]={"Count":count}
-        retval["EXPERT_LEVEL"]={"EXPERT_LEVEL":"OBSERVER"}
-        return retval
-
-
 class Bias_From_Overscan(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -659,6 +631,9 @@ class CountSpectralBins(MonitoringAlg):
         counts250=countbins(input_frame.flux,threshold=250)
         counts500=countbins(input_frame.flux,threshold=500)
 
+        goodfibers=np.where(counts500>0)[0] #- fibers with at least one bin higher than 500 counts
+        ngoodfibers=goodfibers.shape[0]
+
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
             pixboundary,fidboundary=fiducialregion(input_frame,psf)
@@ -710,9 +685,9 @@ class CountSpectralBins(MonitoringAlg):
             average250_amps=np.array([average250_amp1,average250_amp2,average250_amp3,average250_amp4])
             average500_amps=np.array([average500_amp1,average500_amp2,average500_amp3,average500_amp4])
 
-            retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500, "NBINS100_AMP":average100_amps,"NBINS250_AMP":average250_amps,"NBINS500_AMP":average500_amps}
+            retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500, "NBINS100_AMP":average100_amps,"NBINS250_AMP":average250_amps,"NBINS500_AMP":average500_amps, "NGOODFIBERS": ngoodfibers}
         else:
-            retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500}
+            retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500,"NGOODFIBERS": ngoodfibers}
 
         #- http post if needed
         if url is not None:
