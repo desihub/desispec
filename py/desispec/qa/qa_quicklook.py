@@ -302,9 +302,8 @@ class Count_Pixels(MonitoringAlg):
         retval["ARM"]=camera[0]
         retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
-        #retval["TIMESTAMP"]='{:%Y-%b-%d %H:%M:%S}'.format(datetime.datetime.now())
-        t=datetime.datetime.now()
-        retval["MJD"]=Time(t).mjd
+        retval["QATIME"]=datetime.datetime.now().isoformat()
+
         #- get the counts over entire CCD
         npix3sig=countpix(image.pix,nsig=3) #- above 3 sigma
         npix100=countpix(image.pix,ncounts=100) #- above 100 pixel count
@@ -411,8 +410,7 @@ class Sky_Continuum(MonitoringAlg):
         retval["ARM"]=camera[0]
         retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
-        t=datetime.datetime.now()
-        retval["MJD"]=Time(t).mjd
+        retval["QATIME"]=datetime.datetime.now().isoformat()
 
         #- get the skyfibers first
         skyfiber=np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
@@ -525,8 +523,7 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["ARM"]=camera[0]
         retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
-        t=datetime.datetime.now()
-        retval["MJD"]=Time(t).mjd
+        retval["QATIME"]=datetime.datetime.now().isoformat()
 
         bias_overscan=[]        
         for kk in ['1','2','3','4']:
@@ -620,8 +617,7 @@ class CountSpectralBins(MonitoringAlg):
         retval["ARM"]=camera[0]
         retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
-        t=datetime.datetime.now()
-        retval["MJD"]=Time(t).mjd
+        retval["QATIME"]=datetime.datetime.now().isoformat()
 
         grid=np.gradient(input_frame.wave)
         if not np.all(grid[0]==grid[1:]): 
@@ -757,8 +753,7 @@ class Calculate_SNR(MonitoringAlg):
         retval["SPECTROGRAPH"]=int(camera[1])
         retval["EXPID"]=expid
         retval["PANAME"]=paname
-        t=datetime.datetime.now()
-        retval["MJD"]=Time(t).mjd
+        retval["QATIME"]=datetime.datetime.now().isoformat()
 
         medsnr=SN_ratio(input_frame.flux,input_frame.ivar)
         if amps:
