@@ -591,16 +591,16 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     qadict = {}
 
     # Unpack model
-    input_model_flux,input_model_wave,input_model_fibers=model_tuple
+    #input_model_flux,input_model_wave,input_model_fibers=model_tuple
 
     # Standard stars
     stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
     stdstars = frame[stdfibers]
     nstds = np.sum(stdfibers)
-    try:
-        assert np.array_equal(frame.fibers[stdfibers], input_model_fibers)
-    except AssertionError:
-        log.error("Bad indexing in standard stars")
+    #try:
+    #    assert np.array_equal(frame.fibers[stdfibers], input_model_fibers)
+    #except AssertionError:
+    #    log.error("Bad indexing in standard stars")
 
     # Calculate ZP for mean spectrum
     #medcalib = np.median(fluxcalib.calib,axis=0)
@@ -634,7 +634,7 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
 
     # MAX ZP Offset
     #stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
-    ZPoffset = np.abs(ZP_fiducial-qadict['ZP'])
+    ZPoffset = ZP_fiducial-qadict['ZP']
     qadict['MAX_ZP_OFF'] = [float(np.max(ZPoffset)),
                             int(stdfibers[np.argmax(ZPoffset)])]
     if qadict['MAX_ZP_OFF'] > param['MAX_ZP_OFF']:
