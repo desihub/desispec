@@ -64,6 +64,7 @@ class TestFrame(unittest.TestCase):
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones(flux.shape)
         mask = np.zeros(flux.shape, dtype=int)
+        chi2pix = np.zeros(flux.shape)
         rdata = np.ones((nspec, 5, nwave))
         fibermap = desispec.io.fibermap.empty_fibermap(nspec)
 
@@ -83,6 +84,16 @@ class TestFrame(unittest.TestCase):
         self.assertEqual(len(x.fibers), len(x.fibermap))
         x = frame[[1,2,3]]
         self.assertTrue(np.all(x.fibers == x.fibermap['FIBER']))
+
+        #- slice with and without options args
+        frame = Frame(wave, flux, ivar, spectrograph=0)
+        x = frame[0:2]
+        self.assertEqual(x.fibermap, None)
+        self.assertEqual(x.chi2pix, None)
+        frame = Frame(wave, flux, ivar, spectrograph=0, fibermap=fibermap, chi2pix=chi2pix)
+        x = frame[0:2]
+        self.assertEqual(len(x.fibermap), 2)
+        self.assertEqual(x.chi2pix.shape, (2,nwave))
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
