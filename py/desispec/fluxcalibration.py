@@ -629,7 +629,7 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
         ZP_stars = ZP_from_calib(i_wave, icalib)
         iZP = np.argmin(np.abs(i_wave-param['ZP_WAVE']))
         ZP_fiducial[ii] = float(np.median(ZP_stars[iZP-10:iZP+10]))
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # MAX ZP Offset
