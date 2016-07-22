@@ -553,6 +553,7 @@ def apply_flux_calibration(frame, fluxcalib):
     frame.flux = frame.flux * (C>0) / (C+(C==0))
     frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
 
+
 def ZP_from_calib(wave, calib):
     """ Calculate the ZP in AB magnitudes given the calibration and the wavelength arrays
     Args:
@@ -565,9 +566,13 @@ def ZP_from_calib(wave, calib):
     """
     ZP_flambda = 1e-17 / calib  # erg/s/cm^2/A
     ZP_fnu = ZP_flambda * wave**2 / (2.9979e18)  # c in A/s
-    ZP_AB = -2.5 * np.log10(ZP_fnu) - 48.6
+    # Avoid 0 values
+    ZP_AB = np.zeros_like(ZP_fnu)
+    gdZ = ZP_fnu > 0.
+    ZP_AB[gdZ] = -2.5 * np.log10(ZP_fnu[gdZ]) - 48.6
     # Return
     return ZP_AB
+
 
 def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     """
@@ -601,7 +606,6 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     #medcalib = np.median(fluxcalib.calib,axis=0)
     medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)
     ZP_AB = ZP_from_calib(fluxcalib.wave, medcalib)  # erg/s/cm^2/A
-    nwave = fluxcalib.wave.size
 
     # ZP at fiducial wavelength (AB mag for 1 photon/s/A)
     iZP = np.argmin(np.abs(fluxcalib.wave-param['ZP_WAVE']))
@@ -612,7 +616,6 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
 
     # RMS
     qadict['NSTARS_FIBER'] = int(nstds)
-    ZP_stars = np.zeros_like(stdstars.flux)
     ZP_fiducial = np.zeros(nstds)
     for ii in range(nstds):
         # Model flux
