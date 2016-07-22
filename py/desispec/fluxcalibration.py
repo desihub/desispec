@@ -635,7 +635,8 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     # MAX ZP Offset
     #stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
     ZPoffset = ZP_fiducial-qadict['ZP']
-    qadict['MAX_ZP_OFF'] = [float(np.max(ZPoffset)),
+    imax = np.argmax(np.abs(ZPoffset))
+    qadict['MAX_ZP_OFF'] = [float(ZPoffset[imax]),
                             int(stdfibers[np.argmax(ZPoffset)])]
     if qadict['MAX_ZP_OFF'] > param['MAX_ZP_OFF']:
         log.warn("Bad standard star ZP {:g}, in fiber {:d}".format(
