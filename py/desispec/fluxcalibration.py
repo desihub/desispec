@@ -619,15 +619,17 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     ZP_fiducial = np.zeros(nstds)
     for ii in range(nstds):
         # Model flux
-        model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
-        convolved_model_flux=stdstars.R[ii].dot(model_flux)
+        #model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
+        #convolved_model_flux=stdstars.R[ii].dot(model_flux)
         # Good pixels
         gdp = stdstars.ivar[ii, :] > 0.
-        icalib = stdstars.flux[ii, gdp] / convolved_model_flux[gdp]
+        #icalib = stdstars.flux[ii, gdp] / convolved_model_flux[gdp]
+        icalib = fluxcalib.calib[stdfibers[ii]]
         i_wave = fluxcalib.wave[gdp]
         ZP_stars = ZP_from_calib(i_wave, icalib)
         iZP = np.argmin(np.abs(i_wave-param['ZP_WAVE']))
         ZP_fiducial[ii] = float(np.median(ZP_stars[iZP-10:iZP+10]))
+    import pdb; pdb.set_trace()
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # MAX ZP Offset
