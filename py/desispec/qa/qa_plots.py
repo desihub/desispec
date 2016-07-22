@@ -248,8 +248,10 @@ def exposure_fluxcalib(outfil, qa_data):
     for qq, channel in enumerate(['b','r','z']):
 
         ax = plt.subplot(gs[qq % 2, qq // 2])
+        allc = []
         for camera in cameras:
             if camera[0] == channel:
+                allc.append(int(camera[1]))
                 ax.errorbar([int(camera[1])],
                             [qa_data['frames'][camera]['FLUXCALIB']['QA']['ZP']],
                             yerr=[qa_data['frames'][camera]['FLUXCALIB']['QA']['RMS_ZP']],
@@ -260,7 +262,8 @@ def exposure_fluxcalib(outfil, qa_data):
     #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
     #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
         ax.set_ylabel('ZP_AB')
-        #ax.set_xlim(xmin, xmax)
+        #import pdb; pdb.set_trace()
+        ax.set_xlim(np.min(allc)-0.2, np.max(allc)+0.2)
         ax.set_xlabel('Spectrograph')
     #med0 = np.maximum(np.abs(np.median(med_res)), 1.)
     #ax0.set_ylim(-5.*med0, 5.*med0)
