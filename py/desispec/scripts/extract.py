@@ -18,6 +18,7 @@ from specter.extract import ex2d
 
 from desispec import io
 from desispec.frame import Frame
+from desispec.maskbits import specmask
 
 import desispec.scripts.mergebundles as merge
 
@@ -26,7 +27,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
     parser.add_argument("-i", "--input", type=str, required=True,
                         help="input image")
-    parser.add_argument("-f", "--fibermap", type=str, required=True,
+    parser.add_argument("-f", "--fibermap", type=str, required=False,
                         help="input fibermap file")
     parser.add_argument("-p", "--psf", type=str, required=True,
                         help="input psf")
@@ -127,9 +128,19 @@ regularize: {regularize}
         regularize=args.regularize)
 
     #- The actual extraction
-    flux, ivar, Rdata = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
+    results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
                  regularize=args.regularize, ndecorr=True,
-                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose)
+                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
+                 full_output=True)
+    flux = results['flux']
+    ivar = results['ivar']
+    Rdata = results['resolution_data']
+    chi2pix = results['chi2pix']
+    
+    mask = np.zeros(flux.shape, dtype=np.uint32)
+    mask[results['pixmask_fraction']>0.5] |= specmask.SOMEBADPIX
+    mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
+    mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
     #- Augment input image header for output
     img.meta['NSPEC']   = (nspec, 'Number of spectra')
@@ -140,8 +151,9 @@ regularize: {regularize}
     img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
     img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
 
-    frame = Frame(wave, flux, ivar, resolution_data=Rdata,
-                fibers=fibers, meta=img.meta, fibermap=fibermap)
+    frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdata,
+                fibers=fibers, meta=img.meta, fibermap=fibermap,
+                chi2pix=chi2pix)
 
     #- Write output
     io.write_frame(args.output, frame)
@@ -149,6 +161,10 @@ regularize: {regularize}
     print('Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
 
+
+#- TODO: The level of repeated code from main() is problematic, e.g. the
+#- recent addition of mask and chi2pix code required nearly identical edits
+#- in two places.  Could main(args) just call main_mpi(args, comm=None) ?
 
 def main_mpi(args, comm=None):
 
@@ -243,7 +259,7 @@ def main_mpi(args, comm=None):
         nproc = comm.size
         rank = comm.rank
 
-    mynbundle = int(nbundle / nproc)
+    mynbundle = int(nbundle // nproc)
     myfirstbundle = 0
     leftover = nbundle % nproc
     if rank < leftover:
@@ -270,7 +286,7 @@ def main_mpi(args, comm=None):
         raise RuntimeError("extraction output file should have .fits extension")
     outroot = outmat.group(1)
 
-    outdir = os.path.dirname(outroot)
+    outdir = os.path.normpath(os.path.dirname(outroot))
     if rank == 0:
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
@@ -288,9 +304,20 @@ def main_mpi(args, comm=None):
 
         #- The actual extraction
         try:
-            flux, ivar, Rdata = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b], 
+            results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b], 
                 bnspec[b], wave, regularize=args.regularize, ndecorr=True,
-                bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose)
+                bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
+                full_output=True)
+
+            flux = results['flux']
+            ivar = results['ivar']
+            Rdata = results['resolution_data']
+            chi2pix = results['chi2pix']
+
+            mask = np.zeros(flux.shape, dtype=np.uint32)
+            mask[results['pixmask_fraction']>0.5] |= specmask.SOMEBADPIX
+            mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
+            mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
             #- Augment input image header for output
             img.meta['NSPEC']   = (nspec, 'Number of spectra')
@@ -301,11 +328,16 @@ def main_mpi(args, comm=None):
             img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
             img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
 
-            bfibermap = fibermap[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
+            if fibermap is not None:
+                bfibermap = fibermap[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
+            else:
+                bfibermap = None
+
             bfibers = fibers[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
 
-            frame = Frame(wave, flux, ivar, resolution_data=Rdata,
-                        fibers=bfibers, meta=img.meta, fibermap=bfibermap)
+            frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdata,
+                        fibers=bfibers, meta=img.meta, fibermap=bfibermap,
+                        chi2pix=chi2pix)
 
             #- Write output
             io.write_frame(outbundle, frame)

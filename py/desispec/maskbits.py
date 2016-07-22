@@ -66,6 +66,7 @@ specmask:
     - [BADFIBERFLAT, 4, "Bad fiber flat solution"]
     - [BRIGHTSKY,    5, "Bright sky level (details TBD)"]
     - [BADSKY,       6, "Bad sky model"]
+    - [BAD2DFIT,     7, "Bad fit of extraction 2D model to pixel data"]
 
 #- zmask: reasons why redshift fitting failed
 """)
