@@ -524,7 +524,10 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
         # Grab QA
         qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
         # Histogram
-        ax.hist(qa_arr, color=clrs[channel])
+        try:
+            ax.hist(qa_arr, color=clrs[channel])
+        except:
+            import pdb; pdb.set_trace()
         # Label
         ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
         ax.set_xlabel('{:s} :: {:s}'.format(qatype,metric))
