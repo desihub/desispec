@@ -34,7 +34,8 @@ class QA_Exposure(object):
         Attributes:
             All input args become object attributes.
         """
-        assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
+        flavors = ['none', 'flat', 'arc', 'gray', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
+        assert flavor in flavors
         if flavor in ['dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']:
             self.type = 'data'
         else:
