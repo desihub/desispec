@@ -166,7 +166,6 @@ class QA_Prod(object):
                             qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib, model_tuple)
                     # Write
                     write_qa_frame(qafile, qaframe)
-            #pdb.set_trace()
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files into one master QA file
