@@ -511,6 +511,7 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     Returns:
 
     """
+    log = get_logger()
     # Setup
     fig = plt.figure(figsize=(8, 5.0))
     gs = gridspec.GridSpec(2,2)
@@ -523,8 +524,15 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
 
         # Grab QA
         qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
+        # Check for nans
+        isnan = np.isnan(qa_arr)
+        if np.sum(isnan) > 0:
+            log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
+                qatype, metric, channel))
+            qa_arr[isnan] = -999.
         # Histogram
         ax.hist(qa_arr, color=clrs[channel])
+        #import pdb; pdb.set_trace()
         # Label
         ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
         ax.set_xlabel('{:s} :: {:s}'.format(qatype,metric))
