@@ -20,7 +20,7 @@ from desispec import io
 from desispec.frame import Frame
 from desispec.maskbits import specmask
 
-import desispec.scripts.mergebundles as merge
+import desispec.scripts.mergebundles as mergebundles
 
 
 def parse(options=None):
@@ -30,9 +30,11 @@ def parse(options=None):
     parser.add_argument("-f", "--fibermap", type=str, required=False,
                         help="input fibermap file")
     parser.add_argument("-p", "--psf", type=str, required=True,
-                        help="input psf")
+                        help="input psf file")
     parser.add_argument("-o", "--output", type=str, required=True,
-                        help="output extracted spectra")
+                        help="output extracted spectra file")
+    parser.add_argument("-m", "--model", type=str, required=False,
+                        help="output 2D pixel model file")
     parser.add_argument("-w", "--wavelength", type=str, required=False,
                         help="wavemin,wavemax,dw")
     parser.add_argument("-s", "--specmin", type=int, required=False, default=0,
@@ -157,6 +159,10 @@ regularize: {regularize}
 
     #- Write output
     io.write_frame(args.output, frame)
+
+    if args.model is not None:
+        from astropy.io import fits
+        fits.writeto(args.model, results['modelimage'], header=frame.meta)
 
     print('Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
@@ -298,6 +304,7 @@ def main_mpi(args, comm=None):
 
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
         outbundle = "{}_{:02d}.fits".format(outroot, b)
+        outmodel = "{}_model_{:02d}.fits".format(outroot, b)
 
         print('extract:  Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
@@ -342,6 +349,10 @@ def main_mpi(args, comm=None):
             #- Write output
             io.write_frame(outbundle, frame)
 
+            if args.model is not None:
+                from astropy.io import fits
+                fits.writeto(outmodel, results['modelimage'], header=frame.meta)
+
             print('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
                 bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
         except:
@@ -355,11 +366,26 @@ def main_mpi(args, comm=None):
         raise RuntimeError("some extraction bundles failed")
 
     if rank == 0:
-        opts = [
+        mergeopts = [
             '--output', args.output,
             '--force',
             '--delete'
         ]
-        opts.extend([ "{}_{:02d}.fits".format(outroot, b) for b in bundles ])
-        args = merge.parse(opts)
-        merge.main(args)
+        mergeopts.extend([ "{}_{:02d}.fits".format(outroot, b) for b in bundles ])
+        mergeargs = mergebundles.parse(mergeopts)
+        mergebundles.main(mergeargs)
+
+        if args.model is not None:
+            model = None
+            for b in bundles:
+                outmodel = "{}_model_{:02d}.fits".format(outroot, b)
+                if model is None:
+                    model = fits.getdata(outmodel)
+                else:
+                    #- TODO: test and warn if models overlap for pixels with
+                    #- non-zero values
+                    model += fits.getdata(outmodel)
+
+                os.remove(outmodel)
+
+            fits.writeto(args.model, model)
