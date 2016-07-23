@@ -12,6 +12,7 @@ except ImportError:
 import unittest
 import uuid
 import os
+from glob import glob
 from pkg_resources import resource_filename
 
 import desispec.image
@@ -25,14 +26,15 @@ class TestExtract(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        testhash = uuid.uuid4()
-        cls.imgfile = 'test-img-{}.fits'.format(testhash)
-        cls.outfile = 'test-out-{}.fits'.format(testhash)
-        cls.fibermapfile = 'test-fibermap-{}.fits'.format(testhash)
+        cls.testhash = uuid.uuid4()
+        cls.imgfile = 'test-img-{}.fits'.format(cls.testhash)
+        cls.outfile = 'test-out-{}.fits'.format(cls.testhash)
+        cls.outmodel = 'test-model-{}.fits'.format(cls.testhash)
+        cls.fibermapfile = 'test-fibermap-{}.fits'.format(cls.testhash)
         cls.psffile = resource_filename('specter', 'test/t/psf-monospot.fits')
         # cls.psf = load_psf(cls.psffile)
         
-        pix = np.random.normal(0, 3.0, size=(500,500))
+        pix = np.random.normal(0, 3.0, size=(400,200))
         ivar = np.ones_like(pix) / 3.0**2
         mask = np.zeros(pix.shape, dtype=np.uint32)
         mask[200] = 1
@@ -43,38 +45,42 @@ class TestExtract(unittest.TestCase):
         desispec.io.write_fibermap(cls.fibermapfile, fibermap)
 
     def setUp(self):
-        for filename in (self.outfile, ):
+        for filename in (self.outfile, self.outmodel):
             if os.path.exists(filename):
                 os.remove(filename)
         
     @classmethod
     def tearDownClass(cls):
-        for filename in (cls.imgfile, cls.outfile, cls.fibermapfile):
+        for filename in glob('test-*{}*.fits'.format(cls.testhash)):
             if os.path.exists(filename):
                 os.remove(filename)
            
     @unittest.skipIf(nospecter, 'specter not installed; skipping extraction test')
     def test_extract(self):
-        template = "desi_extract_spectra -i {} -p {} -w 7500,7600,0.75 -f {} -s 0 -n 4 --bundlesize 2 -o {}"
+        template = "desi_extract_spectra -i {} -p {} -w 7500,7600,0.75 -f {} -s 0 -n 5 --bundlesize 3 -o {} -m {}"
         
-        cmd = template.format(self.imgfile, self.psffile, self.fibermapfile, self.outfile)
+        cmd = template.format(self.imgfile, self.psffile, self.fibermapfile, self.outfile, self.outmodel)
         opts = cmd.split(" ")[1:]
         args = desispec.scripts.extract.parse(opts)
         desispec.scripts.extract.main(args)
 
         self.assertTrue(os.path.exists(self.outfile))
         frame1 = desispec.io.read_frame(self.outfile)
+        model1 = fits.getdata(self.outmodel)
         os.remove(self.outfile)
+        os.remove(self.outmodel)
         
         desispec.scripts.extract.main_mpi(args, comm=None)
         self.assertTrue(os.path.exists(self.outfile))
         frame2 = desispec.io.read_frame(self.outfile)
+        model2 = fits.getdata(self.outmodel)
         
-        self.assertTrue(np.all(frame1.flux[0:4] == frame2.flux[0:4]))
-        self.assertTrue(np.all(frame1.ivar[0:4] == frame2.ivar[0:4]))
-        self.assertTrue(np.all(frame1.mask[0:4] == frame2.mask[0:4]))
-        self.assertTrue(np.all(frame1.chi2pix[0:4] == frame2.chi2pix[0:4]))
-        self.assertTrue(np.all(frame1.resolution_data[0:4] == frame2.resolution_data[0:4]))        
+        self.assertTrue(np.all(frame1.flux[0:5] == frame2.flux[0:5]))
+        self.assertTrue(np.all(frame1.ivar[0:5] == frame2.ivar[0:5]))
+        self.assertTrue(np.all(frame1.mask[0:5] == frame2.mask[0:5]))
+        self.assertTrue(np.all(frame1.chi2pix[0:5] == frame2.chi2pix[0:5]))
+        self.assertTrue(np.all(frame1.resolution_data[0:5] == frame2.resolution_data[0:5]))
+        self.assertTrue(np.allclose(model1, model2, rtol=1e-15, atol=1e-15))
 
 if __name__ == '__main__':
     unittest.main()
