@@ -93,6 +93,7 @@ def main(args) :
         # Load
         qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
         # Run
+        #import pdb; pdb.set_trace()
         qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))
         # Write
         if args.qafile is not None:
@@ -100,7 +101,7 @@ def main(args) :
             log.info("successfully wrote {:s}".format(args.qafile))
         # Figure(s)
         if args.qafig is not None:
-            qa_plots.frame_fluxcalib(args.qafig, qaframe, frame, fluxcalib, model_tuple)
+            qa_plots.frame_fluxcalib(args.qafig, qaframe, frame, fluxcalib)
 
     # write result
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)

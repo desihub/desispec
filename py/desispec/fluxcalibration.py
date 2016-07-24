@@ -480,8 +480,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     mask = (ccalibivar==0).astype(np.int32)
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
-    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration))\
-        #, (sqrtwmodel, sqrtwflux, current_ivar, chi2)
+    return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration))
 
 
 
