@@ -93,7 +93,7 @@ def main(args) :
         # Load
         qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
         # Run
-        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, model_tuple))#, indiv_stars))
+        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))
         # Write
         if args.qafile is not None:
             write_qa_frame(args.qafile, qaframe)

@@ -179,8 +179,7 @@ class QA_Frame(object):
             # Init parameters (as necessary)
             self.init_fluxcalib()
             # Run
-            qadict = qa_fluxcalib(self.qa_data[qatype]['PARAM'],
-                                  inputs[0], inputs[1], inputs[2])
+            qadict = qa_fluxcalib(self.qa_data[qatype]['PARAM'], inputs[0], inputs[1])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update

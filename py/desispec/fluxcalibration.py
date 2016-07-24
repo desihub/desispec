@@ -574,7 +574,7 @@ def ZP_from_calib(wave, calib):
     return ZP_AB
 
 
-def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
+def qa_fluxcalib(param, frame, fluxcalib):
     """
     Args:
         param: dict of QA parameters
@@ -591,7 +591,6 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     qadict = {}
 
     # Unpack model
-    #input_model_flux,input_model_wave,input_model_fibers=model_tuple
 
     # Standard stars
     stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
@@ -618,14 +617,11 @@ def qa_fluxcalib(param, frame, fluxcalib, model_tuple):#, indiv_stars):
     qadict['NSTARS_FIBER'] = int(nstds)
     ZP_fiducial = np.zeros(nstds)
     for ii in range(nstds):
-        # Model flux
-        #model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
-        #convolved_model_flux=stdstars.R[ii].dot(model_flux)
         # Good pixels
         gdp = stdstars.ivar[ii, :] > 0.
-        #icalib = stdstars.flux[ii, gdp] / convolved_model_flux[gdp]
-        icalib = fluxcalib.calib[stdfibers[ii]]
+        icalib = fluxcalib.calib[stdfibers[ii]][gdp]
         i_wave = fluxcalib.wave[gdp]
+        # ZP
         ZP_stars = ZP_from_calib(i_wave, icalib)
         iZP = np.argmin(np.abs(i_wave-param['ZP_WAVE']))
         ZP_fiducial[ii] = float(np.median(ZP_stars[iZP-10:iZP+10]))
