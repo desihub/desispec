@@ -174,13 +174,12 @@ class QA_Frame(object):
             # Run
             qadict = qa_fiberflat(self.qa_data[qatype]['PARAM'], inputs[0], inputs[1])
         elif qatype == 'FLUXCALIB':
-            # Expecting: frame, fluxcalib, individual_outputs (star by star)
-            assert len(inputs) == 3
+            # Expecting: frame, fluxcalib
+            assert len(inputs) == 2
             # Init parameters (as necessary)
             self.init_fluxcalib()
             # Run
-            qadict = qa_fluxcalib(self.qa_data[qatype]['PARAM'],
-                                  inputs[0], inputs[1], inputs[2])
+            qadict = qa_fluxcalib(self.qa_data[qatype]['PARAM'], inputs[0], inputs[1])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update

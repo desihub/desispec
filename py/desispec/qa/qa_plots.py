@@ -282,7 +282,7 @@ def exposure_fluxcalib(outfil, qa_data):
     print('Wrote QA FluxCalib Exposure file: {:s}'.format(outfil))
 
 
-def frame_fluxcalib(outfil, qaframe, frame, fluxcalib, model_tuple):
+def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     """ QA plots for Flux calibration in a Frame
 
     Args:
@@ -299,16 +299,11 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib, model_tuple):
     #sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
 
     # Unpack model
-    input_model_flux,input_model_wave,input_model_fibers=model_tuple
 
     # Standard stars
     stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
     stdstars = frame[stdfibers]
     nstds = np.sum(stdfibers)
-    try:
-        assert np.array_equal(frame.fibers[stdfibers], input_model_fibers)
-    except AssertionError:
-        log.error("Bad indexing in standard stars")
 
     # Median spectrum
     medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)
@@ -342,12 +337,9 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib, model_tuple):
 
     # Other stars
     for ii in range(nstds):
-        # Model flux
-        model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
-        convolved_model_flux=stdstars.R[ii].dot(model_flux)
         # Good pixels
         gdp = stdstars.ivar[ii, :] > 0.
-        icalib = stdstars.flux[ii, gdp] / convolved_model_flux[gdp]
+        icalib = fluxcalib.calib[stdfibers[ii]][gdp]
         i_wave = fluxcalib.wave[gdp]
         ZP_star = dsflux.ZP_from_calib(i_wave, icalib)
         # Plot
