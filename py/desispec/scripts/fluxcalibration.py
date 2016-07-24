@@ -74,7 +74,6 @@ def main(args) :
 
     # read models
     model_flux,model_wave,model_fibers=read_stdstar_models(args.models)
-    model_tuple = model_flux,model_wave,model_fibers
 
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
@@ -84,7 +83,6 @@ def main(args) :
             log.error("inconsistency with spectrum %d, OBJTYPE='%s' in fibermap"%(i,fibermap["OBJTYPE"][i]))
         sys.exit(12)
 
-    #fluxcalib, indiv_stars = compute_flux_calibration(frame, model_wave, model_flux)
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux)
 
     # QA
