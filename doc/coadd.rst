@@ -118,6 +118,9 @@ Notes
 Mock Data Tests
 +++++++++++++++
 
+.. warning::
+    The description of environment setup and installation below may be out of date.
+
 DESI Environment
 ~~~~~~~~~~~~~~~~
 
