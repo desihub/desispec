@@ -18,8 +18,8 @@ def parse(options=None):
                         help = 'slurp production QA files into one?')
     parser.add_argument('--remove', default = False, action='store_true',
                         help = 'remove frame QA files?')
-    parser.add_argument('--clobber', default = True, action='store_true',
-                        help = 'clobber existing QA files?')
+    parser.add_argument('--clobber', default=False, action='store_true',
+                        help='clobber existing QA files?')
     parser.add_argument('--channel_hist', type=str, default=None,
                         help='Generate channel histogram(s)')
 

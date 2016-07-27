@@ -248,8 +248,10 @@ def exposure_fluxcalib(outfil, qa_data):
     for qq, channel in enumerate(['b','r','z']):
 
         ax = plt.subplot(gs[qq % 2, qq // 2])
+        allc = []
         for camera in cameras:
             if camera[0] == channel:
+                allc.append(int(camera[1]))
                 ax.errorbar([int(camera[1])],
                             [qa_data['frames'][camera]['FLUXCALIB']['QA']['ZP']],
                             yerr=[qa_data['frames'][camera]['FLUXCALIB']['QA']['RMS_ZP']],
@@ -260,7 +262,8 @@ def exposure_fluxcalib(outfil, qa_data):
     #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
     #ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
         ax.set_ylabel('ZP_AB')
-        #ax.set_xlim(xmin, xmax)
+        #import pdb; pdb.set_trace()
+        ax.set_xlim(np.min(allc)-0.2, np.max(allc)+0.2)
         ax.set_xlabel('Spectrograph')
     #med0 = np.maximum(np.abs(np.median(med_res)), 1.)
     #ax0.set_ylim(-5.*med0, 5.*med0)
@@ -279,7 +282,7 @@ def exposure_fluxcalib(outfil, qa_data):
     print('Wrote QA FluxCalib Exposure file: {:s}'.format(outfil))
 
 
-def frame_fluxcalib(outfil, qaframe, frame, fluxcalib, model_tuple):
+def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     """ QA plots for Flux calibration in a Frame
 
     Args:
@@ -296,16 +299,11 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib, model_tuple):
     #sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
 
     # Unpack model
-    input_model_flux,input_model_wave,input_model_fibers=model_tuple
 
     # Standard stars
     stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
     stdstars = frame[stdfibers]
     nstds = np.sum(stdfibers)
-    try:
-        assert np.array_equal(frame.fibers[stdfibers], input_model_fibers)
-    except AssertionError:
-        log.error("Bad indexing in standard stars")
 
     # Median spectrum
     medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)
@@ -339,12 +337,9 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib, model_tuple):
 
     # Other stars
     for ii in range(nstds):
-        # Model flux
-        model_flux=resample_flux(stdstars.wave,input_model_wave,input_model_flux[ii])
-        convolved_model_flux=stdstars.R[ii].dot(model_flux)
         # Good pixels
         gdp = stdstars.ivar[ii, :] > 0.
-        icalib = stdstars.flux[ii, gdp] / convolved_model_flux[gdp]
+        icalib = fluxcalib.calib[stdfibers[ii]][gdp]
         i_wave = fluxcalib.wave[gdp]
         ZP_star = dsflux.ZP_from_calib(i_wave, icalib)
         # Plot
@@ -511,6 +506,7 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     Returns:
 
     """
+    log = get_logger()
     # Setup
     fig = plt.figure(figsize=(8, 5.0))
     gs = gridspec.GridSpec(2,2)
@@ -523,8 +519,15 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
 
         # Grab QA
         qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
+        # Check for nans
+        isnan = np.isnan(qa_arr)
+        if np.sum(isnan) > 0:
+            log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
+                qatype, metric, channel))
+            qa_arr[isnan] = -999.
         # Histogram
         ax.hist(qa_arr, color=clrs[channel])
+        #import pdb; pdb.set_trace()
         # Label
         ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
         ax.set_xlabel('{:s} :: {:s}'.format(qatype,metric))

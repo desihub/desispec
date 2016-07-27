@@ -34,7 +34,8 @@ class QA_Exposure(object):
         Attributes:
             All input args become object attributes.
         """
-        assert flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
+        flavors = ['none', 'flat', 'arc', 'gray', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
+        assert flavor in flavors
         if flavor in ['dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']:
             self.type = 'data'
         else:
@@ -83,7 +84,7 @@ class QA_Exposure(object):
         # Figure
         qa_plots.exposure_fluxcalib(outfil, self.data)
 
-    def load_qa_data(self, remove=True):
+    def load_qa_data(self, remove=False):
         """ Load the QA data files for a given exposure (currently yaml)
         Args:
             remove: bool, optional
@@ -94,6 +95,7 @@ class QA_Exposure(object):
         qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
                                   expid=self.expid,
                                   specprod_dir=self.specprod_dir)
+        #import pdb; pdb.set_trace()
         # Load into frames
         for camera,qadata_path in qafiles.iteritems():
             qa_frame = desiio.load_qa_frame(qadata_path)

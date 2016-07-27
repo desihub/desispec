@@ -74,7 +74,6 @@ def main(args) :
 
     # read models
     model_flux,model_wave,model_fibers=read_stdstar_models(args.models)
-    model_tuple = model_flux,model_wave,model_fibers
 
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
@@ -84,7 +83,6 @@ def main(args) :
             log.error("inconsistency with spectrum %d, OBJTYPE='%s' in fibermap"%(i,fibermap["OBJTYPE"][i]))
         sys.exit(12)
 
-    #fluxcalib, indiv_stars = compute_flux_calibration(frame, model_wave, model_flux)
     fluxcalib = compute_flux_calibration(frame, model_wave, model_flux)
 
     # QA
@@ -93,14 +91,15 @@ def main(args) :
         # Load
         qaframe = load_qa_frame(args.qafile, frame, flavor=frame.meta['FLAVOR'])
         # Run
-        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, model_tuple))#, indiv_stars))
+        #import pdb; pdb.set_trace()
+        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))
         # Write
         if args.qafile is not None:
             write_qa_frame(args.qafile, qaframe)
             log.info("successfully wrote {:s}".format(args.qafile))
         # Figure(s)
         if args.qafig is not None:
-            qa_plots.frame_fluxcalib(args.qafig, qaframe, frame, fluxcalib, model_tuple)
+            qa_plots.frame_fluxcalib(args.qafig, qaframe, frame, fluxcalib)
 
     # write result
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)
