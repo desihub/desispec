@@ -755,7 +755,46 @@ class Calculate_SNR(MonitoringAlg):
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
 
+        #- select band for mag, using DECAM_R if present
+
+        filter_pick=["" for x in range(len(input_frame.fibermap))]
+        
+        for ii in range(len(input_frame.fibermap)):
+            if "DECAM_R" in input_frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
+            else: filter_pick[ii]=input_frame.fibermap["FILTER"][ii,0]
+        filter_pick=np.array(filter_pick)
+
         medsnr=SN_ratio(input_frame.flux,input_frame.ivar)
+        elgfibers=np.where(input_frame.fibermap['OBJTYPE']=='ELG')[0]
+        elg_medsnr=medsnr[elgfibers]
+        elg_mag=np.zeros(len(elgfibers))
+        for ii,fib in enumerate(elgfibers):
+            elg_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+
+        elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
+      
+        
+        lrgfibers=np.where(input_frame.fibermap['OBJTYPE']=='LRG')[0]
+        lrg_medsnr=medsnr[lrgfibers]
+        lrg_mag=np.zeros(len(lrgfibers))
+        for ii,fib in enumerate(lrgfibers):
+            lrg_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+        lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
+
+        qsofibers=np.where(input_frame.fibermap['OBJTYPE']=='QSO')[0]
+        qso_medsnr=medsnr[qsofibers]
+        qso_mag=np.zeros(len(qsofibers))
+        for ii,fib in enumerate(qsofibers):
+            qso_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+        qso_snr_mag=np.array((qso_medsnr,qso_mag))
+
+        stdfibers=np.where(input_frame.fibermap['OBJTYPE']=='STD')[0]
+        std_medsnr=medsnr[stdfibers]
+        std_mag=np.zeros(len(stdfibers))
+        for ii,fib in enumerate(stdfibers):
+            std_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]] 
+        std_snr_mag=np.array((std_medsnr,std_mag))
+
         if amps:
             
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
@@ -783,9 +822,9 @@ class Calculate_SNR(MonitoringAlg):
 
             average_amp=np.array([average1,average2,average3,average4])
 
-            retval["VALUE"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp}
+            retval["VALUE"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_SNR_MAG": elg_snr_mag, "LRG_SNR_MAG": lrg_snr_mag, "QSO_SNR_MAG": qso_snr_mag,"STAR_SNR_MAG":std_snr_mag}
 
-        else: retval["VALUE"]={"MEDIAN_SNR":medsnr}
+        else: retval["VALUE"]={"MEDIAN_SNR":medsnr,"ELG_SNR_MAG": elg_snr_mag, "LRG_SNR_MAG": lrg_snr_mag, "QSO_SNR_MAG": qso_snr_mag,"STAR_SNR_MAG":std_snr_mag}
         
         #- http post if valid
         if url is not None:

@@ -386,6 +386,7 @@ def plot_sky_continuum(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_SNR(qa_dict,outfile):
+    from matplotlib.gridspec import GridSpec
     """Plot SNR
 
     `qa_dict` example::
@@ -395,10 +396,16 @@ def plot_SNR(qa_dict,outfile):
          'MJD': 57578.78131121235,
          'PANAME': 'SKYSUB',
          'SPECTROGRAPH': 0,
-         'VALUE': {'MEDIAN_AMP_SNR': array([ 11.28466596,   0.        ,  13.18927372,   0.        ]),
-                   'MEDIAN_SNR': array([ 26.29012459,  35.02498105,   3.30635973,   7.69106173,
-            0.586899  ,   3.59830798,  11.75768833,   8.276959  ,  16.70907383,   4.82177165])}}}
-
+         'VALUE': {'ELG_SNR_MAG': array([[  1.04995347,   1.75609447,   0.86920898],
+                                        [ 22.40120888,  21.33947945,  23.26506996]]),
+                   'LRG_SNR_MAG': array([[  0.92477875,   1.45257228,   1.52262706],
+                                        [ 22.75508881,  21.35451317,  21.39620209]]),
+                   'MEDIAN_AMP_SNR': array([ 4.64376854,  0.        ,  5.02489801,  0.        ]),
+                   'MEDIAN_SNR': array([  1.04995347,   0.47679704,   0.92477875,   1.75609447,
+                                          0.86920898,   1.03979459,   0.46717453,  38.31675053,
+                                          1.45257228,   1.52262706]),
+                   'QSO_SNR_MAG': array([[  1.03979459], [ 22.95341873]]),
+                   'STAR_SNR_MAG': array([[ 38.31675053], [ 17.13783646]])}}}
     Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
         outfile: Name of figure.
@@ -412,19 +419,28 @@ def plot_SNR(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
 
+    elg_snr_mag=qa_dict["VALUE"]["ELG_SNR_MAG"]
+    lrg_snr_mag=qa_dict["VALUE"]["LRG_SNR_MAG"]
+    qso_snr_mag=qa_dict["VALUE"]["QSO_SNR_MAG"]
+    star_snr_mag=qa_dict["VALUE"]["STAR_SNR_MAG"]
+
     fig=plt.figure()
     plt.suptitle("Signal/Noise after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
 
+    gs=GridSpec(7,8)
+    ax1=fig.add_subplot(gs[1:4,:4])
+    ax2=fig.add_subplot(gs[1:4,4:])
+    ax3=fig.add_subplot(gs[4:,:2])
+    ax4=fig.add_subplot(gs[4:,2:4])
+    ax5=fig.add_subplot(gs[4:,4:6])
+    ax6=fig.add_subplot(gs[4:,6:])
 
-    ax1=fig.add_subplot(211)
-    hist_med=ax1.bar(index,med_snr)
+    hist_med=ax1.bar(index,med_snr,align='center')
     ax1.set_xlabel('Fiber #',fontsize=10)
     ax1.set_ylabel('Median S/N',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
 
-
-    ax2=fig.add_subplot(212)
     heatmap_med=ax2.pcolor(med_amp_snr.reshape(2,2).T,cmap=plt.cm.coolwarm)
     ax2.set_xlabel("Avg. Median S/N (per Amp)",fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
@@ -447,4 +463,46 @@ def plot_SNR(qa_dict,outfile):
                  fontsize=10
                  )
 
+    ax3.set_ylabel('Median S/N',fontsize=8)
+    ax3.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
+    ax3.annotate("ELG", xy=(0.8,0.9),fontsize=10)
+    ax3.set_xlim(np.min(elg_snr_mag[1])-0.1,np.max(elg_snr_mag[1])+0.1)
+    ax3.set_ylim(np.min(elg_snr_mag[0])-0.1,np.max(elg_snr_mag[0])+0.1)
+    ax3.xaxis.set_ticks(np.arange(int(np.min(elg_snr_mag[1])),int(np.max(elg_snr_mag[1]))+1,0.5))
+    #print np.arange(int(np.min(elg_snr_mag[1]))-0.5,int(np.max(elg_snr_mag[1]))+1.0,0.5)
+    ax3.tick_params(axis='x',labelsize=6,labelbottom='on')
+    ax3.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax3.plot(elg_snr_mag[1],elg_snr_mag[0],'b.')
+
+    ax4.set_ylabel('',fontsize=10)
+    ax4.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
+    ax4.annotate("LRG", xy=(0.8,0.9),fontsize=10)
+    ax4.set_xlim(np.min(lrg_snr_mag[1])-0.1,np.max(lrg_snr_mag[1])+0.1)
+    ax4.set_ylim(np.min(lrg_snr_mag[0])-0.1,np.max(lrg_snr_mag[0])+0.1)
+    ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_snr_mag[1])),int(np.max(lrg_snr_mag[1]))+1,0.5))
+    ax4.tick_params(axis='x',labelsize=6,labelbottom='on')
+    ax4.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax4.plot(lrg_snr_mag[1],lrg_snr_mag[0],'r.')
+
+    ax5.set_ylabel('',fontsize=10)
+    ax5.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
+    ax5.annotate("QSO", xy=(0.8,0.9),fontsize=10)
+    ax5.set_xlim(np.min(qso_snr_mag[1])-0.1,np.max(qso_snr_mag[1])+0.1)
+    ax5.set_ylim(np.min(qso_snr_mag[0])-0.1,np.max(qso_snr_mag[0])+0.1)
+    ax5.xaxis.set_ticks(np.arange(int(np.min(qso_snr_mag[1])),int(np.max(qso_snr_mag[1]))+1,0.5))
+    ax5.tick_params(axis='x',labelsize=6,labelbottom='on')
+    ax5.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax5.plot(qso_snr_mag[1],qso_snr_mag[0],'go')
+
+    ax6.set_ylabel('',fontsize=10)
+    ax6.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
+    ax6.annotate("STD", xy=(0.8,0.9),fontsize=10)
+    ax6.set_xlim(np.min(star_snr_mag[1])-0.1,np.max(star_snr_mag[1])+0.1)
+    ax6.set_ylim(np.min(star_snr_mag[0])-0.1,np.max(star_snr_mag[0])+0.1)
+    ax6.xaxis.set_ticks(np.arange(int(np.min(star_snr_mag[1])),int(np.max(star_snr_mag[1]))+1,0.5))
+    ax6.tick_params(axis='x',labelsize=6,labelbottom='on')
+    ax6.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax6.plot(star_snr_mag[1],star_snr_mag[0],'ko')
+
+    plt.tight_layout()
     fig.savefig(outfile)
