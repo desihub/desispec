@@ -306,8 +306,10 @@ def main_mpi(args, comm=None):
         outbundle = "{}_{:02d}.fits".format(outroot, b)
         outmodel = "{}_model_{:02d}.fits".format(outroot, b)
 
-        print('extract:  Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
-        bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
+        print('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
+            rank, os.path.basename(input_file),
+            bspecmin[b], bspecmin[b]+bnspec[b], time.asctime(),
+            ) )
 
         #- The actual extraction
         try:
