@@ -324,6 +324,50 @@ def plot_RMS(qa_dict,outfile):
                  )
     fig.savefig(outfile)
 
+def plot_integral(qa_dict,outfile):
+    spectrograph=qa_dict["SPECTROGRAPH"]
+    expid=qa_dict["EXPID"]
+    arm=qa_dict["ARM"]
+    paname=qa_dict["PANAME"]
+    std_integral=np.array(qa_dict["VALUE"]["INTEGRAL"])
+    std_integral_amp=np.array(qa_dict["VALUE"]["INT_AVG_AMP"])
+
+    fig=plt.figure()
+    plt.suptitle("Total integrals of STD spectra %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
+    index=np.arange(1,len(std_integral)+1)
+    ax1=fig.add_subplot(211)
+    hist_med=ax1.bar(index,std_integral,color='b',align='center')
+    ax1.set_xlabel('STD fibers',fontsize=10)
+    ax1.set_ylabel('Integral',fontsize=10)
+    ax1.tick_params(axis='x',labelsize=10)
+    ax1.tick_params(axis='y',labelsize=10)
+    ax1.set_xticks(index)
+    ax1.set_xticklabels(index)
+    
+    ax2=fig.add_subplot(212)
+    heatmap1=ax2.pcolor(std_integral_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
+    ax2.set_xlabel("Average integrals of STD spectra",fontsize=10)
+    ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
+    ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax2.annotate("Amp 1\n%.1f"%std_integral_amp[0],
+                 xy=(0.4,0.4),
+                 fontsize=10
+                 )
+    ax2.annotate("Amp 2\n%.1f"%std_integral_amp[1],
+                 xy=(1.4,0.4),
+                 fontsize=10
+                 )
+    ax2.annotate("Amp 3\n%.1f"%std_integral_amp[2],
+                 xy=(0.4,1.4),
+                 fontsize=10
+                 )
+    ax2.annotate("Amp 4\n%.1f"%std_integral_amp[3],
+                 xy=(1.4,1.4),
+                 fontsize=10
+                 )
+    fig.savefig(outfile)
+
+
 def plot_sky_continuum(qa_dict,outfile):
     """
        plot mean sky continuum from lower and higher wavelength range for each fiber and accross amps

@@ -151,6 +151,15 @@ def continuum(wave,flux,wmin=None,wmax=None):
     medcont=np.median(newflux)
     return medcont
 
+def integrate_spec(wave,flux):
+    """
+    calculate the integral of the spectrum in the given range using trapezoidal integration
+    args: wave: 1d wavelength array
+          flux: 1d flux array 
+    Note: limits of integration are min and max values of wavelength
+    """   
+    integral=np.trapz(flux,wave)
+    return integral
 
 def SN_ratio(flux,ivar):
     """
@@ -350,6 +359,117 @@ class Count_Pixels(MonitoringAlg):
 
     def get_default_config(self):
         return {}
+
+class Integrate_Spec(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="INTEGRATE"
+        from desispec.image import Image as im
+        MonitoringAlg.__init__(self,name,im,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
+        input_frame=args[0]
+        camera=kwargs["camera"]
+        expid=kwargs["expid"] 
+
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+
+        amps=False
+        if "amps" in kwargs:
+            amps=kwargs["amps"]
+
+        psf = None
+        if "PSFFile" in kwargs: 
+            psf=kwargs["PSFFile"]
+
+        if "url" in kwargs:
+             url=kwargs["url"]
+        else: 
+             url=None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+
+        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+
+    def run_qa(self,frame,camera,expid,paname=None,amps=False,psf=None,url=None,qafig=None):
+        retval={}
+        retval["EXPID"]=expid
+        retval["ARM"]=camera[0]
+        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["PANAME"]=paname
+        retval["QATIME"]=datetime.datetime.now().isoformat()
+
+        #- get the integrals for all fibers
+        flux=frame.flux
+        wave=frame.wave
+        integrals=np.zeros(flux.shape[0])
+
+        for ii in range(len(integrals)):
+            integrals[ii]=integrate_spec(wave,flux[ii])
+        
+        #- average integrals over star fibers
+        starfibers=np.where(frame.fibermap['OBJTYPE']=='STD')
+        int_stars=integrals[starfibers]
+        int_average=np.mean(int_stars)
+
+        #- get the counts for each amp
+        if amps:
+
+            #- get the fiducial boundary
+            pixboundary,fidboundary=fiducialregion(frame,psf)
+            int_amp1=integrate_spec(frame.wave[fidboundary[0][1]],frame.flux[fidboundary[0]][starfibers])
+            int_amp3=integrate_spec(frame.wave[fidboundary[2][1]],frame.flux[fidboundary[2]][starfibers])
+            
+            int_avg_amp1=np.mean(int_amp1)
+            int_avg_amp3=np.mean(int_amp3)
+
+            if fidboundary[1][0].start is not None:
+                int_amp2=integrate_spec(frame.wave[fidboundary[1][1]],frame.flux[fidboundary[1]][starfibers])
+                int_amp4=integrate_spec(frame.wave[fidboundary[3][1]],frame.flux[fidboundary[3]][starfibers])
+                int_avg_amp2=np.mean(int_amp2)
+                int_avg_amp4=np.mean(int_amp4)
+
+            else:
+                int_avg_amp2=0.
+                int_avg_amp4=0.
+
+            int_avg_amps=np.array((int_avg_amp1,int_avg_amp2,int_avg_amp3,int_avg_amp4)) #- in four amps regions            
+
+            retval["VALUE"]={"INTEGRAL":int_stars,"INT_AVG":int_average,"INT_AVG_AMP":int_avg_amps}
+        else:
+            retval["VALUE"]={"INTEGRAL":int_stars,"INT_AVG":int_average}     
+
+        if url is not None:
+            try: 
+                import requests
+                response=requests.get(url)
+                #- Check if the api has json
+                api=response.json()
+                #- proceed with post
+                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
+                response=requests.post(api['job'],json=job,auth=("username","password")) #- username, password not real but placeholder here.
+            except:
+                log.info("Skipping HTTP post...")    
+
+        if qafig is not None:
+            from desispec.qa.qa_plots_ql import plot_integral
+            plot_integral(retval,qafig)
+            
+            log.info("Output QA fig %s"%qafig)      
+
+        return retval    
+
+    def get_default_config(self):
+        return {}
+
 
 class Sky_Continuum(MonitoringAlg):
     def __init__(self,name,config,logger=None):
