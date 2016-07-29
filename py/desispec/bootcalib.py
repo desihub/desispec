@@ -803,6 +803,8 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
     nbad=0
     for ion in lines.keys() :
         ii=np.where(llist["Ion"]==ion)[0]
+        if ii.size == 0 :
+            continue
         all_waves=np.array(llist["wave"][ii])
         for j,w in enumerate(lines[ion]) :
             i=np.argmin(np.abs(w-all_waves))
@@ -1440,7 +1442,7 @@ def fix_ycoeff_outliers(xcoeff, ycoeff, deg=5, tolerance=2):
     nfibers=ycoeff.shape[0]
     if nfibers < 3 :
         log.warning("only {:d} fibers, cannot interpolate coefs".format(nfibers))
-        return
+        return ycoeff
     deg=min(deg,nfibers-1)
     
     nwave=ycoeff.shape[1]+1
