@@ -76,7 +76,7 @@ def _overscan(pix, nsigma=5, niter=3):
 
     return overscan, readnoise
 
-def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
+def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8) :
     '''
     preprocess image using metadata in header
 
@@ -94,6 +94,11 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         ndarray: use that array
         filename (str or unicode): read HDU 0 and use that
         DATE-OBS is required in header if bias, pixflat, or mask=True
+
+    Optional tuning of cosmic ray rejection parameters:
+        cosmics_nsig: number of sigma above background required
+        cosmics_cfudge: number of sigma inconsistent with PSF required
+        cosmics_c2fudge:  fudge factor applied to PSF
 
     Returns Image object with member variables:
         image : 2D preprocessed image in units of electrons per pixel
@@ -234,7 +239,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- update img.mask to mask cosmic rays
-    cosmics.reject_cosmic_rays(img)
+    cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
 
     return img
 

@@ -205,7 +205,7 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
     log.info("end : %s pixels rejected"%(np.sum(rejected)))
     return rejected
 
-def reject_cosmic_rays(img) :
+def reject_cosmic_rays(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=False) :
     """Cosmic ray rejection
     Input is a pre-processed image : desispec.Image
     The image mask is modified
@@ -214,5 +214,5 @@ def reject_cosmic_rays(img) :
        img: input desispec.Image
 
     """
-    rejected=reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=20,dilate=False)
+    rejected=reject_cosmic_rays_ala_sdss(img,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge,niter=20,dilate=False)
     img.mask[rejected] |= ccdmask.COSMIC
