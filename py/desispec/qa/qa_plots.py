@@ -571,7 +571,7 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
         plt.show()
 
 
-def skysub_resid(sky_wave, sky_flux, sky_resid, outfile=None, pp=None, close=True):
+def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True):
     """ Generate a plot of sky subtraction residuals
     Typically for a given channel
     Args:
@@ -588,10 +588,23 @@ def skysub_resid(sky_wave, sky_flux, sky_resid, outfile=None, pp=None, close=Tru
     # Start the plot
     fig = plt.figure(figsize=(8, 5.0))
     gs = gridspec.GridSpec(2,1)
+
     # Wavelength
-    ax_wave = gs[0]
-    du_pslices(sky_wave, sky_resid, np.min(sky_wave), np.max(sky_wave),
+    ax_wave = plt.subplot(gs[0])
+    du_pslices(sky_wave, sky_res, np.min(sky_wave), np.max(sky_wave),
                0., num_slices=20, axis=ax_wave)
+    ax_wave.set_xlabel('Wavelength')
+    ax_wave.set_ylabel('Residual Flux')
+
+    # Wavelength
+    ax_flux = plt.subplot(gs[1])
+    du_pslices(sky_flux, sky_res, np.min(sky_flux), np.max(sky_flux),
+               0., num_slices=20, axis=ax_flux, set_ylim_from_stats=True)
+    ax_flux.set_xlabel('log10(Sky Flux)')
+    ax_flux.set_ylabel('Residual Flux')
+    #ax_flux.set_ylim(-600, 100)
+
+
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     if outfile is not None:

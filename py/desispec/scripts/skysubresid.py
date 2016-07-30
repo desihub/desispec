@@ -11,7 +11,7 @@ def parse(options=None):
 
     parser.add_argument('--specprod_dir', type = str, default = None, required=True,
                         help = 'Path containing the exposures/directory to use')
-    parser.add_argument('--expids', type = int, help = 'List of exposure IDs')
+    parser.add_argument('--expids', type=str, help = 'List of exposure IDs')
 
     args = None
     if options is None:
@@ -29,6 +29,9 @@ def main(args) :
     from desispec.io import get_files
     from desispec.io import read_frame
     from desispec.io.sky import read_sky
+    from desispec.qa.qa_plots import skysub_resid
+    from matplotlib import pyplot as plt
+    import copy
     import pdb
 
     # Log
@@ -42,9 +45,11 @@ def main(args) :
         expids = 'all'
 
     # Sky dict
-    sky_dict = dict(wave=[], flux=[], res=[], count=0)
-    channel_dict = dict(b=sky_dict.copy(), r=sky_dict.copy(), z=sky_dict.copy())
-
+    sky_dict = dict(wave=[], skyflux=[], res=[], count=0)
+    channel_dict = dict(b=copy.deepcopy(sky_dict),
+                        r=copy.deepcopy(sky_dict),
+                        z=copy.deepcopy(sky_dict),
+                        )
     # Loop on nights
     path_nights = glob.glob(args.specprod_dir+'/exposures/*')
     nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
@@ -62,6 +67,7 @@ def main(args) :
             for camera, cframe_fil in frames_dict.items():
                 channel = camera[0]
                 # Load frame
+                log.info('Loading {:s}'.format(cframe_fil))
                 cframe = read_frame(cframe_fil)
                 if cframe.meta['FLAVOR'] in ['flat','arc']:  # Probably can't happen
                     continue
@@ -71,14 +77,26 @@ def main(args) :
                 skymodel = read_sky(sky_file)
                 # Resid
                 skyfibers = np.where(cframe.fibermap['OBJTYPE'] == 'SKY')[0]
-                flux = cframe.flux[skyfibers]
-                res = flux - skymodel.flux[skyfibers] # Residuals
-                pdb.set_trace()
+                res = cframe.flux[skyfibers]
+                flux = skymodel.flux[skyfibers] # Residuals
+                tmp = np.outer(np.ones(flux.shape[0]), cframe.wave)
                 # Append
-                channel_dict[channel]['wave'].append(cframe.wave[skyfibers])
-                channel_dict[channel]['flux'].append(flux)
-                channel_dict[channel]['res'].append(res)
+                #from xastropy.xutils import xdebug as xdb
+                #xdb.set_trace()
+                channel_dict[channel]['wave'].append(tmp.flatten())
+                channel_dict[channel]['skyflux'].append(
+                        np.log10(np.maximum(flux.flatten(),1e-1)))
+                channel_dict[channel]['res'].append(res.flatten())
                 channel_dict[channel]['count'] += 1
+    # Figure
+    for channel in ['b', 'r', 'z']:
+        if channel_dict[channel]['count'] > 0:
+            sky_wave = np.concatenate(channel_dict[channel]['wave'])
+            sky_flux = np.concatenate(channel_dict[channel]['skyflux'])
+            sky_res = np.concatenate(channel_dict[channel]['res'])
+            # Plot
+            skysub_resid(sky_wave, sky_flux, sky_res,
+                         outfile='tmp{:s}.png'.format(channel))
 
 
 
