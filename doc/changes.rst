@@ -5,7 +5,7 @@ desispec change log
 0.8.2 (unreleased)
 ------------------
 
-* no changes yet
+* desi_qa_skysub -- plots residuals
 
 0.8.1 (2016-07-18)
 ------------------

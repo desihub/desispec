@@ -1,4 +1,4 @@
-# Script for generating QA from a Production run
+# Script for generating plots on SkySub residuals
 from __future__ import absolute_import, division
 
 from desispec.log import get_logger
