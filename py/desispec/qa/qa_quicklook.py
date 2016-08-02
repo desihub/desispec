@@ -363,7 +363,7 @@ class Count_Pixels(MonitoringAlg):
 class Integrate_Spec(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="INTEGRATE"
+            name="INTEG"
         from desispec.image import Image as im
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
@@ -443,9 +443,9 @@ class Integrate_Spec(MonitoringAlg):
 
             int_avg_amps=np.array((int_avg_amp1,int_avg_amp2,int_avg_amp3,int_avg_amp4)) #- in four amps regions            
 
-            retval["VALUE"]={"INTEGRAL":int_stars,"INT_AVG":int_average,"INT_AVG_AMP":int_avg_amps}
+            retval["VALUE"]={"INTEG":int_stars,"INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps}
         else:
-            retval["VALUE"]={"INTEGRAL":int_stars,"INT_AVG":int_average}     
+            retval["VALUE"]={"INTEG":int_stars,"INTEG_AVG":int_average}     
 
         if url is not None:
             try: 
@@ -881,7 +881,7 @@ class Calculate_SNR(MonitoringAlg):
         
         for ii in range(len(input_frame.fibermap)):
             if "DECAM_R" in input_frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
-            else: filter_pick[ii]=input_frame.fibermap["FILTER"][ii,0]
+            else: filter_pick[ii]= -1 #- only accepting "DECAM_R" now
         filter_pick=np.array(filter_pick)
 
         medsnr=SN_ratio(input_frame.flux,input_frame.ivar)
@@ -942,9 +942,9 @@ class Calculate_SNR(MonitoringAlg):
 
             average_amp=np.array([average1,average2,average3,average4])
 
-            retval["VALUE"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_SNR_MAG": elg_snr_mag, "LRG_SNR_MAG": lrg_snr_mag, "QSO_SNR_MAG": qso_snr_mag,"STAR_SNR_MAG":std_snr_mag}
+            retval["VALUE"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
 
-        else: retval["VALUE"]={"MEDIAN_SNR":medsnr,"ELG_SNR_MAG": elg_snr_mag, "LRG_SNR_MAG": lrg_snr_mag, "QSO_SNR_MAG": qso_snr_mag,"STAR_SNR_MAG":std_snr_mag}
+        else: retval["VALUE"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers, "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers, "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers, "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers, "STAR_SNR_MAG":std_snr_mag}
         
         #- http post if valid
         if url is not None:

@@ -4,6 +4,7 @@ This includes routines to make pdf plots on the qa outputs from quicklook.
 
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
 
 def plot_countspectralbins(qa_dict,outfile):
     """Plot count spectral bins.
@@ -14,7 +15,7 @@ def plot_countspectralbins(qa_dict,outfile):
 
         {'ARM': 'r',
          'EXPID': '00000006',
-         'MJD': 57578.78098693542,
+         'QATIME': '2016-08-02T14:40:03.269684',
          'PANAME': 'BOXCAR',
          'SPECTROGRAPH': 0,
          'VALUE': {'NBINS100': array([ 2575.,  2611.,  2451.,  2495.,  2357.,  2452.,  2528.,  2501.,  2548.,  2461.]),
@@ -22,7 +23,8 @@ def plot_countspectralbins(qa_dict,outfile):
                    'NBINS250': array([ 2503.,  2539.,  2161.,  2259.,  2077.,  2163.,  2284.,  2268.,  2387.,  2210.]),
                    'NBINS250_AMP': array([ 1149.55,     0.  ,  1095.02,     0.  ]),
                    'NBINS500': array([ 2307.,  2448.,   229.,  1910.,    94.,   306.,  2056.,  1941.,  2164.,   785.]),
-                   'NBINS500_AMP': array([ 688.85,    0.  ,  648.75,    0.  ])}}}
+                   'NBINS500_AMP': array([ 688.85,    0.  ,  648.75,    0.  ])
+                   'NGOODFIBERS: 10}}}
 
     Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
@@ -47,29 +49,32 @@ def plot_countspectralbins(qa_dict,outfile):
     fig=plt.figure()
     plt.suptitle("Count spectral bins after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
 
+    gs=GridSpec(7,6)
+    ax1=fig.add_subplot(gs[1:4,:2])
+    ax2=fig.add_subplot(gs[1:4,2:4])
+    ax3=fig.add_subplot(gs[1:4,4:])
+    ax4=fig.add_subplot(gs[4:,:2])
+    ax5=fig.add_subplot(gs[4:,2:4])
+    ax6=fig.add_subplot(gs[4:,4:])
 
-    ax1=fig.add_subplot(231)
     hist_med=ax1.bar(index,bins100,color='b',align='center')
     ax1.set_xlabel('Fiber #',fontsize=10)
     ax1.set_ylabel('Counts > 100',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
 
-    ax2=fig.add_subplot(232)
     hist_med=ax2.bar(index,bins250,color='r',align='center')
     ax2.set_xlabel('Fiber #',fontsize=10)
     ax2.set_ylabel('Counts > 250',fontsize=10)
     ax2.tick_params(axis='x',labelsize=10)
     ax2.tick_params(axis='y',labelsize=10)
 
-    ax3=fig.add_subplot(233)
     hist_med=ax3.bar(index,bins500,color='g',align='center')
     ax3.set_xlabel('Fiber #',fontsize=10)
     ax3.set_ylabel('Counts > 500',fontsize=10)
     ax3.tick_params(axis='x',labelsize=10)
     ax3.tick_params(axis='y',labelsize=10)
 
-    ax4=fig.add_subplot(234)
     heatmap1=ax4.pcolor(bins100_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
     ax4.set_xlabel("Bins above 100 counts (per Amp)",fontsize=10)
     ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
@@ -90,7 +95,6 @@ def plot_countspectralbins(qa_dict,outfile):
                  xy=(1.4,1.4),
                  fontsize=10
                  )
-    ax5=fig.add_subplot(235)
     heatmap2=ax5.pcolor(bins250_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
     ax5.set_xlabel("Bins above 250 counts (per Amp)",fontsize=10)
     ax5.tick_params(axis='x',labelsize=10,labelbottom='off')
@@ -112,7 +116,6 @@ def plot_countspectralbins(qa_dict,outfile):
                  fontsize=10
                  )
 
-    ax6=fig.add_subplot(236)
     heatmap3=ax6.pcolor(bins500_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
     ax6.set_xlabel("Bins above 500 counts (per Amp)",fontsize=10)
     ax6.tick_params(axis='x',labelsize=10,labelbottom='off')
@@ -142,7 +145,7 @@ def plot_countpix(qa_dict,outfile):
        qa_dict example:
            {'ARM': 'r',
             'EXPID': '00000006',
-            'MJD': 57578.780697648355,
+            'QATIME': '2016-08-02T14:39:59.157986',
             'PANAME': 'PREPROC',
             'SPECTROGRAPH': 0,
             'VALUE': {'NPIX100': 0,
@@ -237,7 +240,7 @@ def plot_bias_overscan(qa_dict,outfile):
        qa_dict example:
            {'ARM': 'r',
             'EXPID': '00000006',
-            'MJD': 57578.780704701225,
+            'QATIME': '2016-08-02T14:39:59.773229',
             'PANAME': 'PREPROC',
             'SPECTROGRAPH': 0,
             'VALUE': {'BIAS': -0.0080487558302569373,
@@ -325,12 +328,23 @@ def plot_RMS(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_integral(qa_dict,outfile):
+    """
+    qa_dict example:
+        {'ARM': 'r',
+         'EXPID': '00000002',
+         'PANAME': 'SKYSUB',
+         'QATIME': '2016-08-02T15:01:26.239419',
+         'SPECTROGRAPH': 0,
+         'VALUE': {'INTEG': array([ 3587452.149007]),
+                   'INTEG_AVG': 3587452.1490069963,
+                   'INTEG_AVG_AMP': array([ 1824671.67950129,        0.        ,  1752550.23876224,        0.        ])}}
+   """
     spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
     arm=qa_dict["ARM"]
     paname=qa_dict["PANAME"]
-    std_integral=np.array(qa_dict["VALUE"]["INTEGRAL"])
-    std_integral_amp=np.array(qa_dict["VALUE"]["INT_AVG_AMP"])
+    std_integral=np.array(qa_dict["VALUE"]["INTEG"])
+    std_integral_amp=np.array(qa_dict["VALUE"]["INTEG_AVG_AMP"])
 
     fig=plt.figure()
     plt.suptitle("Total integrals of STD spectra %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
@@ -374,7 +388,7 @@ def plot_sky_continuum(qa_dict,outfile):
        example qa_dict:
           {'ARM': 'r',
            'EXPID': '00000006',
-           'MJD': 57582.49011861168,
+           'QATIME': '2016-08-02T14:40:02.766684,
            'PANAME': 'APPLY_FIBERFLAT',
            'SPECTROGRAPH': 0,
            'VALUE': {'SKYCONT': 359.70078667259668,
@@ -430,25 +444,29 @@ def plot_sky_continuum(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_SNR(qa_dict,outfile):
-    from matplotlib.gridspec import GridSpec
+
     """Plot SNR
 
     `qa_dict` example::
 
         {'ARM': 'r',
          'EXPID': '00000006',
-         'MJD': 57578.78131121235,
+         'QATIME': '2016-08-02T14:40:03.670962',
          'PANAME': 'SKYSUB',
          'SPECTROGRAPH': 0,
-         'VALUE': {'ELG_SNR_MAG': array([[  1.04995347,   1.75609447,   0.86920898],
+         'VALUE': {'ELG_FIBERID': [0, 3, 4],
+                   'ELG_SNR_MAG': array([[  1.04995347,   1.75609447,   0.86920898],
                                         [ 22.40120888,  21.33947945,  23.26506996]]),
+                   'LRG_FIBERID': [2, 8, 9],
                    'LRG_SNR_MAG': array([[  0.92477875,   1.45257228,   1.52262706],
                                         [ 22.75508881,  21.35451317,  21.39620209]]),
                    'MEDIAN_AMP_SNR': array([ 4.64376854,  0.        ,  5.02489801,  0.        ]),
                    'MEDIAN_SNR': array([  1.04995347,   0.47679704,   0.92477875,   1.75609447,
                                           0.86920898,   1.03979459,   0.46717453,  38.31675053,
                                           1.45257228,   1.52262706]),
+                   'QSO_FIBERID': [5],
                    'QSO_SNR_MAG': array([[  1.03979459], [ 22.95341873]]),
+                   'STAR_FIBERID': [7],
                    'STAR_SNR_MAG': array([[ 38.31675053], [ 17.13783646]])}}}
     Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
@@ -509,7 +527,7 @@ def plot_SNR(qa_dict,outfile):
 
     ax3.set_ylabel('Median S/N',fontsize=8)
     ax3.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
-    ax3.annotate("ELG", xy=(0.8,0.9),fontsize=10)
+    ax3.set_title("ELG", fontsize=8)
     ax3.set_xlim(np.min(elg_snr_mag[1])-0.1,np.max(elg_snr_mag[1])+0.1)
     ax3.set_ylim(np.min(elg_snr_mag[0])-0.1,np.max(elg_snr_mag[0])+0.1)
     ax3.xaxis.set_ticks(np.arange(int(np.min(elg_snr_mag[1])),int(np.max(elg_snr_mag[1]))+1,0.5))
@@ -520,7 +538,7 @@ def plot_SNR(qa_dict,outfile):
 
     ax4.set_ylabel('',fontsize=10)
     ax4.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
-    ax4.annotate("LRG", xy=(0.8,0.9),fontsize=10)
+    ax4.set_title("LRG",fontsize=8)
     ax4.set_xlim(np.min(lrg_snr_mag[1])-0.1,np.max(lrg_snr_mag[1])+0.1)
     ax4.set_ylim(np.min(lrg_snr_mag[0])-0.1,np.max(lrg_snr_mag[0])+0.1)
     ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_snr_mag[1])),int(np.max(lrg_snr_mag[1]))+1,0.5))
@@ -530,23 +548,23 @@ def plot_SNR(qa_dict,outfile):
 
     ax5.set_ylabel('',fontsize=10)
     ax5.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
-    ax5.annotate("QSO", xy=(0.8,0.9),fontsize=10)
+    ax5.set_title("QSO", fontsize=8)
     ax5.set_xlim(np.min(qso_snr_mag[1])-0.1,np.max(qso_snr_mag[1])+0.1)
     ax5.set_ylim(np.min(qso_snr_mag[0])-0.1,np.max(qso_snr_mag[0])+0.1)
     ax5.xaxis.set_ticks(np.arange(int(np.min(qso_snr_mag[1])),int(np.max(qso_snr_mag[1]))+1,0.5))
     ax5.tick_params(axis='x',labelsize=6,labelbottom='on')
     ax5.tick_params(axis='y',labelsize=6,labelleft='on')
-    ax5.plot(qso_snr_mag[1],qso_snr_mag[0],'go')
+    ax5.plot(qso_snr_mag[1],qso_snr_mag[0],'g.')
 
     ax6.set_ylabel('',fontsize=10)
     ax6.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
-    ax6.annotate("STD", xy=(0.8,0.9),fontsize=10)
+    ax6.set_title("STD", fontsize=8)
     ax6.set_xlim(np.min(star_snr_mag[1])-0.1,np.max(star_snr_mag[1])+0.1)
     ax6.set_ylim(np.min(star_snr_mag[0])-0.1,np.max(star_snr_mag[0])+0.1)
     ax6.xaxis.set_ticks(np.arange(int(np.min(star_snr_mag[1])),int(np.max(star_snr_mag[1]))+1,0.5))
     ax6.tick_params(axis='x',labelsize=6,labelbottom='on')
     ax6.tick_params(axis='y',labelsize=6,labelleft='on')
-    ax6.plot(star_snr_mag[1],star_snr_mag[0],'ko')
+    ax6.plot(star_snr_mag[1],star_snr_mag[0],'k.')
 
     plt.tight_layout()
     fig.savefig(outfile)
