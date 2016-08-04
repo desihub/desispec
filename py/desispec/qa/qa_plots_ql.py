@@ -284,26 +284,29 @@ def plot_RMS(qa_dict,outfile):
     `qa_dict` example:
         {'ARM': 'r',
          'EXPID': '00000006',
-         'MJD': 57581.91467038749,
+         'QATIME': '2016-07-08T06:05:34.56',
          'PANAME': 'PREPROC',
          'SPECTROGRAPH': 0,
          'VALUE': {'RMS': 40.218151021598679,
-                   'RMS_AMP': array([ 55.16847779,   2.91397089,  55.26686528,   2.91535373])}}
+                   'RMS_AMP': array([ 55.16847779,   2.91397089,  55.26686528,   2.91535373])
+                   'RMS_OVER': 40.21815,
+                   'RMS_OVER_AMP': array([ 55.168,   2.913,   55.266,  2.915])
+}}
      Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
     """
 
     rms_amp=qa_dict["VALUE"]["RMS_AMP"]
+    rms_over_amp=qa_dict["VALUE"]["RMS_OVER_AMP"]
     arm=qa_dict["ARM"]
     spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
-    mjd=qa_dict["MJD"]
     pa=qa_dict["PANAME"]
 
     fig=plt.figure()
     plt.suptitle("RMS image counts per amplifier, Camera: %s%s, ExpID: %s"%(arm,spectrograph,expid))
-    ax1=fig.add_subplot(111)
+    ax1=fig.add_subplot(211)
     heatmap1=ax1.pcolor(rms_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
     ax1.set_xlabel("RMS (per Amp)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
@@ -320,8 +323,28 @@ def plot_RMS(qa_dict,outfile):
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-
     ax1.annotate("Amp 4\n%.3f"%rms_amp[3],
+                 xy=(1.4,1.4),
+                 fontsize=10
+                 )
+    ax2=fig.add_subplot(212)
+    heatmap2=ax2.pcolor(rms_over_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
+    ax1.set_xlabel("RMS Overscan (per Amp)",fontsize=10)
+    ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
+    ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax2.annotate("Amp 1\n%.3f"%rms_over_amp[0],
+                 xy=(0.4,0.4),
+                 fontsize=10
+                 )
+    ax2.annotate("Amp 2\n%.3f"%rms_over_amp[1],
+                 xy=(1.4,0.4),
+                 fontsize=10
+                 )
+    ax2.annotate("Amp 3\n%.3f"%rms_over_amp[2],
+                 xy=(0.4,1.4),
+                 fontsize=10
+                 )
+    ax2.annotate("Amp 4\n%.3f"%rms_over_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
@@ -442,6 +465,53 @@ def plot_sky_continuum(qa_dict,outfile):
                  fontsize=10
                  )
     fig.savefig(outfile)
+
+#def plot_sky_peaks(qa_dict,outfile):
+#    """
+#       plot rms of sky peaks for smy fibers across amps
+#       example qa_dict:
+#       {'ARM': 'r',
+#        'EXPID': '00000006',
+#        'QATIME': '2016-07-08T06:05:34.56',
+#        'PANAME': 'APPLY_FIBERFLAT', 'SPECTROGRAPH': 0,
+#        'VALUE': {'SUMCOUNT': array([ 1500.0,  1400.0, ....]),
+#                  'SUMCOUNT_RMS': 1445.0,
+#                  'SUMCOUNT_RMS_SKY': 1455.0,
+#                  'SUMCOUNT_RMS_AMP': array([ 1444.0, 1433.0, 1422.0, 1411.0])}}
+#
+#       args: qa_dict: dictionary from sky peaks QA
+#             outfile: pdf file to save the plot
+#    """
+#    spectrograph=qa_dict["SPECTROGRAPH"]
+#    expid=qa_dict["EXPID"]
+#    arm=qa_dict["ARM"]
+#    paname=qa_dict["PANAME"]
+#    sky_amp_rms=np.array(qa_dict["VALUE"]["SUMCOUNT_RMS_AMP"])
+#    fig=plt.figure()
+#    plt.suptitle("Amp RMS for Sky Fibers after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
+#
+#    ax1=fig.add_subplot(111)
+#    heatmap1=ax1.pcolor(sky_amp_rms.reshape(2,2).T,cmap=plt.cm.coolwarm)
+#    ax1.set_xlabel("Sky Fiber RMS for peak wavelengths (per Amp)",fontsize=10)
+#    ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
+#    ax1.tick_params(axis='y',labelsize=10,labelleft='off')
+#    ax1.annotate("Amp 1\n%.1f"%sky_amp_rms[0],
+#                 xy=(0.4,0.4),
+#                 fontsize=10
+#                 )
+#    ax1.annotate("Amp 2\n%.1f"%sky_amp_rms[1],
+#                 xy=(1.4,0.4),
+#                 fontsize=10
+#                 )
+#    ax1.annotate("Amp 3\n%.1f"%sky_amp_rms[2],
+#                 xy=(0.4,1.4),
+#                 fontsize=10
+#                 )
+#    ax1.annotate("Amp 4\n%.1f"%sky_amp_rms[3],
+#                 xy=(1.4,1.4),
+#                 fontsize=10
+#                 )
+#    fig.savefig(outfile)
 
 def plot_SNR(qa_dict,outfile):
 
