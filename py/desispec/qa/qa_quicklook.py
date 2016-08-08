@@ -610,154 +610,167 @@ class Sky_Continuum(MonitoringAlg):
         return {}
 
 
-#class Sky_Peaks(MonitoringAlg):
-#    def __init__(self,name,config,logger=None):
-#        if name is None or name.strip() == "":
-#            name="SKYPEAK"
-#        from  desispec.frame import Frame as fr
-#        MonitoringAlg.__init__(self,name,fr,config,logger)
-#    def run(self,*args,**kwargs):
-#        if len(args) == 0 :
-#            raise qlexceptions.ParameterException("Missing input parameter")
-#        if not self.is_compatible(type(args[0])):
-#            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
-#
-#        input_frame=args[0]
-#        camera=kwargs["camera"]
-#        expid=kwargs["expid"]
-#
-#        if "paname" not in kwargs:
-#            paname=None
-#        else:
-#            paname=kwargs["paname"]
-#
-#        amps=False
-#        if "amps" in kwargs:
-#            amps=kwargs["amps"]
-#
-#        if "url" in kwargs:
-#             url=kwargs["url"]
-#        else:
-#             url=None
-#
-#        if "qafig" in kwargs: qafig=kwargs["qafig"]
-#        else: qafig = None
-#
-#        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
-#
-#    def run_qa(self,frame,camera,expid,paname=None,amps=False,url=None,qafig=None):
-#        retval={}
-#        retval["EXPID"]=expid
-#        retval["ARM"]=camera[0]
-#        retval["SPECTROGRAPH"]=int(camera[1])
-#        retval["PANAME"]=paname
-#        retval["QATIME"]=datetime.datetime.now().isoformat()
-#
-#        dw=2. #define wavelength region around peak flux
-#        nspec_counts=[]
-#        sky_counts=[]
-#        rms_skyspec_amp=[]
-#        for i in range(frame.flux.shape[0]):
-#            if camera[0]=="b":
-#                b_peaks=np.array([3914.4,5199.3,5201.8])
-#                wave1_lo=np.argmin(np.abs(frame.wave-(b_peaks[0]-dw)))
-#                wave1_hi=np.argmin(np.abs(frame.wave-(b_peaks[0]+dw)))
-#                wave2_lo=np.argmin(np.abs(frame.wave-(b_peaks[1]-dw)))
-#                wave2_hi=np.argmin(np.abs(frame.wave-(b_peaks[1]+dw)))
-#                wave3_lo=np.argmin(np.abs(frame.wave-(b_peaks[2]-dw)))
-#                wave3_hi=np.argmin(np.abs(frame.wave-(b_peaks[2]+dw)))
-#                peak1_flux=np.trapz(frame.flux[i,wave1_lo:wave1_hi])
-#                peak2_flux=np.trapz(frame.flux[i,wave2_lo:wave2_hi])
-#                peak3_flux=np.trapz(frame.flux[i,wave3_lo:wave3_hi])
-#                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux)
-#                nspec_counts.append(sum_counts)
-#            if camera[0]=="r":
-#                r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
-#                wave1_lo=np.argmin(np.abs(frame.wave-(r_peaks[0]-dw)))
-#                wave1_hi=np.argmin(np.abs(frame.wave-(r_peaks[0]+dw)))
-#                wave2_lo=np.argmin(np.abs(frame.wave-(r_peaks[1]-dw)))
-#                wave2_hi=np.argmin(np.abs(frame.wave-(r_peaks[1]+dw)))
-#                wave3_lo=np.argmin(np.abs(frame.wave-(r_peaks[2]-dw)))
-#                wave3_hi=np.argmin(np.abs(frame.wave-(r_peaks[2]+dw)))
-#                wave4_lo=np.argmin(np.abs(frame.wave-(r_peaks[3]-dw)))
-#                wave4_hi=np.argmin(np.abs(frame.wave-(r_peaks[3]+dw)))
-#                wave5_lo=np.argmin(np.abs(frame.wave-(r_peaks[4]-dw)))
-#                wave5_hi=np.argmin(np.abs(frame.wave-(r_peaks[4]+dw)))
-#                peak1_flux=np.trapz(frame.flux[i,wave1_lo:wave1_hi])
-#                peak2_flux=np.trapz(frame.flux[i,wave2_lo:wave2_hi])
-#                peak3_flux=np.trapz(frame.flux[i,wave3_lo:wave3_hi])
-#                peak4_flux=np.trapz(frame.flux[i,wave4_lo:wave4_hi])
-#                peak5_flux=np.trapz(frame.flux[i,wave5_lo:wave5_hi])
-#                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)
-#                nspec_counts.append(sum_counts)
-#            if camera[0]=="z":
-#                z_peaks=np.array([8401.5,8432.4,8467.5,9479.4,9505.6,9521.8])
-#                wave1_lo=np.argmin(np.abs(frame.wave-(z_peaks[0]-dw)))
-#                wave1_hi=np.argmin(np.abs(frame.wave-(z_peaks[0]+dw)))
-#                wave2_lo=np.argmin(np.abs(frame.wave-(z_peaks[1]-dw)))
-#                wave2_hi=np.argmin(np.abs(frame.wave-(z_peaks[1]+dw)))
-#                wave3_lo=np.argmin(np.abs(frame.wave-(z_peaks[2]-dw)))
-#                wave3_hi=np.argmin(np.abs(frame.wave-(z_peaks[2]+dw)))
-#                wave4_lo=np.argmin(np.abs(frame.wave-(z_peaks[3]-dw)))
-#                wave4_hi=np.argmin(np.abs(frame.wave-(z_peaks[3]+dw)))
-#                wave5_lo=np.argmin(np.abs(frame.wave-(z_peaks[4]-dw)))
-#                wave5_hi=np.argmin(np.abs(frame.wave-(z_peaks[4]+dw)))
-#                wave6_lo=np.argmin(np.abs(frame.wave-(z_peaks[5]-dw)))
-#                wave6_hi=np.argmin(np.abs(frame.wave-(z_peaks[5]+dw)))
-#                peak1_flux=np.trapz(frame.flux[i,wave1_lo:wave1_hi])
-#                peak2_flux=np.trapz(frame.flux[i,wave2_lo:wave2_hi])
-#                peak3_flux=np.trapz(frame.flux[i,wave3_lo:wave3_hi])
-#                peak4_flux=np.trapz(frame.flux[i,wave4_lo:wave4_hi])
-#                peak5_flux=np.trapz(frame.flux[i,wave5_lo:wave5_hi])
-#                peak6_flux=np.trapz(frame.flux[i,wave6_lo:wave6_hi])
-#                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)
-#                nspec_counts.append(sum_counts)
-#
-#                if frame.fibermap['OBJTYPE'][i]=='SKY':
-#                    sky_counts.append(sum_counts)
-#    
-#                    if amps:
-#                        amp1=[]
-#                        amp2=[]
-#                        amp3=[]
-#                        amp4=[]
-#                        if frame.fibermap['FIBER'][i]<240:
-#                            if camera[0]=="b":
-#                                amp1_flux=peak1_flux
-#                                amp3_flux=np.sum(peak2_flux+peak3_flux)
-#                            if camera[0]=="r":
-#                                amp1_flux=np.sum(peak1_flux+peak2_flux)
-#                                amp3_flux=np.sum(peak3_flux+peak4_flux+peak5_flux)
-#                            if camera[0]=="z":
-#                                amp1_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
-#                                amp3_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
-#                            amp1.append(amp1_flux)
-#                            amp3.append(amp3_flux)
-#                        if frame.fibermap['FIBER'][i]>260:
-#                            if camera[0]=="b":
-#                                amp2_flux=peak1_flux
-#                                amp4_flux=np.sum(peak2_flux+peak3_flux)
-#                            if camera[0]=="r":
-#                                amp2_flux=np.sum(peak1_flux+peak2_flux)
-#                                amp4_flux=np.sum(peak3_flux+peak4_flux+peak5_flux)
-#                            if camera[0]=="z":
-#                                amp2_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
-#                                amp4_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
-#                            amp2.append(amp2_flux)
-#                            amp4.append(amp4_flux)
-#                        amp1_rms=np.std(amp1)
-#                        amp2_rms=np.std(amp2)
-#                        amp3_rms=np.std(amp3)
-#                        amp4_rms=np.std(amp4)
-#                        rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
-#
-#        rms_nspec=np.std(nspec_counts)
-#        rms_skyspec=np.std(sky_counts)
-#
-#        retval["VALUE"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp}
-#
-#    def get_default_config(self):
-#        return {}
+class Sky_Peaks(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="SKYPEAK"
+        from  desispec.frame import Frame as fr
+        MonitoringAlg.__init__(self,name,fr,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+
+        input_frame=args[0]
+        camera=kwargs["camera"]
+        expid=kwargs["expid"]
+
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+
+        amps=False
+        if "amps" in kwargs:
+            amps=kwargs["amps"]
+
+        if "url" in kwargs:
+            url=kwargs["url"]
+        else:
+            url=None
+
+        if "qafig" in kwargs:
+            qafig=kwargs["qafig"]
+        else: qafig = None
+
+        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
+
+    def run_qa(self,frame,camera,expid,paname=None,amps=False,url=None,qafig=None):
+        retval={}
+        retval["EXPID"]=expid
+        retval["ARM"]=camera[0]
+        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["PANAME"]=paname
+        retval["QATIME"]=datetime.datetime.now().isoformat()
+
+        # define sky peaks and wavelength region around peak flux to be integrated
+        dw=2.
+        b_peaks=np.array([3914.4,5199.3,5201.8])
+        r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
+        z_peaks=np.array([8401.5,8432.4,8467.5,9479.4,9505.6,9521.8])
+
+        nspec_counts=[]
+        sky_counts=[]
+        rms_skyspec_amp=[]
+        amp1=[]
+        amp2=[]
+        amp3=[]
+        amp4=[]
+        for i in range(frame.flux.shape[0]):
+            if camera[0]=="b":
+                wave1=np.argmin(np.abs(frame.wave-b_peaks[0]))
+                wave2=np.argmin(np.abs(frame.wave-b_peaks[1]))
+                wave3=np.argmin(np.abs(frame.wave-b_peaks[2]))
+                peak1_flux=np.trapz(frame.flux[i,wave1-dw:wave1+dw+1])
+                peak2_flux=np.trapz(frame.flux[i,wave2-dw:wave2+dw+1])
+                peak3_flux=np.trapz(frame.flux[i,wave3-dw:wave3+dw+1])
+                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux)
+                nspec_counts.append(sum_counts)
+            if camera[0]=="r":
+                wave1=np.argmin(np.abs(frame.wave-r_peaks[0]))
+                wave2=np.argmin(np.abs(frame.wave-r_peaks[1]))
+                wave3=np.argmin(np.abs(frame.wave-r_peaks[2]))
+                wave4=np.argmin(np.abs(frame.wave-r_peaks[3]))
+                wave5=np.argmin(np.abs(frame.wave-r_peaks[4]))
+                peak1_flux=np.trapz(frame.flux[i,wave1-dw:wave1+dw+1])
+                peak2_flux=np.trapz(frame.flux[i,wave2-dw:wave2+dw+1])
+                peak3_flux=np.trapz(frame.flux[i,wave3-dw:wave3+dw+1])
+                peak4_flux=np.trapz(frame.flux[i,wave4-dw:wave4+dw+1])
+                peak5_flux=np.trapz(frame.flux[i,wave5-dw:wave5+dw+1])
+                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)
+                nspec_counts.append(sum_counts)
+            if camera[0]=="z":
+                wave1=np.argmin(np.abs(frame.wave-z_peaks[0]))
+                wave2=np.argmin(np.abs(frame.wave-z_peaks[1]))
+                wave3=np.argmin(np.abs(frame.wave-z_peaks[2]))
+                wave4=np.argmin(np.abs(frame.wave-z_peaks[3]))
+                wave5=np.argmin(np.abs(frame.wave-z_peaks[4]))
+                wave6=np.argmin(np.abs(frame.wave-z_peaks[5]))
+                peak1_flux=np.trapz(frame.flux[i,wave1-dw:wave1+dw+1])
+                peak2_flux=np.trapz(frame.flux[i,wave2-dw:wave2+dw+1])
+                peak3_flux=np.trapz(frame.flux[i,wave3-dw:wave3+dw+1])
+                peak4_flux=np.trapz(frame.flux[i,wave4-dw:wave4+dw+1])
+                peak5_flux=np.trapz(frame.flux[i,wave5-dw:wave5+dw+1])
+                peak6_flux=np.trapz(frame.flux[i,wave6-dw:wave6+dw+1])
+                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)
+                nspec_counts.append(sum_counts)
+
+            if frame.fibermap['OBJTYPE'][i]=='SKY':
+                sky_counts.append(sum_counts)
+
+                if amps:
+                    if frame.fibermap['FIBER'][i]<240:
+                        if camera[0]=="b":
+                            amp1_flux=peak1_flux
+                            amp3_flux=np.sum(peak2_flux+peak3_flux)
+                        if camera[0]=="r":
+                            amp1_flux=np.sum(peak1_flux+peak2_flux)
+                            amp3_flux=np.sum(peak3_flux+peak4_flux+peak5_flux)
+                        if camera[0]=="z":
+                            amp1_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
+                            amp3_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
+                        amp1.append(amp1_flux)
+                        amp3.append(amp3_flux)
+                    if frame.fibermap['FIBER'][i]>260:
+                        if camera[0]=="b":
+                            amp2_flux=peak1_flux
+                            amp4_flux=np.sum(peak2_flux+peak3_flux)
+                        if camera[0]=="r":
+                            amp2_flux=np.sum(peak1_flux+peak2_flux)
+                            amp4_flux=np.sum(peak3_flux+peak4_flux+peak5_flux)
+                        if camera[0]=="z":
+                            amp2_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
+                            amp4_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
+                    if frame.fibermap['FIBER'].shape[0]>260:
+                        amp2.append(amp2_flux)
+                        amp4.append(amp4_flux)
+
+        nspec_counts=np.array(nspec_counts)
+        sky_counts=np.array(sky_counts)
+        rms_nspec=np.sqrt(np.sum(nspec_counts**2)/len(nspec_counts))
+        rms_skyspec=np.sqrt(np.sum(sky_counts**2)/len(sky_counts))
+
+        if amps:
+
+            if frame.fibermap['FIBER'].shape[0]<260:
+                amp2=np.zeros(len(sky_counts))
+                amp4=np.zeros(len(sky_counts))
+            else:
+                amp2=np.array(amp2)
+                amp4=np.array(amp4)
+            amp1=np.array(amp1)
+            amp3=np.array(amp3)
+            amp1_rms=np.sqrt(np.sum(amp1**2)/len(amp1))
+            amp2_rms=np.sqrt(np.sum(amp2**2)/len(amp2))
+            amp3_rms=np.sqrt(np.sum(amp3**2)/len(amp3))
+            amp4_rms=np.sqrt(np.sum(amp4**2)/len(amp4))
+            rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
+
+            retval["VALUE"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp}
+        else:
+            retval["VALUE"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec}
+
+        if qafig is not None:
+            from desispec.qa.qa_plots_ql import plot_sky_peaks
+            plot_sky_peaks(retval,qafig)
+
+            log.info("Output QA fig %s"%qafig)
+
+        return retval
+
+    def get_default_config(self):
+        return {}
 
 
 class Bias_From_Overscan(MonitoringAlg):

@@ -329,7 +329,7 @@ def plot_RMS(qa_dict,outfile):
                  )
     ax2=fig.add_subplot(212)
     heatmap2=ax2.pcolor(rms_over_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
-    ax1.set_xlabel("RMS Overscan (per Amp)",fontsize=10)
+    ax2.set_xlabel("RMS Overscan (per Amp)",fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax2.tick_params(axis='y',labelsize=10,labelleft='off')
     ax2.annotate("Amp 1\n%.3f"%rms_over_amp[0],
@@ -466,52 +466,52 @@ def plot_sky_continuum(qa_dict,outfile):
                  )
     fig.savefig(outfile)
 
-#def plot_sky_peaks(qa_dict,outfile):
-#    """
-#       plot rms of sky peaks for smy fibers across amps
-#       example qa_dict:
-#       {'ARM': 'r',
-#        'EXPID': '00000006',
-#        'QATIME': '2016-07-08T06:05:34.56',
-#        'PANAME': 'APPLY_FIBERFLAT', 'SPECTROGRAPH': 0,
-#        'VALUE': {'SUMCOUNT': array([ 1500.0,  1400.0, ....]),
-#                  'SUMCOUNT_RMS': 1445.0,
-#                  'SUMCOUNT_RMS_SKY': 1455.0,
-#                  'SUMCOUNT_RMS_AMP': array([ 1444.0, 1433.0, 1422.0, 1411.0])}}
-#
-#       args: qa_dict: dictionary from sky peaks QA
-#             outfile: pdf file to save the plot
-#    """
-#    spectrograph=qa_dict["SPECTROGRAPH"]
-#    expid=qa_dict["EXPID"]
-#    arm=qa_dict["ARM"]
-#    paname=qa_dict["PANAME"]
-#    sky_amp_rms=np.array(qa_dict["VALUE"]["SUMCOUNT_RMS_AMP"])
-#    fig=plt.figure()
-#    plt.suptitle("Amp RMS for Sky Fibers after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
-#
-#    ax1=fig.add_subplot(111)
-#    heatmap1=ax1.pcolor(sky_amp_rms.reshape(2,2).T,cmap=plt.cm.coolwarm)
-#    ax1.set_xlabel("Sky Fiber RMS for peak wavelengths (per Amp)",fontsize=10)
-#    ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
-#    ax1.tick_params(axis='y',labelsize=10,labelleft='off')
-#    ax1.annotate("Amp 1\n%.1f"%sky_amp_rms[0],
-#                 xy=(0.4,0.4),
-#                 fontsize=10
-#                 )
-#    ax1.annotate("Amp 2\n%.1f"%sky_amp_rms[1],
-#                 xy=(1.4,0.4),
-#                 fontsize=10
-#                 )
-#    ax1.annotate("Amp 3\n%.1f"%sky_amp_rms[2],
-#                 xy=(0.4,1.4),
-#                 fontsize=10
-#                 )
-#    ax1.annotate("Amp 4\n%.1f"%sky_amp_rms[3],
-#                 xy=(1.4,1.4),
-#                 fontsize=10
-#                 )
-#    fig.savefig(outfile)
+def plot_sky_peaks(qa_dict,outfile):
+    """
+       plot rms of sky peaks for smy fibers across amps
+       example qa_dict:
+       {'ARM': 'r',
+        'EXPID': '00000006',
+        'QATIME': '2016-07-08T06:05:34.56',
+        'PANAME': 'APPLY_FIBERFLAT', 'SPECTROGRAPH': 0,
+        'VALUE': {'SUMCOUNT': array([ 1500.0,  1400.0, ....]),
+                  'SUMCOUNT_RMS': 1445.0,
+                  'SUMCOUNT_RMS_SKY': 1455.0,
+                  'SUMCOUNT_RMS_AMP': array([ 1444.0, 1433.0, 1422.0, 1411.0])}}
+
+       args: qa_dict: dictionary from sky peaks QA
+             outfile: pdf file to save the plot
+    """
+    spectrograph=qa_dict["SPECTROGRAPH"]
+    expid=qa_dict["EXPID"]
+    arm=qa_dict["ARM"]
+    paname=qa_dict["PANAME"]
+    sky_amp_rms=np.array(qa_dict["VALUE"]["SUMCOUNT_RMS_AMP"])
+    fig=plt.figure()
+    plt.suptitle("Amp RMS for Sky Fibers after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
+
+    ax1=fig.add_subplot(111)
+    heatmap1=ax1.pcolor(sky_amp_rms.reshape(2,2).T,cmap=plt.cm.coolwarm)
+    ax1.set_xlabel("Sky Fiber RMS for peak wavelengths (per Amp)",fontsize=10)
+    ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
+    ax1.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax1.annotate("Amp 1\n%.1f"%sky_amp_rms[0],
+                 xy=(0.4,0.4),
+                 fontsize=10
+                 )
+    ax1.annotate("Amp 2\n%.1f"%sky_amp_rms[1],
+                 xy=(1.4,0.4),
+                 fontsize=10
+                 )
+    ax1.annotate("Amp 3\n%.1f"%sky_amp_rms[2],
+                 xy=(0.4,1.4),
+                 fontsize=10
+                 )
+    ax1.annotate("Amp 4\n%.1f"%sky_amp_rms[3],
+                 xy=(1.4,1.4),
+                 fontsize=10
+                 )
+    fig.savefig(outfile)
 
 def plot_SNR(qa_dict,outfile):
 
