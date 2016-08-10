@@ -180,7 +180,7 @@ Now we are ready to install software to this location.  Although it is not techn
 
     The wget version at NERSC may be too old to fetch the harp tarball above.  You may have to download it on another computer and copy it to NERSC.
 
-Now we are ready to install the various DESI packages.  Let's go into our git directory and create a small helper script which will update your install any time you update your source trees::
+Now we are ready to install the various DESI python packages.  Let's go into our git directory and create a small helper script which will update your install any time you update your source trees::
 
     %> cd $HOME/git-$NERSC_HOST
     %> cat install.sh
