@@ -278,6 +278,97 @@ def plot_bias_overscan(qa_dict,outfile):
                  fontsize=10
                  )
     fig.savefig(outfile)
+
+def plot_XWSigma(qa_dict,outfile):
+    """Plot XWSigma
+    `qa_dict` example:
+        {'ARM': 'r',
+         'EXPID': '00000006',
+         'QATIME': '2016-07-08T06:05:34.56',
+         'PANAME': 'PREPROC',
+         'SPECTROGRAPH': 0,
+         'VALUE': {'XSIGMA': array([ 1.9, 1.81, 1.2...]),
+                   'XSIGMA_MED': 1.81,
+                   'XSIGMA_MED_SKY': 1.72,
+                   'XSIGMA_AMP': array([ 1.9, 1.8, 1.7, 1.84]),
+                   'WSIGMA': array([ 1.9, 1.81, 1.2...]),
+                   'WSIGMA_MED': 1.81,
+                   'WSIGMA_MED_SKY': 1.72,
+                   'WSIGMA_AMP': array([ 1.9, 1.8, 1.7, 1.84])}}
+    """
+    arm=qa_dict["ARM"]
+    spectrograph=qa_dict["SPECTROGRAPH"]
+    expid=qa_dict["EXPID"]
+    pa=qa_dict["PANAME"]
+    xsigma=qa_dict["VALUE"]["XSIGMA"]
+    wsigma=qa_dict["VALUE"]["WSIGMA"]
+    xsigma_amp=qa_dict["VALUE"]["XSIGMA_AMP"]
+    wsigma_amp=qa_dict["VALUE"]["WSIGMA_AMP"]
+    xfiber=np.arange(xsigma.shape[0])
+    wfiber=np.arange(wsigma.shape[0])
+
+    fig=plt.figure()
+    plt.suptitle("X & W Sigma over sky peaks, Camera: %s%s, ExpID: %s"%(arm,spectrograph,expid))
+
+    ax1=fig.add_subplot(221)
+    hist_x=ax1.bar(xfiber,xsigma,align='center')
+    ax1.set_xlabel("Fiber #",fontsize=10)
+    ax1.set_ylabel("X Sigma",fontsize=10)
+    ax1.tick_params(axis='x',labelsize=10)
+    ax1.tick_params(axis='y',labelsize=10)
+
+    ax2=fig.add_subplot(222)
+    hist_w=ax2.bar(wfiber,wsigma,align='center')
+    ax2.set_xlabel("Fiber #",fontsize=10)
+    ax2.set_ylabel("W Sigma",fontsize=10)
+    ax2.tick_params(axis='x',labelsize=10)
+    ax2.tick_params(axis='y',labelsize=10)
+
+    ax3=fig.add_subplot(223)
+    heatmap3=ax3.pcolor(xsigma_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
+    ax3.set_xlabel("X Sigma (per Amp)",fontsize=10)
+    ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
+    ax3.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax3.annotate("Amp 1\n%.3f"%xsigma_amp[0],
+                 xy=(0.4,0.4),
+                 fontsize=10
+                 )
+    ax3.annotate("Amp 2\n%.3f"%xsigma_amp[1],
+                 xy=(1.4,0.4),
+                 fontsize=10
+                 )
+    ax3.annotate("Amp 3\n%.3f"%xsigma_amp[2],
+                 xy=(0.4,1.4),
+                 fontsize=10
+                 )
+    ax3.annotate("Amp 4\n%.3f"%xsigma_amp[3],
+                 xy=(1.4,1.4),
+                 fontsize=10
+                 )
+
+    ax4=fig.add_subplot(224)
+    heatmap4=ax4.pcolor(wsigma_amp.reshape(2,2).T,cmap=plt.cm.coolwarm)
+    ax4.set_xlabel("W Sigma (per Amp)",fontsize=10)
+    ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
+    ax4.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax4.annotate("Amp 1\n%.3f"%wsigma_amp[0],
+                 xy=(0.4,0.4),
+                 fontsize=10
+                 )
+    ax4.annotate("Amp 2\n%.3f"%wsigma_amp[1],
+                 xy=(1.4,0.4),
+                 fontsize=10
+                 )
+    ax4.annotate("Amp 3\n%.3f"%wsigma_amp[2],
+                 xy=(0.4,1.4),
+                 fontsize=10
+                 )
+    ax4.annotate("Amp 4\n%.3f"%wsigma_amp[3],
+                 xy=(1.4,1.4),
+                 fontsize=10
+                 )
+
+    fig.savefig(outfile)
     
 def plot_RMS(qa_dict,outfile):
     """Plot RMS

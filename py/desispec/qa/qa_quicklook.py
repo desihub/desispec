@@ -182,6 +182,12 @@ def SN_ratio(flux,ivar):
         # totsnr[ii]=np.sqrt(np.sum(snr**2))
     return medsnr #, totsnr
 
+def gauss(x,a,mu,sigma):
+    """
+    return Gaussian fit of input data
+    """
+    return a*np.exp(-(x-mu)**2/(2*sigma**2))
+
 
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -403,8 +409,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-
-        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_q(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
 
     def run_qa(self,frame,camera,expid,paname=None,amps=False,psf=None,url=None,qafig=None):
         retval={}
@@ -476,8 +481,8 @@ class Integrate_Spec(MonitoringAlg):
 
     def get_default_config(self):
         return {}
-
-
+ 
+ 
 class Sky_Continuum(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -536,6 +541,7 @@ class Sky_Continuum(MonitoringAlg):
         retval["EXPID"]=expid
         retval["ARM"]=camera[0]
         retval["SPECTROGRAPH"]=int(camera[1])
+
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
 
@@ -635,6 +641,10 @@ class Sky_Peaks(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
+        psf = None
+        if "PSFFile" in kwargs:
+            psf=kwargs["PSFFile"]
+
         if "url" in kwargs:
             url=kwargs["url"]
         else:
@@ -644,9 +654,9 @@ class Sky_Peaks(MonitoringAlg):
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
 
-    def run_qa(self,frame,camera,expid,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,frame,camera,expid,paname=None,amps=False,psf=None,url=None,qafig=None):
         retval={}
         retval["EXPID"]=expid
         retval["ARM"]=camera[0]
@@ -769,6 +779,296 @@ class Sky_Peaks(MonitoringAlg):
 
         return retval
 
+    def get_default_config(self):
+        return {}
+
+
+class Calc_XWSigma(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="XWSIGMA"
+        from desispec.image import Image as im
+        MonitoringAlg.__init__(self,name,im,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+ 
+        input_image=args[0]
+        camera=kwargs["camera"]
+        expid=kwargs["expid"]
+ 
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+ 
+        amps=False
+        if "amps" in kwargs:
+            amps=kwargs["amps"]
+ 
+        psf = None
+        if "PSFFile" in kwargs:
+            psf=kwargs["PSFFile"]
+ 
+        fibermap = None
+        if "FiberMap" in kwargs:
+            fibermap=kwargs["FiberMap"]
+ 
+        if "url" in kwargs:
+             url=kwargs["url"]
+        else:
+             url=None
+ 
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+ 
+        return self.run_qa(input_image,camera,expid,paname=paname,amps=amps,psf=psf,fibermap=fibermap,url=url,qafig=qafig)
+ 
+    def run_qa(self,image,camera,expid,paname=None,amps=False,psf=None,fibermap=None,url=None,qafig=None):
+        from scipy.optimize import curve_fit
+ 
+        retval={}
+        retval["EXPID"]=expid
+        retval["ARM"]=camera[0]
+        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["PANAME"]=paname
+        retval["QATIME"]=datetime.datetime.now().isoformat()
+ 
+        dw=2.
+        b_peaks=np.array([3914.4,5199.3,5201.8])
+        r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
+        z_peaks=np.array([8401.5,8432.4,8467.5,9479.4,9505.6,9521.8])
+ 
+        dp=3
+        xsigma=[]
+        wsigma=[]
+        xsigma_sky=[]
+        wsigma_sky=[]
+        xsigma_amp1=[]
+        wsigma_amp1=[]
+        xsigma_amp2=[]
+        wsigma_amp2=[]
+        xsigma_amp3=[]
+        wsigma_amp3=[]
+        xsigma_amp4=[]
+        wsigma_amp4=[]
+        for i in range(fibermap['FIBER'].shape[0]):
+            if camera[0]=="b":
+                peak_wave=np.array([b_peaks[0]-dw,b_peaks[0]+dw,b_peaks[1]-dw,b_peaks[1]+dw,b_peaks[2]-dw,b_peaks[2]+dw])
+ 
+                xpix=psf.x(ispec=i,wavelength=peak_wave)
+                ypix=psf.y(ispec=i,wavelength=peak_wave)
+                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
+                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
+                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
+                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
+                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
+                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
+ 
+                xpopt1,xpcov1=curve_fit(gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
+                wpopt1,wpcov1=curve_fit(gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1
+,int(np.mean(xpix_peak1))])
+                xpopt2,xpcov2=curve_fit(gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
+                wpopt2,wpcov2=curve_fit(gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2
+,int(np.mean(xpix_peak2))])
+                xpopt3,xpcov3=curve_fit(gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
+                wpopt3,wpcov3=curve_fit(gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3
+,int(np.mean(xpix_peak3))])
+
+                xsigma1=np.abs(xpopt1[2])
+                wsigma1=np.abs(wpopt1[2])
+                xsigma2=np.abs(xpopt2[2])
+                wsigma2=np.abs(wpopt2[2])
+                xsigma3=np.abs(xpopt3[2])
+                wsigma3=np.abs(wpopt3[2])
+ 
+                xsig=np.array([xsigma1,xsigma2,xsigma3])
+                wsig=np.array([wsigma1,wsigma2,wsigma3])
+                xsigma_avg=np.mean(xsig)
+                wsigma_avg=np.mean(wsig)
+                xsigma.append(xsig)
+                wsigma.append(wsig)
+ 
+            if camera[0]=="r":
+                peak_wave=np.array([r_peaks[0]-dw,r_peaks[0]+dw,r_peaks[1]-dw,r_peaks[1]+dw,r_peaks[2]-dw,r_peaks[2]+dw,r_peaks[3]-dw,r_peaks[3]+dw,r_peaks[4]-dw,r_peaks[4]+dw])
+ 
+                xpix=psf.x(ispec=i,wavelength=peak_wave)
+                ypix=psf.y(ispec=i,wavelength=peak_wave)
+                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
+                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
+                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
+                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
+                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
+                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
+                xpix_peak4=np.arange(int(round(xpix[6]))-dp,int(round(xpix[7]))+dp+1,1)
+                ypix_peak4=np.arange(int(round(ypix[6])),int(round(ypix[7])),1)
+                xpix_peak5=np.arange(int(round(xpix[8]))-dp,int(round(xpix[9]))+dp+1,1)
+                ypix_peak5=np.arange(int(round(ypix[8])),int(round(ypix[9])),1)
+
+                xpopt1,xpcov1=curve_fit(gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
+                wpopt1,wpcov1=curve_fit(gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
+                xpopt2,xpcov2=curve_fit(gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
+                wpopt2,wpcov2=curve_fit(gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
+                xpopt3,xpcov3=curve_fit(gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
+                wpopt3,wpcov3=curve_fit(gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
+                xpopt4,xpcov4=curve_fit(gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
+                wpopt4,wpcov4=curve_fit(gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
+                xpopt5,xpcov5=curve_fit(gauss,np.arange(len(xpix_peak5)),image.pix[int(np.mean(ypix_peak5)),xpix_peak5])
+                wpopt5,wpcov5=curve_fit(gauss,np.arange(len(ypix_peak5)),image.pix[ypix_peak5,int(np.mean(xpix_peak5))])
+
+                xsigma1=np.abs(xpopt1[2])
+                wsigma1=np.abs(wpopt1[2])
+                xsigma2=np.abs(xpopt2[2])
+                wsigma2=np.abs(wpopt2[2])
+                xsigma3=np.abs(xpopt3[2])
+                wsigma3=np.abs(wpopt3[2])
+                xsigma4=np.abs(xpopt4[2])
+                wsigma4=np.abs(wpopt4[2])
+                xsigma5=np.abs(xpopt5[2])
+                wsigma5=np.abs(wpopt5[2]) 
+
+                xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4,xsigma5])
+                wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4,wsigma5])
+                xsigma_avg=np.mean(xsig)
+                wsigma_avg=np.mean(wsig)
+                xsigma.append(xsigma_avg)
+                wsigma.append(wsigma_avg)
+
+            if camera[0]=="z":
+                peak_wave=np.array([z_peaks[0]-dw,z_peaks[0]+dw,z_peaks[1]-dw,z_peaks[1]+dw,z_peaks[2]-dw,z_peaks[2]+dw,z_peaks[3]-dw,z_peaks[3]+dw,z_peaks[4]-dw,z_peaks[4]+dw,z_peaks[5]-dw,z_peaks[5]+dw])
+ 
+                xpix=psf.x(ispec=i,wavelength=peak_wave)
+                ypix=psf.y(ispec=i,wavelength=peak_wave)
+                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
+                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
+                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
+                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
+                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
+                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
+                xpix_peak4=np.arange(int(round(xpix[6]))-dp,int(round(xpix[7]))+dp+1,1)
+                ypix_peak4=np.arange(int(round(ypix[6])),int(round(ypix[7])),1)
+                xpix_peak5=np.arange(int(round(xpix[8]))-dp,int(round(xpix[9]))+dp+1,1)
+                ypix_peak5=np.arange(int(round(ypix[8])),int(round(ypix[9])),1)
+                xpix_peak6=np.arange(int(round(xpix[10]))-dp,int(round(xpix[11]))+dp+1,1)
+                ypix_peak6=np.arange(int(round(ypix[10])),int(round(ypix[11])),1)
+ 
+                xpopt1,xpcov1=curve_fit(gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
+                wpopt1,wpcov1=curve_fit(gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
+                xpopt2,xpcov2=curve_fit(gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
+                wpopt2,wpcov2=curve_fit(gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
+                xpopt3,xpcov3=curve_fit(gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
+                wpopt3,wpcov3=curve_fit(gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
+                xpopt4,xpcov4=curve_fit(gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
+                wpopt4,wpcov4=curve_fit(gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
+                xpopt5,xpcov5=curve_fit(gauss,np.arange(len(xpix_peak5)),image.pix[int(np.mean(ypix_peak5)),xpix_peak5])
+                wpopt5,wpcov5=curve_fit(gauss,np.arange(len(ypix_peak5)),image.pix[ypix_peak5,int(np.mean(xpix_peak5))])
+                xpopt6,xpcov6=curve_fit(gauss,np.arange(len(xpix_peak6)),image.pix[int(np.mean(ypix_peak6)),xpix_peak6])
+                wpopt6,wpcov6=curve_fit(gauss,np.arange(len(ypix_peak6)),image.pix[ypix_peak6,int(np.mean(xpix_peak6))])
+
+                xsigma1=np.abs(xpopt1[2])
+                wsigma1=np.abs(wpopt1[2])
+                xsigma2=np.abs(xpopt2[2])
+                wsigma2=np.abs(wpopt2[2])
+                xsigma3=np.abs(xpopt3[2])
+                wsigma3=np.abs(wpopt3[2])
+                xsigma4=np.abs(xpopt4[2])
+                wsigma4=np.abs(wpopt4[2])
+                xsigma5=np.abs(xpopt5[2])
+                wsigma5=np.abs(wpopt5[2])
+                xsigma6=np.abs(xpopt6[2])
+                wsigma6=np.abs(wpopt6[2])
+
+                xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4,xsigma5,xsigma6])
+                wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4,wsigma5,wsigma6])
+                xsigma_avg=np.mean(xsig)
+                wsigma_avg=np.mean(wsig)
+                xsigma.append(xsigma_avg)
+                wsigma.append(wsigma_avg)
+ 
+            if fibermap['OBJTYPE'][i]=='SKY':
+                xsigma_sky=xsigma
+                wsigma_sky=wsigma
+ 
+            if amps:
+                if fibermap['FIBER'][i]<240:
+                    if camera[0]=="b":
+                        xsig_amp1=np.array([xsigma1])
+                        xsig_amp3=np.array([xsigma2,xsigma3])
+                        wsig_amp1=np.array([wsigma1])
+                        wsig_amp3=np.array([wsigma2,wsigma3])
+                    if camera[0]=="r":
+                        xsig_amp1=np.array([xsigma1,xsigma2])
+                        xsig_amp3=np.array([xsigma3,xsigma4,xsigma5])
+                        wsig_amp1=np.array([wsigma1,wsigma2])
+                        wsig_amp3=np.array([wsigma3,wsigma4,wsigma5])
+                    if camera[0]=="z":
+                        xsig_amp1=np.array([xsigma1,xsigma2,xsigma3])
+                        xsig_amp3=np.array([xsigma4,xsigma5,xsigma6])
+                        wsig_amp1=np.array([wsigma1,wsigma2,wsigma3])
+                        wsig_amp3=np.array([wsigma4,wsigma5,wsigma6])
+                    xsigma_amp1.append(xsig_amp1)
+                    wsigma_amp1.append(wsig_amp1)
+                    xsigma_amp3.append(xsig_amp3)
+                    wsigma_amp3.append(wsig_amp3)
+                if fibermap['FIBER'][i]>260:
+                    if camera[0]=="b":
+                        xsig_amp2=np.array([xsigma1])
+                        xsig_amp4=np.array([xsigma2,xsigma3])
+                        wsig_amp2=np.array([wsigma1])
+                        wsig_amp4=np.array([wsigma2,wsigma3])
+                    if camera[0]=="r":
+                        xsig_amp2=np.array([xsigma1,xsigma2])
+                        xsig_amp4=np.array([xsigma3,xsigma4,xsigma5])
+                        wsig_amp2=np.array([wsigma1,wsigma2])
+                        wsig_amp4=np.array([wsigma3,wsigma4,wsigma5])
+                    if camera[0]=="z":
+                        xsig_amp2=np.array([xsigma1,xsigma2,xsigma3])
+                        xsig_amp4=np.array([xsigma4,xsigma5,xsigma6])
+                        wsig_amp2=np.array([wsigma1,wsigma2,wsigma3])
+                        wsig_amp4=np.array([wsigma4,wsigma5,wsigma6])
+                    xsigma_amp2.append(xsig_amp2)
+                    wsigma_amp2.append(wsig_amp2)
+                    xsigma_amp4.append(xsig_amp4)
+                    wsigma_amp4.append(wsig_amp4)
+  
+                if fibermap['FIBER'].shape[0]<260:
+                    xsigma_amp2=np.zeros(len(xsigma))
+                    xsigma_amp4=np.zeros(len(xsigma))
+                    wsigma_amp2=np.zeros(len(wsigma))
+                    wsigma_amp4=np.zeros(len(wsigma))
+ 
+        xsigma=np.array(xsigma)
+        wsigma=np.array(wsigma)
+        xsigma_med=np.median(xsigma)
+        wsigma_med=np.median(wsigma)
+        xsigma_med_sky=np.median(xsigma_sky)
+        wsigma_med_sky=np.median(wsigma_sky)
+        xamp1_med=np.median(xsigma_amp1)
+        xamp2_med=np.median(xsigma_amp2)
+        xamp3_med=np.median(xsigma_amp3)
+        xamp4_med=np.median(xsigma_amp4)
+        wamp1_med=np.median(wsigma_amp1)
+        wamp2_med=np.median(wsigma_amp2)
+        wamp3_med=np.median(wsigma_amp3)
+        wamp4_med=np.median(wsigma_amp4)
+        xsigma_amp=np.array([xamp1_med,xamp2_med,xamp3_med,xamp4_med])
+        wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
+
+        if amps:
+            retval["VALUE"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp}
+        else:
+            retval["VALUE"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky}
+
+        if qafig is not None:
+            from desispec.qa.qa_plots_ql import plot_XWSigma
+            plot_XWSigma(retval,qafig)
+
+            log.info("Output QA fig %s"%qafig)
+
+        return retval
+ 
     def get_default_config(self):
         return {}
 
