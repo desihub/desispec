@@ -19,6 +19,7 @@ The list of general software outside the DESI project which is needed for the sp
     * BOOST
     * requests
     * matplotlib
+    * scipy
     * astropy
     * fitsio
     * pyyaml
@@ -26,82 +27,43 @@ The list of general software outside the DESI project which is needed for the sp
 
 If you wish to run the pipeline on a cluster, also ensure that you have installed mpi4py (which obviously requires a working MPI installation).
 
-For this documentation, we are going to assume that you will be setting up all dependencies from scratch using Anaconda.  We will document the differences at each step when installing at NERSC or on a simple workstation.  Note that for NERSC systems, the DESI project will likely soon provide a ready-made conda environment for this base software stack.
+Installing Dependencies on a Personal Workstation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+For development, debugging, and small tests it is convenient to install the pipeline tools on a laptop or workstation.  If you are using a Linux machine, you can get all the dependencies (except fitsio and speclite, which are pip-installable) from your distribution's package manager.  Alternatively, you can install just the non-python dependencies with your package manager and then use Anaconda for your python stack.  On OS X, I recommend using macports to get at least the non-python dependencies, and perhaps all of the python tools as well.
 
-Create a Conda Environment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**Example:  Ubuntu GNU/Linux**
 
-If you are using a workstation, download and install Anaconda.  After that, you should have the "conda" command in your $PATH.  
+On an Ubuntu machine, you could install all the dependencies with::
 
-.. topic:: At NERSC
+    %> sudo apt-get install libboost-all-dev libcfitsio-dev \
+        libopenblas-dev liblapack-dev python-matplotlib \
+        python-scipy python-astropy python-requests python-yaml
 
-    If you are using a Cray system at NERSC, then do::
+    %> sudo pip install fitsio speclite
 
-        %> module swap PrgEnv-intel PrgEnv-gnu
-        %> module load python/2.7-anaconda
+Dependencies at NERSC
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    to get conda into your $PATH.
+At NERSC there is already a conda-based python stack and a version of the non-python dependencies installed.  You can add the necessary module search path by doing (you can safely add this to your ~/.bashrc.ext)::
 
-.. topic:: At NERSC
+    %> module use /global/common/${NERSC_HOST}/contrib/desi/modulefiles
 
-    To avoid long pathnames in the conda environment label, do some **one-time** commands to set up the location of your conda environments::
+and then whenever you want to load the software::
 
-        %> mkdir $HOME/conda-envs
-        %> conda config --add envs_dirs $HOME/conda-envs
-        %> conda config --add channels defaults
-        %> conda config --set show_channel_urls yes
-
-
-Now create a conda environment and activate it.  We will call this environment "desi" in the case of a workstation install, or "desi-$NERSC_HOST" in the case of installing at NERSC.  If you are installing on a workstation, you can include mpi4py in this create step::
-
-    %> conda create -n desi numpy scipy astropy matplotlib requests \
-       yaml pyyaml autoconf automake libtool boost mpi4py
-
-.. topic:: At NERSC
-
-    Here we name the conda env so that it includes the machine name.  Also, we **DO NOT** install mpi4py with conda::
-
-        %> conda create -n desi-$NERSC_HOST numpy scipy astropy \
-           matplotlib requests yaml pyyaml autoconf automake libtool \
-           boost
-
-And now activate the environment::
-
-    %> source activate desi
-
-.. topic:: At NERSC
-
-    We must specify the machine specific name::
-
-        %> source activate desi-$NERSC_HOST
-
-.. topic:: At NERSC
-
-    mpi4py installation requires special care at NERSC, since it must be built using the Cray compiler wrappers.  Here is how to install mpi4py manually at NERSC::
-
-        %> wget https://pypi.python.org/packages/ee/b8/f443e1de0b6495479fc73c5863b7b5272a4ece5122e3589db6cd3bb57eeb/mpi4py-2.0.0.tar.gz#md5=4f7d8126d7367c239fd67615680990e3
-        %> tar xzvf mpi4py-2.0.0.tar.gz
-        %> cd mpi4py-2.0.0
-        %> python setup.py build --mpicc=cc --mpicxx=CC
-        %> python setup.py install
-
-Finally, we pip install a couple packages that are not available through conda::
-
-    %> pip install fitsio
-    %> pip install speclite
+    %> module load desi-conda
 
 
 DESI Affiliated Dependencies
 ---------------------------------
 
-Now we should have our base software stack set up and next we will install dependencies associated with DESI.  For simplicity, we will be installing this software directly into the conda environment we created in the last section.
+Now we should have our base software stack set up and next we will install dependencies associated with DESI.
 
-.. warning::
+.. NOTE::
 
-    On NERSC machines, a conda environment contains a full TCL/TK installation in the lib subdirectory.  We will be installing shared libraries to this location and adding that directory to $LD_LIBRARY_PATH.  As soon as these conda-specific TCL libraries are in $LD_LIBRARY_PATH, the environment modules will cease to work.  Do not attempt to use module commands after running the shell function below.
+    At NERSC, the HARP package is already included in the software loaded by the desi-conda module.  You do not need to build it at NERSC.
 
-For this example, we will install DESI software to our conda environment, which we located in $HOME.  On NERSC systems, the $HOME directory is not as performant as $SCRATCH in terms of python startup time.  However, installing software to $SCRATCH (and the necessary steps to prevent it from being purged) is beyond the scope of this document.  
+For this example, we will install DESI software to our home directory.  On NERSC systems, the $HOME directory is not as performant as $SCRATCH in terms of python startup time.  However, installing software to $SCRATCH (and the necessary steps to prevent it from being purged) is beyond the scope of this document.  
 
 Organize Your Git Clones
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -116,22 +78,18 @@ For the purposes of this document, we assume that all DESI git clones reside in 
     %> git clone git@github.com:desihub/specter.git
     %> git clone git@github.com:desihub/specex.git
     %> git clone git@github.com:desihub/desispec.git
+    %> git clone git@github.com:desihub/redmonster.git
 
 Create a Shell Function
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Create a bash function that we will use to load our installed desi software into our environment.  This will also load our base software stack from the previous section::
+Create a bash function that we will use to load our installed desi software into our environment::
 
-    desi () {
-        # At NERSC, we need these commands first
-        module swap PrgEnv-intel PrgEnv-gnu
-        module load python/2.7-anaconda
-        
-        # Activate the conda env, which adds the bin directory to PATH
-        source activate desi-${NERSC_HOST}
-        
-        # This is the install location of our desi software
-        desisoft="${HOME}/conda-envs/desi-${NERSC_HOST}"
+    desidev () {
+        # This is the install location of our desi software.
+        # If you are not at NERSC, then change this to something
+        # without "NERSC_HOST" in the name.
+        desisoft="${HOME}/desi-${NERSC_HOST}"
         
         # Set environment variables
         export CPATH=${desisoft}/include:${CPATH}
@@ -152,41 +110,29 @@ Create a bash function that we will use to load our installed desi software into
         export STD_TEMPLATES=${DESI_ROOT}/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits
     }
 
-Now log out and back in, and then execute our shell function::
+Now log out and back in.  At NERSC, first load our dependencies::
 
-    %> desi
+    %> module load desi-conda
 
-Now we are ready to install software to this location.  Although it is not technically "DESI" software, we need to install CFITSIO manually since it is not available through conda::
+and then execute our shell function::
 
-    %> wget http://heasarc.gsfc.nasa.gov/FTP/software/fitsio/c/cfitsio3390.tar.gz
-    %> tar xzvf cfitsio3390.tar.gz
-    %> cd cfitsio
-    %> ./configure --prefix=$HOME/conda-envs/desi-$NERSC_HOST
-    %> make
-    %> make shared
-    %> make install
+    %> desidev
 
-(if not at NERSC, change "desi-$NERSC_HOST" to "desi" above).  Next we install the HARP tools, but only the minimal set needed by SPECEX::
+Now we are ready to install software to this location.  If you are building on a workstation or laptop, download the latest release of HARP at https://github.com/tskisner/HARP/releases/download/v1.0.1/harp-1.0.1.tar.gz and install::
 
-    %> wget https://github.com/tskisner/HARP/releases/download/v1.0.1/harp-1.0.1.tar.gz
-    %> tar xzvf harp-1.0.1.tar.gz
     %> cd harp-1.0.1
     %> ./configure --disable-python --disable-mpi \
-        --with-blas="-lmkl_rt -fopenmp -lpthread -lm -ldl" \
-        --prefix=$HOME/conda-envs/desi-$NERSC_HOST
-    %> make install
+       --prefix="${HOME}/desi-${NERSC_HOST}"
 
-.. NOTE::
-
-    The wget version at NERSC may be too old to fetch the harp tarball above.  You may have to download it on another computer and copy it to NERSC.
-
-Now we are ready to install the various DESI python packages.  Let's go into our git directory and create a small helper script which will update your install any time you update your source trees::
+Now we are ready to install the various DESI packages from their git source trees.  Let's go into our git directory and create a small helper script which will update your install any time you update your source trees::
 
     %> cd $HOME/git-$NERSC_HOST
     %> cat install.sh
     
     #!/bin/bash
-    pref="${HOME}/conda-envs/desi-${NERSC_HOST}"
+
+    # This should be your actual install location...
+    pref="${HOME}/desi-${NERSC_HOST}"
 
     cd specex
     make clean
@@ -200,17 +146,10 @@ Now we are ready to install the various DESI python packages.  Let's go into our
         cd ..
     done
 
-
 For the initial install, and any you update your source tree versions, do (make sure the install.sh script is executable)::
 
     %> ./install.sh
 
-Now your DESI software stack is complete.  Just run the "desi" shell function to load everything into your environment, and rerun the install.sh script any time you update your source versions.
-
-
-
-
-
-
+Now your DESI software stack is complete.  Just run the "desidev" shell function to load everything into your environment, and rerun the install.sh script any time you update your source versions.
 
 
