@@ -110,7 +110,11 @@ Create a bash function that we will use to load our installed desi software into
         export STD_TEMPLATES=${DESI_ROOT}/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits
     }
 
-Now log out and back in.  At NERSC, first load our dependencies::
+Now log out and back in.  We should pre-create the python package directory the first time we install things::
+
+    %> mkdir -p ${HOME}/desi-${NERSC_HOST}/lib/python2.7/site-packages
+
+At NERSC, first load our dependencies::
 
     %> module load desi-conda
 
@@ -136,7 +140,7 @@ Now we are ready to install the various DESI packages from their git source tree
 
     cd specex
     make clean
-    SPECEX_PREFIX=${pref} make install
+    SPECEX_PREFIX=${pref} make -j 4 install
     cd ..
 
     for pkg in desiutil desimodel desitarget desisim specter desispec; do
