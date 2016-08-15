@@ -748,8 +748,8 @@ class Sky_Peaks(MonitoringAlg):
 
         nspec_counts=np.array(nspec_counts)
         sky_counts=np.array(sky_counts)
-        rms_nspec=np.sqrt(np.sum(nspec_counts**2)/len(nspec_counts))
-        rms_skyspec=np.sqrt(np.sum(sky_counts**2)/len(sky_counts))
+        rms_nspec=getrms(nspec_counts)
+        rms_skyspec=getrms(sky_counts)
 
         if amps:
 
@@ -761,10 +761,10 @@ class Sky_Peaks(MonitoringAlg):
                 amp4=np.array(amp4)
             amp1=np.array(amp1)
             amp3=np.array(amp3)
-            amp1_rms=np.sqrt(np.sum(amp1**2)/len(amp1))
-            amp2_rms=np.sqrt(np.sum(amp2**2)/len(amp2))
-            amp3_rms=np.sqrt(np.sum(amp3**2)/len(amp3))
-            amp4_rms=np.sqrt(np.sum(amp4**2)/len(amp4))
+            amp1_rms=getrms(amp1)
+            amp2_rms=getrms(amp2)
+            amp3_rms=getrms(amp3)
+            amp4_rms=getrms(amp4)
             rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
 
             retval["VALUE"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp}
