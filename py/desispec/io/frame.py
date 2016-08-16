@@ -65,6 +65,9 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     else:
         log.error("You are likely writing a frame without sufficient fiber info")
 
+    if frame.chi2pix is not None:
+        hdus.append( fits.ImageHDU(frame.chi2pix.astype('f4'), name='CHI2PIX' ) )
+
     hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
@@ -106,13 +109,22 @@ def read_frame(filename, nspec=None):
         fibermap = fx['FIBERMAP'].data
     else:
         fibermap = None
-    
+        
+    if 'CHI2PIX' in fx:
+        chi2pix = native_endian(fx['CHI2PIX'].data.astype('f8'))
+    else:
+        chi2pix = None
+
     fx.close()
 
     if nspec is not None:
         flux = flux[0:nspec]
         ivar = ivar[0:nspec]
         resolution_data = resolution_data[0:nspec]
+        if chi2pix is not None:
+            chi2pix = chi2pix[0:nspec]
+        if mask is not None:
+            mask = mask[0:nspec]
 
     # return flux,ivar,wave,resolution_data, hdr
-    return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap)
+    return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix)

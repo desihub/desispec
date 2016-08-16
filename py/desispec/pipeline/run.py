@@ -215,7 +215,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
         options['qafile'] = qafile
-        options['qafig'] = qafig
+        ### options['qafig'] = qafig
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
