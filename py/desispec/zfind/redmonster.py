@@ -19,7 +19,8 @@ class RedMonsterZfind(ZfindBase):
     """Class documentation goes here.
     """
     def __init__(self, wave, flux, ivar, R=None, dloglam=1e-4, objtype=None,
-                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005),nproc=1,npoly=2):
+                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005),
+                 group_galaxy=0, group_qso=1, group_star=2, nproc=1, npoly=2):
         """Uses Redmonster to classify and find redshifts.
 
         See :class:`desispec.zfind.zfind.ZfindBase` class for inputs/outputs.
@@ -86,11 +87,11 @@ class RedMonsterZfind(ZfindBase):
         self.templates = list()
         for x in templatetypes:
             if x == 'GALAXY':
-                self.templates.append(('ndArch-ssp_em_galaxy-v000.fits', zrange_galaxy[0], zrange_galaxy[1]))
+                self.templates.append(('ndArch-ssp_em_galaxy-v000.fits', zrange_galaxy[0], zrange_galaxy[1], group_galaxy))
             elif x == 'STAR':
-                self.templates.append(('ndArch-spEigenStar-55734.fits', zrange_star[0], zrange_star[1]))
+                self.templates.append(('ndArch-spEigenStar-55734.fits', zrange_star[0], zrange_star[1], group_star))
             elif x == 'QSO':
-                self.templates.append(('ndArch-QSO-V003.fits', zrange_qso[0], zrange_qso[1]))
+                self.templates.append(('ndArch-QSO-V003.fits', zrange_qso[0], zrange_qso[1], group_qso))
             else:
                 raise ValueError("Bad template type "+x)
 
@@ -98,9 +99,9 @@ class RedMonsterZfind(ZfindBase):
         self.zfinders = list()
         self.zfitters = list()
         
-        for template, zmin, zmax in self.templates:
+        for template, zmin, zmax, group in self.templates:
             start=time.time()
-            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=npoly, zmin=zmin, zmax=zmax,nproc=nproc)
+            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=npoly, zmin=zmin, zmax=zmax, nproc=nproc, group=group)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
             stop=time.time()
             log.debug("Time to find the redshifts of %d fibers for template %s =%f sec"%(self.flux.shape[0],template,stop-start))
