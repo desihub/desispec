@@ -162,7 +162,7 @@ regularize: {regularize}
 
     if args.model is not None:
         from astropy.io import fits
-        fits.writeto(args.model, results['modelimage'], header=frame.meta)
+        fits.writeto(args.model, results['modelimage'], header=frame.meta, clobber=True)
 
     print('Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))

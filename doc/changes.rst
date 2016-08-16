@@ -2,10 +2,14 @@
 desispec change log
 ===================
 
-0.8.2 (unreleased)
+0.9.0 (unreleased)
 ------------------
 
-* no changes yet
+PR #258; requires specter >=0.6.0
+* propagate pixel model goodness of fit to flag outliers from unmasked cosmics
+* desi_extract_spectra --model option to output 2D pixel model
+* fix pipeline bug in call to desi_bootcalib (no --qafig option)
+* adds extraction tests
 
 0.8.1 (2016-07-18)
 ------------------
