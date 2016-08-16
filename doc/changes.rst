@@ -17,6 +17,7 @@ Misc:
 * desi_qa_skysub -- plots residuals (PR #259)
 * More quicklook QA (PR #260)
 * Added support for template groups in redmonster (PR #255)
+* Lots more pipeline docs (PR #261)
 
 0.8.1 (2016-07-18)
 ------------------
