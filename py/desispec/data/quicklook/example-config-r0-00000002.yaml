@@ -26,6 +26,10 @@ PipeLine:
     ModuleName: desispec.qa.qa_quicklook
     Name: BIAS_OVERSCAN
     kwargs: {camera: r0, expid: '00000002', paname: PREPROC, amps: True, qafig: qafig-biasoverscan-r0-00000002.pdf}   
+  - ClassName: Calc_XWSigma
+    ModuleName: desispec.qa.qa_quicklook
+    Name: XWSIGMA
+    kwargs: {camera: r0, expid: '00000002', paname: PREPROC, PSFFile: '%%PSFFile', FiberMap: '%%FiberMap',amps: True, qafig: qafig-xwsigma-r0-00000002.pdf}
   StepName: Preprocessing
 - OutputFile: qa-extract-r0-00000002.yaml
   PA:
@@ -49,9 +53,13 @@ PipeLine:
   - ClassName: Sky_Continuum
     ModuleName: desispec.qa.qa_quicklook
     Name: SKYCONT
-    kwargs: {camera: r0, expid: '00000002', paname: APPLY_FIBERFLAT, PSFFile: '%%PSFFile', amps: True, qafig: qafig-continuum-r0-00000002.pdf}
+    kwargs: {camera: r0, expid: '00000002', paname: APPLY_FIBERFLAT, PSFFile: '%%PSFFile', amps: True, qafig: qafig-skycont-r0-00000002.pdf}
   StepName: Apply Fiberflat
-- OutputFile: qa-skysub-online-r0-00000002.yaml
+  - ClassName: Sky_Peaks
+    ModuleName: desispec.qa.qa_quicklook
+    Name: SKYPEAK
+    kwargs: {camera: r0, expid: '00000002', paname: APPLY_FIBERFLAT, PSFFile: '%%PSFFile', amps: True, qafig: qafig-skypeak-r0-00000002.pdf}
+- OutputFile: qa-snr-r0-00000002.yaml
   PA:
     ClassName: SubtractSky_QL
     ModuleName: desispec.quicklook.procalgs
