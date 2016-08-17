@@ -35,6 +35,35 @@ class Preproc_test(pas.PipelineAlg):
     def get_default_config(self):
         return {}
 
+class Initialize(pas.PipelineAlg):
+    """
+    This is particularly needed to run some QAs before preprocessing. 
+    It reads rawimage and does input = output. e.g QA to run after this PA: bias from overscan etc"
+    """
+
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Ready"
+        import astropy
+        rawtype=astropy.io.fits.hdu.hdulist.HDUList
+        pas.PipelineAlg.__init__(self,name,rawtype,rawtype,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_raw=args[0]
+        
+        return self.run_pa(input_raw)
+
+    def run_pa(self,raw):
+        return raw
+
+    def get_default_config(self):
+        return {}
+
+
 class Preproc(pas.PipelineAlg):
     #- TODO: currently io itself seems to have the preproc inside it. And preproc does bias, pi
      # xelflat, etc in one step. 
