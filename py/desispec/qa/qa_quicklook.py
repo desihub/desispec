@@ -409,7 +409,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_q(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
 
     def run_qa(self,frame,camera,expid,paname=None,amps=False,psf=None,url=None,qafig=None):
         retval={}

@@ -166,17 +166,31 @@ def testconfig(outfilename="qlconfig.yaml"):
         log.warning("Only yaml defined. Use yaml format in the output config file")
         sys.exit(0)
 
-def get_chan_cam_exp(inpname):
+def get_chan_spec_exp(inpname,camera=None):
+    """
+    Get channel, spectrograph and expid from the filename itself
+    args:
+        inpname: can be raw or pix, or frame etc filename
+        camera: is required for raw case, eg, r0, b5, z8
+                irrelevant for others
+    """
     basename=os.path.basename(inpname)
     if basename =="":
         print "can't parse input file name"
         sys.exit("can't parse input file name %s"%inpname)
-    mod,cid,expid=string.split(basename,'-')
+    brk=string.split(inpname,'-')
+    if len(brk)!=3: #- for raw files 
+        if camera is None:
+            raise IOError("Must give camera for raw file")
+        else:
+            expid=int(string.replace(brk[1],".fits.fz",""))
 
-    expid=int(string.replace(expid,".fits",""))
-    chan=cid[0]
-    cam=int(cid[1:])
-    return (chan,cam,expid)
+    elif len(brk)==3: #- for pix,frame etc. files
+        camera=brk[1]
+        expid=int(string.replace(brk[2],".fits",""))
+    chan=camera[0]
+    spectrograph=int(camera[1:])
+    return (chan,spectrograph,expid)
 
 def getobject(conf,log):
      #qlog=qllogger("QuickLook",20)
@@ -268,7 +282,7 @@ def setup_pipeline(config):
        conversion dictionary from the configuration dictionary so that Pipeline steps (PA) can
        take them. This is required for runpipeline.
     """
-
+    import astropy.io.fits as fits
     import desispec.io.fibermap as fibIO
     import desispec.io.sky as skyIO
     import desispec.io.fiberflat as ffIO
@@ -294,6 +308,8 @@ def setup_pipeline(config):
         sys.exit("Missing \"FiberMap\" key.")
     fibname=config["FiberMap"]
     proctype="Exposure"
+    if "Camera" in config:
+        camera=config["Camera"]
     if "DataType" in config:
         proctype=config["DataType"]
     debuglevel=20
@@ -353,7 +369,7 @@ def setup_pipeline(config):
         basePath=config["basePath"]
 
     hbeat.start("Reading input file %s"%inpname)
-    inp=imIO.read_image(inpname)
+    inp=fits.open(inpname) #- reading raw image directly from astropy.io.fits
     hbeat.start("Reading fiberMap file %s"%fibname)
     fibfile,fibhdr=fibIO.read_fibermap(fibname,header=True)
 

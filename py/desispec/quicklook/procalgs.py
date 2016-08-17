@@ -35,6 +35,61 @@ class Preproc_test(pas.PipelineAlg):
     def get_default_config(self):
         return {}
 
+class Preproc(pas.PipelineAlg):
+    #- TODO: currently io itself seems to have the preproc inside it. And preproc does bias, pi
+     # xelflat, etc in one step. 
+
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Preproc"
+        import astropy
+        #- No raw object (like image or frame object) exists yet so,
+        #- type from reading raw: eg: raw=fits.open('desi-00000002.fits.fz',memmap=False)
+        #- rawtype=type(raw)
+        rawtype=astropy.io.fits.hdu.hdulist.HDUList
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,rawtype,im,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_raw=args[0]
+
+        if 'camera' not in kwargs: 
+            raise qlexceptions.ParameterException("Need Camera to run preprocess on raw files")
+        else: 
+            camera=kwargs["camera"]
+        if camera.upper() not in input_raw:
+            raise IOError('Camera {} not in raw input'.format(camera))
+        if "Bias" in kwargs:
+            bias=kwargs["Bias"]
+        else: bias=False
+    
+        if "Pixflat" in kwargs:
+            pixflat=kwargs["Pixflat"]
+        else: pixflat=False
+
+        if "Mask" in kwargs:
+            mask=kwargs["Mask"]
+        else: mask=False
+
+        return self.run_pa(input_raw,camera,bias=bias,pixflat=pixflat,mask=mask)
+
+    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=False):
+        import desispec.preproc
+
+        rawimage=input_raw[camera.upper()].data
+        header=input_raw[camera.upper()].header
+
+        if 'INHERIT' in header and header['INHERIT']:
+            h0 = input_raw[0].header
+            for key in h0.keys():
+                if key not in header:
+                    header[key] = h0[key]
+        return desispec.preproc.preproc(rawimage,header,bias=bias,pixflat=pixflat,mask=mask)
+
 
 class BootCalibration(pas.PipelineAlg):
     from desispec import bootcalib as desiboot
