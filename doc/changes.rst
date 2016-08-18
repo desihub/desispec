@@ -2,7 +2,12 @@
 desispec change log
 ===================
 
-0.9.0 (unreleased)
+0.9.1 (unreleased)
+------------------
+
+* No changes yet
+
+0.9.0 (2016-08-18)
 ------------------
 
 PR #258 (requires specter >=0.6.0)
@@ -15,7 +20,7 @@ PR #258 (requires specter >=0.6.0)
 Misc:
 
 * desi_qa_skysub -- plots residuals (PR #259)
-* More quicklook QA (PR #260)
+* More quicklook QA (PR #260 and #262)
 * Added support for template groups in redmonster (PR #255)
 * Lots more pipeline docs (PR #261)
 
