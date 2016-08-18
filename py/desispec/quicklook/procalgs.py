@@ -54,10 +54,13 @@ class Initialize(pas.PipelineAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_raw=args[0]
-        
+            
         return self.run_pa(input_raw)
 
     def run_pa(self,raw):
+        """ 
+        We don't need to dump the raw file again here, so skipping"
+        """
         return raw
 
     def get_default_config(self):
@@ -86,6 +89,15 @@ class Preproc(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_raw=args[0]
 
+        dump=False
+        dumpfile=None
+        if "DumpIntermediates" in kwargs:
+            dump=kwargs["DumpIntermediates"]
+            if dump: #- need a file to write
+                if "dumpfile" not in kwargs:
+                    raise IOError("Need file to dump")
+                else: dumpfile=kwargs["dumpfile"]
+
         if 'camera' not in kwargs: 
             raise qlexceptions.ParameterException("Need Camera to run preprocess on raw files")
         else: 
@@ -104,9 +116,9 @@ class Preproc(pas.PipelineAlg):
             mask=kwargs["Mask"]
         else: mask=False
 
-        return self.run_pa(input_raw,camera,bias=bias,pixflat=pixflat,mask=mask)
+        return self.run_pa(input_raw,camera,bias=bias,pixflat=pixflat,mask=mask,dump=dump,dumpfile=dumpfile)
 
-    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=False):
+    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=False,dump=False,dumpfile=None):
         import desispec.preproc
 
         rawimage=input_raw[camera.upper()].data
@@ -117,7 +129,14 @@ class Preproc(pas.PipelineAlg):
             for key in h0.keys():
                 if key not in header:
                     header[key] = h0[key]
-        return desispec.preproc.preproc(rawimage,header,bias=bias,pixflat=pixflat,mask=mask)
+        img = desispec.preproc.preproc(rawimage,header,bias=bias,pixflat=pixflat,mask=mask)
+        if dump and dumpfile is not None:
+            from desispec import io
+            night = img.meta['NIGHT']
+            expid = img.meta['EXPID']
+            io.write_image(dumpfile, img)
+            log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+        return img
 
 
 class BootCalibration(pas.PipelineAlg):
@@ -181,6 +200,16 @@ class BoxcarExtraction(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Need PSF File")
 
         input_image=args[0]
+
+        dump=False
+        dumpfile=None
+        if "DumpIntermediates" in kwargs:
+            dump=kwargs["DumpIntermediates"]
+            if dump: #- need a file to write
+                if "dumpfile" not in kwargs:
+                    raise IOError("Need file to dump")
+                else: dumpfile=kwargs["dumpfile"]
+
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
@@ -229,10 +258,10 @@ class BoxcarExtraction(pas.PipelineAlg):
         else:
             outfile=None
 
-        return self.run_pa(input_image,psf,wave,boxwidth,nspec,fibers=fibers,fibermap=fibermap,outfile=outfile)
+        return self.run_pa(input_image,psf,wave,boxwidth,nspec,fibers=fibers,fibermap=fibermap,dump=dump,dumpfile=dumpfile)
 
 
-    def run_pa(self, input_image, psf, outwave, boxwidth, nspec,fibers=None, fibermap=None,outfile=None):
+    def run_pa(self, input_image, psf, outwave, boxwidth, nspec,fibers=None, fibermap=None,dump=False,dumpfile=None):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
         
@@ -243,10 +272,12 @@ nspec=nspec)
         
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
         
-        if outfile is not None:  #- writing to a frame file if needed.
+        if dump and dumpfile is not None:
             from desispec import io
-            io.write_frame(outfile,frame)
-            log.info("wrote frame output file  %s"%outfile)
+            night = frame.meta['NIGHT']
+            expid = frame.meta['EXPID']
+            io.write_frame(dumpfile, frame)
+            log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return frame
 
@@ -428,6 +459,8 @@ class ApplyFiberFlat(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Need Fiberflat file")
         
         input_frame=args[0]
+
+
         fiberflat=kwargs["FiberFlatFile"]
         
         return self.run_pa(input_frame,fiberflat)
@@ -458,14 +491,32 @@ class ApplyFiberFlat_QL(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Need Fiberflat file")
         
         input_frame=args[0]
+
+        dump=False
+        dumpfile=None
+        if "DumpIntermediates" in kwargs:
+            dump=kwargs["DumpIntermediates"]
+            if dump: #- need a file to write
+                if "dumpfile" not in kwargs:
+                    raise IOError("Need file to dump")
+                else: dumpfile=kwargs["dumpfile"]
+
         fiberflat=kwargs["FiberFlatFile"]
         
-        return self.run_pa(input_frame,fiberflat)
+        return self.run_pa(input_frame,fiberflat,dump=dump,dumpfile=dumpfile)
 
-    def run_pa(self,input_frame,fiberflat): 
+    def run_pa(self,input_frame,fiberflat,dump=False,dumpfile=None): 
      
         from desispec.quicklook.quickfiberflat import apply_fiberflat 
         fframe=apply_fiberflat(input_frame,fiberflat)
+
+        if dump and dumpfile is not None:
+            from desispec import io
+            night = fframe.meta['NIGHT']
+            expid = fframe.meta['EXPID']
+            io.write_frame(dumpfile, fframe)
+            log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+
         return fframe
 
 class ComputeSky(pas.PipelineAlg):
@@ -596,6 +647,15 @@ class SubtractSky_QL(pas.PipelineAlg):
 
         input_frame=args[0] #- this must be flat field applied before sky subtraction in the pipeline
 
+        dump=False
+        dumpfile=None
+        if "DumpIntermediates" in kwargs:
+            dump=kwargs["DumpIntermediates"]
+            if dump: #- need a file to write
+                if "dumpfile" not in kwargs:
+                    raise IOError("Need file to dump")
+                else: dumpfile=kwargs["dumpfile"]
+
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
             skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
@@ -618,10 +678,18 @@ class SubtractSky_QL(pas.PipelineAlg):
                 write_sky(outputfile,skymodel,input_frame.meta)
 
         #- now do the subtraction                   
-        return self.run_pa(input_frame,skymodel)
+        return self.run_pa(input_frame,skymodel,dump=dump,dumpfile=dumpfile)
     
-    def run_pa(self,input_frame,skymodel):
+    def run_pa(self,input_frame,skymodel,dump=False,dumpfile=None):
         from desispec.quicklook.quicksky import subtract_sky
         sframe=subtract_sky(input_frame,skymodel)
+
+        if dump and dumpfile is not None:
+            from desispec import io
+            night = sframe.meta['NIGHT']
+            expid = sframe.meta['EXPID']
+            io.write_frame(dumpfile, sframe)
+            log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+
         return sframe
 

@@ -413,6 +413,9 @@ def setup_pipeline(config):
         skymodel=skyIO.read_sky(skyfile)
         convdict["SkyFile"]=skymodel
 
+    if dumpintermediates:
+        convdict["DumpIntermediates"]=dumpintermediates
+   
     hbeat.stop("Finished reading all static files")
 
     img=inp
