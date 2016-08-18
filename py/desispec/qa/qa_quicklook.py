@@ -409,7 +409,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_q(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
 
     def run_qa(self,frame,camera,expid,paname=None,amps=False,psf=None,url=None,qafig=None):
         retval={}
@@ -1077,15 +1077,16 @@ class Bias_From_Overscan(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="BIAS_OVERSCAN"
-        from desispec.image import Image as im
-        MonitoringAlg.__init__(self,name,im,config,logger)
+        import astropy
+        rawtype=astropy.io.fits.hdu.hdulist.HDUList
+        MonitoringAlg.__init__(self,name,rawtype,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
 
-        input_image=args[0]
+        input_raw=args[0]
         camera=kwargs["camera"]
         expid=kwargs["expid"]
 
@@ -1104,9 +1105,9 @@ class Bias_From_Overscan(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_image,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_raw,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
 
-    def run_qa(self,image,camera,expid,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,raw,camera,expid,paname=None,amps=False,url=None,qafig=None):
 
         retval={}
         retval["EXPID"]=expid
@@ -1114,15 +1115,25 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        
+        rawimage=raw[camera.upper()].data
+        header=raw[camera.upper()].header
+
+        if 'INHERIT' in header and header['INHERIT']:
+            h0 = raw[0].header
+            for key in h0.keys():
+                if key not in header:
+                    header[key] = h0[key]
 
         bias_overscan=[]        
         for kk in ['1','2','3','4']:
             from desispec.preproc import _parse_sec_keyword
-            sel=_parse_sec_keyword(image.meta['BIASSEC'+kk])
-            pix=image.pix[sel]
+            
+            sel=_parse_sec_keyword(header['BIASSEC'+kk])
+            pixdata=rawimage[sel]
             #- Compute statistics of the bias region that only reject
             #  the 0.5% of smallest and largest values. (from sdssproc) 
-            isort=np.sort(pix.ravel())
+            isort=np.sort(pixdata.ravel())
             nn=isort.shape[0]
             bias=np.mean(isort[long(0.005*nn) : long(0.995*nn)])
             bias_overscan.append(bias)
