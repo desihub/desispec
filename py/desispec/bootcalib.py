@@ -146,7 +146,7 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     # Roll to find peaks (simple algorithm)
     nwidth = 5
     nstep = nwidth // 2
-    for kk in xrange(-nstep,nstep):
+    for kk in range(-nstep,nstep):
         if kk < 0:
             test = np.roll(spec,kk) < np.roll(spec,kk+1)
         else:
@@ -623,10 +623,10 @@ def load_arcline_list(camera, vacuum=True,lamps=None):
         # Load
         tbl = parse_nist(iline, vacuum=vacuum)
         # Parse
-        if iline in parse_dict.keys():
+        if iline in parse_dict:
             tbl = parse_nist_tbl(tbl,parse_dict[iline])
         # Reject
-        if iline in rej_dict.keys():
+        if iline in rej_dict:
             log.info("Rejecting select {:s} lines".format(iline))
             tbl = reject_lines(tbl,rej_dict[iline])
         #print("DEBUG",iline)
@@ -665,7 +665,7 @@ def reject_lines(tbl,rej_dict, rej_tol=0.1):
     """
     msk = tbl['wave'] == tbl['wave']
     # Loop on rejected lines
-    for wave in rej_dict.keys():
+    for wave in rej_dict:
         close = np.where(np.abs(wave-tbl['wave']) < rej_tol)[0]
         if rej_dict[wave] == 'all':
             msk[close] = False
@@ -792,7 +792,7 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
             continue
         ion=vals[1]
         wave=float(vals[0])
-        if lines.has_key(ion) :
+        if ion in lines:
             lines[ion].append(wave)
         else :
             lines[ion]=[wave,]
@@ -801,7 +801,7 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
         
     log.info("Checking consistency with full line list")
     nbad=0
-    for ion in lines.keys() :
+    for ion in lines:
         ii=np.where(llist["Ion"]==ion)[0]
         if ii.size == 0 :
             continue
@@ -820,7 +820,7 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
 
     gd_lines=np.array([])
     for lamp in lamps :
-        if lines.has_key(lamp) :
+        if lamp in lines:
             gd_lines=np.append(gd_lines,lines[lamp])
     
     # Sort and return
@@ -867,7 +867,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
     # Loop on fibers
     gauss = []
     start = 0
-    for ii in xrange(nfiber):
+    for ii in range(nfiber):
         if (ii % 25 == 0): # & verbose:
             stop=time.time()
             if start==0 :
@@ -882,7 +882,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         end_xpix=(central_xpix+box_radius+1).astype(int)
         dx=[]
         flux=[]
-        for y in xrange(ny) :
+        for y in range(ny) :
             yflux=flat[y,begin_xpix[y]:end_xpix[y]]
             syflux=np.sum(yflux)
             if syflux<minflux :
@@ -917,7 +917,7 @@ def fiber_gauss_new(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         # fast iterative gaussian fit
         sigma = 1.0
         sq2 = math.sqrt(2.)
-        for i in xrange(10) :
+        for i in range(10) :
             nsigma = sq2*np.sqrt(np.mean(bdx**2*bflux*np.exp(-bdx**2/2/sigma**2))/np.mean(bflux*np.exp(-bdx**2/2/sigma**2)))
             if abs(nsigma-sigma) < 0.001 :
                 break
@@ -966,7 +966,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
     # Loop on fibers
     gauss = []
     start = 0
-    for ii in xrange(nfiber):
+    for ii in range(nfiber):
         if (ii % 25 == 0): # & verbose:
             stop=time.time()
             if start==0 :
@@ -1085,7 +1085,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     #gdp = cut > thresh
     # Roll to find peaks (simple algorithm)
     #nstep = nwidth // 2
-    #for kk in xrange(-nstep,nstep):
+    #for kk in range(-nstep,nstep):
     #    if kk < 0:
     #        test = np.roll(cut,kk) < np.roll(cut,kk+1)
     #    else:
@@ -1111,7 +1111,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
         
     # Record max of each cluster
     xpk=np.zeros((len(clusters)), dtype=np.int64)
-    for i in xrange(len(clusters)) :
+    for i in range(len(clusters)) :
         t=np.argmax(cut[clusters[i]])
         xpk[i]=clusters[i][t]
 
@@ -1170,7 +1170,7 @@ def fit_traces(xset, xerr, func='legendre', order=6, sigrej=20.,
     xnew = np.zeros_like(xset)
     fits = []
     yval = np.arange(ny)
-    for ii in xrange(ntrace):
+    for ii in range(ntrace):
         mask = xerr[:,ii] > 900.
         nmask = np.sum(mask)
         # Fit with rejection
@@ -1598,21 +1598,21 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
 
     # Add informations for headers
     if arc_header is not None :
-        if "NIGHT" in arc_header.keys() :
+        if "NIGHT" in arc_header:
             prihdu.header["ARCNIGHT"] = arc_header["NIGHT"]
-        if "EXPID" in arc_header.keys() :
+        if "EXPID" in arc_header:
             prihdu.header["ARCEXPID"] = arc_header["EXPID"]
-        if "CAMERA" in arc_header.keys() :
+        if "CAMERA" in arc_header:
             prihdu.header["CAMERA"] = arc_header["CAMERA"]
         prihdu.header['NPIX_X'] = arc_header['NAXIS1']
         prihdu.header['NPIX_Y'] = arc_header['NAXIS2']
     if fiberflat_header is not None :
-        if 'NPIX_X' not in prihdu.header.keys():
+        if 'NPIX_X' not in prihdu.header:
             prihdu.header['NPIX_X'] = fiberflat_header['NAXIS1']
             prihdu.header['NPIX_Y'] = fiberflat_header['NAXIS2']
-        if "NIGHT" in fiberflat_header.keys() :
+        if "NIGHT" in fiberflat_header:
             prihdu.header["FLANIGHT"] = fiberflat_header["NIGHT"]
-        if "EXPID" in fiberflat_header.keys() :
+        if "EXPID" in fiberflat_header:
             prihdu.header["FLAEXPID"] = fiberflat_header["EXPID"]
     
     yhdu = fits.ImageHDU(YCOEFF, name='YCOEFF')
@@ -1977,7 +1977,7 @@ def qa_fiber_trace(flat, xtrc, outfil=None, Nfiber=25, isclmin=0.5):
         plt.ylim(x0,x1)
 
         # Traces
-        for ii in xrange(i0,i1):
+        for ii in range(i0,i1):
             # Left
             plt.plot(ycen, xtrc[:,ii], 'r-',alpha=0.7, linewidth=0.5)
             # Label
