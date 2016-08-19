@@ -53,7 +53,7 @@ def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,shifted_st
     chi2 = None
     try :
         chi2=0.
-        for cam in normalized_flux.keys() :
+        for cam in normalized_flux:
             tmp=resample_flux(wave[cam],shifted_stdwave,star_stdflux) # this is slow
             model=Resolution(resolution_data[cam]).dot(tmp) # this is slow
             tmp=applySmoothingFilter(model) # this is fast
@@ -100,7 +100,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # flux should be already flat fielded and sky subtracted.
     # First normalize both data and model by dividing by median filter.
 
-    cameras = flux.keys()
+    cameras = list(flux.keys())
     log = get_logger()
     log.debug(time.asctime())
 
