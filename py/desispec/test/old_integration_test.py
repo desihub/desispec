@@ -143,8 +143,8 @@ def integration_test(night=None, nspec=5, clobber=False):
         fibermap = io.findfile('fibermap', night, expid)  # for QA
         qafile = io.findfile('qa_calib', night, expid, camera)
         qafig = io.findfile('qa_flat_fig', night, expid, camera)
-        cmd = "desi_compute_fiberflat --infile {frame} --fibermap {fibermap} --outfile {fiberflat} --qafile {qafile} --qafig {qafig}".format(
-            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, qafile=qafile, qafig=qafig, **params)
+        cmd = "desi_compute_fiberflat --infile {frame} --outfile {fiberflat} --qafile {qafile} --qafig {qafig}".format(
+            frame=framefile, fiberflat=fiberflat, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile,fibermap,]
         outputs = [fiberflat,qafile,qafig,]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
@@ -162,8 +162,8 @@ def integration_test(night=None, nspec=5, clobber=False):
         skyfile = io.findfile('sky', night, expid, camera)
         qafile = io.findfile('qa_data', night, expid, camera)
         qafig = io.findfile('qa_sky_fig', night, expid, camera)
-        cmd="desi_compute_sky --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky} --qafile {qafile} --qafig {qafig}".format(
-            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile, qafile=qafile, qafig=qafig, **params)
+        cmd="desi_compute_sky --infile {frame} --fiberflat {fiberflat} --outfile {sky} --qafile {qafile} --qafig {qafig}".format(
+            frame=framefile, fiberflat=fiberflat, sky=skyfile, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile, fibermap, fiberflat]
         outputs = [skyfile, qafile, qafig,]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
@@ -220,9 +220,9 @@ def integration_test(night=None, nspec=5, clobber=False):
 
         #- Compute flux calibration vector
         cmd = """desi_compute_fluxcalibration \
-          --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --sky {sky} \
+          --infile {frame} --fiberflat {fiberflat} --sky {sky} \
           --models {stdstars} --outfile {calib} --qafile {qafile} --qafig {qafig}""".format(
-            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile,
+            frame=framefile, fiberflat=fiberflat, sky=skyfile,
             stdstars=stdstarfile, calib=calibfile, qafile=qafile, qafig=qafig
             )
         inputs = [framefile, fibermap, fiberflat, skyfile, stdstarfile]
