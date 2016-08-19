@@ -170,7 +170,7 @@ def main(args):
         if bands != all_bands:
             log.warning('WARNING: target %d has partial band coverage: %s' % (target_id,bands))
         coadd_all = desispec.coaddition.Spectrum(desispec.coaddition.global_wavelength_grid)
-        for coadd_band in coadded_spectra[target_id].itervalues():
+        for coadd_band in coadded_spectra[target_id].values():
             coadd_all += coadd_band
         coadd_all.finalize()
         flux_all[index] = coadd_all.flux

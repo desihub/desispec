@@ -59,8 +59,8 @@ def main(args):
                     filetype = 'cframe', night = args.night,
                     expid = exposure, specprod_dir = args.specprod)
             log.debug('Exposure %08d covers %d bricks and has cframes for %s.' % (
-                exposure,len(brick_names),','.join(cframes.keys())))
-            for camera,cframe_path in cframes.iteritems():
+                exposure,len(brick_names),','.join(list(cframes.keys()))))
+            for camera,cframe_path in cframes.items():
                 band,spectro_id = camera[0],int(camera[1:])
                 this_camera = (fibermap_data['SPECTROID'] == spectro_id)
                 # Read this cframe file.
@@ -85,7 +85,7 @@ def main(args):
                     bricks[brick_key].add_objects(frame.flux[fibers], frame.ivar[fibers],
                         frame.wave, frame.resolution_data[fibers], brick_data,args.night,exposure)
         # Close all brick files.
-        for brick in bricks.itervalues():
+        for brick in bricks.values():
             log.debug('Brick %s now contains %d spectra for %d targets.' % (
                 brick.path,brick.get_num_spectra(),brick.get_num_targets()))
             brick.close()

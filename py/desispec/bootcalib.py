@@ -9,7 +9,7 @@ TODO:
 2. QA plots
 3. Test with CR data
 """
-from __future__ import print_function, absolute_import, division, unicode_literals
+from __future__ import print_function, absolute_import, division
 
 import numpy as np
 import copy

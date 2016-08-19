@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+from __future__ import absolute_import, division, print_function
+
 import sys,os,time,signal
 import threading,string
 import subprocess
@@ -175,8 +178,8 @@ def get_chan_spec_exp(inpname,camera=None):
                 irrelevant for others
     """
     basename=os.path.basename(inpname)
-    if basename =="":
-        print "can't parse input file name"
+    if basename == "":
+        print("can't parse input file name")
         sys.exit("can't parse input file name %s"%inpname)
     brk=string.split(inpname,'-')
     if len(brk)!=3: #- for raw files 
@@ -214,8 +217,8 @@ def mapkeywords(kw,kwmap):
     newmap={}
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
-    for k,v in kw.iteritems():
-        if isinstance(v,basestring) and len(v)>=3 and  v[0:2]=="%%":
+    for k,v in kw.items():
+        if isinstance(v,str) and len(v)>=3 and  v[0:2]=="%%":
             if v[2:] in kwmap:
                 newmap[k]=kwmap[v[2:]]
             else:

@@ -964,7 +964,7 @@ def graph_slice(grph, names=None, types=None, deps=False):
 def graph_slice_spec(grph, spectrographs=None):
     newgrph = copy.deepcopy(grph)
     if spectrographs is None:
-        spectrographs = range(10)
+        spectrographs = list(range(10))
     for name, nd in newgrph.items():
         if 'spec' in nd:
             if int(nd['spec']) not in spectrographs:

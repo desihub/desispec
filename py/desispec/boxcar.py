@@ -2,7 +2,7 @@
 boxcar extraction for Spectra from Desi Image
 """
 import numpy as np
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function
 
 def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
     """Extracts spectra row by row, given the centroids
@@ -87,7 +87,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
     #- limit nspec to psf.nspec max
     if nspec > psf.nspec:
         nspec=psf.nspec
-        print("Warning! Extracting only %s spectra"%psf.nspec)
+        print("Warning! Extracting only {} spectra".format(psf.nspec))
 
     fflux=np.zeros((nspec,len(wtarget)))
     ivar=np.zeros((nspec,len(wtarget)))

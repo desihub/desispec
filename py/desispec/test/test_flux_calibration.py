@@ -116,7 +116,7 @@ class TestFluxCalibration(unittest.TestCase):
         bestflux=np.zeros((bestid.shape[0],modelflux.shape[1]))
         red_chisq=np.zeros(len(stdfibers))
 
-        for i in xrange(len(stdfibers)):
+        for i in range(len(stdfibers)):
 
             stdflux={"b":flux["b"][i],"r":flux["r"][i],"z":flux["z"][i]}
             stdivar={"b":ivar["b"][i],"r":ivar["r"][i],"z":ivar["z"][i]}

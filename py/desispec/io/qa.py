@@ -4,7 +4,7 @@ desispec.io.qa
 
 IO routines for QA
 """
-from __future__ import print_function, absolute_import, division, unicode_literals
+from __future__ import print_function, absolute_import, division
 
 import os, yaml
 
@@ -15,13 +15,6 @@ from desispec.qa import QA_Brick
 from desispec.io import findfile
 from desispec.io.util import makepath
 from desispec.log import get_logger
-
-# Python 2 & 3 compatibility
-try:
-    basestring
-except NameError:
-    basestring = str
-
 log=get_logger()
 
 
@@ -51,7 +44,7 @@ def read_qa_frame(filename):
     """Generate a QA_Frame object from a data file
     """
     #- check if filename is (night, expid, camera) tuple instead
-    if not isinstance(filename, basestring):
+    if not isinstance(filename, str):
         night, expid, camera = filename
         filename = findfile('qa', night, expid, camera)
 

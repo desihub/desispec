@@ -3,6 +3,8 @@
 Fit redshifts and classifications on DESI bricks
 """
 
+from __future__ import absolute_import, division, print_function
+
 import sys
 import os
 import numpy as np
@@ -107,7 +109,7 @@ def main(args, comm=None) :
                     log.error('Channel {} in multiple input files'.format(bx.channel))
                 sys.exit(2)
 
-    filters=brick.keys()
+    filters=list(brick.keys())
     for fil in filters:
         if (comm is None) or (comm.rank == 0):
             log.info("Filter found: "+fil)
@@ -179,7 +181,7 @@ def main(args, comm=None) :
         if not args.print_info is None:
             s2n = np.median(fl[:-1]*np.sqrt(iv[:-1])/np.sqrt(wave[1:]-wave[:-1]))
             if (comm is None) or (comm.rank == 0):
-                print targetid,s2n
+                print(targetid,s2n)
                 fpinfo.write(str(targetid)+" "+str(s2n)+"\n")
 
     if not args.print_info is None:
