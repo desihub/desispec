@@ -187,7 +187,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     i0 = outfil.rfind('/')
     ax2.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax2.transAxes, ha='left')
     yoff=0.15
-    for key in sorted(qaframe.data['SKYSUB']['QA'].keys()):
+    for key in sorted(list(qaframe.data['SKYSUB']['QA'].keys())):
         if key in ['QA_FIG']:
             continue
         # Show
@@ -441,7 +441,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     i0 = outfil.rfind('/')
     ax2.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax2.transAxes, ha='left')
     yoff=0.10
-    for key in sorted(qaframe.data['FIBERFLAT']['QA'].keys()):
+    for key in sorted(list(qaframe.data['FIBERFLAT']['QA'].keys())):
         if key in ['QA_FIG']:
             continue
         # Show
@@ -473,7 +473,7 @@ def show_meta(ax, qaframe, qaflavor, outfil):
     i0 = outfil.rfind('/')
     ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
     yoff=0.10
-    for key in sorted(qaframe.qa_data[qaflavor]['QA'].keys()):
+    for key in sorted(list(qaframe.qa_data[qaflavor]['QA'].keys())):
         if key in ['QA_FIG']:
             continue
         # Show
