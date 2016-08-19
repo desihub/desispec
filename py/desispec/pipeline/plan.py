@@ -351,7 +351,7 @@ def graph_night(rawdir, rawnight):
         # get the raw exposures
         raw = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
 
-        for cam in sorted(raw.keys()):
+        for cam in sorted(list(raw.keys())):
             cammat = campat.match(cam)
             if cammat is None:
                 raise RuntimeError("invalid camera string {}".format(cam))
