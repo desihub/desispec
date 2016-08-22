@@ -123,6 +123,21 @@ def finish_task(name, node):
 
 
 def is_finished(rawdir, proddir, grph, name):
+    '''
+    Determine whether a single data object is finished.
+
+    This checks whether a data object is finished by testing whether 
+    the output file exists and is newer than its inputs.
+
+    Args:
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the dependency graph.
+        name (str): the object name.
+
+    Returns (bool):
+        True if the object is finished, False otherwise.
+    '''
     # eventually, we could check a database to get this info...
 
     type = grph[name]['type']
@@ -154,6 +169,21 @@ def is_finished(rawdir, proddir, grph, name):
 
 
 def prod_state(rawdir, proddir, grph):
+    '''
+    Check the completion state of all objects in a graph.
+
+    This scans over an entire dependency graph and tests each object
+    for whether it is finished.  If the object is done, it marks the
+    the state of the node in the graph.
+
+    Args:
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the dependency graph.
+
+    Returns:
+        Nothing.  The graph is modified in place.
+    '''
     for name, nd in grph.items():
         if is_finished(rawdir, proddir, grph, name):
             nd['state'] = 'done'
@@ -161,6 +191,25 @@ def prod_state(rawdir, proddir, grph):
 
 
 def run_task(step, rawdir, proddir, grph, opts, comm=None):
+    '''
+    Run a single pipeline task.
+
+    This function takes a truncated graph containing a single node
+    of the specified type and the nodes representing the inputs for
+    the task.
+
+    Args:
+        step (str): the pipeline step type.
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the truncated dependency graph.
+        opts (dict): the global options dictionary.
+        comm (mpi4py.Comm): the optional MPI communicator to use.
+
+    Returns:
+        Nothing.
+    '''
+
     if step not in step_file_types.keys():
         raise ValueError("step type {} not recognized".format(step))
 
@@ -215,7 +264,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
         options['qafile'] = qafile
-        options['qafig'] = qafig
+        ### options['qafig'] = qafig
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
@@ -649,6 +698,37 @@ def stdouterr_redirected(to=os.devnull, comm=None):
 
 
 def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
+    '''
+    Run a whole single step of the pipeline.
+
+    This function first takes the communicator and the requested processes
+    per task and splits the communicator to form groups of processes of
+    the desired size.  It then takes the full dependency graph and extracts 
+    all the tasks for a given step.  These tasks are then distributed among
+    the groups of processes.
+
+    Each process group loops over its assigned tasks.  For each task, it
+    redirects stdout/stderr to a per-task file and calls run_task().  If
+    any process in the group throws an exception, then the traceback and
+    all information (graph and options) needed to re-run the task are written
+    to disk.
+
+    After all process groups have finished, the state of the full graph is
+    merged from all processes.  This way a failure of one process on one task
+    will be propagated as a failed task to all processes.
+
+    Args:
+        step (str): the pipeline step to process.
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the dependency graph.
+        opts (dict): the global options.
+        comm (mpi4py.Comm): the full communicator to use for whole step.
+        taskproc (int): the number of processes to use for a single task.
+
+    Returns:
+        Nothing.
+    '''
     log = get_logger()
 
     nproc = 1
@@ -841,6 +921,32 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
 
 
 def retry_task(failpath, newopts=None):
+    '''
+    Attempt to re-run a failed task.
+
+    This takes the path to a yaml file containing the information about a
+    failed task (such a file is written by run_step() when a task fails).
+    This yaml file contains the truncated dependecy graph for the single
+    task, as well as the options that were used when running the task.
+    It also contains information about the number of processes that were
+    being used.
+
+    This function attempts to load mpi4py and use the MPI.COMM_WORLD
+    communicator to re-run the task.  If COMM_WORLD has a different number
+    of processes than were originally used, a warning is printed.  A
+    warning is also printed if the options are being overridden.
+
+    If the task completes successfully, the failed yaml file is deleted.
+
+    Args:
+        failpath (str): the path to the failure yaml file.
+        newopts (dict): the dictionary of options to use in place of the
+            original ones.
+
+    Returns:
+        Nothing.
+    '''
+
     log = get_logger()
 
     if not os.path.isfile(failpath):
@@ -887,6 +993,39 @@ def retry_task(failpath, newopts=None):
 
 
 def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, comm=None):
+    '''
+    Run multiple sequential pipeline steps.
+
+    
+
+    This function first takes the communicator and the requested processes
+    per task and splits the communicator to form groups of processes of
+    the desired size.  It then takes the full dependency graph and extracts 
+    all the tasks for a given step.  These tasks are then distributed among
+    the groups of processes.
+
+    Each process group loops over its assigned tasks.  For each task, it
+    redirects stdout/stderr to a per-task file and calls run_task().  If
+    any process in the group throws an exception, then the traceback and
+    all information (graph and options) needed to re-run the task are written
+    to disk.
+
+    After all process groups have finished, the state of the full graph is
+    merged from all processes.  This way a failure of one process on one task
+    will be propagated as a failed task to all processes.
+
+    Args:
+        step (str): the pipeline step to process.
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the dependency graph.
+        opts (dict): the global options.
+        comm (mpi4py.Comm): the full communicator to use for whole step.
+        taskproc (int): the number of processes to use for a single task.
+
+    Returns:
+        Nothing.
+    '''
     log = get_logger()
 
     rank = 0
