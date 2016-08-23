@@ -283,14 +283,14 @@ def integration_test(night=None, nspec=5, clobber=False):
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('redshifts failed for brick '+b)
     # ztruth QA
-    qafile = io.findfile('qa_ztruth', night)
-    qafig = io.findfile('qa_ztruth_fig', night)
-    cmd = "desi_qa_zfind --night {night} --qafile {qafile} --qafig {qafig} --verbose".format(
-        night=night, qafile=qafile, qafig=qafig)
-    inputs = []
-    outputs = [qafile, qafig]
-    if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-        raise RuntimeError('redshift QA failed for night '+night)
+    # qafile = io.findfile('qa_ztruth', night)
+    # qafig = io.findfile('qa_ztruth_fig', night)
+    # cmd = "desi_qa_zfind --night {night} --qafile {qafile} --qafig {qafig} --verbose".format(
+    #     night=night, qafile=qafile, qafig=qafig)
+    # inputs = []
+    # outputs = [qafile, qafig]
+    # if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+    #     raise RuntimeError('redshift QA failed for night '+night)
 
     #-----
     #- Did it work?
@@ -317,18 +317,24 @@ def integration_test(night=None, nspec=5, clobber=False):
 
             j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
+            oiiflux = siminfo['OIIFLUX'][j]
             truez = siminfo['REDSHIFT'][j]
             dv = 3e5*(z-truez)/(1+truez)
             if truetype == 'SKY' and zwarn > 0:
                 status = 'ok'
+            elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
+                status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
             elif zwarn == 0:
                 if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
                     status = 'ok'
-                elif truetype == 'ELG' and objtype == 'GAL' and abs(dv) < 150:
-                    status = 'ok'
+                elif truetype == 'ELG' and objtype == 'GAL':
+                    if abs(dv) < 150 or oiiflux < 8e-17:
+                        status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
+                    else:
+                        status = 'OOPS ([OII] flux {:.2g})'.format(oiiflux)
                 elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
                     status = 'ok'
-                elif truetype == 'STD' and objtype == 'STAR':
+                elif truetype in ('STD', 'FSTD') and objtype == 'STAR':
                     status = 'ok'
                 else:
                     status = 'OOPS'
