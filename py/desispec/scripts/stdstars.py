@@ -214,7 +214,12 @@ def main(args) :
     log.info("computing model mags %s"%model_filters)
     model_mags = np.zeros((stdflux.shape[0],len(model_filters)))
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
+    
     for index in range(len(model_filters)) :
+        if model_filters[index].startswith('WISE'):
+            log.warning('not computing stdstar {} mags'.format(model_filters[index]))
+            continue
+
         filter_response=load_filter(model_filters[index])
         for m in range(stdflux.shape[0]) :
             model_mags[m,index]=filter_response.get_ab_magnitude(stdflux[m]*fluxunits,stdwave)
