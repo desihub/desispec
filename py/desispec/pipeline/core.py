@@ -13,6 +13,7 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import time
+import collections
 
 import desispec.log
 
@@ -82,7 +83,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
                 print("   ", x)
 
     #- run command
-    if callable(cmd):
+    if isinstance(cmd, collections.Callable):
         if args is None:
             return cmd()
         else:

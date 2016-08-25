@@ -1,7 +1,7 @@
 """ Class to organize QA for a full DESI production run
 """
 
-from __future__ import print_function, absolute_import, division, unicode_literals
+from __future__ import print_function, absolute_import, division
 
 import numpy as np
 import glob, os
@@ -55,13 +55,13 @@ class QA_Prod(object):
         out_list = []
         ne_dict = {}
         # Nights
-        for night in self.data.keys():
+        for night in self.data:
             if (night not in nights) and (nights != 'all'):
                 continue
             # Exposures
-            for expid in self.data[night].keys():
+            for expid in self.data[night]:
                 # Cameras
-                for camera in self.data[night][expid].keys():
+                for camera in self.data[night][expid]:
                     if camera == 'flavor':
                         continue
                     if (camera[0] not in channels) and (channels != 'all'):
@@ -79,7 +79,7 @@ class QA_Prod(object):
                         else:
                             out_list.append(val)
                         # dict
-                        if night not in ne_dict.keys():
+                        if night not in ne_dict:
                             ne_dict[night] = []
                         if expid not in ne_dict[night]:
                             ne_dict[night].append(expid)
@@ -197,10 +197,10 @@ class QA_Prod(object):
             for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
                 frames_dict = get_files(filetype = str('frame'), night = night,
                                         expid = exposure, specprod_dir = self.specprod_dir)
-                if len(frames_dict.keys()) == 0:
+                if len(frames_dict) == 0:
                     continue
                 # Load any frame (for the type)
-                key = frames_dict.keys()[0]
+                key = list(frames_dict.keys())[0]
                 frame_fil = frames_dict[key]
                 frame = read_frame(frame_fil)
                 qa_exp = QA_Exposure(exposure, night, frame.meta['FLAVOR'],

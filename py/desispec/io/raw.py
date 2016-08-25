@@ -39,7 +39,7 @@ def read_raw(filename, camera, **kwargs):
 
     if 'INHERIT' in header and header['INHERIT']:
         h0 = fx[0].header
-        for key in h0.keys():
+        for key in h0:
             if key not in header:
                 header[key] = h0[key]
 

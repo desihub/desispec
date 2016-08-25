@@ -55,7 +55,8 @@ def read_sky(filename) :
     skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
     """
     #- check if filename is (night, expid, camera) tuple instead
-    if not isinstance(filename, (str, unicode)):
+    ### if not isinstance(filename, (str, unicode)):
+    if not isinstance(filename, str):
         night, expid, camera = filename
         filename = findfile('sky', night, expid, camera)
 

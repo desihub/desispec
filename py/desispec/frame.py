@@ -130,7 +130,7 @@ class Frame(object):
                 self.fibers = fibermap['FIBER']
             elif spectrograph is not None:
                 self.fibers = spectrograph*fibers_per_spectrograph + np.arange(self.nspec, dtype=int)
-            elif (self.meta is not None) and ('FIBERMIN' in self.meta.keys()):
+            elif (self.meta is not None) and ('FIBERMIN' in self.meta):
                 self.fibers = self.meta['FIBERMIN'] + np.arange(self.nspec, dtype=int)
             else:
                 raise ValueError("Must set fibers by one of the methods!")

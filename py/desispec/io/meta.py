@@ -70,7 +70,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
 
     #- Do we know about this kind of file?
     if filetype not in location:
-        raise IOError("Unknown filetype {}; known types are {}".format(filetype, location.keys()))
+        raise IOError("Unknown filetype {}; known types are {}".format(filetype, list(location.keys())))
 
     #- Check for missing inputs
     required_inputs = [i[0] for i in re.findall(r'\{([a-z_]+)(|[:0-9d]+)\}',location[filetype])]
@@ -130,7 +130,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
             guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', rawdata_dir=rawdata_dir)
-    literals = map(re.escape,glob_pattern.split('*'))
+    literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     listing = glob.glob(glob_pattern)
     if len(listing) == 1:
@@ -162,7 +162,7 @@ def get_files(filetype, night, expid, specprod_dir=None):
             guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
-    literals = map(re.escape,glob_pattern.split('*'))
+    literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]    
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
     for entry in glob.glob(glob_pattern):

@@ -10,5 +10,5 @@ Main functions and commandline parsing.
 """
 
 # help with 2to3 support
-from __future__ import absolute_import, division
+from __future__ import absolute_import, division, print_function
 

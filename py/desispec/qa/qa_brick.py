@@ -2,7 +2,7 @@
 Classes to organize and execute QA for a DESI exposure
 """
 
-from __future__ import print_function, absolute_import, division, unicode_literals
+from __future__ import print_function, absolute_import, division
 
 import numpy as np
 
@@ -42,14 +42,14 @@ class QA_Brick(object):
           Code will always add new parameters if any exist
         """
         # Fill and return if not set previously or if re_init=True
-        if (qatype not in self.data.keys()) or re_init:
+        if (qatype not in self.data) or re_init:
             self.data[qatype] = {}
             self.data[qatype]['PARAM'] = param
             return
 
         # Update the new parameters only
-        for key in param.keys():
-            if key not in self.data[qatype]['PARAM'].keys():
+        for key in param:
+            if key not in self.data[qatype]['PARAM']:
                 self.data[qatype]['PARAM'][key] = param[key]
 
     def init_zbest(self, re_init=False):
@@ -88,7 +88,7 @@ class QA_Brick(object):
         # Check for previous QA if clobber==False
         if not clobber:
             # QA previously performed?
-            if 'QA' in self.data[qatype].keys():
+            if 'QA' in self.data[qatype]:
                 return
         # Run
         if qatype == 'ZBEST':

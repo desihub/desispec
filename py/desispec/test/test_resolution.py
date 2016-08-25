@@ -42,7 +42,7 @@ class TestResolution(unittest.TestCase):
             ndiag = 10
             R7 = Resolution(np.ones((ndiag, n)))
             raise RuntimeError('Incorrectly created Resolution with even number of diagonals')
-        except ValueError, err:
+        except ValueError as err:
             #- it correctly raised an error, so pass
             pass
 

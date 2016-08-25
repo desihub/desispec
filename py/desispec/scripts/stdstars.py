@@ -122,7 +122,7 @@ def main(args) :
             log.error("incompatible fibermap")
             raise ValueError("incompatible fibermap")
         
-        if frames.has_key(camera) :
+        if camera in frames:
             log.error("cannot handle for now several frame of same camera (%s)"%camera)
             raise ValueError("cannot handle for now several frame of same camera (%s)"%camera)
             
@@ -135,7 +135,7 @@ def main(args) :
         camera=safe_read_key(header,"CAMERA").strip().lower()
                 
         # NEED TO ADD MORE CHECKS
-        if skies.has_key(camera) :
+        if camera in skies:
             log.error("cannot handle several skymodels of same camera (%s)"%camera)
             raise ValueError("cannot handle several skymodels of same camera (%s)"%camera)
             
@@ -149,7 +149,7 @@ def main(args) :
         camera=safe_read_key(header,"CAMERA").strip().lower()
         
         # NEED TO ADD MORE CHECKS
-        if flats.has_key(camera) :
+        if camera in flats:
             log.error("cannot handle several flats of same camera (%s)"%camera)
             raise ValueError("cannot handle several flats of same camera (%s)"%camera)
         flats[camera]=flat
@@ -173,11 +173,11 @@ def main(args) :
     ############################################     
     for cam in frames :
         
-        if not skies.has_key(cam) :
+        if not cam in skies:
             log.warning("Missing sky for %s"%cam)
             frames.pop(cam)
             continue
-        if not flats.has_key(cam) :
+        if not cam in flats:
             log.warning("Missing flat for %s"%cam)
             frames.pop(cam)
             continue

@@ -1,6 +1,7 @@
 """
 boxcar extraction for Spectra from Desi Image
 """
+from __future__ import absolute_import, division, print_function
 import numpy as np
 
 def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
@@ -13,7 +14,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels
 
-    Returns desispec.frame.Frame object
+    Returns flux, ivar, resolution
     """
     import math
     from desispec.frame import Frame
@@ -32,9 +33,9 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
     maxx=maxx-1
     maxy=maxy-1
     ranges=np.zeros((mask.shape[1],xs.shape[0]+1),dtype=int)
-    for bin in xrange(0,len(waves)):
+    for bin in range(0,len(waves)):
         ixmaxold=0
-        for spec in xrange(0,xs.shape[0]):
+        for spec in range(0,xs.shape[0]):
             xpos=xs[spec][bin]
             ypos=int(ys[spec][bin])
             if xpos<0 or xpos>maxx or ypos<0 or ypos>maxy :
@@ -44,7 +45,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
             ixmin=int(math.floor(xmin))
             ixmax=int(math.floor(xmax))
             if ixmin <= ixmaxold:
-                print "Error Box width overlaps,",xpos,ypos,ixmin,ixmaxold
+                print("Error Box width overlaps,",xpos,ypos,ixmin,ixmaxold)
                 return None,None
             ixmaxold=ixmax
             if mask[int(xpos)][ypos]>0 :
@@ -64,11 +65,11 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
             if  ranges[ypos][spec]==0:
                 ranges[ypos][spec]=ixmin
             mask[ixmin][ypos]=rxmin
-            for x in xrange(ixmin+1,ixmax): mask[x][ypos]=1.0
+            for x in range(ixmin+1,ixmax): mask[x][ypos]=1.0
             mask[ixmax][ypos]=rxmax
-    for ypos in xrange(ranges.shape[0]):
+    for ypos in range(ranges.shape[0]):
         lastval=ranges[ypos][0]
-        for sp in xrange(1,ranges.shape[1]):
+        for sp in range(1,ranges.shape[1]):
             if  ranges[ypos][sp]==0:
                 ranges[ypos][sp]=lastval
             lastval=ranges[ypos][sp]
@@ -76,7 +77,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
 
     maskedimg=(image.pix*mask.T)
     flux=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))
-    for r in xrange(flux.shape[0]):
+    for r in range(flux.shape[0]):
         row=np.add.reduceat(maskedimg[r],ranges[r])[:-1]
         flux[r]=row
 
@@ -86,7 +87,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
     #- limit nspec to psf.nspec max
     if nspec > psf.nspec:
         nspec=psf.nspec
-        print "Warning! Extracting only %s spectra"%psf.nspec
+        print("Warning! Extracting only {} spectra".format(psf.nspec))
 
     fflux=np.zeros((nspec,len(wtarget)))
     ivar=np.zeros((nspec,len(wtarget)))
@@ -95,7 +96,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
 
     #- convert to per angstrom first and then resample to desired wave length grid.
 
-    for spec in xrange(nspec):
+    for spec in range(nspec):
         ww=psf.wavelength(spec)
         dwave=np.gradient(ww)
         flux[:,spec]/=dwave

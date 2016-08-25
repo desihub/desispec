@@ -80,7 +80,7 @@ def qa_zbest(param, zf, brick):
     log = get_logger()
 
     # Parse brick table
-    key = brick.keys()[0]
+    key = list(brick.keys())[0]
     btbl = brick[key].hdu_list[4].data
 
     # Output dict

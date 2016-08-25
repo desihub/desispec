@@ -150,7 +150,7 @@ class PSF(object):
         wavelength can be a vector but not allowing None #- similar as in specter.psf.PSF.y
         """
         if wavelength is None:
-            raise ValueError, "PSF.y requires wavelength 1D vector"
+            raise ValueError("PSF.y requires wavelength 1D vector")
             
         wavelength = np.asarray(wavelength)
         if ispec is None:

@@ -126,7 +126,7 @@ class Preproc(pas.PipelineAlg):
 
         if 'INHERIT' in header and header['INHERIT']:
             h0 = input_raw[0].header
-            for key in h0.keys():
+            for key in h0:
                 if key not in header:
                     header[key] = h0[key]
         img = desispec.preproc.preproc(rawimage,header,bias=bias,pixflat=pixflat,mask=mask)
@@ -221,7 +221,7 @@ class BoxcarExtraction(pas.PipelineAlg):
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
-                wstart, wstop, dw = map(float, wavelength.split(','))
+                wstart, wstop, dw = [float(w) for w in wavelength.split(',')]
             else: 
                 wstart = np.ceil(psf.wmin)
                 wstop = np.floor(psf.wmax)
@@ -326,7 +326,7 @@ class Extraction_2d(pas.PipelineAlg):
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
-                wstart, wstop, dw = map(float, wavelength.split(','))
+                wstart, wstop, dw = [float(w) for w in wavelength.split(',')]
             else: 
                 wstart = np.ceil(psf.wmin_all)
                 wstop = np.floor(psf.wmax_all)

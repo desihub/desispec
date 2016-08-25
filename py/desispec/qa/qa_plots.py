@@ -1,6 +1,6 @@
 """ Module for QA plots
 """
-from __future__ import print_function, absolute_import, division, unicode_literals
+from __future__ import print_function, absolute_import, division
 
 import numpy as np
 from scipy import signal
@@ -59,7 +59,7 @@ def brick_zbest(outfil, zf, qabrick):
     ax0.set_ylim(0.0, 0.002)
     ax0.set_xlabel('z')
 
-    for key in sty_otype.keys():
+    for key in sty_otype:
         idx = np.where(zftypes == key)[0]
         if len(idx) == 0:
             continue
@@ -240,7 +240,7 @@ def exposure_fluxcalib(outfil, qa_data):
         qa_data: dict -- QA data, including that of the individual frames
     """
     # Init
-    cameras = qa_data['frames'].keys()
+    cameras = list(qa_data['frames'].keys())
     # Plot
     fig = plt.figure(figsize=(8, 5.0))
     gs = gridspec.GridSpec(2, 2)
@@ -543,7 +543,7 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     ylbl = 0.85
     yoff = 0.1
     ax.text(xlbl, ylbl, qa_prod.prod_name, color='black', transform=ax.transAxes, ha='left')
-    nights = ne_dict.keys()
+    nights = list(ne_dict.keys())
     #
     ylbl -= yoff
     ax.text(xlbl+0.1, ylbl, 'Nights: {}'.format(nights),
