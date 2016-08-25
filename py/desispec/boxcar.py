@@ -1,8 +1,8 @@
 """
 boxcar extraction for Spectra from Desi Image
 """
-import numpy as np
 from __future__ import absolute_import, division, print_function
+import numpy as np
 
 def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
     """Extracts spectra row by row, given the centroids
@@ -14,7 +14,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500):
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels
 
-    Returns desispec.frame.Frame object
+    Returns flux, ivar, resolution
     """
     import math
     from desispec.frame import Frame

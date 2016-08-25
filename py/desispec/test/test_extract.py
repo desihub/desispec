@@ -82,6 +82,27 @@ class TestExtract(unittest.TestCase):
         self.assertTrue(np.all(frame1.resolution_data[0:3] == frame2.resolution_data[0:3]))
         self.assertTrue(np.allclose(model1, model2, rtol=1e-15, atol=1e-15))
 
+    def test_boxcar(self):
+        import desimodel.io
+        from desispec.boxcar import do_boxcar
+        psf = desimodel.io.load_psf('z')
+        
+        pix = np.random.normal(0, 3.0, size=(psf.npix_y, psf.npix_x))
+        ivar = np.ones_like(pix) / 3.0**2
+        mask = np.zeros(pix.shape, dtype=np.uint32)
+        img = desispec.image.Image(pix, ivar, mask, camera='z0')
+        
+        outwave = np.arange(7500, 7600)
+        nwave = len(outwave)
+        nspec = 5
+        flux, ivar, resolution = do_boxcar(img, psf, outwave, boxwidth=2.5, nspec=nspec)
+        
+        self.assertEqual(flux.shape, (nspec, nwave))
+        self.assertEqual(ivar.shape, (nspec, nwave))
+        self.assertEqual(resolution.shape[0], nspec)
+        # resolution.shape[1] is number of diagonals; picked by algorithm
+        self.assertEqual(resolution.shape[2], nwave)
+
     def _test_bundles(self, template, specmin, nspec):
         #- should also work with bundles and not starting at spectrum 0
         cmd = template.format(self.imgfile, self.psffile, self.fibermapfile, self.outfile, self.outmodel, specmin, nspec)
