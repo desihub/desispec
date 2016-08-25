@@ -83,9 +83,8 @@ class TestExtract(unittest.TestCase):
         self.assertTrue(np.allclose(model1, model2, rtol=1e-15, atol=1e-15))
 
     def test_boxcar(self):
-        import desimodel.io
         from desispec.boxcar import do_boxcar
-        psf = desimodel.io.load_psf('z')
+        psf = load_psf(self.psffile)
         
         pix = np.random.normal(0, 3.0, size=(psf.npix_y, psf.npix_x))
         ivar = np.ones_like(pix) / 3.0**2
