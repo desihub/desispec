@@ -351,7 +351,7 @@ def graph_night(rawdir, rawnight):
         # get the raw exposures
         raw = io.get_raw_files("pix", rawnight, ex, rawdata_dir=rawdir)
 
-        for cam in sorted(list(raw.keys())):
+        for cam in sorted(raw.keys()):
             cammat = campat.match(cam)
             if cammat is None:
                 raise RuntimeError("invalid camera string {}".format(cam))
@@ -373,7 +373,7 @@ def graph_night(rawdir, rawnight):
             grph[name] = node
             grph[rawnight]['out'].append(name)
 
-    keep = sorted(list(keepspec))
+    keep = sorted(keepspec)
 
     # Now that we have added all the raw data to the graph, we work our way
     # through the processing steps.  
@@ -1099,7 +1099,7 @@ def graph_merge_state(grph, comm=None):
     # them both.
     
     states = {}
-    names = sorted(list(grph.keys()))
+    names = sorted(grph.keys())
     for n in names:
         if 'state' in grph[n]:
             states[n] = grph[n]['state']
@@ -1122,7 +1122,7 @@ def graph_merge_state(grph, comm=None):
             # print("proc {} receiving from {}".format(comm.rank, p))
             # sys.stdout.flush()
             pstates = comm.recv(source=p, tag=p)
-            pnames = sorted(list(pstates.keys()))
+            pnames = sorted(pstates.keys())
             if pnames != names:
                 raise RuntimeError("names of all objects must be the same when merging graph states")
             for n in names:

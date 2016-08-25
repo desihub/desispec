@@ -242,7 +242,7 @@ def main_mpi(args, comm=None):
     bundlesize = args.bundlesize
     checkbundles = set()
     checkbundles.update(np.floor_divide(np.arange(specmin, specmax), bundlesize*np.ones(nspec)).astype(int))
-    bundles = sorted(list(checkbundles))
+    bundles = sorted(checkbundles)
     nbundle = len(bundles)
 
     bspecmin = {}

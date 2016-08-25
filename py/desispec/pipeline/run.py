@@ -747,7 +747,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     if rank == 0:
         # For this step, compute all the tasks that we need to do
         alltasks = []
-        for name, nd in sorted(list(grph.items())):
+        for name, nd in sorted(grph.items()):
             if nd['type'] in step_file_types[step]:
                 alltasks.append(name)
 

@@ -73,7 +73,7 @@ def download(filenames,single_thread=False,workers=None):
         if workers is None:
             workers = cpu_count()
         p = Pool(workers)
-        downloaded_list = p.map(_map_download,list(zip(file_list,http_list,[a]*len(file_list))))
+        downloaded_list = p.map(_map_download,zip(file_list,http_list,[a]*len(file_list)))
     return downloaded_list
 
 def _map_download(map_tuple):
