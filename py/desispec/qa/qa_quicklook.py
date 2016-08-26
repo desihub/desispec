@@ -491,7 +491,6 @@ class Integrate_Spec(MonitoringAlg):
                     for ii in range(stdflux.shape[0]):
                         integ[ii]=integrate_spec(wave,stdflux[ii])
                     int_avg_amps[amp]=np.mean(integ)
-                    log.info(" value %.f"%int_avg_amps[amp])             
 
             retval["VALUE"]={"INTEG":int_stars,"INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps}
         else:
