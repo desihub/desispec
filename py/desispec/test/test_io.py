@@ -315,8 +315,8 @@ class TestIO(unittest.TestCase):
         assert np.all(zfind2.zerr == zfind1.zerr)
         assert np.all(zfind2.zwarn == zfind1.zwarn)
         assert np.all(zfind2.spectype == zfind1.spectype)
-        assert np.all(zfind2.subtype == zfind1.subtype)
-        assert np.all(zfind2.brickname == brickname)
+        assert np.all(zfind2.subtype == zfind1.subtype)        
+        assert np.all(zfind2.brickname == brickname.encode())
         assert np.all(zfind2.targetid == targetids)
 
         desispec.io.write_zbest(self.testfile, brickname, targetids, zfind1, zspec=True)
@@ -434,11 +434,11 @@ class TestIO(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             foo = desispec.io.findfile('stdstars',expid=2,spectrograph=0)
         the_exception = cm.exception
-        self.assertEqual(the_exception.message, "Required input 'night' is not set for type 'stdstars'!")
+        self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
             foo = desispec.io.findfile('brick',brickname='3338p190')
         the_exception = cm.exception
-        self.assertEqual(the_exception.message, "Required input 'band' is not set for type 'brick'!")
+        self.assertEqual(str(the_exception), "Required input 'band' is not set for type 'brick'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']

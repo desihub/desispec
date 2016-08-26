@@ -111,6 +111,7 @@ def read_fibermap(filename, header=False) :
         raise IOError("cannot open"+filename)
 
     fibermap, hdr = fits.getdata(filename, 'FIBERMAP', header=True)
+    fibermap = np.asarray(fibermap)
 
     if header:
         return fibermap, hdr

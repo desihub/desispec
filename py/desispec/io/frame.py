@@ -107,7 +107,7 @@ def read_frame(filename, nspec=None):
     resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
     
     if 'FIBERMAP' in fx:
-        fibermap = fx['FIBERMAP'].data
+        fibermap = np.asarray(fx['FIBERMAP'].data)
     else:
         fibermap = None
         

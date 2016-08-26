@@ -71,7 +71,7 @@ def read_zbest(filename):
     """
     from desispec.io.util import native_endian
     fx = fits.open(filename, memmap=False)
-    zbest = fx['ZBEST'].data
+    zbest = np.asarray(fx['ZBEST'].data)
     if 'WAVELENGTH' in fx:
         wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
         flux = native_endian(fx['FLUX'].data.astype('f8'))
