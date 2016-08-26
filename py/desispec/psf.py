@@ -8,6 +8,7 @@ Mostly making parallel to specter.psf.PSF baseclass and inheriting as needed, bu
 ytrace and wavelength solution available for this case. No resolution information yet.
 """
 
+import numbers
 import numpy as np
 from desiutil import funcfits as dufits
 from numpy.polynomial.legendre import Legendre,legval,legfit
@@ -129,7 +130,7 @@ class PSF(object):
         
         #- wavelength not None but a scalar or 1D-vector here and below
         wavelength = np.asarray(wavelength)
-        if isinstance(ispec,int):
+        if isinstance(ispec, numbers.Integral):
             fit_dictx=dufits.mk_fit_dict(self.xcoeff[ispec],self.ncoeff,'legendre',self.wmin,self.wmax)
             x=dufits.func_val(wavelength,fit_dictx)
             return np.array(x)
@@ -169,8 +170,8 @@ class PSF(object):
                 yfit=dufits.func_val(wavelength,fit_dicty)
                 y.append(yfit)
             return np.array(y)
-    
-        if isinstance(ispec,int): # int ispec
+
+        if isinstance(ispec, numbers.Integral): # int ispec
             fit_dicty=dufits.mk_fit_dict(self.ycoeff[ispec],self.ncoeff,'legendre',self.wmin,self.wmax)
             y=dufits.func_val(wavelength,fit_dicty)
             return np.array(y)
@@ -186,8 +187,7 @@ class PSF(object):
         #- First get the inversion map y --> wavelength dictionary
         c,ymin,ymax=self.invert(coeff=self.ycoeff) 
 
- 
-        if isinstance(ispec,int):
+        if isinstance(ispec, numbers.Integral):
             new_dict=dufits.mk_fit_dict(c[ispec,:],c[ispec,:].shape,'legendre',ymin,ymax)
             wfit=dufits.func_val(y,new_dict)
             return wfit
