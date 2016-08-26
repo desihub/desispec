@@ -6,7 +6,7 @@ import os
 import numpy as np
 
 #- Default number of processes to use for multiprocessing
-if 'SLURM_CPUS_PER_TASK' in os.environ.keys():
+if 'SLURM_CPUS_PER_TASK' in os.environ:
     default_nproc = int(os.environ['SLURM_CPUS_PER_TASK'])
 else:
     import multiprocessing as _mp

@@ -43,7 +43,7 @@ def get_logger(level=None) :
         # forcing the level to the value of DESI_LOGLEVEL, ignoring the requested logging level.
         desi_level=string.upper(desi_level)
         dico={"DEBUG":DEBUG,"INFO":INFO,"WARNING":WARNING,"ERROR":ERROR}
-        if dico.has_key(desi_level) :
+        if desi_level in dico:
             level=dico[desi_level]
         else :
             # amusingly I would need the logger to dump a warning here

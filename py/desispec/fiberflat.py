@@ -288,7 +288,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
 
     fiberflat=np.ones((flux.shape))
     fiberflat_ivar=np.zeros((flux.shape))
-    mask=np.zeros((flux.shape)).astype(long)  # SOMEONE CHECK THIS !
+    mask=np.zeros((flux.shape), dtype='uint32')
     
     # reset ivar
     ivar=frame.ivar

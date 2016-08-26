@@ -24,9 +24,9 @@ def _parse_sec_keyword(value):
     '''
     m = re.search('\[(\d+):(\d+)\,(\d+):(\d+)\]', value)
     if m is None:
-        raise ValueError, 'unable to parse {} as [a:b, c:d]'.format(value)
+        raise ValueError('unable to parse {} as [a:b, c:d]'.format(value))
     else:
-        xmin, xmax, ymin, ymax = map(int, m.groups())
+        xmin, xmax, ymin, ymax = tuple(map(int, m.groups()))
 
     return np.s_[ymin-1:ymax, xmin-1:xmax]
 
@@ -135,7 +135,8 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
             #- use default bias file for this camera/night
             dateobs = header['DATE-OBS']
             bias = read_bias(camera=camera, dateobs=dateobs)
-        elif isinstance(bias, (str, unicode)):
+        ### elif isinstance(bias, (str, unicode)):
+        elif isinstance(bias, str):
             #- treat as filename
             bias = read_bias(filename=bias)
 
@@ -195,7 +196,8 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         if mask is True:
             dateobs = header['DATE-OBS']
             mask = read_mask(camera=camera, dateobs=dateobs)
-        elif isinstance(mask, (str, unicode)):
+        ### elif isinstance(mask, (str, unicode)):
+        elif isinstance(mask, str):
             mask = read_mask(filename=mask)
     else:
         mask = np.zeros(image.shape, dtype=np.int32)
@@ -208,7 +210,8 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         if pixflat is True:
             dateobs = header['DATE-OBS']
             pixflat = read_pixflat(camera=camera, dateobs=dateobs)
-        elif isinstance(pixflat, (str, unicode)):
+        ### elif isinstance(pixflat, (str, unicode)):
+        elif isinstance(pixflat, str):
             pixflat = read_pixflat(filename=pixflat)
 
         if pixflat.shape != image.shape:

@@ -210,7 +210,7 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         Nothing.
     '''
 
-    if step not in step_file_types.keys():
+    if step not in step_file_types:
         raise ValueError("step type {} not recognized".format(step))
 
     log = get_logger()
@@ -747,14 +747,14 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     if rank == 0:
         # For this step, compute all the tasks that we need to do
         alltasks = []
-        for name, nd in sorted(list(grph.items())):
+        for name, nd in sorted(grph.items()):
             if nd['type'] in step_file_types[step]:
                 alltasks.append(name)
 
         # For each task, prune if it is finished
         tasks = []
         for t in alltasks:
-            if 'state' in grph[t].keys():
+            if 'state' in grph[t]:
                 if grph[t]['state'] != 'done':
                     tasks.append(t)
             else:
@@ -1097,7 +1097,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
 
     jobid = None
     if rank == 0:
-        if 'SLURM_JOBID' in os.environ.keys():
+        if 'SLURM_JOBID' in os.environ:
             jobid = "slurm-{}".format(os.environ['SLURM_JOBID'])
         else:
             jobid = os.getpid()
@@ -1114,7 +1114,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     for st in range(firststep, laststep):
         for name, nd in grph.items():
             if nd['type'] in step_file_types[run_step_types[st]]:
-                if 'state' in nd.keys():
+                if 'state' in nd:
                     if nd['state'] != 'done':
                         graph_mark(grph, name, 'wait')
                 else:

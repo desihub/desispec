@@ -86,7 +86,8 @@ def read_frame(filename, nspec=None):
         desispec.Frame object with attributes wave, flux, ivar, etc.
     """
     #- check if filename is (night, expid, camera) tuple instead
-    if not isinstance(filename, (str, unicode)):
+    ### if not isinstance(filename, (str, unicode)):
+    if not isinstance(filename, str):
         night, expid, camera = filename
         filename = findfile('frame', night, expid, camera)
 

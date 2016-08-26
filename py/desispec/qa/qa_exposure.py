@@ -2,7 +2,7 @@
 Classes to organize and execute QA for a DESI exposure
 """
 
-from __future__ import print_function, absolute_import, division, unicode_literals
+from __future__ import print_function, absolute_import, division
 
 import numpy as np
 import os
@@ -64,13 +64,13 @@ class QA_Exposure(object):
         """
         from . import qa_plots
         # Init
-        if 'FLUXCALIB' not in self.data.keys():
+        if 'FLUXCALIB' not in self.data:
             self.data['FLUXCALIB'] = {}
         # Loop on channel
-        cameras = self.data['frames'].keys()
+        cameras = list(self.data['frames'].keys())
         for channel in ['b','r','z']:
             # Init
-            if channel not in self.data['FLUXCALIB'].keys():
+            if channel not in self.data['FLUXCALIB']:
                 self.data['FLUXCALIB'][channel] = {}
             # Load
             ZPval = []
@@ -97,7 +97,7 @@ class QA_Exposure(object):
                                   specprod_dir=self.specprod_dir)
         #import pdb; pdb.set_trace()
         # Load into frames
-        for camera,qadata_path in qafiles.iteritems():
+        for camera,qadata_path in qafiles.items():
             qa_frame = desiio.load_qa_frame(qadata_path)
             # Remove?
             if remove:

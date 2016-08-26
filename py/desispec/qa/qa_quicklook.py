@@ -587,8 +587,8 @@ class Sky_Continuum(MonitoringAlg):
         #- get the skyfibers first
         skyfiber=np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
         nspec_sky=skyfiber.shape[0]
-        wminlow,wmaxlow=map(float,wrange1.split(','))
-        wminhigh,wmaxhigh=map(float,wrange2.split(','))
+        wminlow,wmaxlow=[float(w) for w in wrange1.split(',')]
+        wminhigh,wmaxhigh=[float(w) for w in wrange2.split(',')]
         selectlow=np.where((frame.wave>wminlow) & (frame.wave<wmaxlow))[0]
         selecthigh=np.where((frame.wave>wminhigh) & (frame.wave < wmaxhigh))[0]
 
@@ -1162,7 +1162,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if 'INHERIT' in header and header['INHERIT']:
             h0 = raw[0].header
-            for key in h0.keys():
+            for key in h0:
                 if key not in header:
                     header[key] = h0[key]
 
@@ -1176,7 +1176,7 @@ class Bias_From_Overscan(MonitoringAlg):
             #  the 0.5% of smallest and largest values. (from sdssproc) 
             isort=np.sort(pixdata.ravel())
             nn=isort.shape[0]
-            bias=np.mean(isort[long(0.005*nn) : long(0.995*nn)])
+            bias=np.mean(isort[int(0.005*nn) : int(0.995*nn)])
             bias_overscan.append(bias)
 
         bias=np.mean(bias_overscan)

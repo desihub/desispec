@@ -2,7 +2,7 @@
 Extract spectra from DESI pre-processed raw data
 """
 
-from __future__ import absolute_import, division
+from __future__ import absolute_import, division, print_function
 
 import sys
 import os
@@ -95,7 +95,7 @@ def main(args):
 
     #- Get wavelength grid from options
     if args.wavelength is not None:
-        wstart, wstop, dw = map(float, args.wavelength.split(','))
+        wstart, wstop, dw = [float(tmp) for tmp in args.wavelength.split(',')]
     else:
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
@@ -106,15 +106,15 @@ def main(args):
     bundlesize = args.bundlesize
 
     #- Confirm that this PSF covers these wavelengths for these spectra
-    psf_wavemin = np.max(psf.wavelength(range(specmin, specmax), y=0))
-    psf_wavemax = np.min(psf.wavelength(range(specmin, specmax), y=psf.npix_y-1))
+    psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=0))
+    psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-1))
     if psf_wavemin > wstart:
-        raise ValueError, 'Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin)
+        raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
     if psf_wavemax < wstop:
-        raise ValueError, 'Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax)
+        raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
     #- Print parameters
-    print """\
+    print("""\
 #--- Extraction Parameters ---
 input:      {input}
 psf:        {psf}
@@ -127,7 +127,7 @@ regularize: {regularize}
     """.format(input=input_file, psf=psf_file, output=args.output,
         wstart=wstart, wstop=wstop, dw=dw,
         specmin=specmin, nspec=nspec,
-        regularize=args.regularize)
+        regularize=args.regularize))
 
     #- The actual extraction
     results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
@@ -219,7 +219,7 @@ def main_mpi(args, comm=None):
     #- Get wavelength grid from options
 
     if args.wavelength is not None:
-        wstart, wstop, dw = map(float, args.wavelength.split(','))
+        wstart, wstop, dw = [float(tmp) for tmp in args.wavelength.split(',')]
     else:
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
@@ -230,19 +230,19 @@ def main_mpi(args, comm=None):
 
     #- Confirm that this PSF covers these wavelengths for these spectra
     
-    psf_wavemin = np.max(psf.wavelength(range(specmin, specmax), y=0))
-    psf_wavemax = np.min(psf.wavelength(range(specmin, specmax), y=psf.npix_y-1))
+    psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=0))
+    psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-1))
     if psf_wavemin > wstart:
-        raise ValueError, 'Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin)
+        raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
     if psf_wavemax < wstop:
-        raise ValueError, 'Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax)
+        raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
     # Now we divide our spectra into bundles
 
     bundlesize = args.bundlesize
     checkbundles = set()
     checkbundles.update(np.floor_divide(np.arange(specmin, specmax), bundlesize*np.ones(nspec)).astype(int))
-    bundles = sorted(list(checkbundles))
+    bundles = sorted(checkbundles)
     nbundle = len(bundles)
 
     bspecmin = {}
@@ -276,13 +276,13 @@ def main_mpi(args, comm=None):
 
     if rank == 0:
         #- Print parameters
-        print "extract:  input = {}".format(input_file)
-        print "extract:  psf = {}".format(psf_file)
-        print "extract:  specmin = {}".format(specmin)
-        print "extract:  nspec = {}".format(nspec)
-        print "extract:  wavelength = {},{},{}".format(wstart, wstop, dw)
-        print "extract:  nwavestep = {}".format(args.nwavestep)
-        print "extract:  regularize = {}".format(args.regularize)
+        print("extract:  input = {}".format(input_file))
+        print("extract:  psf = {}".format(psf_file))
+        print("extract:  specmin = {}".format(specmin))
+        print("extract:  nspec = {}".format(nspec))
+        print("extract:  wavelength = {},{},{}".format(wstart, wstop, dw))
+        print("extract:  nwavestep = {}".format(args.nwavestep))
+        print("extract:  regularize = {}".format(args.regularize))
 
     # get the root output file
 

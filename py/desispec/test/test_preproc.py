@@ -217,7 +217,7 @@ class TestPreProc(unittest.TestCase):
         self.assertEqual(fx[5].header['EXTNAME'], 'B4')
 
     def test_keywords(self):
-        for keyword in self.header.keys():
+        for keyword in self.header:
             #- Missing GAIN* and RDNOISE* are warnings but not errors
             if keyword.startswith('GAIN') or keyword.startswith('RDNOISE'):
                 continue
@@ -248,11 +248,11 @@ class TestPreProc(unittest.TestCase):
         rawimage = self.rawimage + np.random.normal(scale=10, size=self.rawimage.shape)
         image = preproc(rawimage, self.header)
         #- should log a warning about small readnoise
-        rdnoise = 0.7 * np.mean(self.rdnoise.values())
+        rdnoise = 0.7 * np.mean(list(self.rdnoise.values()))
         rawimage = np.random.normal(scale=rdnoise, size=self.rawimage.shape)
         image = preproc(rawimage, self.header)
         #- should log a warning about tiny readnoise
-        rdnoise = 0.01 * np.mean(self.rdnoise.values())
+        rdnoise = 0.01 * np.mean(list(self.rdnoise.values()))
         rawimage = np.random.normal(scale=rdnoise, size=self.rawimage.shape)
         image = preproc(rawimage, self.header)
         #- Missing expected RDNOISE keywords shouldn't be fatal

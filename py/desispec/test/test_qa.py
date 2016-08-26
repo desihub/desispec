@@ -146,8 +146,8 @@ class TestQA(unittest.TestCase):
         #- Test loading data
         self._write_qaframes()
         qaexp = QA_Exposure(self.expid, self.night, 'dark', specprod_dir=self.testDir)
-        assert 'b0' in qaexp.data['frames'].keys()
-        assert 'b1' in qaexp.data['frames'].keys()
+        assert 'b0' in qaexp.data['frames']
+        assert 'b1' in qaexp.data['frames']
         # Write
         write_qa_exposure(self.qafile_exp, qaexp)
 

@@ -89,7 +89,8 @@ def makepath(outfile, filetype=None):
     """
     #- if this doesn't look like a filename, interpret outfile as a tuple of
     #- (night, expid, ...) via findfile.  Only works if filetype is set.
-    if (filetype is not None) and (not isinstance(outfile, (str, unicode))):
+    ### if (filetype is not None) and (not isinstance(outfile, (str, unicode))):
+    if (filetype is not None) and (not isinstance(outfile, str)):
         outfile = findfile(filetype, *outfile)
 
     #- Create the path to that file if needed
@@ -128,7 +129,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     #- Reopen the file to add the comments and units
     fx = astropy.io.fits.open(filename, mode='update')
     hdu = fx[extname]
-    for i in xrange(1,999):
+    for i in range(1,999):
         key = 'TTYPE'+str(i)
         if key not in hdu.header:
             break
@@ -165,7 +166,7 @@ def _dict2ndarray(data, columns=None):
         nddata = _dict2ndarray(d, columns=['x', 'y'])
     """
     if columns is None:
-        columns = data.keys()
+        columns = list(data.keys())
         
     dtype = list()
     for key in columns:
