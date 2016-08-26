@@ -46,6 +46,12 @@ def fiducialregion(frame,psf):
     endwave1=frame.wave.shape[0] #- upper index for the last fiber for that amp
     pixboundary=[]
     fidboundary=[]
+    
+    #- Adding the min, max boundary individually for the benefit of dumping to yaml.
+    leftmax=499 #- for amp 1 and 3
+    rightmin=0 #- for amp 2 and 4
+    bottommax=frame.wave.shape[0] #- for amp 1 and 2
+    topmin=0 #- for amp 3 and 4
 
     for kk in ['1','2','3','4']: #- 4 amps
         #- get the amp region in pix
@@ -86,12 +92,39 @@ def fiducialregion(frame,psf):
         startwave=max(startwave0,startwave1) 
         endwave=min(endwave0,endwave1)
         if endspec is not None:
-            endspec+=1 #- last entry exclusive in slice, so add 1
-            endwave+=1
-        fiducialb=(slice(startspec,endspec,None),slice(startwave,endwave,None))  #- Note: y,x --> spec, wavelength 
-        fidboundary.append(fiducialb)
- 
-    return pixboundary,fidboundary
+            #endspec+=1 #- last entry exclusive in slice, so add 1
+            #endwave+=1
+
+            if endspec < leftmax:
+                leftmax=endspec
+            if startspec > rightmin:
+                rightmin=startspec
+            if endwave < bottommax:
+                bottommax=endwave
+            if startwave > topmin:
+                topmin=startwave
+        else:
+            rightmin=0 #- Only if no spec in right side of CCD. passing 0 to encertain valid data type. Nontype throws a type error in yaml.dump. 
+
+        #fiducialb=(slice(startspec,endspec,None),slice(startwave,endwave,None))  #- Note: y,x --> spec, wavelength 
+        #fidboundary.append(fiducialb)
+
+    #- return pixboundary,fidboundary
+    return leftmax,rightmin,bottommax,topmin
+
+def slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin):
+    """
+    runs fiducialregion function and makes the boundary slice for the amps:
+    returns list of tuples of slices for spec- wavelength boundary for the amps.
+    """
+    leftmax+=1 #- last entry not counted in slice
+    bottommax+=1
+    if rightmin ==0:
+        return [(slice(0,leftmax,None),slice(0,bottommax,None)), (slice(None,None,None),slice(None,None,None)),
+                (slice(0,leftmax,None),slice(topmin,frame.wave.shape[0],None)),(slice(None,None,None),slice(None,None,None))]
+    else:
+        return [(slice(0,leftmax,None),slice(0,bottommax,None)), (slice(rightmin,frame.nspec,None),slice(0,bottommax,None)),
+                (slice(0,leftmax,None),slice(topmin,frame.wave.shape[0],None)),(slice(rightmin,frame.nspec,None),slice(topmin,frame.wave.shape[0]-1,None))]
 
 
 def getrms(image):
@@ -398,9 +431,9 @@ class Integrate_Spec(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        psf = None
-        if "PSFFile" in kwargs: 
-            psf=kwargs["PSFFile"]
+        dict_countbins=None
+        if "dict_countbins" in kwargs:
+            dict_countbins=kwargs["dict_countbins"] 
 
         if "url" in kwargs:
              url=kwargs["url"]
@@ -409,9 +442,9 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
 
-    def run_qa(self,frame,camera,expid,paname=None,amps=False,psf=None,url=None,qafig=None):
+    def run_qa(self,frame,camera,expid,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
         retval={}
         retval["EXPID"]=expid
         retval["ARM"]=camera[0]
@@ -436,24 +469,29 @@ class Integrate_Spec(MonitoringAlg):
         if amps:
 
             #- get the fiducial boundary
-            pixboundary,fidboundary=fiducialregion(frame,psf)
-            int_amp1=integrate_spec(frame.wave[fidboundary[0][1]],frame.flux[fidboundary[0]][starfibers])
-            int_amp3=integrate_spec(frame.wave[fidboundary[2][1]],frame.flux[fidboundary[2]][starfibers])
-            
-            int_avg_amp1=np.mean(int_amp1)
-            int_avg_amp3=np.mean(int_amp3)
+            leftmax = dict_countbins["LEFT_MAX_FIBER"]
+            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
+            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
+            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
 
-            if fidboundary[1][0].start is not None:
-                int_amp2=integrate_spec(frame.wave[fidboundary[1][1]],frame.flux[fidboundary[1]][starfibers])
-                int_amp4=integrate_spec(frame.wave[fidboundary[3][1]],frame.flux[fidboundary[3]][starfibers])
-                int_avg_amp2=np.mean(int_amp2)
-                int_avg_amp4=np.mean(int_amp4)
+            fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
 
-            else:
-                int_avg_amp2=0.
-                int_avg_amp4=0.
+            int_avg_amps=np.zeros(4)
+           
+            for amp in range(4):
+                wave=frame.wave[fidboundary[amp][1]]
+                select=starfibers[(starfibers >= fidboundary[amp][0].start) & (starfibers < fidboundary[amp][0].stop)]
+                stdflux=frame.flux[select,fidboundary[amp][1]]
 
-            int_avg_amps=np.array((int_avg_amp1,int_avg_amp2,int_avg_amp3,int_avg_amp4)) #- in four amps regions            
+                if len(stdflux)==0:
+                    break
+                else:
+                    integ=np.zeros(stdflux.shape[0])
+
+                    for ii in range(stdflux.shape[0]):
+                        integ[ii]=integrate_spec(wave,stdflux[ii])
+                    int_avg_amps[amp]=np.mean(integ)
+                    log.info(" value %.f"%int_avg_amps[amp])             
 
             retval["VALUE"]={"INTEG":int_stars,"INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps}
         else:
@@ -522,9 +560,10 @@ class Sky_Continuum(MonitoringAlg):
         amps=False
         if "amps" in kwargs:
             amps=kwargs["amps"]
-        psf = None
-        if "PSFFile" in kwargs: 
-            psf=kwargs["PSFFile"]
+
+        dict_countbins=None
+        if "dict_countbins" in kwargs:
+            dict_countbins=kwargs["dict_countbins"]
 
         url=None
         if "url" in kwargs:
@@ -532,9 +571,9 @@ class Sky_Continuum(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(input_frame,camera,expid,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,camera,expid,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
 
-    def run_qa(self,frame,camera,expid,wrange1=None,wrange2=None,paname=None,amps=False,psf=None,url=None,qafig=None):
+    def run_qa(self,frame,camera,expid,wrange1=None,wrange2=None,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
 
         #- qa dictionary 
         retval={}
@@ -565,20 +604,23 @@ class Sky_Continuum(MonitoringAlg):
         skycont=np.mean(meancontfiber) #- over the entire CCD (skyfibers)
 
         if amps:
-   
-            pixboundary,fidboundary=fiducialregion(frame,psf)
-            maxsky_index=240  #- for amp 1 and 3
-            for jj,ii in enumerate(skyfiber):
-                if ii < fidboundary[0][0].stop:
-                    maxsky_index=jj
+
+            leftmax = dict_countbins["LEFT_MAX_FIBER"]
+            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
+            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
+            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
+
+            fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
+
+            k1=np.where(skyfiber < fidboundary[0][0].stop)[0]
+            maxsky_index=max(k1)
+
             contamp1=np.mean(contfiberlow[:maxsky_index])
             contamp3=np.mean(contfiberhigh[:maxsky_index])
 
-            if fidboundary[1][0].start is not None:
-                minsky_index=260 #- for amp 2 and 4
-                for jj,ii in enumerate(skyfiber):
-                    if ii > fidboundary[1][0].start:
-                        minsky_index=jj
+            if fidboundary[1][0].start >=fidboundary[0][0].stop:
+                k2=np.where(skyfiber > fidboundary[1][0].start)[0]
+                minsky_index=min(k2)
                 contamp2=np.mean(contfiberlow[minsky_index:])
                 contamp4=np.mean(contfiberhigh[minsky_index:])
             else:
@@ -742,7 +784,6 @@ class Sky_Peaks(MonitoringAlg):
                         if camera[0]=="z":
                             amp2_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
                             amp4_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
-                    if frame.fibermap['FIBER'].shape[0]>260:
                         amp2.append(amp2_flux)
                         amp4.append(amp4_flux)
 
@@ -1231,10 +1272,17 @@ class CountSpectralBins(MonitoringAlg):
         goodfibers=np.where(counts500>0)[0] #- fibers with at least one bin higher than 500 counts
         ngoodfibers=goodfibers.shape[0]
 
+        leftmax=None
+        rightmax=None
+        bottommax=None
+        topmin=None
+
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
-            pixboundary,fidboundary=fiducialregion(input_frame,psf)
-           
+
+            leftmax,rightmin,bottommax,topmin = fiducialregion(input_frame,psf)  
+            fidboundary=slice_fidboundary(input_frame,leftmax,rightmin,bottommax,topmin)          
+
             counts100_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=100)
             average100_amp1=np.mean(counts100_amp1)
             counts250_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=250)
@@ -1286,6 +1334,11 @@ class CountSpectralBins(MonitoringAlg):
         else:
             retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500,"NGOODFIBERS": ngoodfibers}
 
+        retval["LEFT_MAX_FIBER"]=int(leftmax)
+        retval["RIGHT_MIN_FIBER"]=int(rightmin)
+        retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
+        retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
+
         #- http post if needed
         if url is not None:
             try: 
@@ -1328,9 +1381,9 @@ class Calculate_SNR(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        psf = None
-        if "PSFFile" in kwargs: 
-            psf=kwargs["PSFFile"]
+        dict_countbins=None
+        if "dict_countbins" in kwargs:
+            dict_countbins=kwargs["dict_countbins"]
         
         paname=None
         if "paname" in kwargs:
@@ -1343,10 +1396,10 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
 
 
-    def run_qa(self,input_frame,camera,expid,paname=None,amps=False,psf=None,url=None,qafig=None):
+    def run_qa(self,input_frame,camera,expid,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
 
         #- return values
         retval={}
@@ -1399,7 +1452,12 @@ class Calculate_SNR(MonitoringAlg):
         if amps:
             
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
-            pixboundary,fidboundary=fiducialregion(input_frame,psf)
+            leftmax = dict_countbins["LEFT_MAX_FIBER"]
+            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
+            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
+            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
+
+            fidboundary = slice_fidboundary(input_frame,leftmax,rightmin,bottommax,topmin)
            
             medsnr1=SN_ratio(input_frame.flux[fidboundary[0]],input_frame.ivar[fidboundary[0]])
             average1=np.mean(medsnr1)

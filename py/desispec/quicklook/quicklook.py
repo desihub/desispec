@@ -246,6 +246,7 @@ def runpipeline(pl,convdict,conf):
     paconf=conf["PipeLine"]
     qlog=qllogger.QLLogger("QuickLook",0)
     log=qlog.getlog()
+    passqadict=None #- pass this dict to QAs downstream
     for s,step in enumerate(pl):
         log.info("Starting to run step %s"%(paconf[s]["StepName"]))
         pa=step[0]
@@ -261,9 +262,13 @@ def runpipeline(pl,convdict,conf):
             try:
                 qargs=mapkeywords(qa.config["kwargs"],convdict)
                 hb.start("Running %s"%(qa.name))
+                qargs["dict_countbins"]=passqadict
                 res=qa(inp,**qargs)
+                if qa.name=="COUNTBINS":         #TODO -must run this QA for now. change this later.
+                    passqadict=res
                 log.debug("%s %s"%(qa.name,inp))
                 qaresult[qa.name]=res
+
             except Exception as e:
                 log.warning("Failed to run QA %s error was %s"%(qa.name,e))
         if len(qaresult):
