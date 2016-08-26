@@ -101,7 +101,7 @@ def main(args) :
                                     expid=exposure, specprod_dir=args.specprod_dir)
                 skymodel = read_sky(sky_file)
                 # Resid
-                skyfibers = np.where(cframe.fibermap['OBJTYPE'] == 'SKY')[0]
+                skyfibers = np.where(cframe.fibermap['OBJTYPE'] == b'SKY')[0]
                 res = cframe.flux[skyfibers]
                 flux = skymodel.flux[skyfibers] # Residuals
                 tmp = np.outer(np.ones(flux.shape[0]), cframe.wave)

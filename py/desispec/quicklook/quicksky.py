@@ -31,7 +31,7 @@ def compute_sky(fframe,fibermap=None):
         sys.exit(0)
 
     #- get the sky
-    skyfibers = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
+    skyfibers = np.where(fibermap['OBJTYPE'] == b'SKY')[0]
     skyfluxes=fframe.flux[skyfibers]
     skyivars=fframe.ivar[skyfibers]
     if skyfibers.shape[0] > 1:

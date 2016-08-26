@@ -196,7 +196,7 @@ class TestFluxCalibration(unittest.TestCase):
         modelwave, modelflux = get_models()
         nstd = 5
         frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
-        nstd = np.count_nonzero(frame.fibermap['OBJTYPE'] == 'STD')
+        nstd = np.count_nonzero(frame.fibermap['OBJTYPE'] == b'STD')
         frame.flux[0] = np.mean(frame.flux[0])        
         fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[0:nstd])
 

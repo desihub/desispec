@@ -98,7 +98,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     """
 
     # Sky fibers
-    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == b'SKY')[0]
     assert np.max(skyfibers) < 500  #- indices, not fiber numbers
 
     # Residuals
@@ -303,7 +303,7 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     # Unpack model
 
     # Standard stars
-    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    stdfibers = (frame.fibermap['OBJTYPE'] == b'STD')
     stdstars = frame[stdfibers]
     nstds = np.sum(stdfibers)
 
