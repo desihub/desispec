@@ -974,11 +974,11 @@ def retry_task(failpath, newopts=None):
         rank = comm.rank
         if nworld != nproc:
             if rank == 0:
-                log.warn("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
+                log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
 
     opts = origopts
     if newopts is not None:
-        log.warn("WARNING: overriding original options")
+        log.warning("WARNING: overriding original options")
         opts = newopts
 
     try:

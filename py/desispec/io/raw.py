@@ -99,14 +99,14 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     for amp in ['1', '2', '3', '4']:
         keyword = 'GAIN'+amp
         if keyword not in header:
-            log.warn('Gain keyword {} missing; using 1.0'.format(keyword))
+            log.warning('Gain keyword {} missing; using 1.0'.format(keyword))
             header[keyword] = 1.0
 
     #- Missing RDNOISEx is warning but not error
     for amp in ['1', '2', '3', '4']:
         keyword = 'RDNOISE'+amp
         if keyword not in header:
-            log.warn('Readnoise keyword {} missing'.format(keyword))
+            log.warning('Readnoise keyword {} missing'.format(keyword))
 
     #- Stop if any keywords are missing
     if len(missing_keywords) > 0:
@@ -118,7 +118,7 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         extname = camera.upper()
     else:
         if header['CAMERA'] != header['CAMERA'].lower():
-            log.warn('Converting CAMERA {} to lowercase'.format(header['CAMERA']))
+            log.warning('Converting CAMERA {} to lowercase'.format(header['CAMERA']))
             header['CAMERA'] = header['CAMERA'].lower()
         extname = header['CAMERA'].upper()
 
@@ -138,7 +138,7 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     if rawdata.dtype in (np.int16, np.int32):
         dataHDU = fits.CompImageHDU(rawdata, header=header, name=extname)
     elif rawdata.dtype == np.int64:
-        log.warn('Image compression not supported for 64-bit; writing uncompressed')
+        log.warning('Image compression not supported for 64-bit; writing uncompressed')
         dataHDU = fits.ImageHDU(rawdata, header=header, name=extname)
     else:
         log.error("How did we get this far with rawdata dtype {}?".format(rawdata.dtype))

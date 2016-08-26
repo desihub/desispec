@@ -175,16 +175,16 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
                 log.error('Amp {} measured readnoise {:.2f} < 0.5 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise < 0.9*expected_readnoise:
-                log.warn('Amp {} measured readnoise {:.2f} < 0.9 * expected readnoise {:.2f}'.format(
+                log.warning('Amp {} measured readnoise {:.2f} < 0.9 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise > 2.0*expected_readnoise:
                 log.error('Amp {} measured readnoise {:.2f} > 2 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise > 1.2*expected_readnoise:
-                log.warn('Amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
+                log.warning('Amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
         else:
-            log.warn('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
+            log.warning('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
 
         #- subtract overscan from data region and apply gain
         jj = _parse_sec_keyword(header['DATASEC'+amp])

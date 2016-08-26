@@ -90,7 +90,7 @@ def qa_zbest(param, zf, brick):
     nfail = np.sum(zf.zwarn > 0)
     qadict['NFAIL'] = int(nfail)  # For yaml
     if nfail > param['MAX_NFAIL']:
-        log.warn("High number of failed redshifts {:d}".format(nfail))
+        log.warning("High number of failed redshifts {:d}".format(nfail))
 
     # Simple redshift stats
     gdz = zf.zwarn == 0

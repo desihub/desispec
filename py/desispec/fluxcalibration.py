@@ -635,7 +635,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     qadict['MAX_ZP_OFF'] = [float(ZPoffset[imax]),
                             int(stdfibers[np.argmax(ZPoffset)])]
     if qadict['MAX_ZP_OFF'][0] > param['MAX_ZP_OFF']:
-        log.warn("Bad standard star ZP {:g}, in fiber {:d}".format(
+        log.warning("Bad standard star ZP {:g}, in fiber {:d}".format(
                 qadict['MAX_ZP_OFF'][0], qadict['MAX_ZP_OFF'][1]))
     # Return
     return qadict
