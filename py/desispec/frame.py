@@ -4,6 +4,7 @@ Lightweight wrapper class for spectra, to be returned by io.read_frame
 
 from __future__ import absolute_import, division
 
+import numbers
 import numpy as np
 
 from desispec import util
@@ -153,7 +154,7 @@ class Frame(object):
         This is analogous to how integers vs. slices or arrays return either
         scalars or arrays when indexing numpy.ndarray .
         """
-        if isinstance(index, int):
+        if isinstance(index, numbers.Integral):
             return Spectrum(self.wave, self.flux[index], self.ivar[index], self.mask[index], self.R[index])
         
         #- convert index to 1d array to maintain dimentionality of sliced arrays

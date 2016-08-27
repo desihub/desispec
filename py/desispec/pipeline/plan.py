@@ -318,6 +318,7 @@ def graph_night(rawdir, rawnight):
         flavor = fmheader['flavor']
         fmbricks = {}
         for fmb in fmdata['BRICKNAME']:
+            fmb = str(fmb)
             if len(fmb) > 0:
                 if fmb in fmbricks:
                     fmbricks[fmb] += 1
@@ -422,7 +423,9 @@ def graph_night(rawdir, rawnight):
             node['out'] = []
             grph[name] = node
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'pix':
             continue
         if nd['flavor'] != 'arc':
@@ -447,7 +450,9 @@ def graph_night(rawdir, rawnight):
 
     # Now we extract the flats and science frames using the nightly psf
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'pix':
             continue
         if nd['flavor'] == 'arc':
@@ -478,7 +483,9 @@ def graph_night(rawdir, rawnight):
 
     flatexpid = {}
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] != 'flat':
@@ -504,7 +511,9 @@ def graph_night(rawdir, rawnight):
     # To compute the sky file, we use the "most recent fiberflat" that came
     # before the current exposure.
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] == 'flat':
@@ -537,7 +546,9 @@ def graph_night(rawdir, rawnight):
 
     stdgrph = {}
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] == 'flat':
@@ -580,7 +591,9 @@ def graph_night(rawdir, rawnight):
 
     # Construct calibration files
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] == 'flat':
@@ -614,7 +627,9 @@ def graph_night(rawdir, rawnight):
 
     # Build cframe files
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] == 'flat':
@@ -669,7 +684,9 @@ def graph_night(rawdir, rawnight):
         node['out'] = []
         grph[zbname] = node
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'fibermap':
             continue
         if nd['flavor'] == 'arc':
@@ -940,7 +957,7 @@ def graph_slice(grph, names=None, types=None, deps=False):
 
     # Now optionally grab all direct inputs
     if deps:
-        for name, nd in newgrph.items():
+        for name, nd in list(newgrph.items()):
             for p in nd['in']:
                 if p not in newgrph:
                     newgrph[p] = copy.deepcopy(grph[p])
@@ -965,7 +982,7 @@ def graph_slice_spec(grph, spectrographs=None):
     newgrph = copy.deepcopy(grph)
     if spectrographs is None:
         spectrographs = list(range(10))
-    for name, nd in newgrph.items():
+    for name, nd in list(newgrph.items()):
         if 'spec' in nd:
             if int(nd['spec']) not in spectrographs:
                 graph_prune(newgrph, name, descend=False)

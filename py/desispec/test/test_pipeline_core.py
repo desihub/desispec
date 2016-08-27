@@ -5,6 +5,7 @@ tests desispec.pipeline.core
 import os
 import unittest
 from uuid import uuid4
+import imp
 
 from desispec.pipeline.core import runcmd
 
@@ -78,13 +79,13 @@ class TestRunCmd(unittest.TestCase):
         tmp = os.getenv('SLURM_CPUS_PER_TASK')
         os.environ['SLURM_CPUS_PER_TASK'] = str(n)
         from desispec import util
-        reload(util)
+        imp.reload(util)
         self.assertEqual(util.default_nproc, n)
         os.environ['SLURM_CPUS_PER_TASK'] = str(2*n)
-        reload(util)
+        imp.reload(util)
         self.assertEqual(util.default_nproc, 2*n)
         del os.environ['SLURM_CPUS_PER_TASK']
-        reload(util)
+        imp.reload(util)
         import multiprocessing
         self.assertEqual(util.default_nproc, multiprocessing.cpu_count()//2)
 
