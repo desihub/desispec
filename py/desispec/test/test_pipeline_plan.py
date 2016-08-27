@@ -75,7 +75,7 @@ class TestPipelinePlan(unittest.TestCase):
         (grph, expcount, bricks) = graph_night(self.testraw, self.night)        
         with open(os.path.join(self.testraw, "{}.dot".format(self.night)), 'w') as f:
             graph_dot(grph, f)        
-        graph_write(os.path.join(self.testraw, "{}_graph.yml".format(self.night)), grph)
+        graph_write(os.path.join(self.testraw, "{}_graph.yml".format(self.night)), grph)        
 
 
     def test_graph_slice_spec(self):
