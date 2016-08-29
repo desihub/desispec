@@ -31,14 +31,49 @@ class TestBinScripts(unittest.TestCase):
         cls.qa_calib_file = 'qa-calib-'+id+'.yaml'
         cls.qa_data_file = 'qa-data-'+id+'.yaml'
         cls.qafig = 'qa-'+id+'.pdf'
-        cls.topDir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+        #- when running "python setup.py test", this file is run from different
+        #- locations for python 2.7 vs. 3.5
+        #- python 2.7: py/specter/test/test_binscripts.py
+        #- python 3.5: build/lib/specter/test/test_binscripts.py
+
+        #- python 2.7 location:
+        cls.topDir = os.path.dirname( # top-level
+            os.path.dirname( # py/
+                os.path.dirname( # desispec/
+                    os.path.dirname(os.path.abspath(__file__)) # test/
+                    )
+                )
+            )
         cls.binDir = os.path.join(cls.topDir,'bin')
+        if not os.path.isdir(cls.binDir):
+            #- python 3.x setup.py test location:
+            cls.topDir = os.path.dirname( # top-level
+                os.path.dirname( # build/
+                    os.path.dirname( # lib/
+                        os.path.dirname( # desispec/
+                            os.path.dirname(os.path.abspath(__file__)) # test/
+                            )
+                        )
+                    )
+                )
+            cls.binDir = os.path.join(cls.topDir,'bin')
+
+        #- last attempt
+        if not os.path.isdir(cls.binDir):
+            cls.topDir = os.getcwd()
+            cls.binDir = os.path.join(cls.topDir, 'bin')
+
+        if not os.path.isdir(cls.binDir):
+            raise RuntimeError('Unable to auto-locate desispec/bin from {}'.format(__file__))
+
         try:
             cls.origPath = os.environ['PYTHONPATH']
             os.environ['PYTHONPATH'] = os.path.join(cls.topDir,'py') + ':' + cls.origPath
         except KeyError:
             cls.origPath = None
             os.environ['PYTHONPATH'] = os.path.join(cls.topDir,'py')
+        
 
     @classmethod
     def tearDownClass(cls):
