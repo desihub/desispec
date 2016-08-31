@@ -42,7 +42,7 @@ def compute_sky(frame, nsig_clipping=4.) :
     log.info("starting")
 
     # Grab sky fibers on this frame
-    skyfibers = np.where(frame.fibermap['OBJTYPE'] == b'SKY')[0]
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
     assert np.max(skyfibers) < 500  #- indices, not fiber numbers
 
     nwave=frame.nwave
@@ -240,7 +240,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     qadict['NREJ'] = int(skymodel.nrej)
 
     # Grab sky fibers on this frame
-    skyfibers = np.where(frame.fibermap['OBJTYPE'] == b'SKY')[0]
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
     assert np.max(skyfibers) < 500  #- indices, not fiber numbers
     nfibers=len(skyfibers)
     qadict['NSKY_FIB'] = int(nfibers)

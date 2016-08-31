@@ -32,7 +32,7 @@ def write_zbest(filename, brickname, targetids, zfind, zspec=False):
     and MODEL.
     """
     dtype = [
-        ('BRICKNAME', 'S8'),
+        ('BRICKNAME', (str, 8)),
         ('TARGETID',  np.int64),
         ('Z',         zfind.z.dtype),
         ('ZERR',      zfind.zerr.dtype),

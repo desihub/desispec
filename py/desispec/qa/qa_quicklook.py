@@ -428,7 +428,7 @@ class Integrate_Spec(MonitoringAlg):
             integrals[ii]=integrate_spec(wave,flux[ii])
         
         #- average integrals over star fibers
-        starfibers=np.where(frame.fibermap['OBJTYPE']==b'STD')
+        starfibers=np.where(frame.fibermap['OBJTYPE']=='STD')
         int_stars=integrals[starfibers]
         int_average=np.mean(int_stars)
 
@@ -546,7 +546,7 @@ class Sky_Continuum(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
 
         #- get the skyfibers first
-        skyfiber=np.where(frame.fibermap['OBJTYPE']==b'SKY')[0]
+        skyfiber=np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
         nspec_sky=skyfiber.shape[0]
         wminlow,wmaxlow=[float(w) for w in wrange1.split(',')]
         wminhigh,wmaxhigh=[float(w) for w in wrange2.split(',')]
@@ -716,7 +716,7 @@ class Sky_Peaks(MonitoringAlg):
                 sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)
                 nspec_counts.append(sum_counts)
 
-            if frame.fibermap['OBJTYPE'][i]==b'SKY':
+            if frame.fibermap['OBJTYPE'][i]=='SKY':
                 sky_counts.append(sum_counts)
 
                 if amps:
@@ -987,7 +987,7 @@ class Calc_XWSigma(MonitoringAlg):
                 xsigma.append(xsigma_avg)
                 wsigma.append(wsigma_avg)
  
-            if fibermap['OBJTYPE'][i]==b'SKY':
+            if fibermap['OBJTYPE'][i]=='SKY':
                 xsigma_sky=xsigma
                 wsigma_sky=wsigma
  
@@ -1366,7 +1366,7 @@ class Calculate_SNR(MonitoringAlg):
         filter_pick=np.array(filter_pick)
 
         medsnr=SN_ratio(input_frame.flux,input_frame.ivar)
-        elgfibers=np.where(input_frame.fibermap['OBJTYPE']==b'ELG')[0]
+        elgfibers=np.where(input_frame.fibermap['OBJTYPE']=='ELG')[0]
         elg_medsnr=medsnr[elgfibers]
         elg_mag=np.zeros(len(elgfibers))
         for ii,fib in enumerate(elgfibers):
@@ -1375,21 +1375,21 @@ class Calculate_SNR(MonitoringAlg):
         elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
       
         
-        lrgfibers=np.where(input_frame.fibermap['OBJTYPE']==b'LRG')[0]
+        lrgfibers=np.where(input_frame.fibermap['OBJTYPE']=='LRG')[0]
         lrg_medsnr=medsnr[lrgfibers]
         lrg_mag=np.zeros(len(lrgfibers))
         for ii,fib in enumerate(lrgfibers):
             lrg_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
         lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
 
-        qsofibers=np.where(input_frame.fibermap['OBJTYPE']==b'QSO')[0]
+        qsofibers=np.where(input_frame.fibermap['OBJTYPE']=='QSO')[0]
         qso_medsnr=medsnr[qsofibers]
         qso_mag=np.zeros(len(qsofibers))
         for ii,fib in enumerate(qsofibers):
             qso_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
         qso_snr_mag=np.array((qso_medsnr,qso_mag))
 
-        stdfibers=np.where(input_frame.fibermap['OBJTYPE']==b'STD')[0]
+        stdfibers=np.where(input_frame.fibermap['OBJTYPE']=='STD')[0]
         std_medsnr=medsnr[stdfibers]
         std_mag=np.zeros(len(stdfibers))
         for ii,fib in enumerate(stdfibers):

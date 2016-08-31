@@ -311,7 +311,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
     #- the calibration vector for each fiber individually
-    stdfibers = (frame.fibermap['OBJTYPE'] == b'STD')
+    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
     stdstars = frame[stdfibers]
 
     nwave=stdstars.nwave
@@ -592,7 +592,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     # Unpack model
 
     # Standard stars
-    stdfibers = np.where((frame.fibermap['OBJTYPE'] == b'STD'))[0]
+    stdfibers = np.where((frame.fibermap['OBJTYPE'] == 'STD'))[0]
     stdstars = frame[stdfibers]
     nstds = len(stdfibers)
     #try:
@@ -629,7 +629,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     qadict['RMS_ZP'] = float(np.std(ZP_fiducial))
 
     # MAX ZP Offset
-    #stdfibers = np.where(frame.fibermap['OBJTYPE'] == b'STD')[0]
+    #stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
     ZPoffset = ZP_fiducial-qadict['ZP']
     imax = np.argmax(np.abs(ZPoffset))
     qadict['MAX_ZP_OFF'] = [float(ZPoffset[imax]),

@@ -14,15 +14,15 @@ from desiutil.depend import add_dependencies
 from desispec.io.util import fitsheader, write_bintable, makepath
 
 fibermap_columns = [
-    ('OBJTYPE', 'S10'),
-    ('TARGETCAT', 'S20'),
-    ('BRICKNAME', 'S8'),
+    ('OBJTYPE', (str, 10)),
+    ('TARGETCAT', (str, 20)),
+    ('BRICKNAME', (str, 8)),
     ('TARGETID', 'i8'),
     ('DESI_TARGET', 'i8'),
     ('BGS_TARGET', 'i8'),
     ('MWS_TARGET', 'i8'),
     ('MAG', 'f4', (5,)),
-    ('FILTER', 'S10', (5,)),
+    ('FILTER', (str, 10), (5,)),
     ('SPECTROID', 'i4'),
     ('POSITIONER', 'i4'),
     ('FIBER', 'i4'),
