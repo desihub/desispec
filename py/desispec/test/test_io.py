@@ -315,8 +315,8 @@ class TestIO(unittest.TestCase):
         assert np.all(zfind2.zerr == zfind1.zerr)
         assert np.all(zfind2.zwarn == zfind1.zwarn)
         assert np.all(zfind2.spectype == zfind1.spectype)
-        assert np.all(zfind2.subtype == zfind1.subtype)        
-        assert np.all(zfind2.brickname == brickname.encode())
+        assert np.all(zfind2.subtype == zfind1.subtype)
+        assert np.all(zfind2.brickname == brickname)
         assert np.all(zfind2.targetid == targetids)
 
         desispec.io.write_zbest(self.testfile, brickname, targetids, zfind1, zspec=True)

@@ -73,7 +73,6 @@ class TestBinScripts(unittest.TestCase):
         except KeyError:
             cls.origPath = None
             os.environ['PYTHONPATH'] = os.path.join(cls.topDir,'py')
-        
 
     @classmethod
     def tearDownClass(cls):
