@@ -162,7 +162,7 @@ def get_files(filetype, night, expid, specprod_dir=None):
             guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
-    literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]    
+    literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
     for entry in glob.glob(glob_pattern):
