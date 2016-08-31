@@ -57,9 +57,9 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     
     if fibermap is not None:
-        hdus.append( fits.BinTableHDU(np.asarray(fibermap), name='FIBERMAP' ) )
+        hdus.append( fits.BinTableHDU(fibermap, name='FIBERMAP' ) )
     elif frame.fibermap is not None:
-        hdus.append( fits.BinTableHDU(np.asarray(frame.fibermap), name='FIBERMAP' ) )
+        hdus.append( fits.BinTableHDU(frame.fibermap, name='FIBERMAP' ) )
     elif frame.spectrograph is not None:
         x.header['FIBERMIN'] = 500*frame.spectrograph  # Hard-coded (as in desispec.frame)
     else:
@@ -106,7 +106,7 @@ def read_frame(filename, nspec=None):
     resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
     
     if 'FIBERMAP' in fx:
-        fibermap = np.asarray(fx['FIBERMAP'].data)
+        fibermap = fx['FIBERMAP'].data
     else:
         fibermap = None
         
