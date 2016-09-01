@@ -323,7 +323,7 @@ def plot_XWSigma(qa_dict,outfile):
     ax1.set_ylabel("X Sigma",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
-    ax1.xlim(0,len(xfiber))
+    plt.xlim(0,len(xfiber))
 
 #    ax2=fig.add_subplot(222)
 #    hist_w=ax2.bar(wfiber,wsigma,align='center')
@@ -331,7 +331,7 @@ def plot_XWSigma(qa_dict,outfile):
 #    ax2.set_ylabel("W Sigma",fontsize=10)
 #    ax2.tick_params(axis='x',labelsize=10)
 #    ax2.tick_params(axis='y',labelsize=10)
-#    ax2.xlim(0,len(wfiber))
+#    plt.xlim(0,len(wfiber))
 
     ax3=fig.add_subplot(223)
     heatmap3=ax3.pcolor(xsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
