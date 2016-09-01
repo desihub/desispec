@@ -1359,7 +1359,108 @@ class CountSpectralBins(MonitoringAlg):
         
         return retval
 
+class Sky_Residual(MonitoringAlg):
+    """ 
+    Use offline sky_residual function to calculate sky residuals
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="RESIDUAL"
+        from  desispec.frame import Frame as fr
+        MonitoringAlg.__init__(self,name,fr,config,logger)
+    def run(self,*args,**kwargs):
+        from desispec.io.sky import read_sky
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_frame=args[0]
+        camera=kwargs["camera"]
+        expid=kwargs["expid"]
+        
+        skymodel=args[1] #- should be skymodel evaluated
+        if "SkyFile" in kwargs:
+            from desispec.io.sky import read_sky
+            skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
+            log.info("Using given sky file %s for subtraction"%skyfile)
 
+            skymodel=read_sky(skyfile)
+
+        amps=False
+        if "amps" in kwargs:
+            amps=kwargs["amps"]
+
+        dict_countbins=None
+        if "dict_countbins" in kwargs:
+            dict_countbins=kwargs["dict_countbins"]
+        
+        paname=None
+        if "paname" in kwargs:
+            paname=kwargs["paname"]
+
+        url=None
+        if "url" in kwargs:
+             url=kwargs["url"]
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+        
+        return self.run_qa(input_frame,camera,expid,paname=paname,skymodel=skymodel,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+
+
+    def run_qa(self,frame,camera,expid,paname=None,skymodel=None,amps=False,dict_countbins=None,url=None,qafig=None):
+        from desispec.sky import qa_skysub
+        from desispec import util
+
+        if skymodel is None:
+            raise IOError("Must have skymodel to find residual. It can't be None")
+        #- return values
+        retval={}
+        retval["ARM"]=camera[0]
+        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["EXPID"]=expid
+        retval["PANAME"]=paname
+        retval["QATIME"]=datetime.datetime.now().isoformat()
+        
+        param = dict(
+            PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+            PER_RESID=95.,   # Percentile for residual distribution
+            )
+        qadict=qa_skysub(param,frame,skymodel)
+
+        #- Also need the med_resid_spec. Offline does not output this, so do again
+
+        skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+        residuals= frame.flux[skyfibers] - skymodel.flux[skyfibers] # Residuals
+        residuals_ivar = util.combine_ivar(frame.ivar[skyfibers], skymodel.ivar[skyfibers])
+
+        #- Now get the median residual for each fiber
+        med_resid_fiber=np.median(residuals,axis=1)
+        med_resid_wave=np.median(residuals,axis=0)
+        wavelength=frame.wave
+
+        retval["VALUE"]={"MED_RESID":qadict["MED_RESID"], "NREJ": qadict["NREJ"], "NSKY_FIB": qadict["NSKY_FIB"], "RESID_PER": qadict["RESID_PER"], "NBAD_PCHI": qadict["NBAD_PCHI"], "MED_RESID_FIBER": med_resid_fiber, "MED_RESID_WAVE": med_resid_wave,"WAVELENGTH": wavelength}
+
+        if url is not None:
+            try: 
+                import requests
+                response=requests.get(url)
+                #- Check if the api has json
+                api=response.json()
+                #- proceed with post
+                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
+                response=requests.post(api['job'],json=job,auth=("username","password"))
+            except:
+                log.info("Skipping HTTP post...")    
+
+        if qafig is not None:
+            from desispec.qa.qa_plots_ql import plot_residuals
+            plot_residuals(retval,qafig)
+            
+            log.info("Output QA fig %s"%qafig)            
+
+        return retval
+        
 class Calculate_SNR(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":

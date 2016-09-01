@@ -604,6 +604,69 @@ def plot_sky_peaks(qa_dict,outfile):
                  )
     fig.savefig(outfile)
 
+def plot_residuals(qa_dict,outfile):
+    """
+    Plot histogram of sky residuals for each sky fiber"
+    qa_dict example:
+
+        {'ARM': 'r',
+         'EXPID': '00000002',
+         'PANAME': 'SKYSUB',
+         'QATIME': '2016-08-31T10:48:58.984638',
+         'SPECTROGRAPH': 0,
+         'VALUE': {'MED_RESID': -8.461671761494927e-06,
+                   'MED_RESID_FIBER': array([ 0.29701871, -0.29444709]),
+                   'NBAD_PCHI': 0,
+                   'NREJ': 0,
+                   'NSKY_FIB': 2,
+                   'RESID_PER': [-20.15769508014313, 23.938934018349393]}}
+
+    """
+    spectrograph=qa_dict["SPECTROGRAPH"]
+    expid=qa_dict["EXPID"]
+    arm=qa_dict["ARM"]
+    paname=qa_dict["PANAME"]
+    med_resid_fiber=qa_dict["VALUE"]["MED_RESID_FIBER"]
+    med_resid_wave=qa_dict["VALUE"]["MED_RESID_WAVE"]
+    wavelength=qa_dict["VALUE"]["WAVELENGTH"]
+
+    fig=plt.figure()
+
+    gs=GridSpec(6,4)
+    plt.suptitle("Sky Residuals after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
+
+    
+    ax0=fig.add_subplot(gs[:2,2:])
+    ax0.set_axis_off()
+    keys=["MED_RESID","NBAD_PCHI","NREJ","NSKY_FIB","RESID_PER"]
+    
+    xl=0.05
+    yl=0.9
+    for key in keys:
+        ax0.text(xl,yl,key+': '+str(qa_dict["VALUE"][key]),transform=ax0.transAxes,ha='left',fontsize='x-small')
+        yl=yl-0.1
+
+    ax1=fig.add_subplot(gs[:2,:2])
+    ax1.plot(wavelength, med_resid_wave,'b')
+    ax1.set_ylabel("Med. Sky Res. (wave)",fontsize=10)
+    ax1.set_xlabel("Wavelength(A)",fontsize=10)
+    ax1.set_ylim(np.percentile(med_resid_wave,2.5),np.percentile(med_resid_wave,97.5))
+    ax1.set_xlim(np.min(wavelength),np.max(wavelength))
+    ax1.tick_params(axis='x',labelsize=10)
+    ax1.tick_params(axis='y',labelsize=10)   
+
+    ax2=fig.add_subplot(gs[3:,:])
+    index=range(med_resid_fiber.shape[0])
+    hist_res=ax2.bar(index,med_resid_fiber,align='center')
+    ax2.plot(index,np.zeros_like(index),'k-')
+    #ax1.plot(index,med_resid_fiber,'bo')
+    ax2.set_xlabel('Sky fibers',fontsize=10)
+    ax2.set_ylabel('Med. Sky Res. (fibers)',fontsize=10)
+    ax2.tick_params(axis='x',labelsize=10)
+    ax2.tick_params(axis='y',labelsize=10)
+    #plt.tight_layout()
+    fig.savefig(outfile)
+    
 def plot_SNR(qa_dict,outfile):
 
     """Plot SNR
