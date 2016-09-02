@@ -21,6 +21,7 @@ import astropy.io.fits
 
 from desiutil.depend import add_dependencies
 import desispec.io.util
+import desiutil.io
 
 #- For backwards compatibility, derive brickname from filename
 def _parse_brick_filename(filepath):
@@ -92,13 +93,11 @@ class BrickBase(object):
                 ('INDEX','i4'),
                 ])
             data = np.empty(shape = (0,),dtype = columns)
-            hdr = desispec.io.util.fitsheader(header)
-
-            #- ignore incorrect and harmless fits TDIM7 warning for
-            #- FILTER column that is a 2D array of strings
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                hdu4 = astropy.io.fits.BinTableHDU(data=data, header=hdr, name='FIBERMAP')
+            data = desiutil.io.encode_table(data)   #- unicode -> bytes
+            data.meta['EXTNAME'] = 'FIBERMAP'
+            for key, value in header.items():
+                data.meta[key] = value
+            hdu4 = astropy.io.fits.convenience.table_to_hdu(data)
 
             # Add comments for fibermap columns.
             num_fibermap_columns = len(desispec.io.fibermap.fibermap_comments)

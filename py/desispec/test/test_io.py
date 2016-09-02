@@ -219,7 +219,6 @@ class TestIO(unittest.TestCase):
         fm, hdr = desispec.io.read_fibermap(self.testfile, header=True)
         self.assertTrue(isinstance(fm, np.ndarray))
         self.assertTrue(isinstance(hdr, fits.Header))
-
         self.assertEqual(set(fibermap.dtype.names), set(fm.dtype.names))
         for key in fibermap.dtype.names:
             c1 = fibermap[key]
@@ -304,6 +303,11 @@ class TestIO(unittest.TestCase):
         flux = np.random.uniform(size=(nspec, nflux))
         ivar = np.random.uniform(size=(nspec, nflux))
         zfind1 = ZfindBase(wave, flux, ivar)
+
+        zfind1.zwarn[:] = np.arange(nspec)
+        zfind1.z[:] = np.random.uniform(size=nspec)
+        zfind1.zerr[:] = np.random.uniform(size=nspec)
+        zfind1.spectype[:] = 'ELG'
 
         brickname = '1234p567'
         targetids = np.random.randint(0,12345678, size=nspec)

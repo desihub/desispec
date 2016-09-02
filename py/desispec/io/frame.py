@@ -11,6 +11,7 @@ import scipy,scipy.sparse
 from astropy.io import fits
 
 from desiutil.depend import add_dependencies
+import desiutil.io
 
 from desispec.frame import Frame
 from desispec.io import findfile
@@ -57,9 +58,13 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     
     if fibermap is not None:
-        hdus.append( fits.BinTableHDU(fibermap, name='FIBERMAP' ) )
+        fibermap = desiutil.io.encode_table(fibermap)  #- unicode -> bytes
+        fibermap.meta['EXTNAME'] = 'FIBERMAP'
+        hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.fibermap is not None:
-        hdus.append( fits.BinTableHDU(frame.fibermap, name='FIBERMAP' ) )
+        fibermap = desiutil.io.encode_table(frame.fibermap)  #- unicode -> bytes
+        fibermap.meta['EXTNAME'] = 'FIBERMAP'
+        hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.spectrograph is not None:
         x.header['FIBERMIN'] = 500*frame.spectrograph  # Hard-coded (as in desispec.frame)
     else:

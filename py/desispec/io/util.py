@@ -8,6 +8,8 @@ import os
 import astropy.io
 import numpy as np
 
+import desiutil.io
+
 def iterfiles(root, prefix):
     '''
     Returns iterator over files starting with `prefix` found under `root` dir
@@ -106,19 +108,33 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     comments and units in the FITS header too.  DATA can either be
     dictionary, an Astropy Table, a numpy.recarray or a numpy.ndarray. 
     """
+    from astropy.table import Table
 
-    #- Convert DATA as needed
-    if isinstance(data, (np.recarray,np.ndarray)):
-        outdata = data
+    #- Convert data as needed
+    if isinstance(data, (np.recarray, np.ndarray, Table)):
+        outdata = desiutil.io.encode_table(data, encoding='ascii')
     else:
-        outdata = _dict2ndarray(data)
+        outdata = desiutil.io.encode_table(_dict2ndarray(data), encoding='ascii')
+
+    # hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
+    hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
+    if extname is not None:
+        hdu.header['EXTNAME'] = extname
+
+    if header is not None:
+        for key, value in header.items():
+            hdu.header[key] = value
 
     #- Write the data and header
-    hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
     if clobber:
         astropy.io.fits.writeto(filename, hdu.data, hdu.header, clobber=True, checksum=True)
     else:
         astropy.io.fits.append(filename, hdu.data, hdu.header, checksum=True)
+
+    #- TODO:
+    #- The following could probably be implemented for efficiently by updating
+    #- the outdata Table metadata directly before writing it out.
+    #- The following was originally implemented when outdata was a numpy array.
 
     #- Allow comments and units to be None
     if comments is None:
