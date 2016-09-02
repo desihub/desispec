@@ -63,7 +63,7 @@ module list
 #
 # Install DESI pipeline packages.
 #
-desiInstall -d -v -c test_desiInstall.ini speclite v0.4
+desiInstall -d -v -c test_desiInstall.ini speclite v0.5
 desiInstall -d -v -c test_desiInstall.ini specter 0.5.0
 desiInstall -d -v -c test_desiInstall.ini specsim v0.4
 desiInstall -d -v -c test_desiInstall.ini desimodel 0.4.4
