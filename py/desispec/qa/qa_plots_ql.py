@@ -76,7 +76,7 @@ def plot_countspectralbins(qa_dict,outfile):
     ax3.tick_params(axis='y',labelsize=10)
 
     heatmap1=ax4.pcolor(bins100_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax4.set_xlabel("Bins above 100 photon counts (per Amp)",fontsize=10)
+    ax4.set_xlabel("Bins > 100 photon counts (per Amp)",fontsize=8)
     ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax4.tick_params(axis='y',labelsize=10,labelleft='off')
     ax4.annotate("Amp 1\n%.1f"%bins100_amp[0],
@@ -96,7 +96,7 @@ def plot_countspectralbins(qa_dict,outfile):
                  fontsize=10
                  )
     heatmap2=ax5.pcolor(bins250_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax5.set_xlabel("Bins above 250 photon counts (per Amp)",fontsize=10)
+    ax5.set_xlabel("Bins > 250 photon counts (per Amp)",fontsize=8)
     ax5.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax5.tick_params(axis='y',labelsize=10,labelleft='off')
     ax5.annotate("Amp 1\n%.1f"%bins250_amp[0],
@@ -117,7 +117,7 @@ def plot_countspectralbins(qa_dict,outfile):
                  )
 
     heatmap3=ax6.pcolor(bins500_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax6.set_xlabel("Bins above 500 photon counts (per Amp)",fontsize=10)
+    ax6.set_xlabel("Bins > 500 photon counts (per Amp)",fontsize=8)
     ax6.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax6.tick_params(axis='y',labelsize=10,labelleft='off')
     ax6.annotate("Amp 1\n%.1f"%bins500_amp[0],
