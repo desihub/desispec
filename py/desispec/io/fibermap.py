@@ -7,7 +7,7 @@ IO routines for fibermap.
 import os
 import warnings
 import numpy as np
-from astropy.io import fits
+from astropy.table import Table
 
 from desiutil.depend import add_dependencies
 from desispec.io.util import fitsheader, write_bintable, makepath

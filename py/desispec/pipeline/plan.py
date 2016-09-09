@@ -315,8 +315,7 @@ def graph_night(rawdir, rawnight):
         # also accumulate the total list of bricks        
 
         fmdata = io.read_fibermap(fibermap)
-        fmheader = fmdata.meta
-        flavor = fmheader['flavor']
+        flavor = fmdata.meta['FLAVOR']
         fmbricks = {}
         for fmb in fmdata['BRICKNAME']:
             fmb = str(fmb)

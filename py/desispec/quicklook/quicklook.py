@@ -374,7 +374,8 @@ def setup_pipeline(config):
     hbeat.start("Reading input file %s"%inpname)
     inp=fits.open(inpname) #- reading raw image directly from astropy.io.fits
     hbeat.start("Reading fiberMap file %s"%fibname)
-    fibfile,fibhdr=fibIO.read_fibermap(fibname,header=True)
+    fibfile=fibIO.read_fibermap(fibname)
+    fibhdr=fibfile.meta
 
     convdict={"FiberMap":fibfile}
 

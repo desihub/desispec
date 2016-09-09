@@ -18,6 +18,7 @@ import warnings
 
 import numpy as np
 import astropy.io.fits
+from astropy import table
 
 from desiutil.depend import add_dependencies
 import desispec.io.util
@@ -166,9 +167,8 @@ class BrickBase(object):
                 was opened in update mode.)
         """
         exposures = (self.hdu_list[4].data['TARGETID'] == target_id)
-        index_list = np.unique(self.hdu_list[4].data['INDEX'][exposures])
-        return (self.hdu_list[0].data[index_list],self.hdu_list[1].data[index_list],
-            self.hdu_list[3].data[index_list],self.hdu_list[4].data[exposures])
+        return (self.hdu_list[0].data[exposures],self.hdu_list[1].data[exposures],
+            self.hdu_list[3].data[exposures],self.hdu_list[4].data[exposures])
 
     def get_target_ids(self):
         """Return set of unique target IDs in this brick.
@@ -214,7 +214,7 @@ class Brick(BrickBase):
             ivar(numpy.ndarray): Array of (nobj,nwave) inverse-variance values.
             wave(numpy.ndarray): Array of (nwave,) wavelength values in Angstroms. All objects are assumed to use the same wavelength grid.
             resolution(numpy.ndarray): Array of (nobj,nres,nwave) resolution matrix elements.
-            object_data(numpy.ndarray): Record array of fibermap rows for the objects to add.
+            object_data(astropy.table.Table): fibermap rows for the objects to add.
             night(str): Date string for the night these objects were observed in the format YYYYMMDD.
             expid(int): Exposure number for these objects.
 
@@ -223,23 +223,33 @@ class Brick(BrickBase):
         """
         BrickBase.add_objects(self,flux,ivar,wave,resolution)
         # Augment object_data with constant NIGHT and EXPID columns.
-        augmented_data = np.empty(shape = object_data.shape,dtype = self.hdu_list[4].data.dtype)
-        for column_def in desispec.io.fibermap.fibermap_columns:
-            name = column_def[0]
-            # Special handling for the fibermap FILTER array, which is not output correctly
-            # by astropy.io.fits so we convert it to a comma-separated list.
-            if name == 'FILTER' and augmented_data[name].shape != object_data[name].shape:
-                for i,filters in enumerate(object_data[name]):
-                    augmented_data[name][i] = ','.join(filters)
-            else:
-                augmented_data[name] = object_data[name]
+        # augmented_data = np.empty(shape = object_data.shape,dtype = self.hdu_list[4].data.dtype)
+        # for column_def in desispec.io.fibermap.fibermap_columns:
+        #     name = column_def[0]
+        #     # Special handling for the fibermap FILTER array, which is not output correctly
+        #     # by astropy.io.fits so we convert it to a comma-separated list.
+        #     if name == 'FILTER' and augmented_data[name].shape != object_data[name].shape:
+        #         for i,filters in enumerate(object_data[name]):
+        #             augmented_data[name][i] = ','.join(filters)
+        #     else:
+        #         augmented_data[name] = object_data[name]
+
+        augmented_data = table.Table(object_data)
         augmented_data['NIGHT'] = int(night)
         augmented_data['EXPID'] = expid
-        begin_index = len(self.hdu_list[4].data)
-        end_index = begin_index + len(flux)
-        augmented_data['INDEX'] = np.arange(begin_index,end_index,dtype=int)
+        # begin_index = len(self.hdu_list[4].data)
+        # end_index = begin_index + len(flux)
+        # augmented_data['INDEX'] = np.arange(begin_index,end_index,dtype=int)
         # Always concatenate to our table since a new file will be created with a zero-length table.
-        self.hdu_list[4].data = np.concatenate((self.hdu_list[4].data,augmented_data,))
+
+        fibermap_hdu = self.hdu_list['FIBERMAP']
+        if len(fibermap_hdu.data) > 0:
+            orig_data = table.Table(fibermap_hdu.data)
+            augmented_data = table.vstack([orig_data, augmented_data])
+
+        updated_hdu = astropy.io.fits.convenience.table_to_hdu(augmented_data)
+        updated_hdu.header = fibermap_hdu.header
+        self.hdu_list['FIBERMAP'] = updated_hdu
 
 class CoAddedBrick(BrickBase):
     """Represents the co-added exposures in a single brick and, possibly, a single band.

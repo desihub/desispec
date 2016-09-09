@@ -212,13 +212,9 @@ class TestIO(unittest.TestCase):
 
         desispec.io.write_fibermap(self.testfile, fibermap)
 
-        #- Read without and with header
         fm = desispec.io.read_fibermap(self.testfile)
-        self.assertTrue(isinstance(fm, np.ndarray))
+        self.assertTrue(isinstance(fm, Table))
 
-        fm, hdr = desispec.io.read_fibermap(self.testfile, header=True)
-        self.assertTrue(isinstance(fm, np.ndarray))
-        self.assertTrue(isinstance(hdr, fits.Header))
         self.assertEqual(set(fibermap.dtype.names), set(fm.dtype.names))
         for key in fibermap.dtype.names:
             c1 = fibermap[key]
