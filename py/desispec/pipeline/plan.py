@@ -314,7 +314,8 @@ def graph_night(rawdir, rawnight):
         # read the fibermap to get the exposure type, and while we are at it,
         # also accumulate the total list of bricks        
 
-        fmdata, fmheader = io.read_fibermap(fibermap, header=True)
+        fmdata = io.read_fibermap(fibermap)
+        fmheader = fmdata.meta
         flavor = fmheader['flavor']
         fmbricks = {}
         for fmb in fmdata['BRICKNAME']:
