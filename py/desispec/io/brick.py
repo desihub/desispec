@@ -222,30 +222,18 @@ class Brick(BrickBase):
             RuntimeError: Can only add objects in update mode.
         """
         BrickBase.add_objects(self,flux,ivar,wave,resolution)
-        # Augment object_data with constant NIGHT and EXPID columns.
-        # augmented_data = np.empty(shape = object_data.shape,dtype = self.hdu_list[4].data.dtype)
-        # for column_def in desispec.io.fibermap.fibermap_columns:
-        #     name = column_def[0]
-        #     # Special handling for the fibermap FILTER array, which is not output correctly
-        #     # by astropy.io.fits so we convert it to a comma-separated list.
-        #     if name == 'FILTER' and augmented_data[name].shape != object_data[name].shape:
-        #         for i,filters in enumerate(object_data[name]):
-        #             augmented_data[name][i] = ','.join(filters)
-        #     else:
-        #         augmented_data[name] = object_data[name]
 
         augmented_data = table.Table(object_data)
         augmented_data['NIGHT'] = int(night)
         augmented_data['EXPID'] = expid
-        # begin_index = len(self.hdu_list[4].data)
-        # end_index = begin_index + len(flux)
-        # augmented_data['INDEX'] = np.arange(begin_index,end_index,dtype=int)
-        # Always concatenate to our table since a new file will be created with a zero-length table.
 
         fibermap_hdu = self.hdu_list['FIBERMAP']
         if len(fibermap_hdu.data) > 0:
             orig_data = table.Table(fibermap_hdu.data)
             augmented_data = table.vstack([orig_data, augmented_data])
+
+        #- unicode -> ascii columns
+        augmented_data = desiutil.io.encode_table(augmented_data)
 
         updated_hdu = astropy.io.fits.convenience.table_to_hdu(augmented_data)
         updated_hdu.header = fibermap_hdu.header

@@ -276,6 +276,17 @@ class TestIO(unittest.TestCase):
         brick = Brick(self.testfile, mode='update', header=header)
         brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid)
         brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid+1)
+
+        #- check dtype consistency for columns in original fibermap
+        brick_fibermap = Table(brick.hdu_list['FIBERMAP'].data)
+        for colname in fibermap.colnames:
+            self.assertEqual(fibermap[colname].dtype, brick_fibermap[colname].dtype)
+
+        #- Check that the two extra columns exist (and only those)
+        self.assertIn('NIGHT', brick_fibermap.colnames)
+        self.assertIn('EXPID', brick_fibermap.colnames)
+        self.assertEqual(len(fibermap.colnames)+2, len(brick_fibermap.colnames))
+        
         brick.close()
 
         bx = Brick(self.testfile)
@@ -290,6 +301,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(len(info2), 2)
         self.assertTrue( np.all(flux2[0] == flux[0]) )
         self.assertTrue( np.all(ivar2[0] == ivar[0]) )
+        
         bx.close()
 
     def test_zbest_io(self):

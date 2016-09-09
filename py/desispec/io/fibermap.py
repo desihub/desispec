@@ -75,7 +75,7 @@ def write_fibermap(outfile, fibermap, header=None):
 
     Args:
         outfile (str): output filename
-        fibermap: ndarray with named columns of fibermap data
+        fibermap: astropy Table of fibermap data
         header: header data to include in same HDU as fibermap
 
     Returns:
@@ -86,7 +86,11 @@ def write_fibermap(outfile, fibermap, header=None):
     #- astropy.io.fits incorrectly generates warning about 2D arrays of strings
     #- Temporarily turn off warnings to avoid this; desispec.test.test_io will
     #- catch it if the arrays actually are written incorrectly.
-    hdr = fitsheader(header)
+    if header is not None:
+        hdr = fitsheader(header)
+    else:
+        hdr = fitsheader(fibermap.meta)
+
     add_dependencies(hdr)
     
     with warnings.catch_warnings():
