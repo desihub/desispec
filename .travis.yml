@@ -55,6 +55,7 @@ env:
         # - SPHINX_VERSION=1.3
         # Need desiutil master until >1.5.0 tag to get add_dependencies
         - DESIUTIL_VERSION=1.8.0
+        # -DESIUTIL_VERSION=master
         - SPECLITE_VERSION=0.5
         - SPECTER_VERSION=0.6.0
         # - HARP_VERSION=1.0.1
