@@ -121,7 +121,7 @@ class Tile(object):
 
         Parameters
         ----------
-        brick : Brick
+        brick : :class:`~desispec.io.database.Brick`
             A brick.
 
         Returns
@@ -410,7 +410,8 @@ class RawDataCursor(sqlite3.Cursor):
         Returns
         -------
         :class:`list`
-            A list of Brick objects that overlap `tile`.
+            A list of :class:`~desispec.io.database.Brick` objects that
+            overlap `tile`.
         """
         #
         # RA wrap around can be handled by the requirements:
@@ -442,7 +443,7 @@ class RawDataCursor(sqlite3.Cursor):
         Returns
         -------
         :class:`list`
-            A list of Brick objects.
+            A list of :class:`~desispec.io.database.Brick` objects.
         """
         if isinstance(bricknames, str):
             b = [bricknames]
