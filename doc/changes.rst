@@ -2,8 +2,13 @@
 desispec change log
 ===================
 
-0.10.0 (unreleased)
-------------------
+0.10.1 (unreleased)
+-------------------
+
+* no changes yet
+
+0.10.0 (2016-09-10)
+-------------------
 
 PR #266 update for python 3.5:
 
