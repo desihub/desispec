@@ -226,8 +226,8 @@ def main(args):
             try:
                 desiboot.id_arc_lines_using_triplets(id_dict, gd_lines, dlamb,ntrack=args.ntrack,nmax=args.nmax)
             except : 
-                log.warn(sys.exc_info())
-                log.warn("fiber {:d} ID_ARC failed".format(ii))
+                log.warning(sys.exc_info())
+                log.warning("fiber {:d} ID_ARC failed".format(ii))
                 id_dict['status'] = "failed"                
                 id_dict_of_fibers.append(id_dict)
                 continue
@@ -288,8 +288,8 @@ def main(args):
                 try:
                     desiboot.id_arc_lines_using_triplets(id_dict,  good_matched_lines, dlamb,ntrack=args.ntrack,nmax=args.nmax)
                 except:
-                    log.warn(sys.exc_info())
-                    log.warn("ID_ARC failed on fiber {:d}".format(ii))
+                    log.warning(sys.exc_info())
+                    log.warning("ID_ARC failed on fiber {:d}".format(ii))
                     id_dict["status"]="failed"
 
                 if id_dict['status']=="ok" and  len(id_dict['pixpk'])>len(id_dict['id_pix']) :

@@ -60,9 +60,9 @@ class ZfindBase(object):
             self.model = np.zeros((nspec, nwave), dtype=flux.dtype)
             self.z = np.zeros(nspec)
             self.zerr = np.zeros(nspec)
-            self.zwarn = np.zeros(nspec, dtype=int)
-            self.spectype = np.zeros(nspec, dtype='S10')
-            self.subtype = np.zeros(nspec, dtype='S20')
+            self.zwarn = np.zeros(nspec, dtype=np.uint32)
+            self.spectype = np.zeros(nspec, dtype=(str, 10))
+            self.subtype = np.zeros(nspec, dtype=(str, 20))
         else:
             for key in results.dtype.names:
                 self.__setattr__(key.lower(), results[key])
@@ -90,7 +90,7 @@ def qa_zbest(param, zf, brick):
     nfail = np.sum(zf.zwarn > 0)
     qadict['NFAIL'] = int(nfail)  # For yaml
     if nfail > param['MAX_NFAIL']:
-        log.warn("High number of failed redshifts {:d}".format(nfail))
+        log.warning("High number of failed redshifts {:d}".format(nfail))
 
     # Simple redshift stats
     gdz = zf.zwarn == 0

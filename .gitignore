@@ -29,5 +29,12 @@ distribute-*.tar.gz
 .*.swp
 *~
 
+# Test directories and files
+test-*.fits
+test*.fits.gz
+test-*
+test_raw-*
+test_redux-*
+
 # Mac OSX
 .DS_Store

@@ -51,7 +51,7 @@ env:
         # to repeat them for all configurations.
         # - NUMPY_VERSION=1.10
         # - SCIPY_VERSION=0.16
-        - ASTROPY_VERSION=1.1.1
+        - ASTROPY_VERSION=1.2.1
         # - SPHINX_VERSION=1.3
         # Need desiutil master until >1.5.0 tag to get add_dependencies
         # - DESIUTIL_VERSION=1.4.1
@@ -76,6 +76,7 @@ env:
         - DEBUG=False
     matrix:
         - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
+        - PYTHON_VERSION=3.5 SETUP_CMD='egg_info'
 
 matrix:
     # Don't wait for allowed failures.
@@ -102,6 +103,12 @@ matrix:
         # Default versions
         - os: linux
           env: PYTHON_VERSION=2.7 SETUP_CMD='test --coverage'
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+
+        # Default versions
+        - os: linux
+          env: PYTHON_VERSION=3.5 SETUP_CMD='test'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 

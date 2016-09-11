@@ -567,7 +567,7 @@ def parse_nist(ion, vacuum=True):
     nist_tbl.remove_column('Rel.')
     nist_tbl.remove_column('Ritz')
     nist_tbl.add_column(Column(agdrel,name='RelInt'))
-    nist_tbl.add_column(Column([ion]*len(nist_tbl), name='Ion', dtype='S5'))
+    nist_tbl.add_column(Column([ion]*len(nist_tbl), name='Ion', dtype=(str, 5)))
     nist_tbl.rename_column('Observed','wave')
     # Return
     return nist_tbl
@@ -948,7 +948,7 @@ def fiber_gauss_old(flat, xtrc, xerr, box_radius=2, max_iter=5, debug=False, ver
         list of Gaussian sigma
     """
     log=get_logger()
-    log.warn("fiber_gauss uses astropy.modeling.  Consider an alternative")
+    log.warning("fiber_gauss uses astropy.modeling.  Consider an alternative")
     # Init
     nfiber = xtrc.shape[1]
     ny = xtrc.shape[0]
@@ -1121,7 +1121,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
 
     # Book-keeping and some error checking
     if len(xpk) != Nbundle*Nfiber:
-        log.warn('Found the wrong number of total fibers: {:d}'.format(len(xpk)))
+        log.warning('Found the wrong number of total fibers: {:d}'.format(len(xpk)))
     else:
         log.info('Found {:d} fibers'.format(len(xpk)))
     # Find bundles
@@ -1129,13 +1129,13 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     medsep = np.median(xsep)
     bundle_ends = np.where(np.abs(xsep-medsep) > 0.5*medsep)[0]
     if len(bundle_ends) != Nbundle:
-        log.warn('Found the wrong number of bundles: {:d}'.format(len(bundle_ends)))
+        log.warning('Found the wrong number of bundles: {:d}'.format(len(bundle_ends)))
     else:
         log.info('Found {:d} bundles'.format(len(bundle_ends)))
     # Confirm correct number of fibers per bundle
     bad = ((bundle_ends+1) % Nfiber) != 0
     if np.sum(bad) > 0:
-        log.warn('Wrong number of fibers in a bundle')
+        log.warning('Wrong number of fibers in a bundle')
         #raise ValueError('Wrong number of fibers in a bundle')
 
     # Return

@@ -93,7 +93,7 @@ def _map_download(map_tuple):
             return None
         if not exists(dirname(filename)):
             makedirs(dirname(filename))
-        with open(filename,'w') as d:
+        with open(filename, 'wb') as d:
             d.write(r.content)
         atime = stat(filename).st_atime
         mtime = timegm(datetime.strptime(r.headers['last-modified'],'%a, %d %b %Y %H:%M:%S %Z').utctimetuple())

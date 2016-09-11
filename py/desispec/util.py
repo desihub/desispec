@@ -3,6 +3,7 @@ Utility functions for desispec
 """
 
 import os
+import numbers
 import numpy as np
 
 #- Default number of processes to use for multiprocessing
@@ -195,7 +196,7 @@ def combine_ivar(ivar1, ivar2):
     ivar[ii] = 1.0 / (1.0/iv1[ii] + 1.0/iv2[ii])
     
     #- Convert back to python float if input was scalar
-    if isinstance(ivar1, (float, int)):
+    if isinstance(ivar1, (float, numbers.Integral)):
         return float(ivar)
     #- If input was 0-dim numpy array, convert back to 0-di
     elif ivar1.ndim == 0:

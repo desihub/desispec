@@ -2,10 +2,15 @@
 desispec change log
 ===================
 
-0.9.1 (unreleased)
+0.10.0 (unreleased)
 ------------------
 
-* No changes yet
+PR #266 update for python 3.5:
+
+* Many little updates to work for both python 2.7 and 3.5
+* internally fibermap is now an astropy Table instead of FITS_rec table
+* Bug fix for flux calibration QA
+* requires desiutil >= 1.8.0
 
 0.9.0 (2016-08-18)
 ------------------

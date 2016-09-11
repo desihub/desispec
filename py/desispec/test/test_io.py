@@ -212,13 +212,8 @@ class TestIO(unittest.TestCase):
 
         desispec.io.write_fibermap(self.testfile, fibermap)
 
-        #- Read without and with header
         fm = desispec.io.read_fibermap(self.testfile)
-        self.assertTrue(isinstance(fm, np.ndarray))
-
-        fm, hdr = desispec.io.read_fibermap(self.testfile, header=True)
-        self.assertTrue(isinstance(fm, np.ndarray))
-        self.assertTrue(isinstance(hdr, fits.Header))
+        self.assertTrue(isinstance(fm, Table))
 
         self.assertEqual(set(fibermap.dtype.names), set(fm.dtype.names))
         for key in fibermap.dtype.names:
@@ -281,6 +276,17 @@ class TestIO(unittest.TestCase):
         brick = Brick(self.testfile, mode='update', header=header)
         brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid)
         brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid+1)
+
+        #- check dtype consistency for columns in original fibermap
+        brick_fibermap = Table(brick.hdu_list['FIBERMAP'].data)
+        for colname in fibermap.colnames:
+            self.assertEqual(fibermap[colname].dtype, brick_fibermap[colname].dtype)
+
+        #- Check that the two extra columns exist (and only those)
+        self.assertIn('NIGHT', brick_fibermap.colnames)
+        self.assertIn('EXPID', brick_fibermap.colnames)
+        self.assertEqual(len(fibermap.colnames)+2, len(brick_fibermap.colnames))
+        
         brick.close()
 
         bx = Brick(self.testfile)
@@ -295,6 +301,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(len(info2), 2)
         self.assertTrue( np.all(flux2[0] == flux[0]) )
         self.assertTrue( np.all(ivar2[0] == ivar[0]) )
+        
         bx.close()
 
     def test_zbest_io(self):
@@ -304,6 +311,11 @@ class TestIO(unittest.TestCase):
         flux = np.random.uniform(size=(nspec, nflux))
         ivar = np.random.uniform(size=(nspec, nflux))
         zfind1 = ZfindBase(wave, flux, ivar)
+
+        zfind1.zwarn[:] = np.arange(nspec)
+        zfind1.z[:] = np.random.uniform(size=nspec)
+        zfind1.zerr[:] = np.random.uniform(size=nspec)
+        zfind1.spectype[:] = 'ELG'
 
         brickname = '1234p567'
         targetids = np.random.randint(0,12345678, size=nspec)
@@ -434,11 +446,11 @@ class TestIO(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             foo = desispec.io.findfile('stdstars',expid=2,spectrograph=0)
         the_exception = cm.exception
-        self.assertEqual(the_exception.message, "Required input 'night' is not set for type 'stdstars'!")
+        self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
             foo = desispec.io.findfile('brick',brickname='3338p190')
         the_exception = cm.exception
-        self.assertEqual(the_exception.message, "Required input 'band' is not set for type 'brick'!")
+        self.assertEqual(str(the_exception), "Required input 'band' is not set for type 'brick'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']

@@ -106,7 +106,7 @@ def main(args) :
         frame=io.read_frame(filename)
         header=fits.getheader(filename, 0)
         frame_fibermap = frame.fibermap
-        frame_starindices=np.where(frame_fibermap["OBJTYPE"]=="STD")[0] 
+        frame_starindices=np.where(frame_fibermap["OBJTYPE"]=="STD")[0]
         camera=safe_read_key(header,"CAMERA").strip().lower()
         
         if spectrograph is None :

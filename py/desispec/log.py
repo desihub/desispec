@@ -9,7 +9,6 @@ from __future__ import absolute_import, division, print_function
 import sys
 import logging
 import os
-import string
 
 desi_logger = None
 
@@ -41,7 +40,7 @@ def get_logger(level=None) :
     desi_level=os.getenv("DESI_LOGLEVEL")
     if desi_level is not None and (desi_level != "" ) :
         # forcing the level to the value of DESI_LOGLEVEL, ignoring the requested logging level.
-        desi_level=string.upper(desi_level)
+        desi_level=desi_level.upper()
         dico={"DEBUG":DEBUG,"INFO":INFO,"WARNING":WARNING,"ERROR":ERROR}
         if desi_level in dico:
             level=dico[desi_level]
