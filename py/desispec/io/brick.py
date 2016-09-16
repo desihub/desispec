@@ -171,9 +171,11 @@ class BrickBase(object):
             self.hdu_list[3].data[exposures],self.hdu_list[4].data[exposures])
 
     def get_target_ids(self):
-        """Return set of unique target IDs in this brick.
+        """Return list of unique target IDs in this brick
+        in the order that they first appear in the file input file.
         """
-        return list(set(self.hdu_list[4].data['TARGETID']))
+        uniq, indices = np.unique(self.hdu_list[4].data['TARGETID'], return_index=True)
+        return uniq[indices.argsort()]
 
     def get_num_spectra(self):
         """Get the number of spectra contained in this brick file.

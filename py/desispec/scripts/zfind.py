@@ -153,7 +153,7 @@ def main(args, comm=None) :
         xivar = list()
 
         good=True
-        for channel in filters:
+        for channel in sorted(filters):
             exp_flux, exp_ivar, resolution, info = brick[channel].get_target(targetid)
             weights = np.sum(exp_ivar, axis=0)
             ii, = np.where(weights > 0)
