@@ -109,7 +109,7 @@ def main(args, comm=None) :
                     log.error('Channel {} in multiple input files'.format(bx.channel))
                 sys.exit(2)
 
-    filters=list(brick.keys())
+    filters=sorted(brick.keys())
     for fil in filters:
         if (comm is None) or (comm.rank == 0):
             log.info("Filter found: "+fil)
@@ -153,7 +153,7 @@ def main(args, comm=None) :
         xivar = list()
 
         good=True
-        for channel in sorted(filters):
+        for channel in filters:
             exp_flux, exp_ivar, resolution, info = brick[channel].get_target(targetid)
             weights = np.sum(exp_ivar, axis=0)
             ii, = np.where(weights > 0)
