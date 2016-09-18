@@ -233,16 +233,34 @@ def main(args, comm=None) :
                 sys.stdout.flush()
             comm.barrier()
 
-        # do redshift fitting on each process
+        # do redshift fitting on each process.  If any process
+        # throws an exception, log that error and ensure that 
+        # all processes raise an exception.  This ensures consistency
+        # in the calling pipeline.
         myzf = None
-        if my_nspec > 0:
-            savelevel = os.environ["DESI_LOGLEVEL"]
-            os.environ["DESI_LOGLEVEL"] = "WARNING"
-            myzf = RedMonsterZfind(wave=wave, flux=flux[my_specs,:], ivar=ivar[my_specs,:],
-                             objtype=args.objtype,zrange_galaxy= args.zrange_galaxy,
-                             zrange_qso=args.zrange_qso,zrange_star=args.zrange_star,
-                             nproc=args.nproc,npoly=args.npoly)
-            os.environ["DESI_LOGLEVEL"] = savelevel
+        failcount = 0
+        try:
+            if my_nspec > 0:
+                savelevel = os.environ["DESI_LOGLEVEL"]
+                os.environ["DESI_LOGLEVEL"] = "WARNING"
+                myzf = RedMonsterZfind(wave=wave, flux=flux[my_specs,:], ivar=ivar[my_specs,:],
+                                 objtype=args.objtype,zrange_galaxy= args.zrange_galaxy,
+                                 zrange_qso=args.zrange_qso,zrange_star=args.zrange_star,
+                                 nproc=args.nproc,npoly=args.npoly)
+                os.environ["DESI_LOGLEVEL"] = savelevel
+        except:
+            # Log the error and increment the number of failures
+            log.error("process {} FAILED RedMonsterZfind".format(comm.rank))
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            log.error(''.join(lines))
+            failcount += 1
+
+        failcount = comm.allreduce(failcount)
+
+        if failcount > 0:
+            # all processes throw
+            raise RuntimeError("some RedMonsterZfind tasks failed")
 
         # Combine results into a single ZFindBase object on the root process.
         # We could do this with a gather, but we are using a small number of

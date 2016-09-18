@@ -17,6 +17,7 @@ from specter.psf import load_psf
 from specter.extract import ex2d
 
 from desispec import io
+from desispec.log import get_logger
 from desispec.frame import Frame
 from desispec.maskbits import specmask
 
@@ -174,6 +175,8 @@ regularize: {regularize}
 
 def main_mpi(args, comm=None):
 
+    log = get_logger()
+
     psf_file = args.psf
     input_file = args.input
 
@@ -276,13 +279,13 @@ def main_mpi(args, comm=None):
 
     if rank == 0:
         #- Print parameters
-        print("extract:  input = {}".format(input_file))
-        print("extract:  psf = {}".format(psf_file))
-        print("extract:  specmin = {}".format(specmin))
-        print("extract:  nspec = {}".format(nspec))
-        print("extract:  wavelength = {},{},{}".format(wstart, wstop, dw))
-        print("extract:  nwavestep = {}".format(args.nwavestep))
-        print("extract:  regularize = {}".format(args.regularize))
+        log.info("extract:  input = {}".format(input_file))
+        log.info("extract:  psf = {}".format(psf_file))
+        log.info("extract:  specmin = {}".format(specmin))
+        log.info("extract:  nspec = {}".format(nspec))
+        log.info("extract:  wavelength = {},{},{}".format(wstart, wstop, dw))
+        log.info("extract:  nwavestep = {}".format(args.nwavestep))
+        log.info("extract:  regularize = {}".format(args.regularize))
 
     # get the root output file
 
@@ -306,7 +309,7 @@ def main_mpi(args, comm=None):
         outbundle = "{}_{:02d}.fits".format(outroot, b)
         outmodel = "{}_model_{:02d}.fits".format(outroot, b)
 
-        print('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
+        log.info('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
             rank, os.path.basename(input_file),
             bspecmin[b], bspecmin[b]+bnspec[b], time.asctime(),
             ) )
@@ -355,9 +358,14 @@ def main_mpi(args, comm=None):
                 from astropy.io import fits
                 fits.writeto(outmodel, results['modelimage'], header=frame.meta)
 
-            print('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
+            log.info('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
                 bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
         except:
+            # Log the error and increment the number of failures
+            log.error("extract:  FAILED bundle {}, spectrum range {}:{}".format(b, bspecmin[b], bspecmin[b]+bnspec[b]))
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            log.error(''.join(lines))
             failcount += 1
 
     if comm is not None:

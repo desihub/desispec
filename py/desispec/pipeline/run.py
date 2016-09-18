@@ -270,9 +270,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_bootcalib']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_bootcalib']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = bootcalib.parse(optarray)
 
@@ -319,9 +320,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_compute_psf']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_compute_psf']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = specex.parse(optarray)
         specex.main(args, comm=comm)
@@ -383,9 +385,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_extract_spectra']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_extract_spectra']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = extract.parse(optarray)
         extract.main_mpi(args, comm=comm)
@@ -407,9 +410,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_compute_fiberflat']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_compute_fiberflat']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = fiberflat.parse(optarray)
 
@@ -446,9 +450,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_compute_sky']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_compute_sky']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = skypkg.parse(optarray)
 
@@ -492,9 +497,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_fit_stdstars']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_fit_stdstars']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = stdstars.parse(optarray)
 
@@ -545,9 +551,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_compute_fluxcalibration']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_compute_fluxcalibration']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = fluxcal.parse(optarray)
 
@@ -595,9 +602,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_process_exposure']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_process_exposure']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = procexp.parse(optarray)
 
@@ -616,9 +624,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_zfind']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_zfind']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = zfind.parse(optarray)
         zfind.main(args, comm=comm)
