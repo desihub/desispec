@@ -313,6 +313,7 @@ def main_mpi(args, comm=None):
             rank, os.path.basename(input_file),
             bspecmin[b], bspecmin[b]+bnspec[b], time.asctime(),
             ) )
+        sys.stdout.flush()
 
         #- The actual extraction
         try:
@@ -360,6 +361,7 @@ def main_mpi(args, comm=None):
 
             log.info('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
                 bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
+            sys.stdout.flush()
         except:
             # Log the error and increment the number of failures
             log.error("extract:  FAILED bundle {}, spectrum range {}:{}".format(b, bspecmin[b], bspecmin[b]+bnspec[b]))
@@ -367,6 +369,7 @@ def main_mpi(args, comm=None):
             lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
             log.error(''.join(lines))
             failcount += 1
+            sys.stdout.flush()
 
     if comm is not None:
         failcount = comm.allreduce(failcount)

@@ -17,7 +17,8 @@ from desispec.log import get_logger, WARNING
 from desispec.zfind.redmonster import RedMonsterZfind
 from desispec.zfind import ZfindBase
 from desispec.io.qa import load_qa_brick, write_qa_brick
-from desispec.util import default_nproc, dist_uniform
+from desispec.util import (default_nproc, dist_uniform,
+    collective_log)
 
 import argparse
 
@@ -224,14 +225,13 @@ def main(args, comm=None) :
         # distribute the spectra among processes
         my_firstspec, my_nspec = dist_uniform(nspec, comm.size, comm.rank)
         my_specs = slice(my_firstspec, my_firstspec + my_nspec)
-        for p in range(comm.size):
-            if p == comm.rank:
-                if my_nspec > 0:
-                    log.info("process {} fitting spectra {} - {}".format(p, my_firstspec, my_firstspec+my_nspec-1))
-                else:
-                    log.info("process {} idle".format(p))
-                sys.stdout.flush()
-            comm.barrier()
+        msg = ""
+        if my_nspec > 0:
+            msg = "process {} fitting spectra {} - {}".format(comm.rank, my_firstspec, my_firstspec+my_nspec-1)
+        else:
+            msg = "process {} idle".format(comm.rank)
+        collective_log(log, 'INFO', msg, comm=comm)
+        sys.stdout.flush()
 
         # do redshift fitting on each process.  If any process
         # throws an exception, log that error and ensure that 

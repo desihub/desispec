@@ -657,6 +657,8 @@ def stdouterr_redirected(to=os.devnull, comm=None):
         print("from Python")
         os.system("echo non-Python applications are also supported")
     '''
+    sys.stdout.flush()
+    sys.stderr.flush()
     fd = sys.stdout.fileno()
     fde = sys.stderr.fileno()
 
@@ -683,12 +685,12 @@ def stdouterr_redirected(to=os.devnull, comm=None):
 
     with os.fdopen(os.dup(fd), 'w') as old_stdout:
         if comm is None:
-            with open(to, 'w') as file:
+            with open(to, 'a') as file:
                 _redirect_stdout(to=file)
         else:
             for p in range(comm.size):
                 if p == comm.rank:
-                    with open(to, 'w') as file:
+                    with open(to, 'a') as file:
                         _redirect_stdout(to=file)
                 comm.barrier()
         try:
@@ -846,6 +848,9 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     faildir = os.path.join(proddir, 'run', 'failed')
     logdir = os.path.join(proddir, 'run', 'logs')
 
+    failcount = 0
+    group_failcount = 0
+
     if group_ntask > 0:
         for t in range(group_firsttask, group_firsttask + group_ntask):
             # if group_rank == 0:
@@ -863,7 +868,13 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             # For this task, we will temporarily redirect stdout and stderr
             # to a task-specific log file.
 
-            with stdouterr_redirected(to=os.path.join(nlogdir, "{}.log".format(gname)), comm=comm_group):
+            tasklog = os.path.join(nlogdir, "{}.log".format(gname))
+            if group_rank == 0:
+                os.remove(tasklog)
+            if comm_group is not None:
+                comm_group.barrier()
+
+            with stdouterr_redirected(to=tasklog, comm=comm_group):
                 try:
                     # if the step previously failed, clear that file now
                     if group_rank == 0:
@@ -886,6 +897,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                     # The task threw an exception.  We want to dump all information
                     # that will be needed to re-run the run_task() function on just
                     # this task.
+                    group_failcount += 1
                     msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
                     log.error(msg)
                     exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -909,9 +921,11 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
 
         if comm_group is not None:
             comm_group.barrier()
+            group_failcount = comm_group.allreduce(group_failcount)
 
     # Now we take the graphs from all groups and merge their states
 
+    failcount = group_failcount
     #sys.stdout.flush()
     if comm is not None:
         # print("proc {} hit merge barrier".format(rank))
@@ -921,12 +935,14 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             # print("proc {} joining merge".format(rank))
             # sys.stdout.flush()
             graph_merge_state(grph, comm=comm_rank)
+            failcount = comm_rank.allreduce(failcount)
         if comm_group is not None:
             # print("proc {} joining bcast".format(rank))
             # sys.stdout.flush()
             grph = comm_group.bcast(grph, root=0)
+            failcount = comm_group.bcast(failcount, root=0)
 
-    return grph
+    return grph, ntask, failcount
 
 
 def retry_task(failpath, newopts=None):
@@ -1144,7 +1160,16 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
         taskproc = steptaskproc[run_step_types[st]]
         if taskproc > nproc:
             taskproc = nproc
-        grph = run_step(run_step_types[st], rawdir, proddir, grph, opts, comm=comm, taskproc=taskproc)
+
+        grph, ntask, failtask = run_step(run_step_types[st], rawdir, proddir, grph, opts, comm=comm, taskproc=taskproc)
+        if rank == 0:
+            log.info("  {} total tasks, {} failures".format(ntask, failtask))
+
+        if ntask == failtask:
+            if rank == 0:
+                log.info("step {}: all tasks failed, quiting at {}".format(run_step_types[st], time.asctime()))
+            break
+
         if comm is not None:
             comm.barrier()
         if rank == 0:
