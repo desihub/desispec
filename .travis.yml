@@ -61,7 +61,7 @@ env:
         # - SPECEX_VERSION=0.3.9
         - MAIN_CMD='python setup.py'
         # These packages will always be installed.
-        - CONDA_DEPENDENCIES=""
+        - CONDA_DEPENDENCIES="qt=4"
         # These packages will only be installed if we really need them.
         - CONDA_ALL_DEPENDENCIES="scipy matplotlib coverage==3.7.1 pyyaml"
         # These packages will always be installed.
