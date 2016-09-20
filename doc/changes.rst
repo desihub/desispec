@@ -5,7 +5,8 @@ desispec change log
 0.10.1 (unreleased)
 -------------------
 
-* no changes yet
+* update redmonster wrapper for reproducibility
+* Brick.get_target_ids() returns them in the order they appear in input file
 
 0.10.0 (2016-09-10)
 -------------------

@@ -109,7 +109,7 @@ def main(args, comm=None) :
                     log.error('Channel {} in multiple input files'.format(bx.channel))
                 sys.exit(2)
 
-    filters=list(brick.keys())
+    filters=sorted(brick.keys())
     for fil in filters:
         if (comm is None) or (comm.rank == 0):
             log.info("Filter found: "+fil)

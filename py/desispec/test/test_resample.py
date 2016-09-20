@@ -91,6 +91,17 @@ class TestResample(unittest.TestCase):
         self.assertAlmostEqual(lo[1], x[0]+0.5*dx)
         self.assertAlmostEqual(hi[-1], x[-1]+0.5*dx)
 
+    #- maybe these shouldn't agree
+    # def test_same_bin(self):
+    #     '''test reproducibility if two input bins are the same'''
+    #     x  = np.array([1, 2, 3, 3, 4, 5])
+    #     y1 = np.array([1, 2, 3, 4, 5, 6])
+    #     y2 = np.array([1, 2, 4, 3, 5, 6])
+    #     xx = np.array([1, 2.5, 3.3, 4.5])
+    #     z1 = resample_flux(xx, x, y1)
+    #     z2 = resample_flux(xx, x, y2)
+    #     self.assertTrue(np.all(z1 == z2))
+
     @unittest.expectedFailure
     def test_edges(self):
         '''Test for large edge effects in resampling'''
