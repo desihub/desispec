@@ -175,7 +175,7 @@ def main(args, comm=None):
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
         argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
         addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
@@ -209,7 +209,7 @@ def main(args, comm=None):
         com.extend([ "{}_{:02d}.xml".format(outroot, x) for x in bundles ])
 
         argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
         addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
@@ -225,7 +225,7 @@ def main(args, comm=None):
         com.extend([ "{}_{:02d}-spots.fits".format(outroot, x) for x in bundles ])
 
         argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
         addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
