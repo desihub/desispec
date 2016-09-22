@@ -317,18 +317,6 @@ def graph_night(rawdir, rawnight):
         fmdata = io.read_fibermap(fibermap)
         flavor = fmdata.meta['FLAVOR']
         fmbricks = {}
-        for fmb in fmdata['BRICKNAME']:
-            fmb = str(fmb)
-            if len(fmb) > 0:
-                if fmb in fmbricks:
-                    fmbricks[fmb] += 1
-                else:
-                    fmbricks[fmb] = 1
-        for fmb in fmbricks:
-            if fmb in allbricks:
-                allbricks[fmb] += fmbricks[fmb]
-            else:
-                allbricks[fmb] = fmbricks[fmb]
 
         if flavor == 'arc':
             expcount['arc'] += 1
@@ -336,6 +324,18 @@ def graph_night(rawdir, rawnight):
             expcount['flat'] += 1
         else:
             expcount['science'] += 1
+            for fmb in fmdata['BRICKNAME']:
+                fmb = str(fmb)
+                if len(fmb) > 0:
+                    if fmb in fmbricks:
+                        fmbricks[fmb] += 1
+                    else:
+                        fmbricks[fmb] = 1
+            for fmb in fmbricks:
+                if fmb in allbricks:
+                    allbricks[fmb] += fmbricks[fmb]
+                else:
+                    allbricks[fmb] = fmbricks[fmb]
 
         node = {}
         node['type'] = 'fibermap'
@@ -398,7 +398,8 @@ def graph_night(rawdir, rawnight):
             node['out'] = []
             grph[name] = node
 
-    for name, nd in grph.items():
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'pix':
             continue
         if (nd['flavor'] != 'flat') and (nd['flavor'] != 'arc'):
@@ -963,7 +964,8 @@ def graph_slice(grph, names=None, types=None, deps=False):
                     newgrph[p] = copy.deepcopy(grph[p])
 
     # Now remove links that we have pruned
-    for name, nd in newgrph.items():
+    current_items = list(newgrph.items())
+    for name, nd in current_items:
         newin = []
         for p in nd['in']:
             if p in newgrph:
@@ -982,7 +984,8 @@ def graph_slice_spec(grph, spectrographs=None):
     newgrph = copy.deepcopy(grph)
     if spectrographs is None:
         spectrographs = list(range(10))
-    for name, nd in list(newgrph.items()):
+    current_items = list(newgrph.items())
+    for name, nd in current_items:
         if 'spec' in nd:
             if int(nd['spec']) not in spectrographs:
                 graph_prune(newgrph, name, descend=False)
