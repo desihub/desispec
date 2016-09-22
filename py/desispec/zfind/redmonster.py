@@ -130,7 +130,11 @@ class RedMonsterZfind(ZfindBase):
 
         #- Fill in outputs
         self.spectype = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
-        self.subtype = np.asarray([json.dumps(self.zpicker.subtype[i][0]) for i in range(nspec)])
+        self.subtype = np.asarray(["NA" for i in range(nspec)])
+        # FIXME:  re-enable subtype writing once we have a sane
+        # way to write and read this information to a FITS table
+        # column.
+        #self.subtype = np.asarray([json.dumps(self.zpicker.subtype[i][0]) for i in range(nspec)])
         self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
         self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
         self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
