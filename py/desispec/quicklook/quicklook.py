@@ -249,12 +249,14 @@ def runpipeline(pl,convdict,conf):
     paconf=conf["PipeLine"]
     qlog=qllogger.QLLogger("QuickLook",0)
     log=qlog.getlog()
+    passqadict=None #- pass this dict to QAs downstream
     for s,step in enumerate(pl):
         log.info("Starting to run step %s"%(paconf[s]["StepName"]))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
         try:
             hb.start("Running %s"%(step[0].name))
+            oldinp=inp #-  copy for QAs that need to see earlier input
             inp=pa(inp,**pargs)
         except Exception as e:
             log.critical("Failed to run PA %s error was %s"%(step[0].name,e))
@@ -264,9 +266,22 @@ def runpipeline(pl,convdict,conf):
             try:
                 qargs=mapkeywords(qa.config["kwargs"],convdict)
                 hb.start("Running %s"%(qa.name))
-                res=qa(inp,**qargs)
+                qargs["dict_countbins"]=passqadict #- pass this to all QA downstream
+
+                if qa.name=="RESIDUAL":
+                    res=qa(oldinp,inp[1],**qargs)
+                    
+                else:
+                    if isinstance(inp,tuple):
+                        res=qa(inp[0],**qargs)
+                    else:
+                        res=qa(inp,**qargs)
+
+                if qa.name=="COUNTBINS":         #TODO -must run this QA for now. change this later.
+                    passqadict=res
                 log.debug("%s %s"%(qa.name,inp))
                 qaresult[qa.name]=res
+
             except Exception as e:
                 log.warning("Failed to run QA %s error was %s"%(qa.name,e))
         if len(qaresult):
@@ -275,7 +290,10 @@ def runpipeline(pl,convdict,conf):
         else:
             hb.stop("Step %s finished."%(paconf[s]["StepName"]))
     hb.stop("Pipeline processing finished. Serializing result")
-    return inp
+    if isinstance(inp,tuple):
+       return inp[0]
+    else:
+       return inp
 
 #- Setup pipeline from configuration
 
