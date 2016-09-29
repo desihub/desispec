@@ -187,16 +187,12 @@ def main(args, comm=None):
             failcount += 1
 
     if comm is not None:
-        failcount = comm.allreduce(failcount)
+        from mpi4py import MPI
+        failcount = comm.allreduce(failcount, op=MPI.SUM)
 
     if failcount > 0:
         # all processes throw
         raise RuntimeError("some bundles failed specex_desi_psf_fit")
-
-    if comm is not None:
-        comm.barrier()
-
-    failcount = 0
 
     if rank == 0:
         outfits = "{}.fits".format(outroot)
@@ -247,7 +243,8 @@ def main(args, comm=None):
                 if os.path.isfile(f):
                     os.remove(f)
 
-    failcount = comm.bcast(failcount, root=0)
+    if comm is not None:
+        failcount = comm.bcast(failcount, root=0)
 
     if failcount > 0:
         # all processes throw
