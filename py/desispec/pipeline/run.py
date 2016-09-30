@@ -684,27 +684,42 @@ def stdouterr_redirected(to=os.devnull, comm=None):
         log.addHandler(ch)
 
     with os.fdopen(os.dup(fd), 'w') as old_stdout:
+        pto = to
         if comm is None:
-            with open(to, 'a') as file:
+            with open(pto, 'w') as file:
                 _redirect_stdout(to=file)
         else:
-            for p in range(comm.size):
-                if p == comm.rank:
-                    with open(to, 'a') as file:
-                        _redirect_stdout(to=file)
-                comm.barrier()
+            pto = "{}_{}".format(to, comm.rank)
+            with open(pto, 'w') as file:
+                _redirect_stdout(to=file)
         try:
             if (comm is None) or (comm.rank == 0):
                 log.info("Begin log redirection to {} at {}".format(to, time.asctime()))
             sys.stdout.flush()
             yield # allow code to be run with the redirected stdout
         finally:
-            if (comm is None) or (comm.rank == 0):
-                log.info("End log redirection to {} at {}".format(to, time.asctime()))
             sys.stdout.flush()
+            sys.stderr.flush()
             _redirect_stdout(to=old_stdout) # restore stdout.
                                             # buffering and flags such as
                                             # CLOEXEC may be different
+            if comm is not None:
+                # concatenate per-process files
+                comm.barrier()
+                if comm.rank == 0:
+                    with open(to, 'w') as outfile:
+                        for p in range(comm.size):
+                            outfile.write("================= Process {} =================\n".format(p))
+                            fname = "{}_{}".format(to, p)
+                            with open(fname) as infile:
+                                outfile.write(infile.read())
+                            os.remove(fname)
+                comm.barrier()
+
+            if (comm is None) or (comm.rank == 0):
+                log.info("End log redirection to {} at {}".format(to, time.asctime()))
+            sys.stdout.flush()
+            
     return
 
 
@@ -870,7 +885,8 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
 
             tasklog = os.path.join(nlogdir, "{}.log".format(gname))
             if group_rank == 0:
-                os.remove(tasklog)
+                if os.path.isfile(tasklog):
+                    os.remove(tasklog)
             if comm_group is not None:
                 comm_group.barrier()
 
