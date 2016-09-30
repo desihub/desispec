@@ -113,38 +113,6 @@ def dist_discrete(worksizes, workers, id, pow=1.0):
     return dist[id]
 
 
-def collective_log(logger, level, msg, comm=None):
-    nproc = 1
-    rank = 0
-    if comm is not None:
-        nproc = comm.size
-        rank = comm.rank
-
-    msglist = None
-    if comm is None:
-        msglist = [msg]
-    else:
-        msglist = comm.gather(msg, root=0)
-
-    if rank == 0:
-        if level == 'DEBUG':
-            for p in range(nproc):
-                logger.debug(msglist[p])
-        elif level == 'INFO':
-            for p in range(nproc):
-                logger.info(msglist[p])
-        elif level == 'WARNING':
-            for p in range(nproc):
-                logger.warning(msglist[p])
-        elif level == 'ERROR':
-            for p in range(nproc):
-                logger.error(msglist[p])
-        elif level == 'CRITICAL':
-            for p in range(nproc):
-                logger.critical(msglist[p])
-    return
-
-
 def mask32(mask):
     '''
     Return an input mask as unsigned 32-bit
