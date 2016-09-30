@@ -5,7 +5,7 @@ desispec change log
 0.10.1 (unreleased)
 -------------------
 
-* no changes yet
+* Update template Module file to reflect DESI+Anaconda infrastructure.
 
 0.10.0 (2016-09-10)
 -------------------
