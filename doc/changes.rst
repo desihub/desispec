@@ -5,6 +5,7 @@ desispec change log
 0.10.1 (unreleased)
 -------------------
 
+* Update template Module file to reflect DESI+Anaconda infrastructure.
 * update redmonster wrapper for reproducibility
 * Brick.get_target_ids() returns them in the order they appear in input file
 
