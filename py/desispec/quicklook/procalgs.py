@@ -637,7 +637,7 @@ class SubtractSky_QL(pas.PipelineAlg):
             name="Sky Subtraction"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
-        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+        pas.PipelineAlg.__init__(self,name,fr,type(tuple),config,logger)
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -691,5 +691,5 @@ class SubtractSky_QL(pas.PipelineAlg):
             io.write_frame(dumpfile, sframe)
             log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
-        return sframe
+        return (sframe,skymodel)
 
