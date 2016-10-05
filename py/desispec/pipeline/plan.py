@@ -17,7 +17,13 @@ import time
 import glob
 import re
 import copy
-import yaml
+
+from yaml import load as yload
+from yaml import dump as ydump
+try:
+    from yaml import CLoader as YLoader
+except ImportError:
+    from yaml import Loader as YLoader
 
 import astropy.io.fits as af
 
@@ -118,14 +124,14 @@ def default_options():
 
 def write_options(path, opts):
     with open(path, 'w') as f:
-        yaml.dump(opts, f, default_flow_style=False)
+        ydump(opts, f, default_flow_style=False)
     return
 
 
 def read_options(path):
     opts = None
     with open(path, 'r') as f:
-        opts = yaml.load(f)
+        opts = yload(f)
     return opts
 
 
@@ -994,14 +1000,14 @@ def graph_slice_spec(grph, spectrographs=None):
 
 def graph_write(path, grph):
     with open(path, 'w') as f:
-        yaml.dump(grph, f, default_flow_style=False)
+        ydump(grph, f, default_flow_style=False)
     return
 
 
 def graph_read(path, progress=None):
     grph = None
     with open(path, 'r') as f:
-        grph = yaml.load(f, Loader=yaml.CLoader)
+        grph = yload(f, Loader=YLoader)
     return grph
 
 
