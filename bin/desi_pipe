@@ -71,7 +71,10 @@ def compute_step(setupfile, rawdir, proddir, envcom, first, last, specs, night,
     shell_log = os.path.join(logdir, "{}_sh".format(stepstr))
 
     #- no MPI for shell job version so that it can be run from interactive node
-    com = ["desi_pipe_run --nompi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
+    if shell_maxcores == 1:
+        com = ["desi_pipe_run --nompi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
+    else:
+        com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
     pipe.shell_job(shell_path, shell_log, envcom, setupfile, com, comrun=shell_mpi_run, mpiprocs=shell_procs, threads=shell_threads)
 
     #- MPI for standard batch job (to be written below)
@@ -417,7 +420,7 @@ def main():
     # if one is very large.
     redtime = 30
     redqueue = 'debug'
-    largest = np.max([ allbricks[x] for x in allbricks.keys() ])
+    largest = np.max(np.asarray([ allbricks[x] for x in allbricks.keys() ]))
     increments = int(2.0 * (float(largest) / 10.0) / float(taskproc)) + 1
     if increments > 1:
         redqueue = 'regular'
