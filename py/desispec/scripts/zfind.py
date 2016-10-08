@@ -237,13 +237,10 @@ def main(args, comm=None) :
         failcount = 0
         try:
             if my_nspec > 0:
-                savelevel = os.environ["DESI_LOGLEVEL"]
-                os.environ["DESI_LOGLEVEL"] = "WARNING"
                 myzf = RedMonsterZfind(wave=wave, flux=flux[my_specs,:], ivar=ivar[my_specs,:],
                                  objtype=args.objtype,zrange_galaxy= args.zrange_galaxy,
                                  zrange_qso=args.zrange_qso,zrange_star=args.zrange_star,
                                  nproc=args.nproc,npoly=args.npoly)
-                os.environ["DESI_LOGLEVEL"] = savelevel
         except:
             # Log the error and increment the number of failures
             log.error("process {} FAILED RedMonsterZfind".format(comm.rank))
