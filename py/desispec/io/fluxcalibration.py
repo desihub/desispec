@@ -86,7 +86,7 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     add_dependencies(hdr)
     
     hdr['EXTNAME'] = 'FLUXCALIB'
-    hdr['BUNIT'] = ('(electrons/A) / (erg/s/cm2/A)', 'electrons per flux unit')
+    hdr['BUNIT'] = ('(electrons/A) / (1e-17 erg/s/cm2/A)', 'electrons per flux unit')
     hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f4'), header=hdr) )
     hx.append( fits.ImageHDU(fluxcalib.ivar.astype('f4'), name='IVAR') )
     hx.append( fits.CompImageHDU(fluxcalib.mask, name='MASK') )
