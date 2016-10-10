@@ -28,7 +28,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     add_dependencies(hdr)
     
     hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
-    hdr['BUNIT'] = ('erg/s/cm2/A', 'Flux units')
+    hdr['BUNIT'] = ('1e-17 erg/s/cm2/A', 'Flux units')
     hdu1=fits.PrimaryHDU(normalizedFlux.astype('f4'), header=hdr.copy())
 
     hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
