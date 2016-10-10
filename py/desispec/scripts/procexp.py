@@ -71,7 +71,7 @@ def main(args):
 
 
     # save output
-    write_frame(args.outfile, frame)
+    write_frame(args.outfile, frame, units=str('cframe units'))
 
     log.info("successfully wrote %s"%args.outfile)
 
