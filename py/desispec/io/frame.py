@@ -50,11 +50,12 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(frame.flux.astype('f4'), header=hdr)
     x.header['EXTNAME'] = 'FLUX'
-    if units is not None and 'BUNIT' not in hdr:
-        if units =='frame units':
-            x.header['BUNIT'] = ('photons/bin','Flux units')
-        if units == 'cframe units':
-            x.header['BUNIT'] = ('1e-17 erg/s/cm^2/A','Flux units')
+    if units is not None:
+        units = str(units)
+        if 'BUNIT' in hdr and hdr['BUNIT'] != units:
+            log.warn('BUNIT {bunit} != units {units}; using {units}'.format(
+                    bunit=hdr['BUNIT'], units=units))
+        x.header['BUNIT'] = units
     hdus.append(x)
 
     hdus.append( fits.ImageHDU(frame.ivar.astype('f4'), name='IVAR') )
