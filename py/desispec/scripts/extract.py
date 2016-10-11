@@ -159,7 +159,7 @@ regularize: {regularize}
                 chi2pix=chi2pix)
 
     #- Write output
-    io.write_frame(args.output, frame)
+    io.write_frame(args.output, frame, units='photon/bin')
 
     if args.model is not None:
         from astropy.io import fits
@@ -353,7 +353,7 @@ def main_mpi(args, comm=None):
                         chi2pix=chi2pix)
 
             #- Write output
-            io.write_frame(outbundle, frame)
+            io.write_frame(outbundle, frame, units='photon/bin')
 
             if args.model is not None:
                 from astropy.io import fits

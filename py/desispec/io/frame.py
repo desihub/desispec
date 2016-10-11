@@ -20,7 +20,7 @@ from desispec.log import get_logger
 
 log = get_logger()
 
-def write_frame(outfile, frame, header=None, fibermap=None):
+def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     """Write a frame fits file and returns path to file written.
 
     Args:
@@ -50,11 +50,18 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(frame.flux.astype('f4'), header=hdr)
     x.header['EXTNAME'] = 'FLUX'
+    if units is not None:
+        units = str(units)
+        if 'BUNIT' in hdr and hdr['BUNIT'] != units:
+            log.warn('BUNIT {bunit} != units {units}; using {units}'.format(
+                    bunit=hdr['BUNIT'], units=units))
+        x.header['BUNIT'] = units
     hdus.append(x)
 
     hdus.append( fits.ImageHDU(frame.ivar.astype('f4'), name='IVAR') )
     hdus.append( fits.CompImageHDU(frame.mask, name='MASK') )
     hdus.append( fits.ImageHDU(frame.wave.astype('f4'), name='WAVELENGTH') )
+    hdus[-1].header['BUNIT'] = 'Angstrom'
     hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     
     if fibermap is not None:
