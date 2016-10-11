@@ -78,14 +78,13 @@ class BrickBase(object):
             # Create empty HDUs. It would be good to refactor io.frame to avoid any duplication here.
             hdr = desispec.io.util.fitsheader(header)
             add_dependencies(hdr)
-            hdr['EXTNAME'] = ('FLUX', 'no dimension')
-            hdu0 = astropy.io.fits.PrimaryHDU(header = hdr)
-            hdr['EXTNAME'] = ('IVAR', 'no dimension')
-            hdu1 = astropy.io.fits.ImageHDU(header = hdr)
-            hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
-            hdu2 = astropy.io.fits.ImageHDU(header = hdr)
-            hdr['EXTNAME'] = ('RESOLUTION', 'no dimension')
-            hdu3 = astropy.io.fits.ImageHDU(header = hdr)
+            hdr['EXTNAME'] = ('FLUX', '1e-17 erg/(s cm2 Angstrom)')
+            hdr['BUNIT'] = '1e-17 erg/(s cm2 Angstrom)'
+            hdu0 = astropy.io.fits.PrimaryHDU(header=hdr)
+            hdu1 = astropy.io.fits.ImageHDU(name='IVAR')
+            hdu2 = astropy.io.fits.ImageHDU(name='WAVELENGTH')
+            hdu2.header['BUNIT'] = 'Angstrom'
+            hdu3 = astropy.io.fits.ImageHDU(name='RESOLUTION')
             # Create an HDU4 using the columns from fibermap with a few extras added.
             columns = desispec.io.fibermap.fibermap_columns[:]
             columns.extend([
