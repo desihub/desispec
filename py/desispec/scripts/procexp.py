@@ -71,7 +71,7 @@ def main(args):
 
 
     # save output
-    write_frame(args.outfile, frame, units='erg/(s cm2 A)')
+    write_frame(args.outfile, frame, units='1e-17 erg/(s cm2 A)')
 
     log.info("successfully wrote %s"%args.outfile)
 
