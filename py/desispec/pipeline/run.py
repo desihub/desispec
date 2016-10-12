@@ -1022,14 +1022,47 @@ def retry_task(failpath, newopts=None):
         log.warning("WARNING: overriding original options")
         opts = newopts
 
-    try:
-        run_task(step, rawdir, proddir, grph, opts, comm=comm)
-    except:
-        log.error("Retry Failed")
-        raise
-    else:
-        if rank == 0:
-            os.remove(failpath)
+    logdir = os.path.join(proddir, 'run', 'logs')
+    (night, gname) = graph_name_split(name)
+
+    nlogdir = os.path.join(logdir, night)
+            
+    # For this task, we will temporarily redirect stdout and stderr
+    # to a task-specific log file.
+
+    tasklog = os.path.join(nlogdir, "{}.log".format(gname))
+    if rank == 0:
+        if os.path.isfile(tasklog):
+            os.remove(tasklog)
+    if comm is not None:
+        comm.barrier()
+
+    failcount = 0
+
+    with stdouterr_redirected(to=tasklog, comm=comm):
+        try:
+            log.debug("re-trying step {}, task {} with {} processes".format(step, name, nworld))
+            run_task(step, rawdir, proddir, grph, opts, comm=comm)
+        except:
+            failcount += 1
+            msg = "FAILED: step {} task {} process {}".format(step, name, rank)
+            log.error(msg)
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            log.error(''.join(lines))
+            
+    if comm is not None:
+        comm.barrier()
+        failcount = comm.allreduce(failcount)
+
+    if rank == 0:
+        if failcount > 0:
+            log.error("{} of {} processes raised an exception".format(failcount, nworld))
+        else:
+            # success, clear failure file now
+            if os.path.isfile(failpath):
+                os.remove(failpath)
+
     return
 
 
