@@ -144,8 +144,8 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     gdp = gdp & (np.arange(npix) > 2.*nwidth) & (np.arange(npix) < (npix-2.*nwidth))
 
     # Roll to find peaks (simple algorithm)
-    nwidth = 5
-    nstep = nwidth // 2
+    # nwidth = 5
+    nstep = max(1,nwidth // 2)
     for kk in xrange(-nstep,nstep):
         if kk < 0:
             test = np.roll(spec,kk) < np.roll(spec,kk+1)
