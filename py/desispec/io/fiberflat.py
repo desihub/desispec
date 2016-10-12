@@ -33,6 +33,10 @@ def write_fiberflat(outfile,fiberflat,header=None):
     if fiberflat.chi2pdf is not None:
         hdr['chi2pdf'] = float(fiberflat.chi2pdf)
 
+    hdr['EXTNAME'] = 'FIBERFLAT'
+    if 'BUNIT' in hdr:
+        del hdr['BUNIT']
+
     add_dependencies(hdr)
 
     ff = fiberflat   #- shorthand
@@ -43,6 +47,7 @@ def write_fiberflat(outfile,fiberflat,header=None):
     hdus.append(fits.CompImageHDU(ff.mask,              name='MASK'))
     hdus.append(fits.ImageHDU(ff.meanspec.astype('f4'), name='MEANSPEC'))
     hdus.append(fits.ImageHDU(ff.wave.astype('f4'),     name='WAVELENGTH'))
+    hdus[-1].header['BUNIT'] = 'Angstrom'
     
     hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
@@ -69,7 +74,7 @@ def read_fiberflat(filename):
         filename = findfile('fiberflat', night, expid, camera)
 
     header    = fits.getheader(filename, 0)
-    fiberflat = native_endian(fits.getdata(filename, 0))
+    fiberflat = native_endian(fits.getdata(filename, 0)).astype('f8')
     ivar      = native_endian(fits.getdata(filename, "IVAR").astype('f8'))
     mask      = native_endian(fits.getdata(filename, "MASK", uint=True))
     meanspec  = native_endian(fits.getdata(filename, "MEANSPEC").astype('f8'))

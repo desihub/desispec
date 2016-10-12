@@ -262,7 +262,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     # Bad models
     qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
     if qadict['NBAD_PCHI'] > 0:
-        log.warn("Bad Sky Subtraction in {:d} fibers".format(
+        log.warning("Bad Sky Subtraction in {:d} fibers".format(
                 qadict['NBAD_PCHI']))
 
     # Median residual

@@ -49,7 +49,7 @@ def main(args):
             fibermap_path = desispec.io.findfile(filetype = 'fibermap',night = args.night,
                 expid = exposure, specprod_dir = args.specprod)
             if not os.path.exists(fibermap_path):
-                log.debug('Skipping exposure %08d with no fibermap.' % exposure)
+                log.debug('Skipping exposure {:08d} with no fibermap.'.format(exposure))
                 continue
             # Open the fibermap.
             fibermap_data = desispec.io.read_fibermap(fibermap_path)
@@ -58,9 +58,8 @@ def main(args):
             cframes = desispec.io.get_files(
                     filetype = 'cframe', night = args.night,
                     expid = exposure, specprod_dir = args.specprod)
-            log.debug('Exposure %08d covers %d bricks and has cframes for %s.' % (
-                exposure,len(brick_names),','.join(cframes.keys())))
-            for camera,cframe_path in cframes.iteritems():
+            log.debug('Exposure {:08d} covers {} bricks and has cframes for {}.'.format(exposure, len(brick_names), ','.join(list(cframes.keys()))))
+            for camera,cframe_path in cframes.items():
                 band,spectro_id = camera[0],int(camera[1:])
                 this_camera = (fibermap_data['SPECTROID'] == spectro_id)
                 # Read this cframe file.
@@ -73,7 +72,7 @@ def main(args):
                     fibers = np.mod(brick_data['FIBER'],500)
                     if len(fibers) == 0:
                         continue
-                    brick_key = '%s_%s' % (band,brick_name)
+                    brick_key = '{}_{}'.format(band,brick_name)
                     # Open the brick file if this is the first time we are using it.
                     if brick_key not in bricks:
                         brick_path = desispec.io.findfile('brick',brickname = brick_name,band = band)
@@ -85,9 +84,8 @@ def main(args):
                     bricks[brick_key].add_objects(frame.flux[fibers], frame.ivar[fibers],
                         frame.wave, frame.resolution_data[fibers], brick_data,args.night,exposure)
         # Close all brick files.
-        for brick in bricks.itervalues():
-            log.debug('Brick %s now contains %d spectra for %d targets.' % (
-                brick.path,brick.get_num_spectra(),brick.get_num_targets()))
+        for brick in bricks.values():
+            log.debug('Brick {} now contains {} spectra for {} targets.'.format(brick.path, brick.get_num_spectra(), brick.get_num_targets()))
             brick.close()
 
     except RuntimeError as e:

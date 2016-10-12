@@ -17,11 +17,21 @@ import desispec.io as io
 
 class TestPipelineRun(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        cls.uid = uuid4().hex
+        cls.testraw = "test_raw-{}".format(cls.uid)
+        cls.testprod = "test_redux-{}".format(cls.uid)
+
     def setUp(self):
-        self.uid = uuid4().hex
-        self.testraw = "test_raw-{}".format(self.uid)
+        #- Cleanup in case a previous failed test left something behind
+        if os.path.isdir(self.testraw):
+            shutil.rmtree(self.testraw)
+        if os.path.isdir(self.testprod):
+            shutil.rmtree(self.testprod)
+
+        #- Now create a fresh copy to work from
         os.mkdir(self.testraw)
-        self.testprod = "test_redux-{}".format(self.uid)
         os.mkdir(self.testprod)
 
         self.night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
@@ -99,21 +109,28 @@ class TestPipelineRun(unittest.TestCase):
                     with open(pixfile, 'w') as p:
                         p.write("")
 
+    def tearDown(self):
+        if os.path.isdir(self.testraw):
+            shutil.rmtree(self.testraw)
+        if os.path.isdir(self.testprod):
+            shutil.rmtree(self.testprod)
+
+    #- Even if every test fails, cleanup after ourselves
+    @classmethod
+    def tearDownClass(cls):
+        if os.path.isdir(cls.testraw):
+            shutil.rmtree(cls.testraw)
+        if os.path.isdir(cls.testprod):
+            shutil.rmtree(cls.testprod)
+
+    def test_graph_night(self):
         self.grph, expcount, bricks = graph_night(self.testraw, self.night)
         graph_write(os.path.join(self.testraw, "{}_graph.yml".format(self.night)), self.grph)
 
-
-    def tearDown(self):
-        shutil.rmtree(self.testraw)
-        shutil.rmtree(self.testprod)
-        pass
-
-    
     def test_options(self):
         options = default_options()
         dump = os.path.join(self.testraw, "opts.yml")
         write_options(dump, options)
-
 
     def test_failpkl(self):
         options = default_options()

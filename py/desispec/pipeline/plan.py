@@ -17,7 +17,13 @@ import time
 import glob
 import re
 import copy
-import yaml
+
+from yaml import load as yload
+from yaml import dump as ydump
+try:
+    from yaml import CLoader as YLoader
+except ImportError:
+    from yaml import Loader as YLoader
 
 import astropy.io.fits as af
 
@@ -118,14 +124,14 @@ def default_options():
 
 def write_options(path, opts):
     with open(path, 'w') as f:
-        yaml.dump(opts, f, default_flow_style=False)
+        ydump(opts, f, default_flow_style=False)
     return
 
 
 def read_options(path):
     opts = None
     with open(path, 'r') as f:
-        opts = yaml.load(f)
+        opts = yload(f)
     return opts
 
 
@@ -234,8 +240,8 @@ def create_prod(rawdir, proddir, nightstr=None):
 
         grph, expcount, nbricks = graph_night(rawdir, nt)
 
-        for brk in nbricks.keys():
-            if brk in allbricks.keys():
+        for brk in nbricks:
+            if brk in allbricks:
                 allbricks[brk] += nbricks[brk]
             else:
                 allbricks[brk] = nbricks[brk]
@@ -314,20 +320,9 @@ def graph_night(rawdir, rawnight):
         # read the fibermap to get the exposure type, and while we are at it,
         # also accumulate the total list of bricks        
 
-        fmdata, fmheader = io.read_fibermap(fibermap, header=True)
-        flavor = fmheader['flavor']
+        fmdata = io.read_fibermap(fibermap)
+        flavor = fmdata.meta['FLAVOR']
         fmbricks = {}
-        for fmb in fmdata['BRICKNAME']:
-            if len(fmb) > 0:
-                if fmb in fmbricks.keys():
-                    fmbricks[fmb] += 1
-                else:
-                    fmbricks[fmb] = 1
-        for fmb in fmbricks.keys():
-            if fmb in allbricks.keys():
-                allbricks[fmb] += fmbricks[fmb]
-            else:
-                allbricks[fmb] = fmbricks[fmb]
 
         if flavor == 'arc':
             expcount['arc'] += 1
@@ -335,6 +330,18 @@ def graph_night(rawdir, rawnight):
             expcount['flat'] += 1
         else:
             expcount['science'] += 1
+            for fmb in fmdata['BRICKNAME']:
+                fmb = str(fmb)
+                if len(fmb) > 0:
+                    if fmb in fmbricks:
+                        fmbricks[fmb] += 1
+                    else:
+                        fmbricks[fmb] = 1
+            for fmb in fmbricks:
+                if fmb in allbricks:
+                    allbricks[fmb] += fmbricks[fmb]
+                else:
+                    allbricks[fmb] = fmbricks[fmb]
 
         node = {}
         node['type'] = 'fibermap'
@@ -373,7 +380,7 @@ def graph_night(rawdir, rawnight):
             grph[name] = node
             grph[rawnight]['out'].append(name)
 
-    keep = sorted(list(keepspec))
+    keep = sorted(keepspec)
 
     # Now that we have added all the raw data to the graph, we work our way
     # through the processing steps.  
@@ -397,7 +404,8 @@ def graph_night(rawdir, rawnight):
             node['out'] = []
             grph[name] = node
 
-    for name, nd in grph.items():
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'pix':
             continue
         if (nd['flavor'] != 'flat') and (nd['flavor'] != 'arc'):
@@ -422,7 +430,9 @@ def graph_night(rawdir, rawnight):
             node['out'] = []
             grph[name] = node
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'pix':
             continue
         if nd['flavor'] != 'arc':
@@ -447,7 +457,9 @@ def graph_night(rawdir, rawnight):
 
     # Now we extract the flats and science frames using the nightly psf
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'pix':
             continue
         if nd['flavor'] == 'arc':
@@ -478,7 +490,9 @@ def graph_night(rawdir, rawnight):
 
     flatexpid = {}
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] != 'flat':
@@ -497,14 +511,16 @@ def graph_night(rawdir, rawnight):
         grph[flatname] = node
         nd['out'].append(flatname)
         cam = "{}{}".format(band, spec)
-        if cam not in flatexpid.keys():
+        if cam not in flatexpid:
             flatexpid[cam] = []
         flatexpid[cam].append(id)
 
     # To compute the sky file, we use the "most recent fiberflat" that came
     # before the current exposure.
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] == 'flat':
@@ -537,7 +553,9 @@ def graph_night(rawdir, rawnight):
 
     stdgrph = {}
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] == 'flat':
@@ -548,7 +566,7 @@ def graph_night(rawdir, rawnight):
 
         starname = graph_name(rawnight, "stdstars-{}-{:08d}".format(spec, id))
         # does this spectrograph exist yet in the graph?
-        if starname not in stdgrph.keys():
+        if starname not in stdgrph:
             fmname = graph_name(rawnight, "fibermap-{:08d}".format(id))
             grph[fmname]['out'].append(starname)
             node = {}
@@ -580,7 +598,9 @@ def graph_night(rawdir, rawnight):
 
     # Construct calibration files
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] == 'flat':
@@ -614,7 +634,9 @@ def graph_night(rawdir, rawnight):
 
     # Build cframe files
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'frame':
             continue
         if nd['flavor'] == 'flat':
@@ -648,7 +670,7 @@ def graph_night(rawdir, rawnight):
 
     # Brick / Zbest dependencies
 
-    for b in allbricks.keys():
+    for b in allbricks:
         zbname = "zbest-{}".format(b)
         inb = []
         for band in ['b', 'r', 'z']:
@@ -669,7 +691,9 @@ def graph_night(rawdir, rawnight):
         node['out'] = []
         grph[zbname] = node
 
-    for name, nd in grph.items():
+    #- cache current graph items so we can update graph as we go
+    current_items = list(grph.items())
+    for name, nd in current_items:
         if nd['type'] != 'fibermap':
             continue
         if nd['flavor'] == 'arc':
@@ -917,7 +941,7 @@ def graph_mark(grph, name, state=None, descend=False):
             graph_mark(grph, c, state=state, descend=True)
     # set or clear state
     if state is None:
-        if 'state' in grph[name].keys():
+        if 'state' in grph[name]:
             del grph[name]['state']
     else:
         grph[name]['state'] = state
@@ -940,21 +964,22 @@ def graph_slice(grph, names=None, types=None, deps=False):
 
     # Now optionally grab all direct inputs
     if deps:
-        for name, nd in newgrph.items():
+        for name, nd in list(newgrph.items()):
             for p in nd['in']:
-                if p not in newgrph.keys():
+                if p not in newgrph:
                     newgrph[p] = copy.deepcopy(grph[p])
 
     # Now remove links that we have pruned
-    for name, nd in newgrph.items():
+    current_items = list(newgrph.items())
+    for name, nd in current_items:
         newin = []
         for p in nd['in']:
-            if p in newgrph.keys():
+            if p in newgrph:
                 newin.append(p)
         nd['in'] = newin
         newout = []
         for c in nd['out']:
-            if c in newgrph.keys():
+            if c in newgrph:
                 newout.append(c)
         nd['out'] = newout
 
@@ -964,9 +989,10 @@ def graph_slice(grph, names=None, types=None, deps=False):
 def graph_slice_spec(grph, spectrographs=None):
     newgrph = copy.deepcopy(grph)
     if spectrographs is None:
-        spectrographs = range(10)
-    for name, nd in newgrph.items():
-        if 'spec' in nd.keys():
+        spectrographs = list(range(10))
+    current_items = list(newgrph.items())
+    for name, nd in current_items:
+        if 'spec' in nd:
             if int(nd['spec']) not in spectrographs:
                 graph_prune(newgrph, name, descend=False)
     return newgrph
@@ -974,14 +1000,14 @@ def graph_slice_spec(grph, spectrographs=None):
 
 def graph_write(path, grph):
     with open(path, 'w') as f:
-        yaml.dump(grph, f, default_flow_style=False)
+        ydump(grph, f, default_flow_style=False)
     return
 
 
 def graph_read(path, progress=None):
     grph = None
     with open(path, 'r') as f:
-        grph = yaml.load(f, Loader=yaml.CLoader)
+        grph = yload(f, Loader=YLoader)
     return grph
 
 
@@ -1059,7 +1085,7 @@ def graph_dot(grph, f):
         for name in sorted(rank[t]):
             nd = grph[name]
             props = "[shape=box,penwidth=3"
-            if 'state' in nd.keys():
+            if 'state' in nd:
                 props = "{},color=\"{}\"".format(props, _state_colors[nd['state']])
             else:
                 props = "{},color=\"{}\"".format(props, _state_colors['none'])
@@ -1099,9 +1125,9 @@ def graph_merge_state(grph, comm=None):
     # them both.
     
     states = {}
-    names = sorted(list(grph.keys()))
+    names = sorted(grph.keys())
     for n in names:
-        if 'state' in grph[n].keys():
+        if 'state' in grph[n]:
             states[n] = grph[n]['state']
         else:
             states[n] = 'none'
@@ -1122,7 +1148,7 @@ def graph_merge_state(grph, comm=None):
             # print("proc {} receiving from {}".format(comm.rank, p))
             # sys.stdout.flush()
             pstates = comm.recv(source=p, tag=p)
-            pnames = sorted(list(pstates.keys()))
+            pnames = sorted(pstates.keys())
             if pnames != names:
                 raise RuntimeError("names of all objects must be the same when merging graph states")
             for n in names:

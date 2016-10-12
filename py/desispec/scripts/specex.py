@@ -95,7 +95,7 @@ def main(args, comm=None):
 
     checkbundles = set()
     checkbundles.update(np.floor_divide(np.arange(specmin, specmax), bundlesize*np.ones(nspec)).astype(int))
-    bundles = sorted(list(checkbundles))
+    bundles = sorted(checkbundles)
     nbundle = len(bundles)
 
     bspecmin = {}
@@ -175,7 +175,7 @@ def main(args, comm=None):
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
         argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
         addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
@@ -187,16 +187,12 @@ def main(args, comm=None):
             failcount += 1
 
     if comm is not None:
-        failcount = comm.allreduce(failcount)
+        from mpi4py import MPI
+        failcount = comm.allreduce(failcount, op=MPI.SUM)
 
     if failcount > 0:
         # all processes throw
         raise RuntimeError("some bundles failed specex_desi_psf_fit")
-
-    if comm is not None:
-        comm.barrier()
-
-    failcount = 0
 
     if rank == 0:
         outfits = "{}.fits".format(outroot)
@@ -209,7 +205,7 @@ def main(args, comm=None):
         com.extend([ "{}_{:02d}.xml".format(outroot, x) for x in bundles ])
 
         argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
         addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
@@ -225,7 +221,7 @@ def main(args, comm=None):
         com.extend([ "{}_{:02d}-spots.fits".format(outroot, x) for x in bundles ])
 
         argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i]) for i in range(argc)]
+        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
         addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
@@ -247,7 +243,8 @@ def main(args, comm=None):
                 if os.path.isfile(f):
                     os.remove(f)
 
-    failcount = comm.bcast(failcount, root=0)
+    if comm is not None:
+        failcount = comm.bcast(failcount, root=0)
 
     if failcount > 0:
         # all processes throw

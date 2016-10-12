@@ -7,22 +7,21 @@ IO routines for fibermap.
 import os
 import warnings
 import numpy as np
-from astropy.io import fits
+from astropy.table import Table
 
 from desiutil.depend import add_dependencies
-
 from desispec.io.util import fitsheader, write_bintable, makepath
 
 fibermap_columns = [
-    ('OBJTYPE', 'S10'),
-    ('TARGETCAT', 'S20'),
-    ('BRICKNAME', 'S8'),
+    ('OBJTYPE', (str, 10)),
+    ('TARGETCAT', (str, 20)),
+    ('BRICKNAME', (str, 8)),
     ('TARGETID', 'i8'),
     ('DESI_TARGET', 'i8'),
     ('BGS_TARGET', 'i8'),
     ('MWS_TARGET', 'i8'),
     ('MAG', 'f4', (5,)),
-    ('FILTER', 'S10', (5,)),
+    ('FILTER', (str, 10), (5,)),
     ('SPECTROID', 'i4'),
     ('POSITIONER', 'i4'),
     ('FIBER', 'i4'),
@@ -57,17 +56,18 @@ fibermap_comments = dict(
     Y_FVCERR     = "Y location uncertainty from Fiber View Cam [mm]",
     RA_OBS       = "RA of obs from (X,Y)_FVCOBS and optics [deg]",
     DEC_OBS      = "dec of obs from (X,Y)_FVCOBS and optics [deg]",
-    MAG          = "magitude",
+    MAG          = "magnitudes in each of the filters",
     FILTER       = "SDSS_R, DECAM_Z, WISE1, etc."
 )
 
 def empty_fibermap(nspec, specmin=0):
     """Return an empty fibermap ndarray to be filled in.
     """
-    fibermap = np.zeros(nspec, dtype=fibermap_columns)
+    fibermap = Table(np.zeros(nspec, dtype=fibermap_columns))
     fibermap['FIBER'] = np.arange(specmin, specmin+nspec)
     fibers_per_spectrograph = 500
     fibermap['SPECTROID'] = fibermap['FIBER'] // fibers_per_spectrograph
+        
     return fibermap
 
 def write_fibermap(outfile, fibermap, header=None):
@@ -75,7 +75,7 @@ def write_fibermap(outfile, fibermap, header=None):
 
     Args:
         outfile (str): output filename
-        fibermap: ndarray with named columns of fibermap data
+        fibermap: astropy Table of fibermap data
         header: header data to include in same HDU as fibermap
 
     Returns:
@@ -86,7 +86,11 @@ def write_fibermap(outfile, fibermap, header=None):
     #- astropy.io.fits incorrectly generates warning about 2D arrays of strings
     #- Temporarily turn off warnings to avoid this; desispec.test.test_io will
     #- catch it if the arrays actually are written incorrectly.
-    hdr = fitsheader(header)
+    if header is not None:
+        hdr = fitsheader(header)
+    else:
+        hdr = fitsheader(fibermap.meta)
+
     add_dependencies(hdr)
     
     with warnings.catch_warnings():
@@ -97,22 +101,14 @@ def write_fibermap(outfile, fibermap, header=None):
     return outfile
 
 
-def read_fibermap(filename, header=False) :
-    """Reads a fibermap file and returns its data as a numpy structured array
+def read_fibermap(filename) :
+    """Reads a fibermap file and returns its data as an astropy Table
     
     Args:
         filename : input file name
-        
-    Options:
-        header : if True, return (fibermap, header) tuple
     """
-
-    if not os.path.isfile(filename) :
-        raise IOError("cannot open"+filename)
-
-    fibermap, hdr = fits.getdata(filename, 'FIBERMAP', header=True)
-
-    if header:
-        return fibermap, hdr
-    else:
-        return fibermap
+    #- Implementation note: wrapping Table.read() with this function allows us
+    #- to update the underlying format, extension name, etc. without having
+    #- to change every place that reads a fibermap.
+    
+    return Table.read(filename, 'FIBERMAP')

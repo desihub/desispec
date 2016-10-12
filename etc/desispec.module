@@ -42,8 +42,8 @@ module-whatis "Sets up $product/$version in your environment."
 # A mandatory dependency is a module load command followed by a prereq
 # command.  An optional dependency is not followed by a prereq statement.
 #
-module load desiutil
-prereq desiutil
+# module load desiutil
+# prereq desiutil
 #
 # ENVIRONMENT SECTION
 #
@@ -53,11 +53,11 @@ prereq desiutil
 # will need to set the DESI_PRODUCT_ROOT environment variable
 #
 if {{[info exists env(DESI_PRODUCT_ROOT)]}} {{
-    set PRODUCT_ROOT $env(DESI_PRODUCT_ROOT)
+    set code_root $env(DESI_PRODUCT_ROOT)/code
 }} else {{
-    set PRODUCT_ROOT /project/projectdirs/desi/software/$env(NERSC_HOST)
+    set code_root {product_root}
 }}
-set PRODUCT_DIR $PRODUCT_ROOT/$product/$version
+set PRODUCT_DIR $code_root/$product/$version
 #
 # This line creates an environment variable pointing to the install
 # directory of your product.
@@ -70,7 +70,7 @@ setenv [string toupper $product] $PRODUCT_DIR
 #
 {needs_bin}prepend-path PATH $PRODUCT_DIR/bin
 {needs_python}prepend-path PYTHONPATH $PRODUCT_DIR/lib/{pyversion}/site-packages
-{needs_trunk_py}prepend-path PYTHONPATH $PRODUCT_DIR/py
+{needs_trunk_py}prepend-path PYTHONPATH $PRODUCT_DIR{trunk_py_dir}
 {needs_ld_lib}prepend-path LD_LIBRARY_PATH $PRODUCT_DIR/lib
 {needs_idl}prepend-path IDL_PATH +$PRODUCT_DIR/pro
 #

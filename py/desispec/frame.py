@@ -4,6 +4,7 @@ Lightweight wrapper class for spectra, to be returned by io.read_frame
 
 from __future__ import absolute_import, division
 
+import numbers
 import numpy as np
 
 from desispec import util
@@ -130,7 +131,7 @@ class Frame(object):
                 self.fibers = fibermap['FIBER']
             elif spectrograph is not None:
                 self.fibers = spectrograph*fibers_per_spectrograph + np.arange(self.nspec, dtype=int)
-            elif (self.meta is not None) and ('FIBERMIN' in self.meta.keys()):
+            elif (self.meta is not None) and ('FIBERMIN' in self.meta):
                 self.fibers = self.meta['FIBERMIN'] + np.arange(self.nspec, dtype=int)
             else:
                 raise ValueError("Must set fibers by one of the methods!")
@@ -153,7 +154,7 @@ class Frame(object):
         This is analogous to how integers vs. slices or arrays return either
         scalars or arrays when indexing numpy.ndarray .
         """
-        if isinstance(index, int):
+        if isinstance(index, numbers.Integral):
             return Spectrum(self.wave, self.flux[index], self.ivar[index], self.mask[index], self.R[index])
         
         #- convert index to 1d array to maintain dimentionality of sliced arrays

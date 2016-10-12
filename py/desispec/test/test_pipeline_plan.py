@@ -17,9 +17,18 @@ import desispec.io as io
 
 class TestPipelinePlan(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        cls.proddir = 'test-prod-'+uuid4().hex
+        cls.testraw = 'test-'+uuid4().hex
+
     def setUp(self):
-        self.proddir = 'test-prod-'+uuid4().hex
-        self.testraw = 'test-'+uuid4().hex
+        #- cleanup from any previously failed tests
+        if os.path.exists(self.testraw):
+            shutil.rmtree(self.testraw)
+        if os.path.exists(self.proddir):
+            shutil.rmtree(self.proddir)
+
         os.mkdir(self.testraw)
 
         self.night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
@@ -62,9 +71,18 @@ class TestPipelinePlan(unittest.TestCase):
                         p.write("")
 
     def tearDown(self):
-        shutil.rmtree(self.testraw)
+        if os.path.exists(self.testraw):
+            shutil.rmtree(self.testraw)
         if os.path.exists(self.proddir):
             shutil.rmtree(self.proddir)
+
+    #- Even if all tests fail to cleanup, we should cleanup on our way out
+    @classmethod
+    def tearDownClass(cls):
+        if os.path.exists(cls.testraw):
+            shutil.rmtree(cls.testraw)
+        if os.path.exists(cls.proddir):
+            shutil.rmtree(cls.proddir)
 
 
     def test_graph_names(self):

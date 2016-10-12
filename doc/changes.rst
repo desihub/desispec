@@ -2,10 +2,22 @@
 desispec change log
 ===================
 
-0.9.1 (unreleased)
-------------------
+0.10.1 (unreleased)
+-------------------
 
-* No changes yet
+* Update template Module file to reflect DESI+Anaconda infrastructure.
+* update redmonster wrapper for reproducibility
+* Brick.get_target_ids() returns them in the order they appear in input file
+
+0.10.0 (2016-09-10)
+-------------------
+
+PR #266 update for python 3.5:
+
+* Many little updates to work for both python 2.7 and 3.5
+* internally fibermap is now an astropy Table instead of FITS_rec table
+* Bug fix for flux calibration QA
+* requires desiutil >= 1.8.0
 
 0.9.0 (2016-08-18)
 ------------------

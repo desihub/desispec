@@ -121,7 +121,7 @@ class Tile(object):
 
         Parameters
         ----------
-        brick : Brick
+        brick : :class:`~desispec.io.database.Brick`
             A brick.
 
         Returns
@@ -281,7 +281,7 @@ class RawDataCursor(sqlite3.Cursor):
                     (np.sin(np.radians(brickdata['dec2'])) -
                      np.sin(np.radians(brickdata['dec1']))))
             bricklist.append(area.tolist())
-        self.executemany(self.insert_brick, zip(*bricklist))
+        self.executemany(self.insert_brick, list(zip(*bricklist)))
         return
 
     def load_tile(self, tilefile):
@@ -297,7 +297,7 @@ class RawDataCursor(sqlite3.Cursor):
         tile_list = [tile_data['TILEID'].tolist(), tile_data['RA'].tolist(),
                      tile_data['DEC'].tolist(), tile_data['PASS'].tolist(),
                      tile_data['IN_DESI'].tolist()]
-        self.executemany(self.insert_tile, zip(*tile_list))
+        self.executemany(self.insert_tile, list(zip(*tile_list)))
         return
 
     def is_night(self, night):
@@ -330,7 +330,7 @@ class RawDataCursor(sqlite3.Cursor):
             my_nights = [nights]
         else:
             my_nights = nights
-        self.executemany(self.insert_night, zip(my_nights))
+        self.executemany(self.insert_night, list(zip(my_nights)))
         return
 
     def is_status(self, status):
@@ -363,7 +363,7 @@ class RawDataCursor(sqlite3.Cursor):
             my_statuses = [statuses]
         else:
             my_statuses = statuses
-        self.executemany(self.insert_status, zip(my_statuses))
+        self.executemany(self.insert_status, list(zip(my_statuses)))
         return
 
     def is_flavor(self, flavor):
@@ -396,7 +396,7 @@ class RawDataCursor(sqlite3.Cursor):
             my_flavors = [flavors]
         else:
             my_flavors = flavors
-        self.executemany(self.insert_flavor, zip(my_flavors))
+        self.executemany(self.insert_flavor, list(zip(my_flavors)))
         return
 
     def get_bricks(self, tile):
@@ -410,7 +410,8 @@ class RawDataCursor(sqlite3.Cursor):
         Returns
         -------
         :class:`list`
-            A list of Brick objects that overlap `tile`.
+            A list of :class:`~desispec.io.database.Brick` objects that
+            overlap `tile`.
         """
         #
         # RA wrap around can be handled by the requirements:
@@ -442,7 +443,7 @@ class RawDataCursor(sqlite3.Cursor):
         Returns
         -------
         :class:`list`
-            A list of Brick objects.
+            A list of :class:`~desispec.io.database.Brick` objects.
         """
         if isinstance(bricknames, str):
             b = [bricknames]
@@ -568,7 +569,7 @@ class RawDataCursor(sqlite3.Cursor):
             petal2brick = tile.overlapping_bricks(candidate_bricks, map_petals=True)
             for p in petal2brick:
                 nb = len(petal2brick[p])
-                self.executemany(self.insert_tile2brick, zip([tile.id]*nb, [p]*nb, petal2brick[p]))
+                self.executemany(self.insert_tile2brick, list(zip([tile.id]*nb, [p]*nb, petal2brick[p])))
         return
 
     def load_simulated_data(self, obs_pass=0):

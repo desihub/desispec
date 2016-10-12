@@ -11,6 +11,7 @@ import scipy,scipy.sparse
 from astropy.io import fits
 
 from desiutil.depend import add_dependencies
+import desiutil.io
 
 from desispec.frame import Frame
 from desispec.io import findfile
@@ -19,7 +20,7 @@ from desispec.log import get_logger
 
 log = get_logger()
 
-def write_frame(outfile, frame, header=None, fibermap=None):
+def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     """Write a frame fits file and returns path to file written.
 
     Args:
@@ -49,17 +50,28 @@ def write_frame(outfile, frame, header=None, fibermap=None):
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(frame.flux.astype('f4'), header=hdr)
     x.header['EXTNAME'] = 'FLUX'
+    if units is not None:
+        units = str(units)
+        if 'BUNIT' in hdr and hdr['BUNIT'] != units:
+            log.warn('BUNIT {bunit} != units {units}; using {units}'.format(
+                    bunit=hdr['BUNIT'], units=units))
+        x.header['BUNIT'] = units
     hdus.append(x)
 
     hdus.append( fits.ImageHDU(frame.ivar.astype('f4'), name='IVAR') )
     hdus.append( fits.CompImageHDU(frame.mask, name='MASK') )
     hdus.append( fits.ImageHDU(frame.wave.astype('f4'), name='WAVELENGTH') )
+    hdus[-1].header['BUNIT'] = 'Angstrom'
     hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     
     if fibermap is not None:
-        hdus.append( fits.BinTableHDU(np.asarray(fibermap), name='FIBERMAP' ) )
+        fibermap = desiutil.io.encode_table(fibermap)  #- unicode -> bytes
+        fibermap.meta['EXTNAME'] = 'FIBERMAP'
+        hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.fibermap is not None:
-        hdus.append( fits.BinTableHDU(np.asarray(frame.fibermap), name='FIBERMAP' ) )
+        fibermap = desiutil.io.encode_table(frame.fibermap)  #- unicode -> bytes
+        fibermap.meta['EXTNAME'] = 'FIBERMAP'
+        hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.spectrograph is not None:
         x.header['FIBERMIN'] = 500*frame.spectrograph  # Hard-coded (as in desispec.frame)
     else:
@@ -86,7 +98,7 @@ def read_frame(filename, nspec=None):
         desispec.Frame object with attributes wave, flux, ivar, etc.
     """
     #- check if filename is (night, expid, camera) tuple instead
-    if not isinstance(filename, (str, unicode)):
+    if not isinstance(filename, str):
         night, expid, camera = filename
         filename = findfile('frame', night, expid, camera)
 
