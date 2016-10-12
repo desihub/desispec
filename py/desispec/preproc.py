@@ -130,6 +130,9 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     #- Subtract bias image
     camera = header['CAMERA'].lower()
 
+    #- convert rawimage to float64 : this is the output format of read_image
+    rawimage = rawimage.astype(np.float64)
+    
     if bias is not False and bias is not None:
         if bias is True:
             #- use default bias file for this camera/night
