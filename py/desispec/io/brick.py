@@ -47,7 +47,8 @@ class BrickBase(object):
     Args:
         path(str): Path to the brick file to open.
         mode(str): File access mode to use. Should normally be 'readonly' or 'update'. Use 'update' to create a new file and its parent directory if necessary.
-        header: An optional header specification used to create a new file. See :func:`desispec.io.util.fitsheader` for details on allowed values.
+        header: header used to create a new file. See :func:`desispec.io.util.fitsheader` for details on allowed types.
+            required for new files and must have BRICKNAM keyword; ignored when opening existing files
 
     Raises:
         RuntimeError: Invalid mode requested.
