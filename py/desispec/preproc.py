@@ -4,6 +4,8 @@ Preprocess raw DESI exposures
 
 import re
 import numpy as np
+import scipy.interpolate
+
 from desispec.image import Image
 
 from desispec import cosmics
@@ -76,7 +78,118 @@ def _overscan(pix, nsigma=5, niter=3):
 
     return overscan, readnoise
 
-def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
+def _global_background(image,patch_width=200) :
+    '''
+    determine background using a 2D median with square patches of width = width
+    that are interpolated
+    (does not subtract the background)
+    
+    Args:
+       image is expected to be already preprocessed
+       ( image = ((rawimage-bias-overscan)*gain)/pixflat )
+    Options:
+       patch_width (integer) size in pixels of the median square patches
+    Returns background image with same shape as input image
+    '''
+    bkg=np.zeros_like(image)
+    bins0=np.linspace(0,image.shape[0],float(image.shape[0])/patch_width).astype(int)
+    bins1=np.linspace(0,image.shape[1],float(image.shape[1])/patch_width).astype(int)
+    bkg_grid=np.zeros((bins0.size-1,bins1.size-1))
+    for j in xrange(bins1.size-1) :
+        for i in xrange(bins0.size-1) :
+            bkg_grid[i,j]=np.median(image[bins0[i]:bins0[i+1],bins1[j]:bins1[j+1]])
+    
+    nodes0=bins0[:-1]+(bins0[1]-bins0[0])/2.
+    nodes1=bins1[:-1]+(bins1[1]-bins0[0])/2.
+    spline=scipy.interpolate.RectBivariateSpline(nodes0,nodes1,bkg_grid,kx=2, ky=2, s=0)
+    return spline(np.arange(0,image.shape[0]),np.arange(0,image.shape[1]))
+    
+    
+def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
+    '''
+    determine background using a 2D median with square patches of width = width
+    that are interpolated and optionnally try and match the level of amplifiers
+    (does not subtract the background)
+    
+    Args:
+       image is expected to be already preprocessed
+       ( image = ((rawimage-bias-overscan)*gain)/pixflat )
+       header is used to read CCDSEC
+    Options:
+       patch_width (integer) size in pixels of the median square patches
+       stitch_width (integer) width in pixels of amplifier edges to match level of amplifiers 
+       stitch : do match level of amplifiers 
+    Returns background image with same shape as input image
+    
+    '''
+    
+    
+    log.info("fit a smooth background over the whole image with median patches of size %dx%d"%(patch_width,patch_width))    
+    bkg=_global_background(image,patch_width)
+    
+    if stitch :
+        
+        tmp_image=image-bkg
+        
+        log.info("stitch amps one with the other using median patches of size %dx%d"%(stitch_width,patch_width))
+        tmp_bkg=np.zeros_like(image)
+        
+        
+        for edge in [[1,2,1],[3,4,1],[1,3,0],[2,4,0]] :
+            
+            amp0=edge[0]
+            amp1=edge[1]
+            axis=edge[2]
+                
+
+            ii0=_parse_sec_keyword(header['CCDSEC%d'%amp0])
+            ii1=_parse_sec_keyword(header['CCDSEC%d'%amp1])
+            pos=ii0[axis].stop
+            bins=np.linspace(ii0[axis-1].start,ii0[axis-1].stop,float(ii0[axis-1].stop-ii0[axis-1].start)/patch_width).astype(int)
+            delta=np.zeros((bins.size-1))
+            for i in xrange(bins.size-1) :
+                if axis==0 :            
+                    delta[i]=np.median(tmp_image[pos-stitch_width:pos,bins[i]:bins[i+1]])-np.median(tmp_image[pos:pos+stitch_width,bins[i]:bins[i+1]])
+                else :
+                    delta[i]=np.median(tmp_image[bins[i]:bins[i+1],pos-stitch_width:pos])-np.median(tmp_image[bins[i]:bins[i+1],pos:pos+stitch_width])
+            nodes=bins[:-1]+(bins[1]-bins[0])/2.
+            
+            log.info("AMPS %d:%d mean diff=%f"%(amp0,amp1,np.mean(delta)))
+                            
+            delta=np.interp(np.arange(ii0[axis-1].stop-ii0[axis-1].start),nodes,delta)
+            
+            # smooth ramp along axis of scale patch_width 
+            w=float(patch_width)
+            x=np.arange(ii1[axis].stop-ii1[axis].start)                        
+            #ramp=(x<w)*(x>w/2)*((x-w)/(w))**2+(x<=w/2)*(0.5-(x/(w))**2) # peaks at 0.5
+            ramp=0.5*np.ones(x.shape)
+                
+            if axis==0 :
+                tmp_bkg[ii1] -= np.outer(ramp,delta)
+            else :
+                tmp_bkg[ii1] -= np.outer(delta,ramp)
+
+            x=np.arange(ii0[axis].stop-ii0[axis].start)  
+            #ramp=(x<w)*(x>w/2)*((x-w)/(w))**2+(x<=w/2)*(0.5-(x/(w))**2) # peaks at 0.5
+            ramp=0.5*np.ones(x.shape)
+
+            if axis==0 :
+                tmp_bkg[ii0] += np.outer(ramp[::-1],delta)
+            else :
+                tmp_bkg[ii0] += np.outer(delta,ramp[::-1])
+                
+        bkg += tmp_bkg
+        tmp_image=image-bkg
+        log.info("refit smooth background over the whole image with median patches of size %dx%d"%(patch_width,patch_width))
+        bkg+=_global_background(tmp_image,patch_width)
+        
+    
+    
+    log.info("done")
+    return bkg
+
+
+def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False):
     '''
     preprocess image using metadata in header
 
@@ -94,6 +207,10 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
         ndarray: use that array
         filename (str or unicode): read HDU 0 and use that
         DATE-OBS is required in header if bias, pixflat, or mask=True
+
+    Optional background subtraction with median filtering if bkgsub=True
+    
+    Optional disabling of cosmic ray rejection if nocosmic=True
 
     Returns Image object with member variables:
         image : 2D preprocessed image in units of electrons per pixel
@@ -237,11 +354,17 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False):
     var = image.clip(0) + readnoise**2
     ivar = 1.0 / var
 
+    if bkgsub :
+        bkg = _background(image,header)
+        image -= bkg
+        
+
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- update img.mask to mask cosmic rays
-    cosmics.reject_cosmic_rays(img)
-
+    if not nocosmic :
+        cosmics.reject_cosmic_rays(img)
+    
     return img
 
 #-------------------------------------------------------------------------
