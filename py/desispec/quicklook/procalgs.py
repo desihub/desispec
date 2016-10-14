@@ -623,7 +623,7 @@ class SubtractSky(pas.PipelineAlg):
     def run_pa(self,input_frame,skymodel):
         from desispec.sky import subtract_sky
         subtract_sky(input_frame,skymodel)
-        return input_frame
+        return (input_frame, skymodel)
 
 class SubtractSky_QL(pas.PipelineAlg):
     """

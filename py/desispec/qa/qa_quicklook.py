@@ -1484,20 +1484,9 @@ class Sky_Residual(MonitoringAlg):
             PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
             PER_RESID=95.,   # Percentile for residual distribution
             )
-        qadict=qa_skysub(param,frame,skymodel)
+        qadict=qa_skysub(param,frame,skymodel,quick_look=True)
 
-        #- Also need the med_resid_spec. Offline does not output this, so do again
-
-        skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
-        residuals= frame.flux[skyfibers] - skymodel.flux[skyfibers] # Residuals
-        residuals_ivar = util.combine_ivar(frame.ivar[skyfibers], skymodel.ivar[skyfibers])
-
-        #- Now get the median residual for each fiber
-        med_resid_fiber=np.median(residuals,axis=1)
-        med_resid_wave=np.median(residuals,axis=0)
-        wavelength=frame.wave
-
-        retval["VALUE"]={"MED_RESID":qadict["MED_RESID"], "NREJ": qadict["NREJ"], "NSKY_FIB": qadict["NSKY_FIB"], "RESID_PER": qadict["RESID_PER"], "NBAD_PCHI": qadict["NBAD_PCHI"], "MED_RESID_FIBER": med_resid_fiber, "MED_RESID_WAVE": med_resid_wave,"WAVELENGTH": wavelength}
+        retval["VALUE"]={"MED_RESID":qadict["MED_RESID"], "NREJ": qadict["NREJ"], "NSKY_FIB": qadict["NSKY_FIB"], "RESID_PER": qadict["RESID_PER"], "NBAD_PCHI": qadict["NBAD_PCHI"], "MED_RESID_FIBER": qadict["MED_RESID_FIBER"], "MED_RESID_WAVE": qadict["MED_RESID_WAVE"],"WAVELENGTH": qadict["WAVELENGTH"]}
 
         if url is not None:
             try: 

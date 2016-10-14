@@ -135,6 +135,23 @@ class TestIO(unittest.TestCase):
             data = fits.getdata(self.testfile, extname)
             self.assertEqual(data.dtype, np.dtype('>f4'), '{} not type >f4'.format(extname))
 
+        #- with and without units
+        frx = Frame(wave, flux, ivar, mask, R, meta=meta)
+        desispec.io.write_frame(self.testfile, frx)
+        frame = desispec.io.read_frame(self.testfile)
+        self.assertTrue('BUNIT' not in frame.meta)
+        desispec.io.write_frame(self.testfile, frx, units='photon/bin')
+        frame = desispec.io.read_frame(self.testfile)
+        self.assertEqual(frame.meta['BUNIT'], 'photon/bin')
+        frx.meta['BUNIT'] = 'blatfoo'
+        desispec.io.write_frame(self.testfile, frx)
+        frame = desispec.io.read_frame(self.testfile)
+        self.assertEqual(frame.meta['BUNIT'], 'blatfoo')
+        #- function argument trumps pre-existing BUNIT
+        desispec.io.write_frame(self.testfile, frx, units='quat')
+        frame = desispec.io.read_frame(self.testfile)
+        self.assertEqual(frame.meta['BUNIT'], 'quat')
+
         #- with and without fibermap
         self.assertEqual(frame.fibermap, None)
         fibermap = desispec.io.empty_fibermap(nspec)
