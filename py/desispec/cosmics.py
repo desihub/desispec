@@ -40,11 +40,7 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     naxis=4
 
     
-    band=None
-    if img.camera.lower().find("ccd")>=0 : # ccd naming in teststand is CCDS1B CCDS1R CCDS1Z
-        band=img.camera[-1].lower()
-    else : # ccd naming in simulations is B0 R0 Z0 ...
-        band=img.camera[0].lower()
+    band=img.camera[0].lower()
     
     if band == 'b':
         psf=np.array([0.366247,0.391422,0.172965,0.184552])
