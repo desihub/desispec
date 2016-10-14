@@ -236,7 +236,12 @@ class Get_RMS(MonitoringAlg):
 
         input_image=args[0]
         camera=kwargs["camera"]
-        expid=kwargs["expid"] 
+        if camera != input_image.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
+        expid=kwargs["expid"]
+        exp2 = "%08d"%input_image.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -255,15 +260,17 @@ class Get_RMS(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,url=url,qafig=qafig)
 
-    def run_qa(self,image,camera,expid,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,url=None,qafig=None):
         retval={}
-        retval["EXPID"]=expid
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["EXPID"] = "%08d"%image.meta["EXPID"]
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["CAMERA"] = image.meta["CAMERA"]
+        retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["NIGHT"] = image.meta["NIGHT"]
+
         rmsccd=getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
         if amps:
             rms_amps=[]
@@ -299,8 +306,7 @@ class Get_RMS(MonitoringAlg):
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_RMS
-            plot_RMS(retval,qafig)
-            
+            plot_RMS(retval,qafig)            
             log.info("Output QA fig %s"%qafig)      
 
         return retval    
@@ -322,7 +328,12 @@ class Count_Pixels(MonitoringAlg):
 
         input_image=args[0]
         camera=kwargs["camera"]
-        expid=kwargs["expid"] 
+        if camera != input_image.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
+        expid=kwargs["expid"]
+        exp2 = "%08d"%input_image.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
 
         nsigma=None
         if "nsigma" in kwargs:
@@ -349,15 +360,19 @@ class Count_Pixels(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,url=url,qafig=qafig)
 
-    def run_qa(self,image,camera,expid,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,url=None,qafig=None):
         retval={}
-        retval["EXPID"]=expid
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
+        # retval["EXPID"]=expid
+        #retval["ARM"]=camera[0]
+        #retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["EXPID"] = "%08d"%image.meta["EXPID"]
+        retval["CAMERA"] = image.meta["CAMERA"]
+        retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["NIGHT"] = image.meta["NIGHT"]
 
         #- get the counts over entire CCD
         npix3sig=countpix(image.pix,nsig=3) #- above 3 sigma
@@ -420,7 +435,12 @@ class Integrate_Spec(MonitoringAlg):
 
         input_frame=args[0]
         camera=kwargs["camera"]
-        expid=kwargs["expid"] 
+        if camera != input_frame.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
+        expid=kwargs["expid"]
+        exp2 = "%08d"%input_frame.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -442,15 +462,16 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
 
-    def run_qa(self,frame,camera,expid,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
         retval={}
-        retval["EXPID"]=expid
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- get the integrals for all fibers
         flux=frame.flux
@@ -462,6 +483,8 @@ class Integrate_Spec(MonitoringAlg):
         
         #- average integrals over star fibers
         starfibers=np.where(frame.fibermap['OBJTYPE']=='STD')
+        if len(starfibers) < 1:
+            log.info("WARNING: no STD fibers found.")
         int_stars=integrals[starfibers]
         int_average=np.mean(int_stars)
 
@@ -534,7 +557,12 @@ class Sky_Continuum(MonitoringAlg):
 
         input_frame=args[0]
         camera=kwargs["camera"]
+        if camera != input_frame.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
         expid=kwargs["expid"]
+        exp2 = "%08d"%input_frame.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
         
         wrange1=None
         wrange2=None
@@ -570,18 +598,18 @@ class Sky_Continuum(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(input_frame,camera,expid,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
 
-    def run_qa(self,frame,camera,expid,wrange1=None,wrange2=None,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,wrange1=None,wrange2=None,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
 
         #- qa dictionary 
         retval={}
-        retval["EXPID"]=expid
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
-
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- get the skyfibers first
         skyfiber=np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
@@ -671,7 +699,12 @@ class Sky_Peaks(MonitoringAlg):
 
         input_frame=args[0]
         camera=kwargs["camera"]
+        if camera != input_frame.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
         expid=kwargs["expid"]
+        exp2 = "%08d"%input_frame.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -695,15 +728,17 @@ class Sky_Peaks(MonitoringAlg):
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
 
-    def run_qa(self,frame,camera,expid,paname=None,amps=False,psf=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,amps=False,psf=None,url=None,qafig=None):
         retval={}
-        retval["EXPID"]=expid
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        camera = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         # define sky peaks and wavelength region around peak flux to be integrated
         dw=2.
@@ -837,7 +872,12 @@ class Calc_XWSigma(MonitoringAlg):
  
         input_image=args[0]
         camera=kwargs["camera"]
+        if camera != input_image.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
         expid=kwargs["expid"]
+        exp2 = "%08d"%input_image.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
  
         if "paname" not in kwargs:
             paname=None
@@ -864,18 +904,20 @@ class Calc_XWSigma(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
  
-        return self.run_qa(input_image,camera,expid,paname=paname,amps=amps,psf=psf,fibermap=fibermap,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,psf=psf,fibermap=fibermap,url=url,qafig=qafig)
  
-    def run_qa(self,image,camera,expid,paname=None,amps=False,psf=None,fibermap=None,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,psf=None,fibermap=None,url=None,qafig=None):
         from scipy.optimize import curve_fit
  
         retval={}
-        retval["EXPID"]=expid
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
- 
+        retval["QATIME"]=datetime.datetime.now().isoformat() 
+        retval["EXPID"] = "%08d"%image.meta["EXPID"]
+        camera = image.meta["CAMERA"]
+        retval["CAMERA"] = camera
+        retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["NIGHT"] = image.meta["NIGHT"]
+
         dw=2.
         b_peaks=np.array([3914.4,5199.3,5201.8])
         r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
@@ -1129,6 +1171,9 @@ class Bias_From_Overscan(MonitoringAlg):
         input_raw=args[0]
         camera=kwargs["camera"]
         expid=kwargs["expid"]
+        exp2 = "%08d"%input_raw[0].header["EXPID"]
+        if expid != exp2:
+           log.warning("Exposure ID does not match configuration!")
 
         paname=None
         if "paname" in kwargs:
@@ -1145,16 +1190,17 @@ class Bias_From_Overscan(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_raw,camera,expid,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_raw,camera,paname=paname,amps=amps,url=url,qafig=qafig)
 
-    def run_qa(self,raw,camera,expid,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,raw,camera,paname=None,amps=False,url=None,qafig=None):
 
         retval={}
-        retval["EXPID"]=expid
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
+        retval["EXPID"]= "%08d"%raw[0].header["EXPID"]
+        retval["CAMERA"]=camera
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["FLAVOR"] = raw[0].header["FLAVOR"]
+        retval["NIGHT"] = raw[0].header["NIGHT"]
         
         rawimage=raw[camera.upper()].data
         header=raw[camera.upper()].header
@@ -1224,7 +1270,12 @@ class CountSpectralBins(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
         camera=kwargs["camera"]
+        if camera != input_frame.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
         expid=kwargs["expid"]
+        exp2 = "%08d"%input_frame.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
 
         paname=None
         if "paname" in kwargs:
@@ -1247,18 +1298,19 @@ class CountSpectralBins(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
 
 
-    def run_qa(self,input_frame,camera,expid,paname=None,psf=None,amps=False,url=None,qafig=None):
+    def run_qa(self,input_frame,paname=None,psf=None,amps=False,url=None,qafig=None):
 
         #- qa dictionary 
         retval={}
-        retval["EXPID"]=expid
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["EXPID"] = "%08d"%input_frame.meta["EXPID"]
+        retval["CAMERA"] = input_frame.meta["CAMERA"]
+        retval["FLAVOR"] = input_frame.meta["FLAVOR"]
+        retval["NIGHT"] = input_frame.meta["NIGHT"]
 
         grid=np.gradient(input_frame.wave)
         if not np.all(grid[0]==grid[1:]): 
@@ -1376,7 +1428,12 @@ class Sky_Residual(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
         camera=kwargs["camera"]
+        if camera != input_frame.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
         expid=kwargs["expid"]
+        exp2 = "%08d"%input_frame.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
         
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
@@ -1405,10 +1462,10 @@ class Sky_Residual(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(input_frame,camera,expid,paname=paname,skymodel=skymodel,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
 
 
-    def run_qa(self,frame,camera,expid,paname=None,skymodel=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None,url=None,qafig=None):
         from desispec.sky import qa_skysub
         from desispec import util
 
@@ -1416,11 +1473,12 @@ class Sky_Residual(MonitoringAlg):
             raise IOError("Must have skymodel to find residual. It can't be None")
         #- return values
         retval={}
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
-        retval["EXPID"]=expid
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
         
         param = dict(
             PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
@@ -1475,7 +1533,12 @@ class Calculate_SNR(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
         camera=kwargs["camera"]
+        if camera != input_frame.meta["CAMERA"]:
+           log.info("ERROR: camera does not match configuration!")
         expid=kwargs["expid"]
+        exp2 = "%08d"%input_frame.meta["EXPID"]
+        if expid != exp2:
+           log.info("ERROR: exposure ID does not match configuration!")
 
         amps=False
         if "amps" in kwargs:
@@ -1496,18 +1559,19 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,camera,expid,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
 
 
-    def run_qa(self,input_frame,camera,expid,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,input_frame,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
 
         #- return values
         retval={}
-        retval["ARM"]=camera[0]
-        retval["SPECTROGRAPH"]=int(camera[1])
-        retval["EXPID"]=expid
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["EXPID"] = "%08d"%input_frame.meta["EXPID"]
+        retval["CAMERA"] = input_frame.meta["CAMERA"]
+        retval["FLAVOR"] = input_frame.meta["FLAVOR"]
+        retval["NIGHT"] = input_frame.meta["NIGHT"]
 
         #- select band for mag, using DECAM_R if present
 
