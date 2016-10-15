@@ -30,9 +30,7 @@ def plot_countspectralbins(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
         outfile: Name of figure.
     """
-
-    arm=qa_dict["ARM"]
-    spectrograph=qa_dict["SPECTROGRAPH"]
+    camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
     
@@ -47,7 +45,7 @@ def plot_countspectralbins(qa_dict,outfile):
     index=np.arange(bins100.shape[0])
 
     fig=plt.figure()
-    plt.suptitle("Count spectral bins after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("Count spectral bins after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
 
     gs=GridSpec(7,6)
     ax1=fig.add_subplot(gs[1:4,:2])
@@ -157,9 +155,10 @@ def plot_countpix(qa_dict,outfile):
        args: qa_dict : qa dictionary from countpix qa
              outfile : pdf file of the plot
     """
-    spectrograph=qa_dict["SPECTROGRAPH"]
+    #spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
-    arm=qa_dict["ARM"]
+    #arm=qa_dict["ARM"]
+    camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
     count3sig=qa_dict["VALUE"]["NPIX3SIG"]
     count3sig_amp=np.array(qa_dict["VALUE"]["NPIX3SIG_AMP"])
@@ -168,7 +167,7 @@ def plot_countpix(qa_dict,outfile):
     count500=qa_dict["VALUE"]["NPIX500"]
     count500_amp=np.array(qa_dict["VALUE"]["NPIX500_AMP"])
     fig=plt.figure()
-    plt.suptitle("Count pixels after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("Count pixels after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(221)
     heatmap1=ax1.pcolor(count3sig_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('Pixels above 3 sigma = %.4f' %count3sig, fontsize=10)
@@ -252,14 +251,14 @@ def plot_bias_overscan(qa_dict,outfile):
        args: qa_dict : qa dictionary from countpix qa
              outfile : pdf file of the plot
     """
-    spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
-    arm=qa_dict["ARM"]
+    camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
+
     bias=qa_dict["VALUE"]["BIAS"]
     bias_amp=qa_dict["VALUE"]["BIAS_AMP"]
     fig=plt.figure()
-    plt.suptitle("Bias from overscan region after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("Bias from overscan region after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(111)
     heatmap1=ax1.pcolor(bias_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('Bias = %.4f' %bias, fontsize=10)
@@ -403,13 +402,15 @@ def plot_RMS(qa_dict,outfile):
     rms_amp=qa_dict["VALUE"]["RMS_AMP"]
     rms_over=qa_dict["VALUE"]["RMS_OVER"]
     rms_over_amp=qa_dict["VALUE"]["RMS_OVER_AMP"]
-    arm=qa_dict["ARM"]
-    spectrograph=qa_dict["SPECTROGRAPH"]
+    # arm=qa_dict["ARM"]
+    # spectrograph=qa_dict["SPECTROGRAPH"]
+    camera = qa_dict["CAMERA"]
+
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
 
     fig=plt.figure()
-    plt.suptitle("RMS image counts per amplifier, Camera: %s%s, ExpID: %s"%(arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("RMS image counts per amplifier, Camera: %s, ExpID: %s"%(camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(211)
     heatmap1=ax1.pcolor(rms_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('RMS = %.4f' %rms, fontsize=10)
@@ -468,16 +469,15 @@ def plot_integral(qa_dict,outfile):
                    'INTEG_AVG': 3587452.1490069963,
                    'INTEG_AVG_AMP': array([ 1824671.67950129,        0.        ,  1752550.23876224,        0.        ])}}
    """
-    spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
-    arm=qa_dict["ARM"]
+    camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
     std_integral=np.array(qa_dict["VALUE"]["INTEG"])
     std_integral_avg=qa_dict["VALUE"]["INTEG_AVG"]
     std_integral_amp=np.array(qa_dict["VALUE"]["INTEG_AVG_AMP"])
 
     fig=plt.figure()
-    plt.suptitle("Total integrals of STD spectra %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("Total integrals of STD spectra %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     index=np.arange(1,len(std_integral)+1)
     ax1=fig.add_subplot(211)
     hist_med=ax1.bar(index,std_integral,color='b',align='center')
@@ -532,9 +532,8 @@ def plot_sky_continuum(qa_dict,outfile):
        args: qa_dict: dictionary from sky continuum QA
              outfile: pdf file to save the plot
     """
-    spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
-    arm=qa_dict["ARM"]
+    camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
     skycont_fiber=np.array(qa_dict["VALUE"]["SKYCONT_FIBER"])
     skycont=qa_dict["VALUE"]["SKYCONT"]
@@ -542,7 +541,7 @@ def plot_sky_continuum(qa_dict,outfile):
     index=np.arange(skycont_fiber.shape[0])
     fiberid=qa_dict["VALUE"]["SKYFIBERID"]
     fig=plt.figure()
-    plt.suptitle("Mean Sky Continuum after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("Mean Sky Continuum after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     
     ax1=fig.add_subplot(211)
     hist_med=ax1.bar(index,skycont_fiber,color='b',align='center')
@@ -595,16 +594,15 @@ def plot_sky_peaks(qa_dict,outfile):
        args: qa_dict: dictionary from sky peaks QA
              outfile: pdf file to save the plot
     """
-    spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
-    arm=qa_dict["ARM"]
+    camera=qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
     sumcount=qa_dict["VALUE"]["SUMCOUNT"]
     fiber=np.arange(sumcount.shape[0])
     skyfiber_rms=qa_dict["VALUE"]["SUMCOUNT_RMS_SKY"]
     sky_amp_rms=np.array(qa_dict["VALUE"]["SUMCOUNT_RMS_AMP"])
     fig=plt.figure()
-    plt.suptitle("Counts and Amp RMS for Sky Fibers after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("Counts and Amp RMS for Sky Fibers after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
 
     ax1=fig.add_subplot(211)
     hist_x=ax1.bar(fiber,sumcount,align='center')
@@ -658,9 +656,8 @@ def plot_residuals(qa_dict,outfile):
                    'RESID_PER': [-20.15769508014313, 23.938934018349393]}}
 
     """
-    spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
-    arm=qa_dict["ARM"]
+    camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
     med_resid_fiber=qa_dict["VALUE"]["MED_RESID_FIBER"]
     med_resid_wave=qa_dict["VALUE"]["MED_RESID_WAVE"]
@@ -669,8 +666,7 @@ def plot_residuals(qa_dict,outfile):
     fig=plt.figure()
 
     gs=GridSpec(6,4)
-    plt.suptitle("Sky Residuals after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid))
-
+    plt.suptitle("Sky Residuals after %s, Camera: %s, ExpID: %s"%(paname,camera,expid))
     
     ax0=fig.add_subplot(gs[:2,2:])
     ax0.set_axis_off()
@@ -737,8 +733,7 @@ def plot_SNR(qa_dict,outfile):
     med_amp_snr=qa_dict["VALUE"]["MEDIAN_AMP_SNR"]
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
-    arm=qa_dict["ARM"]
-    spectrograph=qa_dict["SPECTROGRAPH"]
+    camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
 
@@ -748,7 +743,7 @@ def plot_SNR(qa_dict,outfile):
     star_snr_mag=qa_dict["VALUE"]["STAR_SNR_MAG"]
 
     fig=plt.figure()
-    plt.suptitle("Signal/Noise after %s, Camera: %s%s, ExpID: %s"%(paname,arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("Signal/Noise after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
 
     gs=GridSpec(7,8)
     ax1=fig.add_subplot(gs[1:4,:4])

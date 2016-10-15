@@ -274,32 +274,14 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
-    # Mean Sky Continuum from all skyfibers
-    # need to limit in wavelength?
+    #- Add per fiber median residuals
+    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
 
+    #- Evaluate residuals in wave axis for quicklook
     if quick_look:
-        continuum=scipy.ndimage.filters.median_filter(flux,200) # taking 200 bins (somewhat arbitrarily)
-        mean_continuum=np.zeros(flux.shape[1])
-        for ii in range(flux.shape[1]):
-            mean_continuum[ii]=np.mean(continuum[:,ii])
-        qadict['MEAN_CONTIN'] = mean_continuum
-
-    # Median Signal to Noise on sky subtracted spectra
-    # first do the subtraction:
-    if quick_look:
-        fframe=frame # make a copy
-        sskymodel=skymodel # make a copy
-        subtract_sky(fframe,sskymodel)
-        medsnr=np.zeros(fframe.flux.shape[0])
-        totsnr=np.zeros(fframe.flux.shape[0])
-        for ii in range(fframe.flux.shape[0]):
-            signalmask=fframe.flux[ii,:]>0
-            # total snr considering bin by bin uncorrelated S/N
-            snr=fframe.flux[ii,signalmask]*np.sqrt(fframe.ivar[ii,signalmask])
-            medsnr[ii]=np.median(snr)
-            totsnr[ii]=np.sqrt(np.sum(snr**2))
-        qadict['MED_SNR']=medsnr  # for each fiber
-        qadict['TOT_SNR']=totsnr  # for each fiber
+        
+        qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
+        qadict["WAVELENGTH"]=frame.wave
 
     # Return
     return qadict
