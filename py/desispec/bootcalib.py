@@ -1062,7 +1062,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
         ypos = flat.shape[0]//2
 
     # Cut image
-    cutimg = flat[ypos-15:ypos+15, :]
+    cutimg = flat[ypos-50:ypos+50, :]
 
     # Smash
     cut = np.median(cutimg, axis=0)
@@ -1071,7 +1071,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     #srt = np.sort(cutimg.flatten()) # this does not work for sparse fibers
     #thresh = srt[int(cutimg.size*0.95)] / 2. # this does not work for sparse fibers
     
-    thresh = np.max(cut)/50.
+    thresh = np.max(cut)/20.
     pixels_below_threshold=np.where(cut<thresh)[0]
     if pixels_below_threshold.size>2 :
         values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,iters=200)
