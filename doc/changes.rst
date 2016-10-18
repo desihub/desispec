@@ -5,7 +5,7 @@ desispec change log
 0.11.1 (unreleased)
 -------------------
 
-* No changes yet
+* Update integration test to use stdstar_templates_v1.1.fits
 
 0.11.0 (2016-10-14)
 -------------------
