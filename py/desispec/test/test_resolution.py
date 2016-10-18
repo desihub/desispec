@@ -46,18 +46,29 @@ class TestResolution(unittest.TestCase):
             #- it correctly raised an error, so pass
             pass
 
-        #- Test creation with asymetric diagonals (should fail)
-        R1.offsets += 1
-        try:
-            R8 = Resolution(R1)
-            raise RuntimeError('Incorrectly created Resolution with non-symmetric input')
-        except ValueError:
-            #- correctly raised an error, so pass
-            pass
-            
         #- Test creation with sigmas - it should conserve flux
         R9 = Resolution(np.linspace(1.0, 2.0, n))
         self.assertTrue(np.allclose(np.sum(R9.data, axis=0), 1.0))
+
+    def test_resolution_dia(self):
+        data = np.random.uniform(size=(9,20))
+        offsets = np.arange(-4,5)
+
+        #- Original case: symetric and odd number of diagonals
+        Rdia = scipy.sparse.dia_matrix((data, offsets), shape=(20,20))
+        R = Resolution(Rdia)
+        self.assertTrue(np.all(R.diagonal() == Rdia.diagonal()))
+
+        #- Non symetric but still odd number of diagonals
+        Rdia = scipy.sparse.dia_matrix((data, offsets+1), shape=(20,20))
+        R = Resolution(Rdia)
+        self.assertTrue(np.all(R.diagonal() == Rdia.diagonal()))
+
+        #- Even number of diagonals
+        Rdia = scipy.sparse.dia_matrix((data[1:,:], offsets[1:]), shape=(20,20))
+        R = Resolution(Rdia)
+        self.assertTrue(np.all(R.diagonal() == Rdia.diagonal()))
+        
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

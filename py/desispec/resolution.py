@@ -42,29 +42,38 @@ class Resolution(scipy.sparse.dia_matrix):
     The last format is the one used to store resolution matrices in FITS files.
 
     """
-    def __init__(self,data):
+    def __init__(self, data, offsets=None):
 
         ### if scipy.sparse.isspmatrix_dia(data) and np.array_equal(np.sort(data.offsets)[::-1],self.offsets):
         if scipy.sparse.isspmatrix_dia(data):
             # Input is already in DIA format with the required diagonals.
             # We just need to put the diagonals in the correct order.
             diag_order = np.argsort(data.offsets)[::-1]
-            ndiag = len(data.offsets)
-            if ndiag%2 == 0:
-                raise ValueError("Number of diagonals ({}) should be odd".format(ndiag))
-            self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
-            if not np.array_equal(data.offsets[diag_order], self.offsets):
-                raise ValueError('Offsets of input matrix are non-contiguous or non-symmetric')
+            self.offsets = data.offsets[diag_order]
             scipy.sparse.dia_matrix.__init__(self,(data.data[diag_order],self.offsets),data.shape)
+            
+            # ndiag = len(data.offsets)
+            # if ndiag%2 == 0:
+            #     raise ValueError("Number of diagonals ({}) should be odd".format(ndiag))
+            # self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
+            # if not np.array_equal(data.offsets[diag_order], self.offsets):
+            #     raise ValueError('Offsets of input matrix are non-contiguous or non-symmetric')
+            # scipy.sparse.dia_matrix.__init__(self,(data.data[diag_order],self.offsets),data.shape)
 
         elif isinstance(data,np.ndarray) and data.ndim == 2:
             n1,n2 = data.shape
             if n2 > n1:
                 ndiag = n1  #- rename for clarity
-                if ndiag%2 == 0:
+                if offsets is not None:
+                    diag_order = np.argsort(offsets)[::-1]
+                    self.offsets = offsets[diag_order]
+                    scipy.sparse.dia_matrix.__init__(self,(data[diag_order],self.offsets),data.shape)
+                elif ndiag%2 == 0:
                     raise ValueError("Number of diagonals ({}) should be odd".format(ndiag))
-                self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
-                scipy.sparse.dia_matrix.__init__(self,(data,self.offsets),(n2,n2))
+                else:
+                    #- Auto-derive offsets
+                    self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
+                    scipy.sparse.dia_matrix.__init__(self,(data,self.offsets),(n2,n2))
             elif n1 == n2:
                 sparse_data = np.zeros((default_ndiag,n1))
                 self.offsets = np.arange(default_ndiag//2,-(default_ndiag//2)-1,-1)
