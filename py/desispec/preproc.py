@@ -266,8 +266,14 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 
     #- Output arrays
-    yy, xx = _parse_sec_keyword(header['CCDSEC4'])  #- 4 = upper right
-    image = np.zeros( (yy.stop, xx.stop) )
+    ny=0
+    nx=0
+    for amp in ['1', '2', '3', '4']:
+        yy, xx = _parse_sec_keyword(header['CCDSEC%s'%amp])
+        ny=max(ny,yy.stop)
+        nx=max(nx,xx.stop)
+    image = np.zeros( (ny,nx) )
+    
     readnoise = np.zeros_like(image)
 
     for amp in ['1', '2', '3', '4']:
