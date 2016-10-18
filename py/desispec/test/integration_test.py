@@ -38,7 +38,7 @@ def check_env():
 
     if not os.path.isdir(os.getenv('DESI_BASIS_TEMPLATES')):
         log.warning('missing $DESI_BASIS_TEMPLATES directory')
-        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v1.0')
+        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v2.2')
         missing_env = True
 
     for name in (
