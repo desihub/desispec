@@ -81,6 +81,13 @@ class Resolution(scipy.sparse.dia_matrix):
     """
     def __init__(self, data, offsets=None):
 
+        #- Sanity check on length of offsets
+        if offsets is not None:
+            if len(offsets) < 3:
+                raise ValueError("Only {} resolution matrix diagonals?  That's probably way too small".format(len(offsets)))
+            if len(offsets) > 4*default_ndiag:
+                raise ValueError("{} resolution matrix diagonals?  That's probably way too big".format(len(offsets)))
+
         if scipy.sparse.isspmatrix_dia(data):
             # Input is already in DIA format with the required diagonals.
             # We just need to put the diagonals in the correct order.
@@ -90,7 +97,7 @@ class Resolution(scipy.sparse.dia_matrix):
 
         elif isinstance(data,np.ndarray) and data.ndim == 2:
             n1,n2 = data.shape
-            if n2 > n1 or offsets is not None:
+            if n2 > n1:
                 ntotdiag = n1  #- rename for clarity
                 if offsets is not None:
                     diadata, offsets = _sort_and_symmeterize(data, offsets)
@@ -103,8 +110,12 @@ class Resolution(scipy.sparse.dia_matrix):
                     self.offsets = np.arange(ntotdiag//2,-(ntotdiag//2)-1,-1)
                     scipy.sparse.dia_matrix.__init__(self,(data,self.offsets),(n2,n2))
             elif n1 == n2:
-                sparse_data = np.zeros((default_ndiag,n1))
-                self.offsets = np.arange(default_ndiag//2,-(default_ndiag//2)-1,-1)
+                if offsets is None:
+                    self.offsets = np.arange(default_ndiag//2,-(default_ndiag//2)-1,-1)
+                else:
+                    self.offsets = np.sort(offsets)[-1::-1]  #- reverse sort
+
+                sparse_data = np.zeros((len(self.offsets),n1))
                 for index,offset in enumerate(self.offsets):
                     where =  slice(offset,None) if offset >= 0 else slice(None,offset)
                     sparse_data[index,where] = np.diag(data,offset)

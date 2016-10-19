@@ -50,7 +50,7 @@ class TestResolution(unittest.TestCase):
         R9 = Resolution(np.linspace(1.0, 2.0, n))
         self.assertTrue(np.allclose(np.sum(R9.data, axis=0), 1.0))
 
-    def test_resolution_dia(self):
+    def test_resolution_sparsedia(self):
         data = np.random.uniform(size=(5,10))
         offsets = np.arange(-2,3)
 
@@ -80,6 +80,38 @@ class TestResolution(unittest.TestCase):
         self.assertTrue(np.all(R2.diagonal() == Rdia.diagonal()))
         self.assertTrue(np.all(R1.data == R2.data))
 
+    def test_resolution_dense(self):
+        #- dense with no offsets specified
+        data = np.random.uniform(size=(10,10))
+        R = Resolution(data)
+        Rdense = R.todense()
+        self.assertTrue(np.all(Rdense == data))        
+
+        #- with offsets
+        offsets = np.arange(-2,4)
+        R = Resolution(data, offsets)
+        Rdense = R.todense()
+        for i in offsets:
+            self.assertTrue(np.all(Rdense.diagonal(i) == data.diagonal(i)), \
+                "diagonal {} doesn't match".format(i))
+
+        #- dense without offsets but larger than default_ndiag
+        ndiag = desispec.resolution.default_ndiag + 5
+        data = np.random.uniform(size=(ndiag, ndiag))
+        Rdense = Resolution(data).todense()
+
+        for i in range(ndiag):
+            if i <= desispec.resolution.default_ndiag//2:
+                self.assertTrue(np.all(Rdense.diagonal(i) == data.diagonal(i)), \
+                    "diagonal {} doesn't match".format(i))
+                self.assertTrue(np.all(Rdense.diagonal(-i) == data.diagonal(-i)), \
+                    "diagonal {} doesn't match".format(-i))
+            else:
+                self.assertTrue(np.all(Rdense.diagonal(i) == 0.0), \
+                    "diagonal {} not 0s".format(i))
+                self.assertTrue(np.all(Rdense.diagonal(-i) == 0.0), \
+                    "diagonal {} not 0s".format(-i))
+
     def test_errors(self):
         #- Bad shaped input
         data = np.random.uniform(size=(10,5))
@@ -98,6 +130,13 @@ class TestResolution(unittest.TestCase):
         with self.assertRaises(ValueError):
             desispec.resolution._sort_and_symmeterize(data, [-2,-1,0,1,3])
 
+        #- length of offsets too large or small
+        with self.assertRaises(ValueError):
+            Resolution(data, offsets=[1,2])
+
+        with self.assertRaises(ValueError):
+            Resolution(data, offsets=np.arange(10*desispec.resolution.default_ndiag))
+
     def test_sort_and_symmeterize(self):
         #- if data,offsets are already good, just return them
         data = np.random.uniform((5,10))
@@ -105,8 +144,6 @@ class TestResolution(unittest.TestCase):
         data2, offsets2 = desispec.resolution._sort_and_symmeterize(data, offsets)
         self.assertTrue(data is data2)
         self.assertTrue(offsets is offsets2)
-        
-
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
