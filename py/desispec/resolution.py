@@ -17,6 +17,39 @@ import scipy.special
 # converting from a dense matrix
 default_ndiag = 21
 
+def _sort_and_symmeterize(data, offsets):
+    '''
+    Sort data,offsets and pad to ensure equal number of upper/lower diagonals
+
+    Args:
+        data : 2D array of diagonals, following scipy.sparse.dia_matrix.data ordering
+        offsets : 1D array of offsets; must be complete from min to max but
+            doesn't have to be sorted
+
+    Returns:
+        fulldata, fulloffsets
+    '''
+    offsets = np.asarray(offsets)
+    #- Already good?
+    if np.all(np.diff(offsets) == -1) and offsets[0] == -offsets[-1]:
+        return data, offsets
+
+    #- Sort offsets and check for missing ones
+    diag_order = np.argsort(offsets)[::-1]
+    offsets = offsets[diag_order]
+    if np.any(np.diff(offsets) != -1):
+        raise ValueError('missing offsets {}'.format(offsets))
+
+    #- Pad as needed to get equal number of upper and lower diagonals
+    ndiag = np.max(np.abs(offsets))
+    fulloffsets = np.arange(ndiag, -ndiag-1, -1)
+    fulldata = np.zeros((2*ndiag+1, data.shape[1]), dtype=data.dtype)
+    i = np.where(fulloffsets == offsets[0])[0][0]
+    fulldata[i:i+len(offsets)] = data[diag_order]
+
+    return fulldata, fulloffsets
+
+
 class Resolution(scipy.sparse.dia_matrix):
     """Canonical representation of a resolution matrix.
 
@@ -26,6 +59,10 @@ class Resolution(scipy.sparse.dia_matrix):
 
     Args:
         data: Must be in one of the following formats listed below.
+
+    Options:
+        offsets: list of diagonals that the data represents.  Only used if
+            data is a 2D dense array.
 
     Raises:
         ValueError: Invalid input for initializing a sparse resolution matrix.
@@ -44,35 +81,26 @@ class Resolution(scipy.sparse.dia_matrix):
     """
     def __init__(self, data, offsets=None):
 
-        ### if scipy.sparse.isspmatrix_dia(data) and np.array_equal(np.sort(data.offsets)[::-1],self.offsets):
         if scipy.sparse.isspmatrix_dia(data):
             # Input is already in DIA format with the required diagonals.
             # We just need to put the diagonals in the correct order.
-            diag_order = np.argsort(data.offsets)[::-1]
-            self.offsets = data.offsets[diag_order]
-            scipy.sparse.dia_matrix.__init__(self,(data.data[diag_order],self.offsets),data.shape)
-            
-            # ndiag = len(data.offsets)
-            # if ndiag%2 == 0:
-            #     raise ValueError("Number of diagonals ({}) should be odd".format(ndiag))
-            # self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
-            # if not np.array_equal(data.offsets[diag_order], self.offsets):
-            #     raise ValueError('Offsets of input matrix are non-contiguous or non-symmetric')
-            # scipy.sparse.dia_matrix.__init__(self,(data.data[diag_order],self.offsets),data.shape)
+            diadata, offsets = _sort_and_symmeterize(data.data, data.offsets)
+            self.offsets = offsets
+            scipy.sparse.dia_matrix.__init__(self, (diadata,offsets), data.shape)
 
         elif isinstance(data,np.ndarray) and data.ndim == 2:
             n1,n2 = data.shape
-            if n2 > n1:
-                ndiag = n1  #- rename for clarity
+            if n2 > n1 or offsets is not None:
+                ntotdiag = n1  #- rename for clarity
                 if offsets is not None:
-                    diag_order = np.argsort(offsets)[::-1]
-                    self.offsets = offsets[diag_order]
-                    scipy.sparse.dia_matrix.__init__(self,(data[diag_order],self.offsets),data.shape)
-                elif ndiag%2 == 0:
-                    raise ValueError("Number of diagonals ({}) should be odd".format(ndiag))
+                    diadata, offsets = _sort_and_symmeterize(data, offsets)
+                    self.offsets = offsets
+                    scipy.sparse.dia_matrix.__init__(self, (diadata,offsets), (n2,n2))
+                elif ntotdiag%2 == 0:
+                    raise ValueError("Number of diagonals ({}) should be odd if offsets aren't included".format(ntotdiag))
                 else:
                     #- Auto-derive offsets
-                    self.offsets = np.arange(ndiag//2,-(ndiag//2)-1,-1)
+                    self.offsets = np.arange(ntotdiag//2,-(ntotdiag//2)-1,-1)
                     scipy.sparse.dia_matrix.__init__(self,(data,self.offsets),(n2,n2))
             elif n1 == n2:
                 sparse_data = np.zeros((default_ndiag,n1))
