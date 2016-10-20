@@ -88,7 +88,7 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f4'), header=hdr) )
     hx.append( fits.ImageHDU(fluxcalib.ivar.astype('f4'), name='IVAR') )
     hx.append( fits.CompImageHDU(fluxcalib.mask, name='MASK') )
-    hx.append( fits.ImageHDU(fluxcalib.wave, name='WAVELENGTH') )
+    hx.append( fits.ImageHDU(fluxcalib.wave.astype('f4'), name='WAVELENGTH') )
     hx[-1].header['BUNIT'] = 'Angstrom'
     
     hx.writeto(outfile+'.tmp', clobber=True, checksum=True)
