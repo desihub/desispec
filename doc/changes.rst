@@ -2,12 +2,21 @@
 desispec change log
 ===================
 
-0.10.1 (unreleased)
+0.11.1 (unreleased)
+-------------------
+
+* Update integration test to use stdstar_templates_v1.1.fits
+
+0.11.0 (2016-10-14)
 -------------------
 
 * Update template Module file to reflect DESI+Anaconda infrastructure.
 * update redmonster wrapper for reproducibility
 * Brick.get_target_ids() returns them in the order they appear in input file
+* set BUNIT header keywords (#284)
+* Improved pipeline logging robustness
+* MPI updates for robustness and non-NERSC operation
+* more py3 fixes
 
 0.10.0 (2016-09-10)
 -------------------

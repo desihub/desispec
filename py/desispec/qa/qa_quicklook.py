@@ -1486,7 +1486,9 @@ class Sky_Residual(MonitoringAlg):
             )
         qadict=qa_skysub(param,frame,skymodel,quick_look=True)
 
-        retval["VALUE"]={"MED_RESID":qadict["MED_RESID"], "NREJ": qadict["NREJ"], "NSKY_FIB": qadict["NSKY_FIB"], "RESID_PER": qadict["RESID_PER"], "NBAD_PCHI": qadict["NBAD_PCHI"], "MED_RESID_FIBER": qadict["MED_RESID_FIBER"], "MED_RESID_WAVE": qadict["MED_RESID_WAVE"],"WAVELENGTH": qadict["WAVELENGTH"]}
+        retval["VALUE"] = {}
+        for key in qadict.keys():
+            retval["VALUE"][key] = qadict[key]
 
         if url is not None:
             try: 
