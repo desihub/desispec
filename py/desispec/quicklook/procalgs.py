@@ -682,7 +682,7 @@ class SubtractSky_QL(pas.PipelineAlg):
             if outskyfile is not None:
                 from desispec.io.sky import write_sky
                 log.info("writing an output sky model file %s "%outskyfile)
-                write_sky(outputfile,skymodel,input_frame.meta)
+                write_sky(outskyfile,skymodel,input_frame.meta)
 
         #- now do the subtraction                   
         return self.run_pa(input_frame,skymodel,dump=dump,dumpfile=dumpfile)
