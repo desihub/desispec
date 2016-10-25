@@ -684,6 +684,10 @@ def stdouterr_redirected(to=os.devnull, comm=None):
         log.addHandler(ch)
 
     with os.fdopen(os.dup(fd), 'w') as old_stdout:
+        if (comm is None) or (comm.rank == 0):
+            log.debug("Begin log redirection to {} at {}".format(to, time.asctime()))
+        sys.stdout.flush()
+        sys.stderr.flush()
         pto = to
         if comm is None:
             with open(pto, 'w') as file:
@@ -693,9 +697,6 @@ def stdouterr_redirected(to=os.devnull, comm=None):
             with open(pto, 'w') as file:
                 _redirect_stdout(to=file)
         try:
-            if (comm is None) or (comm.rank == 0):
-                log.info("Begin log redirection to {} at {}".format(to, time.asctime()))
-            sys.stdout.flush()
             yield # allow code to be run with the redirected stdout
         finally:
             sys.stdout.flush()
@@ -717,8 +718,9 @@ def stdouterr_redirected(to=os.devnull, comm=None):
                 comm.barrier()
 
             if (comm is None) or (comm.rank == 0):
-                log.info("End log redirection to {} at {}".format(to, time.asctime()))
+                log.debug("End log redirection to {} at {}".format(to, time.asctime()))
             sys.stdout.flush()
+            sys.stderr.flush()
             
     return
 
@@ -874,6 +876,26 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             # slice out just the graph for this task
 
             (night, gname) = graph_name_split(tasks[t])
+
+            # check if all inputs exist
+
+            missing = 0
+            if group_rank == 0:
+                for iname in grph[tasks[t]]['in']:
+                    ind = grph[iname]
+                    fspath = graph_path(rawdir, proddir, iname, ind['type'])
+                    if not os.path.exists(fspath):
+                        missing += 1
+                        log.error("skipping step {} task {} due to missing input {}".format(step, tasks[t], fspath))
+
+            if comm_group is not None:
+                missing = comm_group.bcast(missing, root=0)
+
+            if missing > 0:
+                if group_rank == 0:
+                    group_failcount += 1
+                continue
+
             nfaildir = os.path.join(faildir, night)
             nlogdir = os.path.join(logdir, night)
 
@@ -896,65 +918,55 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                     if group_rank == 0:
                         if os.path.isfile(ffile):
                             os.remove(ffile)
-                    # if group_rank == 0:
-                    #     print("group {} runtask {}".format(group, tasks[t]))
-                    #     sys.stdout.flush()
+
                     log.debug("running step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc))
+
+                    # All processes in comm_group will either return from this or ALL will
+                    # raise an exception
                     run_task(step, rawdir, proddir, tgraph, options, comm=comm_group)
+                    
                     # mark step as done in our group's graph
-                    # if group_rank == 0:
-                    #     print("group {} start graph_mark {}".format(group, tasks[t]))
-                    #     sys.stdout.flush()
                     graph_mark(grph, tasks[t], state='done', descend=False)
-                    # if group_rank == 0:
-                    #     print("group {} end graph_mark {}".format(group, tasks[t]))
-                    #     sys.stdout.flush()
+
                 except:
                     # The task threw an exception.  We want to dump all information
                     # that will be needed to re-run the run_task() function on just
                     # this task.
-                    group_failcount += 1
-                    msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
-                    log.error(msg)
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
-                    lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-                    log.error(''.join(lines))
-                    fyml = {}
-                    fyml['step'] = step
-                    fyml['rawdir'] = rawdir
-                    fyml['proddir'] = proddir
-                    fyml['task'] = tasks[t]
-                    fyml['graph'] = tgraph
-                    fyml['opts'] = options
-                    fyml['procs'] = taskproc
-                    if not os.path.isfile(ffile):
-                        log.error('Dumping yaml graph to '+ffile)
-                        # we are the first process to hit this
-                        with open(ffile, 'w') as f:
-                            yaml.dump(fyml, f, default_flow_style=False)
+                    if group_rank == 0:
+                        group_failcount += 1
+                        msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
+                        log.error(msg)
+                        exc_type, exc_value, exc_traceback = sys.exc_info()
+                        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+                        log.error(''.join(lines))
+                        fyml = {}
+                        fyml['step'] = step
+                        fyml['rawdir'] = rawdir
+                        fyml['proddir'] = proddir
+                        fyml['task'] = tasks[t]
+                        fyml['graph'] = tgraph
+                        fyml['opts'] = options
+                        fyml['procs'] = taskproc
+                        if not os.path.isfile(ffile):
+                            log.error('Dumping yaml graph to '+ffile)
+                            # we are the first process to hit this
+                            with open(ffile, 'w') as f:
+                                yaml.dump(fyml, f, default_flow_style=False)
                     # mark the step as failed in our group's local graph
                     graph_mark(grph, tasks[t], state='fail', descend=True)
 
         if comm_group is not None:
-            comm_group.barrier()
-            group_failcount = comm_group.allreduce(group_failcount)
+            group_failcount = comm_group.bcast(group_failcount, root=0)
 
     # Now we take the graphs from all groups and merge their states
 
     failcount = group_failcount
-    #sys.stdout.flush()
+
     if comm is not None:
-        # print("proc {} hit merge barrier".format(rank))
-        # sys.stdout.flush()
-        # comm.barrier()
         if group_rank == 0:
-            # print("proc {} joining merge".format(rank))
-            # sys.stdout.flush()
             graph_merge_state(grph, comm=comm_rank)
             failcount = comm_rank.allreduce(failcount)
         if comm_group is not None:
-            # print("proc {} joining bcast".format(rank))
-            # sys.stdout.flush()
             grph = comm_group.bcast(grph, root=0)
             failcount = comm_group.bcast(failcount, root=0)
 
@@ -1007,6 +1019,7 @@ def retry_task(failpath, newopts=None):
 
     comm = None
     rank = 0
+    nworld = 1
 
     if nproc > 1:
         from mpi4py import MPI
@@ -1022,22 +1035,53 @@ def retry_task(failpath, newopts=None):
         log.warning("WARNING: overriding original options")
         opts = newopts
 
-    try:
-        run_task(step, rawdir, proddir, grph, opts, comm=comm)
-    except:
-        log.error("Retry Failed")
-        raise
-    else:
-        if rank == 0:
-            os.remove(failpath)
+    logdir = os.path.join(proddir, 'run', 'logs')
+    (night, gname) = graph_name_split(name)
+
+    nlogdir = os.path.join(logdir, night)
+            
+    # For this task, we will temporarily redirect stdout and stderr
+    # to a task-specific log file.
+
+    tasklog = os.path.join(nlogdir, "{}.log".format(gname))
+    if rank == 0:
+        if os.path.isfile(tasklog):
+            os.remove(tasklog)
+    if comm is not None:
+        comm.barrier()
+
+    failcount = 0
+
+    with stdouterr_redirected(to=tasklog, comm=comm):
+        try:
+            log.debug("re-trying step {}, task {} with {} processes".format(step, name, nworld))
+            run_task(step, rawdir, proddir, grph, opts, comm=comm)
+        except:
+            failcount += 1
+            msg = "FAILED: step {} task {} process {}".format(step, name, rank)
+            log.error(msg)
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            log.error(''.join(lines))
+            
+    if comm is not None:
+        comm.barrier()
+        failcount = comm.allreduce(failcount)
+
+    if rank == 0:
+        if failcount > 0:
+            log.error("{} of {} processes raised an exception".format(failcount, nworld))
+        else:
+            # success, clear failure file now
+            if os.path.isfile(failpath):
+                os.remove(failpath)
+
     return
 
 
 def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, comm=None):
     '''
     Run multiple sequential pipeline steps.
-
-    
 
     This function first takes the communicator and the requested processes
     per task and splits the communicator to form groups of processes of
@@ -1178,8 +1222,13 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
             taskproc = nproc
 
         grph, ntask, failtask = run_step(run_step_types[st], rawdir, proddir, grph, opts, comm=comm, taskproc=taskproc)
+        
         if rank == 0:
+            log.info("completed step {} at {}".format(run_step_types[st], time.asctime()))
             log.info("  {} total tasks, {} failures".format(ntask, failtask))
+            graph_write(statefile, grph)
+            with open(statedot, 'w') as f:
+                graph_dot(grph, f)
 
         if ntask == failtask:
             if rank == 0:
@@ -1188,13 +1237,9 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
 
         if comm is not None:
             comm.barrier()
-        if rank == 0:
-            log.info("completed step {} at {}".format(run_step_types[st], time.asctime()))
-        if rank == 0:
-            graph_write(statefile, grph)
-            with open(statedot, 'w') as f:
-                graph_dot(grph, f)
-            log.info("finished steps {} to {}".format(run_step_types[firststep], run_step_types[laststep-1]))
+
+    if rank == 0:
+        log.info("finished steps {} to {}".format(run_step_types[firststep], run_step_types[laststep-1]))
 
     return
 
