@@ -238,7 +238,6 @@ Where supported commands are:
         parser.add_argument('task', help='Task name (as displayed by the "step" command).')
         parser.add_argument('--log', required=False, default=False, action='store_true', help='Print the log and traceback, if applicable')
         parser.add_argument('--retry', required=False, default=False, action='store_true', help='Retry the specified task')
-        parser.add_argument('--opts', required=False, default=None, help='Retry using this options file')
         # now that we're inside a subcommand, ignore the first
         # TWO argvs
         args = parser.parse_args(sys.argv[2:])
@@ -277,14 +276,7 @@ Where supported commands are:
                 print("Task {} has not failed, cannot retry".format(args.task))
             else:
                 if os.path.isfile(ymlpath):
-                    newopts = None
-                    if args.opts is not None:
-                        newopts = pipe.plan.read_options(args.opts)
-                    try:
-                        pipe.retry_task(ymlpath, newopts=newopts)
-                    finally:
-                        self.grph[args.task]['state'] = 'done'
-                        pipe.graph_write(self.state_file, self.grph)
+                    pipe.retry_task(ymlpath)
                 else:
                     print("Failure yaml dump does not exist!")
         else:
