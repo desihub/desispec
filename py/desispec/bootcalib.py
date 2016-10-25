@@ -546,10 +546,10 @@ def parse_nist(ion, vacuum=True):
     # Read, while working around non-ASCII characters in NIST line lists
     nist_file = resource_filename('desispec', srch_file)
     log.info("reading NIST file {:s}".format(nist_file))
-    default_locale = locale.getlocale(locale.LC_ALL)
-    locale.setlocale(locale.LC_ALL, 'en_US.utf8')
+    default_locale = locale.getlocale(locale.LC_CTYPE)
+    locale.setlocale(locale.LC_CTYPE, 'en_US.utf8')
     nist_tbl = Table.read(nist_file, format='ascii.fixed_width')
-    locale.setlocale(locale.LC_ALL, default_locale)
+    locale.setlocale(locale.LC_CTYPE, default_locale)
     gdrow = nist_tbl['Observed'] > 0.  # Eliminate dummy lines
     nist_tbl = nist_tbl[gdrow]
     # Now unique values only (no duplicates)
