@@ -547,7 +547,7 @@ def parse_nist(ion, vacuum=True):
     nist_file = resource_filename('desispec', srch_file)
     log.info("reading NIST file {:s}".format(nist_file))
     default_locale = locale.getlocale(locale.LC_CTYPE)
-    locale.setlocale(locale.LC_CTYPE, 'en_US.utf8')
+    locale.setlocale(locale.LC_CTYPE, 'en_US.UTF-8')
     nist_tbl = Table.read(nist_file, format='ascii.fixed_width')
     locale.setlocale(locale.LC_CTYPE, default_locale)
     gdrow = nist_tbl['Observed'] > 0.  # Eliminate dummy lines
