@@ -114,7 +114,7 @@ class PSF(object):
                     wave=self.wavelength(ii)
                     fit_dictx=dufits.mk_fit_dict(self.xcoeff[ii],self.ncoeff,'legendre',self.wmin,self.wmax)
                     xfit=dufits.func_val(wave,fit_dictx)
-                    x[ii](xfit)
+                    x.append(xfit)
                 return np.array(x)
 
             if isinstance(ispec,(np.ndarray,list,tuple)):
