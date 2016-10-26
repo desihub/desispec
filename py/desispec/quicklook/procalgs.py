@@ -257,23 +257,16 @@ class BoxcarExtraction(pas.PipelineAlg):
             outfile=kwargs["Outfile"]
         else:
             outfile=None
-        maskFile=None
-        if "MaskFile" in kwargs:
-            maskFile=kwargs['MaskFile']
 
-        return self.run_pa(input_image,psf
-                           ,wave,boxwidth,nspec,
-                           fibers=fibers,fibermap=fibermap,
-                           dump=dump,dumpfile=dumpfile,maskFile=maskFile)
+        return self.run_pa(input_image,psf,wave,boxwidth,nspec,fibers=fibers,fibermap=fibermap,dump=dump,dumpfile=dumpfile)
 
 
-    def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
-               fibers=None, fibermap=None,dump=False,dumpfile=None,
-               maskFile=None):
+    def run_pa(self, input_image, psf, outwave, boxwidth, nspec,fibers=None, fibermap=None,dump=False,dumpfile=None):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
+        
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
-                                  nspec=nspec,maskFile=maskFile)
+nspec=nspec)
 
         #- write to a frame object
         
