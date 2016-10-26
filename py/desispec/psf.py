@@ -60,7 +60,12 @@ class PSF(object):
         self.wmax=wmax
         self.nspec=nspec
         self.ncoeff=ncoeff
-       
+        #invertion should be done at psf creation time and saved into file
+        c,ymin,ymax=self.invert(coeff=self.ycoeff)
+        self.icoeff=c
+        self.ymin=ymin
+        self.ymax=ymax
+
     def invert(self, domain=None, coeff=None, deg=None):
         """
         Utility to return a traceset modeling x vs. y instead of y vs. x
@@ -72,7 +77,6 @@ class PSF(object):
             coeff=self.ycoeff # doing y-wavelength map
         ytmp=list()
         for ii in ispec:
-                
             fit_dict=dufits.mk_fit_dict(coeff[ii,:],coeff.shape[1],'legendre',domain[0],domain[1])
             xtmp=np.array((domain[0],domain[1]))
             yfit = dufits.func_val(xtmp, fit_dict)
@@ -104,8 +108,8 @@ class PSF(object):
             #- ispec = None -> all the spectra
             if ispec is None:
                 ispec=np.arange(self.nspec)
-                wavelength=self.wavelength
                 x=list()
+                #x=np.array((len(ispec),len(wavelength)))
                 for ii in ispec:
                     wave=self.wavelength(ii)
                     fit_dictx=dufits.mk_fit_dict(self.xcoeff[ii],self.ncoeff,'legendre',self.wmin,self.wmax)
@@ -184,8 +188,9 @@ class PSF(object):
             y=np.arange(0,self.npix_y)
         if ispec is None:
             ispec=np.arange(self.nspec)
-        #- First get the inversion map y --> wavelength dictionary
-        c,ymin,ymax=self.invert(coeff=self.ycoeff) 
+        c=self.icoeff
+        ymin=self.ymin
+        ymax=self.ymax
 
         if isinstance(ispec, numbers.Integral):
             new_dict=dufits.mk_fit_dict(c[ispec,:],c[ispec,:].shape,'legendre',ymin,ymax)
@@ -197,6 +202,5 @@ class PSF(object):
                 new_dict=dufits.mk_fit_dict(c[ii,:],c[ii,:].shape,'legendre',ymin,ymax)
                 wfit=dufits.func_val(y,new_dict)
                 ww.append(wfit)
-            
         return np.array(ww)
 
