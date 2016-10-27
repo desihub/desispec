@@ -96,11 +96,18 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
                 pass
     else:
         mask,ranges=calcMask(psf)
+
     maskedimg=(image.pix*mask.T)
+    maskedvar=(1/image.ivar.clip(0)*mask.T)
+
     flux=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))
+    ivar=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))
+
     for r in range(flux.shape[0]):
         row=np.add.reduceat(maskedimg[r],ranges[r])[:-1]
         flux[r]=row
+        vrow=np.add.reduceat(maskedvar[r],ranges[r])[:-1]
+        ivar[r]=1/vrow
 
     from desispec.interpolation import resample_flux
 
@@ -111,21 +118,17 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
         print("Warning! Extracting only {} spectra".format(psf.nspec))
 
     fflux=np.zeros((nspec,len(wtarget)))
-    ivar=np.zeros((nspec,len(wtarget)))
+    iivar=np.zeros((nspec,len(wtarget)))
     resolution=np.zeros((nspec,21,len(wtarget))) #- placeholder for online case. Offline should be usable
     #TODO get the approximate resolution matrix for online purpose or don't need them? How to perform fiberflat, sky subtraction etc or should have different version of them for online?
 
     #- convert to per angstrom first and then resample to desired wave length grid.
 
-    readnoise=np.median(image.readnoise)
-    factor=2*boxwidth*readnoise**2
     for spec in range(nspec):
         ww=psf.wavelength(spec)
         dwave=np.gradient(ww)
         flux[:,spec]/=dwave
-        fflux[spec,:]=resample_flux(wtarget,ww,flux[:,spec])
-        #- image.readnoise is no more a scalar but a full CCD pixel size array
-        #- TODO Using median readnoise here for now. Need to propagate per-pixel readnoise from top.
-    ivar=1./(fflux.clip(0.0)+factor)#- 2*half width=boxsize
-
-    return fflux,ivar,resolution
+        ivar[:,spec]*=dwave**2
+        fflux[spec,:],iivar[spec,:]=resample_flux(wtarget,ww,flux[:,spec],ivar[:,spec])
+        
+    return fflux,iivar,resolution
