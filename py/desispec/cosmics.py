@@ -38,11 +38,15 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     # /project/projectdirs/desi/spectro/redux/alpha-3/calib2d/psf/20150107
     #
     naxis=4
-    if img.camera[0].lower() == 'b':
+
+    
+    band=img.camera[0].lower()
+    
+    if band == 'b':
         psf=np.array([0.366247,0.391422,0.172965,0.184552])
-    elif img.camera[0].lower() == 'r':
+    elif band == 'r':
         psf=np.array([0.39508155,0.2951822,0.13044542,0.14904523])
-    elif img.camera[0].lower() == 'z':
+    elif band == 'z':
         psf=np.array([0.513852,0.537679,0.297071,0.276298])
     else :
         log.error("do not have psf for camera '%s'"%img.camera)

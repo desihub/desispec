@@ -38,7 +38,11 @@ to use, but also only if a single camera is specified.
                         help = 'pixflat image calibration file')
     parser.add_argument('--mask', type = str, default = None, required=False,
                         help = 'mask image calibration file')
-
+    parser.add_argument('--bkgsub', action='store_true',
+                        help = 'do a background subtraction prior to cosmic ray rejection')
+    parser.add_argument('--nocosmic', action='store_true', 
+                        help = 'do not try and reject cosmic rays')
+    
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
     
@@ -68,7 +72,7 @@ def main(args=None):
     for camera in args.cameras:
         try:
             img = io.read_raw(args.infile, camera,
-                bias=args.bias, pixflat=args.pixflat, mask=args.mask)
+                              bias=args.bias, pixflat=args.pixflat, mask=args.mask, bkgsub=args.bkgsub, nocosmic=args.nocosmic)
         except IOError:
             log.error('Camera {} not in {}'.format(camera, args.infile))
             continue
