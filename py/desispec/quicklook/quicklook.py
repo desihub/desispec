@@ -285,6 +285,7 @@ def runpipeline(pl,convdict,conf):
             except Exception as e:
                 log.warning("Failed to run QA %s error was %s"%(qa.name,e))
         if len(qaresult):
+            #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
             yaml.dump(qaresult,open(paconf[s]["OutputFile"],"wb"))
             hb.stop("Step %s finished. Output is in %s "%(paconf[s]["StepName"],paconf[s]["OutputFile"]))
         else:
