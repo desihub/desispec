@@ -170,67 +170,67 @@ def plot_countpix(qa_dict,outfile):
     plt.suptitle("Count pixels after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(221)
     heatmap1=ax1.pcolor(count3sig_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Pixels above 3 sigma = %.4f' %count3sig, fontsize=10)
+    plt.title('Pixels above 3 sigma = %i' %count3sig, fontsize=10)
     ax1.set_xlabel("# of pixels with counts above 3sig. (per Amp)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax1.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax1.annotate("Amp 1\n%.1f"%count3sig_amp[0],
+    ax1.annotate("Amp 1\n%i"%count3sig_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 2\n%.1f"%count3sig_amp[1],
+    ax1.annotate("Amp 2\n%i"%count3sig_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 3\n%.1f"%count3sig_amp[2],
+    ax1.annotate("Amp 3\n%i"%count3sig_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 4\n%.1f"%count3sig_amp[3],
+    ax1.annotate("Amp 4\n%i"%count3sig_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
     ax2=fig.add_subplot(222)
     heatmap2=ax2.pcolor(count100_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Pixels above 100 counts = %.4f' %count100, fontsize=10)
+    plt.title('Pixels above 100 counts = %i' %count100, fontsize=10)
     ax2.set_xlabel("# of pixels with counts above 100 (per Amp)",fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n%.1f"%count100_amp[0],
+    ax2.annotate("Amp 1\n%i"%count100_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n%.1f"%count100_amp[1],
+    ax2.annotate("Amp 2\n%i"%count100_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n%.1f"%count100_amp[2],
+    ax2.annotate("Amp 3\n%i"%count100_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n%.1f"%count100_amp[3],
+    ax2.annotate("Amp 4\n%i"%count100_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
     ax3=fig.add_subplot(223)
     heatmap3=ax3.pcolor(count500_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Pixels above 500 counts = %.4f' %count500, fontsize=10)
+    plt.title('Pixels above 500 counts = %i' %count500, fontsize=10)
     ax3.set_xlabel("# of pixels with counts above 500 (per Amp)",fontsize=10)
     ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax3.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax3.annotate("Amp 1\n%.1f"%count500_amp[0],
+    ax3.annotate("Amp 1\n%i"%count500_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 2\n%.1f"%count500_amp[1],
+    ax3.annotate("Amp 2\n%i"%count500_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 3\n%.1f"%count500_amp[2],
+    ax3.annotate("Amp 3\n%i"%count500_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 4\n%.1f"%count500_amp[3],
+    ax3.annotate("Amp 4\n%i"%count500_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
@@ -300,8 +300,7 @@ def plot_XWSigma(qa_dict,outfile):
                    'WSIGMA_MED_SKY': 1.72,
                    'WSIGMA_AMP': array([ 1.9, 1.8, 1.7, 1.84])}}
     """
-    arm=qa_dict["ARM"]
-    spectrograph=qa_dict["SPECTROGRAPH"]
+    camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
     xsigma=qa_dict["VALUE"]["XSIGMA"]
@@ -314,7 +313,7 @@ def plot_XWSigma(qa_dict,outfile):
     wfiber=np.arange(wsigma.shape[0])
 
     fig=plt.figure()
-    plt.suptitle("X & W Sigma over sky peaks, Camera: %s%s, ExpID: %s"%(arm,spectrograph,expid),fontsize=10,y=0.99)
+    plt.suptitle("X & W Sigma over sky peaks, Camera: %s, ExpID: %s"%(camera,expid),fontsize=10,y=0.99)
 
     ax1=fig.add_subplot(221)
     hist_x=ax1.bar(xfiber,xsigma,align='center')
