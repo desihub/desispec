@@ -218,11 +218,13 @@ def mapkeywords(kw,kwmap):
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
     for k,v in kw.items():
-        if isinstance(v,str) and len(v)>=3 and  v[0:2]=="%%":
+        if isinstance(v,str) and len(v)>=3 and  v[0:2]=="%%": #- For direct configuration
             if v[2:] in kwmap:
                 newmap[k]=kwmap[v[2:]]
             else:
                 log.warning("Can't find key %s in conversion map. Skipping"%(v[2:]))
+        if k in kwmap: #- for configs generated via desispec.quicklook.qlconfig
+            newmap[k]=kwmap[k]          
         else:
             newmap[k]=v
     return newmap
@@ -277,7 +279,7 @@ def runpipeline(pl,convdict,conf):
                     else:
                         res=qa(inp,**qargs)
 
-                if qa.name=="COUNTBINS":         #TODO -must run this QA for now. change this later.
+                if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         #TODO -must run this QA for now. change this later.
                     passqadict=res
                 log.debug("%s %s"%(qa.name,inp))
                 qaresult[qa.name]=res

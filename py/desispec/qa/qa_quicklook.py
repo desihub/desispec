@@ -1496,7 +1496,7 @@ class Sky_Residual(MonitoringAlg):
         exp2 = "%08d"%input_frame.meta["EXPID"]
         if expid != exp2:
            log.info("ERROR: exposure ID does not match configuration!")
-        
+        log.info(args)
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky

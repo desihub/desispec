@@ -13,11 +13,12 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. build_config will call this object to generate a configuration needed by quicklook
     """
 
-    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=False,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,url=None,timeout=120.):
+    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,url=None,timeout=120.,fiberflat=None):
         """
         psfboot- does not seem to have a desispec.io.findfile entry, so passing this in argument. 
                  May be this will be useful even so.
         palist: Palist object. See class Palist below
+        Note: fiberflat will have a different expid. Passing the file directly in the path
         """  
   
         self.night=night
@@ -25,6 +26,7 @@ class Config(object):
         self.flavor=flavor
         self.camera=camera
         self.psfboot=psfboot
+        self.fiberflat=fiberflat
         self.wavelength=wavelength
         self.debuglevel=debuglevel
         self.period=period
@@ -50,8 +52,6 @@ class Config(object):
         self.rawfile=findfile("raw",night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-
-        self.fiberflat=findfile("fiberflat",night=self.night, expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir, specprod_dir=self.specprod_dir)
 
 
     @property
@@ -122,7 +122,7 @@ class Config(object):
         if filetype in ["fframe","sframe"]: #- fiberflat fielded or sky subtracted intermediate files       
             pafile=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"%s-%s-%08d.fits"%(filetype,self.camera,self.expid))
         else:
-            pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, specprod_dir=self.specprod_dir,outdir=self.outdir)
+            pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
             
         return pafile
 
@@ -143,11 +143,17 @@ class Config(object):
             #- pa level outputs
             qa_pa_outfile[PA]=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"ql-%s-%s-%08d.yaml"%(PA.lower(),self.camera,self.expid))
             qa_pa_outfig[PA]=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"ql-%s-%s-%08d.png"%(PA.lower(),self.camera,self.expid))
+
             #- qa_level output
             for QA in self.qalist[PA]:
                 qa_outfile[QA]=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"qa","ql-%s-%s-%08d.yaml"%(QA.lower(),self.camera,self.expid))
                 qa_outfig[QA]=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"qa","ql-%s-%s-%08d.png"%(QA.lower(),self.camera,self.expid))
-            
+                
+                #- make path if needed
+                path = os.path.normpath(os.path.dirname(qa_outfile[QA]))
+                if not os.path.exists(path):
+                    os.makedirs(path)
+
         return ((qa_outfile,qa_outfig),(qa_pa_outfile,qa_pa_outfig))
 
     @property
@@ -225,13 +231,14 @@ def build_config(config):
     outconfig['Camera'] = config.camera
     #DataType=config.datatype
     outconfig['DumpIntermediates'] = config.dumpintermediates
+    outconfig['FiberMap']=config.fibermap
     outconfig['FiberFlatFile'] = config.fiberflat
     outconfig['PSFFile'] = config.psfboot
     outconfig['Period'] = config.period
 
     pipeline = []
     for ii,PA in enumerate(config.palist):
-        pipe={'OutputFile': config.dump_qa()[0][PA]}
+        pipe={'OutputFile': config.dump_qa()[1][0][PA]}
         pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'Name': PA, 'kwargs': config.paargs[PA]}
         pipe['QAs']=[]
         for jj, QA in enumerate(config.qalist[PA]):
