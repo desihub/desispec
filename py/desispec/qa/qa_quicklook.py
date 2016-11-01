@@ -374,29 +374,35 @@ class Count_Pixels(MonitoringAlg):
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
+        param = dict(
+            CUTLO = 100,   # low threshold for number of counts
+            CUTHI = 500
+            )
+        retval["PARAMS"] = param
+
         #- get the counts over entire CCD
         npix3sig=countpix(image.pix,nsig=3) #- above 3 sigma
-        npix100=countpix(image.pix,ncounts=100) #- above 100 pixel count
-        npix500=countpix(image.pix,ncounts=500) #- above 500 pixel count
+        npixlo=countpix(image.pix,ncounts=param['CUTLO']) #- above 100 pixel count
+        npixhi=countpix(image.pix,ncounts=param['CUTHI']) #- above 500 pixel count
         #- get the counts for each amp
         if amps:
             npix3sig_amps=[]
-            npix100_amps=[]
-            npix500_amps=[]
+            npixlo_amps=[]
+            npixhi_amps=[]
             #- get amp boundary in pixels
             from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 npix3sig=countpix(image.pix[ampboundary],nsig=3)
                 npix3sig_amps.append(npix3sig)
-                npix100=countpix(image.pix[ampboundary],ncounts=100)
-                npix100_amps.append(npix100)
-                npix500=countpix(image.pix[ampboundary],ncounts=500)
-                npix500_amps.append(npix500)
+                npixlo=countpix(image.pix[ampboundary],ncounts=param['CUTLO'])
+                npixlo_amps.append(npixlo)
+                npixhi=countpix(image.pix[ampboundary],ncounts=param['CUTHI'])
+                npixhi_amps.append(npixhi)
 
-            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX100":npix100,"NPIX500":npix500, "NPIX3SIG_AMP": npix3sig_amps, "NPIX100_AMP": npix100_amps,"NPIX500_AMP": npix500_amps}
+            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi, "NPIX3SIG_AMP": npix3sig_amps, "NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps}
         else:
-            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX100":npix100,"NPIX500":npix500}     
+            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi}     
 
         if url is not None:
             try: 

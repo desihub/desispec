@@ -141,31 +141,29 @@ def plot_countpix(qa_dict,outfile):
     """
        plot pixel counts above some threshold
        qa_dict example:
-           {'ARM': 'r',
+           {'CAMERA': 'r0',
             'EXPID': '00000006',
             'QATIME': '2016-08-02T14:39:59.157986',
             'PANAME': 'PREPROC',
-            'SPECTROGRAPH': 0,
-            'METRICS': {'NPIX100': 0,
-                      'NPIX100_AMP': [254549, 0, 242623, 0],
+            'PARAMS': {'CUTLO': 100, 'CUTHI': 500},
+            'METRICS': {'NPIX_LOW': 0,
+                      'NPIX_LOW_AMP': [254549, 0, 242623, 0],
                       'NPIX3SIG': 3713,
                       'NPIX3SIG_AMP': [128158, 2949, 132594, 3713],
-                      'NPIX500': 0,
-                      'NPIX500_AMP': [1566, 0, 1017, 0]}}}
+                      'NPIX_HIGH': 0,
+                      'NPIX_HIGH_AMP': [1566, 0, 1017, 0]}}}
        args: qa_dict : qa dictionary from countpix qa
              outfile : pdf file of the plot
     """
-    #spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
-    #arm=qa_dict["ARM"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
     count3sig=qa_dict["METRICS"]["NPIX3SIG"]
     count3sig_amp=np.array(qa_dict["METRICS"]["NPIX3SIG_AMP"])
-    count100=qa_dict["METRICS"]["NPIX100"]
-    count100_amp=np.array(qa_dict["METRICS"]["NPIX100_AMP"])
-    count500=qa_dict["METRICS"]["NPIX500"]
-    count500_amp=np.array(qa_dict["METRICS"]["NPIX500_AMP"])
+    countlo=qa_dict["METRICS"]["NPIX_LOW"]
+    countlo_amp=np.array(qa_dict["METRICS"]["NPIX_LOW_AMP"])
+    counthi=qa_dict["METRICS"]["NPIX_HIGH"]
+    counthi_amp=np.array(qa_dict["METRICS"]["NPIX_HIGH_AMP"])
     fig=plt.figure()
     plt.suptitle("Count pixels after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(221)
@@ -191,46 +189,46 @@ def plot_countpix(qa_dict,outfile):
                  fontsize=10
                  )
     ax2=fig.add_subplot(222)
-    heatmap2=ax2.pcolor(count100_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Pixels above 100 counts = %.4f' %count100, fontsize=10)
-    ax2.set_xlabel("# of pixels with counts above 100 (per Amp)",fontsize=10)
+    heatmap2=ax2.pcolor(countlo_amp.reshape(2,2),cmap=plt.cm.OrRd)
+    plt.title('Pixels above LOW counts = %.4f' %countlo, fontsize=10)
+    ax2.set_xlabel("# of pixels with counts above LOW (per Amp)",fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n%.1f"%count100_amp[0],
+    ax2.annotate("Amp 1\n%.1f"%countlo_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n%.1f"%count100_amp[1],
+    ax2.annotate("Amp 2\n%.1f"%countlo_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n%.1f"%count100_amp[2],
+    ax2.annotate("Amp 3\n%.1f"%countlo_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n%.1f"%count100_amp[3],
+    ax2.annotate("Amp 4\n%.1f"%countlo_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
     ax3=fig.add_subplot(223)
-    heatmap3=ax3.pcolor(count500_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Pixels above 500 counts = %.4f' %count500, fontsize=10)
-    ax3.set_xlabel("# of pixels with counts above 500 (per Amp)",fontsize=10)
+    heatmap3=ax3.pcolor(counthi_amp.reshape(2,2),cmap=plt.cm.OrRd)
+    plt.title('Pixels above HIGH counts = %.4f' %counthi, fontsize=10)
+    ax3.set_xlabel("# of pixels with counts above HIGH (per Amp)",fontsize=10)
     ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax3.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax3.annotate("Amp 1\n%.1f"%count500_amp[0],
+    ax3.annotate("Amp 1\n%.1f"%counthi_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 2\n%.1f"%count500_amp[1],
+    ax3.annotate("Amp 2\n%.1f"%counthi_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 3\n%.1f"%count500_amp[2],
+    ax3.annotate("Amp 3\n%.1f"%counthi_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 4\n%.1f"%count500_amp[3],
+    ax3.annotate("Amp 4\n%.1f"%counthi_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
