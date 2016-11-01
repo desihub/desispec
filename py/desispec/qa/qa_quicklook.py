@@ -288,9 +288,9 @@ class Get_RMS(MonitoringAlg):
                 rmsover_amps.append(rmsoveramp)
                 overscanregion.append(overscan)
             rmsover=np.std(overscanregion)
-            retval["VALUE"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rmsover_amps)}
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rmsover_amps)}
         else:
-            retval["VALUE"]={"RMS":rmsccd}     
+            retval["METRICS"]={"RMS":rmsccd}     
 
         if url is not None:
             try: 
@@ -394,9 +394,9 @@ class Count_Pixels(MonitoringAlg):
                 npix500=countpix(image.pix[ampboundary],ncounts=500)
                 npix500_amps.append(npix500)
 
-            retval["VALUE"]={"NPIX3SIG":npix3sig,"NPIX100":npix100,"NPIX500":npix500, "NPIX3SIG_AMP": npix3sig_amps, "NPIX100_AMP": npix100_amps,"NPIX500_AMP": npix500_amps}
+            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX100":npix100,"NPIX500":npix500, "NPIX3SIG_AMP": npix3sig_amps, "NPIX100_AMP": npix100_amps,"NPIX500_AMP": npix500_amps}
         else:
-            retval["VALUE"]={"NPIX3SIG":npix3sig,"NPIX100":npix100,"NPIX500":npix500}     
+            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX100":npix100,"NPIX500":npix500}     
 
         if url is not None:
             try: 
@@ -515,9 +515,9 @@ class Integrate_Spec(MonitoringAlg):
                         integ[ii]=integrate_spec(wave,stdflux[ii])
                     int_avg_amps[amp]=np.mean(integ)
 
-            retval["VALUE"]={"INTEG":int_stars,"INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps}
+            retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps}
         else:
-            retval["VALUE"]={"INTEG":int_stars,"INTEG_AVG":int_average}     
+            retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average}     
 
         if url is not None:
             try: 
@@ -656,10 +656,10 @@ class Sky_Continuum(MonitoringAlg):
 
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
-            retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps}
+            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps}
 
         else: 
-            retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
+            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
 
         if url is not None:
             try: 
@@ -842,9 +842,9 @@ class Sky_Peaks(MonitoringAlg):
             amp4_rms=getrms(amp4)
             rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
 
-            retval["VALUE"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp}
+            retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp}
         else:
-            retval["VALUE"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec}
+            retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec}
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_peaks
@@ -1139,9 +1139,9 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
 
         if amps:
-            retval["VALUE"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp}
+            retval["METRICS"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp}
         else:
-            retval["VALUE"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky}
+            retval["METRICS"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky}
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_XWSigma
@@ -1228,9 +1228,9 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if amps:
             bias_amps=np.array(bias_overscan)
-            retval["VALUE"]={'BIAS':bias,'BIAS_AMP':bias_amps}
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps}
         else:
-            retval["VALUE"]={'BIAS':bias}
+            retval["METRICS"]={'BIAS':bias}
 
         #- http post if needed
         if url is not None:
@@ -1289,7 +1289,6 @@ class CountSpectralBins(MonitoringAlg):
         if "PSFFile" in kwargs: 
             psf=kwargs["PSFFile"]
 
-
         if "url" in kwargs:
             url=kwargs["url"]
         else:
@@ -1316,11 +1315,18 @@ class CountSpectralBins(MonitoringAlg):
         if not np.all(grid[0]==grid[1:]): 
             log.info("grid_size is NOT UNIFORM")
 
-        counts100=countbins(input_frame.flux,threshold=100)
-        counts250=countbins(input_frame.flux,threshold=250)
-        counts500=countbins(input_frame.flux,threshold=500)
+        param = dict(
+            CUTLO = 100,   # low threshold for number of counts
+            CUTMED = 250,
+            CUTHI = 500
+            )
+        retval["PARAMS"] = param
+        
+        countslo=countbins(input_frame.flux,threshold=param['CUTLO'])
+        countsmed=countbins(input_frame.flux,threshold=param['CUTMED'])
+        countshi=countbins(input_frame.flux,threshold=param['CUTHI'])
 
-        goodfibers=np.where(counts500>0)[0] #- fibers with at least one bin higher than 500 counts
+        goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than 500 counts
         ngoodfibers=goodfibers.shape[0]
 
         leftmax=None
@@ -1333,57 +1339,56 @@ class CountSpectralBins(MonitoringAlg):
 
             leftmax,rightmin,bottommax,topmin = fiducialregion(input_frame,psf)  
             fidboundary=slice_fidboundary(input_frame,leftmax,rightmin,bottommax,topmin)          
+            countslo_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=param['CUTLO'])
+            averagelo_amp1=np.mean(countslo_amp1)
+            countsmed_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=param['CUTMED'])
+            averagemed_amp1=np.mean(countsmed_amp1)
+            countshi_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=param['CUTHI'])
+            averagehi_amp1=np.mean(countshi_amp1)
 
-            counts100_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=100)
-            average100_amp1=np.mean(counts100_amp1)
-            counts250_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=250)
-            average250_amp1=np.mean(counts250_amp1)
-            counts500_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=500)
-            average500_amp1=np.mean(counts500_amp1)
-
-            counts100_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=100)
-            average100_amp3=np.mean(counts100_amp3)
-            counts250_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=250)
-            average250_amp3=np.mean(counts250_amp3)
-            counts500_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=500)
-            average500_amp3=np.mean(counts500_amp3)
+            countslo_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=param['CUTLO'])
+            averagelo_amp3=np.mean(countslo_amp3)
+            countsmed_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=param['CUTMED'])
+            averagemed_amp3=np.mean(countsmed_amp3)
+            countshi_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=param['CUTHI'])
+            averagehi_amp3=np.mean(countshi_amp3)
 
 
             if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
 
-                counts100_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=100)
-                average100_amp2=np.mean(counts100_amp2)
-                counts250_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=250)
-                average250_amp2=np.mean(counts250_amp2)
-                counts500_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=500)
-                average500_amp2=np.mean(counts500_amp2)
+                countslo_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=param['CUTLO'])
+                averagelo_amp2=np.mean(countslo_amp2)
+                countsmed_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=param['CUTMED'])
+                averagemed_amp2=np.mean(countsmed_amp2)
+                countshi_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=param['CUTHI'])
+                averagehi_amp2=np.mean(countshi_amp2)
 
             else:
-                average100_amp2=0.
-                average250_amp2=0.
-                average500_amp2=0.
+                averagelo_amp2=0.
+                averagemed_amp2=0.
+                averagehi_amp2=0.
 
             if fidboundary[3][0].start is not None: #- to the right top of the CCD
 
-                counts100_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=100)
-                average100_amp4=np.mean(counts100_amp4)
-                counts250_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=250)
-                average250_amp4=np.mean(counts250_amp4)
-                counts500_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=500)
-                average500_amp4=np.mean(counts500_amp4)
+                countslo_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=param['CUTLO'])
+                averagelo_amp4=np.mean(countslo_amp4)
+                countsmed_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=param['CUTMED'])
+                averagemed_amp4=np.mean(countsmed_amp4)
+                countshi_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=param['CUTHI'])
+                averagehi_amp4=np.mean(countshi_amp4)
 
             else:
-                average100_amp4=0.
-                average250_amp4=0.
-                average500_amp4=0.
+                averagelo_amp4=0.
+                averagemed_amp4=0.
+                averagehi_amp4=0.
 
-            average100_amps=np.array([average100_amp1,average100_amp2,average100_amp3,average100_amp4])
-            average250_amps=np.array([average250_amp1,average250_amp2,average250_amp3,average250_amp4])
-            average500_amps=np.array([average500_amp1,average500_amp2,average500_amp3,average500_amp4])
+            averagelo_amps=np.array([averagelo_amp1,averagelo_amp2,averagelo_amp3,averagelo_amp4])
+            averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
+            averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
 
-            retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500, "NBINS100_AMP":average100_amps,"NBINS250_AMP":average250_amps,"NBINS500_AMP":average500_amps, "NGOODFIBERS": ngoodfibers}
+            retval["METRICS"]={"NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIBERS": ngoodfibers}
         else:
-            retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500,"NGOODFIBERS": ngoodfibers}
+            retval["METRICS"]={"NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIBERS": ngoodfibers}
 
         retval["LEFT_MAX_FIBER"]=int(leftmax)
         retval["RIGHT_MIN_FIBER"]=int(rightmin)
@@ -1484,11 +1489,12 @@ class Sky_Residual(MonitoringAlg):
             PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
             PER_RESID=95.,   # Percentile for residual distribution
             )
+        retval["PARAMS"] = param
         qadict=qa_skysub(param,frame,skymodel,quick_look=True)
 
-        retval["VALUE"] = {}
+        retval["METRICS"] = {}
         for key in qadict.keys():
-            retval["VALUE"][key] = qadict[key]
+            retval["METRICS"][key] = qadict[key]
 
         if url is not None:
             try: 
@@ -1582,7 +1588,6 @@ class Calculate_SNR(MonitoringAlg):
 
         elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
       
-        
         lrgfibers=np.where(input_frame.fibermap['OBJTYPE']=='LRG')[0]
         lrg_medsnr=medsnr[lrgfibers]
         lrg_mag=np.zeros(len(lrgfibers))
@@ -1636,9 +1641,9 @@ class Calculate_SNR(MonitoringAlg):
 
             average_amp=np.array([average1,average2,average3,average4])
 
-            retval["VALUE"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
+            retval["METRICS"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
 
-        else: retval["VALUE"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers, "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers, "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers, "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers, "STAR_SNR_MAG":std_snr_mag}
+        else: retval["METRICS"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers, "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers, "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers, "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers, "STAR_SNR_MAG":std_snr_mag}
         
         #- http post if valid
         if url is not None:
@@ -1648,7 +1653,7 @@ class Calculate_SNR(MonitoringAlg):
                 #- Check if the api has json
                 api=response.json()
                 #- proceed with post
-                #job={"name":"QL","status":0,"measurements":[{"metric":"SNR","value":retval["VALUE"]["MED_AMP_SNR"][0]}]}
+                #job={"name":"QL","status":0,"measurements":[{"metric":"SNR","value":retval["METRICS"]["MED_AMP_SNR"][0]}]}
                 #response=requests.post(api['job'],json=job, auth=("nobody","nobody")) #- username and password here is temporary for testing. can come from configuration rather than hardcode.
 
                 job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary

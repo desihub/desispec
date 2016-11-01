@@ -13,17 +13,17 @@ def plot_countspectralbins(qa_dict,outfile):
 
     `qa_dict` example::
 
-        {'ARM': 'r',
+        {'CAMERA': 'r0',
          'EXPID': '00000006',
          'QATIME': '2016-08-02T14:40:03.269684',
          'PANAME': 'BOXCAR',
-         'SPECTROGRAPH': 0,
-         'VALUE': {'NBINS100': array([ 2575.,  2611.,  2451.,  2495.,  2357.,  2452.,  2528.,  2501.,  2548.,  2461.]),
-                   'NBINS100_AMP': array([ 1249.74,     0.  ,  1198.01,     0.  ]),
-                   'NBINS250': array([ 2503.,  2539.,  2161.,  2259.,  2077.,  2163.,  2284.,  2268.,  2387.,  2210.]),
-                   'NBINS250_AMP': array([ 1149.55,     0.  ,  1095.02,     0.  ]),
-                   'NBINS500': array([ 2307.,  2448.,   229.,  1910.,    94.,   306.,  2056.,  1941.,  2164.,   785.]),
-                   'NBINS500_AMP': array([ 688.85,    0.  ,  648.75,    0.  ])
+         'PARAMS': {'CUTLO', 100, 'CUTMED', 250, 'CUTHI', 500},
+         'METRICS': {'NBINSLOW': array([ 2575.,  2611.,  2451.,  2495.,  2357.,  2452.,  2528.,  2501.,  2548.,  2461.]),
+                   'NBINSLOW_AMP': array([ 1249.74,     0.  ,  1198.01,     0.  ]),
+                   'NBINSMED': array([ 2503.,  2539.,  2161.,  2259.,  2077.,  2163.,  2284.,  2268.,  2387.,  2210.]),
+                   'NBINSMED_AMP': array([ 1149.55,     0.  ,  1095.02,     0.  ]),
+                   'NBINSHIGH': array([ 2307.,  2448.,   229.,  1910.,    94.,   306.,  2056.,  1941.,  2164.,   785.]),
+                   'NBINSHIGH_AMP': array([ 688.85,    0.  ,  648.75,    0.  ])
                    'NGOODFIBERS: 10}}}
 
     Args:
@@ -34,15 +34,15 @@ def plot_countspectralbins(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
     
-    bins100=qa_dict["VALUE"]["NBINS100"]
-    bins250=qa_dict["VALUE"]["NBINS250"]
-    bins500=qa_dict["VALUE"]["NBINS500"]
+    binslo=qa_dict["METRICS"]["NBINSLOW"]
+    binsmed=qa_dict["METRICS"]["NBINSMED"]
+    binshi=qa_dict["METRICS"]["NBINSHIGH"]
 
-    bins100_amp=qa_dict["VALUE"]["NBINS100_AMP"]
-    bins250_amp=qa_dict["VALUE"]["NBINS250_AMP"]
-    bins500_amp=qa_dict["VALUE"]["NBINS500_AMP"]
+    binslo_amp=qa_dict["METRICS"]["NBINSLOW_AMP"]
+    binsmed_amp=qa_dict["METRICS"]["NBINSMED_AMP"]
+    binshi_amp=qa_dict["METRICS"]["NBINSHIGH_AMP"]
 
-    index=np.arange(bins100.shape[0])
+    index=np.arange(binslo.shape[0])
 
     fig=plt.figure()
     plt.suptitle("Count spectral bins after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
@@ -55,82 +55,82 @@ def plot_countspectralbins(qa_dict,outfile):
     ax5=fig.add_subplot(gs[4:,2:4])
     ax6=fig.add_subplot(gs[4:,4:])
 
-    hist_med=ax1.bar(index,bins100,color='b',align='center')
+    hist_med=ax1.bar(index,binslo,color='b',align='center')
     ax1.set_xlabel('Fiber #',fontsize=10)
-    ax1.set_ylabel('Photon Counts > 100',fontsize=10)
+    ax1.set_ylabel('Photon Counts > low',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
 
-    hist_med=ax2.bar(index,bins250,color='r',align='center')
+    hist_med=ax2.bar(index,binsmed,color='r',align='center')
     ax2.set_xlabel('Fiber #',fontsize=10)
-    ax2.set_ylabel('Photon Counts > 250',fontsize=10)
+    ax2.set_ylabel('Photon Counts > med',fontsize=10)
     ax2.tick_params(axis='x',labelsize=10)
     ax2.tick_params(axis='y',labelsize=10)
 
-    hist_med=ax3.bar(index,bins500,color='g',align='center')
+    hist_med=ax3.bar(index,binshi,color='g',align='center')
     ax3.set_xlabel('Fiber #',fontsize=10)
-    ax3.set_ylabel('Photon Counts > 500',fontsize=10)
+    ax3.set_ylabel('Photon Counts > high',fontsize=10)
     ax3.tick_params(axis='x',labelsize=10)
     ax3.tick_params(axis='y',labelsize=10)
 
-    heatmap1=ax4.pcolor(bins100_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax4.set_xlabel("Bins > 100 photon counts (per Amp)",fontsize=8)
+    heatmap1=ax4.pcolor(binslo_amp.reshape(2,2),cmap=plt.cm.OrRd)
+    ax4.set_xlabel("Bins > low photon counts (per Amp)",fontsize=8)
     ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax4.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax4.annotate("Amp 1\n%.1f"%bins100_amp[0],
+    ax4.annotate("Amp 1\n%.1f"%binslo_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 2\n%.1f"%bins100_amp[1],
+    ax4.annotate("Amp 2\n%.1f"%binslo_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 3\n%.1f"%bins100_amp[2],
+    ax4.annotate("Amp 3\n%.1f"%binslo_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 4\n%.1f"%bins100_amp[3],
+    ax4.annotate("Amp 4\n%.1f"%binslo_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
-    heatmap2=ax5.pcolor(bins250_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax5.set_xlabel("Bins > 250 photon counts (per Amp)",fontsize=8)
+    heatmap2=ax5.pcolor(binsmed_amp.reshape(2,2),cmap=plt.cm.OrRd)
+    ax5.set_xlabel("Bins > med photon counts (per Amp)",fontsize=8)
     ax5.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax5.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax5.annotate("Amp 1\n%.1f"%bins250_amp[0],
+    ax5.annotate("Amp 1\n%.1f"%binsmed_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax5.annotate("Amp 2\n%.1f"%bins250_amp[1],
+    ax5.annotate("Amp 2\n%.1f"%binsmed_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax5.annotate("Amp 3\n%.1f"%bins250_amp[2],
+    ax5.annotate("Amp 3\n%.1f"%binsmed_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax5.annotate("Amp 4\n%.1f"%bins250_amp[3],
+    ax5.annotate("Amp 4\n%.1f"%binsmed_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
 
-    heatmap3=ax6.pcolor(bins500_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax6.set_xlabel("Bins > 500 photon counts (per Amp)",fontsize=8)
+    heatmap3=ax6.pcolor(binshi_amp.reshape(2,2),cmap=plt.cm.OrRd)
+    ax6.set_xlabel("Bins > high photon counts (per Amp)",fontsize=8)
     ax6.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax6.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax6.annotate("Amp 1\n%.1f"%bins500_amp[0],
+    ax6.annotate("Amp 1\n%.1f"%binshi_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax6.annotate("Amp 2\n%.1f"%bins500_amp[1],
+    ax6.annotate("Amp 2\n%.1f"%binshi_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax6.annotate("Amp 3\n%.1f"%bins500_amp[2],
+    ax6.annotate("Amp 3\n%.1f"%binshi_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax6.annotate("Amp 4\n%.1f"%bins500_amp[3],
+    ax6.annotate("Amp 4\n%.1f"%binshi_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
@@ -146,7 +146,7 @@ def plot_countpix(qa_dict,outfile):
             'QATIME': '2016-08-02T14:39:59.157986',
             'PANAME': 'PREPROC',
             'SPECTROGRAPH': 0,
-            'VALUE': {'NPIX100': 0,
+            'METRICS': {'NPIX100': 0,
                       'NPIX100_AMP': [254549, 0, 242623, 0],
                       'NPIX3SIG': 3713,
                       'NPIX3SIG_AMP': [128158, 2949, 132594, 3713],
@@ -160,12 +160,12 @@ def plot_countpix(qa_dict,outfile):
     #arm=qa_dict["ARM"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    count3sig=qa_dict["VALUE"]["NPIX3SIG"]
-    count3sig_amp=np.array(qa_dict["VALUE"]["NPIX3SIG_AMP"])
-    count100=qa_dict["VALUE"]["NPIX100"]
-    count100_amp=np.array(qa_dict["VALUE"]["NPIX100_AMP"])
-    count500=qa_dict["VALUE"]["NPIX500"]
-    count500_amp=np.array(qa_dict["VALUE"]["NPIX500_AMP"])
+    count3sig=qa_dict["METRICS"]["NPIX3SIG"]
+    count3sig_amp=np.array(qa_dict["METRICS"]["NPIX3SIG_AMP"])
+    count100=qa_dict["METRICS"]["NPIX100"]
+    count100_amp=np.array(qa_dict["METRICS"]["NPIX100_AMP"])
+    count500=qa_dict["METRICS"]["NPIX500"]
+    count500_amp=np.array(qa_dict["METRICS"]["NPIX500_AMP"])
     fig=plt.figure()
     plt.suptitle("Count pixels after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(221)
@@ -246,7 +246,7 @@ def plot_bias_overscan(qa_dict,outfile):
             'QATIME': '2016-08-02T14:39:59.773229',
             'PANAME': 'PREPROC',
             'SPECTROGRAPH': 0,
-            'VALUE': {'BIAS': -0.0080487558302569373,
+            'METRICS': {'BIAS': -0.0080487558302569373,
                       'BIAS_AMP': array([-0.01132324, -0.02867701, -0.00277266,  0.0105779 ])}}
        args: qa_dict : qa dictionary from countpix qa
              outfile : pdf file of the plot
@@ -255,8 +255,8 @@ def plot_bias_overscan(qa_dict,outfile):
     camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
 
-    bias=qa_dict["VALUE"]["BIAS"]
-    bias_amp=qa_dict["VALUE"]["BIAS_AMP"]
+    bias=qa_dict["METRICS"]["BIAS"]
+    bias_amp=qa_dict["METRICS"]["BIAS_AMP"]
     fig=plt.figure()
     plt.suptitle("Bias from overscan region after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(111)
@@ -291,7 +291,7 @@ def plot_XWSigma(qa_dict,outfile):
          'QATIME': '2016-07-08T06:05:34.56',
          'PANAME': 'PREPROC',
          'SPECTROGRAPH': 0,
-         'VALUE': {'XSIGMA': array([ 1.9, 1.81, 1.2...]),
+         'METRICS': {'XSIGMA': array([ 1.9, 1.81, 1.2...]),
                    'XSIGMA_MED': 1.81,
                    'XSIGMA_MED_SKY': 1.72,
                    'XSIGMA_AMP': array([ 1.9, 1.8, 1.7, 1.84]),
@@ -304,12 +304,12 @@ def plot_XWSigma(qa_dict,outfile):
     spectrograph=qa_dict["SPECTROGRAPH"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
-    xsigma=qa_dict["VALUE"]["XSIGMA"]
-    wsigma=qa_dict["VALUE"]["WSIGMA"]
-    xsigma_med=qa_dict["VALUE"]["XSIGMA_MED"]
-    wsigma_med=qa_dict["VALUE"]["WSIGMA_MED"]
-    xsigma_amp=qa_dict["VALUE"]["XSIGMA_AMP"]
-    wsigma_amp=qa_dict["VALUE"]["WSIGMA_AMP"]
+    xsigma=qa_dict["METRICS"]["XSIGMA"]
+    wsigma=qa_dict["METRICS"]["WSIGMA"]
+    xsigma_med=qa_dict["METRICS"]["XSIGMA_MED"]
+    wsigma_med=qa_dict["METRICS"]["WSIGMA_MED"]
+    xsigma_amp=qa_dict["METRICS"]["XSIGMA_AMP"]
+    wsigma_amp=qa_dict["METRICS"]["WSIGMA_AMP"]
     xfiber=np.arange(xsigma.shape[0])
     wfiber=np.arange(wsigma.shape[0])
 
@@ -389,7 +389,7 @@ def plot_RMS(qa_dict,outfile):
          'QATIME': '2016-07-08T06:05:34.56',
          'PANAME': 'PREPROC',
          'SPECTROGRAPH': 0,
-         'VALUE': {'RMS': 40.218151021598679,
+         'METRICS': {'RMS': 40.218151021598679,
                    'RMS_AMP': array([ 55.16847779,   2.91397089,  55.26686528,   2.91535373])
                    'RMS_OVER': 40.21815,
                    'RMS_OVER_AMP': array([ 55.168,   2.913,   55.266,  2.915])
@@ -398,10 +398,10 @@ def plot_RMS(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
     """
-    rms=qa_dict["VALUE"]["RMS"]
-    rms_amp=qa_dict["VALUE"]["RMS_AMP"]
-    rms_over=qa_dict["VALUE"]["RMS_OVER"]
-    rms_over_amp=qa_dict["VALUE"]["RMS_OVER_AMP"]
+    rms=qa_dict["METRICS"]["RMS"]
+    rms_amp=qa_dict["METRICS"]["RMS_AMP"]
+    rms_over=qa_dict["METRICS"]["RMS_OVER"]
+    rms_over_amp=qa_dict["METRICS"]["RMS_OVER_AMP"]
     # arm=qa_dict["ARM"]
     # spectrograph=qa_dict["SPECTROGRAPH"]
     camera = qa_dict["CAMERA"]
@@ -465,16 +465,16 @@ def plot_integral(qa_dict,outfile):
          'PANAME': 'SKYSUB',
          'QATIME': '2016-08-02T15:01:26.239419',
          'SPECTROGRAPH': 0,
-         'VALUE': {'INTEG': array([ 3587452.149007]),
+         'METRICS': {'INTEG': array([ 3587452.149007]),
                    'INTEG_AVG': 3587452.1490069963,
                    'INTEG_AVG_AMP': array([ 1824671.67950129,        0.        ,  1752550.23876224,        0.        ])}}
    """
     expid=qa_dict["EXPID"]
     camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    std_integral=np.array(qa_dict["VALUE"]["INTEG"])
-    std_integral_avg=qa_dict["VALUE"]["INTEG_AVG"]
-    std_integral_amp=np.array(qa_dict["VALUE"]["INTEG_AVG_AMP"])
+    std_integral=np.array(qa_dict["METRICS"]["INTEG"])
+    std_integral_avg=qa_dict["METRICS"]["INTEG_AVG"]
+    std_integral_amp=np.array(qa_dict["METRICS"]["INTEG_AVG_AMP"])
 
     fig=plt.figure()
     plt.suptitle("Total integrals of STD spectra %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
@@ -523,7 +523,7 @@ def plot_sky_continuum(qa_dict,outfile):
            'QATIME': '2016-08-02T14:40:02.766684,
            'PANAME': 'APPLY_FIBERFLAT',
            'SPECTROGRAPH': 0,
-           'VALUE': {'SKYCONT': 359.70078667259668,
+           'METRICS': {'SKYCONT': 359.70078667259668,
                      'SKYCONT_AMP': array([ 374.19163643,    0.        ,  344.76184662,    0.        ]),
                      'SKYCONT_FIBER': [357.23814787655738,   358.14982775192709,   359.34380640332847,   361.55526717275529,
     360.46690568746544,   360.49561926858325,   359.08761654248656,   361.26910267767016],
@@ -535,11 +535,11 @@ def plot_sky_continuum(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    skycont_fiber=np.array(qa_dict["VALUE"]["SKYCONT_FIBER"])
-    skycont=qa_dict["VALUE"]["SKYCONT"]
-    skycont_amps=np.array(qa_dict["VALUE"]["SKYCONT_AMP"])
+    skycont_fiber=np.array(qa_dict["METRICS"]["SKYCONT_FIBER"])
+    skycont=qa_dict["METRICS"]["SKYCONT"]
+    skycont_amps=np.array(qa_dict["METRICS"]["SKYCONT_AMP"])
     index=np.arange(skycont_fiber.shape[0])
-    fiberid=qa_dict["VALUE"]["SKYFIBERID"]
+    fiberid=qa_dict["METRICS"]["SKYFIBERID"]
     fig=plt.figure()
     plt.suptitle("Mean Sky Continuum after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     
@@ -586,7 +586,7 @@ def plot_sky_peaks(qa_dict,outfile):
         'EXPID': '00000006',
         'QATIME': '2016-07-08T06:05:34.56',
         'PANAME': 'APPLY_FIBERFLAT', 'SPECTROGRAPH': 0,
-        'VALUE': {'SUMCOUNT': array([ 1500.0,  1400.0, ....]),
+        'METRICS': {'SUMCOUNT': array([ 1500.0,  1400.0, ....]),
                   'SUMCOUNT_RMS': 1445.0,
                   'SUMCOUNT_RMS_SKY': 1455.0,
                   'SUMCOUNT_RMS_AMP': array([ 1444.0, 1433.0, 1422.0, 1411.0])}}
@@ -597,10 +597,10 @@ def plot_sky_peaks(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera=qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    sumcount=qa_dict["VALUE"]["SUMCOUNT"]
+    sumcount=qa_dict["METRICS"]["SUMCOUNT"]
     fiber=np.arange(sumcount.shape[0])
-    skyfiber_rms=qa_dict["VALUE"]["SUMCOUNT_RMS_SKY"]
-    sky_amp_rms=np.array(qa_dict["VALUE"]["SUMCOUNT_RMS_AMP"])
+    skyfiber_rms=qa_dict["METRICS"]["SUMCOUNT_RMS_SKY"]
+    sky_amp_rms=np.array(qa_dict["METRICS"]["SUMCOUNT_RMS_AMP"])
     fig=plt.figure()
     plt.suptitle("Counts and Amp RMS for Sky Fibers after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
 
@@ -648,7 +648,7 @@ def plot_residuals(qa_dict,outfile):
          'PANAME': 'SKYSUB',
          'QATIME': '2016-08-31T10:48:58.984638',
          'SPECTROGRAPH': 0,
-         'VALUE': {'MED_RESID': -8.461671761494927e-06,
+         'METRICS': {'MED_RESID': -8.461671761494927e-06,
                    'MED_RESID_FIBER': array([ 0.29701871, -0.29444709]),
                    'NBAD_PCHI': 0,
                    'NREJ': 0,
@@ -659,9 +659,9 @@ def plot_residuals(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    med_resid_fiber=qa_dict["VALUE"]["MED_RESID_FIBER"]
-    med_resid_wave=qa_dict["VALUE"]["MED_RESID_WAVE"]
-    wavelength=qa_dict["VALUE"]["WAVELENGTH"]
+    med_resid_fiber=qa_dict["METRICS"]["MED_RESID_FIBER"]
+    med_resid_wave=qa_dict["METRICS"]["MED_RESID_WAVE"]
+    wavelength=qa_dict["METRICS"]["WAVELENGTH"]
 
     fig=plt.figure()
 
@@ -675,7 +675,7 @@ def plot_residuals(qa_dict,outfile):
     xl=0.05
     yl=0.9
     for key in keys:
-        ax0.text(xl,yl,key+': '+str(qa_dict["VALUE"][key]),transform=ax0.transAxes,ha='left',fontsize='x-small')
+        ax0.text(xl,yl,key+': '+str(qa_dict["METRICS"][key]),transform=ax0.transAxes,ha='left',fontsize='x-small')
         yl=yl-0.1
 
     ax1=fig.add_subplot(gs[:2,:2])
@@ -710,7 +710,7 @@ def plot_SNR(qa_dict,outfile):
          'QATIME': '2016-08-02T14:40:03.670962',
          'PANAME': 'SKYSUB',
          'SPECTROGRAPH': 0,
-         'VALUE': {'ELG_FIBERID': [0, 3, 4],
+         'METRICS': {'ELG_FIBERID': [0, 3, 4],
                    'ELG_SNR_MAG': array([[  1.04995347,   1.75609447,   0.86920898],
                                         [ 22.40120888,  21.33947945,  23.26506996]]),
                    'LRG_FIBERID': [2, 8, 9],
@@ -729,18 +729,18 @@ def plot_SNR(qa_dict,outfile):
         outfile: Name of figure.
     """
 
-    med_snr=qa_dict["VALUE"]["MEDIAN_SNR"]
-    med_amp_snr=qa_dict["VALUE"]["MEDIAN_AMP_SNR"]
+    med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
+    med_amp_snr=qa_dict["METRICS"]["MEDIAN_AMP_SNR"]
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
 
-    elg_snr_mag=qa_dict["VALUE"]["ELG_SNR_MAG"]
-    lrg_snr_mag=qa_dict["VALUE"]["LRG_SNR_MAG"]
-    qso_snr_mag=qa_dict["VALUE"]["QSO_SNR_MAG"]
-    star_snr_mag=qa_dict["VALUE"]["STAR_SNR_MAG"]
+    elg_snr_mag=qa_dict["METRICS"]["ELG_SNR_MAG"]
+    lrg_snr_mag=qa_dict["METRICS"]["LRG_SNR_MAG"]
+    qso_snr_mag=qa_dict["METRICS"]["QSO_SNR_MAG"]
+    star_snr_mag=qa_dict["METRICS"]["STAR_SNR_MAG"]
 
     fig=plt.figure()
     plt.suptitle("Signal/Noise after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)

@@ -68,7 +68,7 @@ class QA_Prod(object):
                         continue
                     # Grab
                     try:
-                        val = self.data[night][expid][camera][qatype]['QA'][metric]
+                        val = self.data[night][expid][camera][qatype]['METRICS'][metric]
                     except KeyError:  # Each exposure has limited qatype
                         pass
                     except TypeError:
