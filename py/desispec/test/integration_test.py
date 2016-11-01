@@ -14,6 +14,7 @@ import glob
 import numpy as np
 from astropy.io import fits
 
+from desispec.util import runcmd
 import desispec.pipeline as pipe
 import desispec.io as io
 import desispec.log as logging
@@ -89,7 +90,7 @@ def sim(night, nspec=5, clobber=False):
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
-        if pipe.runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(flavor, expid))
 
         cmd = "pixsim-desi --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
@@ -100,7 +101,7 @@ def sim(night, nspec=5, clobber=False):
             pixfile = io.findfile('pix', night, expid, camera)
             outputs.append(pixfile)
             #outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
-        if pipe.runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(flavor, expid))
 
     return
@@ -149,10 +150,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     # Modify options file to restrict the spectral range
 
     optpath = os.path.join(proddir, "run", "options.yaml")
-    opts = pipe.read_options(optpath)
+    opts = pipe.yaml_read(optpath)
     opts['extract']['specmin'] = 0
     opts['extract']['nspec'] = nspec
-    pipe.write_options(optpath, opts)
+    pipe.yaml_write(optpath, opts)
 
     # run the generated shell scripts
 
@@ -174,7 +175,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Running extraction script "+com)
     sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "fiberflat-procexp_all.sh")
+    com = os.path.join(proddir, "run", "scripts", "fiberflat-calibrate_all.sh")
     print("Running calibration script "+com)
     sp.check_call(["bash", com])
 
@@ -182,8 +183,8 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Running makebricks script "+com)
     sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "zfind_all.sh")
-    print("Running zfind script "+com)
+    com = os.path.join(proddir, "run", "scripts", "redshift_all.sh")
+    print("Running redshift script "+com)
     sp.check_call(["bash", com])
 
     # #-----
