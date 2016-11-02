@@ -76,7 +76,7 @@ class QA_Exposure(object):
             ZPval = []
             for camera in cameras:
                 if camera[0] == channel:
-                    ZPval.append(self.data['frames'][camera]['FLUXCALIB']['QA']['ZP'])
+                    ZPval.append(self.data['frames'][camera]['FLUXCALIB']['METRICS']['ZP'])
             # Measure RMS
             if len(ZPval) > 0:
                 self.data['FLUXCALIB'][channel]['ZP_RMS'] = np.std(ZPval)

@@ -417,7 +417,7 @@ class TestIO(unittest.TestCase):
         # Read
         xqaframe = desio_qa.read_qa_frame(self.testyfile)
         # Check
-        self.assertTrue(qaframe.qa_data['SKYSUB']['PARAM']['PCHI_RESID'] == xqaframe.qa_data['SKYSUB']['PARAM']['PCHI_RESID'])
+        self.assertTrue(qaframe.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'] == xqaframe.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'])
         self.assertTrue(qaframe.flavor == xqaframe.flavor)
 
     def test_native_endian(self):
