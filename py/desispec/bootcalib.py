@@ -22,6 +22,7 @@ import time
 import os
 import sys
 import argparse
+import locale
 from pkg_resources import resource_exists, resource_filename
 
 from astropy.modeling import models, fitting
@@ -542,10 +543,13 @@ def parse_nist(ion, vacuum=True):
     if not resource_exists('desispec', srch_file):
         log.error("Cannot find NIST file {:s}".format(srch_file))
         raise Exception("Cannot find NIST file {:s}".format(srch_file))
-    # Read
+    # Read, while working around non-ASCII characters in NIST line lists
     nist_file = resource_filename('desispec', srch_file)
     log.info("reading NIST file {:s}".format(nist_file))
+    default_locale = locale.getlocale(locale.LC_CTYPE)
+    locale.setlocale(locale.LC_CTYPE, 'en_US.UTF-8')
     nist_tbl = Table.read(nist_file, format='ascii.fixed_width')
+    locale.setlocale(locale.LC_CTYPE, default_locale)
     gdrow = nist_tbl['Observed'] > 0.  # Eliminate dummy lines
     nist_tbl = nist_tbl[gdrow]
     # Now unique values only (no duplicates)

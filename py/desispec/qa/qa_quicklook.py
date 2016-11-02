@@ -151,7 +151,7 @@ def countpix(image,nsig=None,ncounts=None):
         return counts_nsig
     if ncounts is not None:
         counts_thresh=np.where(image.ravel() > ncounts)[0].shape[0]
-        return counts_thresh 
+        return counts_thresh
 
 def countbins(flux,threshold=0):
     """
@@ -274,21 +274,21 @@ class Get_RMS(MonitoringAlg):
         rmsccd=getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
         if amps:
             rms_amps=[]
-            rmsover_amps=[]
-            overscanregion=[]
+            rms_over_amps=[]
+            overscan_values=[]
             #- get amp/overcan boundary in pixels
             from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
-                ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                overscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
-                rmsoveramp=getrms(image.pix[overscanboundary])
-                overscan=np.ravel(image.pix[overscanboundary])
-                rmsamp=getrms(image.pix[ampboundary])
-                rms_amps.append(rmsamp)
-                rmsover_amps.append(rmsoveramp)
-                overscanregion.append(overscan)
-            rmsover=np.std(overscanregion)
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rmsover_amps)}
+                thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
+                thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
+                rms_thisover_thisamp=getrms(image.pix[thisoverscanboundary])
+                thisoverscan_values=np.ravel(image.pix[thisoverscanboundary])
+                rms_thisamp=getrms(image.pix[thisampboundary])
+                rms_amps.append(rms_thisamp)
+                rms_over_amps.append(rms_thisover_thisamp)
+                overscan_values+=thisoverscan_values.tolist()
+            rmsover=np.std(overscan_values)
+            retval["VALUE"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps)}
         else:
             retval["METRICS"]={"RMS":rmsccd}     
 
@@ -393,12 +393,12 @@ class Count_Pixels(MonitoringAlg):
             from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                npix3sig=countpix(image.pix[ampboundary],nsig=3)
-                npix3sig_amps.append(npix3sig)
-                npixlo=countpix(image.pix[ampboundary],ncounts=param['CUTLO'])
-                npixlo_amps.append(npixlo)
-                npixhi=countpix(image.pix[ampboundary],ncounts=param['CUTHI'])
-                npixhi_amps.append(npixhi)
+                npix3sig_thisamp=countpix(image.pix[ampboundary],nsig=3)
+                npix3sig_amps.append(npix3sig_thisamp)
+                npix100_thisamp=countpix(image.pix[ampboundary],ncounts=100)
+                npix100_amps.append(npix100_thisamp)
+                npix500_thisamp=countpix(image.pix[ampboundary],ncounts=500)
+                npix500_amps.append(npix500_thisamp)
 
             retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi, "NPIX3SIG_AMP": npix3sig_amps, "NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps}
         else:
@@ -488,7 +488,7 @@ class Integrate_Spec(MonitoringAlg):
             integrals[ii]=integrate_spec(wave,flux[ii])
         
         #- average integrals over star fibers
-        starfibers=np.where(frame.fibermap['OBJTYPE']=='STD')
+        starfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
         if len(starfibers) < 1:
             log.info("WARNING: no STD fibers found.")
         int_stars=integrals[starfibers]
@@ -509,17 +509,17 @@ class Integrate_Spec(MonitoringAlg):
            
             for amp in range(4):
                 wave=frame.wave[fidboundary[amp][1]]
-                select=starfibers[(starfibers >= fidboundary[amp][0].start) & (starfibers < fidboundary[amp][0].stop)]
-                stdflux=frame.flux[select,fidboundary[amp][1]]
+                select_thisamp=starfibers[(starfibers >= fidboundary[amp][0].start) & (starfibers < fidboundary[amp][0].stop)]
+                stdflux_thisamp=frame.flux[select_thisamp,fidboundary[amp][1]]
 
-                if len(stdflux)==0:
+                if len(stdflux_thisamp)==0:
                     break
                 else:
-                    integ=np.zeros(stdflux.shape[0])
+                    integ_thisamp=np.zeros(stdflux_thisamp.shape[0])
 
-                    for ii in range(stdflux.shape[0]):
-                        integ[ii]=integrate_spec(wave,stdflux[ii])
-                    int_avg_amps[amp]=np.mean(integ)
+                    for ii in range(stdflux_thisamp.shape[0]):
+                        integ_thisamp[ii]=integrate_spec(wave,stdflux_thisamp[ii])
+                    int_avg_amps[amp]=np.mean(integ_thisamp)
 
             retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps}
         else:
