@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+"""
+Run DESI quicklook pipeline on a given exposure
+"""
 
 from desispec.scripts import quicklook
 quicklook.ql_main(quicklook.parse())
-bin/desi_quicklook

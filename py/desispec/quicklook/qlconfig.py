@@ -13,7 +13,7 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. build_config will call this object to generate a configuration needed by quicklook
     """
 
-    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,url=None,timeout=120.,fiberflat=None):
+    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,url=None,timeout=120.,fiberflat=None,outputfile=None):
         """
         psfboot- does not seem to have a desispec.io.findfile entry, so passing this in argument. 
                  May be this will be useful even so.
@@ -27,6 +27,7 @@ class Config(object):
         self.camera=camera
         self.psfboot=psfboot
         self.fiberflat=fiberflat
+        self.outputfile=outputfile #- final outputfile.
         self.wavelength=wavelength
         self.debuglevel=debuglevel
         self.period=period
@@ -162,7 +163,7 @@ class Config(object):
         qaopts={}
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                qaopts[qa]={'camera': self.camera, 'expid': "%08d"%self.expid, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'url': self.url}
+                qaopts[qa]={'camera': self.camera, 'expid': "%08d"%self.expid, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'url': self.url, 'FiberMap': self.fibermap}
                 
         return qaopts    
         
@@ -226,6 +227,8 @@ def build_config(config):
     """
     config: desispec.quicklook.qlconfig.Config object
     """
+    log.info("Building Configuration")
+
     outconfig={}
 
     outconfig['Camera'] = config.camera
@@ -235,6 +238,9 @@ def build_config(config):
     outconfig['FiberFlatFile'] = config.fiberflat
     outconfig['PSFFile'] = config.psfboot
     outconfig['Period'] = config.period
+    if config.outputfile is not None: #- Global final output file
+        outconfig["OutputFile"] = config.outputfile
+    else: outconfig["OutputFile"]="lastframe-%s-%08d.fits"%(config.camera,config.expid)
 
     pipeline = []
     for ii,PA in enumerate(config.palist):
