@@ -373,6 +373,9 @@ class Count_Pixels(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
         else: qlf=False
@@ -383,9 +386,9 @@ class Count_Pixels(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, qlf=qlf)
+        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
-    def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, qlf=False):
+    def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False):
         retval={}
         # retval["EXPID"]=expid
         #retval["ARM"]=camera[0]
@@ -397,10 +400,13 @@ class Count_Pixels(MonitoringAlg):
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
-        param = dict(
-            CUTLO = 100,   # low threshold for number of counts
-            CUTHI = 500
-            )
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                 CUTLO = 100,   # low threshold for number of counts
+                 CUTHI = 500
+                 )
+
         retval["PARAMS"] = param
 
         #- get the counts over entire CCD
@@ -1458,6 +1464,9 @@ class CountSpectralBins(MonitoringAlg):
         if "PSFFile" in kwargs: 
             psf=kwargs["PSFFile"]
 
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
         else: qlf=False
@@ -1468,10 +1477,10 @@ class CountSpectralBins(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, qlf=qlf)
+        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,input_frame,paname=None,psf=None,amps=False,qafile=None,qafig=None, qlf=False):
+    def run_qa(self,input_frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False):
 
         #- qa dictionary 
         retval={}
@@ -1486,11 +1495,13 @@ class CountSpectralBins(MonitoringAlg):
         if not np.all(grid[0]==grid[1:]): 
             log.info("grid_size is NOT UNIFORM")
 
-        param = dict(
-            CUTLO = 100,   # low threshold for number of counts
-            CUTMED = 250,
-            CUTHI = 500
-            )
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                         CUTLO = 100,   # low threshold for number of counts
+                         CUTMED = 250,
+                         CUTHI = 500
+                         )
         retval["PARAMS"] = param
         
         countslo=countbins(input_frame.flux,threshold=param['CUTLO'])
@@ -1648,6 +1659,9 @@ class Sky_Residual(MonitoringAlg):
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
         else: qlf=False
@@ -1659,10 +1673,10 @@ class Sky_Residual(MonitoringAlg):
         else: qafig = None
         
         return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps,
-dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, qlf=qlf)
+dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False):
+    def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
         from desispec.sky import qa_skysub
         from desispec import util
 
@@ -1677,10 +1691,12 @@ dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, qlf=qlf)
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         
-        param = dict(
-            PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-            PER_RESID=95.,   # Percentile for residual distribution
-            )
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                         PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+                         PER_RESID=95.,   # Percentile for residual distribution
+                        )
         retval["PARAMS"] = param
         qadict=qa_skysub(param,frame,skymodel,quick_look=True)
 

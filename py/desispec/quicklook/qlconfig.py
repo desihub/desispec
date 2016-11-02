@@ -13,7 +13,7 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. build_config will call this object to generate a configuration needed by quicklook
     """
 
-    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,timeout=120.,fiberflat=None,outputfile=None,qlf=False):
+    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,timeout=120., fiberflat=None,outputfile=None,qaparams=None,qlf=False):
         """
         psfboot- does not seem to have a desispec.io.findfile entry, so passing this in argument. 
                  May be this will be useful even so.
@@ -47,6 +47,7 @@ class Config(object):
         self._palist=palist
         self.pamodule=palist.pamodule
         self.qamodule=palist.qamodule
+        self.qaparams=qaparams
         self._qlf=qlf
 
         #- some global variables
@@ -165,12 +166,41 @@ class Config(object):
     def qaargs(self):
 
         qaopts={}
+        
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                qaopts[qa]={'camera': self.camera, 'expid': "%08d"%self.expid, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'qlf': self.qlf}
+                if self.qaparams is not None:
+                    params=self.qaparams[qa]
+                else:
+                    params=self._qaparams(qa)
+
+                qaopts[qa]={'camera': self.camera, 'expid': "%08d"%self.expid, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
                 
-        return qaopts    
+        return qaopts 
+   
+    def _qaparams(self,qa):
+     
+        params={}
+        if qa == 'Count_Pixels':
+            params[qa]= dict(
+                             CUTLO = 100,
+                             CUTHI = 500
+                             )
+        elif qa == 'CountSpectralBins':
+            params[qa]= dict(
+                             CUTLO = 100,   # low threshold for number of counts
+                             CUTMED = 250,
+                             CUTHI = 500
+                             )
+        elif qa == 'Sky_Residual':
+            params[qa]= dict(
+                             PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+                             PER_RESID=95.,   # Percentile for residual distribution
+                             )
+        else:
+            params[qa]= None
         
+        return params[qa]
 
 class Palist(object):
     

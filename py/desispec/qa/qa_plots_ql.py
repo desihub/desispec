@@ -42,6 +42,10 @@ def plot_countspectralbins(qa_dict,outfile):
     binsmed_amp=qa_dict["METRICS"]["NBINSMED_AMP"]
     binshi_amp=qa_dict["METRICS"]["NBINSHIGH_AMP"]
 
+    cutlo=qa_dict["PARAMS"]["CUTLO"]
+    cuthi=qa_dict["PARAMS"]["CUTHI"]
+    cutmed=qa_dict["PARAMS"]["CUTMED"]
+
     index=np.arange(binslo.shape[0])
 
     fig=plt.figure()
@@ -57,24 +61,24 @@ def plot_countspectralbins(qa_dict,outfile):
 
     hist_med=ax1.bar(index,binslo,color='b',align='center')
     ax1.set_xlabel('Fiber #',fontsize=10)
-    ax1.set_ylabel('Photon Counts > low',fontsize=10)
+    ax1.set_ylabel('Photon Counts > %i'%cutlo,fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
 
     hist_med=ax2.bar(index,binsmed,color='r',align='center')
     ax2.set_xlabel('Fiber #',fontsize=10)
-    ax2.set_ylabel('Photon Counts > med',fontsize=10)
+    ax2.set_ylabel('Photon Counts > %i'%cutmed,fontsize=10)
     ax2.tick_params(axis='x',labelsize=10)
     ax2.tick_params(axis='y',labelsize=10)
 
     hist_med=ax3.bar(index,binshi,color='g',align='center')
     ax3.set_xlabel('Fiber #',fontsize=10)
-    ax3.set_ylabel('Photon Counts > high',fontsize=10)
+    ax3.set_ylabel('Photon Counts > %i'%cuthi,fontsize=10)
     ax3.tick_params(axis='x',labelsize=10)
     ax3.tick_params(axis='y',labelsize=10)
 
     heatmap1=ax4.pcolor(binslo_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax4.set_xlabel("Bins > low photon counts (per Amp)",fontsize=8)
+    ax4.set_xlabel("Avg. bins > counts: %i (per Amp)"%cutlo,fontsize=8)
     ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax4.tick_params(axis='y',labelsize=10,labelleft='off')
     ax4.annotate("Amp 1\n%.1f"%binslo_amp[0],
@@ -94,7 +98,7 @@ def plot_countspectralbins(qa_dict,outfile):
                  fontsize=10
                  )
     heatmap2=ax5.pcolor(binsmed_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax5.set_xlabel("Bins > med photon counts (per Amp)",fontsize=8)
+    ax5.set_xlabel("Avg. bins > counts: %i (per Amp)"%cutmed,fontsize=8)
     ax5.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax5.tick_params(axis='y',labelsize=10,labelleft='off')
     ax5.annotate("Amp 1\n%.1f"%binsmed_amp[0],
@@ -115,7 +119,7 @@ def plot_countspectralbins(qa_dict,outfile):
                  )
 
     heatmap3=ax6.pcolor(binshi_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax6.set_xlabel("Bins > high photon counts (per Amp)",fontsize=8)
+    ax6.set_xlabel("Avg. bins > counts: %i (per Amp)"%cuthi,fontsize=8)
     ax6.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax6.tick_params(axis='y',labelsize=10,labelleft='off')
     ax6.annotate("Amp 1\n%.1f"%binshi_amp[0],
@@ -164,12 +168,16 @@ def plot_countpix(qa_dict,outfile):
     countlo_amp=np.array(qa_dict["METRICS"]["NPIX_LOW_AMP"])
     counthi=qa_dict["METRICS"]["NPIX_HIGH"]
     counthi_amp=np.array(qa_dict["METRICS"]["NPIX_HIGH_AMP"])
+
+    cutlo=qa_dict["PARAMS"]["CUTLO"]
+    cuthi=qa_dict["PARAMS"]["CUTHI"]
+
     fig=plt.figure()
     plt.suptitle("Count pixels after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(221)
     heatmap1=ax1.pcolor(count3sig_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Pixels above 3 sigma = %i' %count3sig, fontsize=10)
-    ax1.set_xlabel("# of pixels with counts above 3sig. (per Amp)",fontsize=10)
+    plt.title('Total Pixels > 3 sigma = %i'%count3sig, fontsize=10)
+    ax1.set_xlabel("# pixels with counts > 3sig. (per Amp)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax1.tick_params(axis='y',labelsize=10,labelleft='off')
     ax1.annotate("Amp 1\n%i"%count3sig_amp[0],
@@ -190,45 +198,45 @@ def plot_countpix(qa_dict,outfile):
                  )
     ax2=fig.add_subplot(222)
     heatmap2=ax2.pcolor(countlo_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Pixels above LOW counts = %.4f' %countlo, fontsize=10)
-    ax2.set_xlabel("# of pixels with counts above LOW (per Amp)",fontsize=10)
+    plt.title('Total Pixels > counts: %i = %i' %(cutlo,countlo), fontsize=10)
+    ax2.set_xlabel("# pixels with counts > %.i (per Amp)"%cutlo,fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n%.1f"%countlo_amp[0],
+    ax2.annotate("Amp 1\n%i"%countlo_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n%.1f"%countlo_amp[1],
+    ax2.annotate("Amp 2\n%i"%countlo_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n%.1f"%countlo_amp[2],
+    ax2.annotate("Amp 3\n%i"%countlo_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n%.1f"%countlo_amp[3],
+    ax2.annotate("Amp 4\n%i"%countlo_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
     ax3=fig.add_subplot(223)
     heatmap3=ax3.pcolor(counthi_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Pixels above HIGH counts = %.4f' %counthi, fontsize=10)
+    plt.title('Total Pixels > counts: %i = %i' %(cuthi,counthi), fontsize=10)
     ax3.set_xlabel("# of pixels with counts above HIGH (per Amp)",fontsize=10)
     ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax3.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax3.annotate("Amp 1\n%.1f"%counthi_amp[0],
+    ax3.annotate("Amp 1\n%i"%counthi_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 2\n%.1f"%counthi_amp[1],
+    ax3.annotate("Amp 2\n%i"%counthi_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 3\n%.1f"%counthi_amp[2],
+    ax3.annotate("Amp 3\n%i"%counthi_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 4\n%.1f"%counthi_amp[3],
+    ax3.annotate("Amp 4\n%i"%counthi_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
