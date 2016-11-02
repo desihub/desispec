@@ -13,7 +13,7 @@ class Config(object):
     A class to generate Quicklook configurations for a given desi exposure. build_config will call this object to generate a configuration needed by quicklook
     """
 
-    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,url=None,timeout=120.,fiberflat=None,outputfile=None):
+    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,timeout=120.,fiberflat=None,outputfile=None,qlf=False):
         """
         psfboot- does not seem to have a desispec.io.findfile entry, so passing this in argument. 
                  May be this will be useful even so.
@@ -43,11 +43,11 @@ class Config(object):
         self.specprod_dir=specprod_dir
 
         self.outdir=outdir
-        self.url=url
         self.timeout=timeout
         self._palist=palist
         self.pamodule=palist.pamodule
         self.qamodule=palist.qamodule
+        self._qlf=qlf
 
         #- some global variables
         self.rawfile=findfile("raw",night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
@@ -60,6 +60,10 @@ class Config(object):
         """ what mode of QL, online? offline?
         """
         return self._palist.mode
+
+    @property
+    def qlf(self):
+        return self._qlf
 
     @property
     def palist(self): 
@@ -163,7 +167,7 @@ class Config(object):
         qaopts={}
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                qaopts[qa]={'camera': self.camera, 'expid': "%08d"%self.expid, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'url': self.url, 'FiberMap': self.fibermap}
+                qaopts[qa]={'camera': self.camera, 'expid': "%08d"%self.expid, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'qlf': self.qlf}
                 
         return qaopts    
         
