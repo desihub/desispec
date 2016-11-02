@@ -288,7 +288,7 @@ class Get_RMS(MonitoringAlg):
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-            retval["VALUE"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps)}
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps)}
         else:
             retval["METRICS"]={"RMS":rmsccd}     
 
@@ -395,11 +395,10 @@ class Count_Pixels(MonitoringAlg):
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 npix3sig_thisamp=countpix(image.pix[ampboundary],nsig=3)
                 npix3sig_amps.append(npix3sig_thisamp)
-                npix100_thisamp=countpix(image.pix[ampboundary],ncounts=100)
-                npix100_amps.append(npix100_thisamp)
-                npix500_thisamp=countpix(image.pix[ampboundary],ncounts=500)
-                npix500_amps.append(npix500_thisamp)
-
+                npixlo_thisamp=countpix(image.pix[ampboundary],ncounts=param['CUTLO'])
+                npixlo_amps.append(npixlo_thisamp)
+                npixhi_thisamp=countpix(image.pix[ampboundary],ncounts=param['CUTHI'])
+                npixhi_amps.append(npixhi_thisamp)
             retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi, "NPIX3SIG_AMP": npix3sig_amps, "NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps}
         else:
             retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi}     
