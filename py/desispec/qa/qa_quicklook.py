@@ -223,6 +223,36 @@ def gauss(x,a,mu,sigma):
     """
     return a*np.exp(-(x-mu)**2/(2*sigma**2))
 
+def qlf_post(qadict):
+    """
+    A general function to HTTP post the QA output dictionary, intended for QLF
+    requires environmental variables: QLF_API_URL, QLF_USER, QLF_PASSWD
+    args: 
+        qadict: returned dictionary from a QA
+    """
+    #- Check for environment variables and set them here
+    if "QLF_API_URL" in os.environ:
+        qlf_url=os.environ.get("QLF_API_URL")
+        if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
+            log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
+        else: 
+            qlf_user=os.environ.get("QLF_USER")
+            qlf_passwd=os.environ.get("QLF_PASSWD")
+            log.info("Environment variables are set for QLF. Now trying HTTP post.")
+            #- All set. Now try to HTTP post
+            try: 
+                import requests
+                response=requests.get(qlf_url)
+                #- Check if the api has json
+                api=response.json()
+                #- proceed with post
+                job={"name":"QL","status":0,"dictionary":qadict} #- QLF should disintegrate dictionary
+                response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
+            except:
+                log.info("Skipping HTTP post...")    
+
+    else:   
+        log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -297,29 +327,7 @@ class Get_RMS(MonitoringAlg):
             retval["METRICS"]={"RMS":rmsccd}     
 
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
+            qlf_post(retval)  
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -433,29 +441,7 @@ class Count_Pixels(MonitoringAlg):
             retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi}     
 
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")    
+            qlf_post(retval)      
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -573,29 +559,7 @@ class Integrate_Spec(MonitoringAlg):
             retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average}     
 
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")    
+            qlf_post(retval)    
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -736,29 +700,7 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
             retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
 
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")    
+            qlf_post(retval)    
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -940,30 +882,7 @@ class Sky_Peaks(MonitoringAlg):
             retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec}
 
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")    
-
+            qlf_post(retval)
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -1270,29 +1189,7 @@ class Calc_XWSigma(MonitoringAlg):
 
         #- http post if needed
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")    
+            qlf_post(retval)    
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -1392,29 +1289,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
         #- http post if needed
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")    
+            qlf_post(retval)    
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -1579,29 +1454,7 @@ class CountSpectralBins(MonitoringAlg):
 
         #- http post if needed
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")    
+            qlf_post(retval)    
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -1705,29 +1558,7 @@ dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
             retval["METRICS"][key] = qadict[key]
 
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")    
+            qlf_post(retval)    
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
@@ -1875,29 +1706,7 @@ class Calculate_SNR(MonitoringAlg):
         
         #- http post if valid
         if qlf:
-            #- Check for environment variables and set them here
-            if "QLF_API_URL" in os.environ:
-                qlf_url=os.environ.get("QLF_API_URL")
-                if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-                    log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-                else: 
-                    qlf_user=os.environ.get("QLF_USER")
-                    qlf_passwd=os.environ.get("QLF_PASSWD")
-                    log.info("Environment variables are set for QLF. Now trying HTTP post.")
-                    #- All set. Now try to HTTP post
-                    try: 
-                        import requests
-                        response=requests.get(qlf_url)
-                        #- Check if the api has json
-                        api=response.json()
-                        #- proceed with post
-                        job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                        response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-                    except:
-                        log.info("Skipping HTTP post...")    
-
-            else:   
-                log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")            
+            qlf_post(retval)            
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
