@@ -38,7 +38,6 @@ def parse():
     parser.add_argument("--specprod_dir",type=str, required=False, help="specprod directory, overrides $DESI_SPECTRO_REDUX/$SPECPROD in config")
     parser.add_argument("--save",type=str, required=False,help="save this config to a file")
     parser.add_argument("--qlf",type=str,required=False,help="setup for QLF run", default=False)
-    parser.add_argument("--qaparam", type=str, required=False, help="dicts with keys: value in QAname: param dict format",default=False)
     
     args=parser.parse_args()
     return args
@@ -65,7 +64,7 @@ def ql_main(args=None):
         log.warning("No config file given. Trying to create config from other options")
         PAs=qlconfig.Palist(args.flavor)
 
-        config=qlconfig.Config(args.night,args.flavor,args.expid,args.camera, PAs,psfboot=args.psfboot,rawdata_dir=args.rawdata_dir, specprod_dir=args.specprod_dir,fiberflat=args.fiberflat, qlf=args.qlf)
+        config=qlconfig.Make_Config(args.night,args.flavor,args.expid,args.camera, PAs,psfboot=args.psfboot,rawdata_dir=args.rawdata_dir, specprod_dir=args.specprod_dir,fiberflat=args.fiberflat, qlf=args.qlf)
         configdict=qlconfig.build_config(config)
 
         #- save this config to a file

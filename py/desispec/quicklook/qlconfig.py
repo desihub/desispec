@@ -8,12 +8,12 @@ qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
 
-class Config(object):
+class Make_Config(object):
     """ 
     A class to generate Quicklook configurations for a given desi exposure. build_config will call this object to generate a configuration needed by quicklook
     """
 
-    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,timeout=120., fiberflat=None,outputfile=None,qaparams=None,qlf=False):
+    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,timeout=120., fiberflat=None,outputfile=None,qlf=False):
         """
         psfboot- does not seem to have a desispec.io.findfile entry, so passing this in argument. 
                  May be this will be useful even so.
@@ -47,7 +47,6 @@ class Config(object):
         self._palist=palist
         self.pamodule=palist.pamodule
         self.qamodule=palist.qamodule
-        self.qaparams=qaparams
         self._qlf=qlf
 
         #- some global variables
@@ -140,20 +139,19 @@ class Config(object):
         """
 
         #- both PA level and QA level outputs
-
-        qa_pa_outfile={}
-        qa_pa_outfig={}
-        qa_outfile={}
-        qa_outfig={}
+        qa_pa_outfile = {}
+        qa_pa_outfig = {}
+        qa_outfile = {}
+        qa_outfig = {}
         for PA in self.palist:
             #- pa level outputs
-            qa_pa_outfile[PA]=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"ql-%s-%s-%08d.yaml"%(PA.lower(),self.camera,self.expid))
-            qa_pa_outfig[PA]=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"ql-%s-%s-%08d.png"%(PA.lower(),self.camera,self.expid))
+            qa_pa_outfile[PA] = self.io_qa_pa(PA)[0]
+            qa_pa_outfig[PA] = self.io_qa_pa(PA)[1]
 
             #- qa_level output
             for QA in self.qalist[PA]:
-                qa_outfile[QA]=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"qa","ql-%s-%s-%08d.yaml"%(QA.lower(),self.camera,self.expid))
-                qa_outfig[QA]=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"qa","ql-%s-%s-%08d.png"%(QA.lower(),self.camera,self.expid))
+                qa_outfile[QA] = self.io_qa(QA)[0]
+                qa_outfig[QA] = self.io_qa(QA)[1]
                 
                 #- make path if needed
                 path = os.path.normpath(os.path.dirname(qa_outfile[QA]))
@@ -165,15 +163,11 @@ class Config(object):
     @property
     def qaargs(self):
 
-        qaopts={}
+        qaopts = {}
         
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                if self.qaparams is not None:
-                    params=self.qaparams[qa]
-                else:
-                    params=self._qaparams(qa)
-
+                params=self._qaparams(qa)
                 qaopts[qa]={'camera': self.camera, 'expid': "%08d"%self.expid, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
                 
         return qaopts 
@@ -201,6 +195,49 @@ class Config(object):
             params[qa]= None
         
         return params[qa]
+
+    def io_qa_pa(self,paname):
+        """
+        Specify the filenames: yaml and png of the pa level qa files"
+        """
+        outmap={'Initialize': 'initial',
+                'Preproc': 'preproc',
+                'BoxcarExtraction': 'boxextract',
+                'ApplyFiberFlat_QL': 'fiberflat',
+                'SubtractSky_QL': 'skysub'
+               }
+        if paname not in outmap:
+            raise IOError("No output name map available for this PA:",paname)
+
+        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"ql-%s-%s-%08d.yaml"%(outmap[paname],self.camera,self.expid))
+    
+        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"ql-%s-%s-%08d.png"%(outmap[paname],self.camera,self.expid))
+        
+        return (outfile,outfig)
+
+
+    def io_qa(self,qaname):
+        """
+        Specify the filenames: yaml and png for the given qa output
+        """
+        outmap={'Bias_From_Overscan': 'getbias',
+                'Get_RMS' : 'getrms',
+                'Count_Pixels': 'countpix',
+                'Calc_XWSigma': 'xwsigma',
+                'CountSpectralBins': 'countbins',
+                'Sky_Continuum': 'skycont',
+                'Sky_Peaks': 'skypeak',
+                'Sky_Residual': 'skyresid',
+                'Integrate_Spec': 'integ',
+                'Calculate_SNR': 'snr'
+               }
+        if qaname not in outmap:              
+            raise IOError("No output name map available for this QA:",qaname)
+        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"qa","ql-%s-%s-%08d.yaml"%(outmap[qaname],self.camera,self.expid))
+
+        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"qa","ql-%s-%s-%08d.png"%(outmap[qaname],self.camera,self.expid))
+
+        return (outfile,outfig)
 
 class Palist(object):
     
@@ -291,14 +328,5 @@ def build_config(config):
     outconfig['RawImage']=config.rawfile
     outconfig['Timeout']=config.timeout
     return outconfig        
-     
-            
-        
-        
-
-
-    
-                
-
         
         

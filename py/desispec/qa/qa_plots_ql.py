@@ -221,7 +221,7 @@ def plot_countpix(qa_dict,outfile):
     ax3=fig.add_subplot(223)
     heatmap3=ax3.pcolor(counthi_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('Total Pixels > counts: %i = %i' %(cuthi,counthi), fontsize=10)
-    ax3.set_xlabel("# of pixels with counts above HIGH (per Amp)",fontsize=10)
+    ax3.set_xlabel("# pixels with counts > %.i (per Amp)"%cuthi,fontsize=10)
     ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax3.tick_params(axis='y',labelsize=10,labelleft='off')
     ax3.annotate("Amp 1\n%i"%counthi_amp[0],
