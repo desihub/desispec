@@ -218,11 +218,13 @@ def mapkeywords(kw,kwmap):
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
     for k,v in kw.items():
-        if isinstance(v,str) and len(v)>=3 and  v[0:2]=="%%":
+        if isinstance(v,str) and len(v)>=3 and  v[0:2]=="%%": #- For direct configuration
             if v[2:] in kwmap:
                 newmap[k]=kwmap[v[2:]]
             else:
                 log.warning("Can't find key %s in conversion map. Skipping"%(v[2:]))
+        if k in kwmap: #- for configs generated via desispec.quicklook.qlconfig
+            newmap[k]=kwmap[k]          
         else:
             newmap[k]=v
     return newmap
@@ -268,7 +270,7 @@ def runpipeline(pl,convdict,conf):
                 hb.start("Running %s"%(qa.name))
                 qargs["dict_countbins"]=passqadict #- pass this to all QA downstream
 
-                if qa.name=="RESIDUAL":
+                if qa.name=="RESIDUAL" or qa.name=="Sky_Residual":
                     res=qa(oldinp,inp[1],**qargs)
                     
                 else:
@@ -277,7 +279,7 @@ def runpipeline(pl,convdict,conf):
                     else:
                         res=qa(inp,**qargs)
 
-                if qa.name=="COUNTBINS":         #TODO -must run this QA for now. change this later.
+                if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         #TODO -must run this QA for now. change this later.
                     passqadict=res
                 log.debug("%s %s"%(qa.name,inp))
                 qaresult[qa.name]=res
@@ -285,6 +287,7 @@ def runpipeline(pl,convdict,conf):
             except Exception as e:
                 log.warning("Failed to run QA %s error was %s"%(qa.name,e))
         if len(qaresult):
+            #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
             yaml.dump(qaresult,open(paconf[s]["OutputFile"],"wb"))
             hb.stop("Step %s finished. Output is in %s "%(paconf[s]["StepName"],paconf[s]["OutputFile"]))
         else:

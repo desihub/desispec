@@ -5,9 +5,11 @@ Monitoring algorithms for Quicklook pipeline
 
 import numpy as np
 import scipy.ndimage
+import yaml
 from desispec.quicklook.qas import MonitoringAlg
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
+import os,sys
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -221,6 +223,36 @@ def gauss(x,a,mu,sigma):
     """
     return a*np.exp(-(x-mu)**2/(2*sigma**2))
 
+def qlf_post(qadict):
+    """
+    A general function to HTTP post the QA output dictionary, intended for QLF
+    requires environmental variables: QLF_API_URL, QLF_USER, QLF_PASSWD
+    args: 
+        qadict: returned dictionary from a QA
+    """
+    #- Check for environment variables and set them here
+    if "QLF_API_URL" in os.environ:
+        qlf_url=os.environ.get("QLF_API_URL")
+        if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
+            log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
+        else: 
+            qlf_user=os.environ.get("QLF_USER")
+            qlf_passwd=os.environ.get("QLF_PASSWD")
+            log.info("Environment variables are set for QLF. Now trying HTTP post.")
+            #- All set. Now try to HTTP post
+            try: 
+                import requests
+                response=requests.get(qlf_url)
+                #- Check if the api has json
+                api=response.json()
+                #- proceed with post
+                job={"name":"QL","status":0,"dictionary":qadict} #- QLF should disintegrate dictionary
+                response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
+            except:
+                log.info("Skipping HTTP post...")    
+
+    else:   
+        log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -252,17 +284,19 @@ class Get_RMS(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        if "url" in kwargs:
-             url=kwargs["url"]
-        else: 
-             url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, qlf=qlf)
 
-    def run_qa(self,image,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,qlf=False):
         retval={}
         retval["EXPID"] = "%08d"%image.meta["EXPID"]
         retval["PANAME"]=paname
@@ -292,17 +326,12 @@ class Get_RMS(MonitoringAlg):
         else:
             retval["METRICS"]={"RMS":rmsccd}     
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password")) #- username, password not real but placeholder here.
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)  
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_RMS
@@ -352,17 +381,22 @@ class Count_Pixels(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        if "url" in kwargs:
-             url=kwargs["url"]
-        else: 
-             url=None
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
-    def run_qa(self,image,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False):
         retval={}
         # retval["EXPID"]=expid
         #retval["ARM"]=camera[0]
@@ -374,10 +408,13 @@ class Count_Pixels(MonitoringAlg):
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
-        param = dict(
-            CUTLO = 100,   # low threshold for number of counts
-            CUTHI = 500
-            )
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                 CUTLO = 100,   # low threshold for number of counts
+                 CUTHI = 500
+                 )
+
         retval["PARAMS"] = param
 
         #- get the counts over entire CCD
@@ -403,17 +440,12 @@ class Count_Pixels(MonitoringAlg):
         else:
             retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi}     
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password")) #- username, password not real but placeholder here.
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)      
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countpix
@@ -460,16 +492,18 @@ class Integrate_Spec(MonitoringAlg):
         if "dict_countbins" in kwargs:
             dict_countbins=kwargs["dict_countbins"] 
 
-        if "url" in kwargs:
-             url=kwargs["url"]
-        else: 
-             url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, qlf=qlf)
 
-    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
@@ -524,17 +558,12 @@ class Integrate_Spec(MonitoringAlg):
         else:
             retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average}     
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password")) #- username, password not real but placeholder here.
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_integral
@@ -597,15 +626,19 @@ class Sky_Continuum(MonitoringAlg):
         if "dict_countbins" in kwargs:
             dict_countbins=kwargs["dict_countbins"]
 
-        url=None
-        if "url" in kwargs:
-            url=kwargs["url"]
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, qlf=qlf)
 
-    def run_qa(self,frame,wrange1=None,wrange2=None,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,wrange1=None,wrange2=None,paname=None,amps=False,
+dict_countbins=None,qafile=None,qafig=None, qlf=False):
 
         #- qa dictionary 
         retval={}
@@ -666,17 +699,12 @@ class Sky_Continuum(MonitoringAlg):
         else: 
             retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} 
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_continuum
@@ -724,18 +752,20 @@ class Sky_Peaks(MonitoringAlg):
         if "PSFFile" in kwargs:
             psf=kwargs["PSFFile"]
 
-        if "url" in kwargs:
-            url=kwargs["url"]
-        else:
-            url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs:
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, qlf=qlf)
 
-    def run_qa(self,frame,paname=None,amps=False,psf=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,amps=False,psf=None, qafile=None,qafig=None, qlf=False):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
@@ -851,6 +881,13 @@ class Sky_Peaks(MonitoringAlg):
         else:
             retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec}
 
+        if qlf:
+            qlf_post(retval)
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
+
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_peaks
             plot_sky_peaks(retval,qafig)
@@ -901,17 +938,19 @@ class Calc_XWSigma(MonitoringAlg):
         if "FiberMap" in kwargs:
             fibermap=kwargs["FiberMap"]
  
-        if "url" in kwargs:
-             url=kwargs["url"]
-        else:
-             url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
  
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
  
-        return self.run_qa(input_image,paname=paname,amps=amps,psf=psf,fibermap=fibermap,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,psf=psf,fibermap=fibermap, qafile=qafile,qafig=qafig, qlf=qlf)
  
-    def run_qa(self,image,paname=None,amps=False,psf=None,fibermap=None,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,psf=None,fibermap=None, qafile=None,qafig=None, qlf=False):
         from scipy.optimize import curve_fit
  
         retval={}
@@ -1148,6 +1187,14 @@ class Calc_XWSigma(MonitoringAlg):
         else:
             retval["METRICS"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky}
 
+        #- http post if needed
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
+
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_XWSigma
             plot_XWSigma(retval,qafig)
@@ -1188,16 +1235,19 @@ class Bias_From_Overscan(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        url=None
-        if "url" in kwargs:
-            url=kwargs["url"]
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_raw,camera,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_raw,camera,paname=paname,amps=amps, qafile=qafile,qafig=qafig, qlf=qlf)
 
-    def run_qa(self,raw,camera,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,raw,camera,paname=None,amps=False,qafile=None,qafig=None, qlf=False):
 
         retval={}
         retval["EXPID"]= "%08d"%raw[0].header["EXPID"]
@@ -1238,17 +1288,12 @@ class Bias_From_Overscan(MonitoringAlg):
             retval["METRICS"]={'BIAS':bias}
 
         #- http post if needed
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} 
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_bias_overscan
@@ -1294,18 +1339,23 @@ class CountSpectralBins(MonitoringAlg):
         if "PSFFile" in kwargs: 
             psf=kwargs["PSFFile"]
 
-        if "url" in kwargs:
-            url=kwargs["url"]
-        else:
-            url=None
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,input_frame,paname=None,psf=None,amps=False,url=None,qafig=None):
+    def run_qa(self,input_frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False):
 
         #- qa dictionary 
         retval={}
@@ -1320,11 +1370,13 @@ class CountSpectralBins(MonitoringAlg):
         if not np.all(grid[0]==grid[1:]): 
             log.info("grid_size is NOT UNIFORM")
 
-        param = dict(
-            CUTLO = 100,   # low threshold for number of counts
-            CUTMED = 250,
-            CUTHI = 500
-            )
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                         CUTLO = 100,   # low threshold for number of counts
+                         CUTMED = 250,
+                         CUTHI = 500
+                         )
         retval["PARAMS"] = param
         
         countslo=countbins(input_frame.flux,threshold=param['CUTLO'])
@@ -1401,17 +1453,12 @@ class CountSpectralBins(MonitoringAlg):
         retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
 
         #- http post if needed
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countspectralbins
@@ -1444,7 +1491,7 @@ class Sky_Residual(MonitoringAlg):
         exp2 = "%08d"%input_frame.meta["EXPID"]
         if expid != exp2:
            log.info("ERROR: exposure ID does not match configuration!")
-        
+
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
@@ -1465,17 +1512,24 @@ class Sky_Residual(MonitoringAlg):
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
-        url=None
-        if "url" in kwargs:
-             url=kwargs["url"]
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps,
+dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
         from desispec.sky import qa_skysub
         from desispec import util
 
@@ -1490,10 +1544,12 @@ class Sky_Residual(MonitoringAlg):
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         
-        param = dict(
-            PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-            PER_RESID=95.,   # Percentile for residual distribution
-            )
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                         PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+                         PER_RESID=95.,   # Percentile for residual distribution
+                        )
         retval["PARAMS"] = param
         qadict=qa_skysub(param,frame,skymodel,quick_look=True)
 
@@ -1501,17 +1557,12 @@ class Sky_Residual(MonitoringAlg):
         for key in qadict.keys():
             retval["METRICS"][key] = qadict[key]
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_residuals
@@ -1554,17 +1605,20 @@ class Calculate_SNR(MonitoringAlg):
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
-        url=None
-        if "url" in kwargs:
-             url=kwargs["url"]
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, qlf=qlf)
 
 
-    def run_qa(self,input_frame,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,input_frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False):
 
         #- return values
         retval={}
@@ -1651,21 +1705,12 @@ class Calculate_SNR(MonitoringAlg):
         else: retval["METRICS"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers, "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers, "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers, "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers, "STAR_SNR_MAG":std_snr_mag}
         
         #- http post if valid
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                #job={"name":"QL","status":0,"measurements":[{"metric":"SNR","value":retval["METRICS"]["MED_AMP_SNR"][0]}]}
-                #response=requests.post(api['job'],json=job, auth=("nobody","nobody")) #- username and password here is temporary for testing. can come from configuration rather than hardcode.
+        if qlf:
+            qlf_post(retval)            
 
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-             
-                log.info("Skipping HTTP post...")            
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in %s "%qafile)
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
