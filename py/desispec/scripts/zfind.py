@@ -17,7 +17,7 @@ from desispec.log import get_logger, WARNING
 from desispec.zfind.redmonster import RedMonsterZfind
 from desispec.zfind import ZfindBase
 from desispec.io.qa import load_qa_brick, write_qa_brick
-from desispec.util import default_nproc, dist_uniform
+from desispec.parallel import default_nproc, dist_uniform
 
 import argparse
 
