@@ -5,7 +5,7 @@
 SPHINXOPTS    =
 # For macports, use the second line...
 #SPHINXBUILD   = sphinx-build
-SPHINXBUILD   = sphinx-build-2.7
+SPHINXBUILD   = sphinx-build
 PAPER         =
 BUILDDIR      = _build
 

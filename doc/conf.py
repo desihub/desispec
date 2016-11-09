@@ -166,6 +166,7 @@ autodoc_mock_imports = ['astropy',
                         'scipy.special',
                         'scipy.stats',
                         'speclite',
+                        'speclite.filters',
                         'specter',
                         'specter.psf',
                         'specter.extract']

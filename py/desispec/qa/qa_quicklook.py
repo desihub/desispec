@@ -20,8 +20,10 @@ from astropy.time import Time
 
 def ampregion(image):
     """
-       get the pixel boundary regions for amps
-       args: image: desispec.image.Image object
+    Get the pixel boundary regions for amps
+       
+    Args:
+        image: desispec.image.Image object
     """
     from desispec.preproc import _parse_sec_keyword
 
@@ -34,9 +36,11 @@ def ampregion(image):
 
 def fiducialregion(frame,psf):
     """ 
-       get the fiducial amplifier regions on the CCD pixel to fiber by wavelength space
-       args: frame: desispec.frame.Frame object
-             psf: desispec.psf.PSF like object
+    Get the fiducial amplifier regions on the CCD pixel to fiber by wavelength space
+       
+    Args:
+        frame: desispec.frame.Frame object
+        psf: desispec.psf.PSF like object
     """
     from desispec.preproc import _parse_sec_keyword
 
@@ -116,8 +120,10 @@ def fiducialregion(frame,psf):
 
 def slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin):
     """
-    runs fiducialregion function and makes the boundary slice for the amps:
-    returns list of tuples of slices for spec- wavelength boundary for the amps.
+    Runs fiducialregion function and makes the boundary slice for the amps:
+    
+    Returns (list):
+        list of tuples of slices for spec- wavelength boundary for the amps.
     """
     leftmax+=1 #- last entry not counted in slice
     bottommax+=1
@@ -131,8 +137,10 @@ def slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin):
 
 def getrms(image):
     """
-    calculate the rms of the pixel values)
-    args: image : 2d array
+    Calculate the rms of the pixel values)
+    
+    Args:
+        image: 2d array
     """
     pixdata=image.ravel()
     rms=np.std(pixdata)
@@ -141,11 +149,14 @@ def getrms(image):
 
 def countpix(image,nsig=None,ncounts=None):
     """
-    count the pixels above a given threshold
-    threshold can be in n times sigma or counts 
-    args: image: 2d image array 
-          nsig: threshold in units of sigma, e.g 2 for 2 sigma
-          ncounts: threshold in units of count, e.g 100
+    Count the pixels above a given threshold.
+    
+    Threshold can be in n times sigma or counts. 
+    
+    Args:
+        image: 2d image array 
+        nsig: threshold in units of sigma, e.g 2 for 2 sigma
+        ncounts: threshold in units of count, e.g 100
     """
     if nsig is not None:
         sig=np.std(image.ravel())
@@ -157,9 +168,11 @@ def countpix(image,nsig=None,ncounts=None):
 
 def countbins(flux,threshold=0):
     """
-    count the number of bins above a given threshold on each fiber
-    args: flux: 2d (nspec,nwave)
-          threshold: threshold counts 
+    Count the number of bins above a given threshold on each fiber
+    
+    Args:
+        flux: 2d (nspec,nwave)
+        threshold: threshold counts 
     """
     counts=np.zeros(flux.shape[0])
     for ii in range(flux.shape[0]):
@@ -169,10 +182,12 @@ def countbins(flux,threshold=0):
 
 def continuum(wave,flux,wmin=None,wmax=None):
     """
-    find the continuum of the spectrum inside a wavelength region"
-    args: wave: 1d wavelength array
-          flux: 1d counts/flux array
-          wmin and wmax: region to consider for the continuum
+    Find the continuum of the spectrum inside a wavelength region.
+    
+    Args:
+        wave: 1d wavelength array
+        flux: 1d counts/flux array
+        wmin and wmax: region to consider for the continuum
     """
     if wmin is None:
         wmin=min(wave)
@@ -188,23 +203,31 @@ def continuum(wave,flux,wmin=None,wmax=None):
 
 def integrate_spec(wave,flux):
     """
-    calculate the integral of the spectrum in the given range using trapezoidal integration
-    args: wave: 1d wavelength array
-          flux: 1d flux array 
+    Calculate the integral of the spectrum in the given range using trapezoidal integration
+
     Note: limits of integration are min and max values of wavelength
+    
+    Args:
+        wave: 1d wavelength array
+        flux: 1d flux array 
     """   
     integral=np.trapz(flux,wave)
     return integral
 
 def SN_ratio(flux,ivar):
     """
-    flux: 2d [nspec,nwave] : the signal (typically for spectra, this comes from frame object
-    ivar: 2d [nspec,nwave] : corresponding inverse variance
+    SN Ratio
 
-    Note: At current QL setting, can't use offline QA for S/N calculation for sky subtraction, as 
-    that requires frame before sky subtration as QA itself does the sky subtration. QL should take frame
-    after sky subtration. 
-    Also a S/N calculation there needs skymodel object (as it is specific to Sky subtraction), that is not needed for S/N calculation itself.
+    At current QL setting, can't use offline QA for S/N calculation for sky 
+    subtraction, as that requires frame before sky subtration as QA itself 
+    does the sky subtration. QL should take frame after sky subtration. 
+    Also a S/N calculation there needs skymodel object (as it is specific 
+    to Sky subtraction), that is not needed for S/N calculation itself.
+
+    Args:
+        flux (array): 2d [nspec,nwave] the signal (typically for spectra, 
+            this comes from frame object
+        ivar (array): 2d [nspec,nwave] corresponding inverse variance
     """
 
     #- we calculate median and total S/N assuming no correlation bin by bin
@@ -219,7 +242,7 @@ def SN_ratio(flux,ivar):
 
 def gauss(x,a,mu,sigma):
     """
-    return Gaussian fit of input data
+    Gaussian fit of input data
     """
     return a*np.exp(-(x-mu)**2/(2*sigma**2))
 
@@ -227,7 +250,8 @@ def qlf_post(qadict):
     """
     A general function to HTTP post the QA output dictionary, intended for QLF
     requires environmental variables: QLF_API_URL, QLF_USER, QLF_PASSWD
-    args: 
+    
+    Args: 
         qadict: returned dictionary from a QA
     """
     #- Check for environment variables and set them here

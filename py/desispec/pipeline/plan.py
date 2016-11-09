@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.plan
-======================
+==========================
 
 Functions for planning a production and manipulating the dependency graph.
 """

@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """
 desispec.pipeline.state
-=====================
+===========================
 
 Functions for manipulating the state of objects in the dependency graph.
 """
