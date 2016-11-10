@@ -172,7 +172,8 @@ def testconfig(outfilename="qlconfig.yaml"):
 def get_chan_spec_exp(inpname,camera=None):
     """
     Get channel, spectrograph and expid from the filename itself
-    args:
+
+    Args:
         inpname: can be raw or pix, or frame etc filename
         camera: is required for raw case, eg, r0, b5, z8
                 irrelevant for others
@@ -230,7 +231,8 @@ def mapkeywords(kw,kwmap):
     return newmap
 
 def runpipeline(pl,convdict,conf):
-    """runs the quicklook pipeline as configured
+    """
+    Runs the quicklook pipeline as configured
 
     Args:
         pl: is a list of [pa,qas] where pa is a pipeline step and qas the corresponding
@@ -302,9 +304,9 @@ def runpipeline(pl,convdict,conf):
 
 def setup_pipeline(config):
     """
-       Given a configuration from QLF, this sets up a pipeline [pa,qa] and also returns a
-       conversion dictionary from the configuration dictionary so that Pipeline steps (PA) can
-       take them. This is required for runpipeline.
+    Given a configuration from QLF, this sets up a pipeline [pa,qa] and also returns a
+    conversion dictionary from the configuration dictionary so that Pipeline steps (PA) can
+    take them. This is required for runpipeline.
     """
     import astropy.io.fits as fits
     import desispec.io.fibermap as fibIO

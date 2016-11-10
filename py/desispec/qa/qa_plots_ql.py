@@ -7,18 +7,21 @@ from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 def plot_countspectralbins(qa_dict,outfile):
-    """Plot count spectral bins.
+    """
+    Plot count spectral bins.
 
-    While reading from yaml output file, qa_dict is the value to the first top level key, which is the name of that QA
+    While reading from yaml output file, qa_dict is the value to the first top level key, 
+    which is the name of that QA
 
-    `qa_dict` example::
+    qa_dict example::
 
         {'CAMERA': 'r0',
          'EXPID': '00000006',
          'QATIME': '2016-08-02T14:40:03.269684',
          'PANAME': 'BOXCAR',
          'PARAMS': {'CUTLO', 100, 'CUTMED', 250, 'CUTHI', 500},
-         'METRICS': {'NBINSLOW': array([ 2575.,  2611.,  2451.,  2495.,  2357.,  2452.,  2528.,  2501.,  2548.,  2461.]),
+         'METRICS': {'NBINSLOW': array([ 2575.,  2611.,  2451.,  2495.,  2357.,  2452.,  
+                    2528.,  2501.,  2548.,  2461.]),
                    'NBINSLOW_AMP': array([ 1249.74,     0.  ,  1198.01,     0.  ]),
                    'NBINSMED': array([ 2503.,  2539.,  2161.,  2259.,  2077.,  2163.,  2284.,  2268.,  2387.,  2210.]),
                    'NBINSMED_AMP': array([ 1149.55,     0.  ,  1095.02,     0.  ]),
@@ -143,21 +146,25 @@ def plot_countspectralbins(qa_dict,outfile):
 
 def plot_countpix(qa_dict,outfile):
     """
-       plot pixel counts above some threshold
-       qa_dict example:
-           {'CAMERA': 'r0',
-            'EXPID': '00000006',
-            'QATIME': '2016-08-02T14:39:59.157986',
-            'PANAME': 'PREPROC',
-            'PARAMS': {'CUTLO': 100, 'CUTHI': 500},
-            'METRICS': {'NPIX_LOW': 0,
-                      'NPIX_LOW_AMP': [254549, 0, 242623, 0],
-                      'NPIX3SIG': 3713,
-                      'NPIX3SIG_AMP': [128158, 2949, 132594, 3713],
-                      'NPIX_HIGH': 0,
-                      'NPIX_HIGH_AMP': [1566, 0, 1017, 0]}}}
-       args: qa_dict : qa dictionary from countpix qa
-             outfile : pdf file of the plot
+    Plot pixel counts above some threshold
+    
+    qa_dict example::
+        
+        {'CAMERA': 'r0',
+        'EXPID': '00000006',
+        'QATIME': '2016-08-02T14:39:59.157986',
+        'PANAME': 'PREPROC',
+        'PARAMS': {'CUTLO': 100, 'CUTHI': 500},
+        'METRICS': {'NPIX_LOW': 0,
+                  'NPIX_LOW_AMP': [254549, 0, 242623, 0],
+                  'NPIX3SIG': 3713,
+                  'NPIX3SIG_AMP': [128158, 2949, 132594, 3713],
+                  'NPIX_HIGH': 0,
+                  'NPIX_HIGH_AMP': [1566, 0, 1017, 0]}}}
+
+    Args:
+        qa_dict: qa dictionary from countpix qa
+        outfile: pdf file of the plot
     """
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
@@ -245,17 +252,21 @@ def plot_countpix(qa_dict,outfile):
 
 def plot_bias_overscan(qa_dict,outfile):
     """
-       map of bias from overscan from 4 regions of CCD
-       qa_dict example:
-           {'ARM': 'r',
-            'EXPID': '00000006',
-            'QATIME': '2016-08-02T14:39:59.773229',
-            'PANAME': 'PREPROC',
-            'SPECTROGRAPH': 0,
-            'METRICS': {'BIAS': -0.0080487558302569373,
-                      'BIAS_AMP': array([-0.01132324, -0.02867701, -0.00277266,  0.0105779 ])}}
-       args: qa_dict : qa dictionary from countpix qa
-             outfile : pdf file of the plot
+    Map of bias from overscan from 4 regions of CCD
+    
+    qa_dict example::
+
+        {'ARM': 'r',
+        'EXPID': '00000006',
+        'QATIME': '2016-08-02T14:39:59.773229',
+        'PANAME': 'PREPROC',
+        'SPECTROGRAPH': 0,
+        'METRICS': {'BIAS': -0.0080487558302569373,
+                  'BIAS_AMP': array([-0.01132324, -0.02867701, -0.00277266,  0.0105779 ])}}
+
+    Args:
+        qa_dict: qa dictionary from countpix qa
+        outfile : pdf file of the plot
     """
     expid=qa_dict["EXPID"]
     camera =qa_dict["CAMERA"]
@@ -290,8 +301,11 @@ def plot_bias_overscan(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_XWSigma(qa_dict,outfile):
-    """Plot XWSigma
-    `qa_dict` example:
+    """
+    Plot XWSigma
+    
+    qa_dict example::
+        
         {'ARM': 'r',
          'EXPID': '00000006',
          'QATIME': '2016-07-08T06:05:34.56',
@@ -305,6 +319,10 @@ def plot_XWSigma(qa_dict,outfile):
                    'WSIGMA_MED': 1.81,
                    'WSIGMA_MED_SKY': 1.72,
                    'WSIGMA_AMP': array([ 1.9, 1.8, 1.7, 1.84])}}
+
+    Args:
+        qa_dict: qa dictionary from countpix qa
+        outfile : file of the plot
     """
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
@@ -387,8 +405,11 @@ def plot_XWSigma(qa_dict,outfile):
     fig.savefig(outfile)
     
 def plot_RMS(qa_dict,outfile):
-    """Plot RMS
-    `qa_dict` example:
+    """
+    Plot RMS
+    
+    qa_dict example::
+        
         {'ARM': 'r',
          'EXPID': '00000006',
          'QATIME': '2016-07-08T06:05:34.56',
@@ -398,8 +419,10 @@ def plot_RMS(qa_dict,outfile):
                    'RMS_AMP': array([ 55.16847779,   2.91397089,  55.26686528,   2.91535373])
                    'RMS_OVER': 40.21815,
                    'RMS_OVER_AMP': array([ 55.168,   2.913,   55.266,  2.915])
-}}
-     Args:
+                    }
+        }
+
+    Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
     """
@@ -464,7 +487,10 @@ def plot_RMS(qa_dict,outfile):
 
 def plot_integral(qa_dict,outfile):
     """
-    qa_dict example:
+    Plot integral.
+
+    qa_dict example::
+        
         {'ARM': 'r',
          'EXPID': '00000002',
          'PANAME': 'SKYSUB',
@@ -472,8 +498,13 @@ def plot_integral(qa_dict,outfile):
          'SPECTROGRAPH': 0,
          'METRICS': {'INTEG': array([ 3587452.149007]),
                    'INTEG_AVG': 3587452.1490069963,
-                   'INTEG_AVG_AMP': array([ 1824671.67950129,        0.        ,  1752550.23876224,        0.        ])}}
-   """
+                   'INTEG_AVG_AMP': array([ 1824671.67950129,        0.        ,  1752550.23876224,
+                                    0.        ])}}
+
+    Args:
+        qa_dict: qa dictionary
+        outfile : output plot file
+    """
     expid=qa_dict["EXPID"]
     camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -521,21 +552,26 @@ def plot_integral(qa_dict,outfile):
 
 def plot_sky_continuum(qa_dict,outfile):
     """
-       plot mean sky continuum from lower and higher wavelength range for each fiber and accross amps
-       example qa_dict:
-          {'ARM': 'r',
-           'EXPID': '00000006',
-           'QATIME': '2016-08-02T14:40:02.766684,
-           'PANAME': 'APPLY_FIBERFLAT',
-           'SPECTROGRAPH': 0,
-           'METRICS': {'SKYCONT': 359.70078667259668,
-                     'SKYCONT_AMP': array([ 374.19163643,    0.        ,  344.76184662,    0.        ]),
-                     'SKYCONT_FIBER': [357.23814787655738,   358.14982775192709,   359.34380640332847,   361.55526717275529,
-    360.46690568746544,   360.49561926858325,   359.08761654248656,   361.26910267767016],
-                     'SKYFIBERID': [4, 19, 30, 38, 54, 55, 57, 62]}}
+    Plot mean sky continuum from lower and higher wavelength range for each 
+    fiber and accross amps.
+    
+    Example qa_dict::
+        
+        {'ARM': 'r',
+        'EXPID': '00000006',
+        'QATIME': '2016-08-02T14:40:02.766684,
+        'PANAME': 'APPLY_FIBERFLAT',
+        'SPECTROGRAPH': 0,
+        'METRICS': {'SKYCONT': 359.70078667259668,
+                 'SKYCONT_AMP': array([ 374.19163643,    0.        ,  344.76184662,    0.        ]),
+                 'SKYCONT_FIBER': [357.23814787655738,   358.14982775192709,   359.34380640332847,
+                                    361.55526717275529, 360.46690568746544,   360.49561926858325,   
+                                    359.08761654248656,   361.26910267767016],
+                 'SKYFIBERID': [4, 19, 30, 38, 54, 55, 57, 62]}}
 
-       args: qa_dict: dictionary from sky continuum QA
-             outfile: pdf file to save the plot
+    Args:
+        qa_dict: dictionary from sky continuum QA
+        outfile: pdf file to save the plot
     """
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
@@ -585,9 +621,11 @@ def plot_sky_continuum(qa_dict,outfile):
 
 def plot_sky_peaks(qa_dict,outfile):
     """
-       plot rms of sky peaks for smy fibers across amps
-       example qa_dict:
-       {'ARM': 'r',
+    Plot rms of sky peaks for smy fibers across amps
+       
+    Example qa_dict::
+
+        {'ARM': 'r',
         'EXPID': '00000006',
         'QATIME': '2016-07-08T06:05:34.56',
         'PANAME': 'APPLY_FIBERFLAT', 'SPECTROGRAPH': 0,
@@ -596,8 +634,9 @@ def plot_sky_peaks(qa_dict,outfile):
                   'SUMCOUNT_RMS_SKY': 1455.0,
                   'SUMCOUNT_RMS_AMP': array([ 1444.0, 1433.0, 1422.0, 1411.0])}}
 
-       args: qa_dict: dictionary from sky peaks QA
-             outfile: pdf file to save the plot
+    Args:
+        qa_dict: dictionary from sky peaks QA
+        outfile: pdf file to save the plot
     """
     expid=qa_dict["EXPID"]
     camera=qa_dict["CAMERA"]
@@ -645,8 +684,9 @@ def plot_sky_peaks(qa_dict,outfile):
 
 def plot_residuals(qa_dict,outfile):
     """
-    Plot histogram of sky residuals for each sky fiber"
-    qa_dict example:
+    Plot histogram of sky residuals for each sky fiber
+    
+    qa_dict example::
 
         {'ARM': 'r',
          'EXPID': '00000002',
@@ -660,6 +700,9 @@ def plot_residuals(qa_dict,outfile):
                    'NSKY_FIB': 2,
                    'RESID_PER': [-20.15769508014313, 23.938934018349393]}}
 
+    Args:
+        qa_dict: qa dictionary
+        outfile : output plot file
     """
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
@@ -705,10 +748,10 @@ def plot_residuals(qa_dict,outfile):
     fig.savefig(outfile)
     
 def plot_SNR(qa_dict,outfile):
+    """
+    Plot SNR
 
-    """Plot SNR
-
-    `qa_dict` example::
+    qa_dict example::
 
         {'ARM': 'r',
          'EXPID': '00000006',
@@ -729,6 +772,7 @@ def plot_SNR(qa_dict,outfile):
                    'QSO_SNR_MAG': array([[  1.03979459], [ 22.95341873]]),
                    'STAR_FIBERID': [7],
                    'STAR_SNR_MAG': array([[ 38.31675053], [ 17.13783646]])}}}
+    
     Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
         outfile: Name of figure.

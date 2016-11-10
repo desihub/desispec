@@ -92,16 +92,22 @@ The desispec API
 .. automodule:: desispec.pipeline
     :members:
 
-.. automodule:: desispec.pipeline.core
+.. automodule:: desispec.pipeline.common
+    :members:
+
+.. automodule:: desispec.pipeline.task
+    :members:
+
+.. automodule:: desispec.pipeline.graph
+    :members:
+
+.. automodule:: desispec.pipeline.state
     :members:
 
 .. automodule:: desispec.pipeline.plan
     :members:
 
 .. automodule:: desispec.pipeline.run
-    :members:
-
-.. automodule:: desispec.pipeline.utils
     :members:
 
 .. automodule:: desispec.preproc
