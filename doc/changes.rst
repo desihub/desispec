@@ -2,10 +2,20 @@
 desispec change log
 ===================
 
-0.11.1 (unreleased)
+0.12.1 (unreleased)
+-------------------
+
+* No changes yet
+
+0.12.0 (2016-11-09)
 -------------------
 
 * Update integration test to use stdstar_templates_v1.1.fits
+* Support asymmetric resolution matrices (PR #288)
+* Quicklook updates (PR #294, #293, #285)
+* Fix BUNIT and wavelength f4 vs. f8 
+* Significant pipeline code refactor (PR #300 and #290)
+* fix docstrings for sphinx build (PR #308)
 
 0.11.0 (2016-10-14)
 -------------------
