@@ -483,7 +483,7 @@ def run_steps(first, last, spectrographs=None, nightstr=None, comm=None):
         for name, nd in grph.items():
             if nd["type"] == step_file_types[step_types[st]]:
                 if nd["state"] != "done":
-                    nd["state"] = "wait"
+                    nd["state"] = "running"
 
     if rank == 0:
         graph_db_write(grph)
@@ -518,15 +518,12 @@ def run_steps(first, last, spectrographs=None, nightstr=None, comm=None):
     return
 
 
-def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=1, threads=1):
+def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1, threads=1):
     with open(path, "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("export STARTTIME=${now}\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
-        for com in envsetup:
-            f.write("{}\n".format(com))
-        f.write("\n")
         f.write("source {}\n\n".format(desisetup))
         f.write("export OMP_NUM_THREADS={}\n\n".format(threads))
         run = ""
@@ -542,7 +539,7 @@ def shell_job(path, logroot, envsetup, desisetup, commands, comrun="", mpiprocs=
     return
 
 
-def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, \
+def nersc_job(path, logroot, desisetup, commands, nodes=1, \
     nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
     queue="debug", jobname="desipipe"):
     hours = int(minutes/60)
@@ -568,11 +565,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, \
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name={}\n".format(jobname))
         f.write("#SBATCH --output={}_%j.log\n".format(logroot))
-        f.write("#SBATCH --export=NONE\n\n")
         f.write("echo Starting slurm script at `date`\n\n")
-        for com in envsetup:
-            f.write("{}\n".format(com))
-        f.write("\n")
         f.write("source {}\n\n".format(desisetup))
         f.write("# Set TMPDIR to be on the ramdisk\n")
         f.write("export TMPDIR=/dev/shm\n\n")
@@ -590,13 +583,15 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, \
         if openmp:
             f.write("export OMP_NUM_THREADS=${node_thread}\n")
             f.write("\n")
-        runstr = "srun --export=ALL"
+        runstr = "srun"
         if multiproc:
             runstr = "{} --cpu_bind=no".format(runstr)
         f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}}\"\n\n".format(runstr))
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("echo \"job datestamp = ${now}\"\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
+        f.write("envlog={}_${{now}}.env\n".format(logroot))
+        f.write("env > ${envlog}\n\n")
         for com in commands:
             comlist = com.split(" ")
             executable = comlist.pop(0)
@@ -609,7 +604,7 @@ def nersc_job(path, logroot, envsetup, desisetup, commands, nodes=1, \
             f.write("else\n")
             f.write("  app=${ex}\n")
             f.write("fi\n")
-            f.write("echo calling desi_pipe_run at `date`\n\n")
+            f.write("echo calling {} at `date`\n\n".format(executable))
             f.write("export STARTTIME=`date +%Y%m%d-%H:%M:%S`\n")
             f.write("echo ${{run}} ${{app}} {}\n".format(" ".join(comlist)))
             f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(" ".join(comlist)))

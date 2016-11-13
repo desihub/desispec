@@ -30,7 +30,6 @@ def parse(options=None):
     parser.add_argument( "--last", required=False, default=None, help="last step of the pipeline to run")
     parser.add_argument("--nights", required=False, default=None, help="comma separated (YYYYMMDD) or regex pattern")
     parser.add_argument("--spectrographs", required=False, default=None, help="process only this comma-separated list of spectrographs")
-    parser.add_argument("--nompi", action="store_true", help="don't use MPI parallelism")
     
     args = None
     if options is None:
@@ -40,23 +39,17 @@ def parse(options=None):
     return args
 
 
-def main(args):
+def main(args, comm=None):
     t1 = datetime.datetime.now()
 
     log = get_logger()
 
-    comm = None
     rank = 0
     nproc = 1
 
-    if not args.nompi:
-        try:
-            from mpi4py import MPI
-            comm = MPI.COMM_WORLD
-            rank = comm.rank
-            nproc = comm.size
-        except ImportError:
-            log.error("mpi4py not found, using only one process")
+    if comm is not None:
+        rank = comm.rank
+        nproc = comm.size
 
     # raw and production locations
 

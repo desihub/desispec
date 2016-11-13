@@ -25,7 +25,7 @@ _state_colors = {
     "none": "#000000",
     "done": "#00ff00",
     "fail": "#ff0000",
-    "wait": "#ffff00"
+    "running": "#ffff00"
 }
 
 
@@ -455,7 +455,7 @@ def graph_merge(grph, comm=None):
 
     priority = {
         "none" : 0,
-        "wait" : 1,
+        "running" : 1,
         "fail" : 2,
         "done" : 3
     }
