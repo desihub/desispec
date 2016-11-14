@@ -2,7 +2,7 @@
 Extract spectra from DESI pre-processed raw data
 """
 
-from __future__ import absolute_import, division
+from __future__ import absolute_import, division, print_function
 
 import sys
 import os
@@ -17,21 +17,25 @@ from specter.psf import load_psf
 from specter.extract import ex2d
 
 from desispec import io
+from desispec.log import get_logger
 from desispec.frame import Frame
+from desispec.maskbits import specmask
 
-import desispec.scripts.mergebundles as merge
+import desispec.scripts.mergebundles as mergebundles
 
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
     parser.add_argument("-i", "--input", type=str, required=True,
                         help="input image")
-    parser.add_argument("-f", "--fibermap", type=str, required=True,
+    parser.add_argument("-f", "--fibermap", type=str, required=False,
                         help="input fibermap file")
     parser.add_argument("-p", "--psf", type=str, required=True,
-                        help="input psf")
+                        help="input psf file")
     parser.add_argument("-o", "--output", type=str, required=True,
-                        help="output extracted spectra")
+                        help="output extracted spectra file")
+    parser.add_argument("-m", "--model", type=str, required=False,
+                        help="output 2D pixel model file")
     parser.add_argument("-w", "--wavelength", type=str, required=False,
                         help="wavemin,wavemax,dw")
     parser.add_argument("-s", "--specmin", type=int, required=False, default=0,
@@ -92,7 +96,7 @@ def main(args):
 
     #- Get wavelength grid from options
     if args.wavelength is not None:
-        wstart, wstop, dw = map(float, args.wavelength.split(','))
+        wstart, wstop, dw = [float(tmp) for tmp in args.wavelength.split(',')]
     else:
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
@@ -103,15 +107,15 @@ def main(args):
     bundlesize = args.bundlesize
 
     #- Confirm that this PSF covers these wavelengths for these spectra
-    psf_wavemin = np.max(psf.wavelength(range(specmin, specmax), y=0))
-    psf_wavemax = np.min(psf.wavelength(range(specmin, specmax), y=psf.npix_y-1))
+    psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=0))
+    psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-1))
     if psf_wavemin > wstart:
-        raise ValueError, 'Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin)
+        raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
     if psf_wavemax < wstop:
-        raise ValueError, 'Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax)
+        raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
     #- Print parameters
-    print """\
+    print("""\
 #--- Extraction Parameters ---
 input:      {input}
 psf:        {psf}
@@ -124,12 +128,22 @@ regularize: {regularize}
     """.format(input=input_file, psf=psf_file, output=args.output,
         wstart=wstart, wstop=wstop, dw=dw,
         specmin=specmin, nspec=nspec,
-        regularize=args.regularize)
+        regularize=args.regularize))
 
     #- The actual extraction
-    flux, ivar, Rdata = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
+    results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
                  regularize=args.regularize, ndecorr=True,
-                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose)
+                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
+                 full_output=True)
+    flux = results['flux']
+    ivar = results['ivar']
+    Rdata = results['resolution_data']
+    chi2pix = results['chi2pix']
+    
+    mask = np.zeros(flux.shape, dtype=np.uint32)
+    mask[results['pixmask_fraction']>0.5] |= specmask.SOMEBADPIX
+    mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
+    mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
     #- Augment input image header for output
     img.meta['NSPEC']   = (nspec, 'Number of spectra')
@@ -140,17 +154,28 @@ regularize: {regularize}
     img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
     img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
 
-    frame = Frame(wave, flux, ivar, resolution_data=Rdata,
-                fibers=fibers, meta=img.meta, fibermap=fibermap)
+    frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdata,
+                fibers=fibers, meta=img.meta, fibermap=fibermap,
+                chi2pix=chi2pix)
 
     #- Write output
-    io.write_frame(args.output, frame)
+    io.write_frame(args.output, frame, units='photon/bin')
+
+    if args.model is not None:
+        from astropy.io import fits
+        fits.writeto(args.model, results['modelimage'], header=frame.meta, clobber=True)
 
     print('Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
 
 
+#- TODO: The level of repeated code from main() is problematic, e.g. the
+#- recent addition of mask and chi2pix code required nearly identical edits
+#- in two places.  Could main(args) just call main_mpi(args, comm=None) ?
+
 def main_mpi(args, comm=None):
+
+    log = get_logger()
 
     psf_file = args.psf
     input_file = args.input
@@ -197,7 +222,7 @@ def main_mpi(args, comm=None):
     #- Get wavelength grid from options
 
     if args.wavelength is not None:
-        wstart, wstop, dw = map(float, args.wavelength.split(','))
+        wstart, wstop, dw = [float(tmp) for tmp in args.wavelength.split(',')]
     else:
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
@@ -208,19 +233,19 @@ def main_mpi(args, comm=None):
 
     #- Confirm that this PSF covers these wavelengths for these spectra
     
-    psf_wavemin = np.max(psf.wavelength(range(specmin, specmax), y=0))
-    psf_wavemax = np.min(psf.wavelength(range(specmin, specmax), y=psf.npix_y-1))
+    psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=0))
+    psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-1))
     if psf_wavemin > wstart:
-        raise ValueError, 'Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin)
+        raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
     if psf_wavemax < wstop:
-        raise ValueError, 'Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax)
+        raise ValueError('Stop wavelength {:.2f} > max wavelength {:.2f} for these fibers'.format(wstop, psf_wavemax))
 
     # Now we divide our spectra into bundles
 
     bundlesize = args.bundlesize
     checkbundles = set()
     checkbundles.update(np.floor_divide(np.arange(specmin, specmax), bundlesize*np.ones(nspec)).astype(int))
-    bundles = sorted(list(checkbundles))
+    bundles = sorted(checkbundles)
     nbundle = len(bundles)
 
     bspecmin = {}
@@ -243,7 +268,7 @@ def main_mpi(args, comm=None):
         nproc = comm.size
         rank = comm.rank
 
-    mynbundle = int(nbundle / nproc)
+    mynbundle = int(nbundle // nproc)
     myfirstbundle = 0
     leftover = nbundle % nproc
     if rank < leftover:
@@ -254,13 +279,13 @@ def main_mpi(args, comm=None):
 
     if rank == 0:
         #- Print parameters
-        print "extract:  input = {}".format(input_file)
-        print "extract:  psf = {}".format(psf_file)
-        print "extract:  specmin = {}".format(specmin)
-        print "extract:  nspec = {}".format(nspec)
-        print "extract:  wavelength = {},{},{}".format(wstart, wstop, dw)
-        print "extract:  nwavestep = {}".format(args.nwavestep)
-        print "extract:  regularize = {}".format(args.regularize)
+        log.info("extract:  input = {}".format(input_file))
+        log.info("extract:  psf = {}".format(psf_file))
+        log.info("extract:  specmin = {}".format(specmin))
+        log.info("extract:  nspec = {}".format(nspec))
+        log.info("extract:  wavelength = {},{},{}".format(wstart, wstop, dw))
+        log.info("extract:  nwavestep = {}".format(args.nwavestep))
+        log.info("extract:  regularize = {}".format(args.regularize))
 
     # get the root output file
 
@@ -270,7 +295,7 @@ def main_mpi(args, comm=None):
         raise RuntimeError("extraction output file should have .fits extension")
     outroot = outmat.group(1)
 
-    outdir = os.path.dirname(outroot)
+    outdir = os.path.normpath(os.path.dirname(outroot))
     if rank == 0:
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
@@ -282,15 +307,30 @@ def main_mpi(args, comm=None):
 
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
         outbundle = "{}_{:02d}.fits".format(outroot, b)
+        outmodel = "{}_model_{:02d}.fits".format(outroot, b)
 
-        print('extract:  Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
-        bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
+        log.info('extract:  Rank {} starting {} spectra {}:{} at {}'.format(
+            rank, os.path.basename(input_file),
+            bspecmin[b], bspecmin[b]+bnspec[b], time.asctime(),
+            ) )
+        sys.stdout.flush()
 
         #- The actual extraction
         try:
-            flux, ivar, Rdata = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b], 
+            results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b], 
                 bnspec[b], wave, regularize=args.regularize, ndecorr=True,
-                bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose)
+                bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
+                full_output=True)
+
+            flux = results['flux']
+            ivar = results['ivar']
+            Rdata = results['resolution_data']
+            chi2pix = results['chi2pix']
+
+            mask = np.zeros(flux.shape, dtype=np.uint32)
+            mask[results['pixmask_fraction']>0.5] |= specmask.SOMEBADPIX
+            mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
+            mask[chi2pix>100.0] |= specmask.BAD2DFIT
 
             #- Augment input image header for output
             img.meta['NSPEC']   = (nspec, 'Number of spectra')
@@ -301,19 +341,35 @@ def main_mpi(args, comm=None):
             img.meta['IN_PSF']  = (_trim(psf_file), 'Input spectral PSF')
             img.meta['IN_IMG']  = (_trim(input_file), 'Input image')
 
-            bfibermap = fibermap[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
+            if fibermap is not None:
+                bfibermap = fibermap[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
+            else:
+                bfibermap = None
+
             bfibers = fibers[bspecmin[b]-specmin:bspecmin[b]+bnspec[b]-specmin]
 
-            frame = Frame(wave, flux, ivar, resolution_data=Rdata,
-                        fibers=bfibers, meta=img.meta, fibermap=bfibermap)
+            frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdata,
+                        fibers=bfibers, meta=img.meta, fibermap=bfibermap,
+                        chi2pix=chi2pix)
 
             #- Write output
-            io.write_frame(outbundle, frame)
+            io.write_frame(outbundle, frame, units='photon/bin')
 
-            print('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
+            if args.model is not None:
+                from astropy.io import fits
+                fits.writeto(outmodel, results['modelimage'], header=frame.meta)
+
+            log.info('extract:  Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
                 bspecmin[b], bspecmin[b]+bnspec[b], time.asctime()))
+            sys.stdout.flush()
         except:
+            # Log the error and increment the number of failures
+            log.error("extract:  FAILED bundle {}, spectrum range {}:{}".format(b, bspecmin[b], bspecmin[b]+bnspec[b]))
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            log.error(''.join(lines))
             failcount += 1
+            sys.stdout.flush()
 
     if comm is not None:
         failcount = comm.allreduce(failcount)
@@ -323,11 +379,26 @@ def main_mpi(args, comm=None):
         raise RuntimeError("some extraction bundles failed")
 
     if rank == 0:
-        opts = [
+        mergeopts = [
             '--output', args.output,
             '--force',
             '--delete'
         ]
-        opts.extend([ "{}_{:02d}.fits".format(outroot, b) for b in bundles ])
-        args = merge.parse(opts)
-        merge.main(args)
+        mergeopts.extend([ "{}_{:02d}.fits".format(outroot, b) for b in bundles ])
+        mergeargs = mergebundles.parse(mergeopts)
+        mergebundles.main(mergeargs)
+
+        if args.model is not None:
+            model = None
+            for b in bundles:
+                outmodel = "{}_model_{:02d}.fits".format(outroot, b)
+                if model is None:
+                    model = fits.getdata(outmodel)
+                else:
+                    #- TODO: test and warn if models overlap for pixels with
+                    #- non-zero values
+                    model += fits.getdata(outmodel)
+
+                os.remove(outmodel)
+
+            fits.writeto(args.model, model)

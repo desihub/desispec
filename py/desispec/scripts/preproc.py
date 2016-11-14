@@ -38,12 +38,20 @@ to use, but also only if a single camera is specified.
                         help = 'pixflat image calibration file')
     parser.add_argument('--mask', type = str, default = None, required=False,
                         help = 'mask image calibration file')
+<<<<<<< HEAD
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
                         help = 'for cosmic ray rejection : number of sigma inconsistent with PSF required')
     parser.add_argument('--cosmics-c2fudge', type = float, default = 0.8, required=False,
                         help = 'for cosmic ray rejection : fudge factor applied to PSF')
+=======
+    parser.add_argument('--bkgsub', action='store_true',
+                        help = 'do a background subtraction prior to cosmic ray rejection')
+    parser.add_argument('--nocosmic', action='store_true', 
+                        help = 'do not try and reject cosmic rays')
+    
+>>>>>>> a79948a14fa39b870008e53afdc0f2e0254b013f
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
     
@@ -73,11 +81,15 @@ def main(args=None):
     for camera in args.cameras:
         try:
             img = io.read_raw(args.infile, camera,
+<<<<<<< HEAD
                               bias=args.bias, pixflat=args.pixflat, mask=args.mask,
                               cosmics_nsig=args.cosmics_nsig,
                               cosmics_cfudge=args.cosmics_cfudge,
                               cosmics_c2fudge=args.cosmics_c2fudge)
                               
+=======
+                              bias=args.bias, pixflat=args.pixflat, mask=args.mask, bkgsub=args.bkgsub, nocosmic=args.nocosmic)
+>>>>>>> a79948a14fa39b870008e53afdc0f2e0254b013f
         except IOError:
             log.error('Camera {} not in {}'.format(camera, args.infile))
             continue

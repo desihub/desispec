@@ -1,6 +1,6 @@
 """ Module for QA plots
 """
-from __future__ import print_function, absolute_import, division, unicode_literals
+from __future__ import print_function, absolute_import, division
 
 import numpy as np
 from scipy import signal
@@ -17,6 +17,8 @@ from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 
 from desispec import util
+
+from desiutil.plots import plot_slices as du_pslices
 
 
 def brick_zbest(outfil, zf, qabrick):
@@ -57,7 +59,7 @@ def brick_zbest(outfil, zf, qabrick):
     ax0.set_ylim(0.0, 0.002)
     ax0.set_xlabel('z')
 
-    for key in sty_otype.keys():
+    for key in sty_otype:
         idx = np.where(zftypes == key)[0]
         if len(idx) == 0:
             continue
@@ -238,7 +240,7 @@ def exposure_fluxcalib(outfil, qa_data):
         qa_data: dict -- QA data, including that of the individual frames
     """
     # Init
-    cameras = qa_data['frames'].keys()
+    cameras = list(qa_data['frames'].keys())
     # Plot
     fig = plt.figure(figsize=(8, 5.0))
     gs = gridspec.GridSpec(2, 2)
@@ -541,7 +543,7 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     ylbl = 0.85
     yoff = 0.1
     ax.text(xlbl, ylbl, qa_prod.prod_name, color='black', transform=ax.transAxes, ha='left')
-    nights = ne_dict.keys()
+    nights = list(ne_dict.keys())
     #
     ylbl -= yoff
     ax.text(xlbl+0.1, ylbl, 'Nights: {}'.format(nights),
@@ -567,3 +569,54 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
             pp.close()
     else:  # Show
         plt.show()
+
+
+def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True):
+    """ Generate a plot of sky subtraction residuals
+    Typically for a given channel
+    Args:
+        wave:
+        sky_flux:
+        sky_resid:
+        outfile:
+        pp:
+        close:
+
+    Returns:
+
+    """
+    # Start the plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(2,1)
+
+    # Wavelength
+    ax_wave = plt.subplot(gs[0])
+    du_pslices(sky_wave, sky_res, np.min(sky_wave), np.max(sky_wave),
+               0., num_slices=20, axis=ax_wave)
+    ax_wave.set_xlabel('Wavelength')
+    ax_wave.set_ylabel('Residual Flux')
+
+    # Wavelength
+    ax_flux = plt.subplot(gs[1])
+    du_pslices(sky_flux, sky_res, np.min(sky_flux), np.max(sky_flux),
+               0., num_slices=20, axis=ax_flux, set_ylim_from_stats=True)
+    ax_flux.set_xlabel('log10(Sky Flux)')
+    ax_flux.set_ylabel('Residual Flux')
+    #ax_flux.set_ylim(-600, 100)
+
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+

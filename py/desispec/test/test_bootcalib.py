@@ -7,9 +7,9 @@ from uuid import uuid1
 import os
 
 import numpy as np
-import urllib2
 import glob
 
+import requests
 from astropy.io import fits
 
 from desispec import bootcalib as desiboot
@@ -32,21 +32,21 @@ class TestBoot(unittest.TestCase):
         if not os.path.exists(cls.testarc):
             url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
             try:
-                f = urllib2.urlopen(url_arc)
+                f = requests.get(url_arc)
             except:
                 cls.data_unavailable = True
             else:
                 with open(cls.testarc, "wb") as code:
-                    code.write(f.read())
+                    code.write(f.content)
         if not os.path.exists(cls.testflat):
             url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
             try:
-                f = urllib2.urlopen(url_flat)
+                f = requests.get(url_flat)
             except:
                 cls.data_unavailable = True
             else:
                 with open(cls.testflat, "wb") as code:
-                    code.write(f.read())
+                    code.write(f.content)
 
     @classmethod
     def tearDownClass(cls):

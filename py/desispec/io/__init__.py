@@ -10,7 +10,7 @@ Tools for data and metadata I/O.
 """
 
 # help with 2to3 support
-from __future__ import absolute_import, division
+from __future__ import absolute_import, division, print_function
 
 from .meta import (findfile, get_exposures, get_files, get_raw_files,
     rawdata_root, specprod_root, validate_night)

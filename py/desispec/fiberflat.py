@@ -288,7 +288,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
 
     fiberflat=np.ones((flux.shape))
     fiberflat_ivar=np.zeros((flux.shape))
-    mask=np.zeros((flux.shape)).astype(long)  # SOMEONE CHECK THIS !
+    mask=np.zeros((flux.shape), dtype='uint32')
     
     # reset ivar
     ivar=frame.ivar
@@ -544,7 +544,7 @@ def qa_fiberflat(param, frame, fiberflat):
     # Check amplitude of the meanspectrum
     qadict['MAX_MEANSPEC'] = float(np.max(fiberflat.meanspec))
     if qadict['MAX_MEANSPEC'] < 100000:
-        log.warn("Low counts in meanspec = {:g}".format(qadict['MAX_MEANSPEC']))
+        log.warning("Low counts in meanspec = {:g}".format(qadict['MAX_MEANSPEC']))
 
     # Record chi2pdf
     try:
@@ -555,7 +555,7 @@ def qa_fiberflat(param, frame, fiberflat):
     # N mask
     qadict['N_MASK'] = int(np.sum(fiberflat.mask > 0))
     if qadict['N_MASK'] > param['MAX_N_MASK']:  # Arbitrary
-        log.warn("High rejection rate: {:d}".format(qadict['N_MASK']))
+        log.warning("High rejection rate: {:d}".format(qadict['N_MASK']))
 
     # Scale (search for low/high throughput)
     gdp = fiberflat.mask == 0
@@ -564,21 +564,21 @@ def qa_fiberflat(param, frame, fiberflat):
     MAX_SCALE_OFF = float(np.max(np.abs(scale-1.)))
     fiber = int(np.argmax(np.abs(scale-1.)))
     qadict['MAX_SCALE_OFF'] = [MAX_SCALE_OFF, fiber]
-    if qadict['MAX_SCALE_OFF'] > param['MAX_SCALE_OFF']:
-        log.warn("Discrepant flux in fiberflat: {:g}, {:d}".format(
+    if qadict['MAX_SCALE_OFF'][0] > param['MAX_SCALE_OFF']:
+        log.warning("Discrepant flux in fiberflat: {:g}, {:d}".format(
                 qadict['MAX_SCALE_OFF'][0], qadict['MAX_SCALE_OFF'][1]))
 
     # Offset in fiberflat
     qadict['MAX_OFF'] = float(np.max(np.abs(fiberflat.fiberflat-1.)))
     if qadict['MAX_OFF'] > param['MAX_OFF']:
-        log.warn("Large offset in fiberflat: {:g}".format(qadict['MAX_OFF']))
+        log.warning("Large offset in fiberflat: {:g}".format(qadict['MAX_OFF']))
 
     # Offset in mean of fiberflat
     mean = np.mean(fiberflat.fiberflat*gdp,axis=1)
     fiber = int(np.argmax(np.abs(mean-1.)))
     qadict['MAX_MEAN_OFF'] = [float(np.max(np.abs(mean-1.))), fiber]
-    if qadict['MAX_MEAN_OFF'] > param['MAX_MEAN_OFF']:
-        log.warn("Discrepant mean in fiberflat: {:g}, {:d}".format(
+    if qadict['MAX_MEAN_OFF'][0] > param['MAX_MEAN_OFF']:
+        log.warning("Discrepant mean in fiberflat: {:g}, {:d}".format(
                 qadict['MAX_MEAN_OFF'][0], qadict['MAX_MEAN_OFF'][1]))
 
     # RMS in individual fibers
@@ -586,8 +586,8 @@ def qa_fiberflat(param, frame, fiberflat):
                       np.outer(mean, np.ones(fiberflat.nwave))),axis=1)
     fiber = int(np.argmax(rms))
     qadict['MAX_RMS'] = [float(np.max(rms)), fiber]
-    if qadict['MAX_RMS'] > param['MAX_RMS']:
-        log.warn("Large RMS in fiberflat: {:g}, {:d}".format(
+    if qadict['MAX_RMS'][0] > param['MAX_RMS']:
+        log.warning("Large RMS in fiberflat: {:g}, {:d}".format(
                 qadict['MAX_RMS'][0], qadict['MAX_RMS'][1]))
 
     # Return

@@ -3,17 +3,22 @@ Welcome to desispec's documentation!
 ====================================
 
 Contents
-++++++++
+--------
 
 .. toctree::
     :maxdepth: 1
 
-    intro.rst
+    overview.rst
+    install.rst
+    pipeline.rst
+    dev.rst
     coadd.rst
+    changes.rst
     api.rst
 
+
 Indices and tables
-++++++++++++++++++
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`

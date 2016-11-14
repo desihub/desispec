@@ -51,18 +51,17 @@ env:
         # to repeat them for all configurations.
         # - NUMPY_VERSION=1.10
         # - SCIPY_VERSION=0.16
-        - ASTROPY_VERSION=1.1.1
+        - ASTROPY_VERSION=1.2.1
         # - SPHINX_VERSION=1.3
         # Need desiutil master until >1.5.0 tag to get add_dependencies
-        # - DESIUTIL_VERSION=1.4.1
-        - DESIUTIL_VERSION=master
-        - SPECLITE_VERSION=0.4
-        - SPECTER_VERSION=0.5.0
+        - DESIUTIL_VERSION=1.8.0
+        - SPECLITE_VERSION=0.5
+        - SPECTER_VERSION=0.6.0
         # - HARP_VERSION=1.0.1
         # - SPECEX_VERSION=0.3.9
         - MAIN_CMD='python setup.py'
         # These packages will always be installed.
-        - CONDA_DEPENDENCIES=""
+        - CONDA_DEPENDENCIES="qt=4"
         # These packages will only be installed if we really need them.
         - CONDA_ALL_DEPENDENCIES="scipy matplotlib coverage==3.7.1 pyyaml"
         # These packages will always be installed.
@@ -76,6 +75,7 @@ env:
         - DEBUG=False
     matrix:
         - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
+        - PYTHON_VERSION=3.5 SETUP_CMD='egg_info'
 
 matrix:
     # Don't wait for allowed failures.
@@ -102,6 +102,12 @@ matrix:
         # Default versions
         - os: linux
           env: PYTHON_VERSION=2.7 SETUP_CMD='test --coverage'
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+
+        # Default versions
+        - os: linux
+          env: PYTHON_VERSION=3.5 SETUP_CMD='test'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 

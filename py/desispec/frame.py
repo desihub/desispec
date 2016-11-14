@@ -4,6 +4,7 @@ Lightweight wrapper class for spectra, to be returned by io.read_frame
 
 from __future__ import absolute_import, division
 
+import numbers
 import numpy as np
 
 from desispec import util
@@ -38,7 +39,8 @@ log = get_logger()
 
 class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
-                fibers=None, spectrograph=None, meta=None, fibermap=None):
+                fibers=None, spectrograph=None, meta=None, fibermap=None,
+                chi2pix=None):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
@@ -57,6 +59,8 @@ class Frame(object):
             spectrograph: integer, which spectrograph [0-9]
             meta: dict-like object (e.g. FITS header)
             fibermap: fibermap table
+            chi2pix: 2D[nspec, nwave] chi2 of 2D model to pixel-level data
+                for pixels that contributed to each flux bin
 
         Notes:
             spectrograph input is used only if fibers is None.  In this case,
@@ -87,6 +91,7 @@ class Frame(object):
         self.meta = meta
         self.fibermap = fibermap
         self.nspec, self.nwave = self.flux.shape
+        self.chi2pix = chi2pix
         
         fibers_per_spectrograph = 500   #- hardcode; could get from desimodel
         
@@ -126,7 +131,7 @@ class Frame(object):
                 self.fibers = fibermap['FIBER']
             elif spectrograph is not None:
                 self.fibers = spectrograph*fibers_per_spectrograph + np.arange(self.nspec, dtype=int)
-            elif (self.meta is not None) and ('FIBERMIN' in self.meta.keys()):
+            elif (self.meta is not None) and ('FIBERMIN' in self.meta):
                 self.fibers = self.meta['FIBERMIN'] + np.arange(self.nspec, dtype=int)
             else:
                 raise ValueError("Must set fibers by one of the methods!")
@@ -149,7 +154,7 @@ class Frame(object):
         This is analogous to how integers vs. slices or arrays return either
         scalars or arrays when indexing numpy.ndarray .
         """
-        if isinstance(index, int):
+        if isinstance(index, numbers.Integral):
             return Spectrum(self.wave, self.flux[index], self.ivar[index], self.mask[index], self.R[index])
         
         #- convert index to 1d array to maintain dimentionality of sliced arrays
@@ -165,10 +170,15 @@ class Frame(object):
             fibermap = self.fibermap[index]
         else:
             fibermap = None
+            
+        if self.chi2pix is not None:
+            chi2pix = self.chi2pix[index]
+        else:
+            chi2pix = None
         
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
-                    meta=self.meta, fibermap=fibermap)
+                    meta=self.meta, fibermap=fibermap, chi2pix=chi2pix)
         
         return result

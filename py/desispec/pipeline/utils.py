@@ -9,7 +9,7 @@ desispec.pipeline.utils
 Utilities for the pipeline.
 """
 from __future__ import absolute_import, division, print_function
-
+import numbers
 
 def option_list(opts):
     """Convert key, value pairs into command-line options.
@@ -27,12 +27,12 @@ def option_list(opts):
     optlist = []
     for key, val in opts.items():
         keystr = "--{}".format(key)
-        if isinstance(val, (bool,)):
+        if isinstance(val, bool):
             if val:
                 optlist.append(keystr)
         else:
             optlist.append(keystr)
-            if isinstance(val, (float,)):
+            if isinstance(val, float):
                 optlist.append("{:.14e}".format(val))
             elif isinstance(val, (list, tuple)):
                 optlist.extend(val)

@@ -57,7 +57,7 @@ def main(args):
     if len(fibers) != nspec:
         msg = "Input files only have {} instead of {} spectra".format(len(fibers), nspec)
         if args.force:
-            log.warn(msg)
+            log.warning(msg)
         else:
             log.fatal(msg)
             sys.exit(1)
@@ -78,6 +78,8 @@ def main(args):
     ivar = np.zeros( (nspec, nwave) )
     R = np.zeros( (nspec, ndiag, nwave) )
     fibermap = desispec.io.empty_fibermap(nspec, specmin=fibermin)
+    mask = np.zeros( (nspec, nwave), dtype=np.uint32)
+    chi2pix = np.zeros( (nspec, nwave) )    
 
     #- Fill them!
     for filename in args.files :
@@ -87,6 +89,8 @@ def main(args):
         xivar = fx['IVAR'].data
         xR = fx['RESOLUTION'].data
         xfibermap = fx['FIBERMAP'].data
+        xmask = fx['MASK'].data
+        xchi2pix = fx['CHI2PIX'].data
         fx.close()
 
         ii = xfibermap['FIBER'] % nspec
@@ -95,12 +99,14 @@ def main(args):
         ivar[ii] = xivar
         R[ii] = xR
         fibermap[ii] = xfibermap
+        mask[ii] = xmask
+        chi2pix[ii] = xchi2pix
         
     #- Write it out
     print("Writing", args.output)
-    frame = Frame(w, flux, ivar, resolution_data=R,
+    frame = Frame(w, flux, ivar, mask=mask, resolution_data=R,
                 spectrograph=spectrograph,
-                meta=hdr, fibermap=fibermap)
+                meta=hdr, fibermap=fibermap, chi2pix=chi2pix)
     desispec.io.write_frame(args.output, frame)
 
     #- Scary!  Delete input files

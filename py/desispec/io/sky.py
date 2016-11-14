@@ -42,6 +42,7 @@ def write_sky(outfile, skymodel, header=None):
     hx.append( fits.ImageHDU(skymodel.ivar.astype('f4'), name='IVAR') )
     hx.append( fits.CompImageHDU(skymodel.mask, name='MASK') )
     hx.append( fits.ImageHDU(skymodel.wave.astype('f4'), name='WAVELENGTH') )
+    hx[-1].header['BUNIT'] = 'Angstrom'
 
     hx.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
@@ -55,7 +56,7 @@ def read_sky(filename) :
     skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
     """
     #- check if filename is (night, expid, camera) tuple instead
-    if not isinstance(filename, (str, unicode)):
+    if not isinstance(filename, str):
         night, expid, camera = filename
         filename = findfile('sky', night, expid, camera)
 

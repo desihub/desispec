@@ -4,6 +4,8 @@ Preprocess raw DESI exposures
 
 import re
 import numpy as np
+import scipy.interpolate
+
 from desispec.image import Image
 
 from desispec import cosmics
@@ -24,9 +26,9 @@ def _parse_sec_keyword(value):
     '''
     m = re.search('\[(\d+):(\d+)\,(\d+):(\d+)\]', value)
     if m is None:
-        raise ValueError, 'unable to parse {} as [a:b, c:d]'.format(value)
+        raise ValueError('unable to parse {} as [a:b, c:d]'.format(value))
     else:
-        xmin, xmax, ymin, ymax = map(int, m.groups())
+        xmin, xmax, ymin, ymax = tuple(map(int, m.groups()))
 
     return np.s_[ymin-1:ymax, xmin-1:xmax]
 
@@ -76,7 +78,120 @@ def _overscan(pix, nsigma=5, niter=3):
 
     return overscan, readnoise
 
-def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8) :
+
+def _global_background(image,patch_width=200) :
+    '''
+    determine background using a 2D median with square patches of width = width
+    that are interpolated
+    (does not subtract the background)
+    
+    Args:
+       image is expected to be already preprocessed
+       ( image = ((rawimage-bias-overscan)*gain)/pixflat )
+    Options:
+       patch_width (integer) size in pixels of the median square patches
+    Returns background image with same shape as input image
+    '''
+    bkg=np.zeros_like(image)
+    bins0=np.linspace(0,image.shape[0],float(image.shape[0])/patch_width).astype(int)
+    bins1=np.linspace(0,image.shape[1],float(image.shape[1])/patch_width).astype(int)
+    bkg_grid=np.zeros((bins0.size-1,bins1.size-1))
+    for j in xrange(bins1.size-1) :
+        for i in xrange(bins0.size-1) :
+            bkg_grid[i,j]=np.median(image[bins0[i]:bins0[i+1],bins1[j]:bins1[j+1]])
+    
+    nodes0=bins0[:-1]+(bins0[1]-bins0[0])/2.
+    nodes1=bins1[:-1]+(bins1[1]-bins0[0])/2.
+    spline=scipy.interpolate.RectBivariateSpline(nodes0,nodes1,bkg_grid,kx=2, ky=2, s=0)
+    return spline(np.arange(0,image.shape[0]),np.arange(0,image.shape[1]))
+    
+    
+def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
+    '''
+    determine background using a 2D median with square patches of width = width
+    that are interpolated and optionnally try and match the level of amplifiers
+    (does not subtract the background)
+    
+    Args:
+       image is expected to be already preprocessed
+       ( image = ((rawimage-bias-overscan)*gain)/pixflat )
+       header is used to read CCDSEC
+    Options:
+       patch_width (integer) size in pixels of the median square patches
+       stitch_width (integer) width in pixels of amplifier edges to match level of amplifiers 
+       stitch : do match level of amplifiers 
+    Returns background image with same shape as input image
+    
+    '''
+    
+    
+    log.info("fit a smooth background over the whole image with median patches of size %dx%d"%(patch_width,patch_width))    
+    bkg=_global_background(image,patch_width)
+    
+    if stitch :
+        
+        tmp_image=image-bkg
+        
+        log.info("stitch amps one with the other using median patches of size %dx%d"%(stitch_width,patch_width))
+        tmp_bkg=np.zeros_like(image)
+        
+        
+        for edge in [[1,2,1],[3,4,1],[1,3,0],[2,4,0]] :
+            
+            amp0=edge[0]
+            amp1=edge[1]
+            axis=edge[2]
+                
+
+            ii0=_parse_sec_keyword(header['CCDSEC%d'%amp0])
+            ii1=_parse_sec_keyword(header['CCDSEC%d'%amp1])
+            pos=ii0[axis].stop
+            bins=np.linspace(ii0[axis-1].start,ii0[axis-1].stop,float(ii0[axis-1].stop-ii0[axis-1].start)/patch_width).astype(int)
+            delta=np.zeros((bins.size-1))
+            for i in xrange(bins.size-1) :
+                if axis==0 :            
+                    delta[i]=np.median(tmp_image[pos-stitch_width:pos,bins[i]:bins[i+1]])-np.median(tmp_image[pos:pos+stitch_width,bins[i]:bins[i+1]])
+                else :
+                    delta[i]=np.median(tmp_image[bins[i]:bins[i+1],pos-stitch_width:pos])-np.median(tmp_image[bins[i]:bins[i+1],pos:pos+stitch_width])
+            nodes=bins[:-1]+(bins[1]-bins[0])/2.
+            
+            log.info("AMPS %d:%d mean diff=%f"%(amp0,amp1,np.mean(delta)))
+                            
+            delta=np.interp(np.arange(ii0[axis-1].stop-ii0[axis-1].start),nodes,delta)
+            
+            # smooth ramp along axis of scale patch_width 
+            w=float(patch_width)
+            x=np.arange(ii1[axis].stop-ii1[axis].start)                        
+            #ramp=(x<w)*(x>w/2)*((x-w)/(w))**2+(x<=w/2)*(0.5-(x/(w))**2) # peaks at 0.5
+            ramp=0.5*np.ones(x.shape)
+                
+            if axis==0 :
+                tmp_bkg[ii1] -= np.outer(ramp,delta)
+            else :
+                tmp_bkg[ii1] -= np.outer(delta,ramp)
+
+            x=np.arange(ii0[axis].stop-ii0[axis].start)  
+            #ramp=(x<w)*(x>w/2)*((x-w)/(w))**2+(x<=w/2)*(0.5-(x/(w))**2) # peaks at 0.5
+            ramp=0.5*np.ones(x.shape)
+
+            if axis==0 :
+                tmp_bkg[ii0] += np.outer(ramp[::-1],delta)
+            else :
+                tmp_bkg[ii0] += np.outer(delta,ramp[::-1])
+                
+        bkg += tmp_bkg
+        tmp_image=image-bkg
+        log.info("refit smooth background over the whole image with median patches of size %dx%d"%(patch_width,patch_width))
+        bkg+=_global_background(tmp_image,patch_width)
+        
+    
+    
+    log.info("done")
+    return bkg
+
+
+def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8):
+
     '''
     preprocess image using metadata in header
 
@@ -95,6 +210,13 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsi
         filename (str or unicode): read HDU 0 and use that
         DATE-OBS is required in header if bias, pixflat, or mask=True
 
+
+    
+
+    Optional background subtraction with median filtering if bkgsub=True
+    
+    Optional disabling of cosmic ray rejection if nocosmic=True
+    
     Optional tuning of cosmic ray rejection parameters:
         cosmics_nsig: number of sigma above background required
         cosmics_cfudge: number of sigma inconsistent with PSF required
@@ -135,12 +257,16 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsi
     #- Subtract bias image
     camera = header['CAMERA'].lower()
 
+    #- convert rawimage to float64 : this is the output format of read_image
+    rawimage = rawimage.astype(np.float64)
+    
     if bias is not False and bias is not None:
         if bias is True:
             #- use default bias file for this camera/night
             dateobs = header['DATE-OBS']
             bias = read_bias(camera=camera, dateobs=dateobs)
-        elif isinstance(bias, (str, unicode)):
+        ### elif isinstance(bias, (str, unicode)):
+        elif isinstance(bias, str):
             #- treat as filename
             bias = read_bias(filename=bias)
 
@@ -150,8 +276,14 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsi
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 
     #- Output arrays
-    yy, xx = _parse_sec_keyword(header['CCDSEC4'])  #- 4 = upper right
-    image = np.zeros( (yy.stop, xx.stop) )
+    ny=0
+    nx=0
+    for amp in ['1', '2', '3', '4']:
+        yy, xx = _parse_sec_keyword(header['CCDSEC%s'%amp])
+        ny=max(ny,yy.stop)
+        nx=max(nx,xx.stop)
+    image = np.zeros( (ny,nx) )
+    
     readnoise = np.zeros_like(image)
 
     for amp in ['1', '2', '3', '4']:
@@ -179,16 +311,16 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsi
                 log.error('Amp {} measured readnoise {:.2f} < 0.5 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise < 0.9*expected_readnoise:
-                log.warn('Amp {} measured readnoise {:.2f} < 0.9 * expected readnoise {:.2f}'.format(
+                log.warning('Amp {} measured readnoise {:.2f} < 0.9 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise > 2.0*expected_readnoise:
                 log.error('Amp {} measured readnoise {:.2f} > 2 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
             elif rdnoise > 1.2*expected_readnoise:
-                log.warn('Amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
+                log.warning('Amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
         else:
-            log.warn('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
+            log.warning('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
 
         #- subtract overscan from data region and apply gain
         jj = _parse_sec_keyword(header['DATASEC'+amp])
@@ -200,7 +332,8 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsi
         if mask is True:
             dateobs = header['DATE-OBS']
             mask = read_mask(camera=camera, dateobs=dateobs)
-        elif isinstance(mask, (str, unicode)):
+        ### elif isinstance(mask, (str, unicode)):
+        elif isinstance(mask, str):
             mask = read_mask(filename=mask)
     else:
         mask = np.zeros(image.shape, dtype=np.int32)
@@ -213,7 +346,8 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsi
         if pixflat is True:
             dateobs = header['DATE-OBS']
             pixflat = read_pixflat(camera=camera, dateobs=dateobs)
-        elif isinstance(pixflat, (str, unicode)):
+        ### elif isinstance(pixflat, (str, unicode)):
+        elif isinstance(pixflat, str):
             pixflat = read_pixflat(filename=pixflat)
 
         if pixflat.shape != image.shape:
@@ -236,11 +370,18 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, cosmics_nsi
     var = image.clip(0) + readnoise**2
     ivar = 1.0 / var
 
+    if bkgsub :
+        bkg = _background(image,header)
+        image -= bkg
+        
+
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- update img.mask to mask cosmic rays
-    cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
 
+    if not nocosmic :
+        cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
+    
     return img
 
 #-------------------------------------------------------------------------

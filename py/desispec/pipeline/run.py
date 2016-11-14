@@ -123,6 +123,21 @@ def finish_task(name, node):
 
 
 def is_finished(rawdir, proddir, grph, name):
+    '''
+    Determine whether a single data object is finished.
+
+    This checks whether a data object is finished by testing whether 
+    the output file exists and is newer than its inputs.
+
+    Args:
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the dependency graph.
+        name (str): the object name.
+
+    Returns (bool):
+        True if the object is finished, False otherwise.
+    '''
     # eventually, we could check a database to get this info...
 
     type = grph[name]['type']
@@ -154,6 +169,21 @@ def is_finished(rawdir, proddir, grph, name):
 
 
 def prod_state(rawdir, proddir, grph):
+    '''
+    Check the completion state of all objects in a graph.
+
+    This scans over an entire dependency graph and tests each object
+    for whether it is finished.  If the object is done, it marks the
+    the state of the node in the graph.
+
+    Args:
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the dependency graph.
+
+    Returns:
+        Nothing.  The graph is modified in place.
+    '''
     for name, nd in grph.items():
         if is_finished(rawdir, proddir, grph, name):
             nd['state'] = 'done'
@@ -161,7 +191,26 @@ def prod_state(rawdir, proddir, grph):
 
 
 def run_task(step, rawdir, proddir, grph, opts, comm=None):
-    if step not in step_file_types.keys():
+    '''
+    Run a single pipeline task.
+
+    This function takes a truncated graph containing a single node
+    of the specified type and the nodes representing the inputs for
+    the task.
+
+    Args:
+        step (str): the pipeline step type.
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the truncated dependency graph.
+        opts (dict): the global options dictionary.
+        comm (mpi4py.Comm): the optional MPI communicator to use.
+
+    Returns:
+        Nothing.
+    '''
+
+    if step not in step_file_types:
         raise ValueError("step type {} not recognized".format(step))
 
     log = get_logger()
@@ -215,15 +264,16 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         options['fiberflat'] = flatpath
         options['arcfile'] = arcpath
         options['qafile'] = qafile
-        options['qafig'] = qafig
+        ### options['qafig'] = qafig
         options['outfile'] = outpath
         options.update(opts)
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_bootcalib']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_bootcalib']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = bootcalib.parse(optarray)
 
@@ -270,9 +320,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_compute_psf']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_compute_psf']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = specex.parse(optarray)
         specex.main(args, comm=comm)
@@ -334,9 +385,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_extract_spectra']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_extract_spectra']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = extract.parse(optarray)
         extract.main_mpi(args, comm=comm)
@@ -358,9 +410,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_compute_fiberflat']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_compute_fiberflat']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = fiberflat.parse(optarray)
 
@@ -397,9 +450,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_compute_sky']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_compute_sky']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = skypkg.parse(optarray)
 
@@ -443,9 +497,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_fit_stdstars']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_fit_stdstars']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = stdstars.parse(optarray)
 
@@ -496,9 +551,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_compute_fluxcalibration']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_compute_fluxcalibration']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = fluxcal.parse(optarray)
 
@@ -546,9 +602,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_process_exposure']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_process_exposure']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = procexp.parse(optarray)
 
@@ -567,9 +624,10 @@ def run_task(step, rawdir, proddir, grph, opts, comm=None):
         optarray = option_list(options)
 
         # at debug level, write out the equivalent commandline
-        com = ['RUN', 'desi_zfind']
-        com.extend(optarray)
-        log.debug(" ".join(com))
+        if rank == 0:
+            com = ['RUN', 'desi_zfind']
+            com.extend(optarray)
+            log.debug(" ".join(com))
 
         args = zfind.parse(optarray)
         zfind.main(args, comm=comm)
@@ -599,6 +657,8 @@ def stdouterr_redirected(to=os.devnull, comm=None):
         print("from Python")
         os.system("echo non-Python applications are also supported")
     '''
+    sys.stdout.flush()
+    sys.stderr.flush()
     fd = sys.stdout.fileno()
     fde = sys.stderr.fileno()
 
@@ -624,31 +684,77 @@ def stdouterr_redirected(to=os.devnull, comm=None):
         log.addHandler(ch)
 
     with os.fdopen(os.dup(fd), 'w') as old_stdout:
+        pto = to
         if comm is None:
-            with open(to, 'w') as file:
+            with open(pto, 'w') as file:
                 _redirect_stdout(to=file)
         else:
-            for p in range(comm.size):
-                if p == comm.rank:
-                    with open(to, 'w') as file:
-                        _redirect_stdout(to=file)
-                comm.barrier()
+            pto = "{}_{}".format(to, comm.rank)
+            with open(pto, 'w') as file:
+                _redirect_stdout(to=file)
         try:
             if (comm is None) or (comm.rank == 0):
                 log.info("Begin log redirection to {} at {}".format(to, time.asctime()))
             sys.stdout.flush()
             yield # allow code to be run with the redirected stdout
         finally:
-            if (comm is None) or (comm.rank == 0):
-                log.info("End log redirection to {} at {}".format(to, time.asctime()))
             sys.stdout.flush()
+            sys.stderr.flush()
             _redirect_stdout(to=old_stdout) # restore stdout.
                                             # buffering and flags such as
                                             # CLOEXEC may be different
+            if comm is not None:
+                # concatenate per-process files
+                comm.barrier()
+                if comm.rank == 0:
+                    with open(to, 'w') as outfile:
+                        for p in range(comm.size):
+                            outfile.write("================= Process {} =================\n".format(p))
+                            fname = "{}_{}".format(to, p)
+                            with open(fname) as infile:
+                                outfile.write(infile.read())
+                            os.remove(fname)
+                comm.barrier()
+
+            if (comm is None) or (comm.rank == 0):
+                log.info("End log redirection to {} at {}".format(to, time.asctime()))
+            sys.stdout.flush()
+            
     return
 
 
 def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
+    '''
+    Run a whole single step of the pipeline.
+
+    This function first takes the communicator and the requested processes
+    per task and splits the communicator to form groups of processes of
+    the desired size.  It then takes the full dependency graph and extracts 
+    all the tasks for a given step.  These tasks are then distributed among
+    the groups of processes.
+
+    Each process group loops over its assigned tasks.  For each task, it
+    redirects stdout/stderr to a per-task file and calls run_task().  If
+    any process in the group throws an exception, then the traceback and
+    all information (graph and options) needed to re-run the task are written
+    to disk.
+
+    After all process groups have finished, the state of the full graph is
+    merged from all processes.  This way a failure of one process on one task
+    will be propagated as a failed task to all processes.
+
+    Args:
+        step (str): the pipeline step to process.
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the dependency graph.
+        opts (dict): the global options.
+        comm (mpi4py.Comm): the full communicator to use for whole step.
+        taskproc (int): the number of processes to use for a single task.
+
+    Returns:
+        Nothing.
+    '''
     log = get_logger()
 
     nproc = 1
@@ -667,14 +773,14 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     if rank == 0:
         # For this step, compute all the tasks that we need to do
         alltasks = []
-        for name, nd in sorted(list(grph.items())):
+        for name, nd in sorted(grph.items()):
             if nd['type'] in step_file_types[step]:
                 alltasks.append(name)
 
         # For each task, prune if it is finished
         tasks = []
         for t in alltasks:
-            if 'state' in grph[t].keys():
+            if 'state' in grph[t]:
                 if grph[t]['state'] != 'done':
                     tasks.append(t)
             else:
@@ -757,6 +863,9 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
     faildir = os.path.join(proddir, 'run', 'failed')
     logdir = os.path.join(proddir, 'run', 'logs')
 
+    failcount = 0
+    group_failcount = 0
+
     if group_ntask > 0:
         for t in range(group_firsttask, group_firsttask + group_ntask):
             # if group_rank == 0:
@@ -774,7 +883,14 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             # For this task, we will temporarily redirect stdout and stderr
             # to a task-specific log file.
 
-            with stdouterr_redirected(to=os.path.join(nlogdir, "{}.log".format(gname)), comm=comm_group):
+            tasklog = os.path.join(nlogdir, "{}.log".format(gname))
+            if group_rank == 0:
+                if os.path.isfile(tasklog):
+                    os.remove(tasklog)
+            if comm_group is not None:
+                comm_group.barrier()
+
+            with stdouterr_redirected(to=tasklog, comm=comm_group):
                 try:
                     # if the step previously failed, clear that file now
                     if group_rank == 0:
@@ -797,6 +913,7 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
                     # The task threw an exception.  We want to dump all information
                     # that will be needed to re-run the run_task() function on just
                     # this task.
+                    group_failcount += 1
                     msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
                     log.error(msg)
                     exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -820,9 +937,11 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
 
         if comm_group is not None:
             comm_group.barrier()
+            group_failcount = comm_group.allreduce(group_failcount)
 
     # Now we take the graphs from all groups and merge their states
 
+    failcount = group_failcount
     #sys.stdout.flush()
     if comm is not None:
         # print("proc {} hit merge barrier".format(rank))
@@ -832,15 +951,43 @@ def run_step(step, rawdir, proddir, grph, opts, comm=None, taskproc=1):
             # print("proc {} joining merge".format(rank))
             # sys.stdout.flush()
             graph_merge_state(grph, comm=comm_rank)
+            failcount = comm_rank.allreduce(failcount)
         if comm_group is not None:
             # print("proc {} joining bcast".format(rank))
             # sys.stdout.flush()
             grph = comm_group.bcast(grph, root=0)
+            failcount = comm_group.bcast(failcount, root=0)
 
-    return grph
+    return grph, ntask, failcount
 
 
 def retry_task(failpath, newopts=None):
+    '''
+    Attempt to re-run a failed task.
+
+    This takes the path to a yaml file containing the information about a
+    failed task (such a file is written by run_step() when a task fails).
+    This yaml file contains the truncated dependecy graph for the single
+    task, as well as the options that were used when running the task.
+    It also contains information about the number of processes that were
+    being used.
+
+    This function attempts to load mpi4py and use the MPI.COMM_WORLD
+    communicator to re-run the task.  If COMM_WORLD has a different number
+    of processes than were originally used, a warning is printed.  A
+    warning is also printed if the options are being overridden.
+
+    If the task completes successfully, the failed yaml file is deleted.
+
+    Args:
+        failpath (str): the path to the failure yaml file.
+        newopts (dict): the dictionary of options to use in place of the
+            original ones.
+
+    Returns:
+        Nothing.
+    '''
+
     log = get_logger()
 
     if not os.path.isfile(failpath):
@@ -868,11 +1015,11 @@ def retry_task(failpath, newopts=None):
         rank = comm.rank
         if nworld != nproc:
             if rank == 0:
-                log.warn("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
+                log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
 
     opts = origopts
     if newopts is not None:
-        log.warn("WARNING: overriding original options")
+        log.warning("WARNING: overriding original options")
         opts = newopts
 
     try:
@@ -887,6 +1034,39 @@ def retry_task(failpath, newopts=None):
 
 
 def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, comm=None):
+    '''
+    Run multiple sequential pipeline steps.
+
+    
+
+    This function first takes the communicator and the requested processes
+    per task and splits the communicator to form groups of processes of
+    the desired size.  It then takes the full dependency graph and extracts 
+    all the tasks for a given step.  These tasks are then distributed among
+    the groups of processes.
+
+    Each process group loops over its assigned tasks.  For each task, it
+    redirects stdout/stderr to a per-task file and calls run_task().  If
+    any process in the group throws an exception, then the traceback and
+    all information (graph and options) needed to re-run the task are written
+    to disk.
+
+    After all process groups have finished, the state of the full graph is
+    merged from all processes.  This way a failure of one process on one task
+    will be propagated as a failed task to all processes.
+
+    Args:
+        step (str): the pipeline step to process.
+        rawdir (str): the path to the raw data directory.
+        proddir (str): the path to the production directory.
+        grph (dict): the dependency graph.
+        opts (dict): the global options.
+        comm (mpi4py.Comm): the full communicator to use for whole step.
+        taskproc (int): the number of processes to use for a single task.
+
+    Returns:
+        Nothing.
+    '''
     log = get_logger()
 
     rank = 0
@@ -958,7 +1138,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
 
     jobid = None
     if rank == 0:
-        if 'SLURM_JOBID' in os.environ.keys():
+        if 'SLURM_JOBID' in os.environ:
             jobid = "slurm-{}".format(os.environ['SLURM_JOBID'])
         else:
             jobid = os.getpid()
@@ -975,7 +1155,7 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
     for st in range(firststep, laststep):
         for name, nd in grph.items():
             if nd['type'] in step_file_types[run_step_types[st]]:
-                if 'state' in nd.keys():
+                if 'state' in nd:
                     if nd['state'] != 'done':
                         graph_mark(grph, name, 'wait')
                 else:
@@ -996,7 +1176,16 @@ def run_steps(first, last, rawdir, proddir, spectrographs=None, nightstr=None, c
         taskproc = steptaskproc[run_step_types[st]]
         if taskproc > nproc:
             taskproc = nproc
-        grph = run_step(run_step_types[st], rawdir, proddir, grph, opts, comm=comm, taskproc=taskproc)
+
+        grph, ntask, failtask = run_step(run_step_types[st], rawdir, proddir, grph, opts, comm=comm, taskproc=taskproc)
+        if rank == 0:
+            log.info("  {} total tasks, {} failures".format(ntask, failtask))
+
+        if ntask == failtask:
+            if rank == 0:
+                log.info("step {}: all tasks failed, quiting at {}".format(run_step_types[st], time.asctime()))
+            break
+
         if comm is not None:
             comm.barrier()
         if rank == 0:

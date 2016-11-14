@@ -10,6 +10,7 @@ import os
 
 import numpy as np
 import time
+import json
 
 from desispec.zfind import ZfindBase
 from desispec.interpolation import resample_flux
@@ -19,7 +20,8 @@ class RedMonsterZfind(ZfindBase):
     """Class documentation goes here.
     """
     def __init__(self, wave, flux, ivar, R=None, dloglam=1e-4, objtype=None,
-                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005),nproc=1,npoly=2):
+                 zrange_galaxy=(0.0, 1.6), zrange_qso=(0.0, 3.5), zrange_star=(-0.005, 0.005),
+                 group_galaxy=0, group_qso=1, group_star=2, nproc=1, npoly=2):
         """Uses Redmonster to classify and find redshifts.
 
         See :class:`desispec.zfind.zfind.ZfindBase` class for inputs/outputs.
@@ -41,8 +43,8 @@ class RedMonsterZfind(ZfindBase):
         #- so chop off some data
         ii, = np.where(wave>3965)
         wave = wave[ii]
-        flux = flux[:, ii]
-        ivar = ivar[:, ii]
+        flux = flux[:, ii].astype(float)
+        ivar = ivar[:, ii].astype(float)
 
         #- Resample inputs to a loglam grid
         start = round(np.log10(wave[0]), 4)+dloglam
@@ -86,11 +88,11 @@ class RedMonsterZfind(ZfindBase):
         self.templates = list()
         for x in templatetypes:
             if x == 'GALAXY':
-                self.templates.append(('ndArch-ssp_em_galaxy-v000.fits', zrange_galaxy[0], zrange_galaxy[1]))
+                self.templates.append(('ndArch-ssp_em_galaxy-v000.fits', zrange_galaxy[0], zrange_galaxy[1], group_galaxy))
             elif x == 'STAR':
-                self.templates.append(('ndArch-spEigenStar-55734.fits', zrange_star[0], zrange_star[1]))
+                self.templates.append(('ndArch-spEigenStar-55734.fits', zrange_star[0], zrange_star[1], group_star))
             elif x == 'QSO':
-                self.templates.append(('ndArch-QSO-V003.fits', zrange_qso[0], zrange_qso[1]))
+                self.templates.append(('ndArch-QSO-V003.fits', zrange_qso[0], zrange_qso[1], group_qso))
             else:
                 raise ValueError("Bad template type "+x)
 
@@ -98,9 +100,9 @@ class RedMonsterZfind(ZfindBase):
         self.zfinders = list()
         self.zfitters = list()
         
-        for template, zmin, zmax in self.templates:
+        for template, zmin, zmax, group in self.templates:
             start=time.time()
-            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=npoly, zmin=zmin, zmax=zmax,nproc=nproc)
+            zfind = ZFinder(os.path.join(self.template_dir, template), npoly=npoly, zmin=zmin, zmax=zmax, nproc=nproc, group=group)
             zfind.zchi2(self.flux, self.loglam, self.ivar, npixstep=2)
             stop=time.time()
             log.debug("Time to find the redshifts of %d fibers for template %s =%f sec"%(self.flux.shape[0],template,stop-start))
@@ -128,7 +130,11 @@ class RedMonsterZfind(ZfindBase):
 
         #- Fill in outputs
         self.spectype = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
-        self.subtype = np.asarray([repr(self.zpicker.subtype[i][0]) for i in range(nspec)])
+        self.subtype = np.asarray(["NA" for i in range(nspec)])
+        # FIXME:  re-enable subtype writing once we have a sane
+        # way to write and read this information to a FITS table
+        # column.
+        #self.subtype = np.asarray([json.dumps(self.zpicker.subtype[i][0]) for i in range(nspec)])
         self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
         self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
         self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
@@ -136,8 +142,7 @@ class RedMonsterZfind(ZfindBase):
 
         for ifiber in range(self.z.size):
             log.debug("(after zpicker) fiber #%d z=%s"%(ifiber,self.z[ifiber]))
-            
-        
+
 
 #- This is a container class needed by Redmonster zpicker
 class _RedMonsterSpecObj(object):

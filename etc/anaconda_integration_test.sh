@@ -40,7 +40,7 @@ install_desimodel_data -D 0.4.4
 #
 # Install DESI pipeline packages.
 #
-pip install git+https://github.com/dkirkby/speclite.git@v0.4#egg=speclite
+pip install git+https://github.com/dkirkby/speclite.git@v0.5#egg=speclite
 pip install git+https://github.com/desihub/specter.git@0.5.0#egg=specter
 pip install git+https://github.com/desihub/specsim.git@v0.4#egg=specsim
 pip install git+https://github.com/desihub/desitarget.git@0.4.0#egg=desitarget
