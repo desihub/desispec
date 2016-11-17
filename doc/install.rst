@@ -10,7 +10,7 @@ The DESI spectroscopic pipeline requires and interfaces with other external soft
 External Dependencies
 ------------------------
 
-In order to set up a working DESI pipeline, there are several external software packages that must be installed on your system.  There are several ways of obtaining these dependencies:  using your OS package manager, using a third-party package manager (e.g. macports, hpcports, etc), or using one of the conda-based Python distributions (e.g. Anaconda from Continuum Analytics).
+In order to set up a working DESI pipeline, there are several external software packages that must be installed on your system.  There are several ways of obtaining these dependencies:  using your OS package manager, using a third-party package manager (e.g. macports, etc), or using one of the conda-based Python distributions (e.g. Anaconda from Continuum Analytics).
 
 The list of general software outside the DESI project which is needed for the spectroscopic pipeline is:
 
@@ -27,7 +27,7 @@ The list of general software outside the DESI project which is needed for the sp
 
 If you wish to run the pipeline on a cluster, also ensure that you have installed mpi4py (which obviously requires a working MPI installation).
 
-Installing Dependencies on a Personal Workstation
+Installing Dependencies on a Linux Workstation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For development, debugging, and small tests it is convenient to install the pipeline tools on a laptop or workstation.  If you are using a Linux machine, you can get all the dependencies (except fitsio and speclite, which are pip-installable) from your distribution's package manager.  Alternatively, you can install just the non-python dependencies with your package manager and then use Anaconda for your python stack.  On OS X, I recommend using macports to get at least the non-python dependencies, and perhaps all of the python tools as well.
@@ -37,10 +37,39 @@ For development, debugging, and small tests it is convenient to install the pipe
 On an Ubuntu machine, you could install all the dependencies with::
 
     %> sudo apt-get install libboost-all-dev libcfitsio-dev \
-        libopenblas-dev liblapack-dev python-matplotlib \
-        python-scipy python-astropy python-requests python-yaml
+        libopenblas-dev liblapack-dev python3-matplotlib \
+        python3-scipy python3-astropy python3-requests \
+        python3-yaml python3-mpi4py
 
-    %> sudo pip install fitsio speclite
+    %> pip install --no-binary :all: fitsio speclite iniparser
+
+
+Installing Dependencies on an OS X System
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Installing scientific software on OS X is often more difficult than Linux, since Apple is primarily concerned with development of apps using Xcode.  The approach described here for installing desispec dependencies seems to get the job done with the fewest steps.
+
+First, install homebrew::
+
+    %> /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+
+Now use homebrew to install CFITSIO, BOOST, and OpenMPI::
+
+    %> brew install cfitsio
+    %> brew install boost
+    %> brew install openmpi
+
+We are going to use homebrew to install our python stack.  Some people prefer Anaconda, but that distribution has several problems on OS X.  When installing python, we add the flag to indicate we want the python3 versions as well::
+
+    %> brew install homebrew/python/mpi4py --with-python3
+    %> brew install homebrew/python/scipy --with-python3
+    %> brew install homebrew/python/matplotlib --with-python3
+
+The rest of the dependencies we can install with pip::
+
+    %> pip3 install requests pyyaml iniparser speclite astropy
+    %> pip3 install --no-binary :all: fitsio
+
 
 Dependencies at NERSC
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -54,31 +83,12 @@ and then whenever you want to load the software::
     %> module load desi-conda
 
 
+
 DESI Affiliated Dependencies
 ---------------------------------
 
-Now we should have our base software stack set up and next we will install dependencies associated with DESI.
+Now we should have our base software stack set up and next we will install dependencies associated with DESI.  For this example, we will install DESI software to our home directory.  On NERSC systems, the $HOME directory is not as performant as $SCRATCH in terms of python startup time.  However, installing software to $SCRATCH (and the necessary steps to prevent it from being purged) is beyond the scope of this document.  
 
-.. NOTE::
-
-    At NERSC, the HARP package is already included in the software loaded by the desi-conda module.  You do not need to build it at NERSC.
-
-For this example, we will install DESI software to our home directory.  On NERSC systems, the $HOME directory is not as performant as $SCRATCH in terms of python startup time.  However, installing software to $SCRATCH (and the necessary steps to prevent it from being purged) is beyond the scope of this document.  
-
-Organize Your Git Clones
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For the purposes of this document, we assume that all DESI git clones reside in $HOME/git-$NERSC_HOST.  You will need to get the following repos.  Some of these are not strictly necessary for the spectroscopic pipeline, but are useful for simulating data as part of the integration tests::
-
-    %> cd $HOME/git-$NERSC_HOST
-    %> git clone git@github.com:desihub/desiutil.git
-    %> git clone git@github.com:desihub/desimodel.git
-    %> git clone git@github.com:desihub/desitarget.git
-    %> git clone git@github.com:desihub/desisim.git
-    %> git clone git@github.com:desihub/specter.git
-    %> git clone git@github.com:desihub/specex.git
-    %> git clone git@github.com:desihub/desispec.git
-    %> git clone git@github.com:desihub/redmonster.git
 
 Create a Shell Function
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -95,7 +105,7 @@ Create a bash function that we will use to load our installed desi software into
         export CPATH=${desisoft}/include:${CPATH}
         export LIBRARY_PATH=${desisoft}/lib:${LIBRARY_PATH}
         export LD_LIBRARY_PATH=${desisoft}/lib:${LD_LIBRARY_PATH}
-        export PYTHONPATH=${desisoft}/lib/python2.7/site-packages:${PYTHONPATH}
+        export PYTHONPATH=${desisoft}/lib/python3.5/site-packages:${PYTHONPATH}
 
         # Special setup for redmonster
         red="${HOME}/git-${NERSC_HOST}/redmonster"
@@ -112,7 +122,7 @@ Create a bash function that we will use to load our installed desi software into
 
 Now log out and back in.  We should pre-create the python package directory the first time we install things::
 
-    %> mkdir -p ${HOME}/desi-${NERSC_HOST}/lib/python2.7/site-packages
+    %> mkdir -p ${HOME}/desi-${NERSC_HOST}/lib/python3.5/site-packages
 
 At NERSC, first load our dependencies::
 
@@ -122,11 +132,35 @@ and then execute our shell function::
 
     %> desidev
 
-Now we are ready to install software to this location.  If you are building on a workstation or laptop, download the latest release of HARP at https://github.com/tskisner/HARP/releases/download/v1.0.1/harp-1.0.1.tar.gz and install::
+
+Install Release Tarballs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Now we are ready to install software to this location.  Some packages (HARP), do not currently change rapidly and we can just install them from a released tarball.  If you are building on a workstation or laptop, download the latest release of HARP from https://github.com/tskisner/HARP/releases and install::
 
     %> cd harp-1.0.1
     %> ./configure --disable-python --disable-mpi \
        --prefix="${HOME}/desi-${NERSC_HOST}"
+
+.. NOTE::
+
+    At NERSC, the HARP package is already included in the software loaded by the desi-conda module.  You do not need to build it at NERSC.
+
+
+Organize Your Git Clones
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For the purposes of this document, we assume that all DESI git clones reside in $HOME/git-$NERSC_HOST.  You will need to get the following repos.  Some of these are not strictly necessary for the spectroscopic pipeline, but are useful for simulating data as part of the integration tests::
+
+    %> cd $HOME/git-$NERSC_HOST
+    %> git clone git@github.com:desihub/desiutil.git
+    %> git clone git@github.com:desihub/desimodel.git
+    %> git clone git@github.com:desihub/desitarget.git
+    %> git clone git@github.com:desihub/desisim.git
+    %> git clone git@github.com:desihub/specter.git
+    %> git clone git@github.com:desihub/specex.git
+    %> git clone git@github.com:desihub/desispec.git
+    %> git clone git@github.com:desihub/redmonster.git
 
 Now we are ready to install the various DESI packages from their git source trees.  Let's go into our git directory and create a small helper script which will update your install any time you update your source trees::
 
@@ -146,7 +180,7 @@ Now we are ready to install the various DESI packages from their git source tree
     for pkg in desiutil desimodel desitarget desisim specter desispec; do
         cd ${pkg}
         python setup.py clean
-        python setup.py develop
+        python setup.py install --prefix=${pref}
         cd ..
     done
 

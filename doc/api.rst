@@ -1,6 +1,7 @@
-================
-The desispec API
-================
+.. _api:
+
+Full desispec API Reference
+================================
 
 .. automodule:: desispec
     :members:

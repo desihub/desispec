@@ -49,12 +49,30 @@ class Worker(object):
         pass
 
     def max_nproc(self):
+        """
+        The maximum number of processes to use for this worker.
+        """
         return 1
 
     def default_options(self):
+        """
+        The default options dictionary for this worker.
+        """
         return {}
 
     def run(self, grph, task, opts, comm=None):
+        """
+        Run the specified task.
+
+        This runs the task, with the given options, using the 
+        specified communicator.
+
+        Args:
+            grph (dict): pruned graph with this task and dependencies.
+            task (str): the name of this task.
+            opts (dict): options to use for this task.
+            comm (mpi4py.MPI.Comm): optional MPI communicator.
+        """
         raise RuntimeError("Worker base class should never run a task!")
 
 

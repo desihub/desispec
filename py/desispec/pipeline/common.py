@@ -130,8 +130,8 @@ def yaml_read(path, progress=None):
     Args:
         path (str): the input file name.
 
-    Returns (dict):
-        the data.
+    Returns:
+        dict: the data.
     """
     data = None
     with open(path, "r") as f:

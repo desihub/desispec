@@ -39,8 +39,8 @@ def graph_name(*args):
     Args:
         args (list): strings to join.
 
-    Returns (str):
-        the name in the graph.
+    Returns:
+        str: the name in the graph.
     """
     if len(args) > 0:
         return _graph_sep.join(args)
@@ -82,8 +82,8 @@ def graph_path(type, name):
         type (str): object type.
         name (str): the name of the object in the graph.
 
-    Returns (str):
-        Filesystem path to object.
+    Returns:
+        str: Filesystem path to object.
     """
     path = ""
     if type == "night":
@@ -257,8 +257,8 @@ def graph_slice(grph, names=None, types=None, deps=False):
         types (list): list of node types to keep.
         deps (bool): if True, keep direct inputs to selected nodes.
 
-    Returns (dict):
-        the new graph.
+    Returns:
+        dict: the new graph.
     """
     if types is None:
         types = graph_types
@@ -308,8 +308,8 @@ def graph_slice_spec(grph, spectrographs=None):
         grph (dict): the graph.
         spectrographs (list): list of ints
 
-    Returns (dict):
-        the new graph.
+    Returns:
+        dict: the new graph.
     """
 
     newgrph = copy.deepcopy(grph)

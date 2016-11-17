@@ -36,11 +36,12 @@ def graph_db_info():
 
     Args: None
 
-    Returns (tuple) with elements:
-        file: name of the most recent state file
-        stime: modification time of the file
-        jobid: the slurm job name or POSIX PID
-        running: True if the job is still running
+    Returns:
+        tuple with elements
+            - file: name of the most recent state file
+            - stime: modification time of the file
+            - jobid: the slurm job name or POSIX PID
+            - running: True if the job is still running
     """
     proddir = os.path.abspath(io.specprod_root())
     rundir = os.path.join(proddir, "run")
@@ -149,8 +150,8 @@ def graph_db_read(file):
     Args:
         file (str): the path to the file to write.
 
-    Returns (dict):
-        The dependency graph.
+    Returns:
+        dict: The dependency graph.
     """
     return yaml_read(file)
 

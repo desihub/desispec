@@ -1,7 +1,7 @@
 .. code-block:: console
 
     usage: desi_pipe [-h] [--raw RAW] [--redux REDUX] [--prod PROD]
-                     [--nights NIGHTS] [--env ENV] 
+                     [--nights NIGHTS]
                      [--nersc_host NERSC_HOST] 
                      [--nersc_max_nodes NERSC_MAX_NODES]                    
                      [--shell_mpi_run SHELL_MPI_RUN]                        
@@ -18,7 +18,6 @@
       --prod PROD           output production name
       --nights NIGHTS       comma separated (YYYYMMDD) or regex 
                             pattern
-      --env ENV             text file with environment setup commands
       --nersc_host NERSC_HOST
                             NERSC slurm scripts host name 
                             (edison|cori)
