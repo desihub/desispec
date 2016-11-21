@@ -20,7 +20,7 @@ from ..parallel import dist_discrete
 from .. import pipeline as pipe
 
     
-def compute_step(setupfile, envcom, first, last, specs, night, 
+def compute_step(setupfile, first, last, specs, night, 
     ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes,
     nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
     queue="debug", minutes=30,
@@ -49,8 +49,6 @@ def compute_step(setupfile, envcom, first, last, specs, night,
         stepstr = "{}-{}_{}".format(first, last, scrstr)
         jobname = "{}_{}".format(first, last)
 
-    com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
-
     totproc = ntask * taskproc
 
     shell_maxprocs = int(shell_maxcores / shell_threads)
@@ -62,14 +60,15 @@ def compute_step(setupfile, envcom, first, last, specs, night,
     shell_log = os.path.join(logdir, "{}_sh".format(stepstr))
 
     #- no MPI for shell job version so that it can be run from interactive node
+    com = None
     if shell_maxcores == 1:
-        com = ["desi_pipe_run --nompi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
-    else:
         com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
-    pipe.shell_job(shell_path, shell_log, envcom, setupfile, com, comrun=shell_mpi_run, mpiprocs=shell_procs, threads=shell_threads)
+    else:
+        com = ["desi_pipe_run_mpi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
+    pipe.shell_job(shell_path, shell_log, setupfile, com, comrun=shell_mpi_run, mpiprocs=shell_procs, threads=shell_threads)
 
     #- MPI for standard batch job (to be written below)
-    com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
+    com = ["desi_pipe_run_mpi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
 
     core_per_proc = 1
     if nersc_threads > 1:
@@ -91,7 +90,7 @@ def compute_step(setupfile, envcom, first, last, specs, night,
     nersc_path = os.path.join(scrdir, "{}.slurm".format(stepstr))
     nersc_log = os.path.join(logdir, "{}_slurm".format(stepstr))
 
-    pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, com, nodes=nodes,
+    pipe.nersc_job(nersc_path, nersc_log, setupfile, com, nodes=nodes,
         nodeproc=nodeproc, minutes=minutes, multisrun=False, openmp=(nersc_threads > 1),
         multiproc=(nersc_mp > 1), queue=queue, jobname=jobname)
 
@@ -104,8 +103,6 @@ def parse(options=None):
     parser.add_argument("--redux", required=False, default=None, help="output directory")
     parser.add_argument("--prod", required=False, default=None, help="output production name")
     parser.add_argument("--nights", required=False, default=None, help="comma separated (YYYYMMDD) or regex pattern")
-    
-    parser.add_argument("--env", required=False, default=None, help="text file with environment setup commands")
     
     parser.add_argument("--nersc_host", required=False, default="edison", help="NERSC slurm scripts host name (edison|cori)")
 
@@ -175,18 +172,21 @@ def main(args):
 
     nodecores = 0
     maxnodes = 0
+    queuethresh = 0
     if args.nersc_host == "edison":
         nodecores = 24
+        queuethresh = 512
+        if args.nersc_max_nodes is not None:
+            maxnodes = int(args.nersc_max_nodes)
+        else:
+            maxnodes = 2048
+    elif args.nerschost == "cori":
+        nodecores = 32
+        queuethresh = 64
         if args.nersc_max_nodes is not None:
             maxnodes = int(args.nersc_max_nodes)
         else:
             maxnodes = 512
-    elif args.nerschost == "cori":
-        nodecores = 32
-        if args.nersc_max_nodes is not None:
-            maxnodes = int(args.nersc_max_nodes)
-        else:
-            maxnodes = 64
     else:
         raise RuntimeError("unknown nersc host")
 
@@ -224,17 +224,6 @@ def main(args):
             s.write("export DESI_LOGLEVEL=\"DEBUG\"\n\n")
         else:
             s.write("#export DESI_LOGLEVEL=\"DEBUG\"\n\n")
-
-    # read in the environment setup, if needed
-
-    envcom = []
-    if args.env is not None:
-        print("  Reading environment initialization from {} ...".format(args.env))
-        with open(args.env, "r") as f:
-            for line in f:
-                envcom.append(line.rstrip())
-    else:
-        print("  No environment initialization specified")
 
     # which nights and spectrographs are we using?
 
@@ -293,7 +282,7 @@ def main(args):
         ntask = len(nights) * 3 * nspect
         multip = 2
 
-        scr_shell, scr_slurm = compute_step(setupfile, envcom, "bootstrap", "bootstrap", specs, None, ntask, workermax["bootstrap"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
+        scr_shell, scr_slurm = compute_step(setupfile, "bootstrap", "bootstrap", specs, None, ntask, workermax["bootstrap"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
         all_shell.append(scr_shell)
         all_slurm.append(scr_slurm)
 
@@ -301,7 +290,7 @@ def main(args):
 
             ntask = 3 * nspect
 
-            scr_shell, scr_slurm = compute_step(setupfile, envcom, "bootstrap", "bootstrap", specs, nt, ntask, workermax["bootstrap"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
+            scr_shell, scr_slurm = compute_step(setupfile, "bootstrap", "bootstrap", specs, nt, ntask, workermax["bootstrap"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
             nt_shell[nt].append(scr_shell)
             nt_slurm[nt].append(scr_slurm)
 
@@ -331,7 +320,7 @@ def main(args):
         ntask = totcount["arc"] * 3 * nspect
         threads = 2
 
-        scr_shell, scr_slurm = compute_step(setupfile, envcom, "psf", "psf", specs, None, ntask, workermax["psf"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
+        scr_shell, scr_slurm = compute_step(setupfile, "psf", "psf", specs, None, ntask, workermax["psf"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
         all_shell.append(scr_shell)
         all_slurm.append(scr_slurm)
 
@@ -339,7 +328,7 @@ def main(args):
 
             ntask = expnightcount[nt]["arc"] * 3 * nspect
 
-            scr_shell, scr_slurm = compute_step(setupfile, envcom, "psf", "psf", specs, nt, ntask, workermax["psf"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
+            scr_shell, scr_slurm = compute_step(setupfile, "psf", "psf", specs, nt, ntask, workermax["psf"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
             nt_shell[nt].append(scr_shell)
             nt_slurm[nt].append(scr_slurm)
 
@@ -347,7 +336,7 @@ def main(args):
 
         ntask = len(nights) * 3 * nspect
 
-        scr_shell, scr_slurm = compute_step(setupfile, envcom, "psfcombine", "psfcombine", specs, None, ntask, workermax["psfcombine"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+        scr_shell, scr_slurm = compute_step(setupfile, "psfcombine", "psfcombine", specs, None, ntask, workermax["psfcombine"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, queuethresh)
         all_shell.append(scr_shell)
         all_slurm.append(scr_slurm)
 
@@ -355,7 +344,7 @@ def main(args):
 
             ntask = 3 * nspect
 
-            scr_shell, scr_slurm = compute_step(setupfile, envcom, "psfcombine", "psfcombine", specs, nt, ntask, workermax["psfcombine"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, maxnodes)
+            scr_shell, scr_slurm = compute_step(setupfile, "psfcombine", "psfcombine", specs, nt, ntask, workermax["psfcombine"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, queuethresh)
             nt_shell[nt].append(scr_shell)
             nt_slurm[nt].append(scr_slurm)
 
@@ -383,7 +372,7 @@ def main(args):
     ntask = (totcount["flat"] + totcount["science"]) * 3 * nspect
     threads = 1
 
-    scr_shell, scr_slurm = compute_step(setupfile, envcom, "extract", "extract", specs, None, ntask, workermax["extract"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
+    scr_shell, scr_slurm = compute_step(setupfile, "extract", "extract", specs, None, ntask, workermax["extract"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
     all_shell.append(scr_shell)
     all_slurm.append(scr_slurm)
 
@@ -391,7 +380,7 @@ def main(args):
 
         ntask = (expnightcount[nt]["flat"] + expnightcount[nt]["science"]) * 3 * nspect
 
-        scr_shell, scr_slurm = compute_step(setupfile, envcom, "extract", "extract", specs, nt, ntask, workermax["extract"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, maxnodes)
+        scr_shell, scr_slurm = compute_step(setupfile, "extract", "extract", specs, nt, ntask, workermax["extract"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
         nt_shell[nt].append(scr_shell)
         nt_slurm[nt].append(scr_slurm)
 
@@ -400,7 +389,7 @@ def main(args):
     ntask = totcount["science"] * 3 * nspect
     multip = 1      #- turning off multiprocessing
 
-    scr_shell, scr_slurm = compute_step(setupfile, envcom, "fiberflat", "calibrate", specs, None, ntask, 1, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
+    scr_shell, scr_slurm = compute_step(setupfile, "fiberflat", "calibrate", specs, None, ntask, 1, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
     all_shell.append(scr_shell)
     all_slurm.append(scr_slurm)
 
@@ -408,7 +397,7 @@ def main(args):
 
         ntask = expnightcount[nt]["science"] * 3 * nspect
 
-        scr_shell, scr_slurm = compute_step(setupfile, envcom, "fiberflat", "calibrate", specs, nt, ntask, 1, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, maxnodes)
+        scr_shell, scr_slurm = compute_step(setupfile, "fiberflat", "calibrate", specs, nt, ntask, 1, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
         nt_shell[nt].append(scr_shell)
         nt_slurm[nt].append(scr_slurm)
 
@@ -424,11 +413,11 @@ def main(args):
 
     shell_path = os.path.join(scrdir, "bricks.sh")
     shell_log = os.path.join(logdir, "bricks_sh.log")
-    pipe.shell_job(shell_path, shell_log, envcom, setupfile, brickcom, comrun=shell_mpi_run, mpiprocs=1, threads=1)
+    pipe.shell_job(shell_path, shell_log, setupfile, brickcom, comrun=shell_mpi_run, mpiprocs=1, threads=1)
 
     nersc_path = os.path.join(scrdir, "bricks.slurm")
     nersc_log = os.path.join(logdir, "bricks_slurm.log")
-    pipe.nersc_job(nersc_path, nersc_log, envcom, setupfile, brickcom, nodes=1,
+    pipe.nersc_job(nersc_path, nersc_log, setupfile, brickcom, nodes=1,
         nodeproc=1, minutes=30, multisrun=False, openmp=False, multiproc=False,
         queue="debug", jobname="bricks")
 
@@ -456,9 +445,9 @@ def main(args):
         redqueue = "regular"
         redtime = 30 * increments
 
-    scr_shell, scr_slurm = compute_step(setupfile, envcom, "redshift", "redshift", specs,
+    scr_shell, scr_slurm = compute_step(setupfile, "redshift", "redshift", specs,
         None, efftask, workermax["redshift"], shell_mpi_run, shell_maxcores,
-        1, maxnodes, nodecores, 1, 1, maxnodes, queue=redqueue, minutes=redtime)
+        1, maxnodes, nodecores, 1, 1, queuethresh, queue=redqueue, minutes=redtime)
     all_shell.append(scr_shell)
     all_slurm.append(scr_slurm)
 

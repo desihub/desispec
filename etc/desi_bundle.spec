@@ -3,7 +3,7 @@
 block_cipher = None
 
 scripts = [
-    'desi_pipe_run'
+    'desi_pipe_run_mpi'
 ]
 
 for scr in scripts:

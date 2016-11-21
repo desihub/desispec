@@ -103,7 +103,7 @@ Where supported commands are:
             status[st] = {}
             status[st]["total"] = 0
             status[st]["none"] = 0
-            status[st]["wait"] = 0
+            status[st]["running"] = 0
             status[st]["fail"] = 0
             status[st]["done"] = 0
 
@@ -120,7 +120,7 @@ Where supported commands are:
                 beg = clr.OKGREEN
             elif status[st]["fail"] > 0:
                 beg = clr.FAIL
-            elif status[st]["wait"] > 0:
+            elif status[st]["running"] > 0:
                 beg = clr.WARNING
             print("{}    {}{:<12}{} {:>5} tasks".format(self.pref, beg, st, clr.ENDC, status[st]["total"]))
         print("")
@@ -130,7 +130,7 @@ Where supported commands are:
     def step(self):
         parser = argparse.ArgumentParser(description="Details about a particular pipeline step")
         parser.add_argument("step", help="Step name (allowed values are: bootcalib, specex, psfcombine, extract, fiberflat, sky, stdstars, fluxcal, procexp, and zfind).")
-        parser.add_argument("--state", required=False, default=None, help="Only list tasks in this state (allowed values are: done, fail, wait, none)")
+        parser.add_argument("--state", required=False, default=None, help="Only list tasks in this state (allowed values are: done, fail, running, none)")
         # now that we"re inside a subcommand, ignore the first
         # TWO argvs
         args = parser.parse_args(sys.argv[2:])
@@ -145,7 +145,7 @@ Where supported commands are:
         tasks_done = []
         tasks_none = []
         tasks_fail = []
-        tasks_wait = []
+        tasks_running = []
 
         fts = pipe.step_file_types[args.step]
         for name, nd in self.grph.items():
@@ -156,8 +156,8 @@ Where supported commands are:
                     tasks_done.append(name)
                 elif stat == "fail":
                     tasks_fail.append(name)
-                elif stat == "wait":
-                    tasks_wait.append(name)
+                elif stat == "running":
+                    tasks_running.append(name)
                 else:
                     tasks_none.append(name)
 
@@ -167,8 +167,8 @@ Where supported commands are:
         if (args.state is None) or (args.state == "fail"):
             for tsk in sorted(tasks_fail):
                 print("{}    {}{:<20}{}".format(self.pref, clr.FAIL, tsk, clr.ENDC))
-        if (args.state is None) or (args.state == "wait"):
-            for tsk in sorted(tasks_wait):
+        if (args.state is None) or (args.state == "running"):
+            for tsk in sorted(tasks_running):
                 print("{}    {}{:<20}{}".format(self.pref, clr.WARNING, tsk, clr.ENDC))
         if (args.state is None) or (args.state == "none"):
             for tsk in sorted(tasks_none):
@@ -199,7 +199,7 @@ Where supported commands are:
             beg = clr.OKGREEN
         elif stat == "fail":
             beg = clr.FAIL
-        elif stat == "wait":
+        elif stat == "running":
             beg = clr.WARNING
 
         filepath = pipe.graph_path(nd["type"], args.task)
