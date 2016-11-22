@@ -291,13 +291,6 @@ class Get_RMS(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
 
         input_image=args[0]
-        camera=kwargs["camera"]
-        if camera != input_image.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_image.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -380,21 +373,6 @@ class Count_Pixels(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
 
         input_image=args[0]
-        camera=kwargs["camera"]
-        if camera != input_image.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_image.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
-
-        nsigma=None
-        if "nsigma" in kwargs:
-            nsigma=kwargs["nsigma"]
-       
-        ncounts=None
-        if "ncounts" in kwargs:
-            ncounts=kwargs["ncounts"]
 
         if "paname" not in kwargs:
             paname=None
@@ -422,9 +400,6 @@ class Count_Pixels(MonitoringAlg):
 
     def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False):
         retval={}
-        # retval["EXPID"]=expid
-        #retval["ARM"]=camera[0]
-        #retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"] = "%08d"%image.meta["EXPID"]
@@ -495,13 +470,6 @@ class Integrate_Spec(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
 
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -531,7 +499,7 @@ class Integrate_Spec(MonitoringAlg):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -614,13 +582,7 @@ class Sky_Continuum(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
 
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
+        camera=input_frame.meta["CAMERA"]
         
         wrange1=None
         wrange2=None
@@ -668,7 +630,7 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -755,13 +717,6 @@ class Sky_Peaks(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
 
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -793,9 +748,8 @@ class Sky_Peaks(MonitoringAlg):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
-        camera = frame.meta["CAMERA"]
-        retval["CAMERA"] = camera
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["CAMERA"] = camera = frame.meta["CAMERA"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
@@ -937,13 +891,6 @@ class Calc_XWSigma(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
  
         input_image=args[0]
-        camera=kwargs["camera"]
-        if camera != input_image.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_image.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
  
         if "paname" not in kwargs:
             paname=None
@@ -980,9 +927,8 @@ class Calc_XWSigma(MonitoringAlg):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat() 
-        retval["EXPID"] = "%08d"%image.meta["EXPID"]
-        camera = image.meta["CAMERA"]
-        retval["CAMERA"] = camera
+        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
+        retval["CAMERA"] = camera = image.meta["CAMERA"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
@@ -1246,10 +1192,6 @@ class Bias_From_Overscan(MonitoringAlg):
 
         input_raw=args[0]
         camera=kwargs["camera"]
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_raw[0].header["EXPID"]
-        if expid != exp2:
-           log.warning("Exposure ID does not match configuration!")
 
         paname=None
         if "paname" in kwargs:
@@ -1273,8 +1215,11 @@ class Bias_From_Overscan(MonitoringAlg):
 
     def run_qa(self,raw,camera,paname=None,amps=False,qafile=None,qafig=None, qlf=False):
 
+        rawimage=raw[camera.upper()].data
+        header=raw[camera.upper()].header
+
         retval={}
-        retval["EXPID"]= "%08d"%raw[0].header["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(header["EXPID"])
         retval["CAMERA"]=camera
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
@@ -1343,13 +1288,6 @@ class CountSpectralBins(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         paname=None
         if "paname" in kwargs:
@@ -1379,18 +1317,18 @@ class CountSpectralBins(MonitoringAlg):
         return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,input_frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False):
+    def run_qa(self,frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False):
 
         #- qa dictionary 
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%input_frame.meta["EXPID"]
-        retval["CAMERA"] = input_frame.meta["CAMERA"]
-        retval["FLAVOR"] = input_frame.meta["FLAVOR"]
-        retval["NIGHT"] = input_frame.meta["NIGHT"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
-        grid=np.gradient(input_frame.wave)
+        grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
             log.info("grid_size is NOT UNIFORM")
 
@@ -1403,9 +1341,9 @@ class CountSpectralBins(MonitoringAlg):
                          )
         retval["PARAMS"] = param
         
-        countslo=countbins(input_frame.flux,threshold=param['CUTLO'])
-        countsmed=countbins(input_frame.flux,threshold=param['CUTMED'])
-        countshi=countbins(input_frame.flux,threshold=param['CUTHI'])
+        countslo=countbins(frame.flux,threshold=param['CUTLO'])
+        countsmed=countbins(frame.flux,threshold=param['CUTMED'])
+        countshi=countbins(frame.flux,threshold=param['CUTHI'])
 
         goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than 500 counts
         ngoodfibers=goodfibers.shape[0]
@@ -1418,30 +1356,30 @@ class CountSpectralBins(MonitoringAlg):
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
 
-            leftmax,rightmin,bottommax,topmin = fiducialregion(input_frame,psf)  
-            fidboundary=slice_fidboundary(input_frame,leftmax,rightmin,bottommax,topmin)          
-            countslo_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=param['CUTLO'])
+            leftmax,rightmin,bottommax,topmin = fiducialregion(frame,psf)  
+            fidboundary=slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)          
+            countslo_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTLO'])
             averagelo_amp1=np.mean(countslo_amp1)
-            countsmed_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=param['CUTMED'])
+            countsmed_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTMED'])
             averagemed_amp1=np.mean(countsmed_amp1)
-            countshi_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=param['CUTHI'])
+            countshi_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTHI'])
             averagehi_amp1=np.mean(countshi_amp1)
 
-            countslo_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=param['CUTLO'])
+            countslo_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTLO'])
             averagelo_amp3=np.mean(countslo_amp3)
-            countsmed_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=param['CUTMED'])
+            countsmed_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTMED'])
             averagemed_amp3=np.mean(countsmed_amp3)
-            countshi_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=param['CUTHI'])
+            countshi_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTHI'])
             averagehi_amp3=np.mean(countshi_amp3)
 
 
             if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
 
-                countslo_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=param['CUTLO'])
+                countslo_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTLO'])
                 averagelo_amp2=np.mean(countslo_amp2)
-                countsmed_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=param['CUTMED'])
+                countsmed_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTMED'])
                 averagemed_amp2=np.mean(countsmed_amp2)
-                countshi_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=param['CUTHI'])
+                countshi_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTHI'])
                 averagehi_amp2=np.mean(countshi_amp2)
 
             else:
@@ -1451,11 +1389,11 @@ class CountSpectralBins(MonitoringAlg):
 
             if fidboundary[3][0].start is not None: #- to the right top of the CCD
 
-                countslo_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=param['CUTLO'])
+                countslo_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTLO'])
                 averagelo_amp4=np.mean(countslo_amp4)
-                countsmed_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=param['CUTMED'])
+                countsmed_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTMED'])
                 averagemed_amp4=np.mean(countsmed_amp4)
-                countshi_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=param['CUTHI'])
+                countshi_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTHI'])
                 averagehi_amp4=np.mean(countshi_amp4)
 
             else:
@@ -1508,13 +1446,6 @@ class Sky_Residual(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
@@ -1563,7 +1494,7 @@ dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -1609,13 +1540,6 @@ class Calculate_SNR(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         amps=False
         if "amps" in kwargs:
@@ -1642,54 +1566,54 @@ class Calculate_SNR(MonitoringAlg):
         return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, qlf=qlf)
 
 
-    def run_qa(self,input_frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False):
+    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False):
 
         #- return values
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%input_frame.meta["EXPID"]
-        retval["CAMERA"] = input_frame.meta["CAMERA"]
-        retval["FLAVOR"] = input_frame.meta["FLAVOR"]
-        retval["NIGHT"] = input_frame.meta["NIGHT"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- select band for mag, using DECAM_R if present
 
-        filter_pick=["" for x in range(len(input_frame.fibermap))]
+        filter_pick=["" for x in range(len(frame.fibermap))]
         
-        for ii in range(len(input_frame.fibermap)):
-            if "DECAM_R" in input_frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
+        for ii in range(len(frame.fibermap)):
+            if "DECAM_R" in frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
             else: filter_pick[ii]= -1 #- only accepting "DECAM_R" now
         filter_pick=np.array(filter_pick)
 
-        medsnr=SN_ratio(input_frame.flux,input_frame.ivar)
-        elgfibers=np.where(input_frame.fibermap['OBJTYPE']=='ELG')[0]
+        medsnr=SN_ratio(frame.flux,frame.ivar)
+        elgfibers=np.where(frame.fibermap['OBJTYPE']=='ELG')[0]
         elg_medsnr=medsnr[elgfibers]
         elg_mag=np.zeros(len(elgfibers))
         for ii,fib in enumerate(elgfibers):
-            elg_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+            elg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
 
         elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
       
-        lrgfibers=np.where(input_frame.fibermap['OBJTYPE']=='LRG')[0]
+        lrgfibers=np.where(frame.fibermap['OBJTYPE']=='LRG')[0]
         lrg_medsnr=medsnr[lrgfibers]
         lrg_mag=np.zeros(len(lrgfibers))
         for ii,fib in enumerate(lrgfibers):
-            lrg_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+            lrg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
         lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
 
-        qsofibers=np.where(input_frame.fibermap['OBJTYPE']=='QSO')[0]
+        qsofibers=np.where(frame.fibermap['OBJTYPE']=='QSO')[0]
         qso_medsnr=medsnr[qsofibers]
         qso_mag=np.zeros(len(qsofibers))
         for ii,fib in enumerate(qsofibers):
-            qso_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+            qso_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
         qso_snr_mag=np.array((qso_medsnr,qso_mag))
 
-        stdfibers=np.where(input_frame.fibermap['OBJTYPE']=='STD')[0]
+        stdfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
         std_medsnr=medsnr[stdfibers]
         std_mag=np.zeros(len(stdfibers))
         for ii,fib in enumerate(stdfibers):
-            std_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]] 
+            std_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]] 
         std_snr_mag=np.array((std_medsnr,std_mag))
 
         if amps:
@@ -1700,24 +1624,24 @@ class Calculate_SNR(MonitoringAlg):
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
 
-            fidboundary = slice_fidboundary(input_frame,leftmax,rightmin,bottommax,topmin)
+            fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
            
-            medsnr1=SN_ratio(input_frame.flux[fidboundary[0]],input_frame.ivar[fidboundary[0]])
+            medsnr1=SN_ratio(frame.flux[fidboundary[0]],frame.ivar[fidboundary[0]])
             average1=np.mean(medsnr1)
 
-            medsnr3=SN_ratio(input_frame.flux[fidboundary[2]],input_frame.ivar[fidboundary[2]])
+            medsnr3=SN_ratio(frame.flux[fidboundary[2]],frame.ivar[fidboundary[2]])
             average3=np.mean(medsnr3)
 
             if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
                
-                medsnr2=SN_ratio(input_frame.flux[fidboundary[1]],input_frame.ivar[fidboundary[1]])
+                medsnr2=SN_ratio(frame.flux[fidboundary[1]],frame.ivar[fidboundary[1]])
                 average2=np.mean(medsnr2)
             else:
                 average2=0.
 
             if fidboundary[3][0].start is not None : #- to the right top of the CCD
 
-                medsnr4=SN_ratio(input_frame.flux[fidboundary[3]],input_frame.ivar[fidboundary[3]])
+                medsnr4=SN_ratio(frame.flux[fidboundary[3]],frame.ivar[fidboundary[3]])
                 average4=np.mean(medsnr4)
             else:
                 average4=0.
