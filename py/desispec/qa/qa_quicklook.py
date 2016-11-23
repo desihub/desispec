@@ -538,7 +538,7 @@ class Integrate_Spec(MonitoringAlg):
                 stdflux_thisamp=frame.flux[select_thisamp,fidboundary[amp][1]]
 
                 if len(stdflux_thisamp)==0:
-                    break
+                    continue
                 else:
                     integ_thisamp=np.zeros(stdflux_thisamp.shape[0])
 
@@ -1650,7 +1650,7 @@ class Calculate_SNR(MonitoringAlg):
 
             retval["METRICS"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
 
-        else: retval["METRICS"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers, "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers, "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers, "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers, "STAR_SNR_MAG":std_snr_mag}
+        else: retval["METRICS"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
         
         #- http post if valid
         if qlf:

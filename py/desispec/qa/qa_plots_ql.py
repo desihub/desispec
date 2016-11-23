@@ -41,10 +41,6 @@ def plot_countspectralbins(qa_dict,outfile):
     binsmed=qa_dict["METRICS"]["NBINSMED"]
     binshi=qa_dict["METRICS"]["NBINSHIGH"]
 
-    binslo_amp=qa_dict["METRICS"]["NBINSLOW_AMP"]
-    binsmed_amp=qa_dict["METRICS"]["NBINSMED_AMP"]
-    binshi_amp=qa_dict["METRICS"]["NBINSHIGH_AMP"]
-
     cutlo=qa_dict["PARAMS"]["CUTLO"]
     cuthi=qa_dict["PARAMS"]["CUTHI"]
     cutmed=qa_dict["PARAMS"]["CUTMED"]
@@ -80,64 +76,71 @@ def plot_countspectralbins(qa_dict,outfile):
     ax3.tick_params(axis='x',labelsize=10)
     ax3.tick_params(axis='y',labelsize=10)
 
-    heatmap1=ax4.pcolor(binslo_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax4.set_xlabel("Avg. bins > counts: %i (per Amp)"%cutlo,fontsize=8)
-    ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax4.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax4.annotate("Amp 1\n%.1f"%binslo_amp[0],
+    #- plotting if amp is turned on
+    if "NBINSLOW_AMP" in qa_dict["METRICS"]:
+
+        binslo_amp=qa_dict["METRICS"]["NBINSLOW_AMP"]
+        binsmed_amp=qa_dict["METRICS"]["NBINSMED_AMP"]
+        binshi_amp=qa_dict["METRICS"]["NBINSHIGH_AMP"]
+    
+        heatmap1=ax4.pcolor(binslo_amp.reshape(2,2),cmap=plt.cm.OrRd)
+        ax4.set_xlabel("Avg. bins > counts: %i (per Amp)"%cutlo,fontsize=8)
+        ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax4.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax4.annotate("Amp 1\n%.1f"%binslo_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 2\n%.1f"%binslo_amp[1],
+        ax4.annotate("Amp 2\n%.1f"%binslo_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 3\n%.1f"%binslo_amp[2],
+        ax4.annotate("Amp 3\n%.1f"%binslo_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 4\n%.1f"%binslo_amp[3],
+        ax4.annotate("Amp 4\n%.1f"%binslo_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
-    heatmap2=ax5.pcolor(binsmed_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax5.set_xlabel("Avg. bins > counts: %i (per Amp)"%cutmed,fontsize=8)
-    ax5.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax5.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax5.annotate("Amp 1\n%.1f"%binsmed_amp[0],
+        heatmap2=ax5.pcolor(binsmed_amp.reshape(2,2),cmap=plt.cm.OrRd)
+        ax5.set_xlabel("Avg. bins > counts: %i (per Amp)"%cutmed,fontsize=8)
+        ax5.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax5.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax5.annotate("Amp 1\n%.1f"%binsmed_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax5.annotate("Amp 2\n%.1f"%binsmed_amp[1],
+        ax5.annotate("Amp 2\n%.1f"%binsmed_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax5.annotate("Amp 3\n%.1f"%binsmed_amp[2],
+        ax5.annotate("Amp 3\n%.1f"%binsmed_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax5.annotate("Amp 4\n%.1f"%binsmed_amp[3],
+        ax5.annotate("Amp 4\n%.1f"%binsmed_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
 
-    heatmap3=ax6.pcolor(binshi_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    ax6.set_xlabel("Avg. bins > counts: %i (per Amp)"%cuthi,fontsize=8)
-    ax6.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax6.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax6.annotate("Amp 1\n%.1f"%binshi_amp[0],
+        heatmap3=ax6.pcolor(binshi_amp.reshape(2,2),cmap=plt.cm.OrRd)
+        ax6.set_xlabel("Avg. bins > counts: %i (per Amp)"%cuthi,fontsize=8)
+        ax6.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax6.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax6.annotate("Amp 1\n%.1f"%binshi_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax6.annotate("Amp 2\n%.1f"%binshi_amp[1],
+        ax6.annotate("Amp 2\n%.1f"%binshi_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax6.annotate("Amp 3\n%.1f"%binshi_amp[2],
+        ax6.annotate("Amp 3\n%.1f"%binshi_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax6.annotate("Amp 4\n%.1f"%binshi_amp[3],
+        ax6.annotate("Amp 4\n%.1f"%binshi_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
@@ -331,8 +334,6 @@ def plot_XWSigma(qa_dict,outfile):
     wsigma=qa_dict["METRICS"]["WSIGMA"]
     xsigma_med=qa_dict["METRICS"]["XSIGMA_MED"]
     wsigma_med=qa_dict["METRICS"]["WSIGMA_MED"]
-    xsigma_amp=qa_dict["METRICS"]["XSIGMA_AMP"]
-    wsigma_amp=qa_dict["METRICS"]["WSIGMA_AMP"]
     xfiber=np.arange(xsigma.shape[0])
     wfiber=np.arange(wsigma.shape[0])
 
@@ -355,48 +356,51 @@ def plot_XWSigma(qa_dict,outfile):
 #    ax2.tick_params(axis='y',labelsize=10)
 #    plt.xlim(0,len(wfiber))
 
-    ax3=fig.add_subplot(223)
-    heatmap3=ax3.pcolor(xsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('X Sigma = %.4f' %xsigma_med, fontsize=10)
-    ax3.set_xlabel("X std. dev. per Amp (# of pixels)",fontsize=10)
-    ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax3.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax3.annotate("Amp 1\n%.3f"%xsigma_amp[0],
+    if "XSIGMA_AMP" in qa_dict["METRICS"]:
+        xsigma_amp=qa_dict["METRICS"]["XSIGMA_AMP"]
+        wsigma_amp=qa_dict["METRICS"]["WSIGMA_AMP"]
+        ax3=fig.add_subplot(223)
+        heatmap3=ax3.pcolor(xsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
+        plt.title('X Sigma = %.4f' %xsigma_med, fontsize=10)
+        ax3.set_xlabel("X std. dev. per Amp (# of pixels)",fontsize=10)
+        ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax3.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax3.annotate("Amp 1\n%.3f"%xsigma_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 2\n%.3f"%xsigma_amp[1],
+        ax3.annotate("Amp 2\n%.3f"%xsigma_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 3\n%.3f"%xsigma_amp[2],
+        ax3.annotate("Amp 3\n%.3f"%xsigma_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax3.annotate("Amp 4\n%.3f"%xsigma_amp[3],
+        ax3.annotate("Amp 4\n%.3f"%xsigma_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
 
-    ax4=fig.add_subplot(224)
-    heatmap4=ax4.pcolor(wsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('W Sigma = %.4f' %wsigma_med, fontsize=10)
-    ax4.set_xlabel("W std. dev. per Amp (# of pixels)",fontsize=10)
-    ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax4.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax4.annotate("Amp 1\n%.3f"%wsigma_amp[0],
+        ax4=fig.add_subplot(224)
+        heatmap4=ax4.pcolor(wsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
+        plt.title('W Sigma = %.4f' %wsigma_med, fontsize=10)
+        ax4.set_xlabel("W std. dev. per Amp (# of pixels)",fontsize=10)
+        ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax4.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax4.annotate("Amp 1\n%.3f"%wsigma_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 2\n%.3f"%wsigma_amp[1],
+        ax4.annotate("Amp 2\n%.3f"%wsigma_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 3\n%.3f"%wsigma_amp[2],
+        ax4.annotate("Amp 3\n%.3f"%wsigma_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax4.annotate("Amp 4\n%.3f"%wsigma_amp[3],
+        ax4.annotate("Amp 4\n%.3f"%wsigma_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
@@ -510,7 +514,6 @@ def plot_integral(qa_dict,outfile):
     paname=qa_dict["PANAME"]
     std_integral=np.array(qa_dict["METRICS"]["INTEG"])
     std_integral_avg=qa_dict["METRICS"]["INTEG_AVG"]
-    std_integral_amp=np.array(qa_dict["METRICS"]["INTEG_AVG_AMP"])
     std_fiberid=qa_dict["METRICS"]["STD_FIBERID"]
 
     fig=plt.figure()
@@ -525,25 +528,28 @@ def plot_integral(qa_dict,outfile):
     ax1.set_xticks(index)
     ax1.set_xticklabels(std_fiberid)
     
-    ax2=fig.add_subplot(212)
-    heatmap1=ax2.pcolor(std_integral_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Integral Average = %.4f' %std_integral_avg, fontsize=10)
-    ax2.set_xlabel("Average integrals of STD spectra (photon counts)",fontsize=10)
-    ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n%.1f"%std_integral_amp[0],
+    if "INTEG_AVG_AMP" in qa_dict["METRICS"]:
+
+        std_integral_amp=np.array(qa_dict["METRICS"]["INTEG_AVG_AMP"])
+        ax2=fig.add_subplot(212)
+        heatmap1=ax2.pcolor(std_integral_amp.reshape(2,2),cmap=plt.cm.OrRd)
+        plt.title('Integral Average = %.4f' %std_integral_avg, fontsize=10)
+        ax2.set_xlabel("Average integrals of STD spectra (photon counts)",fontsize=10)
+        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax2.annotate("Amp 1\n%.1f"%std_integral_amp[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n%.1f"%std_integral_amp[1],
+        ax2.annotate("Amp 2\n%.1f"%std_integral_amp[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n%.1f"%std_integral_amp[2],
+        ax2.annotate("Amp 3\n%.1f"%std_integral_amp[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n%.1f"%std_integral_amp[3],
+        ax2.annotate("Amp 4\n%.1f"%std_integral_amp[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
@@ -579,7 +585,6 @@ def plot_sky_continuum(qa_dict,outfile):
     paname=qa_dict["PANAME"]
     skycont_fiber=np.array(qa_dict["METRICS"]["SKYCONT_FIBER"])
     skycont=qa_dict["METRICS"]["SKYCONT"]
-    skycont_amps=np.array(qa_dict["METRICS"]["SKYCONT_AMP"])
     index=np.arange(skycont_fiber.shape[0])
     fiberid=qa_dict["METRICS"]["SKYFIBERID"]
     fig=plt.figure()
@@ -594,25 +599,27 @@ def plot_sky_continuum(qa_dict,outfile):
     ax1.set_xticks(index)
     ax1.set_xticklabels(fiberid)
     
-    ax2=fig.add_subplot(212)
-    heatmap1=ax2.pcolor(skycont_amps.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Sky Continuum = %.4f' %skycont, fontsize=10)
-    ax2.set_xlabel("Avg. sky continuum per Amp (photon counts)",fontsize=10)
-    ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n%.1f"%skycont_amps[0],
+    if "SKYCONT_AMP" in qa_dict["METRICS"]:
+        skycont_amps=np.array(qa_dict["METRICS"]["SKYCONT_AMP"])
+        ax2=fig.add_subplot(212)
+        heatmap1=ax2.pcolor(skycont_amps.reshape(2,2),cmap=plt.cm.OrRd)
+        plt.title('Sky Continuum = %.4f' %skycont, fontsize=10)
+        ax2.set_xlabel("Avg. sky continuum per Amp (photon counts)",fontsize=10)
+        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax2.annotate("Amp 1\n%.1f"%skycont_amps[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n%.1f"%skycont_amps[1],
+        ax2.annotate("Amp 2\n%.1f"%skycont_amps[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n%.1f"%skycont_amps[2],
+        ax2.annotate("Amp 3\n%.1f"%skycont_amps[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n%.1f"%skycont_amps[3],
+        ax2.annotate("Amp 4\n%.1f"%skycont_amps[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
@@ -645,7 +652,6 @@ def plot_sky_peaks(qa_dict,outfile):
     sumcount=qa_dict["METRICS"]["SUMCOUNT"]
     fiber=np.arange(sumcount.shape[0])
     skyfiber_rms=qa_dict["METRICS"]["SUMCOUNT_RMS_SKY"]
-    sky_amp_rms=np.array(qa_dict["METRICS"]["SUMCOUNT_RMS_AMP"])
     fig=plt.figure()
     plt.suptitle("Counts and Amp RMS for Sky Fibers after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
 
@@ -657,25 +663,27 @@ def plot_sky_peaks(qa_dict,outfile):
     ax1.tick_params(axis='y',labelsize=10)
     plt.xlim(0,len(fiber))
 
-    ax2=fig.add_subplot(212)
-    heatmap2=ax2.pcolor(sky_amp_rms.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Sky peaks for sky fibers = %.4f' %skyfiber_rms, fontsize=10)
-    ax2.set_xlabel("Sky Fiber RMS for peak wavelengths per Amp (photon counts)",fontsize=10)
-    ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n%.1f"%sky_amp_rms[0],
+    if "SUMCOUNT_RMS_AMP" in qa_dict["METRICS"]:
+        sky_amp_rms=np.array(qa_dict["METRICS"]["SUMCOUNT_RMS_AMP"])
+        ax2=fig.add_subplot(212)
+        heatmap2=ax2.pcolor(sky_amp_rms.reshape(2,2),cmap=plt.cm.OrRd)
+        plt.title('Sky peaks for sky fibers = %.4f' %skyfiber_rms, fontsize=10)
+        ax2.set_xlabel("Sky Fiber RMS for peak wavelengths per Amp (photon counts)",fontsize=10)
+        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax2.annotate("Amp 1\n%.1f"%sky_amp_rms[0],
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n%.1f"%sky_amp_rms[1],
+        ax2.annotate("Amp 2\n%.1f"%sky_amp_rms[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n%.1f"%sky_amp_rms[2],
+        ax2.annotate("Amp 3\n%.1f"%sky_amp_rms[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n%.1f"%sky_amp_rms[3],
+        ax2.annotate("Amp 4\n%.1f"%sky_amp_rms[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
@@ -783,7 +791,6 @@ def plot_SNR(qa_dict,outfile):
     """
 
     med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
-    med_amp_snr=qa_dict["METRICS"]["MEDIAN_AMP_SNR"]
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
     camera = qa_dict["CAMERA"]
@@ -799,8 +806,7 @@ def plot_SNR(qa_dict,outfile):
     plt.suptitle("Signal/Noise after %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
 
     gs=GridSpec(7,8)
-    ax1=fig.add_subplot(gs[1:4,:4])
-    ax2=fig.add_subplot(gs[1:4,4:])
+    ax1=fig.add_subplot(gs[1:4,:4]) #- ax2 for amp ccd map below.
     ax3=fig.add_subplot(gs[4:,:2])
     ax4=fig.add_subplot(gs[4:,2:4])
     ax5=fig.add_subplot(gs[4:,4:6])
@@ -812,25 +818,29 @@ def plot_SNR(qa_dict,outfile):
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
 
-    heatmap_med=ax2.pcolor(med_amp_snr.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Avg. Median S/N = %.4f' %avg_med_snr, fontsize=10)
-    ax2.set_xlabel("Avg. Median S/N (per Amp)",fontsize=10)
-    ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n%.3f"%med_amp_snr[0],
+    #- plot for amp zones
+    if "MEDIAN_AMP_SNR" in qa_dict["METRICS"]:
+        ax2=fig.add_subplot(gs[1:4,4:])
+        med_amp_snr=qa_dict["METRICS"]["MEDIAN_AMP_SNR"]
+        heatmap_med=ax2.pcolor(med_amp_snr.reshape(2,2),cmap=plt.cm.OrRd)
+        plt.title('Avg. Median S/N = %.4f' %avg_med_snr, fontsize=10)
+        ax2.set_xlabel("Avg. Median S/N (per Amp)",fontsize=10)
+        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
+        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax2.annotate("Amp 1\n%.3f"%med_amp_snr[0],
                  xy=(0.4,0.4), #- Full scale is 2
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n%.3f"%med_amp_snr[1],
+        ax2.annotate("Amp 2\n%.3f"%med_amp_snr[1],
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n%.3f"%med_amp_snr[2],
+        ax2.annotate("Amp 3\n%.3f"%med_amp_snr[2],
                  xy=(0.4,1.4),
                  fontsize=10
                  )
 
-    ax2.annotate("Amp 4\n%.3f"%med_amp_snr[3],
+        ax2.annotate("Amp 4\n%.3f"%med_amp_snr[3],
                  xy=(1.4,1.4),
                  fontsize=10
                  )
