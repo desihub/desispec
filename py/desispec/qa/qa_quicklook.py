@@ -546,9 +546,9 @@ class Integrate_Spec(MonitoringAlg):
                         integ_thisamp[ii]=integrate_spec(wave,stdflux_thisamp[ii])
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
-            retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps}
+            retval["METRICS"]={"INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist()}
         else:
-            retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average}     
+            retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist()}     
 
         if qlf:
             qlf_post(retval)    
@@ -1445,8 +1445,8 @@ class Sky_Residual(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        input_frame=args[0]
 
+        input_frame=args[0]
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky

@@ -511,18 +511,19 @@ def plot_integral(qa_dict,outfile):
     std_integral=np.array(qa_dict["METRICS"]["INTEG"])
     std_integral_avg=qa_dict["METRICS"]["INTEG_AVG"]
     std_integral_amp=np.array(qa_dict["METRICS"]["INTEG_AVG_AMP"])
+    std_fiberid=qa_dict["METRICS"]["STD_FIBERID"]
 
     fig=plt.figure()
     plt.suptitle("Total integrals of STD spectra %s, Camera: %s, ExpID: %s"%(paname,camera,expid),fontsize=10,y=0.99)
     index=np.arange(1,len(std_integral)+1)
     ax1=fig.add_subplot(211)
     hist_med=ax1.bar(index,std_integral,color='b',align='center')
-    ax1.set_xlabel('STD fibers',fontsize=10)
+    ax1.set_xlabel('STD fiber ID',fontsize=10)
     ax1.set_ylabel('Integral (photon counts)',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
     ax1.set_xticks(index)
-    ax1.set_xticklabels(index)
+    ax1.set_xticklabels(std_fiberid)
     
     ax2=fig.add_subplot(212)
     heatmap1=ax2.pcolor(std_integral_amp.reshape(2,2),cmap=plt.cm.OrRd)
@@ -586,7 +587,7 @@ def plot_sky_continuum(qa_dict,outfile):
     
     ax1=fig.add_subplot(211)
     hist_med=ax1.bar(index,skycont_fiber,color='b',align='center')
-    ax1.set_xlabel('SKY fibers',fontsize=10)
+    ax1.set_xlabel('SKY fiber ID',fontsize=10)
     ax1.set_ylabel('Sky Continuum (photon counts)',fontsize=10)
     ax1.tick_params(axis='x',labelsize=6)
     ax1.tick_params(axis='y',labelsize=10)
@@ -719,6 +720,7 @@ def plot_residuals(qa_dict,outfile):
     ax0=fig.add_subplot(gs[:2,2:])
     ax0.set_axis_off()
     keys=["MED_RESID","NBAD_PCHI","NREJ","NSKY_FIB","RESID_PER"]
+    skyfiberid=qa_dict["METRICS"]["SKY_FIBERID"]
     
     xl=0.05
     yl=0.9
@@ -740,10 +742,12 @@ def plot_residuals(qa_dict,outfile):
     hist_res=ax2.bar(index,med_resid_fiber,align='center')
     ax2.plot(index,np.zeros_like(index),'k-')
     #ax1.plot(index,med_resid_fiber,'bo')
-    ax2.set_xlabel('Sky fibers',fontsize=10)
+    ax2.set_xlabel('Sky fiber ID',fontsize=10)
     ax2.set_ylabel('Med. Sky Res. (photon counts)',fontsize=10)
     ax2.tick_params(axis='x',labelsize=10)
     ax2.tick_params(axis='y',labelsize=10)
+    ax2.set_xticks(index)
+    ax2.set_xticklabels(skyfiberid)
     #plt.tight_layout()
     fig.savefig(outfile)
     
