@@ -26,9 +26,11 @@ def _parse_sec_keyword(value):
     '''
     m = re.search('\[(\d+):(\d+)\,(\d+):(\d+)\]', value)
     if m is None:
-        raise ValueError('unable to parse {} as [a:b, c:d]'.format(value))
-    else:
-        xmin, xmax, ymin, ymax = tuple(map(int, m.groups()))
+        m = re.search('\[(\d+):(\d+)\, (\d+):(\d+)\]', value)
+        if m is None :
+            raise ValueError('unable to parse {} as [a:b, c:d]'.format(value))
+    
+    xmin, xmax, ymin, ymax = tuple(map(int, m.groups()))
 
     return np.s_[ymin-1:ymax, xmin-1:xmax]
 
