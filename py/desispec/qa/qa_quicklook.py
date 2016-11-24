@@ -288,7 +288,7 @@ class Get_RMS(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
 
         input_image=args[0]
 
@@ -315,7 +315,7 @@ class Get_RMS(MonitoringAlg):
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,qlf=False):
         retval={}
-        retval["EXPID"] = "%08d"%image.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["CAMERA"] = image.meta["CAMERA"]
@@ -348,12 +348,12 @@ class Get_RMS(MonitoringAlg):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_RMS
             plot_RMS(retval,qafig)            
-            log.info("Output QA fig %s"%qafig)      
+            log.info("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -370,7 +370,7 @@ class Count_Pixels(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         input_image=args[0]
 
@@ -402,7 +402,7 @@ class Count_Pixels(MonitoringAlg):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%image.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = image.meta["CAMERA"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
@@ -444,13 +444,13 @@ class Count_Pixels(MonitoringAlg):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countpix
             plot_countpix(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)      
+            log.info("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -461,14 +461,13 @@ class Integrate_Spec(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="INTEG"
-        from desispec.image import Image as im
-        MonitoringAlg.__init__(self,name,im,config,logger)
+        from desispec.frame import Frame as fr
+        MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
 
         if "paname" not in kwargs:
@@ -555,13 +554,13 @@ class Integrate_Spec(MonitoringAlg):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_integral
             plot_integral(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)      
+            log.info("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -579,7 +578,7 @@ class Sky_Continuum(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
         input_frame=args[0]
         camera=input_frame.meta["CAMERA"]
@@ -690,13 +689,13 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_continuum
             plot_sky_continuum(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)                   
+            log.info("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -714,7 +713,7 @@ class Sky_Peaks(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image, got {}".format(type(args[0])))
 
         input_frame=args[0]
 
@@ -864,13 +863,13 @@ class Sky_Peaks(MonitoringAlg):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_peaks
             plot_sky_peaks(retval,qafig)
 
-            log.info("Output QA fig %s"%qafig)
+            log.info("Output QA fig {}".format(qafig))
 
         return retval
 
@@ -888,7 +887,7 @@ class Calc_XWSigma(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
  
         input_image=args[0]
  
@@ -1163,13 +1162,13 @@ class Calc_XWSigma(MonitoringAlg):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_XWSigma
             plot_XWSigma(retval,qafig)
 
-            log.info("Output QA fig %s"%qafig)
+            log.info("Output QA fig {}".format(qafig))
 
         return retval
  
@@ -1188,7 +1187,7 @@ class Bias_From_Overscan(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         input_raw=args[0]
         camera=kwargs["camera"]
@@ -1262,13 +1261,13 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_bias_overscan
             plot_bias_overscan(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)                   
+            log.info("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -1286,7 +1285,7 @@ class CountSpectralBins(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
 
         paname=None
@@ -1420,13 +1419,13 @@ class CountSpectralBins(MonitoringAlg):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countspectralbins
             plot_countspectralbins(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)                   
+            log.info("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -1444,14 +1443,14 @@ class Sky_Residual(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         input_frame=args[0]
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
             skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
-            log.info("Using given sky file %s for subtraction"%skyfile)
+            log.info("Using given sky file {} for subtraction".format(skyfile))
 
             skymodel=read_sky(skyfile)
 
@@ -1517,13 +1516,13 @@ dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_residuals
             plot_residuals(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)            
+            log.info("Output QA fig {}".format(qafig))            
 
         return retval
         
@@ -1538,7 +1537,7 @@ class Calculate_SNR(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
 
         amps=False
@@ -1548,7 +1547,7 @@ class Calculate_SNR(MonitoringAlg):
         dict_countbins=None
         if "dict_countbins" in kwargs:
             dict_countbins=kwargs["dict_countbins"]
-        
+
         paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
@@ -1658,12 +1657,12 @@ class Calculate_SNR(MonitoringAlg):
 
         if qafile is not None:
             yaml.dump(retval,open(qafile,"wb"))
-            log.info("Output QA data is in %s "%qafile)
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
             plot_SNR(retval,qafig)         
-            log.info("Output QA fig %s"%qafig)
+            log.info("Output QA fig {}".format(qafig))
 
         return retval
 

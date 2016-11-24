@@ -125,7 +125,7 @@ class Make_Config(object):
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
         if filetype in ["fframe","sframe"]: #- fiberflat fielded or sky subtracted intermediate files       
-            pafile=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"%s-%s-%08d.fits"%(filetype,self.camera,self.expid))
+            pafile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"{}-{}-{:08d}.fits".format(filetype,self.camera,self.expid))
         else:
             pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
             
@@ -168,7 +168,7 @@ class Make_Config(object):
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'expid': "%08d"%self.expid, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
                 
         return qaopts 
    
@@ -209,9 +209,9 @@ class Make_Config(object):
         if paname not in outmap:
             raise IOError("No output name map available for this PA:",paname)
 
-        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"ql-%s-%s-%08d.yaml"%(outmap[paname],self.camera,self.expid))
+        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.yaml".format(outmap[paname],self.camera,self.expid))
     
-        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"ql-%s-%s-%08d.png"%(outmap[paname],self.camera,self.expid))
+        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.png".format(outmap[paname],self.camera,self.expid))
         
         return (outfile,outfig)
 
@@ -233,9 +233,9 @@ class Make_Config(object):
                }
         if qaname not in outmap:              
             raise IOError("No output name map available for this QA:",qaname)
-        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"qa","ql-%s-%s-%08d.yaml"%(outmap[qaname],self.camera,self.expid))
+        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"qa","ql-{}-{}-{:08d}.yaml".format(outmap[qaname],self.camera,self.expid))
 
-        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"%08d"%self.expid,"qa","ql-%s-%s-%08d.png"%(outmap[qaname],self.camera,self.expid))
+        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"qa","ql-{}-{}-{:08d}.png".format(outmap[qaname],self.camera,self.expid))
 
         return (outfile,outfig)
 
@@ -311,7 +311,7 @@ def build_config(config):
     outconfig['Period'] = config.period
     if config.outputfile is not None: #- Global final output file
         outconfig["OutputFile"] = config.outputfile
-    else: outconfig["OutputFile"]="lastframe-%s-%08d.fits"%(config.camera,config.expid)
+    else: outconfig["OutputFile"]="lastframe-{}-{:08d}.fits".format(config.camera,config.expid)
 
     pipeline = []
     for ii,PA in enumerate(config.palist):
