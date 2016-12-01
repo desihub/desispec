@@ -21,6 +21,7 @@ class TestIO(unittest.TestCase):
     def setUpClass(cls):
         cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
         cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
+        cls.testbrfile = 'test-{uuid}/test-br-{uuid}.fits'.format(uuid=uuid1())
         cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
         cls.origEnv = {'SPECPROD':None,
             "DESI_SPECTRO_DATA":None,
@@ -36,7 +37,7 @@ class TestIO(unittest.TestCase):
     #- Cleanup test files if they exist
     @classmethod
     def tearDownClass(cls):
-        for testfile in [cls.testfile, cls.testyfile]:
+        for testfile in [cls.testfile, cls.testyfile, cls.testbrfile]:
             if os.path.exists(testfile):
                 os.remove(testfile)
                 testpath = os.path.normpath(os.path.dirname(testfile))
@@ -320,6 +321,36 @@ class TestIO(unittest.TestCase):
         self.assertTrue( np.all(ivar2[0] == ivar[0]) )
         
         bx.close()
+
+        #- test for incorrect fits file. Use self.testbrfile as this requires many spectra/wavelength.
+        #- Using self.testfile breaks above tests for shapes assertion etc. So dealing differently
+        nspec2 = 500
+        nwave2 = 1000
+        wave2 = np.arange(nwave2)
+        flux2 = np.random.uniform(size=(nspec2, nwave2))
+        ivar2 = np.random.uniform(size=(nspec2, nwave2))
+        resolution2 = np.random.uniform(size=(nspec2, 5, nwave2))
+        fibermap2 = desispec.io.fibermap.empty_fibermap(nspec2)
+        fibermap2['TARGETID'] = 3*np.arange(nspec2)
+        night2 = '20161130'
+        expid2 = 5
+        header2 = dict(BRICKNAM = '0005p026', channel='r')
+
+        brick2 = Brick(self.testbrfile, mode='update', header=header2)
+        brick2.add_objects(flux2, ivar2, wave2, resolution2, fibermap2, night2, expid2)
+        brick2.close()
+
+        #- Now open before teardown and add a HDU. A corrupt file will throw IOError while opening
+        trueflux=np.ones((nspec2,nwave2))*0.75
+        header2 = desispec.io.util.fitsheader(header2)
+        fx = fits.open(self.testbrfile, mode='append')
+        self.assertEqual(len(fx),5)
+        fx.append(fits.ImageHDU(trueflux, name='_TRUEFLUX', header=header2))
+        fx.flush()
+        self.assertEqual(len(fx),6)
+        self.assertEqual(fx[5].header['EXTNAME'], '_TRUEFLUX')
+        fx.close()
+
 
     def test_zbest_io(self):
         from desispec.zfind import ZfindBase

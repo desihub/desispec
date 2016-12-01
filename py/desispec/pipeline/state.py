@@ -49,7 +49,7 @@ def graph_db_info():
     stime = 0
     first = ""
     last = ""
-    jobid = 0
+    jobid = "-1"
     running = False
 
     statepat = re.compile(r'.*state_(.*).yaml')
@@ -91,7 +91,7 @@ def graph_db_check(grph):
     This sets the state of all objects in the graph based on external
     information.  This might eventually involve querying a database.
     For now, the filesystem is checked for the existance of the object.
-    Currently this marks all nodes as "none" or "done".  The "wait" and
+    Currently this marks all nodes as "none" or "done".  The "running" and
     "fail" states are overridden.  This may change in the future.
 
     Args:

@@ -102,7 +102,7 @@ run_states = [
     "none",
     "done",
     "fail",
-    "wait"
+    "running"
 ]
 """The valid states of each pipeline task."""
 
