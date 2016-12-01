@@ -5,7 +5,7 @@ desispec change log
 0.12.1 (unreleased)
 -------------------
 
-* No changes yet
+* Fix brick update corruption (PR #314)
 
 0.12.0 (2016-11-09)
 -------------------
