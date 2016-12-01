@@ -58,7 +58,7 @@ def ql_main(args=None):
             if "yaml" in args.config:
                 configdict=yaml.load(open(args.config,'rb'))
         else:
-            log.critical("Can't open config file %s"%(args.config))
+            log.critical("Can't open config file {}".format(args.config))
             sys.exit("Can't open config file")
     else:
         log.warning("No config file given. Trying to create config from other options")
@@ -71,7 +71,7 @@ def ql_main(args=None):
         if args.save:
             if "yaml" in args.save:
                 yaml.dump(configdict,open(args.save,"wb"))
-                log.info("Output saved for this configuration to %s "%args.save)
+                log.info("Output saved for this configuration to {}".format(args.save))
             else:
                 log.info("Can save config to only yaml output. Put a yaml in the argument")
         
@@ -83,15 +83,15 @@ def ql_main(args=None):
 
     if isinstance(res,image.Image):
         if configdict["OutputFile"]: finalname=configdict["OutputFile"]
-        else: finalname="image-%s%d-%08d.fits"%(chan,spectrograph,expid)
+        else: finalname="image-{}{:d}-{:08d}.fits".format(chan,spectrograph,expid)
         imIO.write_image(finalname,res,meta=None)        
     elif isinstance(res,frame.Frame):
         if configdict["OutputFile"]: finalname=configdict["OutputFile"]
-        else: finalname="frame-%s%d-%08d.fits"%(chan,spectrograph,expid)
+        else: finalname="frame-{}{:d}-{:08d}.fits".format(chan,spectrograph,expid)
         frIO.write_frame(finalname,res,header=None)
     else:
-        log.error("Result of pipeline is in unkown type %s. Don't know how to write"%(type(res)))
-        sys.exit("Unknown pipeline result type %s."%(type(res)))
-    log.info("Pipeline completed. Final result is in %s"%finalname)
+        log.error("Result of pipeline is in unkown type {}. Don't know how to write".format(type(res)))
+        sys.exit("Unknown pipeline result type {}.".format(type(res)))
+    log.info("Pipeline completed. Final result is in {}".format(finalname))
 if __name__=='__main__':
     ql_main()    

@@ -11,7 +11,7 @@ class MonitoringAlg:
         self.__inpType__=type(inptype)
         self.name=name
         self.config=config
-        self.m_log.debug("initializing Monitoring alg %s"%name)
+        self.m_log.debug("initializing Monitoring alg {}".format(name))
     def __call__(self,*args,**kwargs):
         return self.run(*args,**kwargs)
     def run(self,*argv,**kwargs):

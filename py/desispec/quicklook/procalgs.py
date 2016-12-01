@@ -10,30 +10,6 @@ from desispec.quicklook import qlexceptions,qllogger
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
-class Preproc_test(pas.PipelineAlg):
-
-    #- this is not real preproc, but only for testing QAs, now input taking pix = output pix
-
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="Preproc Test"
-        from desispec.image import Image as im
-        pas.PipelineAlg.__init__(self,name,im,im,config,logger)
-
-    def run(self,*args,**kwargs):
-        if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
-        if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        input_image=args[0]
-        
-        return self.run_pa(input_image)
-
-    def run_pa(self,image):
-        return image
-
-    def get_default_config(self):
-        return {}
 
 class Initialize(pas.PipelineAlg):
     """
