@@ -91,6 +91,8 @@ matrix:
         # runs for a long time
         - os: linux
           env: PYTHON_VERSION=2.7 SETUP_CMD='build_sphinx'
+                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
           # OPTIONAL_DEPS needed because the plot_directive in sphinx needs them
           # -w is an astropy extension
 

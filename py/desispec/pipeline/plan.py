@@ -39,8 +39,8 @@ def select_nights(allnights, nightstr):
         allnights (list): list of all nights as strings
         nightstr (str): comma-separated list of regex patterns.
 
-    Returns (list):
-        list of nights that match the patterns.
+    Returns:
+        list: list of nights that match the patterns.
     """
 
     nights = []
@@ -73,7 +73,8 @@ def create_prod(nightstr=None):
         nightstr (str): comma-separated list of regex patterns.
 
     Returns:
-        nothing.
+        tuple containing the number of exposures of each type
+        and the bricks.
     """
 
     rawdir = os.path.abspath(io.rawdata_root())
@@ -198,8 +199,14 @@ def graph_night(rawnight):
     Args:
         rawnight (str): The night to process.
 
-    Returns (dict):
-        Dependency graph, as nested dictionaries.
+    Returns:
+        tuple containing
+
+            - Dependency graph, as nested dictionaries.
+            - exposure counts: dictionary of the number of exposures of
+              each type.
+            - dictionary of bricks for each fibermap.
+
     """
 
     grph = {}
@@ -639,8 +646,8 @@ def load_prod(nightstr=None, spectrographs=None, progress=None):
         nightstr (str): comma-separated list of regex patterns.
         spectrographs (str): comma-separated list of spectrographs.
 
-    Returns (dict):
-        The full multi-night graph with selections applied.
+    Returns:
+        dict: The full multi-night graph with selections applied.
     """
 
     proddir = os.path.abspath(io.specprod_root())
