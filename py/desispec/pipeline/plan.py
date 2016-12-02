@@ -201,11 +201,12 @@ def graph_night(rawnight):
 
     Returns:
         tuple containing
+
             - Dependency graph, as nested dictionaries.
-            - exposure counts: dictionary of the number of exposures
-                of each type.
+            - exposure counts: dictionary of the number of exposures of
+              each type.
             - dictionary of bricks for each fibermap.
-    
+
     """
 
     grph = {}
