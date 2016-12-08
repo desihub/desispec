@@ -67,5 +67,6 @@ def read_image(filename):
     else:
         readnoise = fx['IMAGE'].header['RDNOISE']
 
+    fx.close()
     return Image(image, ivar, mask=mask, readnoise=readnoise,
                  camera=camera, meta=meta)

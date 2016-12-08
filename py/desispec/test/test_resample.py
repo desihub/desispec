@@ -20,7 +20,7 @@ class TestResample(unittest.TestCase):
         # we need in this test to make sure we have the same boundaries of the edges bins
         # to obtain the same flux density on the edges
         # because the resampling routine considers the flux is 0 outside of the input bins
-        nout = n/2
+        nout = n//2
         stepout = n/float(nout)
         xout = np.arange(nout)*stepout+stepout/2-0.5 
         yout = resample_flux(xout, x, y)
@@ -34,7 +34,7 @@ class TestResample(unittest.TestCase):
         # to obtain the same flux density on the edges
         # because the resampling routine considers the flux is 0 outside of the input bins
         # we consider here a logarithmic output grid
-        nout = n/2
+        nout = n//2
         lstepout = (log(x[-1])-log(x[0]))/float(nout)
         xout = np.exp(np.arange(nout)*lstepout)-0.5
         xout[0]  = x[0]-0.5+(xout[1]-xout[0])/2 # same edge of first bin
@@ -49,7 +49,7 @@ class TestResample(unittest.TestCase):
         n = 100
         x = np.arange(n)
         y = 1+np.sin(x/20.0)
-        y[n/2+1] += 10
+        y[n//2+1] += 10
         # xout must have edges including bin half width equal
         # or larger than input to get the same integrated flux
         xout = np.arange(0,n+1,2)
@@ -64,7 +64,7 @@ class TestResample(unittest.TestCase):
         n = 100
         x = np.arange(n)
         y = 1+np.sin(x/20.0)        
-        y[n/2+1] += 10
+        y[n//2+1] += 10
         ivar = np.ones(n)
         for rebin in (2, 3, 5):
             xout = np.arange(0,n+1,rebin)
@@ -73,7 +73,7 @@ class TestResample(unittest.TestCase):
             self.assertEqual(len(xout), len(ivout))
             # we have to compare the variance of ouput bins that
             # are fully contained in input
-            self.assertAlmostEqual(ivout[ivout.size/2], ivar[ivar.size/2]*rebin)
+            self.assertAlmostEqual(ivout[ivout.size//2], ivar[ivar.size//2]*rebin)
             # check sum of weights is conserved 
             ivar_in  = np.sum(ivar)
             ivar_out = np.sum(ivout)
@@ -90,6 +90,17 @@ class TestResample(unittest.TestCase):
         self.assertAlmostEqual(lo[0], x[0]-0.5*dx)
         self.assertAlmostEqual(lo[1], x[0]+0.5*dx)
         self.assertAlmostEqual(hi[-1], x[-1]+0.5*dx)
+
+    #- maybe these shouldn't agree
+    # def test_same_bin(self):
+    #     '''test reproducibility if two input bins are the same'''
+    #     x  = np.array([1, 2, 3, 3, 4, 5])
+    #     y1 = np.array([1, 2, 3, 4, 5, 6])
+    #     y2 = np.array([1, 2, 4, 3, 5, 6])
+    #     xx = np.array([1, 2.5, 3.3, 4.5])
+    #     z1 = resample_flux(xx, x, y1)
+    #     z2 = resample_flux(xx, x, y2)
+    #     self.assertTrue(np.all(z1 == z2))
 
     @unittest.expectedFailure
     def test_edges(self):

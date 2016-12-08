@@ -27,25 +27,23 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     hdr = fitsheader(header)
     add_dependencies(hdr)
     
-    hdr['EXTNAME'] = ('FLUX', 'erg/s/cm2/A')
-    hdr['BUNIT'] = ('erg/s/cm2/A', 'Flux units')
-    hdu1=fits.PrimaryHDU(normalizedFlux.astype('f4'), header=hdr.copy())
+    hdr['EXTNAME'] = ('FLUX', '[1e-17 erg/(s cm2 Angstrom)]')
+    hdr['BUNIT'] = ('1e-17 erg/(s cm2 Angstrom)', 'Flux units')
+    hdu1=fits.PrimaryHDU(normalizedFlux.astype('f4'), header=hdr)
 
-    hdr['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
-    hdr['BUNIT'] = ('Angstrom', 'Wavelength units')
-    hdu2 = fits.ImageHDU(wave.astype('f4'), header=hdr.copy())
+    hdu2 = fits.ImageHDU(wave.astype('f4'))
+    hdu2.header['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
+    hdu2.header['BUNIT'] = ('Angstrom', 'Wavelength units')
 
-    hdr['EXTNAME'] = ('FIBERS', 'no dimension')
-    hdu3 = fits.ImageHDU(fibers, header=hdr.copy())
+    hdu3 = fits.ImageHDU(fibers, name='FIBERS')
 
-    hdr['EXTNAME'] = ('METADATA', 'no dimension')
     from astropy.io.fits import Column
     BESTMODEL=Column(name='BESTMODEL',format='K',array=data['BESTMODEL'])
     TEMPLATEID=Column(name='TEMPLATEID',format='K',array=data['TEMPLATEID'])
     CHI2DOF=Column(name='CHI2DOF',format='D',array=data['CHI2DOF'])
     REDSHIFT=Column(name='REDSHIFT',format='D',array=data['REDSHIFT'])
     cols=fits.ColDefs([BESTMODEL,TEMPLATEID,CHI2DOF,REDSHIFT])
-    tbhdu=fits.BinTableHDU.from_columns(cols,header=hdr)
+    tbhdu=fits.BinTableHDU.from_columns(cols, name='METADATA')
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
     tmpfile = norm_modelfile+".tmp"
@@ -86,11 +84,12 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     add_dependencies(hdr)
     
     hdr['EXTNAME'] = 'FLUXCALIB'
-    hdr['BUNIT'] = ('(electrons/A) / (erg/s/cm2/A)', 'electrons per flux unit')
+    hdr['BUNIT'] = ('1e+17 cm2 electron s / erg', 'i.e. (electron/Angstrom) / (1e-17 erg/s/cm2/Angstrom)')
     hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f4'), header=hdr) )
     hx.append( fits.ImageHDU(fluxcalib.ivar.astype('f4'), name='IVAR') )
     hx.append( fits.CompImageHDU(fluxcalib.mask, name='MASK') )
-    hx.append( fits.ImageHDU(fluxcalib.wave, name='WAVELENGTH') )
+    hx.append( fits.ImageHDU(fluxcalib.wave.astype('f4'), name='WAVELENGTH') )
+    hx[-1].header['BUNIT'] = 'Angstrom'
     
     hx.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)

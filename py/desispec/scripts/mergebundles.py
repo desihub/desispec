@@ -57,7 +57,7 @@ def main(args):
     if len(fibers) != nspec:
         msg = "Input files only have {} instead of {} spectra".format(len(fibers), nspec)
         if args.force:
-            log.warn(msg)
+            log.warning(msg)
         else:
             log.fatal(msg)
             sys.exit(1)

@@ -2,7 +2,7 @@
 Classes to organize and execute QA for a DESI exposure
 """
 
-from __future__ import print_function, absolute_import, division, unicode_literals
+from __future__ import print_function, absolute_import, division
 
 import numpy as np
 import os
@@ -27,13 +27,13 @@ class QA_Frame(object):
 
         """
         if isinstance(inp,dict):
-            assert len(inp.keys()) == 1
-            self.night = inp.keys()[0]  # Requires night in first key
-            assert len(inp[self.night].keys()) == 1
-            self.expid = inp[self.night].keys()[0]
-            assert len(inp[self.night][self.expid].keys()) == 2
+            assert len(inp) == 1
+            self.night = list(inp.keys())[0]  # Requires night in first key
+            assert len(inp[self.night]) == 1
+            self.expid = list(inp[self.night].keys())[0]
+            assert len(inp[self.night][self.expid]) == 2
             self.flavor = inp[self.night][self.expid].pop('flavor')
-            self.camera = inp[self.night][self.expid].keys()[0]
+            self.camera = list(inp[self.night][self.expid].keys())[0]
             assert self.camera[0] in ['b','r','z']
             self.qa_data = inp[self.night][self.expid][self.camera]
         else:
@@ -57,15 +57,15 @@ class QA_Frame(object):
           Code will always add new parameters if any exist
         """
         # Fill and return if not set previously or if re_init=True
-        if (qatype not in self.qa_data.keys()) or re_init:
+        if (qatype not in self.qa_data) or re_init:
             self.qa_data[qatype] = {}
-            self.qa_data[qatype]['PARAM'] = param
+            self.qa_data[qatype]['PARAMS'] = param
             return
 
         # Update the new parameters only
-        for key in param.keys():
-            if key not in self.qa_data[qatype]['PARAM'].keys():
-                self.qa_data[qatype]['PARAM'][key] = param[key]
+        for key in param:
+            if key not in self.qa_data[qatype]['PARAMS']:
+                self.qa_data[qatype]['PARAMS'][key] = param[key]
 
     def init_fiberflat(self, re_init=False):
         """Initialize parameters for FIBERFLAT QA
@@ -155,7 +155,7 @@ class QA_Frame(object):
         # Check for previous QA if clobber==False
         if not clobber:
             # QA previously performed?
-            if 'QA' in self.qa_data[qatype].keys():
+            if 'METRICS' in self.qa_data[qatype]:
                 return
         # Run
         if qatype == 'SKYSUB':
@@ -164,7 +164,7 @@ class QA_Frame(object):
             # Init parameters (as necessary)
             self.init_skysub()
             # Run
-            qadict = qa_skysub(self.qa_data[qatype]['PARAM'],
+            qadict = qa_skysub(self.qa_data[qatype]['PARAMS'],
                 inputs[0], inputs[1])
         elif qatype == 'FIBERFLAT':
             # Expecting: frame, fiberflat
@@ -172,18 +172,18 @@ class QA_Frame(object):
             # Init parameters (as necessary)
             self.init_fiberflat()
             # Run
-            qadict = qa_fiberflat(self.qa_data[qatype]['PARAM'], inputs[0], inputs[1])
+            qadict = qa_fiberflat(self.qa_data[qatype]['PARAMS'], inputs[0], inputs[1])
         elif qatype == 'FLUXCALIB':
             # Expecting: frame, fluxcalib
             assert len(inputs) == 2
             # Init parameters (as necessary)
             self.init_fluxcalib()
             # Run
-            qadict = qa_fluxcalib(self.qa_data[qatype]['PARAM'], inputs[0], inputs[1])
+            qadict = qa_fluxcalib(self.qa_data[qatype]['PARAMS'], inputs[0], inputs[1])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update
-        self.qa_data[qatype]['QA'] = qadict
+        self.qa_data[qatype]['METRICS'] = qadict
 
     def __repr__(self):
         """ Print formatting

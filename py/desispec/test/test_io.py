@@ -21,6 +21,7 @@ class TestIO(unittest.TestCase):
     def setUpClass(cls):
         cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
         cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
+        cls.testbrfile = 'test-{uuid}/test-br-{uuid}.fits'.format(uuid=uuid1())
         cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
         cls.origEnv = {'SPECPROD':None,
             "DESI_SPECTRO_DATA":None,
@@ -36,7 +37,7 @@ class TestIO(unittest.TestCase):
     #- Cleanup test files if they exist
     @classmethod
     def tearDownClass(cls):
-        for testfile in [cls.testfile, cls.testyfile]:
+        for testfile in [cls.testfile, cls.testyfile, cls.testbrfile]:
             if os.path.exists(testfile):
                 os.remove(testfile)
                 testpath = os.path.normpath(os.path.dirname(testfile))
@@ -135,6 +136,23 @@ class TestIO(unittest.TestCase):
             data = fits.getdata(self.testfile, extname)
             self.assertEqual(data.dtype, np.dtype('>f4'), '{} not type >f4'.format(extname))
 
+        #- with and without units
+        frx = Frame(wave, flux, ivar, mask, R, meta=meta)
+        desispec.io.write_frame(self.testfile, frx)
+        frame = desispec.io.read_frame(self.testfile)
+        self.assertTrue('BUNIT' not in frame.meta)
+        desispec.io.write_frame(self.testfile, frx, units='photon/bin')
+        frame = desispec.io.read_frame(self.testfile)
+        self.assertEqual(frame.meta['BUNIT'], 'photon/bin')
+        frx.meta['BUNIT'] = 'blatfoo'
+        desispec.io.write_frame(self.testfile, frx)
+        frame = desispec.io.read_frame(self.testfile)
+        self.assertEqual(frame.meta['BUNIT'], 'blatfoo')
+        #- function argument trumps pre-existing BUNIT
+        desispec.io.write_frame(self.testfile, frx, units='quat')
+        frame = desispec.io.read_frame(self.testfile)
+        self.assertEqual(frame.meta['BUNIT'], 'quat')
+
         #- with and without fibermap
         self.assertEqual(frame.fibermap, None)
         fibermap = desispec.io.empty_fibermap(nspec)
@@ -212,13 +230,8 @@ class TestIO(unittest.TestCase):
 
         desispec.io.write_fibermap(self.testfile, fibermap)
 
-        #- Read without and with header
         fm = desispec.io.read_fibermap(self.testfile)
-        self.assertTrue(isinstance(fm, np.ndarray))
-
-        fm, hdr = desispec.io.read_fibermap(self.testfile, header=True)
-        self.assertTrue(isinstance(fm, np.ndarray))
-        self.assertTrue(isinstance(hdr, fits.Header))
+        self.assertTrue(isinstance(fm, Table))
 
         self.assertEqual(set(fibermap.dtype.names), set(fm.dtype.names))
         for key in fibermap.dtype.names:
@@ -281,6 +294,17 @@ class TestIO(unittest.TestCase):
         brick = Brick(self.testfile, mode='update', header=header)
         brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid)
         brick.add_objects(flux, ivar, wave, resolution, fibermap, night, expid+1)
+
+        #- check dtype consistency for columns in original fibermap
+        brick_fibermap = Table(brick.hdu_list['FIBERMAP'].data)
+        for colname in fibermap.colnames:
+            self.assertEqual(fibermap[colname].dtype, brick_fibermap[colname].dtype)
+
+        #- Check that the two extra columns exist (and only those)
+        self.assertIn('NIGHT', brick_fibermap.colnames)
+        self.assertIn('EXPID', brick_fibermap.colnames)
+        self.assertEqual(len(fibermap.colnames)+2, len(brick_fibermap.colnames))
+        
         brick.close()
 
         bx = Brick(self.testfile)
@@ -295,7 +319,38 @@ class TestIO(unittest.TestCase):
         self.assertEqual(len(info2), 2)
         self.assertTrue( np.all(flux2[0] == flux[0]) )
         self.assertTrue( np.all(ivar2[0] == ivar[0]) )
+        
         bx.close()
+
+        #- test for incorrect fits file. Use self.testbrfile as this requires many spectra/wavelength.
+        #- Using self.testfile breaks above tests for shapes assertion etc. So dealing differently
+        nspec2 = 500
+        nwave2 = 1000
+        wave2 = np.arange(nwave2)
+        flux2 = np.random.uniform(size=(nspec2, nwave2))
+        ivar2 = np.random.uniform(size=(nspec2, nwave2))
+        resolution2 = np.random.uniform(size=(nspec2, 5, nwave2))
+        fibermap2 = desispec.io.fibermap.empty_fibermap(nspec2)
+        fibermap2['TARGETID'] = 3*np.arange(nspec2)
+        night2 = '20161130'
+        expid2 = 5
+        header2 = dict(BRICKNAM = '0005p026', channel='r')
+
+        brick2 = Brick(self.testbrfile, mode='update', header=header2)
+        brick2.add_objects(flux2, ivar2, wave2, resolution2, fibermap2, night2, expid2)
+        brick2.close()
+
+        #- Now open before teardown and add a HDU. A corrupt file will throw IOError while opening
+        trueflux=np.ones((nspec2,nwave2))*0.75
+        header2 = desispec.io.util.fitsheader(header2)
+        fx = fits.open(self.testbrfile, mode='append')
+        self.assertEqual(len(fx),5)
+        fx.append(fits.ImageHDU(trueflux, name='_TRUEFLUX', header=header2))
+        fx.flush()
+        self.assertEqual(len(fx),6)
+        self.assertEqual(fx[5].header['EXTNAME'], '_TRUEFLUX')
+        fx.close()
+
 
     def test_zbest_io(self):
         from desispec.zfind import ZfindBase
@@ -304,6 +359,11 @@ class TestIO(unittest.TestCase):
         flux = np.random.uniform(size=(nspec, nflux))
         ivar = np.random.uniform(size=(nspec, nflux))
         zfind1 = ZfindBase(wave, flux, ivar)
+
+        zfind1.zwarn[:] = np.arange(nspec)
+        zfind1.z[:] = np.random.uniform(size=nspec)
+        zfind1.zerr[:] = np.random.uniform(size=nspec)
+        zfind1.spectype[:] = 'ELG'
 
         brickname = '1234p567'
         targetids = np.random.randint(0,12345678, size=nspec)
@@ -388,7 +448,7 @@ class TestIO(unittest.TestCase):
         # Read
         xqaframe = desio_qa.read_qa_frame(self.testyfile)
         # Check
-        self.assertTrue(qaframe.qa_data['SKYSUB']['PARAM']['PCHI_RESID'] == xqaframe.qa_data['SKYSUB']['PARAM']['PCHI_RESID'])
+        self.assertTrue(qaframe.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'] == xqaframe.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'])
         self.assertTrue(qaframe.flavor == xqaframe.flavor)
 
     def test_native_endian(self):
@@ -434,11 +494,11 @@ class TestIO(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             foo = desispec.io.findfile('stdstars',expid=2,spectrograph=0)
         the_exception = cm.exception
-        self.assertEqual(the_exception.message, "Required input 'night' is not set for type 'stdstars'!")
+        self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
             foo = desispec.io.findfile('brick',brickname='3338p190')
         the_exception = cm.exception
-        self.assertEqual(the_exception.message, "Required input 'band' is not set for type 'brick'!")
+        self.assertEqual(str(the_exception), "Required input 'band' is not set for type 'brick'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']

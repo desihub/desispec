@@ -10,10 +10,11 @@ Tools for data and metadata I/O.
 """
 
 # help with 2to3 support
-from __future__ import absolute_import, division
+from __future__ import absolute_import, division, print_function
 
 from .meta import (findfile, get_exposures, get_files, get_raw_files,
-    rawdata_root, specprod_root, validate_night)
+    rawdata_root, specprod_root, validate_night, get_pipe_plandir,
+    get_pipe_rundir, get_pipe_scriptdir, get_pipe_logdir, get_pipe_faildir)
 from .frame import read_frame, write_frame
 from .sky import read_sky, write_sky
 from .fiberflat import read_fiberflat, write_fiberflat

@@ -64,19 +64,19 @@ class TestQA(unittest.TestCase):
         # SKY
         qafrm0.init_skysub()
         qafrm1.init_skysub()
-        qafrm0.qa_data['SKYSUB']['QA'] = {}
-        qafrm1.qa_data['SKYSUB']['QA'] = {}
-        qafrm0.qa_data['SKYSUB']['QA']['NSKY_FIB'] = 10
-        qafrm1.qa_data['SKYSUB']['QA']['NSKY_FIB'] = 30
+        qafrm0.qa_data['SKYSUB']['METRICS'] = {}
+        qafrm1.qa_data['SKYSUB']['METRICS'] = {}
+        qafrm0.qa_data['SKYSUB']['METRICS']['NSKY_FIB'] = 10
+        qafrm1.qa_data['SKYSUB']['METRICS']['NSKY_FIB'] = 30
         # FLUX
         qafrm0.init_fluxcalib()
         qafrm1.init_fluxcalib()
-        qafrm0.qa_data['FLUXCALIB']['QA'] = {}
-        qafrm0.qa_data['FLUXCALIB']['QA']['ZP'] = 24.
-        qafrm0.qa_data['FLUXCALIB']['QA']['RMS_ZP'] = 0.05
-        qafrm1.qa_data['FLUXCALIB']['QA'] = {}
-        qafrm1.qa_data['FLUXCALIB']['QA']['ZP'] = 24.5
-        qafrm1.qa_data['FLUXCALIB']['QA']['RMS_ZP'] = 0.05
+        qafrm0.qa_data['FLUXCALIB']['METRICS'] = {}
+        qafrm0.qa_data['FLUXCALIB']['METRICS']['ZP'] = 24.
+        qafrm0.qa_data['FLUXCALIB']['METRICS']['RMS_ZP'] = 0.05
+        qafrm1.qa_data['FLUXCALIB']['METRICS'] = {}
+        qafrm1.qa_data['FLUXCALIB']['METRICS']['ZP'] = 24.5
+        qafrm1.qa_data['FLUXCALIB']['METRICS']['RMS_ZP'] = 0.05
         # WRITE
         write_qa_frame(self.qafile_b0, qafrm0)
         write_qa_frame(self.qafile_b1, qafrm1)
@@ -86,8 +86,8 @@ class TestQA(unittest.TestCase):
         qabrck = QA_Brick()
         # ZBEST
         qabrck.init_zbest()
-        qabrck.data['ZBEST']['QA'] = {}
-        qabrck.data['ZBEST']['QA']['NFAIL'] = 10
+        qabrck.data['ZBEST']['METRICS'] = {}
+        qabrck.data['ZBEST']['METRICS']['NFAIL'] = 10
         write_qa_brick(self.qafile_brick, qabrck)
 
     def test_init_qa_frame(self):
@@ -99,31 +99,31 @@ class TestQA(unittest.TestCase):
         #- Init FiberFlat dict
         qafrm = QA_Frame(self._make_frame(flavor='flat'))
         qafrm.init_fiberflat()
-        assert qafrm.qa_data['FIBERFLAT']['PARAM']['MAX_RMS'] > 0.
+        assert qafrm.qa_data['FIBERFLAT']['PARAMS']['MAX_RMS'] > 0.
 
         #- ReInit FiberFlat dict
         qafrm.init_fiberflat(re_init=True)
-        assert qafrm.qa_data['FIBERFLAT']['PARAM']['MAX_RMS'] > 0.
+        assert qafrm.qa_data['FIBERFLAT']['PARAMS']['MAX_RMS'] > 0.
 
     def test_init_qa_fluxcalib(self):
         #- Init FluxCalib dict
         qafrm = QA_Frame(self._make_frame(flavor='dark'))
         qafrm.init_fluxcalib()
-        assert qafrm.qa_data['FLUXCALIB']['PARAM']['MAX_ZP_OFF'] > 0.
+        assert qafrm.qa_data['FLUXCALIB']['PARAMS']['MAX_ZP_OFF'] > 0.
 
         #- ReInit FluxCalib dict
         qafrm.init_fluxcalib(re_init=True)
-        assert qafrm.qa_data['FLUXCALIB']['PARAM']['MAX_ZP_OFF'] > 0.
+        assert qafrm.qa_data['FLUXCALIB']['PARAMS']['MAX_ZP_OFF'] > 0.
 
     def test_init_qa_skysub(self):
         #- Init SkySub dict
         qafrm = QA_Frame(self._make_frame(flavor='dark'))
         qafrm.init_skysub()
-        assert qafrm.qa_data['SKYSUB']['PARAM']['PCHI_RESID'] > 0.
+        assert qafrm.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'] > 0.
 
         #- ReInit SkySub dict
         qafrm.init_skysub(re_init=True)
-        assert qafrm.qa_data['SKYSUB']['PARAM']['PCHI_RESID'] > 0.
+        assert qafrm.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'] > 0.
 
     def test_qa_frame_write_load_data(self):
         # Write
@@ -146,8 +146,8 @@ class TestQA(unittest.TestCase):
         #- Test loading data
         self._write_qaframes()
         qaexp = QA_Exposure(self.expid, self.night, 'dark', specprod_dir=self.testDir)
-        assert 'b0' in qaexp.data['frames'].keys()
-        assert 'b1' in qaexp.data['frames'].keys()
+        assert 'b0' in qaexp.data['frames']
+        assert 'b1' in qaexp.data['frames']
         # Write
         write_qa_exposure(self.qafile_exp, qaexp)
 
@@ -167,7 +167,7 @@ class TestQA(unittest.TestCase):
         assert qabrck.brick_name == 'tst_brick'
         #
         qabrck.init_zbest()
-        assert qabrck.data['ZBEST']['PARAM']['MAX_NFAIL'] > 0
+        assert qabrck.data['ZBEST']['PARAMS']['MAX_NFAIL'] > 0
 
     def test_init_qa_prod(self):
         qaprod = QA_Prod(self.testDir)

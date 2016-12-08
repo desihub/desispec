@@ -27,7 +27,7 @@ def compute_sky(fframe,fibermap=None):
         fibermap=fframe.fibermap
 
     if fibermap is None:
-        print "Must have fibermap for Sky compute"
+        print("Must have fibermap for Sky compute")
         sys.exit(0)
 
     #- get the sky

@@ -46,7 +46,7 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
         psf=np.array([0.513852,0.537679,0.297071,0.276298])
     else :
         log.error("do not have psf for camera '%s'"%img.camera)
-        raise KeyError, 'No PSF for camera {}'.format(img.camera)
+        raise KeyError('No PSF for camera {}'.format(img.camera))
 
     # selection is now an argument (for neighbors)
     # selection=((img.pix*np.sqrt(img.ivar)*(img.mask==0))[1:-1,1:-1]>nsig).astype(bool)

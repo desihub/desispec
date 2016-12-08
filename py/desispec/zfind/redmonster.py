@@ -10,6 +10,7 @@ import os
 
 import numpy as np
 import time
+import json
 
 from desispec.zfind import ZfindBase
 from desispec.interpolation import resample_flux
@@ -42,8 +43,8 @@ class RedMonsterZfind(ZfindBase):
         #- so chop off some data
         ii, = np.where(wave>3965)
         wave = wave[ii]
-        flux = flux[:, ii]
-        ivar = ivar[:, ii]
+        flux = flux[:, ii].astype(float)
+        ivar = ivar[:, ii].astype(float)
 
         #- Resample inputs to a loglam grid
         start = round(np.log10(wave[0]), 4)+dloglam
@@ -129,7 +130,11 @@ class RedMonsterZfind(ZfindBase):
 
         #- Fill in outputs
         self.spectype = np.asarray([self.zpicker.type[i][0] for i in range(nspec)])
-        self.subtype = np.asarray([repr(self.zpicker.subtype[i][0]) for i in range(nspec)])
+        self.subtype = np.asarray(["NA" for i in range(nspec)])
+        # FIXME:  re-enable subtype writing once we have a sane
+        # way to write and read this information to a FITS table
+        # column.
+        #self.subtype = np.asarray([json.dumps(self.zpicker.subtype[i][0]) for i in range(nspec)])
         self.z = np.array([self.zpicker.z[i][0] for i in range(nspec)])
         self.zerr = np.array([self.zpicker.z_err[i][0] for i in range(nspec)])
         self.zwarn = np.array([int(self.zpicker.zwarning[i]) for i in range(nspec)])
@@ -137,8 +142,7 @@ class RedMonsterZfind(ZfindBase):
 
         for ifiber in range(self.z.size):
             log.debug("(after zpicker) fiber #%d z=%s"%(ifiber,self.z[ifiber]))
-            
-        
+
 
 #- This is a container class needed by Redmonster zpicker
 class _RedMonsterSpecObj(object):

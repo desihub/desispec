@@ -16,7 +16,7 @@ from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.interpolation import resample_flux
 from desispec.log import get_logger
-from desispec.util import default_nproc
+from desispec.parallel import default_nproc
 from desispec.io.filters import load_filter
 
 def parse(options=None):
@@ -106,7 +106,7 @@ def main(args) :
         frame=io.read_frame(filename)
         header=fits.getheader(filename, 0)
         frame_fibermap = frame.fibermap
-        frame_starindices=np.where(frame_fibermap["OBJTYPE"]=="STD")[0] 
+        frame_starindices=np.where(frame_fibermap["OBJTYPE"]=="STD")[0]
         camera=safe_read_key(header,"CAMERA").strip().lower()
         
         if spectrograph is None :
@@ -122,7 +122,7 @@ def main(args) :
             log.error("incompatible fibermap")
             raise ValueError("incompatible fibermap")
         
-        if frames.has_key(camera) :
+        if camera in frames:
             log.error("cannot handle for now several frame of same camera (%s)"%camera)
             raise ValueError("cannot handle for now several frame of same camera (%s)"%camera)
             
@@ -135,7 +135,7 @@ def main(args) :
         camera=safe_read_key(header,"CAMERA").strip().lower()
                 
         # NEED TO ADD MORE CHECKS
-        if skies.has_key(camera) :
+        if camera in skies:
             log.error("cannot handle several skymodels of same camera (%s)"%camera)
             raise ValueError("cannot handle several skymodels of same camera (%s)"%camera)
             
@@ -149,7 +149,7 @@ def main(args) :
         camera=safe_read_key(header,"CAMERA").strip().lower()
         
         # NEED TO ADD MORE CHECKS
-        if flats.has_key(camera) :
+        if camera in flats:
             log.error("cannot handle several flats of same camera (%s)"%camera)
             raise ValueError("cannot handle several flats of same camera (%s)"%camera)
         flats[camera]=flat
@@ -173,11 +173,11 @@ def main(args) :
     ############################################     
     for cam in frames :
         
-        if not skies.has_key(cam) :
+        if not cam in skies:
             log.warning("Missing sky for %s"%cam)
             frames.pop(cam)
             continue
-        if not flats.has_key(cam) :
+        if not cam in flats:
             log.warning("Missing flat for %s"%cam)
             frames.pop(cam)
             continue
@@ -214,7 +214,12 @@ def main(args) :
     log.info("computing model mags %s"%model_filters)
     model_mags = np.zeros((stdflux.shape[0],len(model_filters)))
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
+    
     for index in range(len(model_filters)) :
+        if model_filters[index].startswith('WISE'):
+            log.warning('not computing stdstar {} mags'.format(model_filters[index]))
+            continue
+
         filter_response=load_filter(model_filters[index])
         for m in range(stdflux.shape[0]) :
             model_mags[m,index]=filter_response.get_ab_magnitude(stdflux[m]*fluxunits,stdwave)

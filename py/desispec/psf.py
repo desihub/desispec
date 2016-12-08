@@ -8,6 +8,7 @@ Mostly making parallel to specter.psf.PSF baseclass and inheriting as needed, bu
 ytrace and wavelength solution available for this case. No resolution information yet.
 """
 
+import numbers
 import numpy as np
 from desiutil import funcfits as dufits
 from numpy.polynomial.legendre import Legendre,legval,legfit
@@ -59,7 +60,12 @@ class PSF(object):
         self.wmax=wmax
         self.nspec=nspec
         self.ncoeff=ncoeff
-       
+        #invertion should be done at psf creation time and saved into file
+        c,ymin,ymax=self.invert(coeff=self.ycoeff)
+        self.icoeff=c
+        self.ymin=ymin
+        self.ymax=ymax
+
     def invert(self, domain=None, coeff=None, deg=None):
         """
         Utility to return a traceset modeling x vs. y instead of y vs. x
@@ -71,7 +77,6 @@ class PSF(object):
             coeff=self.ycoeff # doing y-wavelength map
         ytmp=list()
         for ii in ispec:
-                
             fit_dict=dufits.mk_fit_dict(coeff[ii,:],coeff.shape[1],'legendre',domain[0],domain[1])
             xtmp=np.array((domain[0],domain[1]))
             yfit = dufits.func_val(xtmp, fit_dict)
@@ -103,8 +108,8 @@ class PSF(object):
             #- ispec = None -> all the spectra
             if ispec is None:
                 ispec=np.arange(self.nspec)
-                wavelength=self.wavelength
                 x=list()
+                #x=np.array((len(ispec),len(wavelength)))
                 for ii in ispec:
                     wave=self.wavelength(ii)
                     fit_dictx=dufits.mk_fit_dict(self.xcoeff[ii],self.ncoeff,'legendre',self.wmin,self.wmax)
@@ -129,7 +134,7 @@ class PSF(object):
         
         #- wavelength not None but a scalar or 1D-vector here and below
         wavelength = np.asarray(wavelength)
-        if isinstance(ispec,int):
+        if isinstance(ispec, numbers.Integral):
             fit_dictx=dufits.mk_fit_dict(self.xcoeff[ispec],self.ncoeff,'legendre',self.wmin,self.wmax)
             x=dufits.func_val(wavelength,fit_dictx)
             return np.array(x)
@@ -150,7 +155,7 @@ class PSF(object):
         wavelength can be a vector but not allowing None #- similar as in specter.psf.PSF.y
         """
         if wavelength is None:
-            raise ValueError, "PSF.y requires wavelength 1D vector"
+            raise ValueError("PSF.y requires wavelength 1D vector")
             
         wavelength = np.asarray(wavelength)
         if ispec is None:
@@ -169,8 +174,8 @@ class PSF(object):
                 yfit=dufits.func_val(wavelength,fit_dicty)
                 y.append(yfit)
             return np.array(y)
-    
-        if isinstance(ispec,int): # int ispec
+
+        if isinstance(ispec, numbers.Integral): # int ispec
             fit_dicty=dufits.mk_fit_dict(self.ycoeff[ispec],self.ncoeff,'legendre',self.wmin,self.wmax)
             y=dufits.func_val(wavelength,fit_dicty)
             return np.array(y)
@@ -183,11 +188,11 @@ class PSF(object):
             y=np.arange(0,self.npix_y)
         if ispec is None:
             ispec=np.arange(self.nspec)
-        #- First get the inversion map y --> wavelength dictionary
-        c,ymin,ymax=self.invert(coeff=self.ycoeff) 
+        c=self.icoeff
+        ymin=self.ymin
+        ymax=self.ymax
 
- 
-        if isinstance(ispec,int):
+        if isinstance(ispec, numbers.Integral):
             new_dict=dufits.mk_fit_dict(c[ispec,:],c[ispec,:].shape,'legendre',ymin,ymax)
             wfit=dufits.func_val(y,new_dict)
             return wfit
@@ -197,6 +202,5 @@ class PSF(object):
                 new_dict=dufits.mk_fit_dict(c[ii,:],c[ii,:].shape,'legendre',ymin,ymax)
                 wfit=dufits.func_val(y,new_dict)
                 ww.append(wfit)
-            
         return np.array(ww)
 

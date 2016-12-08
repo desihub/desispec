@@ -42,22 +42,108 @@ class TestResolution(unittest.TestCase):
             ndiag = 10
             R7 = Resolution(np.ones((ndiag, n)))
             raise RuntimeError('Incorrectly created Resolution with even number of diagonals')
-        except ValueError, err:
+        except ValueError as err:
             #- it correctly raised an error, so pass
             pass
 
-        #- Test creation with asymetric diagonals (should fail)
-        R1.offsets += 1
-        try:
-            R8 = Resolution(R1)
-            raise RuntimeError('Incorrectly created Resolution with non-symmetric input')
-        except ValueError:
-            #- correctly raised an error, so pass
-            pass
-            
         #- Test creation with sigmas - it should conserve flux
         R9 = Resolution(np.linspace(1.0, 2.0, n))
         self.assertTrue(np.allclose(np.sum(R9.data, axis=0), 1.0))
+
+    def test_resolution_sparsedia(self):
+        data = np.random.uniform(size=(5,10))
+        offsets = np.arange(-2,3)
+
+        #- Original case: symetric and odd number of diagonals
+        Rdia = scipy.sparse.dia_matrix((data, offsets), shape=(10,10))
+        R = Resolution(Rdia)
+        self.assertTrue(np.all(R.diagonal() == Rdia.diagonal()))
+
+        #- Non symetric but still odd number of diagonals
+        Rdia = scipy.sparse.dia_matrix((data, offsets+1), shape=(10,10))
+        R = Resolution(Rdia)
+        self.assertTrue(np.all(R.diagonal() == Rdia.diagonal()))
+
+        #- Even number of diagonals
+        Rdia = scipy.sparse.dia_matrix((data[1:,:], offsets[1:]), shape=(10,10))
+        R = Resolution(Rdia)
+        self.assertTrue(np.all(R.diagonal() == Rdia.diagonal()))
+
+        #- Unordered diagonals
+        data = np.random.uniform(size=(5,10))
+        offsets = [0,1,-1,2,-2]
+
+        Rdia = scipy.sparse.dia_matrix((data, offsets), shape=(10,10))
+        R1 = Resolution(Rdia)
+        R2 = Resolution(data, offsets)
+        self.assertTrue(np.all(R1.diagonal() == Rdia.diagonal()))
+        self.assertTrue(np.all(R2.diagonal() == Rdia.diagonal()))
+        self.assertTrue(np.all(R1.data == R2.data))
+
+    def test_resolution_dense(self):
+        #- dense with no offsets specified
+        data = np.random.uniform(size=(10,10))
+        R = Resolution(data)
+        Rdense = R.todense()
+        self.assertTrue(np.all(Rdense == data))        
+
+        #- with offsets
+        offsets = np.arange(-2,4)
+        R = Resolution(data, offsets)
+        Rdense = R.todense()
+        for i in offsets:
+            self.assertTrue(np.all(Rdense.diagonal(i) == data.diagonal(i)), \
+                "diagonal {} doesn't match".format(i))
+
+        #- dense without offsets but larger than default_ndiag
+        ndiag = desispec.resolution.default_ndiag + 5
+        data = np.random.uniform(size=(ndiag, ndiag))
+        Rdense = Resolution(data).todense()
+
+        for i in range(ndiag):
+            if i <= desispec.resolution.default_ndiag//2:
+                self.assertTrue(np.all(Rdense.diagonal(i) == data.diagonal(i)), \
+                    "diagonal {} doesn't match".format(i))
+                self.assertTrue(np.all(Rdense.diagonal(-i) == data.diagonal(-i)), \
+                    "diagonal {} doesn't match".format(-i))
+            else:
+                self.assertTrue(np.all(Rdense.diagonal(i) == 0.0), \
+                    "diagonal {} not 0s".format(i))
+                self.assertTrue(np.all(Rdense.diagonal(-i) == 0.0), \
+                    "diagonal {} not 0s".format(-i))
+
+    def test_errors(self):
+        #- Bad shaped input
+        data = np.random.uniform(size=(10,5))
+        with self.assertRaises(ValueError):
+            R = Resolution(data)
+
+        #- Meaningless type for input
+        with self.assertRaises(ValueError):
+            R = Resolution('blat')
+
+        #- Non-uniform x spacing
+        with self.assertRaises(ValueError):
+            R = desispec.resolution._gauss_pix([-1,0,2])
+
+        #- missing offsets
+        with self.assertRaises(ValueError):
+            desispec.resolution._sort_and_symmeterize(data, [-2,-1,0,1,3])
+
+        #- length of offsets too large or small
+        with self.assertRaises(ValueError):
+            Resolution(data, offsets=[1,2])
+
+        with self.assertRaises(ValueError):
+            Resolution(data, offsets=np.arange(10*desispec.resolution.default_ndiag))
+
+    def test_sort_and_symmeterize(self):
+        #- if data,offsets are already good, just return them
+        data = np.random.uniform((5,10))
+        offsets = np.array([2,1,0,-1,-2])
+        data2, offsets2 = desispec.resolution._sort_and_symmeterize(data, offsets)
+        self.assertTrue(data is data2)
+        self.assertTrue(offsets is offsets2)
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

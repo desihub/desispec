@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+from __future__ import absolute_import, division, print_function
+
 import sys,os,time,signal
 import threading,string
 import subprocess
@@ -169,15 +172,16 @@ def testconfig(outfilename="qlconfig.yaml"):
 def get_chan_spec_exp(inpname,camera=None):
     """
     Get channel, spectrograph and expid from the filename itself
-    args:
+
+    Args:
         inpname: can be raw or pix, or frame etc filename
         camera: is required for raw case, eg, r0, b5, z8
                 irrelevant for others
     """
     basename=os.path.basename(inpname)
-    if basename =="":
-        print "can't parse input file name"
-        sys.exit("can't parse input file name %s"%inpname)
+    if basename == "":
+        print("can't parse input file name")
+        sys.exit("can't parse input file name {}".format(inpname))
     brk=string.split(inpname,'-')
     if len(brk)!=3: #- for raw files 
         if camera is None:
@@ -195,13 +199,13 @@ def get_chan_spec_exp(inpname,camera=None):
 def getobject(conf,log):
      #qlog=qllogger("QuickLook",20)
      #log=qlog.getlog()
-    log.debug("Running for %s %s %s"%(conf["ModuleName"],conf["ClassName"],conf))
+    log.debug("Running for {} {} {}".format(conf["ModuleName"],conf["ClassName"],conf))
     try:
         mod=__import__(conf["ModuleName"],fromlist=[conf["ClassName"]])
         klass=getattr(mod,conf["ClassName"])
         return klass(conf["Name"],conf)
     except Exception as e:
-        log.error("Failed to import %s from %s. Error was '%s'"%(conf["ClassName"],conf["ModuleName"],e))
+        log.error("Failed to import {} from {}. Error was '{}'".format(conf["ClassName"],conf["ModuleName"],e))
         return None
 
 def mapkeywords(kw,kwmap):
@@ -214,18 +218,21 @@ def mapkeywords(kw,kwmap):
     newmap={}
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
-    for k,v in kw.iteritems():
-        if isinstance(v,basestring) and len(v)>=3 and  v[0:2]=="%%":
+    for k,v in kw.items():
+        if isinstance(v,str) and len(v)>=3 and  v[0:2]=="%%": #- For direct configuration
             if v[2:] in kwmap:
                 newmap[k]=kwmap[v[2:]]
             else:
-                log.warning("Can't find key %s in conversion map. Skipping"%(v[2:]))
+                log.warning("Can't find key {} in conversion map. Skipping".format(v[2:]))
+        if k in kwmap: #- for configs generated via desispec.quicklook.qlconfig
+            newmap[k]=kwmap[k]          
         else:
             newmap[k]=v
     return newmap
 
 def runpipeline(pl,convdict,conf):
-    """runs the quicklook pipeline as configured
+    """
+    Runs the quicklook pipeline as configured
 
     Args:
         pl: is a list of [pa,qas] where pa is a pipeline step and qas the corresponding
@@ -246,41 +253,60 @@ def runpipeline(pl,convdict,conf):
     paconf=conf["PipeLine"]
     qlog=qllogger.QLLogger("QuickLook",0)
     log=qlog.getlog()
+    passqadict=None #- pass this dict to QAs downstream
     for s,step in enumerate(pl):
-        log.info("Starting to run step %s"%(paconf[s]["StepName"]))
+        log.info("Starting to run step {}".format(paconf[s]["StepName"]))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
         try:
-            hb.start("Running %s"%(step[0].name))
+            hb.start("Running {}".format(step[0].name))
+            oldinp=inp #-  copy for QAs that need to see earlier input
             inp=pa(inp,**pargs)
         except Exception as e:
-            log.critical("Failed to run PA %s error was %s"%(step[0].name,e))
-            sys.exit("Failed to run PA %s"%(step[0].name))
+            log.critical("Failed to run PA {} error was {}".format(step[0].name,e))
+            sys.exit("Failed to run PA {}".format(step[0].name))
         qaresult={}
         for qa in step[1]:
             try:
                 qargs=mapkeywords(qa.config["kwargs"],convdict)
-                hb.start("Running %s"%(qa.name))
-                res=qa(inp,**qargs)
-                log.debug("%s %s"%(qa.name,inp))
+                hb.start("Running {}".format(qa.name))
+                qargs["dict_countbins"]=passqadict #- pass this to all QA downstream
+
+                if qa.name=="RESIDUAL" or qa.name=="Sky_Residual":
+                    res=qa(oldinp,inp[1],**qargs)
+                    
+                else:
+                    if isinstance(inp,tuple):
+                        res=qa(inp[0],**qargs)
+                    else:
+                        res=qa(inp,**qargs)
+
+                if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         #TODO -must run this QA for now. change this later.
+                    passqadict=res
+                log.debug("{} {}".format(qa.name,inp))
                 qaresult[qa.name]=res
+
             except Exception as e:
-                log.warning("Failed to run QA %s error was %s"%(qa.name,e))
+                log.warning("Failed to run QA {} error was {}".format(qa.name,e))
         if len(qaresult):
+            #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
             yaml.dump(qaresult,open(paconf[s]["OutputFile"],"wb"))
-            hb.stop("Step %s finished. Output is in %s "%(paconf[s]["StepName"],paconf[s]["OutputFile"]))
+            hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
         else:
-            hb.stop("Step %s finished."%(paconf[s]["StepName"]))
+            hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
     hb.stop("Pipeline processing finished. Serializing result")
-    return inp
+    if isinstance(inp,tuple):
+       return inp[0]
+    else:
+       return inp
 
 #- Setup pipeline from configuration
 
 def setup_pipeline(config):
     """
-       Given a configuration from QLF, this sets up a pipeline [pa,qa] and also returns a
-       conversion dictionary from the configuration dictionary so that Pipeline steps (PA) can
-       take them. This is required for runpipeline.
+    Given a configuration from QLF, this sets up a pipeline [pa,qa] and also returns a
+    conversion dictionary from the configuration dictionary so that Pipeline steps (PA) can
+    take them. This is required for runpipeline.
     """
     import astropy.io.fits as fits
     import desispec.io.fibermap as fibIO
@@ -368,10 +394,11 @@ def setup_pipeline(config):
     if "basePath" in config:
         basePath=config["basePath"]
 
-    hbeat.start("Reading input file %s"%inpname)
+    hbeat.start("Reading input file {}".format(inpname))
     inp=fits.open(inpname) #- reading raw image directly from astropy.io.fits
-    hbeat.start("Reading fiberMap file %s"%fibname)
-    fibfile,fibhdr=fibIO.read_fibermap(fibname,header=True)
+    hbeat.start("Reading fiberMap file {}".format(fibname))
+    fibfile=fibIO.read_fibermap(fibname)
+    fibhdr=fibfile.meta
 
     convdict={"FiberMap":fibfile}
 
@@ -379,37 +406,37 @@ def setup_pipeline(config):
         convdict["PSFFile"]=psf
 
     if biasfile is not None:
-        hbeat.start("Reading Bias Image %s"%biasfile)
+        hbeat.start("Reading Bias Image {}".format(biasfile))
         biasimage=imIO.read_image(biasfile)
         convdict["BiasImage"]=biasimage
 
     if darkfile is not None:
-        hbeat.start("Reading Dark Image %s"%darkfile)
+        hbeat.start("Reading Dark Image {}".format(darkfile))
         darkimage=imIO.read_image(darkfile)
         convdict["DarkImage"]=darkimage
 
     if pixelflatfile:
-        hbeat.start("Reading PixelFlat Image %s"%pixelflatfile)
+        hbeat.start("Reading PixelFlat Image {}".format(pixelflatfile))
         pixelflatimage=imIO.read_image(pixelflatfile)
         convdict["PixelFlat"]=pixelflatimage
 
     if fiberflatimagefile:
-        hbeat.start("Reading FiberFlat Image %s"%fiberflatimagefile)
+        hbeat.start("Reading FiberFlat Image {}".format(fiberflatimagefile))
         fiberflatimage=imIO.read_image(fiberflatimagefile)
         convdict["FiberFlatImage"]=fiberflatimage
 
     if arclampimagefile:
-        hbeat.start("Reading ArcLampImage %s"%arclampimagefile)
+        hbeat.start("Reading ArcLampImage {}".format(arclampimagefile))
         arclampimage=imIO.read_image(arclampimagefile)
         convdict["ArcLampImage"]=arclampimage
 
     if fiberflatfile:
-        hbeat.start("Reading FiberFlat %s"%fiberflatfile)
+        hbeat.start("Reading FiberFlat {}".format(fiberflatfile))
         fiberflat=ffIO.read_fiberflat(fiberflatfile)
         convdict["FiberFlatFile"]=fiberflat
 
     if skyfile:
-        hbeat.start("Reading SkyModel file %s"%skyfile)
+        hbeat.start("Reading SkyModel file {}".format(skyfile))
         skymodel=skyIO.read_sky(skyfile)
         convdict["SkyFile"]=skymodel
 
@@ -425,18 +452,18 @@ def setup_pipeline(config):
         pa=getobject(step["PA"],log)
         if len(pipeline) == 0:
             if not pa.is_compatible(type(img)):
-                log.critical("Pipeline configuration is incorrect! check configuration %s %s"%(img,pa.is_compatible(img)))
+                log.critical("Pipeline configuration is incorrect! check configuration {} {}".format(img,pa.is_compatible(img)))
                 sys.exit("Wrong pipeline configuration")
         else:
             if not pa.is_compatible(pipeline[-1][0].get_output_type()):
                 log.critical("Pipeline configuration is incorrect! check configuration")
-                log.critical("Can't connect input of %s to output of %s. Incompatible types"%(pa.name,pipeline[-1][0].name))
+                log.critical("Can't connect input of {} to output of {}. Incompatible types".format(pa.name,pipeline[-1][0].name))
                 sys.exit("Wrong pipeline configuration")
         qas=[]
         for q in step["QAs"]:
             qa=getobject(q,log)
             if not qa.is_compatible(pa.get_output_type()):
-                log.warning("QA %s can not be used for output of %s. Skipping expecting %s got %s %s"%(qa.name,pa.name,qa.__inpType__,pa.get_output_type(),qa.is_compatible(pa.get_output_type())))
+                log.warning("QA {} can not be used for output of {}. Skipping expecting {} got {} {}".format(qa.name,pa.name,qa.__inpType__,pa.get_output_type(),qa.is_compatible(pa.get_output_type())))
             else:
                 qas.append(qa)
         pipeline.append([pa,qas])

@@ -56,8 +56,9 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
         qa_flat_fig = '{specprod_dir}/calib2d/{night}/qa-flat-{camera}-{expid:08d}.png',
         qa_ztruth = '{specprod_dir}/exposures/{night}/qa-ztruth-{night}.yaml',
         qa_ztruth_fig = '{specprod_dir}/exposures/{night}/qa-ztruth-{night}.png',
-        ### psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
-        psf = '{specprod_dir}/calib2d/{night}/psf-{camera}-{expid:08d}.fits',
+        psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
+        psfnight = '{specprod_dir}/calib2d/psf/{night}/psfnight-{camera}.fits',
+        psfboot = '{specprod_dir}/calib2d/psf/{night}/psfboot-{camera}.fits',
         fibermap = '{rawdata_dir}/{night}/fibermap-{expid:08d}.fits',
         brick = '{specprod_dir}/bricks/{brickname}/brick-{band}-{brickname}.fits',
         coadd = '{specprod_dir}/bricks/{brickname}/coadd-{band}-{brickname}.fits',
@@ -70,7 +71,7 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
 
     #- Do we know about this kind of file?
     if filetype not in location:
-        raise IOError("Unknown filetype {}; known types are {}".format(filetype, location.keys()))
+        raise IOError("Unknown filetype {}; known types are {}".format(filetype, list(location.keys())))
 
     #- Check for missing inputs
     required_inputs = [i[0] for i in re.findall(r'\{([a-z_]+)(|[:0-9d]+)\}',location[filetype])]
@@ -130,7 +131,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
             guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', rawdata_dir=rawdata_dir)
-    literals = map(re.escape,glob_pattern.split('*'))
+    literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     listing = glob.glob(glob_pattern)
     if len(listing) == 1:
@@ -162,7 +163,7 @@ def get_files(filetype, night, expid, specprod_dir=None):
             guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
-    literals = map(re.escape,glob_pattern.split('*'))
+    literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
     re_pattern = re.compile('([brz][0-9])'.join(literals))
     files = { }
     for entry in glob.glob(glob_pattern):
@@ -270,3 +271,66 @@ def specprod_root():
     assert 'SPECPROD' in os.environ, 'Missing $SPECPROD environment variable'
     assert 'DESI_SPECTRO_REDUX' in os.environ, 'Missing $DESI_SPECTRO_REDUX environment variable'
     return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'))
+
+
+def get_pipe_plandir(specprod_dir=None):
+    """
+    Return the directory path for pipeline planning files.
+
+    Args:
+        specprod_dir (str): Optional path to production directory.  If None,
+            the this is obtained from :func:`specprod_root`.
+
+    Returns (str):
+        the directory path for pipeline planning files.
+    """
+    if specprod_dir is None:
+        specprod_dir = specprod_root()
+    return os.path.join(os.path.abspath(specprod_dir), "plan")
+
+
+def get_pipe_rundir(specprod_dir=None):
+    """
+    Return the directory path for pipeline runtime files.
+
+    Args:
+        specprod_dir (str): Optional path to production directory.  If None,
+            the this is obtained from :func:`specprod_root`.
+
+    Returns (str):
+        the directory path for pipeline runtime files.
+    """
+    if specprod_dir is None:
+        specprod_dir = specprod_root()
+    return os.path.join(os.path.abspath(specprod_dir), "run")
+
+
+def get_pipe_scriptdir():
+    """
+    Return the name of the subdirectory containing pipeline scripts.
+
+    Returns (str):
+        The name of the subdirectory.
+    """
+    return "scripts"
+
+
+def get_pipe_logdir():
+    """
+    Return the name of the subdirectory containing pipeline logs.
+
+    Returns (str):
+        The name of the subdirectory.
+    """
+    return "logs"
+
+
+def get_pipe_faildir():
+    """
+    Return the name of the subdirectory containing pipeline failures.
+
+    Returns (str):
+        The name of the subdirectory.
+    """
+    return "failed"
+

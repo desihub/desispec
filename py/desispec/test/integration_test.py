@@ -14,6 +14,7 @@ import glob
 import numpy as np
 from astropy.io import fits
 
+from desispec.util import runcmd
 import desispec.pipeline as pipe
 import desispec.io as io
 import desispec.log as logging
@@ -38,7 +39,7 @@ def check_env():
 
     if not os.path.isdir(os.getenv('DESI_BASIS_TEMPLATES')):
         log.warning('missing $DESI_BASIS_TEMPLATES directory')
-        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v1.0')
+        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v2.2')
         missing_env = True
 
     for name in (
@@ -89,7 +90,7 @@ def sim(night, nspec=5, clobber=False):
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
-        if pipe.runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(flavor, expid))
 
         cmd = "pixsim-desi --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
@@ -100,7 +101,7 @@ def sim(night, nspec=5, clobber=False):
             pixfile = io.findfile('pix', night, expid, camera)
             outputs.append(pixfile)
             #outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
-        if pipe.runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(flavor, expid))
 
     return
@@ -149,10 +150,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     # Modify options file to restrict the spectral range
 
     optpath = os.path.join(proddir, "run", "options.yaml")
-    opts = pipe.read_options(optpath)
+    opts = pipe.yaml_read(optpath)
     opts['extract']['specmin'] = 0
     opts['extract']['nspec'] = nspec
-    pipe.write_options(optpath, opts)
+    pipe.yaml_write(optpath, opts)
 
     # run the generated shell scripts
 
@@ -174,7 +175,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Running extraction script "+com)
     sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "fiberflat-procexp_all.sh")
+    com = os.path.join(proddir, "run", "scripts", "fiberflat-calibrate_all.sh")
     print("Running calibration script "+com)
     sp.check_call(["bash", com])
 
@@ -182,8 +183,8 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Running makebricks script "+com)
     sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "zfind_all.sh")
-    print("Running zfind script "+com)
+    com = os.path.join(proddir, "run", "scripts", "redshift_all.sh")
+    print("Running redshift script "+com)
     sp.check_call(["bash", com])
 
     # #-----
@@ -217,18 +218,24 @@ def integration_test(night=None, nspec=5, clobber=False):
 
             j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
+            oiiflux = siminfo['OIIFLUX'][j]
             truez = siminfo['REDSHIFT'][j]
             dv = 3e5*(z-truez)/(1+truez)
             if truetype == 'SKY' and zwarn > 0:
                 status = 'ok'
+            elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
+                status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
             elif zwarn == 0:
                 if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
                     status = 'ok'
-                elif truetype == 'ELG' and objtype == 'GAL' and abs(dv) < 150:
-                    status = 'ok'
+                elif truetype == 'ELG' and objtype == 'GAL':
+                    if abs(dv) < 150 or oiiflux < 8e-17:
+                        status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
+                    else:
+                        status = 'OOPS ([OII] flux {:.2g})'.format(oiiflux)
                 elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
                     status = 'ok'
-                elif truetype == 'STD' and objtype == 'STAR':
+                elif truetype in ('STD', 'FSTD') and objtype == 'STAR':
                     status = 'ok'
                 else:
                     status = 'OOPS'

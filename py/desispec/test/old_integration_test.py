@@ -33,7 +33,7 @@ def check_env():
 
     if not os.path.isdir(os.getenv('DESI_BASIS_TEMPLATES')):
         log.warning('missing $DESI_BASIS_TEMPLATES directory')
-        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v1.0')
+        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v2.2')
         missing_env = True
 
     for name in (
@@ -143,8 +143,8 @@ def integration_test(night=None, nspec=5, clobber=False):
         fibermap = io.findfile('fibermap', night, expid)  # for QA
         qafile = io.findfile('qa_calib', night, expid, camera)
         qafig = io.findfile('qa_flat_fig', night, expid, camera)
-        cmd = "desi_compute_fiberflat --infile {frame} --fibermap {fibermap} --outfile {fiberflat} --qafile {qafile} --qafig {qafig}".format(
-            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, qafile=qafile, qafig=qafig, **params)
+        cmd = "desi_compute_fiberflat --infile {frame} --outfile {fiberflat} --qafile {qafile} --qafig {qafig}".format(
+            frame=framefile, fiberflat=fiberflat, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile,fibermap,]
         outputs = [fiberflat,qafile,qafig,]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
@@ -162,8 +162,8 @@ def integration_test(night=None, nspec=5, clobber=False):
         skyfile = io.findfile('sky', night, expid, camera)
         qafile = io.findfile('qa_data', night, expid, camera)
         qafig = io.findfile('qa_sky_fig', night, expid, camera)
-        cmd="desi_compute_sky --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --outfile {sky} --qafile {qafile} --qafig {qafig}".format(
-            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile, qafile=qafile, qafig=qafig, **params)
+        cmd="desi_compute_sky --infile {frame} --fiberflat {fiberflat} --outfile {sky} --qafile {qafile} --qafig {qafig}".format(
+            frame=framefile, fiberflat=fiberflat, sky=skyfile, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile, fibermap, fiberflat]
         outputs = [skyfile, qafile, qafig,]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
@@ -175,7 +175,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     if 'STD_TEMPLATES' in os.environ:
         std_templates = os.getenv('STD_TEMPLATES')
     else:
-        std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'
+        std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
 
     stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
     flats = list()
@@ -220,9 +220,9 @@ def integration_test(night=None, nspec=5, clobber=False):
 
         #- Compute flux calibration vector
         cmd = """desi_compute_fluxcalibration \
-          --infile {frame} --fibermap {fibermap} --fiberflat {fiberflat} --sky {sky} \
+          --infile {frame} --fiberflat {fiberflat} --sky {sky} \
           --models {stdstars} --outfile {calib} --qafile {qafile} --qafig {qafig}""".format(
-            frame=framefile, fibermap=fibermap, fiberflat=fiberflat, sky=skyfile,
+            frame=framefile, fiberflat=fiberflat, sky=skyfile,
             stdstars=stdstarfile, calib=calibfile, qafile=qafile, qafig=qafig
             )
         inputs = [framefile, fibermap, fiberflat, skyfile, stdstarfile]
@@ -283,14 +283,14 @@ def integration_test(night=None, nspec=5, clobber=False):
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('redshifts failed for brick '+b)
     # ztruth QA
-    qafile = io.findfile('qa_ztruth', night)
-    qafig = io.findfile('qa_ztruth_fig', night)
-    cmd = "desi_qa_zfind --night {night} --qafile {qafile} --qafig {qafig} --verbose".format(
-        night=night, qafile=qafile, qafig=qafig)
-    inputs = []
-    outputs = [qafile, qafig]
-    if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-        raise RuntimeError('redshift QA failed for night '+night)
+    # qafile = io.findfile('qa_ztruth', night)
+    # qafig = io.findfile('qa_ztruth_fig', night)
+    # cmd = "desi_qa_zfind --night {night} --qafile {qafile} --qafig {qafig} --verbose".format(
+    #     night=night, qafile=qafile, qafig=qafig)
+    # inputs = []
+    # outputs = [qafile, qafig]
+    # if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+    #     raise RuntimeError('redshift QA failed for night '+night)
 
     #-----
     #- Did it work?
@@ -317,18 +317,24 @@ def integration_test(night=None, nspec=5, clobber=False):
 
             j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
+            oiiflux = siminfo['OIIFLUX'][j]
             truez = siminfo['REDSHIFT'][j]
             dv = 3e5*(z-truez)/(1+truez)
             if truetype == 'SKY' and zwarn > 0:
                 status = 'ok'
+            elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
+                status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
             elif zwarn == 0:
                 if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
                     status = 'ok'
-                elif truetype == 'ELG' and objtype == 'GAL' and abs(dv) < 150:
-                    status = 'ok'
+                elif truetype == 'ELG' and objtype == 'GAL':
+                    if abs(dv) < 150 or oiiflux < 8e-17:
+                        status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
+                    else:
+                        status = 'OOPS ([OII] flux {:.2g})'.format(oiiflux)
                 elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
                     status = 'ok'
-                elif truetype == 'STD' and objtype == 'STAR':
+                elif truetype in ('STD', 'FSTD') and objtype == 'STAR':
                     status = 'ok'
                 else:
                     status = 'OOPS'

@@ -116,7 +116,7 @@ class TestFluxCalibration(unittest.TestCase):
         bestflux=np.zeros((bestid.shape[0],modelflux.shape[1]))
         red_chisq=np.zeros(len(stdfibers))
 
-        for i in xrange(len(stdfibers)):
+        for i in range(len(stdfibers)):
 
             stdflux={"b":flux["b"][i],"r":flux["r"][i],"z":flux["z"][i]}
             stdivar={"b":ivar["b"][i],"r":ivar["r"][i],"z":ivar["z"][i]}
@@ -197,7 +197,7 @@ class TestFluxCalibration(unittest.TestCase):
         nstd = 5
         frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
         nstd = np.count_nonzero(frame.fibermap['OBJTYPE'] == 'STD')
-        frame.flux[0] = np.mean(frame.flux[0])
+        frame.flux[0] = np.mean(frame.flux[0])        
         fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[0:nstd])
 
     def test_masked_data(self):
