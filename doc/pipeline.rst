@@ -62,7 +62,7 @@ Example
 Let's assume we have some simulated raw data located in ${SCRATCH}/desi/raw.  We'll also assume that our data reduction directory is ${SCRATCH}/desi/redux.  Now we create a production with the first spectrograph.  We also pass in the debug option, which will enable the DEBUG logging level in all pipeline scripts::
 
     %> desi_pipe --debug \
-        --raw ${SCRATCH}/desi/raw \
+        --data ${SCRATCH}/desi/raw \
         --redux ${SCRATCH}/desi/redux \
         --prod smalltest \
         --spectrographs 0
