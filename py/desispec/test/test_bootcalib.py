@@ -109,6 +109,10 @@ class TestBoot(unittest.TestCase):
                 del os.environ[e]
             else:
                 old_lc_env[e] = None
+        #
+        # This call doesn't actually unset the locale, it sets it to the
+        # default for the system.
+        #
         locale.setlocale(locale.LC_ALL, '')
         with self.assertRaises(UnicodeDecodeError):
             tbl = desiboot.parse_nist('CdI')
