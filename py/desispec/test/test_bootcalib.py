@@ -113,7 +113,7 @@ class TestBoot(unittest.TestCase):
         # This call doesn't actually unset the locale, it sets it to the
         # default for the system.
         #
-        locale.setlocale(locale.LC_ALL, '')
+        locale.setlocale(locale.LC_ALL, 'C')
         with self.assertRaises(UnicodeDecodeError):
             tbl = desiboot.parse_nist('CdI')
         locale.setlocale(locale.LC_CTYPE, 'en_US.UTF-8')
