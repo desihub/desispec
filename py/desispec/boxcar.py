@@ -35,7 +35,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
         maxx=maxx-1
         maxy=maxy-1
         ranges=np.zeros((mask.shape[1],xs.shape[0]+1),dtype=int)
-        for bin in xrange(0,len(waves)):
+        for bin in range(0,len(waves)):
             ixmaxold=0
             for spec in range(0,xs.shape[0]):
                 xpos=xs[spec][bin]
@@ -69,7 +69,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
                 mask[ixmin][ypos]=rxmin
                 for x in range(ixmin+1,ixmax): mask[x][ypos]=1.0
                 mask[ixmax][ypos]=rxmax
-        for ypos in xrange(ranges.shape[0]):
+        for ypos in range(ranges.shape[0]):
             lastval=ranges[ypos][0]
             for sp in range(1,ranges.shape[1]):
                 if  ranges[ypos][sp]==0:
@@ -130,5 +130,5 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
         flux[:,spec]/=dwave
         ivar[:,spec]*=dwave**2
         fflux[spec,:],iivar[spec,:]=resample_flux(wtarget,ww,flux[:,spec],ivar[:,spec])
-        
+
     return fflux,iivar,resolution
