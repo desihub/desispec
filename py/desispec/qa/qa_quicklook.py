@@ -240,6 +240,75 @@ def SN_ratio(flux,ivar):
         # totsnr[ii]=np.sqrt(np.sum(snr**2))
     return medsnr #, totsnr
 
+def SignalVsNoise(frame,params,fidboundary=False):
+    """
+    Signal vs. Noise
+
+    Take flux and inverse variance arrays and calculate S/N for individual
+    targets (ELG, LRG, QSO, STD) and for each amplifier of the camera.
+
+    Args:
+        flux (array): 2d [nspec,nwave] the signal (typically for spectra, 
+            this comes from frame object
+        ivar (array): 2d [nspec,nwave] corresponding inverse variance
+        fidboundary : list of slices indicating where to select in fiber
+            and wavelength directions for each amp (output of fiducialregion)
+    """
+
+    #- we calculate median and total S/N assuming no correlation bin by bin
+
+    medsnr=SN_ratio(frame.flux,frame.ivar)
+    elgfibers=np.where(frame.fibermap['OBJTYPE']=='ELG')[0]
+    elg_medsnr=medsnr[elgfibers]
+    elg_mag=np.zeros(len(elgfibers))
+    for ii,fib in enumerate(elgfibers):
+        elg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
+    elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
+
+    lrgfibers=np.where(frame.fibermap['OBJTYPE']=='LRG')[0]
+    lrg_medsnr=medsnr[lrgfibers]
+    lrg_mag=np.zeros(len(lrgfibers))
+    for ii,fib in enumerate(lrgfibers):
+        lrg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
+    lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
+
+    qsofibers=np.where(frame.fibermap['OBJTYPE']=='QSO')[0]
+    qso_medsnr=medsnr[qsofibers]
+    qso_mag=np.zeros(len(qsofibers))
+    for ii,fib in enumerate(qsofibers):
+        qso_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
+    qso_snr_mag=np.array((qso_medsnr,qso_mag))
+
+    stdfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
+    std_medsnr=medsnr[stdfibers]
+    std_mag=np.zeros(len(stdfibers))
+    for ii,fib in enumerate(stdfibers):
+        std_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"] 
+    std_snr_mag=np.array((std_medsnr,std_mag))
+
+    average_amp = 0.
+    if fidboundary:        
+        average1=average2=average3=average4=0.0
+        medsnr1=SN_ratio(frame.flux[fidboundary[0]],frame.ivar[fidboundary[0]])
+        average1=np.mean(medsnr1)
+
+        medsnr3=SN_ratio(frame.flux[fidboundary[2]],frame.ivar[fidboundary[2]])
+        average3=np.mean(medsnr3)
+
+        if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
+            medsnr2=SN_ratio(frame.flux[fidboundary[1]],frame.ivar[fidboundary[1]])
+            average2=np.mean(medsnr2)
+
+        if fidboundary[3][0].start is not None : #- to the right top of the CCD
+            medsnr4=SN_ratio(frame.flux[fidboundary[3]],frame.ivar[fidboundary[3]])
+            average4=np.mean(medsnr4)
+
+        average_amp=np.array([average1,average2,average3,average4])
+
+    retval["METRICS"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
+
+    return retval
+
 def gauss(x,a,mu,sigma):
     """
     Gaussian fit of input data
@@ -1565,7 +1634,7 @@ class Calculate_SNR(MonitoringAlg):
         return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, qlf=qlf)
 
 
-    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False):
+    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False, param=None):
 
         #- return values
         retval={}
@@ -1578,79 +1647,31 @@ class Calculate_SNR(MonitoringAlg):
 
         #- select band for mag, using DECAM_R if present
 
-        filter_pick=["" for x in range(len(frame.fibermap))]
-        
-        for ii in range(len(frame.fibermap)):
-            if "DECAM_R" in frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
-            else: filter_pick[ii]= -1 #- only accepting "DECAM_R" now
-        filter_pick=np.array(filter_pick)
+        # filter_pick=["" for x in range(len(frame.fibermap))]        
+        # for ii in range(len(frame.fibermap)):
+        #    if "DECAM_R" in frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
+        #    else: filter_pick[ii]= -1 #- only accepting "DECAM_R" now
+        # filter_pick=np.array(filter_pick)
 
-        medsnr=SN_ratio(frame.flux,frame.ivar)
-        elgfibers=np.where(frame.fibermap['OBJTYPE']=='ELG')[0]
-        elg_medsnr=medsnr[elgfibers]
-        elg_mag=np.zeros(len(elgfibers))
-        for ii,fib in enumerate(elgfibers):
-            elg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                SNR_FLUXTHRESH=0.0, # Minimum value of flux to go into SNR calc.
+                )
+        retval["PARAMS"] = param
 
-        elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
-      
-        lrgfibers=np.where(frame.fibermap['OBJTYPE']=='LRG')[0]
-        lrg_medsnr=medsnr[lrgfibers]
-        lrg_mag=np.zeros(len(lrgfibers))
-        for ii,fib in enumerate(lrgfibers):
-            lrg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
-        lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
-
-        qsofibers=np.where(frame.fibermap['OBJTYPE']=='QSO')[0]
-        qso_medsnr=medsnr[qsofibers]
-        qso_mag=np.zeros(len(qsofibers))
-        for ii,fib in enumerate(qsofibers):
-            qso_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
-        qso_snr_mag=np.array((qso_medsnr,qso_mag))
-
-        stdfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
-        std_medsnr=medsnr[stdfibers]
-        std_mag=np.zeros(len(stdfibers))
-        for ii,fib in enumerate(stdfibers):
-            std_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]] 
-        std_snr_mag=np.array((std_medsnr,std_mag))
-
-        if amps:
-            
+        if amps: 
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
             leftmax = dict_countbins["LEFT_MAX_FIBER"]
             rightmin = dict_countbins["RIGHT_MIN_FIBER"]
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
-
             fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-           
-            medsnr1=SN_ratio(frame.flux[fidboundary[0]],frame.ivar[fidboundary[0]])
-            average1=np.mean(medsnr1)
+        qadict = SignalVsNoise(param,frame,fidboundary)
+        retval["METRICS"] = {}
+        for key in qadict.keys():
+            retval["METRICS"][key] = qadict[key]
 
-            medsnr3=SN_ratio(frame.flux[fidboundary[2]],frame.ivar[fidboundary[2]])
-            average3=np.mean(medsnr3)
-
-            if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
-               
-                medsnr2=SN_ratio(frame.flux[fidboundary[1]],frame.ivar[fidboundary[1]])
-                average2=np.mean(medsnr2)
-            else:
-                average2=0.
-
-            if fidboundary[3][0].start is not None : #- to the right top of the CCD
-
-                medsnr4=SN_ratio(frame.flux[fidboundary[3]],frame.ivar[fidboundary[3]])
-                average4=np.mean(medsnr4)
-            else:
-                average4=0.
-
-            average_amp=np.array([average1,average2,average3,average4])
-
-            retval["METRICS"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
-
-        else: retval["METRICS"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
-        
         #- http post if valid
         if qlf:
             qlf_post(retval)            
