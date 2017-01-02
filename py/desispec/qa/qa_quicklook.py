@@ -10,11 +10,14 @@ from desispec.quicklook.qas import MonitoringAlg
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
 import os,sys
+import datetime
+from astropy.time import Time
+from desispec import util
+from desiutil import stats as dustat
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
-import datetime
-from astropy.time import Time
+
 
 #- Few utility functions that a corresponding method of a QA class may call
 
@@ -214,6 +217,66 @@ def integrate_spec(wave,flux):
     integral=np.trapz(flux,wave)
     return integral
 
+def sky_resid(param, frame, skymodel, quick_look=False):
+    """
+    Algorithm for sky residual
+    To be called from desispec.sky.qa_skysub and desispec.qa.qa_quicklook.Sky_residual.run_qa
+    Args: 
+        param : dict of QA parameters
+        frame : desispec.Frame object
+        skymodel : desispec.SkyModel object
+    Returns a qa dictionary for sky resid
+    """
+    # Output dict
+    qadict = {}
+    qadict['NREJ'] = int(skymodel.nrej)
+
+    # Grab sky fibers on this frame
+    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
+    nfibers=len(skyfibers)
+    qadict['NSKY_FIB'] = int(nfibers)
+
+    current_ivar=frame.ivar[skyfibers].copy()
+    flux = frame.flux[skyfibers]
+
+    # Subtract
+    res = flux - skymodel.flux[skyfibers] # Residuals
+    res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers])
+
+    # Chi^2 and Probability
+    chi2_fiber = np.sum(res_ivar*(res**2),1)
+    chi2_prob = np.zeros(nfibers)
+    for ii in range(nfibers):
+        # Stats
+        dof = np.sum(res_ivar[ii,:] > 0.)
+        chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
+    # Bad models
+    qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
+    if qadict['NBAD_PCHI'] > 0:
+        log.warning("Bad Sky Subtraction in {:d} fibers".format(
+                qadict['NBAD_PCHI']))
+    # Median residual
+    qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
+    log.info("Median residual for sky fibers = {:g}".format(
+        qadict['MED_RESID']))
+
+    # Residual percentiles
+    perc = dustat.perc(res, per=param['PER_RESID'])
+    qadict['RESID_PER'] = [float(iperc) for iperc in perc]
+
+    #- Add per fiber median residuals
+    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
+
+    #- Evaluate residuals in wave axis for quicklook
+    if quick_look:
+        
+        qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
+        qadict["WAVELENGTH"]=frame.wave
+        qadict["SKY_FIBERID"]=skyfibers.tolist()
+    # Return
+    return qadict
+
 def SN_ratio(flux,ivar):
     """
     SN Ratio
@@ -240,7 +303,7 @@ def SN_ratio(flux,ivar):
         # totsnr[ii]=np.sqrt(np.sum(snr**2))
     return medsnr #, totsnr
 
-def SignalVsNoise(frame,params,fidboundary=False):
+def SignalVsNoise(frame,params,fidboundary=None):
     """
     Signal vs. Noise
 
@@ -286,8 +349,8 @@ def SignalVsNoise(frame,params,fidboundary=False):
         std_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"] 
     std_snr_mag=np.array((std_medsnr,std_mag))
 
-    average_amp = 0.
-    if fidboundary:        
+    average_amp = None
+    if fidboundary is not None:        
         average1=average2=average3=average4=0.0
         medsnr1=SN_ratio(frame.flux[fidboundary[0]],frame.ivar[fidboundary[0]])
         average1=np.mean(medsnr1)
@@ -305,9 +368,9 @@ def SignalVsNoise(frame,params,fidboundary=False):
 
         average_amp=np.array([average1,average2,average3,average4])
 
-    retval["METRICS"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
+    qadict={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
 
-    return retval
+    return qadict
 
 def gauss(x,a,mu,sigma):
     """
@@ -1574,7 +1637,7 @@ dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
                          PER_RESID=95.,   # Percentile for residual distribution
                         )
         retval["PARAMS"] = param
-        qadict=qa_skysub(param,frame,skymodel,quick_look=True)
+        qadict=sky_resid(param,frame,skymodel,quick_look=True)
 
         retval["METRICS"] = {}
         for key in qadict.keys():
@@ -1655,11 +1718,11 @@ class Calculate_SNR(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                SNR_FLUXTHRESH=0.0, # Minimum value of flux to go into SNR calc.
+            params = dict(
+                SNR_FLUXTHRESH=0.0, # Minimum value of flux to go into SNR calc. 
                 )
-        retval["PARAMS"] = param
 
+        fidboundary=None
         if amps: 
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
             leftmax = dict_countbins["LEFT_MAX_FIBER"]
@@ -1667,11 +1730,9 @@ class Calculate_SNR(MonitoringAlg):
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
             fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-        qadict = SignalVsNoise(param,frame,fidboundary)
-        retval["METRICS"] = {}
-        for key in qadict.keys():
-            retval["METRICS"][key] = qadict[key]
-
+        qadict = SignalVsNoise(frame,params,fidboundary=fidboundary)
+        retval["METRICS"] = qadict
+        retval["PARAMS"] = params
         #- http post if valid
         if qlf:
             qlf_post(retval)            
