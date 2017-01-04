@@ -265,13 +265,11 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
-    #- Add per fiber median residuals
-    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
+    #- Residuals in wave and fiber axes
+    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)        
+    qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
 
-    #- Evaluate residuals in wave axis for quicklook
     if quick_look:
-        
-        qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
         qadict["WAVELENGTH"]=frame.wave
         qadict["SKY_FIBERID"]=skyfibers.tolist()
     # Return

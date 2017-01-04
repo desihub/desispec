@@ -232,6 +232,8 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
           Need to record simple Python objects for yaml (str, float, int)
     """
     from desispec.qa import qa_quicklook as qa
+    import copy
+
     log=get_logger()
     #- sky residual
     if param is None:
@@ -245,8 +247,9 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
 
     #- calculate snr 
     #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately. 
-    subtract_sky(frame,skymodel)
-    qadict_snr = qa.SignalVsNoise(frame,param)
+    tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame as it is
+    subtract_sky(tempframe,skymodel)
+    qadict_snr = qa.SignalVsNoise(tempframe,param)
     qadict.update(qadict_snr)
     
     return qadict

@@ -6,6 +6,7 @@ import numpy as np
 from scipy import signal
 import scipy
 import pdb
+import copy
 
 from desispec.log import get_logger
 from desispec import fluxcalibration as dsflux
@@ -177,9 +178,17 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
 
 
     # Meta text
+    #- limit the dictionary to residuals only
+    qaresid=copy.deepcopy(qaframe)
+    resid_keys=['NREJ','NSKY_FIB','NBAD_PCHI','MED_RESID','RESID_PER']
+    qaresid.qa_data['SKYSUB']['METRICS']={key:value for key,value in qaframe.qa_data['SKYSUB']
+                                         ['METRICS'].items() if key in resid_keys}
+
     ax2 = plt.subplot(gs[1,1])
     ax2.set_axis_off()
-    show_meta(ax2, qaframe, 'SKYSUB', outfil)
+    show_meta(ax2, qaresid, 'SKYSUB', outfil)
+    
+    #- Add SNR plot here
     """
     # Meta
     xlbl = 0.1
