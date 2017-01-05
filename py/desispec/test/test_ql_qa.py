@@ -34,7 +34,7 @@ def xy2hdr(xyslice):
 class TestQL(unittest.TestCase):
 
     def tearDown(self):
-        for filename in [self.framefile, self.rawfile, self.pixfile, self.fibermapfile]:
+        for filename in [self.framefile, self.rawfile, self.pixfile, self.fibermapfile, self.skyfile]:
             if os.path.exists(filename):
                 os.remove(filename)
 
@@ -44,8 +44,9 @@ class TestQL(unittest.TestCase):
         self.rawfile = 'test-raw-abcd.fits'
         self.pixfile = 'test-pix-abcd.fits'
         self.framefile = 'test-frame-abcd.fits'
-        self.fibermapfile = 'test_fibermap-abcd.fits'
- 
+        self.fibermapfile = 'test-fibermap-abcd.fits'
+        self.skyfile = 'test-sky-abcd.fits'
+
         #- use specter psf for this test
         self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits')
         self.config={}
@@ -129,8 +130,35 @@ class TestQL(unittest.TestCase):
         self.image = desispec.image.Image(img_pix, img_ivar, img_mask, camera='r0',meta=hdr)
         desispec.io.write_image(self.pixfile, self.image)
         
-        self.fibermap = desispec.io.empty_fibermap(100)
+        self.fibermap = desispec.io.empty_fibermap(30)
+        self.fibermap['OBJTYPE'][::2]='ELG'
+        self.fibermap['OBJTYPE'][::3]='LRG'
+        self.fibermap['OBJTYPE'][::5]='QSO'
+        self.fibermap['OBJTYPE'][::7]='SKY'
+        #- add a filter and arbitrary magnitude
+        self.fibermap['MAG']=np.tile(np.random.uniform(18,20,30),5).reshape(30,5)
+        self.fibermap['FILTER']=np.tile(['DECAM_R','..','..','..','..'],(30,1))
+        
         desispec.io.write_fibermap(self.fibermapfile, self.fibermap)        
+        
+        #- make a test frame file
+        self.night=hdr['NIGHT']
+        nspec=30
+        nwave=200
+        wave=np.arange(nwave)
+        flux=np.random.uniform(size=(nspec,nwave))
+        ivar=np.ones_like(flux)
+        resolution_data=np.ones((nspec,13,nwave))
+        self.frame=desispec.frame.Frame(wave,flux,ivar,resolution_data=resolution_data,fibermap=self.fibermap)
+        #self.frame.meta = dict(CAMERA=self.camera,FLAVOR='dark',NIGHT=self.night, EXPID=self.expid)
+        desispec.io.write_frame(self.framefile, self.frame)
+
+        #- make a skymodel
+        sky=np.ones_like(self.frame.flux)*0.5
+        skyivar=np.ones_like(sky)
+        self.mask=np.zeros(sky.shape,dtype=np.uint32)
+        self.skymodel=desispec.sky.SkyModel(wave,sky,skyivar,self.mask)
+        self.skyfile=desispec.io.write_sky(self.skyfile,self.skymodel)
         
 
     #- test some qa utillities functions:
@@ -152,6 +180,42 @@ class TestQL(unittest.TestCase):
         counts3=QA.countpix(pix,ncounts=15)
         counts4=QA.countpix(pix,ncounts=20)
         self.assertLess(counts4,counts3)
+
+    def test_sky_resid(self):
+        param = dict(
+                     PCHI_RESID=0.05,PER_RESID=95.)
+        qadict=QA.sky_resid(param,self.frame,self.skymodel,quick_look=True)
+        kk=np.where(self.frame.fibermap['OBJTYPE']=='SKY')[0]
+        self.assertEqual(qadict['NSKY_FIB'],len(kk))
+
+        #- run with different sky flux
+        skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
+        skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
+        qa1=QA.sky_resid(param,self.frame,skym1)
+        qa2=QA.sky_resid(param,self.frame,skym2)
+        self.assertLess(qa1['MED_RESID'],qa2['MED_RESID']) #- residuals must be smaller for case 1
+
+    def testSignalVsNoise(self):
+        import copy
+        params=None
+        #- first get the sky subtracted frame
+        #- copy frame not to override
+        thisframe=copy.deepcopy(self.frame)
+        desispec.sky.subtract_sky(thisframe,self.skymodel)
+        qadict=QA.SignalVsNoise(thisframe,params)
+        #- make sure all the S/N is positive
+        self.assertTrue(np.all(qadict['MEDIAN_SNR']) > 0)
+
+        #- Reduce sky
+        skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
+        skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
+        frame1=copy.deepcopy(self.frame)
+        frame2=copy.deepcopy(self.frame)
+        desispec.sky.subtract_sky(frame1,skym1)
+        desispec.sky.subtract_sky(frame2,skym2)
+        qa1=QA.SignalVsNoise(frame1,params)
+        qa2=QA.SignalVsNoise(frame2,params)
+        self.assertTrue(np.all(qa2['MEDIAN_SNR'] > qa1['MEDIAN_SNR']))
    
     #- QA: bias overscan
     def testBiasOverscan(self):
@@ -165,7 +229,7 @@ class TestQL(unittest.TestCase):
         qargs["paname"]="abc"
         res1=qa(inp,**qargs)
         self.assertEqual(len(res1['METRICS']['BIAS_AMP']),4)
-
+        
 
 if __name__ == '__main__':
     unittest.main()
