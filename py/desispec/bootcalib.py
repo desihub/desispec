@@ -436,7 +436,8 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
     # loop on best matches ( = most populated bins)
     count=0
     for histo_bin in best_histo_bins[:ntrack] :
-        if  histogram_ravel[histo_bin]<4 and count>5 :
+        
+        if  histogram_ravel[histo_bin]<4 and count>3 :
             log.warning("stopping here")
             break
         count += 1

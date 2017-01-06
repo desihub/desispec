@@ -26,9 +26,11 @@ def _parse_sec_keyword(value):
     '''
     m = re.search('\[(\d+):(\d+)\,(\d+):(\d+)\]', value)
     if m is None:
-        raise ValueError('unable to parse {} as [a:b, c:d]'.format(value))
-    else:
-        xmin, xmax, ymin, ymax = tuple(map(int, m.groups()))
+        m = re.search('\[(\d+):(\d+)\, (\d+):(\d+)\]', value)
+        if m is None :
+            raise ValueError('unable to parse {} as [a:b, c:d]'.format(value))
+    
+    xmin, xmax, ymin, ymax = tuple(map(int, m.groups()))
 
     return np.s_[ymin-1:ymax, xmin-1:xmax]
 
@@ -77,6 +79,7 @@ def _overscan(pix, nsigma=5, niter=3):
     readnoise /= _clipped_std_bias(nsigma)
 
     return overscan, readnoise
+
 
 def _global_background(image,patch_width=200) :
     '''
@@ -189,7 +192,8 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     return bkg
 
 
-def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False):
+def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8):
+
     '''
     preprocess image using metadata in header
 
@@ -208,9 +212,17 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
         filename (str or unicode): read HDU 0 and use that
         DATE-OBS is required in header if bias, pixflat, or mask=True
 
+
+    
+
     Optional background subtraction with median filtering if bkgsub=True
     
     Optional disabling of cosmic ray rejection if nocosmic=True
+    
+    Optional tuning of cosmic ray rejection parameters:
+        cosmics_nsig: number of sigma above background required
+        cosmics_cfudge: number of sigma inconsistent with PSF required
+        cosmics_c2fudge:  fudge factor applied to PSF
 
     Returns Image object with member variables:
         image : 2D preprocessed image in units of electrons per pixel
@@ -368,8 +380,9 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
     img = Image(image, ivar=ivar, mask=mask, meta=header, readnoise=readnoise, camera=camera)
 
     #- update img.mask to mask cosmic rays
+
     if not nocosmic :
-        cosmics.reject_cosmic_rays(img)
+        cosmics.reject_cosmic_rays(img,nsig=cosmics_nsig,cfudge=cosmics_cfudge,c2fudge=cosmics_c2fudge)
     
     return img
 
