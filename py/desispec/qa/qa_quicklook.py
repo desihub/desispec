@@ -223,8 +223,8 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     To be called from desispec.sky.qa_skysub and desispec.qa.qa_quicklook.Sky_residual.run_qa
     Args: 
         param : dict of QA parameters
-        frame : desispec.Frame object
-        skymodel : desispec.SkyModel object
+        frame : desispec.Frame object after sky subtraction
+        skymodel : desispec.SkyModel object #- no need of this as frame is sky subtracted.
     Returns a qa dictionary for sky resid
     """
     # Output dict
@@ -237,12 +237,16 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     nfibers=len(skyfibers)
     qadict['NSKY_FIB'] = int(nfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()
-    flux = frame.flux[skyfibers]
+    #current_ivar=frame.ivar[skyfibers].copy()
+    #flux = frame.flux[skyfibers]
 
     # Subtract
-    res = flux - skymodel.flux[skyfibers] # Residuals
-    res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers])
+    #res = flux - skymodel.flux[skyfibers] # Residuals
+    #res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers])
+
+    #- Residuals
+    res=frame.flux[skyfibers] #- as this frame is already sky subtracted
+    res_ivar=frame.ivar[skyfibers]
 
     # Chi^2 and Probability
     chi2_fiber = np.sum(res_ivar*(res**2),1)
@@ -268,6 +272,9 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     #- Residuals in wave and fiber axes
     qadict["MED_RESID_FIBER"]=np.median(res,axis=1)        
     qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
+
+    #- Weighted average for each bin on all fibers
+    qadict["WT_AVG_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)        
 
     if quick_look:
         qadict["WAVELENGTH"]=frame.wave

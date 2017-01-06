@@ -242,13 +242,17 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
                      PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
                      PER_RESID=95.,   # Percentile for residual distribution
                      )
-    qadict_resid = qa.sky_resid(param, frame, skymodel, quick_look=quick_look)
-    qadict=qadict_resid.copy()
+    #qadict_resid = qa.sky_resid(param, frame, skymodel, quick_look=quick_look)
+    #qadict=qadict_resid.copy()
 
-    #- calculate snr 
+    #- QAs
     #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately. 
     tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame as it is
     subtract_sky(tempframe,skymodel)
+
+    qadict_resid = qa.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
+    qadict=qadict_resid.copy()
+
     qadict_snr = qa.SignalVsNoise(tempframe,param)
     qadict.update(qadict_snr)
     

@@ -182,6 +182,7 @@ class TestQL(unittest.TestCase):
         self.assertLess(counts4,counts3)
 
     def test_sky_resid(self):
+        import copy
         param = dict(
                      PCHI_RESID=0.05,PER_RESID=95.)
         qadict=QA.sky_resid(param,self.frame,self.skymodel,quick_look=True)
@@ -191,8 +192,13 @@ class TestQL(unittest.TestCase):
         #- run with different sky flux
         skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
         skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
-        qa1=QA.sky_resid(param,self.frame,skym1)
-        qa2=QA.sky_resid(param,self.frame,skym2)
+        frame1=copy.deepcopy(self.frame)
+        frame2=copy.deepcopy(self.frame)
+        desispec.sky.subtract_sky(frame1,skym1)
+        desispec.sky.subtract_sky(frame2,skym2)
+
+        qa1=QA.sky_resid(param,frame1,skym1)
+        qa2=QA.sky_resid(param,frame2,skym2)
         self.assertLess(qa1['MED_RESID'],qa2['MED_RESID']) #- residuals must be smaller for case 1
 
     def testSignalVsNoise(self):
