@@ -203,7 +203,9 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
         rawimage : 2D numpy array directly from raw data file
         header : dict-like metadata, e.g. from FITS header, with keywords
             CAMERA, BIASSECx, DATASECx, CCDSECx
-            where x = 1, 2, 3, 4 for each of the 4 amplifiers.
+            where x = A, B, C, D for each of the 4 amplifiers
+            (also supports old naming convention 1, 2, 3, 4).
+
 
     Optional bias, pixflat, and mask can each be:
         False: don't apply that step
@@ -277,10 +279,26 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
         else:
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 
+    amp_ids=['A','B','C','D']
+    #- check whether it's indeed CCDSECx with x in ['A','B','C','D']
+    #  or older version with x in ['1','2','3','4']
+    has_valid_keywords = True
+    for amp in amp_ids :
+        if not 'CCDSEC%s'%amp in header :
+            log.warning("No CCDSEC%s keyword in header , will look for alternative naming CCDSEC{1,2,3,4} ..."%amp)
+            has_valid_keywords = False
+            break
+    if not has_valid_keywords :
+        amp_ids=['1','2','3','4']
+        for amp in ['1','2','3','4'] :
+            if not 'CCDSEC%s'%amp in header :
+                log.error("No CCDSEC%s keyword, exit"%amp)
+                raise KeyError("No CCDSEC%s keyword"%amp)
+    
     #- Output arrays
     ny=0
     nx=0
-    for amp in ['1', '2', '3', '4']:
+    for amp in amp_ids :
         yy, xx = _parse_sec_keyword(header['CCDSEC%s'%amp])
         ny=max(ny,yy.stop)
         nx=max(nx,xx.stop)
@@ -288,7 +306,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
     
     readnoise = np.zeros_like(image)
 
-    for amp in ['1', '2', '3', '4']:
+    for amp in amp_ids :
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
 
         #- Initial teststand data may be missing GAIN* keywords; don't crash
@@ -306,7 +324,7 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
         header['OVERSCN'+amp] = overscan
         header['OBSRDN'+amp] = rdnoise
 
-        #- Warn/error if measured readnoise is very different from expected
+        #- Warn/error if measured readnoise is very different from expected if exists
         if 'RDNOISE'+amp in header:
             expected_readnoise = header['RDNOISE'+amp]
             if rdnoise < 0.5*expected_readnoise:
@@ -321,9 +339,11 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
             elif rdnoise > 1.2*expected_readnoise:
                 log.warning('Amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
                     amp, rdnoise, expected_readnoise))
-        else:
-            log.warning('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
-
+        #else:
+        #    log.warning('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
+        
+        log.info("Measured readnoise for AMP %s = %f"%(amp,rdnoise))
+        
         #- subtract overscan from data region and apply gain
         jj = _parse_sec_keyword(header['DATASEC'+amp])
         data = rawimage[jj] - overscan
