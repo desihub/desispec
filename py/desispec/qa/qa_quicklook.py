@@ -274,8 +274,22 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
 
     #- Weighted average for each bin on all fibers
-    qadict["WT_AVG_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)        
+    qadict["WAVG_RES_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)        
 
+    #- Histograms for residual/sigma #- inherited from qa_plots.frame_skyres()
+    binsz = param['BIN_SZ']
+    gd_res = res_ivar > 0.
+    devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
+    i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
+    rng = tuple( binsz*np.array([i0,i1]) )
+    nbin = i1-i0
+    hist, edges = np.histogram(devs, range=rng, bins=nbin)
+    xhist = (edges[1:] + edges[:-1])/2.
+    
+    qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
+    qadict['DEVS_BINC'] = xhist.tolist() #- Bin centers
+    
+    #- Add additional metrics for quicklook
     if quick_look:
         qadict["WAVELENGTH"]=frame.wave
         qadict["SKY_FIBERID"]=skyfibers.tolist()
@@ -1582,7 +1596,7 @@ class Sky_Residual(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        input_frame=args[0]
+        input_frame=args[0] #- should be sky subtracted
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
@@ -1616,8 +1630,7 @@ class Sky_Residual(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps,
-dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
+        return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
     def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
