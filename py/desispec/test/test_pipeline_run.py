@@ -71,9 +71,12 @@ class TestPipelineRun(unittest.TestCase):
         envfile = os.path.join(rundir, "env.sh")
         with open(envfile, "w") as f:
             f.write("export DESIMODEL={}\n".format(rundir))
-            f.write("export PATH={}\n".format(os.environ["PATH"]))
-            f.write("export PYTHONPATH={}\n".format(os.environ["PYTHONPATH"]))
-            f.write("export LD_LIBRARY_PATH={}\n".format(os.environ["LD_LIBRARY_PATH"]))
+            if "PATH" in os.environ:
+                f.write("export PATH={}\n".format(os.environ["PATH"]))
+            if "PYTHONPATH" in os.environ:
+                f.write("export PYTHONPATH={}\n".format(os.environ["PYTHONPATH"]))
+            if "LD_LIBRARY_PATH" in os.environ:
+                f.write("export LD_LIBRARY_PATH={}\n".format(os.environ["LD_LIBRARY_PATH"]))
 
         com = ". {}; eval {}".format(envfile, os.path.join(rundir, "scripts", "run_shell_all.sh"))
         print(com)
