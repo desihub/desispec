@@ -202,9 +202,9 @@ Where supported commands are:
         elif stat == "running":
             beg = clr.WARNING
 
-        filepath = pipe.graph_path(nd["type"], args.task)
+        filepath = pipe.graph_path(args.task)
 
-        (night, gname) = pipe.graph_name_split(args.task)
+        (night, gname) = pipe.graph_night_split(args.task)
         nfaildir = os.path.join(self.faildir, night)
         nlogdir = os.path.join(self.logdir, night)
 

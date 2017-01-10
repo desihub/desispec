@@ -19,12 +19,8 @@ from ..parallel import dist_discrete
 
 from .. import pipeline as pipe
 
-    
-def compute_step(setupfile, first, last, specs, night, 
-    ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes,
-    nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
-    queue="debug", minutes=30,
-    ):
+
+def step_props(first, last, specs, night):
     specstr = ""
     if specs is not None:
         specstr = " --spectrographs {}".format(",".join([ "{}".format(x) for x in specs ]))
@@ -33,21 +29,29 @@ def compute_step(setupfile, first, last, specs, night,
     scrdir = os.path.join(rundir, io.get_pipe_scriptdir())
     logdir = os.path.join(rundir, io.get_pipe_logdir())
 
-    if (nersc_threads > 1) and (nersc_mp > 1):
-        raise RuntimeError("set either nersc_threads or nersc_mp, but not both")
-
     nstr = ""
     scrstr = "all"
     if night is not None:
         nstr = " --nights {}".format(night)
         scrstr = "{}".format(night)
 
+    stepstr = ""
+    jobname = ""
     if first == last:
         stepstr = "{}_{}".format(first, scrstr)
         jobname = first
     else:
         stepstr = "{}-{}_{}".format(first, last, scrstr)
         jobname = "{}_{}".format(first, last)
+
+    return (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname)
+
+    
+def compute_step_shell(setupfile, first, last, specs, night, 
+    ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads
+    ):
+    
+    (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname) = step_props(first, last, specs, night)
 
     totproc = ntask * taskproc
 
@@ -67,7 +71,19 @@ def compute_step(setupfile, first, last, specs, night,
         com = ["desi_pipe_run_mpi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
     pipe.shell_job(shell_path, shell_log, setupfile, com, comrun=shell_mpi_run, mpiprocs=shell_procs, threads=shell_threads)
 
-    #- MPI for standard batch job (to be written below)
+    return shell_path
+
+
+def compute_step_slurm(setupfile, first, last, specs, night, 
+    ntask, taskproc, nersc_maxnodes,
+    nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
+    queue="debug", minutes=30
+    ):
+
+    (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname) = step_props(first, last, specs, night)
+
+    totproc = ntask * taskproc
+
     com = ["desi_pipe_run_mpi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
 
     core_per_proc = 1
@@ -94,14 +110,77 @@ def compute_step(setupfile, first, last, specs, night,
         nodeproc=nodeproc, minutes=minutes, multisrun=False, openmp=(nersc_threads > 1),
         multiproc=(nersc_mp > 1), queue=queue, jobname=jobname)
 
-    return (shell_path, nersc_path)
+    return nersc_path
+
+
+def compute_step_shifter(img, specdata, specredux, desimodel, setupfile, first, last, specs, night, 
+    ntask, taskproc, nersc_maxnodes,
+    nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
+    queue="debug", minutes=30
+    ):
+
+    (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname) = step_props(first, last, specs, night)
+
+    totproc = ntask * taskproc
+
+    com = ["desi_pipe_run_mpi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
+
+    core_per_proc = 1
+    if nersc_threads > 1:
+        core_per_proc = nersc_threads
+    elif nersc_mp > 1:
+        core_per_proc = nersc_mp
+
+    nodeproc = int(nersc_nodecores / core_per_proc)
+    nodes = int(totproc / nodeproc)
+    if nodes * nodeproc != totproc:
+        nodes += 1
+    if nodes > nersc_maxnodes:
+        nodes = nersc_maxnodes
+
+    if nodes > nersc_queue_thresh and queue == "debug":
+        print("{} nodes too big for debug queue; switching to regular".format(nodes))
+        queue = "regular"
+
+    nersc_path = os.path.join(scrdir, "{}_shifter.slurm".format(stepstr))
+    nersc_log = os.path.join(logdir, "{}_shifter".format(stepstr))
+
+    pipe.nersc_shifter_job(nersc_path, img, specdata, specredux, desimodel, nersc_log, setupfile, com, nodes=nodes,
+        nodeproc=nodeproc, minutes=minutes, multisrun=False, openmp=(nersc_threads > 1),
+        multiproc=(nersc_mp > 1), queue=queue, jobname=jobname)
+
+    return nersc_path
+
+
+def compute_step(img, specdata, specredux, desimodel, setupfile, first, last, specs, night, 
+    ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads, nersc_maxnodes,
+    nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
+    queue="debug", minutes=30
+    ):
+
+    scr_shell = compute_step_shell(setupfile, first, last, specs, night, 
+                ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads)
+
+    scr_slurm = compute_step_slurm(setupfile, first, last, specs, night, 
+                ntask, taskproc, nersc_maxnodes, nersc_nodecores, nersc_threads, 
+                nersc_mp, nersc_queue_thresh, queue=queue, minutes=minutes)
+
+    scr_shifter = ""
+    if img is not None:
+        scr_shifter = compute_step_shifter(img, specdata, specredux, desimodel, 
+                        setupfile, first, last, specs, night, ntask, taskproc, 
+                        nersc_maxnodes, nersc_nodecores, nersc_threads, nersc_mp, 
+                        nersc_queue_thresh, queue=queue, minutes=minutes)
+
+    return (scr_shell, scr_slurm, scr_shifter)
 
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Set up pipeline runs for a production.")
-    parser.add_argument("--raw", required=False, default=None, help="raw data directory")
-    parser.add_argument("--redux", required=False, default=None, help="output directory")
-    parser.add_argument("--prod", required=False, default=None, help="output production name")
+    parser.add_argument("--data", required=False, default=None, help="override DESI_SPECTRO_DATA")
+    parser.add_argument("--redux", required=False, default=None, help="override DESI_SPECTRO_REDUX")
+    parser.add_argument("--prod", required=False, default=None, help="override SPECPROD")
+    parser.add_argument("--model", required=False, default=None, help="override DESIMODEL")
     parser.add_argument("--nights", required=False, default=None, help="comma separated (YYYYMMDD) or regex pattern")
     
     parser.add_argument("--nersc_host", required=False, default="edison", help="NERSC slurm scripts host name (edison|cori)")
@@ -119,6 +198,8 @@ def parse(options=None):
 
     parser.add_argument("--debug", required=False, default=False, action="store_true", help="in setup script, set log level to DEBUG")
 
+    parser.add_argument("--shifter", required=False, default=None, help="shifter image to use in alternate slurm scripts")
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -131,7 +212,7 @@ def main(args):
 
     # Check raw data location
 
-    rawdir = args.raw
+    rawdir = args.data
     if rawdir is None:
         if "DESI_SPECTRO_DATA" in os.environ:
             rawdir = io.rawdata_root()
@@ -167,6 +248,17 @@ def main(args):
         specdir = os.path.abspath(specdir)
         proddir = os.path.join(specdir, prodname)
         os.environ["DESI_SPECTRO_REDUX"] = specdir
+
+    # Check DESIMODEL
+
+    desimodel = args.model
+    if desimodel is None:
+        if "DESIMODEL" in os.environ:
+            desimodel = os.environ["DESIMODEL"]
+        else:
+            raise RuntimeError("You must set DESIMODEL in your environment or use the --model commandline option")
+    else:
+        os.environ["DESIMODEL"] = desimodel
 
     # Check the machine limits we are using for this production
 
@@ -269,30 +361,51 @@ def main(args):
 
     all_slurm = []
     all_shell = []
+    all_shifter = []
+
     nt_slurm = {}
     nt_shell = {}
+    nt_shifter = {}
     for nt in nights:
         nt_slurm[nt] = []
         nt_shell[nt] = []
+        nt_shifter[nt] = []
 
     # bootcalib
 
     if not args.fakeboot:
 
         ntask = len(nights) * 3 * nspect
-        multip = 2
+        taskproc = workermax["bootstrap"]
+        step_threads = 1
+        step_mp = 2
+        nt = None
+        first = "bootstrap"
+        last = "bootstrap"
 
-        scr_shell, scr_slurm = compute_step(setupfile, "bootstrap", "bootstrap", specs, None, ntask, workermax["bootstrap"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
+        scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+            rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+            ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+            nodecores, step_threads, step_mp, queuethresh)
         all_shell.append(scr_shell)
         all_slurm.append(scr_slurm)
+        all_shifter.append(scr_shifter)
 
+        #scr_shell, scr_slurm = compute_step(setupfile, "bootstrap", "bootstrap", specs, None, ntask, workermax["bootstrap"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
+        
         for nt in nights:
 
             ntask = 3 * nspect
 
-            scr_shell, scr_slurm = compute_step(setupfile, "bootstrap", "bootstrap", specs, nt, ntask, workermax["bootstrap"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
+            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+                rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+                ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+                nodecores, step_threads, step_mp, queuethresh)
             nt_shell[nt].append(scr_shell)
             nt_slurm[nt].append(scr_slurm)
+            nt_shifter[nt].append(scr_shifter)
+
+            # scr_shell, scr_slurm = compute_step(setupfile, "bootstrap", "bootstrap", specs, nt, ntask, workermax["bootstrap"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
 
     else:
 
@@ -318,35 +431,74 @@ def main(args):
     if not args.fakepsf:
 
         ntask = totcount["arc"] * 3 * nspect
-        threads = 2
+        taskproc = workermax["psf"]
+        step_threads = 2
+        step_mp = 1
+        nt = None
+        first = "psf"
+        last = "psf"
 
-        scr_shell, scr_slurm = compute_step(setupfile, "psf", "psf", specs, None, ntask, workermax["psf"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
+        scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+            rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+            ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+            nodecores, step_threads, step_mp, queuethresh)
         all_shell.append(scr_shell)
         all_slurm.append(scr_slurm)
+        all_shifter.append(scr_shifter)
+
+        # scr_shell, scr_slurm = compute_step(setupfile, "psf", "psf", specs, None, ntask, workermax["psf"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
+        # all_shell.append(scr_shell)
+        # all_slurm.append(scr_slurm)
 
         for nt in nights:
 
             ntask = expnightcount[nt]["arc"] * 3 * nspect
 
-            scr_shell, scr_slurm = compute_step(setupfile, "psf", "psf", specs, nt, ntask, workermax["psf"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
+            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+                rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+                ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+                nodecores, step_threads, step_mp, queuethresh)
             nt_shell[nt].append(scr_shell)
             nt_slurm[nt].append(scr_slurm)
+            nt_shifter[nt].append(scr_shifter)
 
         # psfcombine
 
         ntask = len(nights) * 3 * nspect
+        taskproc = workermax["psfcombine"]
+        step_threads = 1
+        step_mp = 1
+        nt = None
+        first = "psfcombine"
+        last = "psfcombine"
 
-        scr_shell, scr_slurm = compute_step(setupfile, "psfcombine", "psfcombine", specs, None, ntask, workermax["psfcombine"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, queuethresh)
+        scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+            rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+            ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+            nodecores, step_threads, step_mp, queuethresh)
         all_shell.append(scr_shell)
         all_slurm.append(scr_slurm)
+        all_shifter.append(scr_shifter)
+
+        # scr_shell, scr_slurm = compute_step(setupfile, "psfcombine", "psfcombine", specs, None, ntask, workermax["psfcombine"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, queuethresh)
+        # all_shell.append(scr_shell)
+        # all_slurm.append(scr_slurm)
 
         for nt in nights:
 
             ntask = 3 * nspect
 
-            scr_shell, scr_slurm = compute_step(setupfile, "psfcombine", "psfcombine", specs, nt, ntask, workermax["psfcombine"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, queuethresh)
+            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+                rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+                ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+                nodecores, step_threads, step_mp, queuethresh)
             nt_shell[nt].append(scr_shell)
             nt_slurm[nt].append(scr_slurm)
+            nt_shifter[nt].append(scr_shifter)
+
+            # scr_shell, scr_slurm = compute_step(setupfile, "psfcombine", "psfcombine", specs, nt, ntask, workermax["psfcombine"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, 1, queuethresh)
+            # nt_shell[nt].append(scr_shell)
+            # nt_slurm[nt].append(scr_slurm)
 
     else:
 
@@ -370,36 +522,80 @@ def main(args):
     # extract
 
     ntask = (totcount["flat"] + totcount["science"]) * 3 * nspect
-    threads = 1
+    taskproc = workermax["extract"]
+    step_threads = 1
+    step_mp = 1
+    nt = None
+    first = "extract"
+    last = "extract"
 
-    scr_shell, scr_slurm = compute_step(setupfile, "extract", "extract", specs, None, ntask, workermax["extract"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
+    scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+        rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+        ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+        nodecores, step_threads, step_mp, queuethresh)
     all_shell.append(scr_shell)
     all_slurm.append(scr_slurm)
+    all_shifter.append(scr_shifter)
+
+    # scr_shell, scr_slurm = compute_step(setupfile, "extract", "extract", specs, None, ntask, workermax["extract"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
+    # all_shell.append(scr_shell)
+    # all_slurm.append(scr_slurm)
 
     for nt in nights:
 
         ntask = (expnightcount[nt]["flat"] + expnightcount[nt]["science"]) * 3 * nspect
 
-        scr_shell, scr_slurm = compute_step(setupfile, "extract", "extract", specs, nt, ntask, workermax["extract"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
+        scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+            rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+            ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+            nodecores, step_threads, step_mp, queuethresh)
         nt_shell[nt].append(scr_shell)
         nt_slurm[nt].append(scr_slurm)
+        nt_shifter[nt].append(scr_shifter)
+
+        # scr_shell, scr_slurm = compute_step(setupfile, "extract", "extract", specs, nt, ntask, workermax["extract"], shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, threads, 1, queuethresh)
+        # nt_shell[nt].append(scr_shell)
+        # nt_slurm[nt].append(scr_slurm)
 
     # calibration
 
     ntask = totcount["science"] * 3 * nspect
-    multip = 1      #- turning off multiprocessing
+    taskproc = 1
+    step_threads = 1
+    step_mp = 1
+    nt = None
+    first = "fiberflat"
+    last = "calibrate"
 
-    scr_shell, scr_slurm = compute_step(setupfile, "fiberflat", "calibrate", specs, None, ntask, 1, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
+    scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+        rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+        ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+        nodecores, step_threads, step_mp, queuethresh)
     all_shell.append(scr_shell)
     all_slurm.append(scr_slurm)
+    all_shifter.append(scr_shifter)
+
+    # multip = 1      #- turning off multiprocessing
+
+    # scr_shell, scr_slurm = compute_step(setupfile, "fiberflat", "calibrate", specs, None, ntask, 1, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
+    # all_shell.append(scr_shell)
+    # all_slurm.append(scr_slurm)
 
     for nt in nights:
 
         ntask = expnightcount[nt]["science"] * 3 * nspect
 
-        scr_shell, scr_slurm = compute_step(setupfile, "fiberflat", "calibrate", specs, nt, ntask, 1, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
+        scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+            rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+            ntask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+            nodecores, step_threads, step_mp, queuethresh)
         nt_shell[nt].append(scr_shell)
         nt_slurm[nt].append(scr_slurm)
+        nt_shifter[nt].append(scr_shifter)
+
+        # scr_shell, scr_slurm = compute_step(setupfile, "fiberflat", "calibrate", specs, nt, ntask, 1, shell_mpi_run, shell_maxcores, 1, maxnodes, nodecores, 1, multip, queuethresh)
+        # nt_shell[nt].append(scr_shell)
+        # nt_slurm[nt].append(scr_slurm)
 
     # make bricks - serial only for now!
 
@@ -412,17 +608,25 @@ def main(args):
         brickcom.append("desi_make_bricks --night {}".format(nt))
 
     shell_path = os.path.join(scrdir, "bricks.sh")
-    shell_log = os.path.join(logdir, "bricks_sh.log")
+    shell_log = os.path.join(logdir, "bricks_sh")
     pipe.shell_job(shell_path, shell_log, setupfile, brickcom, comrun=shell_mpi_run, mpiprocs=1, threads=1)
+    all_shell.append(shell_path)
 
     nersc_path = os.path.join(scrdir, "bricks.slurm")
-    nersc_log = os.path.join(logdir, "bricks_slurm.log")
+    nersc_log = os.path.join(logdir, "bricks_slurm")
     pipe.nersc_job(nersc_path, nersc_log, setupfile, brickcom, nodes=1,
         nodeproc=1, minutes=30, multisrun=False, openmp=False, multiproc=False,
         queue="debug", jobname="bricks")
-
-    all_shell.append(shell_path)
     all_slurm.append(nersc_path)
+
+    if args.shifter is not None:
+        nersc_path = os.path.join(scrdir, "bricks_shifter.slurm")
+        nersc_log = os.path.join(logdir, "bricks_shifter")
+        pipe.nersc_shifter_job(nersc_path, args.shifter, 
+            rawdir, specdir, desimodel, nersc_log, setupfile, brickcom, nodes=1,
+            nodeproc=1, minutes=30, multisrun=False, openmp=False, multiproc=False,
+            queue="debug", jobname="bricks")
+        all_shifter.append(nersc_path)
 
     # redshift fitting
 
@@ -445,13 +649,30 @@ def main(args):
         redqueue = "regular"
         redtime = 30 * increments
 
-    scr_shell, scr_slurm = compute_step(setupfile, "redshift", "redshift", specs,
-        None, efftask, workermax["redshift"], shell_mpi_run, shell_maxcores,
-        1, maxnodes, nodecores, 1, 1, queuethresh, queue=redqueue, minutes=redtime)
+    taskproc = workermax["redshift"]
+    step_threads = 1
+    step_mp = 1
+    nt = None
+    first = "redshift"
+    last = "redshift"
+
+    scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
+        rawdir, specdir, desimodel, setupfile, first, last, specs, nt, 
+        efftask, taskproc, shell_mpi_run, shell_maxcores, 1, maxnodes,
+        nodecores, step_threads, step_mp, queuethresh, queue=redqueue, minutes=redtime)
     all_shell.append(scr_shell)
     all_slurm.append(scr_slurm)
+    all_shifter.append(scr_shifter)
+
+    # scr_shell, scr_slurm = compute_step(setupfile, "redshift", "redshift", specs,
+    #     None, efftask, workermax["redshift"], shell_mpi_run, shell_maxcores,
+    #     1, maxnodes, nodecores, 1, 1, queuethresh, queue=redqueue, minutes=redtime)
+    # all_shell.append(scr_shell)
+    # all_slurm.append(scr_slurm)
 
     # Make high-level shell scripts which run or submit the steps
+
+    mode = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
 
     run_slurm_all = os.path.join(scrdir, "run_slurm_all.sh")
     with open(run_slurm_all, "w") as f:
@@ -463,15 +684,26 @@ def main(args):
                 first = False
             else:
                 f.write("jobid=`sbatch -d afterok:${{jobid}} {} | awk '{{print $4}}'`\n\n".format(scr))
+    os.chmod(run_slurm_all, mode)
+
+    if args.shifter is not None:
+        run_shifter_all = os.path.join(scrdir, "run_shifter_all.sh")
+        with open(run_shifter_all, "w") as f:
+            f.write("#!/bin/bash\n\n")
+            first = True
+            for scr in all_shifter:
+                if first:
+                    f.write("jobid=`sbatch {} | awk '{{print $4}}'`\n\n".format(scr))
+                    first = False
+                else:
+                    f.write("jobid=`sbatch -d afterok:${{jobid}} {} | awk '{{print $4}}'`\n\n".format(scr))
+        os.chmod(run_shifter_all, mode)
 
     run_shell_all = os.path.join(scrdir, "run_shell_all.sh")
     with open(run_shell_all, "w") as f:
         f.write("#!/bin/bash\n\n")
-        for scr in all_slurm:
+        for scr in all_shell:
             f.write("bash {}\n\n".format(scr))
-
-    mode = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
-    os.chmod(run_slurm_all, mode)
     os.chmod(run_shell_all, mode)
 
     for nt in nights:
@@ -485,13 +717,25 @@ def main(args):
                     first = False
                 else:
                     f.write("jobid=`sbatch -d afterok:${{jobid}} {} | awk '{{print $4}}'`\n\n".format(scr))
+        os.chmod(run_slurm_nt, mode)
+
+        if args.shifter is not None:
+            run_shifter_nt = os.path.join(scrdir, "run_shifter_{}.sh".format(nt))
+            with open(run_shifter_nt, "w") as f:
+                f.write("#!/bin/bash\n\n")
+                first = True
+                for scr in nt_shifter[nt]:
+                    if first:
+                        f.write("jobid=`sbatch {} | awk '{{print $4}}'`\n\n".format(scr))
+                        first = False
+                    else:
+                        f.write("jobid=`sbatch -d afterok:${{jobid}} {} | awk '{{print $4}}'`\n\n".format(scr))
+            os.chmod(run_shifter_nt, mode)
 
         run_shell_nt = os.path.join(scrdir, "run_shell_{}.sh".format(nt))
         with open(run_shell_nt, "w") as f:
             f.write("#!/bin/bash\n\n")
             for scr in nt_shell[nt]:
                 f.write("bash {}\n\n".format(scr))
-
-        os.chmod(run_slurm_nt, mode)
         os.chmod(run_shell_nt, mode)
 

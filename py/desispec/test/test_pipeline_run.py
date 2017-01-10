@@ -4,145 +4,84 @@ tests desispec.pipeline.core
 
 import os
 import unittest
-from uuid import uuid4
 import shutil
 import time
 import numpy as np
 
-# from desispec.pipeline.run import *
-# import desispec.io as io
+import subprocess as sp
 
-#- TODO: override log level to quiet down error messages that are supposed
-#- to be there from these tests
+from desispec.pipeline.common import *
+from desispec.pipeline.graph import *
+from desispec.pipeline.plan import *
+from desispec.pipeline.run import *
+from desispec.util import option_list
+
+import desispec.scripts.pipe_prod as pipe_prod
+
+import desispec.io as io
+
+from desispec.log import get_logger
+
+from . import pipehelpers as ph
+
+
+
 
 class TestPipelineRun(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        pass
-        # cls.uid = uuid4().hex
-        # cls.testraw = "test_raw-{}".format(cls.uid)
-        # cls.testprod = "test_redux-{}".format(cls.uid)
-
     def setUp(self):
-        pass
-        # #- Cleanup in case a previous failed test left something behind
-        # if os.path.isdir(self.testraw):
-        #     shutil.rmtree(self.testraw)
-        # if os.path.isdir(self.testprod):
-        #     shutil.rmtree(self.testprod)
-
-        # #- Now create a fresh copy to work from
-        # os.mkdir(self.testraw)
-        # os.mkdir(self.testprod)
-
-        # self.night = time.strftime('%Y%m%d', time.localtime(time.time()-12*3600))
-        # self.rawnightdir = os.path.join(self.testraw, self.night)
-        # os.mkdir(self.rawnightdir)
-
-        # self.cal2d = os.path.join(self.testprod, 'calib2d')
-        # if not os.path.isdir(self.cal2d):
-        #     os.makedirs(self.cal2d)
-
-        # self.calpsf = os.path.join(self.cal2d, 'psf')
-        # if not os.path.isdir(self.calpsf):
-        #     os.makedirs(self.calpsf)
-
-        # self.calpsfnight = os.path.join(self.calpsf, self.night)
-        # if not os.path.isdir(self.calpsfnight):
-        #     os.makedirs(self.calpsfnight)
-
-        # self.expdir = os.path.join(self.testprod, 'exposures')
-        # if not os.path.isdir(self.expdir):
-        #     os.makedirs(self.expdir)
-
-        # self.expnight = os.path.join(self.expdir, self.night)
-        # if not os.path.isdir(self.expnight):
-        #     os.makedirs(self.expnight)
-
-        # self.brkdir = os.path.join(self.testprod, 'bricks')
-        # if not os.path.isdir(self.brkdir):
-        #     os.makedirs(self.brkdir)
-
-        # self.logdir = os.path.join(self.testprod, 'logs')
-        # if not os.path.isdir(self.logdir):
-        #     os.makedirs(self.logdir)
-
-        # self.faildir = os.path.join(self.testprod, 'failed')
-        # if not os.path.isdir(self.faildir):
-        #     os.makedirs(self.faildir)
-
-        # self.scriptdir = os.path.join(self.testprod, 'scripts')
-        # if not os.path.isdir(self.scriptdir):
-        #     os.makedirs(self.scriptdir)
-
-        # for expid in [0, 1]:
-        #     fibermap = io.fibermap.empty_fibermap(10)
-        #     for key in fibermap.dtype.names:
-        #         column = fibermap[key]
-        #         fibermap[key] = np.random.random(column.shape).astype(column.dtype)
-        #     hdr = {'flavor': 'flat'}
-        #     fmfile = os.path.join(self.rawnightdir, "fibermap-{:08d}.fits".format(expid))
-        #     io.write_fibermap(fmfile, fibermap, header=hdr)
-
-        # for expid in [2, 3]:
-        #     fibermap = io.fibermap.empty_fibermap(10)
-        #     for key in fibermap.dtype.names:
-        #         column = fibermap[key]
-        #         fibermap[key] = np.random.random(column.shape).astype(column.dtype)
-        #     hdr = {'flavor': 'arc'}
-        #     fmfile = os.path.join(self.rawnightdir, "fibermap-{:08d}.fits".format(expid))
-        #     io.write_fibermap(fmfile, fibermap, header=hdr)
-
-        # for expid in [4, 5]:
-        #     fibermap = io.fibermap.empty_fibermap(10)
-        #     for key in fibermap.dtype.names:
-        #         column = fibermap[key]
-        #         fibermap[key] = np.random.random(column.shape).astype(column.dtype)
-        #     hdr = {'flavor': 'science'}
-        #     fmfile = os.path.join(self.rawnightdir, "fibermap-{:08d}.fits".format(expid))
-        #     io.write_fibermap(fmfile, fibermap, header=hdr)
-
-        # for expid in range(6):
-        #     for band in ['b', 'r', 'z']:
-        #         for spec in range(10):
-        #             cam = "{}{}".format(band, spec)
-        #             pixfile = os.path.join(self.rawnightdir, "pix-{}-{:08d}.fits".format(cam, expid))
-        #             with open(pixfile, 'w') as p:
-        #                 p.write("")
+        self.prod = "test"
+        self.shifter = "docker:tskisner/desipipe:latest"
+        self.raw = ph.fake_raw()
+        self.redux = ph.fake_redux(self.prod)
+        # (dummy value for DESIMODEL)
+        self.model = ph.fake_redux(self.prod)
+        ph.fake_env(self.raw, self.redux, self.prod, self.model)
 
     def tearDown(self):
-        pass
-        # if os.path.isdir(self.testraw):
-        #     shutil.rmtree(self.testraw)
-        # if os.path.isdir(self.testprod):
-        #     shutil.rmtree(self.testprod)
+        if os.path.exists(self.raw):
+            shutil.rmtree(self.raw)
+        if os.path.exists(self.redux):
+            shutil.rmtree(self.redux)
 
-    #- Even if every test fails, cleanup after ourselves
-    @classmethod
-    def tearDownClass(cls):
-        pass
-        # if os.path.isdir(cls.testraw):
-        #     shutil.rmtree(cls.testraw)
-        # if os.path.isdir(cls.testprod):
-        #     shutil.rmtree(cls.testprod)
 
-    def test_graph_night(self):
-        pass
-        # self.grph, expcount, bricks = graph_night(self.testraw, self.night)
-        # graph_write(os.path.join(self.testraw, "{}_graph.yml".format(self.night)), self.grph)
+    def test_run(self):
+        opts = {}
+        opts["spectrographs"] = "0"
+        opts["data"] = self.raw
+        opts["redux"] = self.redux
+        opts["prod"] = self.prod
+        opts["model"] = self.model
+        opts["shifter"] = self.shifter
+        sopts = option_list(opts)
+        sargs = pipe_prod.parse(sopts)
+        pipe_prod.main(sargs)
+        
+        # modify the options to use our No-op worker
+        rundir = io.get_pipe_rundir()
+        optfile = os.path.join(rundir, "options.yaml")
 
-    def test_options(self):
-        pass
-        # options = default_options()
-        # dump = os.path.join(self.testraw, "opts.yml")
-        # write_options(dump, options)
+        opts = {}
+        for step in step_types:
+            opts["{}_worker".format(step)] = "Noop"
+            opts["{}_worker_opts".format(step)] = {}
+            opts[step] = {}
+        yaml_write(optfile, opts)
 
-    def test_failpkl(self):
-        pass
-        # options = default_options()
-        # #run_step('bootcalib', self.testraw, self.testprod, self.grph, options)
-    
+        envfile = os.path.join(rundir, "env.sh")
+        with open(envfile, "w") as f:
+            f.write("export DESIMODEL={}\n".format(rundir))
+            if "PATH" in os.environ:
+                f.write("export PATH={}\n".format(os.environ["PATH"]))
+            if "PYTHONPATH" in os.environ:
+                f.write("export PYTHONPATH={}\n".format(os.environ["PYTHONPATH"]))
+            if "LD_LIBRARY_PATH" in os.environ:
+                f.write("export LD_LIBRARY_PATH={}\n".format(os.environ["LD_LIBRARY_PATH"]))
+
+        com = ". {}; eval {}".format(envfile, os.path.join(rundir, "scripts", "run_shell_all.sh"))
+        print(com)
+        sp.call(com, shell=True, env=os.environ.copy())
+
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

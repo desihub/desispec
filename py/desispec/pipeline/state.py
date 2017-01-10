@@ -107,7 +107,7 @@ def graph_db_check(grph):
             nd["state"] = "done"
             continue
 
-        path = graph_path(nd["type"], name)
+        path = graph_path(name)
 
         if not os.path.isfile(path):
             # file does not exist 
@@ -125,7 +125,7 @@ def graph_db_check(grph):
         for input in nd["in"]:
             if grph[input]["type"] == "night":
                 continue
-            inpath = graph_path(grph[input]["type"], input)
+            inpath = graph_path(input)
             # if the input file exists, check if its timestamp
             # is newer than the output.
             if os.path.isfile(inpath):

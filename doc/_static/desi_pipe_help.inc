@@ -13,9 +13,10 @@
 
     optional arguments:
       -h, --help            show this help message and exit
-      --raw RAW             raw data directory
-      --redux REDUX         output directory
-      --prod PROD           output production name
+      --data DATA           override DESI_SPECTRO_DATA
+      --redux REDUX         override DESI_SPECTRO_REDUX
+      --prod PROD           override SPECPROD
+      --model MODEL         override DESIMODEL
       --nights NIGHTS       comma separated (YYYYMMDD) or regex 
                             pattern
       --nersc_host NERSC_HOST
@@ -36,3 +37,5 @@
                             process only this comma-separated list of
                             spectrographs
       --debug               in setup script, set log level to DEBUG
+      --shifter             shifter image to use in alternate slurm 
+                            scripts
