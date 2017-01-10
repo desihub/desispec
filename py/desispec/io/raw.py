@@ -36,6 +36,7 @@ def read_raw(filename, camera, **kwargs):
 
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
+    primary_header= fx[0].header
 
     if 'INHERIT' in header and header['INHERIT']:
         h0 = fx[0].header
@@ -45,7 +46,7 @@ def read_raw(filename, camera, **kwargs):
 
     fx.close()
 
-    img = desispec.preproc.preproc(rawimage, header, **kwargs)
+    img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
     return img
 
 def write_raw(filename, rawdata, header, camera=None, primary_header=None):
