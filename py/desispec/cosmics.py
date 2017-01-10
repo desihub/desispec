@@ -110,7 +110,9 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     # with one the axis.
     # I change the algorithm to accept 3 out of 4 valid tests
     first_criterion=np.ones(pix.shape)
-    tmp=pix-nsig/np.sqrt(pixivar)
+    nonullivar=pixivar>0
+    tmp=np.zeros(pix.shape)
+    tmp[nonullivar]=pix[nonullivar]-nsig/np.sqrt(pixivar[nonullivar])
     for a in range(naxis) :
         first_criterion += (tmp>back[a])
     first_criterion=(first_criterion>=3).astype(bool)
@@ -121,10 +123,11 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     # here the number of sigmas is the parameter cfudge
     # c2fudge alters the PSF
     second_criterion=np.zeros(pix.shape).astype(bool)
-    tmp=pix-cfudge/np.sqrt(pixivar)
+    tmp=np.zeros(pix.shape)
+    tmp[nonullivar]=pix[nonullivar]-cfudge/np.sqrt(pixivar[nonullivar])
     for a in range(naxis) :
         second_criterion |= ( tmp*c2fudge*psf[a] > ( back[a]+cfudge*sigmaback[a] ) )
-
+    
 
     log.debug("npix selected                       = %d"%pix.size)
     log.debug("npix rejected 1st criterion         = %d"%np.sum(first_criterion))
