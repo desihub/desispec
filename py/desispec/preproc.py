@@ -5,13 +5,24 @@ Preprocess raw DESI exposures
 import re
 import numpy as np
 import scipy.interpolate
-
+import yaml
+import datetime
 from desispec.image import Image
 
 from desispec import cosmics
 from desispec.maskbits import ccdmask
 from desispec.log import get_logger
 log = get_logger()
+
+def _parse_date_obs(value):
+    '''
+    converts DATE-OBS keywork to int
+    with for instance DATE-OBS=2016-12-21T18:06:21.268371-05:00
+    '''
+    m = re.search('(\d+)-(\d+)-(\d+)T', value)
+    Y,M,D=tuple(map(int, m.groups()))
+    dateobs=int(Y*10000+M*100+D)
+    return dateobs
 
 def _parse_sec_keyword(value):
     '''
@@ -191,8 +202,56 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     log.info("done")
     return bkg
 
+def read_ccd_calibration(header, primary_header, filename) :
+    stream = open(filename, 'r')
+    data   = yaml.load(stream)
+    stream.close()
+    cameraid=header["CAMERA"].lower()
+    if not cameraid in data :
+        log.error("Cannot find data for camera %s in filename %s"%(cameraid,filename))
+        raise KeyError("Cannot find  data for camera %s in filename %s"%(cameraid,filename))
+    log.info("Found data for camera %s in filename %s"%(cameraid,filename))
+    data=data[cameraid]
+    log.info("Finding matching version ...")
+    dateobs=_parse_date_obs(primary_header["DATE-OBS"])
+    dosver=primary_header["DOSVER"].strip()
+    feever=header["FEEVER"].strip()
+    ccdname=header["CCDNAME"].strip()
+    
+    log.info("DATE-OBS=%d"%dateobs)
+    found=False
+    for version in data :
+        log.info("Checking version %s"%version)
+        datebegin=int(data[version]["DATE-OBS-BEGIN"])
+        if dateobs < datebegin :
+            log.info("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(datebegin,dateobs))
+            continue
+        if "DATE-OBS-END" in data[version] and data[version]["DATE-OBS-END"].lower() != "none" :
+            dateend=int(data[version]["DATE-OBS-END"])
+            if dateobs >= dateend :
+                log.info("Skip version %s with DATE-OBS-END=%d <= DATE-OBS=%d"%(datebegin,dateobs))
+                continue
+        if dosver != data[version]["DOSVER"].strip() :
+            log.info("Skip version %s with DOSVER=%s != %s "%(data[version]["DOSVER"],dosver))
+            continue
+        if feever != data[version]["FEEVER"].strip() :
+            log.info("Skip version %s with FEEVER=%s != %s"%(data[version]["FEEVER"],feever))
+            continue
+        if ccdname != data[version]["CCDNAME"].strip() :
+            log.info("Skip version %s with CCDNAME=%s != %s"%(data[version]["CCDNAME"],ccdname))
+            continue
+        
+        log.info("Found data version %s for camera %s in %s"%(version,cameraid,filename))
+        found=True
+        data=data[version]
 
-def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8):
+    if not found :
+        log.error("Didn't find matching calibration data in %s"%(filename))
+        raise KeyError("Didn't find matching calibration data in %s"%(filename))
+    return data
+
+
+def preproc(rawimage, header, primary_header, bias=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None):
 
     '''
     preprocess image using metadata in header
@@ -256,6 +315,12 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
     The inverse variance is estimated from the readnoise and the image itself,
     and thus is biased.
     '''
+
+    calibration_data = None
+    if ccd_calibration_filename is not None :
+        calibration_data = read_ccd_calibration(header, primary_header, ccd_calibration_filename)
+    
+
     #- TODO: Check for required keywords first
 
     #- Subtract bias image
@@ -279,9 +344,15 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
         else:
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
 
-    amp_ids=['A','B','C','D']
+
+    if calibration_data and "AMPLIFIERS" in calibration_data :
+        amp_ids=list(calibration_data["AMPLIFIERS"])
+    else :
+        amp_ids=['A','B','C','D']
+    
     #- check whether it's indeed CCDSECx with x in ['A','B','C','D']
     #  or older version with x in ['1','2','3','4']
+    #  we can remove this piece of code at later times 
     has_valid_keywords = True
     for amp in amp_ids :
         if not 'CCDSEC%s'%amp in header :
@@ -305,6 +376,20 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
     image = np.zeros( (ny,nx) )
     
     readnoise = np.zeros_like(image)
+    
+    #- Load mask
+    if mask is not False and mask is not None:
+        if mask is True:
+            dateobs = header['DATE-OBS']
+            mask = read_mask(camera=camera, dateobs=dateobs)
+        ### elif isinstance(mask, (str, unicode)):
+        elif isinstance(mask, str):
+            mask = read_mask(filename=mask)
+    else:
+        mask = np.zeros(image.shape, dtype=np.int32)
+
+    if mask.shape != image.shape:
+        raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
     for amp in amp_ids :
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
@@ -313,8 +398,25 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
         if 'GAIN'+amp in header:
             gain = header['GAIN'+amp]          #- gain = electrons / ADU
         else:
-            log.error('Missing keyword GAIN{}; using 1.0'.format(amp))
-            gain = 1.0
+            if calibration_data  and 'GAIN'+amp in calibration_data :
+                gain = float(calibration_data['GAIN'+amp])
+                log.info('Using GAIN{}={} from calibration data'.format(amp,gain))
+            else :
+                gain = 1.0
+                log.warning('Missing keyword GAIN{} in header and nothing in calib data; using {}'.format(amp,gain))
+                
+        
+        #- Add saturation level
+        if 'SATURLEV'+amp in header:
+            saturlev = header['SATURLEV'+amp]          # in electrons
+        else:
+            if calibration_data and 'SATURLEV'+amp in calibration_data :
+                saturlev = float(calibration_data['SATURLEV'+amp])
+                log.info('Using SATURLEV{}={} from calibration data'.format(amp,saturlev))
+            else :
+                saturlev = 200000
+                log.warning('Missing keyword SATURLEV{} in header and nothing in calib data; using 200000'.format(amp,saturlev))
+        
 
         overscan, rdnoise = _overscan(rawimage[ii])
         rdnoise *= gain
@@ -347,22 +449,16 @@ def preproc(rawimage, header, bias=False, pixflat=False, mask=False, bkgsub=Fals
         #- subtract overscan from data region and apply gain
         jj = _parse_sec_keyword(header['DATASEC'+amp])
         data = rawimage[jj] - overscan
+
+        #- apply saturlev (defined in ADU), prior to multiplication by gain
+        saturated = (rawimage[jj]>=saturlev)
+        mask[kk][saturated] |= ccdmask.SATURATED
+        
         image[kk] = data*gain
 
-    #- Load mask
-    if mask is not False and mask is not None:
-        if mask is True:
-            dateobs = header['DATE-OBS']
-            mask = read_mask(camera=camera, dateobs=dateobs)
-        ### elif isinstance(mask, (str, unicode)):
-        elif isinstance(mask, str):
-            mask = read_mask(filename=mask)
-    else:
-        mask = np.zeros(image.shape, dtype=np.int32)
+        
 
-    if mask.shape != image.shape:
-        raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
-
+    
     #- Divide by pixflat image
     if pixflat is not False and pixflat is not None:
         if pixflat is True:
