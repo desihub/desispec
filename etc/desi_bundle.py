@@ -14,13 +14,14 @@ import numpy as np
 import argparse
 import re
 import subprocess as sp
+import shutil
 
 def main():
     parser = argparse.ArgumentParser(description='Bundle apps with pyinstaller.')
     parser.add_argument('--prefix', required=True, default=None, help='The install prefix directory.  Apps will be installed to <prefix>/bin.')
     args = parser.parse_args()
 
-    apps = ['desi_pipe_run']
+    apps = ['desi_pipe_run_mpi']
 
     installer = None
 

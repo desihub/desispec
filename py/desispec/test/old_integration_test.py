@@ -33,7 +33,7 @@ def check_env():
 
     if not os.path.isdir(os.getenv('DESI_BASIS_TEMPLATES')):
         log.warning('missing $DESI_BASIS_TEMPLATES directory')
-        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v1.0')
+        log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v2.2')
         missing_env = True
 
     for name in (
@@ -175,7 +175,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     if 'STD_TEMPLATES' in os.environ:
         std_templates = os.getenv('STD_TEMPLATES')
     else:
-        std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.0/stdstar_templates_v1.0.fits'
+        std_templates = os.getenv('DESI_ROOT')+'/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits'
 
     stdstarfile = io.findfile('stdstars', night, expid, spectrograph=0)
     flats = list()

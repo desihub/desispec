@@ -5,12 +5,14 @@
 # -*- coding: utf-8 -*-
 
 """
-Run one or more steps of the DESI pipeline.
+Run one or more steps of the DESI pipeline using MPI.
 """
+
+from mpi4py import MPI
 
 import desispec.scripts.pipe_run as pipe_run
 
 if __name__ == '__main__':
     args = pipe_run.parse()
-    pipe_run.main(args)
+    pipe_run.main(args, comm=MPI.COMM_WORLD)
 

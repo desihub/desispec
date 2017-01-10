@@ -10,30 +10,6 @@ from desispec.quicklook import qlexceptions,qllogger
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
-class Preproc_test(pas.PipelineAlg):
-
-    #- this is not real preproc, but only for testing QAs, now input taking pix = output pix
-
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="Preproc Test"
-        from desispec.image import Image as im
-        pas.PipelineAlg.__init__(self,name,im,im,config,logger)
-
-    def run(self,*args,**kwargs):
-        if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
-        if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        input_image=args[0]
-        
-        return self.run_pa(input_image)
-
-    def run_pa(self,image):
-        return image
-
-    def get_default_config(self):
-        return {}
 
 class Initialize(pas.PipelineAlg):
     """
@@ -257,16 +233,23 @@ class BoxcarExtraction(pas.PipelineAlg):
             outfile=kwargs["Outfile"]
         else:
             outfile=None
+        maskFile=None
+        if "MaskFile" in kwargs:
+            maskFile=kwargs['MaskFile']
 
-        return self.run_pa(input_image,psf,wave,boxwidth,nspec,fibers=fibers,fibermap=fibermap,dump=dump,dumpfile=dumpfile)
+        return self.run_pa(input_image,psf
+                           ,wave,boxwidth,nspec,
+                           fibers=fibers,fibermap=fibermap,
+                           dump=dump,dumpfile=dumpfile,maskFile=maskFile)
 
 
-    def run_pa(self, input_image, psf, outwave, boxwidth, nspec,fibers=None, fibermap=None,dump=False,dumpfile=None):
+    def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
+               fibers=None, fibermap=None,dump=False,dumpfile=None,
+               maskFile=None):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
-        
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
-nspec=nspec)
+                                  nspec=nspec,maskFile=maskFile)
 
         #- write to a frame object
         
@@ -623,7 +606,7 @@ class SubtractSky(pas.PipelineAlg):
     def run_pa(self,input_frame,skymodel):
         from desispec.sky import subtract_sky
         subtract_sky(input_frame,skymodel)
-        return input_frame
+        return (input_frame, skymodel)
 
 class SubtractSky_QL(pas.PipelineAlg):
     """
@@ -675,7 +658,7 @@ class SubtractSky_QL(pas.PipelineAlg):
             if outskyfile is not None:
                 from desispec.io.sky import write_sky
                 log.info("writing an output sky model file %s "%outskyfile)
-                write_sky(outputfile,skymodel,input_frame.meta)
+                write_sky(outskyfile,skymodel,input_frame.meta)
 
         #- now do the subtraction                   
         return self.run_pa(input_frame,skymodel,dump=dump,dumpfile=dumpfile)

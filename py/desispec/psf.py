@@ -25,42 +25,38 @@ class PSF(object):
         load header, xcoeff, ycoeff from the file
         filename should have HDU1: Xcoeff, HDU2: Ycoeff
         """
-        psfdata=fits.open(filename, memmap=False)
-        xcoeff=psfdata[0].data
-        hdr=psfdata[0].header
-        wmin=hdr['WAVEMIN']
-        wmax=hdr['WAVEMAX']
-        ycoeff=psfdata[1].data
+        # psfdata = fits.open(filename, memmap=False)
+        with fits.open(filename, memmap=False) as psfdata:
+            xcoeff=psfdata[0].data
+            hdr=psfdata[0].header
+            wmin=hdr['WAVEMIN']
+            wmax=hdr['WAVEMAX']
+            ycoeff=psfdata[1].data
         
-        arm = hdr['CAMERA'].lower()[0]
-        npix_x = hdr['NPIX_X']
-        npix_y = hdr['NPIX_Y']
+            arm = hdr['CAMERA'].lower()[0]
+            npix_x = hdr['NPIX_X']
+            npix_y = hdr['NPIX_Y']
         
-        # if arm=='r': 
-        #     npix_x=4114 
-        #     npix_y=4128 
-        # if arm=='b':
-        #     npix_x=4096
-        #     npix_y=4096
-        # if arm=='z':
-        #     npix_x=4114
-        #     npix_y=4128
+            if arm not in ['b','r','z']:
+                raise ValueError("arm not in b, r, or z. File should be of the form psfboot-r0.fits.")  
+            #- Get the coeffiecients
+            nspec=xcoeff.shape[0]
+            ncoeff=xcoeff.shape[1]
+        
+            self.npix_x=npix_x
+            self.npix_y=npix_y
+            self.xcoeff=xcoeff
+            self.ycoeff=ycoeff
+            self.wmin=wmin
+            self.wmax=wmax
+            self.nspec=nspec
+            self.ncoeff=ncoeff
+            #invertion should be done at psf creation time and saved into file
+            c,ymin,ymax=self.invert(coeff=self.ycoeff)
+            self.icoeff=c
+            self.ymin=ymin
+            self.ymax=ymax
 
-        if arm not in ['b','r','z']:
-            raise ValueError("arm not in b, r, or z. File should be of the form psfboot-r0.fits.")  
-        #- Get the coeffiecients
-        nspec=xcoeff.shape[0]
-        ncoeff=xcoeff.shape[1]
-        
-        self.npix_x=npix_x
-        self.npix_y=npix_y
-        self.xcoeff=xcoeff
-        self.ycoeff=ycoeff
-        self.wmin=wmin
-        self.wmax=wmax
-        self.nspec=nspec
-        self.ncoeff=ncoeff
-       
     def invert(self, domain=None, coeff=None, deg=None):
         """
         Utility to return a traceset modeling x vs. y instead of y vs. x
@@ -72,7 +68,6 @@ class PSF(object):
             coeff=self.ycoeff # doing y-wavelength map
         ytmp=list()
         for ii in ispec:
-                
             fit_dict=dufits.mk_fit_dict(coeff[ii,:],coeff.shape[1],'legendre',domain[0],domain[1])
             xtmp=np.array((domain[0],domain[1]))
             yfit = dufits.func_val(xtmp, fit_dict)
@@ -104,8 +99,8 @@ class PSF(object):
             #- ispec = None -> all the spectra
             if ispec is None:
                 ispec=np.arange(self.nspec)
-                wavelength=self.wavelength
                 x=list()
+                #x=np.array((len(ispec),len(wavelength)))
                 for ii in ispec:
                     wave=self.wavelength(ii)
                     fit_dictx=dufits.mk_fit_dict(self.xcoeff[ii],self.ncoeff,'legendre',self.wmin,self.wmax)
@@ -184,8 +179,9 @@ class PSF(object):
             y=np.arange(0,self.npix_y)
         if ispec is None:
             ispec=np.arange(self.nspec)
-        #- First get the inversion map y --> wavelength dictionary
-        c,ymin,ymax=self.invert(coeff=self.ycoeff) 
+        c=self.icoeff
+        ymin=self.ymin
+        ymax=self.ymax
 
         if isinstance(ispec, numbers.Integral):
             new_dict=dufits.mk_fit_dict(c[ispec,:],c[ispec,:].shape,'legendre',ymin,ymax)
@@ -197,6 +193,5 @@ class PSF(object):
                 new_dict=dufits.mk_fit_dict(c[ii,:],c[ii,:].shape,'legendre',ymin,ymax)
                 wfit=dufits.func_val(y,new_dict)
                 ww.append(wfit)
-            
         return np.array(ww)
 
