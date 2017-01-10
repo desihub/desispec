@@ -50,6 +50,8 @@ to use, but also only if a single camera is specified.
                         help = 'do a background subtraction prior to cosmic ray rejection')
     parser.add_argument('--nocosmic', action='store_true', 
                         help = 'do not try and reject cosmic rays')
+    parser.add_argument('--ccd-calib-filename', type = str, default = None, required=False,
+                        help = 'read calibration data (gains, saturation levels, bias, dark, mask filenames for yaml file')
     
     
     #- uses sys.argv if options=None
@@ -85,7 +87,9 @@ def main(args=None):
                               bias=args.bias, pixflat=args.pixflat, mask=args.mask, bkgsub=args.bkgsub, nocosmic=args.nocosmic,
                               cosmics_nsig=args.cosmics_nsig,
                               cosmics_cfudge=args.cosmics_cfudge,
-                              cosmics_c2fudge=args.cosmics_c2fudge)
+                              cosmics_c2fudge=args.cosmics_c2fudge,
+                              ccd_calibration_filename=args.ccd_calib_filename
+            )
         except IOError:
             log.error('Camera {} not in {}'.format(camera, args.infile))
             continue
