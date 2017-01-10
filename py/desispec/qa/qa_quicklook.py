@@ -284,10 +284,9 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     rng = tuple( binsz*np.array([i0,i1]) )
     nbin = i1-i0
     hist, edges = np.histogram(devs, range=rng, bins=nbin)
-    xhist = (edges[1:] + edges[:-1])/2.
     
     qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
-    qadict['DEVS_BINC'] = xhist.tolist() #- Bin centers
+    qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
     
     #- Add additional metrics for quicklook
     if quick_look:

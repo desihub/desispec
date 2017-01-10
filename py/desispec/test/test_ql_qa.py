@@ -184,7 +184,7 @@ class TestQL(unittest.TestCase):
     def test_sky_resid(self):
         import copy
         param = dict(
-                     PCHI_RESID=0.05,PER_RESID=95.)
+                     PCHI_RESID=0.05,PER_RESID=95.,BIN_SZ=0.1)
         qadict=QA.sky_resid(param,self.frame,self.skymodel,quick_look=True)
         kk=np.where(self.frame.fibermap['OBJTYPE']=='SKY')[0]
         self.assertEqual(qadict['NSKY_FIB'],len(kk))

@@ -114,6 +114,9 @@ class TestBinScripts(unittest.TestCase):
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
             fibermap['OBJTYPE'][i+1] = 'STD'
+            #- Add mag and filter needed for skysub qas
+            fibermap['MAG']=np.tile(np.random.uniform(18,20,self.nspec),5).reshape(self.nspec,5)
+            fibermap['FILTER']=np.tile(['DECAM_R','..','..','..','..'],(self.nspec)).reshape(self.nspec,5)
         return fibermap
 
     def _write_fibermap(self):
