@@ -82,7 +82,7 @@ class WorkerBootcalib(Worker):
     Bootstrap the trace locations from arc images.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -169,7 +169,7 @@ class WorkerSpecex(Worker):
     Estimate the PSF from arc images.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -268,7 +268,7 @@ class WorkerSpecexCombine(Worker):
     Combine multiple PSF estimates into one.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -315,7 +315,7 @@ class WorkerSpecter(Worker):
     Extract a frame using Specter"s ex2d.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -420,7 +420,7 @@ class WorkerFiberflat(Worker):
     Compute the 1D fiberflat.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -484,7 +484,7 @@ class WorkerSky(Worker):
     Compute the sky model.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -558,7 +558,7 @@ class WorkerStdstars(Worker):
     Compute the standard stars for use in flux calibration.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -645,7 +645,7 @@ class WorkerFluxcal(Worker):
     Compute the flux calibration.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -733,7 +733,7 @@ class WorkerProcexp(Worker):
     Apply the calibration to a frame.
     """
     def __init__(self, opts):
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -820,7 +820,7 @@ class WorkerRedmonster(Worker):
         self.nproc = 24
         if "nproc" in opts:
             self.nproc = opts["nproc"]
-        super().__init__(self)
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -881,7 +881,7 @@ class WorkerNoop(Worker):
     """
     def __init__(self, opts):
         self.defaults = opts
-        super().__init__(self)
+        super(Worker, self).__init__()
 
     def max_nproc(self):
         return 1
