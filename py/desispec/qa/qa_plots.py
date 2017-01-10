@@ -123,8 +123,8 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     '''
 
     # Plot
-    fig = plt.figure(figsize=(8, 5.0))
-    gs = gridspec.GridSpec(2,2)
+    fig = plt.figure(figsize=(8, 10.0))
+    gs = gridspec.GridSpec(4,2)
 
     xmin,xmax = np.min(frame.wave), np.max(frame.wave)
 
@@ -178,7 +178,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
 
 
     # Meta text
-    #- limit the dictionary to residuals only
+    #- limit the dictionary to residuals only for meta
     qaresid=copy.deepcopy(qaframe)
     resid_keys=['NREJ','NSKY_FIB','NBAD_PCHI','MED_RESID','RESID_PER']
     qaresid.qa_data['SKYSUB']['METRICS']={key:value for key,value in qaframe.qa_data['SKYSUB']
@@ -188,7 +188,60 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax2.set_axis_off()
     show_meta(ax2, qaresid, 'SKYSUB', outfil)
     
-    #- Add SNR plot here
+    #- SNR Plot
+
+    elg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["ELG_SNR_MAG"]
+    lrg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["LRG_SNR_MAG"]
+    qso_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["QSO_SNR_MAG"]
+    star_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["STAR_SNR_MAG"]
+    
+    ax3 = plt.subplot(gs[2,0])
+    ax4 = plt.subplot(gs[2,1])
+    ax5 = plt.subplot(gs[3,0])
+    ax6 = plt.subplot(gs[3,1])
+
+    ax3.set_ylabel(r'Median S/N')
+    #ax3.set_xlabel(r'Mag. (DECAM_R)')
+    ax3.set_xlabel('')
+    ax3.set_title(r'ELG')
+    ax3.set_xlim(np.min(elg_snr_mag[1])-0.1,np.max(elg_snr_mag[1])+0.1)
+    ax3.set_ylim(np.min(elg_snr_mag[0])-0.1,np.max(elg_snr_mag[0])+0.1)
+    ax3.xaxis.set_ticks(np.arange(int(np.min(elg_snr_mag[1])),int(np.max(elg_snr_mag[1]))+1,0.5))
+    ax3.tick_params(axis='x',labelsize=6,labelbottom='on')
+    ax3.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax3.plot(elg_snr_mag[1],elg_snr_mag[0],'b.')
+
+    ax4.set_ylabel('')
+    #ax4.set_xlabel(r'Mag. (DECAM_R)')
+    ax4.set_xlabel('')
+    ax4.set_title(r'LRG')
+    ax4.set_xlim(np.min(lrg_snr_mag[1])-0.1,np.max(lrg_snr_mag[1])+0.1)
+    ax4.set_ylim(np.min(lrg_snr_mag[0])-0.1,np.max(lrg_snr_mag[0])+0.1)
+    ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_snr_mag[1])),int(np.max(lrg_snr_mag[1]))+1,0.5))
+    ax4.tick_params(axis='x',labelsize=6,labelbottom='on')
+    ax4.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax4.plot(lrg_snr_mag[1],lrg_snr_mag[0],'r.')
+
+    ax5.set_ylabel(r'Median S/N')
+    ax5.set_xlabel(r'Mag. (DECAM_R)')
+    ax5.set_title(r'QSO')
+    ax5.set_xlim(np.min(qso_snr_mag[1])-0.1,np.max(qso_snr_mag[1])+0.1)
+    ax5.set_ylim(np.min(qso_snr_mag[0])-0.1,np.max(qso_snr_mag[0])+0.1)
+    ax5.xaxis.set_ticks(np.arange(int(np.min(qso_snr_mag[1])),int(np.max(qso_snr_mag[1]))+1,1.0))
+    ax5.tick_params(axis='x',labelsize=6,labelbottom='on')
+    ax5.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax5.plot(qso_snr_mag[1],qso_snr_mag[0],'g.')
+
+    ax6.set_ylabel('')
+    ax6.set_xlabel('Mag. (DECAM_R)')
+    ax6.set_title(r'STD')
+    ax6.set_xlim(np.min(star_snr_mag[1])-0.1,np.max(star_snr_mag[1])+0.1)
+    ax6.set_ylim(np.min(star_snr_mag[0])-0.1,np.max(star_snr_mag[0])+0.1)
+    ax6.xaxis.set_ticks(np.arange(int(np.min(star_snr_mag[1])),int(np.max(star_snr_mag[1]))+1,0.5))
+    ax6.tick_params(axis='x',labelsize=6,labelbottom='on')
+    ax6.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax6.plot(star_snr_mag[1],star_snr_mag[0],'k.')
+
     """
     # Meta
     xlbl = 0.1
