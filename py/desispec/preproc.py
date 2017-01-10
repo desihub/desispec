@@ -6,8 +6,8 @@ import re
 import numpy as np
 import scipy.interpolate
 import yaml
-import datetime
 from desispec.image import Image
+import os.path
 
 from desispec import cosmics
 from desispec.maskbits import ccdmask
@@ -203,6 +203,11 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     return bkg
 
 def read_ccd_calibration(header, primary_header, filename) :
+
+    if not os.path.isfile(filename) :
+        log.error("Cannot find calibration data file '%s'"%filename)
+        raise IOError("Cannot find calibration data file '%s'"%filename)
+    
     stream = open(filename, 'r')
     data   = yaml.load(stream)
     stream.close()

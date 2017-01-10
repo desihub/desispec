@@ -7,6 +7,7 @@ Command line wrappers for pre-processing a DESI raw exposure
 from __future__ import absolute_import, division
 
 import argparse
+from pkg_resources import resource_exists, resource_filename
 
 import os
 from desispec import io
@@ -50,8 +51,10 @@ to use, but also only if a single camera is specified.
                         help = 'do a background subtraction prior to cosmic ray rejection')
     parser.add_argument('--nocosmic', action='store_true', 
                         help = 'do not try and reject cosmic rays')
-    parser.add_argument('--ccd-calib-filename', type = str, default = None, required=False,
-                        help = 'read calibration data (gains, saturation levels, bias, dark, mask filenames for yaml file')
+    parser.add_argument('--no-ccd-calib-filename', action='store_true',
+                        help = 'do not read calibration data from yaml file in desispec')
+    parser.add_argument('--ccd-calib-filename', required=False, default=None,
+                        help = 'specify a difference ccd calibration filename (for dev. purpose), default is in desispec/data/ccd')
     
     
     #- uses sys.argv if options=None
@@ -79,6 +82,20 @@ def main(args=None):
 
     if args.outdir is None:
         args.outdir = os.getcwd()
+
+    if args.no_ccd_calib_filename :
+        ccd_calibration_filename = None
+    else :
+        if args.ccd_calib_filename is not None :
+            ccd_calibration_filename = args.ccd_calib_filename
+        else :
+            # find it in desispec
+            srch_file = "data/ccd/ccd_calibration.yaml"
+            if not resource_exists('desispec', srch_file):
+                log.error("Cannot find CCD calibration file {:s}".format(srch_file))
+                ccd_calibration_filename = None        
+            else :
+                ccd_calibration_filename=resource_filename('desispec', srch_file)
     
     for camera in args.cameras:
         try:
@@ -88,10 +105,10 @@ def main(args=None):
                               cosmics_nsig=args.cosmics_nsig,
                               cosmics_cfudge=args.cosmics_cfudge,
                               cosmics_c2fudge=args.cosmics_c2fudge,
-                              ccd_calibration_filename=args.ccd_calib_filename
+                              ccd_calibration_filename=ccd_calibration_filename
             )
         except IOError:
-            log.error('Camera {} not in {}'.format(camera, args.infile))
+            log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
             continue
 
         if args.pixfile is None:
