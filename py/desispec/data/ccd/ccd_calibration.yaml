@@ -1,0 +1,62 @@
+# CCD calibration file
+# for each spectrograph arm bx,rx,zx with x from 0 to 9
+#  several versions of the hardware + firmware (not the version of this file or preproc. software)
+#  identified by DATE-OBS-BEGIN,DATE-OBS-END with a compatibility check of CCDNAME,DOSVER,FEEVER
+#
+# For each amplifier X
+# GAINX is in e/ADU
+# SATURLEVX is in ADU : the saturation level above which pixels are masked (applied before multiplication by gain)
+# CROSSTALKXY is the fraction of X in Y (in ADU/ADU, ie applied before multiplication by gain)
+#
+
+r1:
+  V0:
+    AMPLIFIERS: ABCD
+    CCDNAME: CCDS1R
+    DATE-OBS-BEGIN: '20161221'
+    DATE-OBS-END: None
+    DOSVER: trunk
+    FEEVER: v20160312
+    GAINA: 1.0
+    GAINB: 1.0
+    GAINC: 1.0
+    GAIND: 1.0
+    SATURLEVA: 20000.0
+    SATURLEVB: 20000.0
+    SATURLEVC: 20000.0
+    SATURLEVD: 20000.0
+
+b1:
+  V0:
+    AMPLIFIERS: ABCD
+    CCDNAME: CCDS1B
+    DATE-OBS-BEGIN: '20161221'
+    DATE-OBS-END: None
+    DOSVER: trunk
+    FEEVER: v20160312
+    GAINA: 1.0
+    GAINB: 1.0
+    GAINC: 1.0
+    GAIND: 1.0
+    SATURLEVA: 200000.0
+    SATURLEVB: 200000.0
+    SATURLEVC: 200000.0
+    SATURLEVD: 200000.0
+
+z1:
+  V0:
+    AMPLIFIERS: ABCD
+    CCDNAME: CCDS1Z
+    DATE-OBS-BEGIN: '20161221'
+    DATE-OBS-END: None
+    DOSVER: trunk
+    FEEVER: v20160312
+    GAINA: 1.0
+    GAINB: 1.0
+    GAINC: 1.0
+    GAIND: 1.0
+    SATURLEVA: 200000.0
+    SATURLEVB: 200000.0
+    SATURLEVC: 200000.0
+    SATURLEVD: 200000.0
+
