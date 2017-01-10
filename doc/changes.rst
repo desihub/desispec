@@ -6,6 +6,7 @@ Desispec Change Log
 -------------------
 
 * Fix brick update corruption (PR #314)
+* close PSF file after initializing PSF object
 
 0.12.0 (2016-11-09)
 -------------------

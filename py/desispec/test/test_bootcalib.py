@@ -5,10 +5,10 @@ tests bootcalib code
 import unittest
 from uuid import uuid1
 import os
-
+import sys
 import numpy as np
 import glob
-
+import locale
 import requests
 from astropy.io import fits
 
@@ -97,6 +97,25 @@ class TestBoot(unittest.TestCase):
         #pdb.set_trace()
         np.testing.assert_allclose(np.median(gauss), 1.06, rtol=0.05)
 
+    @unittest.skipIf(sys.version_info[0] == 2, "Skipping arc line test that is only relevant to Python 3.")
+    def test_parse_nist(self):
+        """Test parsing of NIST arc line files.
+        """
+        old_loc = locale.getlocale()
+        old_lc_env = dict()
+        for e in ('LANG', 'LC_ALL'):
+            if e in os.environ:
+                old_lc_env[e] = os.environ[e]
+                del os.environ[e]
+            else:
+                old_lc_env[e] = None
+        tbl = desiboot.parse_nist('CdI')
+        self.assertEqual(tbl['Ion'][0], 'CdI')
+        for e in old_lc_env:
+            if old_lc_env[e] is not None:
+                os.environ[e] = old_lc_env[e]
+        locale.setlocale(locale.LC_ALL, old_loc)
+
     def test_load_gdarc_lines(self):
 
         for camera in ['b', 'r', 'z']:
@@ -167,7 +186,7 @@ class TestBoot(unittest.TestCase):
 
     #- bootcalib.bootcalib is broken; see https://github.com/desihub/desispec/issues/174
     @unittest.expectedFailure
-    def test_bootcalib(self):        
+    def test_bootcalib(self):
         from desispec.bootcalib import bootcalib
         from desispec.image import Image
         arc = fits.getdata(self.testarc)
@@ -187,18 +206,18 @@ class TestBoot(unittest.TestCase):
         ]
         args = bootscript.parse(options=argstr)
         bootscript.main(args)
-        
+
         #- Ensure the PSF class can read that file
         from desispec.psf import PSF
         psf = PSF(self.testout)
-        
+
         #- While we're at it, test some PSF accessor functions
         w = psf.wavelength()
         w = psf.wavelength(ispec=0)
         w = psf.wavelength(ispec=[0,1])
         w = psf.wavelength(ispec=[0,1], y=0)
         w = psf.wavelength(ispec=[0,1], y=[0,1])
-        
+
         x = psf.x()
         x = psf.x(ispec=0)
         x = psf.x(ispec=[0,1])
@@ -211,8 +230,16 @@ class TestBoot(unittest.TestCase):
         y = psf.y(ispec=0, wavelength=psf.wmin)
         y = psf.y(ispec=[0,1], wavelength=psf.wmin)
         y = psf.y(ispec=[0,1], wavelength=[psf.wmin, psf.wmin+1])
-        
-        t = psf.invert()        
+
+        t = psf.invert()
+
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
 
 if __name__ == '__main__':
     unittest.main()

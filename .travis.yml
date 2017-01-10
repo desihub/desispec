@@ -160,6 +160,8 @@ before_install:
     # - "export DISPLAY=:99.0"
     # - "sh -e /etc/init.d/xvfb start"
     # - sleep 3  # give xvfb some time to start
+    # See how the locale is set.
+    - echo LC_ALL=${LC_ALL:-undef} LC_CTYPE=${LC_CTYPE:-undef} LANG=${LANG:-undef} LANGUAGE=${LANGUAGE:-undef}
 
 script:
     - $MAIN_CMD $SETUP_CMD
