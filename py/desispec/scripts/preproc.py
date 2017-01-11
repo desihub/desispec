@@ -7,7 +7,6 @@ Command line wrappers for pre-processing a DESI raw exposure
 from __future__ import absolute_import, division
 
 import argparse
-from pkg_resources import resource_exists, resource_filename
 
 import os
 from desispec import io
@@ -35,6 +34,8 @@ to use, but also only if a single camera is specified.
                         help = 'comma separated list of cameras')
     parser.add_argument('--bias', type = str, default = None, required=False,
                         help = 'bias image calibration file')
+    parser.add_argument('--dark', type = str, default = None, required=False,
+                        help = 'dark image calibration file')
     parser.add_argument('--pixflat', type = str, default = None, required=False,
                         help = 'pixflat image calibration file')
     parser.add_argument('--mask', type = str, default = None, required=False,
@@ -51,6 +52,8 @@ to use, but also only if a single camera is specified.
                         help = 'do a background subtraction prior to cosmic ray rejection')
     parser.add_argument('--nocosmic', action='store_true', 
                         help = 'do not try and reject cosmic rays')
+    parser.add_argument('--zero-masked', action='store_true', 
+                        help = 'set to zero the flux of masked pixels (for convenience to display images, no impact on analysis)')
     parser.add_argument('--no-ccd-calib-filename', action='store_true',
                         help = 'do not read calibration data from yaml file in desispec')
     parser.add_argument('--ccd-calib-filename', required=False, default=None,
@@ -73,9 +76,9 @@ def main(args=None):
     else:
         args.cameras = args.cameras.split(',')
     
-    if (args.bias is not None) or (args.pixflat is not None) or (args.mask is not None):
+    if (args.bias is not None) or (args.pixflat is not None) or (args.mask is not None) or (args.dark is not None):
         if len(args.cameras) > 1:
-            raise ValueError('must use only one camera with --bias, --pixflat, --mask options')
+            raise ValueError('must use only one camera with --bias, --dark, --pixflat, --mask options')
     
     if (args.pixfile is not None) and len(args.cameras) > 1:
             raise ValueError('must use only one camera with --pixfile option')
@@ -83,25 +86,19 @@ def main(args=None):
     if args.outdir is None:
         args.outdir = os.getcwd()
 
+    ccd_calibration_filename = None
+    
     if args.no_ccd_calib_filename :
-        ccd_calibration_filename = None
-    else :
-        if args.ccd_calib_filename is not None :
-            ccd_calibration_filename = args.ccd_calib_filename
-        else :
-            # find it in desispec
-            srch_file = "data/ccd/ccd_calibration.yaml"
-            if not resource_exists('desispec', srch_file):
-                log.error("Cannot find CCD calibration file {:s}".format(srch_file))
-                ccd_calibration_filename = None        
-            else :
-                ccd_calibration_filename=resource_filename('desispec', srch_file)
+        ccd_calibration_filename = False
+    elif args.ccd_calib_filename is not None :
+        ccd_calibration_filename = args.ccd_calib_filename
+    
     
     for camera in args.cameras:
         try:
             img = io.read_raw(args.infile, camera,
 
-                              bias=args.bias, pixflat=args.pixflat, mask=args.mask, bkgsub=args.bkgsub, nocosmic=args.nocosmic,
+                              bias=args.bias, dark=args.dark, pixflat=args.pixflat, mask=args.mask, bkgsub=args.bkgsub, nocosmic=args.nocosmic,
                               cosmics_nsig=args.cosmics_nsig,
                               cosmics_cfudge=args.cosmics_cfudge,
                               cosmics_c2fudge=args.cosmics_c2fudge,
@@ -111,6 +108,9 @@ def main(args=None):
             log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
             continue
 
+        if(args.zero_masked) :
+            img.pix *= (img.mask==0)
+        
         if args.pixfile is None:
             night = img.meta['NIGHT']
             expid = img.meta['EXPID']
