@@ -6,9 +6,10 @@ import re
 import numpy as np
 import scipy.interpolate
 import yaml
-from desispec.image import Image
 import os.path
+from pkg_resources import resource_exists, resource_filename
 
+from desispec.image import Image
 from desispec import cosmics
 from desispec.maskbits import ccdmask
 from desispec.log import get_logger
@@ -256,7 +257,7 @@ def read_ccd_calibration(header, primary_header, filename) :
     return data
 
 
-def preproc(rawimage, header, primary_header, bias=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None):
+def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None):
 
     '''
     preprocess image using metadata in header
@@ -322,7 +323,15 @@ def preproc(rawimage, header, primary_header, bias=False, pixflat=False, mask=Fa
     '''
 
     calibration_data = None
-    if ccd_calibration_filename is not None :
+
+    if ccd_calibration_filename is None :
+        srch_file = "data/ccd/ccd_calibration.yaml"
+        if not resource_exists('desispec', srch_file):
+            log.error("Cannot find CCD calibration file {:s}".format(srch_file))               
+        else :
+            ccd_calibration_filename=resource_filename('desispec', srch_file)
+
+    if ccd_calibration_filename is not None and  ccd_calibration_filename is not False :
         calibration_data = read_ccd_calibration(header, primary_header, ccd_calibration_filename)
     
 
@@ -396,6 +405,23 @@ def preproc(rawimage, header, primary_header, bias=False, pixflat=False, mask=Fa
     if mask.shape != image.shape:
         raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
+    #- Load dark if exists
+    if dark is not False and dark is not None:
+        if dark is True:
+            dateobs = header['DATE-OBS']
+            dark = read_dark(camera=camera, dateobs=dateobs)
+        elif isinstance(dark, str):
+            #- treat as filename
+            dark = read_dark(dark)
+            if dark.shape != image.shape :
+                log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
+                raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
+        exptime =  primary_header['EXPTIME']
+        log.info("Multiplying dark by exptime %f"%(exptime))
+        dark *= exptime
+                
+            
+    
     for amp in amp_ids :
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
 
@@ -458,6 +484,10 @@ def preproc(rawimage, header, primary_header, bias=False, pixflat=False, mask=Fa
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
         mask[kk][saturated] |= ccdmask.SATURATED
+        
+        #- subtract dark prior to multiplication by gain
+        if dark is not False and dark is not None :
+            data -= dark[kk]
         
         image[kk] = data*gain
 
@@ -534,6 +564,25 @@ def read_bias(filename=None, camera=None, dateobs=None):
 def read_pixflat(filename=None, camera=None, dateobs=None):
     '''
     Read calibration pixflat image for camera on dateobs.
+
+    Options:
+        filename : input filename to read
+        camera : e.g. 'b0', 'r1', 'z9'
+        dateobs : DATE-OBS string, e.g. '2018-09-23T08:17:03.988'
+
+    Notes:
+        must provide filename, or both camera and dateobs
+    '''
+    from astropy.io import fits
+    if filename is None:
+        #- use camera and dateobs to derive what pixflat file should be used
+        raise NotImplementedError
+    else:
+        return fits.getdata(filename, 0)
+
+def read_dark(filename=None, camera=None, dateobs=None):
+    '''
+    Read calibration dark image for camera on dateobs.
 
     Options:
         filename : input filename to read
