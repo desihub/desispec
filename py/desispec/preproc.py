@@ -357,7 +357,7 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
                 log.error(error_message_for_calibration_data)
                 raise IOError(error_message_for_calibration_data)
             bias = "%s/%s"%(calibration_data_path,calibration_data["BIAS"])
-            log.info("Using bias %s from calibration_data"%bias)
+            
         if bias is True:
             #- use default bias file for this camera/night
             dateobs = header['DATE-OBS']
@@ -415,7 +415,7 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
                 log.error(error_message_for_calibration_data)
                 raise IOError(error_message_for_calibration_data)
             mask = "%s/%s"%(calibration_data_path,calibration_data["MASK"])
-            log.info("Using mask %s from calibration_data"%mask)
+            
         if mask is True:
             dateobs = header['DATE-OBS']
             mask = read_mask(camera=camera, dateobs=dateobs)
@@ -436,7 +436,7 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
                 log.error(error_message_for_calibration_data)
                 raise IOError(error_message_for_calibration_data)
             dark = "%s/%s"%(calibration_data_path,calibration_data["DARK"])
-            log.info("Using dark %s from calibration_data"%dark)
+            
         if dark is None :
             dateobs = header['DATE-OBS']
             dark = read_dark(camera=camera, dateobs=dateobs)            
