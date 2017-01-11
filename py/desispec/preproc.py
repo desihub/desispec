@@ -3,6 +3,7 @@ Preprocess raw DESI exposures
 '''
 
 import re
+import os
 import numpy as np
 import scipy.interpolate
 import yaml
@@ -334,6 +335,13 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
     if ccd_calibration_filename is not None and  ccd_calibration_filename is not False :
         calibration_data = read_ccd_calibration(header, primary_header, ccd_calibration_filename)
     
+    #- Get path to calibration data
+    if "DESI_CCD_CALIBRATION_DATA" in os.environ :
+        calibration_data_path = os.environ["DESI_CCD_CALIBRATION_DATA"]
+    else :
+        calibration_data_path = None
+        error_message_for_calibration_data="DESI_CCD_CALIBRATION_DATA environment variable must be set in order to find fits files listed in %s"%ccd_calibration_filename
+    
 
     #- TODO: Check for required keywords first
 
@@ -343,7 +351,13 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
     #- convert rawimage to float64 : this is the output format of read_image
     rawimage = rawimage.astype(np.float64)
     
-    if bias is not False and bias is not None:
+    if bias is not False :
+        if bias is None and "BIAS" in calibration_data : 
+            if calibration_data_path is None :
+                log.error(error_message_for_calibration_data)
+                raise IOError(error_message_for_calibration_data)
+            bias = "%s/%s"%(calibration_data_path,calibration_data["BIAS"])
+            log.info("Using bias %s from calibration_data"%bias)
         if bias is True:
             #- use default bias file for this camera/night
             dateobs = header['DATE-OBS']
@@ -351,6 +365,7 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
         ### elif isinstance(bias, (str, unicode)):
         elif isinstance(bias, str):
             #- treat as filename
+            log.info("Using bias %s"%bias)
             bias = read_bias(filename=bias)
 
         if bias.shape == rawimage.shape:
@@ -391,27 +406,43 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
     
     readnoise = np.zeros_like(image)
     
+        
+
     #- Load mask
-    if mask is not False and mask is not None:
+    if mask is not False :
+        if mask is  None and "MASK" in calibration_data :
+            if calibration_data_path is None :
+                log.error(error_message_for_calibration_data)
+                raise IOError(error_message_for_calibration_data)
+            mask = "%s/%s"%(calibration_data_path,calibration_data["MASK"])
+            log.info("Using mask %s from calibration_data"%mask)
         if mask is True:
             dateobs = header['DATE-OBS']
             mask = read_mask(camera=camera, dateobs=dateobs)
         ### elif isinstance(mask, (str, unicode)):
         elif isinstance(mask, str):
+            log.info("Using mask %s"%mask)
             mask = read_mask(filename=mask)
-    else:
+    if mask is None :
         mask = np.zeros(image.shape, dtype=np.int32)
 
     if mask.shape != image.shape:
         raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
 
     #- Load dark if exists
-    if dark is not False and dark is not None:
-        if dark is True:
+    if dark is not False : 
+        if dark is None and "DARK" in calibration_data :
+            if calibration_data_path is None :
+                log.error(error_message_for_calibration_data)
+                raise IOError(error_message_for_calibration_data)
+            dark = "%s/%s"%(calibration_data_path,calibration_data["DARK"])
+            log.info("Using dark %s from calibration_data"%dark)
+        if dark is None :
             dateobs = header['DATE-OBS']
-            dark = read_dark(camera=camera, dateobs=dateobs)
+            dark = read_dark(camera=camera, dateobs=dateobs)            
         elif isinstance(dark, str):
             #- treat as filename
+            log.info("Using dark %s"%dark)
             dark = read_dark(dark)
             if dark.shape != image.shape :
                 log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))

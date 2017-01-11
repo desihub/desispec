@@ -25,6 +25,8 @@ r1:
     SATURLEVB: 20000.0
     SATURLEVC: 20000.0
     SATURLEVD: 20000.0
+    BIAS: 20161221/bias-r1.fits
+    DARK: 20161221/dark-r1.fits
 
 b1:
   V0:
@@ -42,6 +44,8 @@ b1:
     SATURLEVB: 200000.0
     SATURLEVC: 200000.0
     SATURLEVD: 200000.0
+    BIAS: 20161221/bias-b1.fits
+    DARK: 20161221/dark-b1.fits
 
 z1:
   V0:
@@ -59,4 +63,7 @@ z1:
     SATURLEVB: 200000.0
     SATURLEVC: 200000.0
     SATURLEVD: 200000.0
-
+    BIAS: 20161221/bias-z1.fits
+    DARK: 20161221/dark-z1.fits
+    MASK: 20161221/mask-z1.fits
+    
