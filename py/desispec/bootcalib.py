@@ -774,8 +774,8 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
     elif camera[0] == 'r':  
         dlamb = 0.527
     elif camera[0] == 'z':  
-        dlamb = 0.599  # Ang
-
+        #dlamb = 0.599  # Ang
+        dlamb = 0.608  # Ang (from teststand, ranges (fiber & wave) from 0.54 to 0.66)
     # read good lines
     if good_lines_filename is not None :
         filename = good_lines_filename
