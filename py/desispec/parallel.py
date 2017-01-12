@@ -217,7 +217,7 @@ def stdouterr_redirected(to=os.devnull, comm=None):
 
         # restore old stdout and stderr
 
-        _redirect_stdout(out_to=old_stdout, out_err=old_stderr)
+        _redirect_stdout(out_to=old_stdout, err_to=old_stderr)
 
         if comm is not None:
             # concatenate per-process files
