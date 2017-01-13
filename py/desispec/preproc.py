@@ -522,8 +522,57 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
         
         image[kk] = data*gain
 
-        
+    #- apply cross-talk
 
+    # the ccd looks like :
+    # C D
+    # A B 
+    # for cross talk, we need a symmetric 4x4 flip_matrix
+    # of coordinates ABCD giving flip of both axis
+    # when computing crosstalk of 
+    #    A   B   C   D
+    #
+    # A  AA  AB  AC  AD
+    # B  BA  BB  BC  BD
+    # C  CA  CB  CC  CD
+    # D  DA  DB  DC  BB
+    # orientation_matrix_defines change of orientation
+    #
+    fip_axis_0= np.array([[1,1,-1,-1],
+                          [1,1,-1,-1],
+                          [-1,-1,1,1],
+                          [-1,-1,1,1]])    
+    fip_axis_1= np.array([[1,-1,1,-1],
+                          [-1,1,-1,1],
+                          [1,-1,1,-1],
+                          [-1,1,-1,1]])
+
+    for a1 in range(len(amp_ids)) :
+        amp1=amp_ids[a1]
+        ii1 = _parse_sec_keyword(header['CCDSEC'+amp1])
+        a1flux=image[ii1]
+        #a1mask=mask[ii1]
+        
+        for a2 in range(len(amp_ids)) :
+            if a1==a2 :
+                continue
+            amp2=amp_ids[a2]
+            if not "CROSSTALK%s%s"%(amp1,amp2) in calibration_data : continue
+            crosstalk=calibration_data["CROSSTALK%s%s"%(amp1,amp2)]
+            if crosstalk==0. : continue
+            log.info("Correct for crosstalk=%f from AMP %s into %s"%(crosstalk,amp1,amp2))
+            a12flux=crosstalk*a1flux.copy()
+            #a12mask=a1mask.copy()
+            if fip_axis_0[a1,a2]==-1 :
+                a12flux=a12flux[::-1]
+                #a12mask=a12mask[::-1]
+            if fip_axis_1[a1,a2]==-1 :
+                a12flux=a12flux[:,::-1]
+                #a12mask=a12mask[:,::-1]
+            ii2 = _parse_sec_keyword(header['CCDSEC'+amp2])
+            image[ii2] -= a12flux
+            # mask[ii2]  |= a12mask (not sure we really need to propagate the mask)
+            
     
     #- Divide by pixflat image
     if pixflat is not False and pixflat is not None:
