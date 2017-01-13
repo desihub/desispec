@@ -99,20 +99,20 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     """
 
     # Sky fibers
-    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
-    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
+    ##skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
+    ##assert np.max(skyfibers) < 500  #- indices, not fiber numbers
 
     # Residuals
-    res = frame.flux[skyfibers] - skymodel.flux[skyfibers] # Residuals
-    res_ivar = util.combine_ivar(frame.ivar[skyfibers], skymodel.ivar[skyfibers])
-    med_res = np.median(res,0)
+    ##res = frame.flux[skyfibers] - skymodel.flux[skyfibers] # Residuals
+    ##res_ivar = util.combine_ivar(frame.ivar[skyfibers], skymodel.ivar[skyfibers])
+    ##med_res = np.median(res,0)
 
     # Deviates
-    gd_res = res_ivar > 0.
-    devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
+    ##gd_res = res_ivar > 0.
+    ##devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
 
     # Calculations
-    wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
+    ##wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
     '''
     wavg_ivar = np.sum(res_ivar,0)
     chi2_wavg = np.sum(wavg_res**2 * wavg_ivar)
@@ -121,6 +121,8 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     chi2_med = np.sum(med_res**2 * wavg_ivar)
     pchi2_med = scipy.stats.chisqprob(chi2_med, dof_wavg)
     '''
+    med_res = qaframe.qa_data['SKYSUB']["METRICS"]["MED_RESID_WAVE"]
+    wavg_res = qaframe.qa_data['SKYSUB']["METRICS"]["WAVG_RES_WAVE"]
 
     # Plot
     fig = plt.figure(figsize=(8, 10.0))
@@ -157,25 +159,33 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
 
     # Histogram of all residuals
     ax1 = plt.subplot(gs[1,0])
-    binsz = 0.1
     xmin,xmax = -5., 5.
-    i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
-    rng = tuple( binsz*np.array([i0,i1]) )
-    nbin = i1-i0
+
+    ##binsz = 0.1
+    ##i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
+    ##rng = tuple( binsz*np.array([i0,i1]) )
+    ##nbin = i1-i0
     # Histogram
-    hist, edges = np.histogram(devs, range=rng, bins=nbin)
+    ##hist, edges = np.histogram(devs, range=rng, bins=nbin)
+
+    binsz = qaframe.qa_data['SKYSUB']["PARAMS"]["BIN_SZ"]
+    hist = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_1D"])
+    edges = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_EDGES"])
+
     xhist = (edges[1:] + edges[:-1])/2.
     #ax.hist(xhist, color='black', bins=edges, weights=hist)#, histtype='step')
     ax1.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
     # PDF for Gaussian
-    area = len(devs) * binsz
+    ##area = len(devs) * binsz
+
+    area = binsz*qaframe.qa_data['SKYSUB']["METRICS"]["NSKY_FIB"]
+    
     xppf = np.linspace(scipy.stats.norm.ppf(0.0001), scipy.stats.norm.ppf(0.9999), 100)
     ax1.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
 
     ax1.set_xlabel(r'Res/$\sigma$')
     ax1.set_ylabel('N')
     ax1.set_xlim(xmin,xmax)
-
 
     # Meta text
     #- limit the dictionary to residuals only for meta

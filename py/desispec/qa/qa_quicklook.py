@@ -271,6 +271,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
 
     #- Residuals in wave and fiber axes
     qadict["MED_RESID_FIBER"]=np.median(res,axis=1)        
+    qadict["SKY_FIBERID"]=skyfibers.tolist()
     qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
 
     #- Weighted average for each bin on all fibers
@@ -291,7 +292,6 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     #- Add additional metrics for quicklook
     if quick_look:
         qadict["WAVELENGTH"]=frame.wave
-        qadict["SKY_FIBERID"]=skyfibers.tolist()
     # Return
     return qadict
 
