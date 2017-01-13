@@ -7,6 +7,7 @@ import astropy.io.fits as pyfits
 import argparse
 from desispec.preproc import  _parse_sec_keyword
 import matplotlib.pyplot as plt
+from desispec.log import get_logger
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-i','--image', type = str, default = None, required = True, 
@@ -19,6 +20,7 @@ parser.add_argument('--plot',action="store_true",help="show the fit")
 
 
 args        = parser.parse_args()
+log = get_logger()
 
     
 image_file  = pyfits.open(args.image)
