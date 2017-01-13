@@ -9,7 +9,12 @@ from desispec.preproc import  _parse_sec_keyword
 import matplotlib.pyplot as plt
 from desispec.log import get_logger
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+description="Compute the electronic cross-talk coefficient among the amplifiers of a CCD image",
+                                 epilog='''
+                                 Input is a preprocessed arc lamp image with a sufficient number of bright lines
+                                 to evaluate unambiguously the cross-talk.                                 
+                                 ''')
 parser.add_argument('-i','--image', type = str, default = None, required = True, 
                     help = 'path of preprocessed image fits file')
 parser.add_argument('-t','--threshold', type = float, default = 2000, required = False, 
