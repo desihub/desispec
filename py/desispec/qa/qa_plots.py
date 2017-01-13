@@ -178,8 +178,8 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     # PDF for Gaussian
     ##area = len(devs) * binsz
 
-    area = binsz*qaframe.qa_data['SKYSUB']["METRICS"]["NSKY_FIB"]
-    
+    area = binsz * np.sum(hist)
+
     xppf = np.linspace(scipy.stats.norm.ppf(0.0001), scipy.stats.norm.ppf(0.9999), 100)
     ax1.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
 
@@ -217,8 +217,8 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax3.set_xlim(np.min(elg_snr_mag[1])-0.1,np.max(elg_snr_mag[1])+0.1)
     ax3.set_ylim(np.min(elg_snr_mag[0])-0.1,np.max(elg_snr_mag[0])+0.1)
     ax3.xaxis.set_ticks(np.arange(int(np.min(elg_snr_mag[1])),int(np.max(elg_snr_mag[1]))+1,0.5))
-    ax3.tick_params(axis='x',labelsize=6,labelbottom='on')
-    ax3.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax3.tick_params(axis='x',labelsize=10,labelbottom='on')
+    ax3.tick_params(axis='y',labelsize=10,labelleft='on')
     ax3.plot(elg_snr_mag[1],elg_snr_mag[0],'b.')
 
     ax4.set_ylabel('')
@@ -228,8 +228,8 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax4.set_xlim(np.min(lrg_snr_mag[1])-0.1,np.max(lrg_snr_mag[1])+0.1)
     ax4.set_ylim(np.min(lrg_snr_mag[0])-0.1,np.max(lrg_snr_mag[0])+0.1)
     ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_snr_mag[1])),int(np.max(lrg_snr_mag[1]))+1,0.5))
-    ax4.tick_params(axis='x',labelsize=6,labelbottom='on')
-    ax4.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax4.tick_params(axis='x',labelsize=10,labelbottom='on')
+    ax4.tick_params(axis='y',labelsize=10,labelleft='on')
     ax4.plot(lrg_snr_mag[1],lrg_snr_mag[0],'r.')
 
     ax5.set_ylabel(r'Median S/N')
@@ -238,8 +238,8 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax5.set_xlim(np.min(qso_snr_mag[1])-0.1,np.max(qso_snr_mag[1])+0.1)
     ax5.set_ylim(np.min(qso_snr_mag[0])-0.1,np.max(qso_snr_mag[0])+0.1)
     ax5.xaxis.set_ticks(np.arange(int(np.min(qso_snr_mag[1])),int(np.max(qso_snr_mag[1]))+1,1.0))
-    ax5.tick_params(axis='x',labelsize=6,labelbottom='on')
-    ax5.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax5.tick_params(axis='x',labelsize=10,labelbottom='on')
+    ax5.tick_params(axis='y',labelsize=10,labelleft='on')
     ax5.plot(qso_snr_mag[1],qso_snr_mag[0],'g.')
 
     ax6.set_ylabel('')
@@ -248,8 +248,8 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax6.set_xlim(np.min(star_snr_mag[1])-0.1,np.max(star_snr_mag[1])+0.1)
     ax6.set_ylim(np.min(star_snr_mag[0])-0.1,np.max(star_snr_mag[0])+0.1)
     ax6.xaxis.set_ticks(np.arange(int(np.min(star_snr_mag[1])),int(np.max(star_snr_mag[1]))+1,0.5))
-    ax6.tick_params(axis='x',labelsize=6,labelbottom='on')
-    ax6.tick_params(axis='y',labelsize=6,labelleft='on')
+    ax6.tick_params(axis='x',labelsize=10,labelbottom='on')
+    ax6.tick_params(axis='y',labelsize=10,labelleft='on')
     ax6.plot(star_snr_mag[1],star_snr_mag[0],'k.')
 
     """
