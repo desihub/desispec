@@ -76,6 +76,8 @@ r1:
     CROSSTALKDA: 0.
     CROSSTALKDB: -0.009475
     CROSSTALKDC: -0.000678
+    OVERSCANA: PER_ROW
+    OVERSCANB: PER_ROW    
     BIAS: 20161221/bias-r1.fits
     DARK: 20161221/dark-r1.fits
 
@@ -108,6 +110,8 @@ z1:
     CROSSTALKDA: 0.
     CROSSTALKDB: -0.002936
     CROSSTALKDC: 0.
+    OVERSCANA: PER_ROW
+    OVERSCANC: PER_ROW  
     BIAS: 20161221/bias-z1.fits
     DARK: 20161221/dark-z1.fits
     MASK: 20161221/mask-z1.fits

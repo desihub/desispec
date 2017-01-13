@@ -85,6 +85,12 @@ def _overscan(pix, nsigma=5, niter=3):
     for i in range(niter):
         absdiff = np.abs(pix - overscan)
         good = absdiff < nsigma*readnoise
+        if np.sum(good)<5 :
+            log.error("error in sigma clipping for overscan measurement, return result without clipping")
+            overscan = np.median(pix)
+            absdiff = np.abs(pix - overscan)
+            readnoise = 1.4826*np.median(absdiff)
+            return overscan,readnoise
         overscan = np.mean(pix[good])
         readnoise = np.std(pix[good])
 
@@ -479,39 +485,67 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
                 saturlev = 200000
                 log.warning('Missing keyword SATURLEV{} in header and nothing in calib data; using 200000'.format(amp,saturlev))
         
-
-        overscan, rdnoise = _overscan(rawimage[ii])
+        overscan_image = rawimage[ii].copy()
+        nrows=overscan_image.shape[0]
+        log.info("nrows in overscan=%d"%nrows)
+        overscan = np.zeros(nrows)
+        rdnoise  = np.zeros(nrows)
+        overscan_per_row = True
+        if calibration_data and 'OVERSCAN'+amp in calibration_data and calibration_data["OVERSCAN"+amp].upper()=="PER_ROW" :
+            log.info("Subtracting overscan per row for amplifier %s of camera %s"%(amp,camera))
+            for j in range(nrows) :
+                if np.isnan(np.sum(overscan_image[j])) :
+                    log.warning("NaN values in row %d of overscan of amplifier %s of camera %s"%(j,amp,camera))
+                    continue
+                o,r =  _overscan(overscan_image[j])
+                #log.info("%d %f %f"%(j,o,r))
+                overscan[j]=o
+                rdnoise[j]=r
+        else :
+            log.info("Subtracting average overscan for amplifier %s of camera %s"%(amp,camera))
+            o,r =  _overscan(overscan_image)
+            overscan += o
+            rdnoise  += r
+        
         rdnoise *= gain
+        median_rdnoise  = np.median(rdnoise)
+        median_overscan = np.median(overscan)
+        log.info("Median rdnoise and overscan= %f %f"%(median_rdnoise,median_overscan))
+        
         kk = _parse_sec_keyword(header['CCDSEC'+amp])
-        readnoise[kk] = rdnoise
+        for j in range(nrows) :
+            readnoise[kk][j] = rdnoise[j]
 
-        header['OVERSCN'+amp] = overscan
-        header['OBSRDN'+amp] = rdnoise
+        header['OVERSCN'+amp] = median_overscan
+        header['OBSRDN'+amp] = median_rdnoise
 
         #- Warn/error if measured readnoise is very different from expected if exists
         if 'RDNOISE'+amp in header:
             expected_readnoise = header['RDNOISE'+amp]
-            if rdnoise < 0.5*expected_readnoise:
+            if median_rdnoise < 0.5*expected_readnoise:
                 log.error('Amp {} measured readnoise {:.2f} < 0.5 * expected readnoise {:.2f}'.format(
-                    amp, rdnoise, expected_readnoise))
-            elif rdnoise < 0.9*expected_readnoise:
+                    amp, median_rdnoise, expected_readnoise))
+            elif median_rdnoise < 0.9*expected_readnoise:
                 log.warning('Amp {} measured readnoise {:.2f} < 0.9 * expected readnoise {:.2f}'.format(
-                    amp, rdnoise, expected_readnoise))
-            elif rdnoise > 2.0*expected_readnoise:
+                    amp, median_rdnoise, expected_readnoise))
+            elif median_rdnoise > 2.0*expected_readnoise:
                 log.error('Amp {} measured readnoise {:.2f} > 2 * expected readnoise {:.2f}'.format(
-                    amp, rdnoise, expected_readnoise))
-            elif rdnoise > 1.2*expected_readnoise:
+                    amp, median_rdnoise, expected_readnoise))
+            elif median_rdnoise > 1.2*expected_readnoise:
                 log.warning('Amp {} measured readnoise {:.2f} > 1.2 * expected readnoise {:.2f}'.format(
-                    amp, rdnoise, expected_readnoise))
+                    amp, median_rdnoise, expected_readnoise))
         #else:
         #    log.warning('Expected readnoise keyword {} missing'.format('RDNOISE'+amp))
         
-        log.info("Measured readnoise for AMP %s = %f"%(amp,rdnoise))
+        log.info("Measured readnoise for AMP %s = %f"%(amp,median_rdnoise))
         
         #- subtract overscan from data region and apply gain
         jj = _parse_sec_keyword(header['DATASEC'+amp])
-        data = rawimage[jj] - overscan
-
+        
+        data = rawimage[jj].copy()
+        for k in range(nrows) :
+            data[k] -= overscan[k]
+        
         #- apply saturlev (defined in ADU), prior to multiplication by gain
         saturated = (rawimage[jj]>=saturlev)
         mask[kk][saturated] |= ccdmask.SATURATED
@@ -557,6 +591,7 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
             if a1==a2 :
                 continue
             amp2=amp_ids[a2]
+            if calibration_data is None : continue
             if not "CROSSTALK%s%s"%(amp1,amp2) in calibration_data : continue
             crosstalk=calibration_data["CROSSTALK%s%s"%(amp1,amp2)]
             if crosstalk==0. : continue
