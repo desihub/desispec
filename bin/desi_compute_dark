@@ -17,7 +17,7 @@ parser.add_argument('-o','--outfile', type = str, default = None, required = Tru
 parser.add_argument('--camera',type = str, required = True, 
                     help = 'header HDU (int or string)')
 parser.add_argument('--bias', type = str, default = None, required=False,
-                        help = 'bias image calibration file')
+                        help = 'bias image calibration file (standard preprocessing calibration is turned off)')
 
 args        = parser.parse_args()
 log = get_logger()
@@ -36,7 +36,7 @@ for filename in args.image :
     fitsfile.close()
     
     # read raw data and preprocess them
-    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=True)
+    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=True,calibration_data=False)
     if shape is None :
         shape=img.pix.shape
     log.info("adding dark %s divided by exposure time %f s"%(filename,exptime))
