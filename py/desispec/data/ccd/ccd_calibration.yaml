@@ -8,28 +8,15 @@
 # SATURLEVX is in ADU : the saturation level above which pixels are masked (applied before multiplication by gain)
 # CROSSTALKXY is the fraction of X in Y (in ADU/ADU, ie applied before multiplication by gain)
 #
-
-r1:
-  V0:
-    AMPLIFIERS: ABCD
-    CCDNAME: CCDS1R
-    DATE-OBS-BEGIN: '20161221'
-    DATE-OBS-END: None
-    DOSVER: trunk
-    FEEVER: v20160312
-    GAINA: 1.0
-    GAINB: 1.0
-    GAINC: 1.0
-    GAIND: 1.0
-    SATURLEVA: 20000.0
-    SATURLEVB: 20000.0
-    SATURLEVC: 20000.0
-    SATURLEVD: 20000.0
-    BIAS: 20161221/bias-r1.fits
-    DARK: 20161221/dark-r1.fits
+# orientation of amps (as seen with ds9)
+# C D
+# A B
+#
+#
 
 b1:
   V0:
+# cross-talk measured with 'desi_compute_crosstalk -i preproc-b1-00001448.fits -t 100 -m 100000'
     AMPLIFIERS: ABCD
     CCDNAME: CCDS1B
     DATE-OBS-BEGIN: '20161221'
@@ -44,11 +31,57 @@ b1:
     SATURLEVB: 200000.0
     SATURLEVC: 200000.0
     SATURLEVD: 200000.0
+    CROSSTALKAB: -0.0044700
+    CROSSTALKAC: 0.
+    CROSSTALKAD: 0.
+    CROSSTALKBA: -0.012249
+    CROSSTALKBC: 0.
+    CROSSTALKBD: 0.
+    CROSSTALKCA: 0.
+    CROSSTALKCB: 0.
+    CROSSTALKCD: -0.001235
+    CROSSTALKDA: 0.
+    CROSSTALKDB: 0.
+    CROSSTALKDC: -0.006775
     BIAS: 20161221/bias-b1.fits
     DARK: 20161221/dark-b1.fits
 
+r1:
+  V0:
+# cross-talk measured with 'desi_compute_crosstalk -i preproc-r1-00001502.fits -t 2000 -m 15000'
+# cross-talk is allowed to be asymmetric eventhough fit compatible with symmetric cross-talk
+    AMPLIFIERS: ABCD
+    CCDNAME: CCDS1R
+    DATE-OBS-BEGIN: '20161221'
+    DATE-OBS-END: None
+    DOSVER: trunk
+    FEEVER: v20160312
+    GAINA: 1.0
+    GAINB: 1.0
+    GAINC: 1.0
+    GAIND: 1.0
+    SATURLEVA: 20000.0
+    SATURLEVB: 20000.0
+    SATURLEVC: 20000.0
+    SATURLEVD: 20000.0
+    CROSSTALKAB: 0.000707
+    CROSSTALKAC: -0.006730
+    CROSSTALKAD: -0.000464
+    CROSSTALKBA: 0.
+    CROSSTALKBC: -0.000177
+    CROSSTALKBD: -0.012172
+    CROSSTALKCA: -0.007473
+    CROSSTALKCB: 0.
+    CROSSTALKCD: -0.000747
+    CROSSTALKDA: 0.
+    CROSSTALKDB: -0.009475
+    CROSSTALKDC: -0.000678
+    BIAS: 20161221/bias-r1.fits
+    DARK: 20161221/dark-r1.fits
+
 z1:
   V0:
+#  desi_compute_crosstalk -i preproc-z1-00001502.fits -t 1000 -m 10000 
     AMPLIFIERS: ABCD
     CCDNAME: CCDS1Z
     DATE-OBS-BEGIN: '20161221'
@@ -63,6 +96,18 @@ z1:
     SATURLEVB: 200000.0
     SATURLEVC: 200000.0
     SATURLEVD: 200000.0
+    CROSSTALKAB: 0.
+    CROSSTALKAC: 0.
+    CROSSTALKAD: 0.
+    CROSSTALKBA: -0.001291
+    CROSSTALKBC: 0.006252
+    CROSSTALKBD: -0.012034
+    CROSSTALKCA: -0.006483
+    CROSSTALKCB: -0.001206
+    CROSSTALKCD: -0.000421
+    CROSSTALKDA: 0.
+    CROSSTALKDB: -0.002936
+    CROSSTALKDC: 0.
     BIAS: 20161221/bias-z1.fits
     DARK: 20161221/dark-z1.fits
     MASK: 20161221/mask-z1.fits
