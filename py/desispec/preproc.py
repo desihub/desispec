@@ -264,7 +264,7 @@ def read_ccd_calibration(header, primary_header, filename) :
     return data
 
 
-def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=False, mask=False, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None):
+def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=False, mask=None, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None):
 
     '''
     preprocess image using metadata in header
@@ -416,7 +416,7 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
 
     #- Load mask
     if mask is not False :
-        if mask is  None and "MASK" in calibration_data :
+        if calibration_data and  mask is  None  and "MASK" in calibration_data :
             if calibration_data_path is None :
                 log.error(error_message_for_calibration_data)
                 raise IOError(error_message_for_calibration_data)
