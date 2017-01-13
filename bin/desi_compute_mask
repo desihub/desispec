@@ -12,7 +12,16 @@ from desispec.log import get_logger
 from desispec.preproc import  _parse_sec_keyword
 from desispec.maskbits import ccdmask
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+description="Compute a mask using preprocessed dark images",
+ epilog='''
+                                 Input is a list of preprocessed dark images.
+                                 This code will mask nsig. outliers, mask entire rows and columns above a given fraction of masked pixels.
+                                 Remove from mask isolated pixels that are presumably statistical fluctuations,
+                                 apply a median filter of size npix to smooth the mask (can be turned off by setting npix=0)
+                                 This code was used to procude the EM spectrograph early NIR (Z1) ccd data mask.
+                                 ''')
+
 parser.add_argument('-i','--image', type = str, default = None, required = True, 
                     help = 'path of preprocessed dark image fits file')
 parser.add_argument('-o','--out', type = str, default = None, required = True, 
