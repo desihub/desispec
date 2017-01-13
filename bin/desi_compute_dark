@@ -9,7 +9,17 @@ import numpy as np
 from desispec import io
 from desispec.log import get_logger
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                 description="Compute a master dark",
+                                 epilog='''
+                                 Input is a list of raw dark images, possibly with various exposure times.
+                                 Raw images are preprocessed without dark,mask,gain correction and without cosmic-ray masking.
+                                 Only an optional bias correction is applied.
+                                 The result is the median of the preprocessed images divided by their exposure time.
+                                 We use for this the keyword EXPTIME in the raw image primary header.                                 
+                                 ''')
+
+
 parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
                     help = 'path of raws image fits files')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True, 
@@ -36,7 +46,7 @@ for filename in args.image :
     fitsfile.close()
     
     # read raw data and preprocess them
-    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=True,calibration_data=False)
+    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=True,ccd_calibration_filename=False)
     if shape is None :
         shape=img.pix.shape
     log.info("adding dark %s divided by exposure time %f s"%(filename,exptime))
@@ -46,7 +56,7 @@ for filename in args.image :
 log.info("compute median image ...")
 medimage=np.median(images,axis=0).reshape(shape)
 
-log.info("write result in %s ..."%filename)
+log.info("write result in %s ..."%args.outfile)
 hdulist=pyfits.HDUList([pyfits.PrimaryHDU(medimage)])
 i=0
 for filename in args.image :
