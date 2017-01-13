@@ -636,7 +636,8 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
 
     #- Inverse variance, estimated directly from the data (BEWARE: biased!)
     var = image.clip(0) + readnoise**2
-    ivar = 1.0 / var
+    ivar = np.zeros(var.shape)
+    ivar[var>0] = 1.0 / var[var>0]
 
     if bkgsub :
         bkg = _background(image,header)
