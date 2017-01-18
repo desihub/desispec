@@ -137,9 +137,8 @@ def integration_test(night=None, nspec=5, clobber=False):
     # create production
 
     # FIXME:  someday run PSF estimation too...
-    ### com = "desi_pipe --env env.txt --spectrographs 0 --fakeboot --fakepsf"
-    rawdir = os.path.join(os.getenv('DESI_SPECTRO_SIM'), os.getenv('PIXPROD'))    
-    com = "desi_pipe --spectrographs 0 --fakeboot --fakepsf --raw {}".format(rawdir)
+    ### com = "desi_pipe --spectrographs 0 --fakeboot --fakepsf"
+    com = "desi_pipe --spectrographs 0 --fakeboot --fakepsf"
     sp.check_call(com, shell=True)
 
     # raw and production locations
