@@ -117,6 +117,8 @@ class Tile(Base):
         self._cos_radius = 0.9996076746114829  # cos(radius)
         self._area = 0.0024650531167640308  # steradians: 2*pi*(1-cos(radius))
         self._circum_square = None
+        self._petal2brick = None
+        self._brick_polygons = None
 
     def __init__(self, *args, **kwargs):
         self._constants()
@@ -149,7 +151,7 @@ class Tile(Base):
 
     @property
     def circum_square(self):
-        """Defines a square-like region on the sphere in which circumscribes
+        """Defines a square-like region on the sphere which circumscribes
         the tile.
         """
         if self._circum_square is None:
@@ -173,12 +175,12 @@ class Tile(Base):
         Parameters
         ----------
         shift : :class:`float`, optional
-            Amount to offset.
+            Amount to offset in degrees.
 
         Returns
         -------
         :class:`float`
-            An amount to offset.
+            An amount to offset in degrees.
         """
         if self.ra < shift:
             return shift
@@ -233,17 +235,17 @@ class Tile(Base):
         return bricks
 
     def petals(self, Npetals=10):
-        """Convert a tile into a set of Wedge objects.
+        """Convert a tile into a set of :class:`~matplotlib.patches.Wedge` objects.
 
         Parameters
         ----------
         Npetals : :class:`int`, optional
-            Number of petals.
+            Number of petals (default 10).
 
         Returns
         -------
         :class:`list`
-            A list of Wedge objects.
+            A list of :class:`~matplotlib.patches.Wedge` objects.
         """
         petal_angle = 360.0/Npetals
         tile_ra = self.ra + self.offset()
@@ -266,50 +268,58 @@ class Tile(Base):
         Returns
         -------
         :class:`list`
-            A list of Polygon objects.
+            If `map_petals` is ``False``, a list of
+            :class:`~matplotlib.patches.Polygon` objects. Otherwise, a
+            :class:`dict` mapping petal number to the
+            :class:`~desispec.io.database.Brick` objects that overlap that
+            petal.
         """
-        candidates = self._coarse_overlapping_bricks(session)
-        petals = self.petals()
-        petal2brick = dict()
-        bricks = list()
-        for b in candidates:
-            b_ra1, b_ra2 = self.brick_offset(b)
-            brick_corners = np.array([[b_ra1, b.dec1],
-                                      [b_ra2, b.dec1],
-                                      [b_ra2, b.dec2],
-                                      [b_ra1, b.dec2]])
-            brick = Polygon(brick_corners, closed=True, facecolor='r')
-            for i, p in enumerate(petals):
-                if brick.get_path().intersects_path(p.get_path()):
-                    brick.set_facecolor('g')
-                    if i in petal2brick:
-                        petal2brick[i].append(b.id)
-                    else:
-                        petal2brick[i] = [b.id]
-            bricks.append(brick)
+        if self._brick_polygons is None and self._petal2brick is None:
+            candidates = self._coarse_overlapping_bricks(session)
+            petals = self.petals()
+            self._petal2brick = dict()
+            self._brick_polygons = list()
+            for b in candidates:
+                b_ra1, b_ra2 = self.brick_offset(b)
+                brick_corners = np.array([[b_ra1, b.dec1],
+                                          [b_ra2, b.dec1],
+                                          [b_ra2, b.dec2],
+                                          [b_ra1, b.dec2]])
+                brick_poly = Polygon(brick_corners, closed=True, facecolor='r')
+                for i, p in enumerate(petals):
+                    if brick_poly.get_path().intersects_path(p.get_path()):
+                        brick_poly.set_facecolor('g')
+                        if i in self._petal2brick:
+                            self._petal2brick[i].append(b)
+                        else:
+                            self._petal2brick[i] = [b]
+                self._brick_polygons.append(brick_poly)
         if map_petals:
-            return petal2brick
-        return bricks
+            return self._petal2brick
+        return self._brick_polygons
 
-    def to_frame(self, band, spectrograph, flavor='science', exptime=1000.0):
+    def simulate_frame(self, session, band, spectrograph,
+                       flavor='science', exptime=1000.0):
         """Simulate a DESI frame given a Tile object.
 
         Parameters
         ----------
+        session : :class:`sqlalchemy.orm.session.Session`
+            Database connection.
         band : :class:`str`
             'b', 'r', 'z'
         spectrograph : :class:`int`
             Spectrograph number [0-9].
         flavor : :class:`str`, optional
-            Exposure flavor.
+            Exposure flavor (default 'science').
         exptime : :class:`float`, optional
-            Exposure time in seconds.
+            Exposure time in seconds (default 1000).
 
         Returns
         -------
-        :class:`desispec.io.database.Frame`
-            A Frame object ready for loading, though matching bricks may
-            need to be loaded separately.
+        :class:`tuple`
+            A tuple containing a :class:`~desispec.io.database.Frame` object
+            ready for loading, and a list of bricks that overlap.
         """
         dateobs = (datetime(2017+self.desi_pass, 1, 1, 0, 0, 0, tzinfo=utc) +
                    timedelta(seconds=(exptime*(self.id%2140))))
@@ -329,7 +339,8 @@ class Tile(Base):
                       'dateobs': dateobs,
                       'alt': self.ra,
                       'az': self.dec}
-        return Frame(**frame_data)
+        petal2brick = self.overlapping_bricks(session, map_petals=True)
+        return (Frame(**frame_data), petal2brick[spectrograph])
 
 
 class Frame(Base):
@@ -391,6 +402,8 @@ class FrameStatus(Base):
     status = Column(String, ForeignKey('status.status'), nullable=False)
     stamp = Column(DateTime(timezone=True), nullable=False)
 
+    def __repr__(self):
+        return "<FrameStatus(id={0.id:d}, frame_id={0.frame_id:d}, status='{0.status}', stamp='{0.stamp}')>".format(self)
 
 class BrickStatus(Base):
     __tablename__ = 'brickstatus'
@@ -399,6 +412,9 @@ class BrickStatus(Base):
     brick_id = Column(Integer, ForeignKey('brick.id'), nullable=False)
     status = Column(String, ForeignKey('status.status'), nullable=False)
     stamp = Column(DateTime(timezone=True), nullable=False)
+
+    def __repr__(self):
+        return "<BrickStatus(id={0.id:d}, brick_id={0.brick_id:d}, status='{0.status}', stamp='{0.stamp}')>".format(self)
 
 
 def get_all_tiles(session, obs_pass=0, limit=0):
@@ -459,17 +475,17 @@ def load_simulated_data(session, obs_pass=0):
     tiles = get_all_tiles(session, obs_pass=obs_pass)
     status = 'succeeded'
     for t in tiles:
-        rows = session.query(Tile2Brick).filter_by(tile_id=t.id).all()
-        petal2brick = dict()
-        for r in rows:
-            brick = session.query(Brick).filter_by(id=r.brick_id).one()
-            try:
-                petal2brick[r.petal_id].append(brick)
-            except KeyError:
-                petal2brick[r.petal_id] = [brick]
+        # rows = session.query(Tile2Brick).filter_by(tile_id=t.id).all()
+        # petal2brick = dict()
+        # for r in rows:
+        #     brick = session.query(Brick).filter_by(id=r.brick_id).one()
+        #     try:
+        #         petal2brick[r.petal_id].append(brick)
+        #     except KeyError:
+        #         petal2brick[r.petal_id] = [brick]
         for band in 'brz':
             for spectrograph in range(10):
-                frame = t.to_frame(band, spectrograph)
+                frame, bricks = t.simulate_frame(session, band, spectrograph)
                 try:
                     q = session.query(Night).filter_by(night=frame.night).one()
                 except NoResultFound:
@@ -484,9 +500,12 @@ def load_simulated_data(session, obs_pass=0):
                 #     session.add(Status(status=status))
                 session.add(frame)
                 session.add(FrameStatus(frame_id=frame.id, status=status, stamp=frame.dateobs))
-                for brick in petal2brick[spectrograph]:
+                # for brick in petal2brick[spectrograph]:
+                #     session.add(BrickStatus(brick_id=brick.id, status=status, stamp=frame.dateobs))
+                # frame.bricks = petal2brick[spectrograph]
+                for brick in bricks:
                     session.add(BrickStatus(brick_id=brick.id, status=status, stamp=frame.dateobs))
-                frame.bricks = petal2brick[spectrograph]
+                frame.bricks = bricks
         session.commit()
         #
         #
@@ -616,8 +635,8 @@ def main():
     from pkg_resources import resource_filename
     parser = ArgumentParser(description=("Create and load a DESI metadata "+
                                          "database."))
-    parser.add_argument('-a', '--area', action='store_true', dest='fixarea',
-        help='If area is not specified in the brick file, recompute it.')
+    # parser.add_argument('-a', '--area', action='store_true', dest='fixarea',
+    #     help='If area is not specified in the brick file, recompute it.')
     parser.add_argument('-b', '--bricks', action='store', dest='brickfile',
         default='bricks-0.50-2.fits', metavar='FILE',
         help='Read brick data from FILE.')
@@ -686,8 +705,9 @@ def main():
         with fits.open(brick_file) as hdulist:
             brick_data = hdulist[1].data
         brick_list = [brick_data[col].tolist() for col in brick_data.names]
-        brick_area = (np.radians(brick_data['ra2']) - np.radians(brick_data['ra1']))*(np.sin(np.radians(brick_data['dec2'])) - np.sin(np.radians(brick_data['dec1'])))
-        brick_list.append(brick_area.tolist())
+        if 'area' not in brick_data.names:
+            brick_area = (np.radians(brick_data['ra2']) - np.radians(brick_data['ra1']))*(np.sin(np.radians(brick_data['dec2'])) - np.sin(np.radians(brick_data['dec1'])))
+            brick_list.append(brick_area.tolist())
         brick_columns = ('name', 'id', 'q', 'row', 'col', 'ra', 'dec', 'ra1', 'ra2', 'dec1', 'dec2', 'area')
         session.add_all([Brick(**b) for b in [dict(zip(brick_columns, row)) for row in zip(*brick_list)]])
         session.commit()
@@ -707,14 +727,14 @@ def main():
         session.commit()
         log.info("Finished loading bricks.")
     if options.simulate:
-        try:
-            q = session.query(Tile2Brick).one()
-        except MultipleResultsFound:
-            log.info("Tile2Brick table already loaded.")
-        except NoResultFound:
-            load_tile2brick(session, options.obs_pass)
-            session.commit()
-        log.info("Completed tile2brick mapping.")
+        # try:
+        #     q = session.query(Tile2Brick).one()
+        # except MultipleResultsFound:
+        #     log.info("Tile2Brick table already loaded.")
+        # except NoResultFound:
+        #     load_tile2brick(session, options.obs_pass)
+        #     session.commit()
+        # log.info("Completed tile2brick mapping.")
         try:
             q = session.query(Frame).one()
         except MultipleResultsFound:
