@@ -222,7 +222,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     along current_ivar to do so.
 
     Args:
-        param : dict of QA parameters
+        param : dict of QA parameters : see qa_frame.init_skysub for example
         frame : desispec.Frame object
         skymodel : desispec.SkyModel object
         quick_look : bool, optional
@@ -234,24 +234,12 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     from desispec.qa import qalib
     import copy
 
-    log=get_logger()
-    #- sky residual
-    if param is None:
-        log.info("Param is None. Using default param instead")
-        param = dict(
-                     PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-                     PER_RESID=95.,   # Percentile for residual distribution
-                     )
-    #qadict_resid = qa.sky_resid(param, frame, skymodel, quick_look=quick_look)
-    #qadict=qadict_resid.copy()
-
     #- QAs
     #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately. 
-    tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame as it is
-    subtract_sky(tempframe,skymodel)
+    tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame unaffected so that downstream pipeline uses it.
+    subtract_sky(tempframe,skymodel) #- Note: sky subtract is done to get residuals. As part of pipeline it is done in fluxcalib stage
 
-    qadict_resid = qalib.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
-    qadict=qadict_resid.copy()
+    qadict = qalib.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
 
     qadict_snr = qalib.SignalVsNoise(tempframe,param)
     qadict.update(qadict_snr)

@@ -212,6 +212,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     Args: 
         param : dict of QA parameters
         frame : desispec.Frame object after sky subtraction
+        skymodel : desispec.SkyModel object
     Returns a qa dictionary for sky resid
     """
     # Output dict
@@ -317,54 +318,70 @@ def SignalVsNoise(frame,params,fidboundary=None):
         fidboundary : list of slices indicating where to select in fiber
             and wavelength directions for each amp (output of slice_fidboundary function)
     """
+    thisfilter='DECAM_R' #- should probably come from param. Hard coding for now
+    mags=frame.fibermap['MAG']
+    filters=frame.fibermap['FILTER']
 
     medsnr=SN_ratio(frame.flux,frame.ivar)
     elgfibers=np.where(frame.fibermap['OBJTYPE']=='ELG')[0]
     elg_medsnr=medsnr[elgfibers]
     elg_mag=np.zeros(len(elgfibers))
+
     for ii,fib in enumerate(elgfibers):
-        elg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
+        if thisfilter not in filters[fib]:
+            #- raise ValueError("{} is not available filter for fiber {}".format(thisfilter,fib))
+            print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
+            elg_mag[ii]=None
+        else:
+            elg_mag[ii]=mags[fib][filters[fib]==thisfilter]
     elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
 
     lrgfibers=np.where(frame.fibermap['OBJTYPE']=='LRG')[0]
     lrg_medsnr=medsnr[lrgfibers]
     lrg_mag=np.zeros(len(lrgfibers))
+
     for ii,fib in enumerate(lrgfibers):
-        lrg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
+        if thisfilter not in filters[fib]:
+            print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
+            lrg_mag[ii]=None
+        else:
+            lrg_mag[ii]=mags[fib][filters[fib]==thisfilter]
     lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
 
     qsofibers=np.where(frame.fibermap['OBJTYPE']=='QSO')[0]
     qso_medsnr=medsnr[qsofibers]
     qso_mag=np.zeros(len(qsofibers))
     for ii,fib in enumerate(qsofibers):
-        qso_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
+        if thisfilter not in filters[fib]:
+            print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
+            qso_mag[ii]=None
+        else:
+            qso_mag[ii]=mags[fib][filters[fib]==thisfilter]
     qso_snr_mag=np.array((qso_medsnr,qso_mag))
 
     stdfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
     std_medsnr=medsnr[stdfibers]
     std_mag=np.zeros(len(stdfibers))
     for ii,fib in enumerate(stdfibers):
-        std_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"] 
+        if thisfilter not in filters[fib]:
+            print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
+            std_mag[ii]=None
+        else:
+            std_mag[ii]=mags[fib][filters[fib]==thisfilter]
     std_snr_mag=np.array((std_medsnr,std_mag))
 
+    #- Median S/N for different amp zones.
     average_amp = None
-    if fidboundary is not None:        
-        average1=average2=average3=average4=0.0
-        medsnr1=SN_ratio(frame.flux[fidboundary[0]],frame.ivar[fidboundary[0]])
-        average1=np.mean(medsnr1)
+    if fidboundary is not None:      
+        averages=[]
+        for ii in range(4):
+            if fidboundary[ii][0].start is not None:  #- have fibers in this amp?
+                medsnramp=SN_ratio(frame.flux[fidboundary[ii]],frame.ivar[fidboundary[ii]])
+                averages.append(np.mean(medsnramp))
+            else: 
+                averages.append(None)
 
-        medsnr3=SN_ratio(frame.flux[fidboundary[2]],frame.ivar[fidboundary[2]])
-        average3=np.mean(medsnr3)
-
-        if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
-            medsnr2=SN_ratio(frame.flux[fidboundary[1]],frame.ivar[fidboundary[1]])
-            average2=np.mean(medsnr2)
-
-        if fidboundary[3][0].start is not None : #- to the right top of the CCD
-            medsnr4=SN_ratio(frame.flux[fidboundary[3]],frame.ivar[fidboundary[3]])
-            average4=np.mean(medsnr4)
-
-        average_amp=np.array([average1,average2,average3,average4])
+        average_amp=np.array(averages)
 
     qadict={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
 

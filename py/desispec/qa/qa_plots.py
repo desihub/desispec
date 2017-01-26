@@ -214,43 +214,67 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     #ax3.set_xlabel(r'Mag. (DECAM_R)')
     ax3.set_xlabel('')
     ax3.set_title(r'ELG')
-    ax3.set_xlim(np.min(elg_snr_mag[1])-0.1,np.max(elg_snr_mag[1])+0.1)
-    ax3.set_ylim(np.min(elg_snr_mag[0])-0.1,np.max(elg_snr_mag[0])+0.1)
-    ax3.xaxis.set_ticks(np.arange(int(np.min(elg_snr_mag[1])),int(np.max(elg_snr_mag[1]))+1,0.5))
-    ax3.tick_params(axis='x',labelsize=10,labelbottom='on')
-    ax3.tick_params(axis='y',labelsize=10,labelleft='on')
-    ax3.plot(elg_snr_mag[1],elg_snr_mag[0],'b.')
+    if len(elg_snr_mag[1]) > 0:  #- at least 1 elg fiber?   
+        select=np.where((elg_snr_mag[1] != np.array(None)) & (~np.isnan(elg_snr_mag[1])))[0]
+        if select.shape[0]>0:
+
+            xmin=np.min(elg_snr_mag[1][select])-0.1
+            xmax=np.max(elg_snr_mag[1][select])+0.1
+            ax3.set_xlim(xmin,xmax)
+            ax3.set_ylim(np.min(elg_snr_mag[0])-0.1,np.max(elg_snr_mag[0])+0.1)
+            ax3.xaxis.set_ticks(np.arange(int(np.min(elg_snr_mag[1])),int(np.max(elg_snr_mag[1]))+1,0.5))
+            ax3.tick_params(axis='x',labelsize=10,labelbottom='on')
+            ax3.tick_params(axis='y',labelsize=10,labelleft='on')
+            ax3.plot(elg_snr_mag[1][select],elg_snr_mag[0][select],'b.')
 
     ax4.set_ylabel('')
     #ax4.set_xlabel(r'Mag. (DECAM_R)')
     ax4.set_xlabel('')
     ax4.set_title(r'LRG')
-    ax4.set_xlim(np.min(lrg_snr_mag[1])-0.1,np.max(lrg_snr_mag[1])+0.1)
-    ax4.set_ylim(np.min(lrg_snr_mag[0])-0.1,np.max(lrg_snr_mag[0])+0.1)
-    ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_snr_mag[1])),int(np.max(lrg_snr_mag[1]))+1,0.5))
-    ax4.tick_params(axis='x',labelsize=10,labelbottom='on')
-    ax4.tick_params(axis='y',labelsize=10,labelleft='on')
-    ax4.plot(lrg_snr_mag[1],lrg_snr_mag[0],'r.')
+    if len(lrg_snr_mag[1]) > 0:  #- at least 1 lrg fiber?
+        select=np.where((lrg_snr_mag[1] != np.array(None)) & (~np.isnan(lrg_snr_mag[1])))[0]
+        if select.shape[0]>0:
+
+            xmin=np.min(lrg_snr_mag[1][select])-0.1
+            xmax=np.max(lrg_snr_mag[1][select])+0.1
+            ax4.set_xlim(xmin,xmax)
+            ax4.set_ylim(np.min(lrg_snr_mag[0])-0.1,np.max(lrg_snr_mag[0])+0.1)
+            ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_snr_mag[1])),int(np.max(lrg_snr_mag[1]))+1,0.5))
+            ax4.tick_params(axis='x',labelsize=10,labelbottom='on')
+            ax4.tick_params(axis='y',labelsize=10,labelleft='on')
+            ax4.plot(lrg_snr_mag[1][select],lrg_snr_mag[0][select],'r.')
 
     ax5.set_ylabel(r'Median S/N')
     ax5.set_xlabel(r'Mag. (DECAM_R)')
     ax5.set_title(r'QSO')
-    ax5.set_xlim(np.min(qso_snr_mag[1])-0.1,np.max(qso_snr_mag[1])+0.1)
-    ax5.set_ylim(np.min(qso_snr_mag[0])-0.1,np.max(qso_snr_mag[0])+0.1)
-    ax5.xaxis.set_ticks(np.arange(int(np.min(qso_snr_mag[1])),int(np.max(qso_snr_mag[1]))+1,1.0))
-    ax5.tick_params(axis='x',labelsize=10,labelbottom='on')
-    ax5.tick_params(axis='y',labelsize=10,labelleft='on')
-    ax5.plot(qso_snr_mag[1],qso_snr_mag[0],'g.')
+    if len(qso_snr_mag[1]) > 0:  #- at least 1 qso fiber?
+        select=np.where((qso_snr_mag[1] != np.array(None)) & (~np.isnan(qso_snr_mag[1])))[0] #- Remove None and nan values
+        if select.shape[0]>0:
+
+            xmin=np.min(qso_snr_mag[1][select])-0.1
+            xmax=np.max(qso_snr_mag[1][select])+0.1
+            ax5.set_xlim(xmin,xmax)
+            ax5.set_ylim(np.min(qso_snr_mag[0])-0.1,np.max(qso_snr_mag[0])+0.1)
+            ax5.xaxis.set_ticks(np.arange(int(np.min(qso_snr_mag[1])),int(np.max(qso_snr_mag[1]))+1,1.0))
+            ax5.tick_params(axis='x',labelsize=10,labelbottom='on')
+            ax5.tick_params(axis='y',labelsize=10,labelleft='on')
+            ax5.plot(qso_snr_mag[1][select],qso_snr_mag[0][select],'g.')
 
     ax6.set_ylabel('')
     ax6.set_xlabel('Mag. (DECAM_R)')
     ax6.set_title(r'STD')
-    ax6.set_xlim(np.min(star_snr_mag[1])-0.1,np.max(star_snr_mag[1])+0.1)
-    ax6.set_ylim(np.min(star_snr_mag[0])-0.1,np.max(star_snr_mag[0])+0.1)
-    ax6.xaxis.set_ticks(np.arange(int(np.min(star_snr_mag[1])),int(np.max(star_snr_mag[1]))+1,0.5))
-    ax6.tick_params(axis='x',labelsize=10,labelbottom='on')
-    ax6.tick_params(axis='y',labelsize=10,labelleft='on')
-    ax6.plot(star_snr_mag[1],star_snr_mag[0],'k.')
+    if len(star_snr_mag[1]) > 0:  #- at least 1 std fiber?
+        select=np.where((star_snr_mag[1] != np.array(None)) & (~np.isnan(star_snr_mag[1])))[0]
+        if select.shape[0]>0:
+            print(select)
+            xmin=np.min(star_snr_mag[1][select])-0.1
+            xmax=np.max(star_snr_mag[1][select])+0.1
+            ax6.set_xlim(xmin,xmax)
+            ax6.set_ylim(np.min(star_snr_mag[0])-0.1,np.max(star_snr_mag[0])+0.1)
+            ax6.xaxis.set_ticks(np.arange(int(np.min(star_snr_mag[1])),int(np.max(star_snr_mag[1]))+1,0.5))
+            ax6.tick_params(axis='x',labelsize=10,labelbottom='on')
+            ax6.tick_params(axis='y',labelsize=10,labelleft='on')
+            ax6.plot(star_snr_mag[1][select],star_snr_mag[0][select],'k.')
 
     """
     # Meta

@@ -19,7 +19,7 @@ class TestBinScripts(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.nspec = 10
+        cls.nspec = 6
         cls.nwave = 20
         id = uuid4().hex
         cls.calibfile = 'calib-'+id+'.fits'
@@ -111,17 +111,10 @@ class TestBinScripts(unittest.TestCase):
 
     def _get_fibermap(self):
         fibermap = io.empty_fibermap(self.nspec, 1500)
-        for i in range(0, self.nspec, 5):
-            #- Add at least 2 QSOs, ELGs, LRGs and STDs each (needed for SNR plot)
+        for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
             fibermap['OBJTYPE'][i+1] = 'STD'
-            fibermap['OBJTYPE'][i+2] = 'ELG'
-            fibermap['OBJTYPE'][i+3] = 'LRG'
-            fibermap['OBJTYPE'][i+4] = 'QSO'
 
-        #- Add mag and filter needed for skysub qas
-        fibermap['MAG']=np.tile(np.random.uniform(18,20,self.nspec),5).reshape(self.nspec,5)
-        fibermap['FILTER']=np.tile(['DECAM_R','..','..','..','..'],(self.nspec)).reshape(self.nspec,5)
         return fibermap
 
     def _write_fibermap(self):
@@ -143,7 +136,7 @@ class TestBinScripts(unittest.TestCase):
         # First generation is very simple
         wave = 5000+np.arange(self.nwave)
         stdflux = np.ones((self.nspec, self.nwave))
-        fibers = np.array([1,6]).astype(int)
+        fibers = np.array([1,4]).astype(int)
         hdu1=fits.PrimaryHDU(stdflux)
         hdu1.header['EXTNAME'] = 'FLUX'
         hdu2=fits.ImageHDU(wave, name='WAVELENGTH')

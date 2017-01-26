@@ -133,12 +133,12 @@ class TestQL(unittest.TestCase):
         
         self.fibermap = desispec.io.empty_fibermap(30)
         self.fibermap['OBJTYPE'][::2]='ELG'
-        self.fibermap['OBJTYPE'][::3]='LRG'
+        self.fibermap['OBJTYPE'][::3]='STD'
         self.fibermap['OBJTYPE'][::5]='QSO'
-        self.fibermap['OBJTYPE'][::7]='SKY'
+        self.fibermap['OBJTYPE'][::7]='SKY'   #- 0 LRG fibers
         #- add a filter and arbitrary magnitude
-        self.fibermap['MAG']=np.tile(np.random.uniform(18,20,30),5).reshape(30,5)
-        self.fibermap['FILTER']=np.tile(['DECAM_R','..','..','..','..'],(30,1))
+        self.fibermap['MAG'][:29]=np.tile(np.random.uniform(18,20,29),5).reshape(29,5) #- Last fiber left
+        self.fibermap['FILTER'][:29]=np.tile(['DECAM_R','..','..','..','..'],(29,1)) #- last fiber left 
         
         desispec.io.write_fibermap(self.fibermapfile, self.fibermap)        
         
@@ -224,6 +224,17 @@ class TestQL(unittest.TestCase):
         qa2=qalib.SignalVsNoise(frame2,params)
         self.assertTrue(np.all(qa2['MEDIAN_SNR'] > qa1['MEDIAN_SNR']))
    
+        #- test for tracer not present 
+        nullfibermap=desispec.io.empty_fibermap(10)
+        qa=qalib.SignalVsNoise(self.frame,params)
+
+        self.assertEqual(self.fibermap['MAG'][29][0],0)   #- No mag for last fiber
+        self.assertEqual(self.fibermap['FILTER'][29][0],'') #- No filter for last fiber
+
+        self.assertEqual(len(qa['MEDIAN_SNR']),30)
+        self.assertEqual(len(qa['LRG_FIBERID']),0) #- LRG was not present by construction
+
+        
     #- QA: bias overscan
     def testBiasOverscan(self):
         qa=QA.Bias_From_Overscan('bias',self.config) #- initialize with fake config and name
