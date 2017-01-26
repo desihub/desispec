@@ -5,9 +5,11 @@ Monitoring algorithms for Quicklook pipeline
 
 import numpy as np
 import scipy.ndimage
+import yaml
 from desispec.quicklook.qas import MonitoringAlg
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
+import os,sys
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -18,8 +20,10 @@ from astropy.time import Time
 
 def ampregion(image):
     """
-       get the pixel boundary regions for amps
-       args: image: desispec.image.Image object
+    Get the pixel boundary regions for amps
+       
+    Args:
+        image: desispec.image.Image object
     """
     from desispec.preproc import _parse_sec_keyword
 
@@ -32,9 +36,11 @@ def ampregion(image):
 
 def fiducialregion(frame,psf):
     """ 
-       get the fiducial amplifier regions on the CCD pixel to fiber by wavelength space
-       args: frame: desispec.frame.Frame object
-             psf: desispec.psf.PSF like object
+    Get the fiducial amplifier regions on the CCD pixel to fiber by wavelength space
+       
+    Args:
+        frame: desispec.frame.Frame object
+        psf: desispec.psf.PSF like object
     """
     from desispec.preproc import _parse_sec_keyword
 
@@ -114,8 +120,10 @@ def fiducialregion(frame,psf):
 
 def slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin):
     """
-    runs fiducialregion function and makes the boundary slice for the amps:
-    returns list of tuples of slices for spec- wavelength boundary for the amps.
+    Runs fiducialregion function and makes the boundary slice for the amps:
+    
+    Returns (list):
+        list of tuples of slices for spec- wavelength boundary for the amps.
     """
     leftmax+=1 #- last entry not counted in slice
     bottommax+=1
@@ -129,8 +137,10 @@ def slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin):
 
 def getrms(image):
     """
-    calculate the rms of the pixel values)
-    args: image : 2d array
+    Calculate the rms of the pixel values)
+    
+    Args:
+        image: 2d array
     """
     pixdata=image.ravel()
     rms=np.std(pixdata)
@@ -139,11 +149,14 @@ def getrms(image):
 
 def countpix(image,nsig=None,ncounts=None):
     """
-    count the pixels above a given threshold
-    threshold can be in n times sigma or counts 
-    args: image: 2d image array 
-          nsig: threshold in units of sigma, e.g 2 for 2 sigma
-          ncounts: threshold in units of count, e.g 100
+    Count the pixels above a given threshold.
+    
+    Threshold can be in n times sigma or counts. 
+    
+    Args:
+        image: 2d image array 
+        nsig: threshold in units of sigma, e.g 2 for 2 sigma
+        ncounts: threshold in units of count, e.g 100
     """
     if nsig is not None:
         sig=np.std(image.ravel())
@@ -155,9 +168,11 @@ def countpix(image,nsig=None,ncounts=None):
 
 def countbins(flux,threshold=0):
     """
-    count the number of bins above a given threshold on each fiber
-    args: flux: 2d (nspec,nwave)
-          threshold: threshold counts 
+    Count the number of bins above a given threshold on each fiber
+    
+    Args:
+        flux: 2d (nspec,nwave)
+        threshold: threshold counts 
     """
     counts=np.zeros(flux.shape[0])
     for ii in range(flux.shape[0]):
@@ -167,10 +182,12 @@ def countbins(flux,threshold=0):
 
 def continuum(wave,flux,wmin=None,wmax=None):
     """
-    find the continuum of the spectrum inside a wavelength region"
-    args: wave: 1d wavelength array
-          flux: 1d counts/flux array
-          wmin and wmax: region to consider for the continuum
+    Find the continuum of the spectrum inside a wavelength region.
+    
+    Args:
+        wave: 1d wavelength array
+        flux: 1d counts/flux array
+        wmin and wmax: region to consider for the continuum
     """
     if wmin is None:
         wmin=min(wave)
@@ -186,23 +203,31 @@ def continuum(wave,flux,wmin=None,wmax=None):
 
 def integrate_spec(wave,flux):
     """
-    calculate the integral of the spectrum in the given range using trapezoidal integration
-    args: wave: 1d wavelength array
-          flux: 1d flux array 
+    Calculate the integral of the spectrum in the given range using trapezoidal integration
+
     Note: limits of integration are min and max values of wavelength
+    
+    Args:
+        wave: 1d wavelength array
+        flux: 1d flux array 
     """   
     integral=np.trapz(flux,wave)
     return integral
 
 def SN_ratio(flux,ivar):
     """
-    flux: 2d [nspec,nwave] : the signal (typically for spectra, this comes from frame object
-    ivar: 2d [nspec,nwave] : corresponding inverse variance
+    SN Ratio
 
-    Note: At current QL setting, can't use offline QA for S/N calculation for sky subtraction, as 
-    that requires frame before sky subtration as QA itself does the sky subtration. QL should take frame
-    after sky subtration. 
-    Also a S/N calculation there needs skymodel object (as it is specific to Sky subtraction), that is not needed for S/N calculation itself.
+    At current QL setting, can't use offline QA for S/N calculation for sky 
+    subtraction, as that requires frame before sky subtration as QA itself 
+    does the sky subtration. QL should take frame after sky subtration. 
+    Also a S/N calculation there needs skymodel object (as it is specific 
+    to Sky subtraction), that is not needed for S/N calculation itself.
+
+    Args:
+        flux (array): 2d [nspec,nwave] the signal (typically for spectra, 
+            this comes from frame object
+        ivar (array): 2d [nspec,nwave] corresponding inverse variance
     """
 
     #- we calculate median and total S/N assuming no correlation bin by bin
@@ -217,10 +242,41 @@ def SN_ratio(flux,ivar):
 
 def gauss(x,a,mu,sigma):
     """
-    return Gaussian fit of input data
+    Gaussian fit of input data
     """
     return a*np.exp(-(x-mu)**2/(2*sigma**2))
 
+def qlf_post(qadict):
+    """
+    A general function to HTTP post the QA output dictionary, intended for QLF
+    requires environmental variables: QLF_API_URL, QLF_USER, QLF_PASSWD
+    
+    Args: 
+        qadict: returned dictionary from a QA
+    """
+    #- Check for environment variables and set them here
+    if "QLF_API_URL" in os.environ:
+        qlf_url=os.environ.get("QLF_API_URL")
+        if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
+            log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
+        else: 
+            qlf_user=os.environ.get("QLF_USER")
+            qlf_passwd=os.environ.get("QLF_PASSWD")
+            log.info("Environment variables are set for QLF. Now trying HTTP post.")
+            #- All set. Now try to HTTP post
+            try: 
+                import requests
+                response=requests.get(qlf_url)
+                #- Check if the api has json
+                api=response.json()
+                #- proceed with post
+                job={"name":"QL","status":0,"dictionary":qadict} #- QLF should disintegrate dictionary
+                response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
+            except:
+                log.info("Skipping HTTP post...")    
+
+    else:   
+        log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -232,16 +288,9 @@ class Get_RMS(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
 
         input_image=args[0]
-        camera=kwargs["camera"]
-        if camera != input_image.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_image.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -252,19 +301,21 @@ class Get_RMS(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        if "url" in kwargs:
-             url=kwargs["url"]
-        else: 
-             url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, qlf=qlf)
 
-    def run_qa(self,image,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,qlf=False):
         retval={}
-        retval["EXPID"] = "%08d"%image.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["CAMERA"] = image.meta["CAMERA"]
@@ -288,26 +339,21 @@ class Get_RMS(MonitoringAlg):
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-            retval["VALUE"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps)}
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps)}
         else:
-            retval["VALUE"]={"RMS":rmsccd}     
+            retval["METRICS"]={"RMS":rmsccd}     
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password")) #- username, password not real but placeholder here.
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)  
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_RMS
             plot_RMS(retval,qafig)            
-            log.info("Output QA fig %s"%qafig)      
+            log.info("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -324,24 +370,9 @@ class Count_Pixels(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         input_image=args[0]
-        camera=kwargs["camera"]
-        if camera != input_image.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_image.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
-
-        nsigma=None
-        if "nsigma" in kwargs:
-            nsigma=kwargs["nsigma"]
-       
-        ncounts=None
-        if "ncounts" in kwargs:
-            ncounts=kwargs["ncounts"]
 
         if "paname" not in kwargs:
             paname=None
@@ -352,69 +383,74 @@ class Count_Pixels(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        if "url" in kwargs:
-             url=kwargs["url"]
-        else: 
-             url=None
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
-    def run_qa(self,image,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False):
         retval={}
-        # retval["EXPID"]=expid
-        #retval["ARM"]=camera[0]
-        #retval["SPECTROGRAPH"]=int(camera[1])
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%image.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = image.meta["CAMERA"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                 CUTLO = 100,   # low threshold for number of counts
+                 CUTHI = 500
+                 )
+
+        retval["PARAMS"] = param
+
         #- get the counts over entire CCD
         npix3sig=countpix(image.pix,nsig=3) #- above 3 sigma
-        npix100=countpix(image.pix,ncounts=100) #- above 100 pixel count
-        npix500=countpix(image.pix,ncounts=500) #- above 500 pixel count
+        npixlo=countpix(image.pix,ncounts=param['CUTLO']) #- above 100 pixel count
+        npixhi=countpix(image.pix,ncounts=param['CUTHI']) #- above 500 pixel count
         #- get the counts for each amp
         if amps:
             npix3sig_amps=[]
-            npix100_amps=[]
-            npix500_amps=[]
+            npixlo_amps=[]
+            npixhi_amps=[]
             #- get amp boundary in pixels
             from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 npix3sig_thisamp=countpix(image.pix[ampboundary],nsig=3)
                 npix3sig_amps.append(npix3sig_thisamp)
-                npix100_thisamp=countpix(image.pix[ampboundary],ncounts=100)
-                npix100_amps.append(npix100_thisamp)
-                npix500_thisamp=countpix(image.pix[ampboundary],ncounts=500)
-                npix500_amps.append(npix500_thisamp)
-
-            retval["VALUE"]={"NPIX3SIG":npix3sig,"NPIX100":npix100,"NPIX500":npix500, "NPIX3SIG_AMP": npix3sig_amps, "NPIX100_AMP": npix100_amps,"NPIX500_AMP": npix500_amps}
+                npixlo_thisamp=countpix(image.pix[ampboundary],ncounts=param['CUTLO'])
+                npixlo_amps.append(npixlo_thisamp)
+                npixhi_thisamp=countpix(image.pix[ampboundary],ncounts=param['CUTHI'])
+                npixhi_amps.append(npixhi_thisamp)
+            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi, "NPIX3SIG_AMP": npix3sig_amps, "NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps}
         else:
-            retval["VALUE"]={"NPIX3SIG":npix3sig,"NPIX100":npix100,"NPIX500":npix500}     
+            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi}     
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password")) #- username, password not real but placeholder here.
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)      
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countpix
             plot_countpix(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)      
+            log.info("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -425,22 +461,14 @@ class Integrate_Spec(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="INTEG"
-        from desispec.image import Image as im
-        MonitoringAlg.__init__(self,name,im,config,logger)
+        from desispec.frame import Frame as fr
+        MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -455,20 +483,22 @@ class Integrate_Spec(MonitoringAlg):
         if "dict_countbins" in kwargs:
             dict_countbins=kwargs["dict_countbins"] 
 
-        if "url" in kwargs:
-             url=kwargs["url"]
-        else: 
-             url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, qlf=qlf)
 
-    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -507,7 +537,7 @@ class Integrate_Spec(MonitoringAlg):
                 stdflux_thisamp=frame.flux[select_thisamp,fidboundary[amp][1]]
 
                 if len(stdflux_thisamp)==0:
-                    break
+                    continue
                 else:
                     integ_thisamp=np.zeros(stdflux_thisamp.shape[0])
 
@@ -515,27 +545,22 @@ class Integrate_Spec(MonitoringAlg):
                         integ_thisamp[ii]=integrate_spec(wave,stdflux_thisamp[ii])
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
-            retval["VALUE"]={"INTEG":int_stars,"INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps}
+            retval["METRICS"]={"INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist()}
         else:
-            retval["VALUE"]={"INTEG":int_stars,"INTEG_AVG":int_average}     
+            retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist()}     
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password")) #- username, password not real but placeholder here.
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_integral
             plot_integral(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)      
+            log.info("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -553,16 +578,10 @@ class Sky_Continuum(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
+        camera=input_frame.meta["CAMERA"]
         
         wrange1=None
         wrange2=None
@@ -592,21 +611,25 @@ class Sky_Continuum(MonitoringAlg):
         if "dict_countbins" in kwargs:
             dict_countbins=kwargs["dict_countbins"]
 
-        url=None
-        if "url" in kwargs:
-            url=kwargs["url"]
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, qlf=qlf)
 
-    def run_qa(self,frame,wrange1=None,wrange2=None,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,wrange1=None,wrange2=None,paname=None,amps=False,
+dict_countbins=None,qafile=None,qafig=None, qlf=False):
 
         #- qa dictionary 
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -656,28 +679,23 @@ class Sky_Continuum(MonitoringAlg):
 
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
-            retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps}
+            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps}
 
         else: 
-            retval["VALUE"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
+            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} 
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_continuum
             plot_sky_continuum(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)                   
+            log.info("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -695,16 +713,9 @@ class Sky_Peaks(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image, got {}".format(type(args[0])))
 
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         if "paname" not in kwargs:
             paname=None
@@ -719,24 +730,25 @@ class Sky_Peaks(MonitoringAlg):
         if "PSFFile" in kwargs:
             psf=kwargs["PSFFile"]
 
-        if "url" in kwargs:
-            url=kwargs["url"]
-        else:
-            url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs:
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, qlf=qlf)
 
-    def run_qa(self,frame,paname=None,amps=False,psf=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,amps=False,psf=None, qafile=None,qafig=None, qlf=False):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
-        camera = frame.meta["CAMERA"]
-        retval["CAMERA"] = camera
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["CAMERA"] = camera = frame.meta["CAMERA"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
@@ -842,15 +854,22 @@ class Sky_Peaks(MonitoringAlg):
             amp4_rms=getrms(amp4)
             rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
 
-            retval["VALUE"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp}
+            retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp}
         else:
-            retval["VALUE"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec}
+            retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec}
+
+        if qlf:
+            qlf_post(retval)
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_peaks
             plot_sky_peaks(retval,qafig)
 
-            log.info("Output QA fig %s"%qafig)
+            log.info("Output QA fig {}".format(qafig))
 
         return retval
 
@@ -868,16 +887,9 @@ class Calc_XWSigma(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got %s"%(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
  
         input_image=args[0]
-        camera=kwargs["camera"]
-        if camera != input_image.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_image.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
  
         if "paname" not in kwargs:
             paname=None
@@ -896,25 +908,26 @@ class Calc_XWSigma(MonitoringAlg):
         if "FiberMap" in kwargs:
             fibermap=kwargs["FiberMap"]
  
-        if "url" in kwargs:
-             url=kwargs["url"]
-        else:
-             url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
  
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
  
-        return self.run_qa(input_image,paname=paname,amps=amps,psf=psf,fibermap=fibermap,url=url,qafig=qafig)
+        return self.run_qa(input_image,paname=paname,amps=amps,psf=psf,fibermap=fibermap, qafile=qafile,qafig=qafig, qlf=qlf)
  
-    def run_qa(self,image,paname=None,amps=False,psf=None,fibermap=None,url=None,qafig=None):
+    def run_qa(self,image,paname=None,amps=False,psf=None,fibermap=None, qafile=None,qafig=None, qlf=False):
         from scipy.optimize import curve_fit
  
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat() 
-        retval["EXPID"] = "%08d"%image.meta["EXPID"]
-        camera = image.meta["CAMERA"]
-        retval["CAMERA"] = camera
+        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
+        retval["CAMERA"] = camera = image.meta["CAMERA"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
@@ -1139,15 +1152,23 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
 
         if amps:
-            retval["VALUE"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp}
+            retval["METRICS"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp}
         else:
-            retval["VALUE"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky}
+            retval["METRICS"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky}
+
+        #- http post if needed
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_XWSigma
             plot_XWSigma(retval,qafig)
 
-            log.info("Output QA fig %s"%qafig)
+            log.info("Output QA fig {}".format(qafig))
 
         return retval
  
@@ -1166,14 +1187,10 @@ class Bias_From_Overscan(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         input_raw=args[0]
         camera=kwargs["camera"]
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_raw[0].header["EXPID"]
-        if expid != exp2:
-           log.warning("Exposure ID does not match configuration!")
 
         paname=None
         if "paname" in kwargs:
@@ -1183,24 +1200,30 @@ class Bias_From_Overscan(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        url=None
-        if "url" in kwargs:
-            url=kwargs["url"]
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_raw,camera,paname=paname,amps=amps,url=url,qafig=qafig)
+        return self.run_qa(input_raw,camera,paname=paname,amps=amps, qafile=qafile,qafig=qafig, qlf=qlf)
 
-    def run_qa(self,raw,camera,paname=None,amps=False,url=None,qafig=None):
+    def run_qa(self,raw,camera,paname=None,amps=False,qafile=None,qafig=None, qlf=False):
+
+        rawimage=raw[camera.upper()].data
+        header=raw[camera.upper()].header
 
         retval={}
-        retval["EXPID"]= "%08d"%raw[0].header["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(header["EXPID"])
         retval["CAMERA"]=camera
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["FLAVOR"] = raw[0].header["FLAVOR"]
-        retval["NIGHT"] = raw[0].header["NIGHT"]
+        retval["FLAVOR"] = header["FLAVOR"]
+        retval["NIGHT"] = header["NIGHT"]
         
         rawimage=raw[camera.upper()].data
         header=raw[camera.upper()].header
@@ -1228,28 +1251,23 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if amps:
             bias_amps=np.array(bias_overscan)
-            retval["VALUE"]={'BIAS':bias,'BIAS_AMP':bias_amps}
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps}
         else:
-            retval["VALUE"]={'BIAS':bias}
+            retval["METRICS"]={'BIAS':bias}
 
         #- http post if needed
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} 
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_bias_overscan
             plot_bias_overscan(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)                   
+            log.info("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -1267,15 +1285,8 @@ class CountSpectralBins(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         paname=None
         if "paname" in kwargs:
@@ -1289,38 +1300,51 @@ class CountSpectralBins(MonitoringAlg):
         if "PSFFile" in kwargs: 
             psf=kwargs["PSFFile"]
 
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
 
-        if "url" in kwargs:
-            url=kwargs["url"]
-        else:
-            url=None
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,input_frame,paname=None,psf=None,amps=False,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False):
 
         #- qa dictionary 
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%input_frame.meta["EXPID"]
-        retval["CAMERA"] = input_frame.meta["CAMERA"]
-        retval["FLAVOR"] = input_frame.meta["FLAVOR"]
-        retval["NIGHT"] = input_frame.meta["NIGHT"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
-        grid=np.gradient(input_frame.wave)
+        grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
             log.info("grid_size is NOT UNIFORM")
 
-        counts100=countbins(input_frame.flux,threshold=100)
-        counts250=countbins(input_frame.flux,threshold=250)
-        counts500=countbins(input_frame.flux,threshold=500)
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                         CUTLO = 100,   # low threshold for number of counts
+                         CUTMED = 250,
+                         CUTHI = 500
+                         )
+        retval["PARAMS"] = param
+        
+        countslo=countbins(frame.flux,threshold=param['CUTLO'])
+        countsmed=countbins(frame.flux,threshold=param['CUTMED'])
+        countshi=countbins(frame.flux,threshold=param['CUTHI'])
 
-        goodfibers=np.where(counts500>0)[0] #- fibers with at least one bin higher than 500 counts
+        goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than 500 counts
         ngoodfibers=goodfibers.shape[0]
 
         leftmax=None
@@ -1331,59 +1355,58 @@ class CountSpectralBins(MonitoringAlg):
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
 
-            leftmax,rightmin,bottommax,topmin = fiducialregion(input_frame,psf)  
-            fidboundary=slice_fidboundary(input_frame,leftmax,rightmin,bottommax,topmin)          
+            leftmax,rightmin,bottommax,topmin = fiducialregion(frame,psf)  
+            fidboundary=slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)          
+            countslo_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTLO'])
+            averagelo_amp1=np.mean(countslo_amp1)
+            countsmed_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTMED'])
+            averagemed_amp1=np.mean(countsmed_amp1)
+            countshi_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTHI'])
+            averagehi_amp1=np.mean(countshi_amp1)
 
-            counts100_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=100)
-            average100_amp1=np.mean(counts100_amp1)
-            counts250_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=250)
-            average250_amp1=np.mean(counts250_amp1)
-            counts500_amp1=countbins(input_frame.flux[fidboundary[0]],threshold=500)
-            average500_amp1=np.mean(counts500_amp1)
-
-            counts100_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=100)
-            average100_amp3=np.mean(counts100_amp3)
-            counts250_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=250)
-            average250_amp3=np.mean(counts250_amp3)
-            counts500_amp3=countbins(input_frame.flux[fidboundary[2]],threshold=500)
-            average500_amp3=np.mean(counts500_amp3)
+            countslo_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTLO'])
+            averagelo_amp3=np.mean(countslo_amp3)
+            countsmed_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTMED'])
+            averagemed_amp3=np.mean(countsmed_amp3)
+            countshi_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTHI'])
+            averagehi_amp3=np.mean(countshi_amp3)
 
 
             if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
 
-                counts100_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=100)
-                average100_amp2=np.mean(counts100_amp2)
-                counts250_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=250)
-                average250_amp2=np.mean(counts250_amp2)
-                counts500_amp2=countbins(input_frame.flux[fidboundary[1]],threshold=500)
-                average500_amp2=np.mean(counts500_amp2)
+                countslo_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTLO'])
+                averagelo_amp2=np.mean(countslo_amp2)
+                countsmed_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTMED'])
+                averagemed_amp2=np.mean(countsmed_amp2)
+                countshi_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTHI'])
+                averagehi_amp2=np.mean(countshi_amp2)
 
             else:
-                average100_amp2=0.
-                average250_amp2=0.
-                average500_amp2=0.
+                averagelo_amp2=0.
+                averagemed_amp2=0.
+                averagehi_amp2=0.
 
             if fidboundary[3][0].start is not None: #- to the right top of the CCD
 
-                counts100_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=100)
-                average100_amp4=np.mean(counts100_amp4)
-                counts250_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=250)
-                average250_amp4=np.mean(counts250_amp4)
-                counts500_amp4=countbins(input_frame.flux[fidboundary[3]],threshold=500)
-                average500_amp4=np.mean(counts500_amp4)
+                countslo_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTLO'])
+                averagelo_amp4=np.mean(countslo_amp4)
+                countsmed_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTMED'])
+                averagemed_amp4=np.mean(countsmed_amp4)
+                countshi_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTHI'])
+                averagehi_amp4=np.mean(countshi_amp4)
 
             else:
-                average100_amp4=0.
-                average250_amp4=0.
-                average500_amp4=0.
+                averagelo_amp4=0.
+                averagemed_amp4=0.
+                averagehi_amp4=0.
 
-            average100_amps=np.array([average100_amp1,average100_amp2,average100_amp3,average100_amp4])
-            average250_amps=np.array([average250_amp1,average250_amp2,average250_amp3,average250_amp4])
-            average500_amps=np.array([average500_amp1,average500_amp2,average500_amp3,average500_amp4])
+            averagelo_amps=np.array([averagelo_amp1,averagelo_amp2,averagelo_amp3,averagelo_amp4])
+            averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
+            averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
 
-            retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500, "NBINS100_AMP":average100_amps,"NBINS250_AMP":average250_amps,"NBINS500_AMP":average500_amps, "NGOODFIBERS": ngoodfibers}
+            retval["METRICS"]={"NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIBERS": ngoodfibers}
         else:
-            retval["VALUE"]={"NBINS100":counts100,"NBINS250":counts250,"NBINS500":counts500,"NGOODFIBERS": ngoodfibers}
+            retval["METRICS"]={"NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIBERS": ngoodfibers}
 
         retval["LEFT_MAX_FIBER"]=int(leftmax)
         retval["RIGHT_MIN_FIBER"]=int(rightmin)
@@ -1391,23 +1414,18 @@ class CountSpectralBins(MonitoringAlg):
         retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
 
         #- http post if needed
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countspectralbins
             plot_countspectralbins(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)                   
+            log.info("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -1425,21 +1443,14 @@ class Sky_Residual(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
-        
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
             skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
-            log.info("Using given sky file %s for subtraction"%skyfile)
+            log.info("Using given sky file {} for subtraction".format(skyfile))
 
             skymodel=read_sky(skyfile)
 
@@ -1455,17 +1466,24 @@ class Sky_Residual(MonitoringAlg):
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
-        url=None
-        if "url" in kwargs:
-             url=kwargs["url"]
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps,
+dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
         from desispec.sky import qa_skysub
         from desispec import util
 
@@ -1475,38 +1493,36 @@ class Sky_Residual(MonitoringAlg):
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%frame.meta["EXPID"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         
-        param = dict(
-            PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-            PER_RESID=95.,   # Percentile for residual distribution
-            )
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            param = dict(
+                         PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+                         PER_RESID=95.,   # Percentile for residual distribution
+                        )
+        retval["PARAMS"] = param
         qadict=qa_skysub(param,frame,skymodel,quick_look=True)
 
-        retval["VALUE"] = {}
+        retval["METRICS"] = {}
         for key in qadict.keys():
-            retval["VALUE"][key] = qadict[key]
+            retval["METRICS"][key] = qadict[key]
 
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-                log.info("Skipping HTTP post...")    
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_residuals
             plot_residuals(retval,qafig)
             
-            log.info("Output QA fig %s"%qafig)            
+            log.info("Output QA fig {}".format(qafig))            
 
         return retval
         
@@ -1521,15 +1537,8 @@ class Calculate_SNR(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
         input_frame=args[0]
-        camera=kwargs["camera"]
-        if camera != input_frame.meta["CAMERA"]:
-           log.info("ERROR: camera does not match configuration!")
-        expid=kwargs["expid"]
-        exp2 = "%08d"%input_frame.meta["EXPID"]
-        if expid != exp2:
-           log.info("ERROR: exposure ID does not match configuration!")
 
         amps=False
         if "amps" in kwargs:
@@ -1538,70 +1547,72 @@ class Calculate_SNR(MonitoringAlg):
         dict_countbins=None
         if "dict_countbins" in kwargs:
             dict_countbins=kwargs["dict_countbins"]
-        
+
         paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
-        url=None
-        if "url" in kwargs:
-             url=kwargs["url"]
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins,url=url,qafig=qafig)
+        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, qlf=qlf)
 
 
-    def run_qa(self,input_frame,paname=None,amps=False,dict_countbins=None,url=None,qafig=None):
+    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False):
 
         #- return values
         retval={}
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"] = "%08d"%input_frame.meta["EXPID"]
-        retval["CAMERA"] = input_frame.meta["CAMERA"]
-        retval["FLAVOR"] = input_frame.meta["FLAVOR"]
-        retval["NIGHT"] = input_frame.meta["NIGHT"]
+        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- select band for mag, using DECAM_R if present
 
-        filter_pick=["" for x in range(len(input_frame.fibermap))]
+        filter_pick=["" for x in range(len(frame.fibermap))]
         
-        for ii in range(len(input_frame.fibermap)):
-            if "DECAM_R" in input_frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
+        for ii in range(len(frame.fibermap)):
+            if "DECAM_R" in frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
             else: filter_pick[ii]= -1 #- only accepting "DECAM_R" now
         filter_pick=np.array(filter_pick)
 
-        medsnr=SN_ratio(input_frame.flux,input_frame.ivar)
-        elgfibers=np.where(input_frame.fibermap['OBJTYPE']=='ELG')[0]
+        medsnr=SN_ratio(frame.flux,frame.ivar)
+        elgfibers=np.where(frame.fibermap['OBJTYPE']=='ELG')[0]
         elg_medsnr=medsnr[elgfibers]
         elg_mag=np.zeros(len(elgfibers))
         for ii,fib in enumerate(elgfibers):
-            elg_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+            elg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
 
         elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
       
-        
-        lrgfibers=np.where(input_frame.fibermap['OBJTYPE']=='LRG')[0]
+        lrgfibers=np.where(frame.fibermap['OBJTYPE']=='LRG')[0]
         lrg_medsnr=medsnr[lrgfibers]
         lrg_mag=np.zeros(len(lrgfibers))
         for ii,fib in enumerate(lrgfibers):
-            lrg_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+            lrg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
         lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
 
-        qsofibers=np.where(input_frame.fibermap['OBJTYPE']=='QSO')[0]
+        qsofibers=np.where(frame.fibermap['OBJTYPE']=='QSO')[0]
         qso_medsnr=medsnr[qsofibers]
         qso_mag=np.zeros(len(qsofibers))
         for ii,fib in enumerate(qsofibers):
-            qso_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]]
+            qso_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]]
         qso_snr_mag=np.array((qso_medsnr,qso_mag))
 
-        stdfibers=np.where(input_frame.fibermap['OBJTYPE']=='STD')[0]
+        stdfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
         std_medsnr=medsnr[stdfibers]
         std_mag=np.zeros(len(stdfibers))
         for ii,fib in enumerate(stdfibers):
-            std_mag[ii]=input_frame.fibermap['MAG'][fib][input_frame.fibermap['FILTER'][fib]==filter_pick[fib]] 
+            std_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]==filter_pick[fib]] 
         std_snr_mag=np.array((std_medsnr,std_mag))
 
         if amps:
@@ -1612,55 +1623,46 @@ class Calculate_SNR(MonitoringAlg):
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
 
-            fidboundary = slice_fidboundary(input_frame,leftmax,rightmin,bottommax,topmin)
+            fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
            
-            medsnr1=SN_ratio(input_frame.flux[fidboundary[0]],input_frame.ivar[fidboundary[0]])
+            medsnr1=SN_ratio(frame.flux[fidboundary[0]],frame.ivar[fidboundary[0]])
             average1=np.mean(medsnr1)
 
-            medsnr3=SN_ratio(input_frame.flux[fidboundary[2]],input_frame.ivar[fidboundary[2]])
+            medsnr3=SN_ratio(frame.flux[fidboundary[2]],frame.ivar[fidboundary[2]])
             average3=np.mean(medsnr3)
 
             if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
                
-                medsnr2=SN_ratio(input_frame.flux[fidboundary[1]],input_frame.ivar[fidboundary[1]])
+                medsnr2=SN_ratio(frame.flux[fidboundary[1]],frame.ivar[fidboundary[1]])
                 average2=np.mean(medsnr2)
             else:
                 average2=0.
 
             if fidboundary[3][0].start is not None : #- to the right top of the CCD
 
-                medsnr4=SN_ratio(input_frame.flux[fidboundary[3]],input_frame.ivar[fidboundary[3]])
+                medsnr4=SN_ratio(frame.flux[fidboundary[3]],frame.ivar[fidboundary[3]])
                 average4=np.mean(medsnr4)
             else:
                 average4=0.
 
             average_amp=np.array([average1,average2,average3,average4])
 
-            retval["VALUE"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
+            retval["METRICS"]={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
 
-        else: retval["VALUE"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers, "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers, "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers, "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers, "STAR_SNR_MAG":std_snr_mag}
+        else: retval["METRICS"]={"MEDIAN_SNR":medsnr,"ELG_FIBERID": elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
         
         #- http post if valid
-        if url is not None:
-            try: 
-                import requests
-                response=requests.get(url)
-                #- Check if the api has json
-                api=response.json()
-                #- proceed with post
-                #job={"name":"QL","status":0,"measurements":[{"metric":"SNR","value":retval["VALUE"]["MED_AMP_SNR"][0]}]}
-                #response=requests.post(api['job'],json=job, auth=("nobody","nobody")) #- username and password here is temporary for testing. can come from configuration rather than hardcode.
+        if qlf:
+            qlf_post(retval)            
 
-                job={"name":"QL","status":0,"dictionary":retval} #- QLF should disintegrate dictionary
-                response=requests.post(api['job'],json=job,auth=("username","password"))
-            except:
-             
-                log.info("Skipping HTTP post...")            
+        if qafile is not None:
+            yaml.dump(retval,open(qafile,"wb"))
+            log.info("Output QA data is in {}".format(qafile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
             plot_SNR(retval,qafig)         
-            log.info("Output QA fig %s"%qafig)
+            log.info("Output QA fig {}".format(qafig))
 
         return retval
 

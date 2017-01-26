@@ -40,8 +40,6 @@ def main(args):
         log.critical('Missing required night argument.')
         return -1
 
-    # Initialize a dictionary of Brick objects indexed by '<band>_<brick-id>' strings.
-    bricks = { }
     try:
         # Loop over exposures available for this night.
         for exposure in desispec.io.get_exposures(args.night, specprod_dir = args.specprod):
@@ -74,19 +72,17 @@ def main(args):
                         continue
                     brick_key = '{}_{}'.format(band,brick_name)
                     # Open the brick file if this is the first time we are using it.
-                    if brick_key not in bricks:
-                        brick_path = desispec.io.findfile('brick',brickname = brick_name,band = band)
-                        header = dict(BRICKNAM=(brick_name, 'Imaging brick name'),
+                    #if brick_key not in bricks:
+                    brick_path = desispec.io.findfile('brick',brickname = brick_name,band = band)
+                    header = dict(BRICKNAM=(brick_name, 'Imaging brick name'),
                                       CHANNEL=(band, 'Spectrograph channel [b,r,z]'), )
-                        bricks[brick_key] = desispec.io.brick.Brick(brick_path,mode = 'update',header = header)
+                    brick = desispec.io.brick.Brick(brick_path,mode = 'update',header = header)
                     # Add these fibers to the brick file. Note that the wavelength array is
                     # not per-fiber, so we do not slice it before passing it to add_objects().
-                    bricks[brick_key].add_objects(frame.flux[fibers], frame.ivar[fibers],
+                    brick.add_objects(frame.flux[fibers], frame.ivar[fibers],
                         frame.wave, frame.resolution_data[fibers], brick_data,args.night,exposure)
-        # Close all brick files.
-        for brick in bricks.values():
-            log.debug('Brick {} now contains {} spectra for {} targets.'.format(brick.path, brick.get_num_spectra(), brick.get_num_targets()))
-            brick.close()
+                    log.debug('Brick {} now contains {} spectra for {} targets.'.format(brick.path, brick.get_num_spectra(), brick.get_num_targets()))
+                    brick.close()
 
     except RuntimeError as e:
         log.critical(str(e))

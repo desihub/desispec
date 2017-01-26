@@ -1,116 +1,182 @@
 """
 Utility functions for desispec
 """
+from __future__ import absolute_import, division, print_function
 
 import os
+import errno
+import time
+import collections
 import numbers
+
 import numpy as np
 
-#- Default number of processes to use for multiprocessing
-if 'SLURM_CPUS_PER_TASK' in os.environ:
-    default_nproc = int(os.environ['SLURM_CPUS_PER_TASK'])
-else:
-    import multiprocessing as _mp
-    default_nproc = max(1, _mp.cpu_count() // 2)
+import subprocess as sp
+
+from .log import get_logger
+from . import log as desilog
 
 
-# Distribute some number of things among some number
-# of workers as evenly as possible.
-
-def dist_uniform(nwork, workers, id):
-    ntask = 0
-    firsttask = 0
-
-    # if ID is out of range, ignore it
-    if id < workers:
-        if nwork < workers:
-            if id < nwork:
-                ntask = 1
-                firsttask = id
-        else:
-            ntask = int(nwork / workers)
-            leftover = nwork % workers
-            if id < leftover:
-                ntask += 1
-                firsttask = id * ntask
-            else:
-                firsttask = ((ntask + 1) * leftover) + (ntask * (id - leftover))
-    return (firsttask, ntask)
-
-
-# This is effectively the "Painter's Partition Problem".
-
-def distribute_required_groups(A, max_per_group):
-    ngroup = 1
-    total = 0
-    for i in range(A.shape[0]):
-        total += A[i]
-        if total > max_per_group:
-            total = A[i]
-            ngroup += 1
-    return ngroup
-
-def distribute_partition(A, k):
-    low = np.max(A)
-    high = np.sum(A)
-    while low < high:
-        mid = low + int((high - low) / 2)
-        required = distribute_required_groups(A, mid)
-        if required <= k:
-            high = mid
-        else:
-            low = mid + 1
-    return low
-
-def dist_discrete(worksizes, workers, id, pow=1.0):
+def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     """
-    Distribute indivisible blocks of items between groups.
-
-    Given some contiguous blocks of items which cannot be 
-    subdivided, distribute these blocks to the specified
-    number of groups in a way which minimizes the maximum
-    total items given to any group.  Optionally weight the
-    blocks by a power of their size when computing the
-    distribution.
+    Runs a command, checking for inputs and outputs
 
     Args:
-        worksizes (list): The sizes of the indivisible blocks.
-        workers (int): The number of workers.
-        id (int): The worker ID whose range should be returned.
-        pow (float): The power to use for weighting
+        cmd : command string to run with subprocess.call()
+        inputs : list of filename inputs that must exist before running
+        outputs : list of output filenames that should be created
+        clobber : if True, run even if outputs already exist
 
     Returns:
-        A tuple.  The first element of the tuple is the first 
-        item assigned to the worker ID, and the second element 
-        is the number of items assigned to the worker.
+        error code from command or input/output checking; 0 is good
+
+    TODO:
+        Should it raise an exception instead?
+
+    Notes:
+        If any inputs are missing, don't run cmd.
+        If outputs exist and have timestamps after all inputs, don't run cmd.
+
     """
-    chunks = np.array(worksizes, dtype=np.int64)
-    weights = np.power(chunks.astype(np.float64), pow)
-    max_per_proc = float(distribute_partition(weights.astype(np.int64), workers))
-
-    target = np.sum(weights) / workers
-
-    dist = []
-
-    off = 0
-    curweight = 0.0
-    proc = 0
-    for cur in range(0, weights.shape[0]):
-        if curweight + weights[cur] > max_per_proc:
-            dist.append( (off, cur-off) )
-            over = curweight - target
-            curweight = weights[cur] + over
-            off = cur
-            proc += 1
+    log = get_logger()
+    #- Check that inputs exist
+    err = 0
+    input_time = 0  #- timestamp of latest input file
+    for x in inputs:
+        if not os.path.exists(x):
+            log.error("missing input "+x)
+            err = 1
         else:
-            curweight += weights[cur]
+            input_time = max(input_time, os.stat(x).st_mtime)
 
-    dist.append( (off, weights.shape[0]-off) )
+    if err > 0:
+        return err
 
-    if len(dist) != workers:
-        raise RuntimeError("Number of distributed groups different than number requested")
+    #- Check if outputs already exist and that their timestamp is after
+    #- the last input timestamp
+    already_done = (not clobber) and (len(outputs) > 0)
+    if not clobber:
+        for x in outputs:
+            if not os.path.exists(x):
+                already_done = False
+                break
+            if len(inputs)>0 and os.stat(x).st_mtime < input_time:
+                already_done = False
+                break
 
-    return dist[id]
+    if already_done:
+        log.info("SKIPPING: {}".format(cmd))
+        return 0
+
+    #- Green light to go; print input/output info
+    #- Use log.level to decide verbosity, but avoid long prefixes
+    log.info(time.asctime())
+    log.info("RUNNING: {}".format(cmd))
+    if log.level <= desilog.INFO:
+        if len(inputs) > 0:
+            print("  Inputs")
+            for x in inputs:
+                print("   ", x)
+        if len(outputs) > 0:
+            print("  Outputs")
+            for x in outputs:
+                print("   ", x)
+
+    #- run command
+    if isinstance(cmd, collections.Callable):
+        if args is None:
+            return cmd()
+        else:
+            return cmd(*args)
+    else:
+        if args is None:
+            err = sp.call(cmd, shell=True)
+        else:
+            raise ValueError("Don't provide args unless cmd is function")
+                
+    log.info(time.asctime())
+    if err > 0:
+        log.critical("FAILED {}".format(cmd))
+        return err
+
+    #- Check for outputs
+    err = 0
+    for x in outputs:
+        if not os.path.exists(x):
+            log.error("missing output "+x)
+            err = 2
+    if err > 0:
+        return err
+
+    log.info("SUCCESS: {}".format(cmd))
+    return 0
+
+
+def pid_exists( pid ):
+    """Check whether pid exists in the current process table.
+
+    **UNIX only.**  Should work the same as psutil.pid_exists().
+
+    Args:
+        pid (int): A process ID.
+
+    Returns:
+        pid_exists (bool): ``True`` if the process exists in the current process table.
+    """
+    if pid < 0:
+        return False
+    if pid == 0:
+        # According to "man 2 kill" PID 0 refers to every process
+        # in the process group of the calling process.
+        # On certain systems 0 is a valid PID but we have no way
+        # to know that in a portable fashion.
+        raise ValueError('invalid PID 0')
+    try:
+        os.kill(pid, 0)
+    except OSError as err:
+        if err.errno == errno.ESRCH:
+            # ESRCH == No such process
+            return False
+        elif err.errno == errno.EPERM:
+            # EPERM clearly means there's a process to deny access to
+            return True
+        else:
+            # According to "man 2 kill" possible error values are
+            # (EINVAL, EPERM, ESRCH)
+            raise
+    else:
+        return True
+
+
+
+def option_list(opts):
+    """Convert key, value pairs into command-line options.
+
+    Parameters
+    ----------
+    opts : dict-like
+        Convert a dictionary into command-line options.
+
+    Returns
+    -------
+    :class:`list`
+        A list of command-line options.
+    """
+    optlist = []
+    for key, val in opts.items():
+        keystr = "--{}".format(key)
+        if isinstance(val, bool):
+            if val:
+                optlist.append(keystr)
+        else:
+            optlist.append(keystr)
+            if isinstance(val, float):
+                optlist.append("{:.14e}".format(val))
+            elif isinstance(val, (list, tuple)):
+                optlist.extend(val)
+            else:
+                optlist.append("{}".format(val))
+    return optlist
 
 
 def mask32(mask):

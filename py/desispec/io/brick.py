@@ -239,7 +239,7 @@ class Brick(BrickBase):
 
         updated_hdu = astropy.io.fits.convenience.table_to_hdu(augmented_data)
         updated_hdu.header = fibermap_hdu.header
-        self.hdu_list['FIBERMAP'] = updated_hdu
+        self.hdu_list['FIBERMAP'].data = updated_hdu.data
 
 class CoAddedBrick(BrickBase):
     """Represents the co-added exposures in a single brick and, possibly, a single band.

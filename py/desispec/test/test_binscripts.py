@@ -12,7 +12,7 @@ from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
 from desispec import io
-from desispec.pipeline.core import runcmd
+from desispec.util import runcmd
 import desispec.scripts
 
 class TestBinScripts(unittest.TestCase):

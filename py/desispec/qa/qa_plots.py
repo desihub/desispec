@@ -34,7 +34,7 @@ def brick_zbest(outfil, zf, qabrick):
     """
     sty_otype = get_sty_otype()
     # Convert types (this should become obsolete)
-    param = qabrick.data['ZBEST']['PARAM']
+    param = qabrick.data['ZBEST']['PARAMS']
     zftypes = []
     for ztype in zf.spectype:
         if ztype in param['ELG_TYPES']:
@@ -187,12 +187,12 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     i0 = outfil.rfind('/')
     ax2.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax2.transAxes, ha='left')
     yoff=0.15
-    for key in sorted(qaframe.data['SKYSUB']['QA'].keys()):
+    for key in sorted(qaframe.data['SKYSUB']['METRICS'].keys()):
         if key in ['QA_FIG']:
             continue
         # Show
         ylbl -= yoff
-        ax2.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data['SKYSUB']['QA'][key]),
+        ax2.text(xlbl+0.1, ylbl, key+': '+str(qaframe.data['SKYSUB']['METRICS'][key]),
             transform=ax2.transAxes, ha='left', fontsize='small')
     """
 
@@ -255,8 +255,8 @@ def exposure_fluxcalib(outfil, qa_data):
             if camera[0] == channel:
                 allc.append(int(camera[1]))
                 ax.errorbar([int(camera[1])],
-                            [qa_data['frames'][camera]['FLUXCALIB']['QA']['ZP']],
-                            yerr=[qa_data['frames'][camera]['FLUXCALIB']['QA']['RMS_ZP']],
+                            [qa_data['frames'][camera]['FLUXCALIB']['METRICS']['ZP']],
+                            yerr=[qa_data['frames'][camera]['FLUXCALIB']['METRICS']['RMS_ZP']],
                             capthick=2, fmt='o', color=clrs[channel])
 
 
@@ -441,12 +441,12 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     i0 = outfil.rfind('/')
     ax2.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax2.transAxes, ha='left')
     yoff=0.10
-    for key in sorted(qaframe.data['FIBERFLAT']['QA'].keys()):
+    for key in sorted(qaframe.data['FIBERFLAT']['METRICS'].keys()):
         if key in ['QA_FIG']:
             continue
         # Show
         ylbl -= yoff
-        ax2.text(xlbl+0.05, ylbl, key+': '+str(qaframe.data['FIBERFLAT']['QA'][key]),
+        ax2.text(xlbl+0.05, ylbl, key+': '+str(qaframe.data['FIBERFLAT']['METRICS'][key]),
             transform=ax2.transAxes, ha='left', fontsize='x-small')
     """
 
@@ -473,12 +473,12 @@ def show_meta(ax, qaframe, qaflavor, outfil):
     i0 = outfil.rfind('/')
     ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
     yoff=0.10
-    for key in sorted(qaframe.qa_data[qaflavor]['QA'].keys()):
+    for key in sorted(qaframe.qa_data[qaflavor]['METRICS'].keys()):
         if key in ['QA_FIG']:
             continue
         # Show
         ylbl -= yoff
-        ax.text(xlbl+0.1, ylbl, key+': '+str(qaframe.qa_data[qaflavor]['QA'][key]),
+        ax.text(xlbl+0.1, ylbl, key+': '+str(qaframe.qa_data[qaflavor]['METRICS'][key]),
             transform=ax.transAxes, ha='left', fontsize='x-small')
 
 

@@ -44,13 +44,13 @@ class QA_Brick(object):
         # Fill and return if not set previously or if re_init=True
         if (qatype not in self.data) or re_init:
             self.data[qatype] = {}
-            self.data[qatype]['PARAM'] = param
+            self.data[qatype]['PARAMS'] = param
             return
 
         # Update the new parameters only
         for key in param:
-            if key not in self.data[qatype]['PARAM']:
-                self.data[qatype]['PARAM'][key] = param[key]
+            if key not in self.data[qatype]['PARAMS']:
+                self.data[qatype]['PARAMS'][key] = param[key]
 
     def init_zbest(self, re_init=False):
         """Initialize parameters for ZBEST output
@@ -88,7 +88,7 @@ class QA_Brick(object):
         # Check for previous QA if clobber==False
         if not clobber:
             # QA previously performed?
-            if 'QA' in self.data[qatype]:
+            if 'METRICS' in self.data[qatype]:
                 return
         # Run
         if qatype == 'ZBEST':
@@ -98,11 +98,11 @@ class QA_Brick(object):
             self.init_zbest()
             # Run
             reload(zfind)
-            qadict = zfind.qa_zbest(self.data[qatype]['PARAM'], inputs[0], inputs[1])
+            qadict = zfind.qa_zbest(self.data[qatype]['PARAMS'], inputs[0], inputs[1])
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update
-        self.data[qatype]['QA'] = qadict
+        self.data[qatype]['METRICS'] = qadict
 
     def __repr__(self):
         """

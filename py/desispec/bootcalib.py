@@ -354,8 +354,11 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
     #log.info("y=%s"%str(y))
     #log.info("w=%s"%str(w))
     
-    y = id_dict["pixpk"]
     
+    y = id_dict["pixpk"]
+
+    log.info("ny=%d nw=%d"%(len(y),len(w)))
+
     if nmax<10 :
         nmax=10
         log.warning("force nmax=10 (arg was too small: {:d})".format(nmax))
@@ -771,8 +774,8 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
     elif camera[0] == 'r':  
         dlamb = 0.527
     elif camera[0] == 'z':  
-        dlamb = 0.599  # Ang
-
+        #dlamb = 0.599  # Ang
+        dlamb = 0.608  # Ang (from teststand, ranges (fiber & wave) from 0.54 to 0.66)
     # read good lines
     if good_lines_filename is not None :
         filename = good_lines_filename
@@ -1259,6 +1262,7 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         # Generate PSF
         dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq], np.ones(nx))
         psf = cst*np.exp(-0.5 * (dx_img/sigma[qq])**2)/sigma[qq]
+        
         #dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
         #g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
         #psf = mask * g_init(dx_img)
@@ -1266,9 +1270,24 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         #all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
         #all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
         a=np.sum(img_ivar[:,minx:maxx+1]*psf**2,axis=1)
-        ok=(a>0)
-        all_spec[ok,qq] = np.sum(img_ivar[ok,minx:maxx+1]*psf[ok]*img[ok,minx:maxx+1],axis=1) / a[ok]
+        b=np.sum(img_ivar[:,minx:maxx+1]*psf*img[:,minx:maxx+1],axis=1)
+        ok=(a>1.e-6) 
+        all_spec[ok,qq] = b[ok] / a[ok]
+        
+        #import astropy.io.fits as pyfits
+        #h=pyfits.HDUList([pyfits.PrimaryHDU(),
+        #                  pyfits.ImageHDU(img[:,minx:maxx+1],name="FLUX"),
+        #                  pyfits.ImageHDU(img_ivar[:,minx:maxx+1],name="IVAR"),
+        #                  pyfits.ImageHDU(psf,name="PSF"),
+        #                  pyfits.ImageHDU(a,name="A"),
+        #                  pyfits.ImageHDU(b,name="B")])
+        #h.writeto("test.fits")
+        #sys.exit(12)
+        
+                          
+                          
 
+        
     # Return
     return all_spec
 

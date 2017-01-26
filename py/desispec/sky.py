@@ -282,6 +282,6 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
         
         qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
         qadict["WAVELENGTH"]=frame.wave
-
+        qadict["SKY_FIBERID"]=skyfibers.tolist()
     # Return
     return qadict

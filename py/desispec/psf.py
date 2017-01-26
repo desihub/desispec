@@ -25,46 +25,37 @@ class PSF(object):
         load header, xcoeff, ycoeff from the file
         filename should have HDU1: Xcoeff, HDU2: Ycoeff
         """
-        psfdata=fits.open(filename, memmap=False)
-        xcoeff=psfdata[0].data
-        hdr=psfdata[0].header
-        wmin=hdr['WAVEMIN']
-        wmax=hdr['WAVEMAX']
-        ycoeff=psfdata[1].data
+        # psfdata = fits.open(filename, memmap=False)
+        with fits.open(filename, memmap=False) as psfdata:
+            xcoeff=psfdata[0].data
+            hdr=psfdata[0].header
+            wmin=hdr['WAVEMIN']
+            wmax=hdr['WAVEMAX']
+            ycoeff=psfdata[1].data
         
-        arm = hdr['CAMERA'].lower()[0]
-        npix_x = hdr['NPIX_X']
-        npix_y = hdr['NPIX_Y']
+            arm = hdr['CAMERA'].lower()[0]
+            npix_x = hdr['NPIX_X']
+            npix_y = hdr['NPIX_Y']
         
-        # if arm=='r': 
-        #     npix_x=4114 
-        #     npix_y=4128 
-        # if arm=='b':
-        #     npix_x=4096
-        #     npix_y=4096
-        # if arm=='z':
-        #     npix_x=4114
-        #     npix_y=4128
-
-        if arm not in ['b','r','z']:
-            raise ValueError("arm not in b, r, or z. File should be of the form psfboot-r0.fits.")  
-        #- Get the coeffiecients
-        nspec=xcoeff.shape[0]
-        ncoeff=xcoeff.shape[1]
+            if arm not in ['b','r','z']:
+                raise ValueError("arm not in b, r, or z. File should be of the form psfboot-r0.fits.")  
+            #- Get the coeffiecients
+            nspec=xcoeff.shape[0]
+            ncoeff=xcoeff.shape[1]
         
-        self.npix_x=npix_x
-        self.npix_y=npix_y
-        self.xcoeff=xcoeff
-        self.ycoeff=ycoeff
-        self.wmin=wmin
-        self.wmax=wmax
-        self.nspec=nspec
-        self.ncoeff=ncoeff
-        #invertion should be done at psf creation time and saved into file
-        c,ymin,ymax=self.invert(coeff=self.ycoeff)
-        self.icoeff=c
-        self.ymin=ymin
-        self.ymax=ymax
+            self.npix_x=npix_x
+            self.npix_y=npix_y
+            self.xcoeff=xcoeff
+            self.ycoeff=ycoeff
+            self.wmin=wmin
+            self.wmax=wmax
+            self.nspec=nspec
+            self.ncoeff=ncoeff
+            #invertion should be done at psf creation time and saved into file
+            c,ymin,ymax=self.invert(coeff=self.ycoeff)
+            self.icoeff=c
+            self.ymin=ymin
+            self.ymax=ymax
 
     def invert(self, domain=None, coeff=None, deg=None):
         """
