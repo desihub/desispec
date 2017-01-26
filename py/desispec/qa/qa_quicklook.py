@@ -12,389 +12,11 @@ from desispec.quicklook import qllogger
 import os,sys
 import datetime
 from astropy.time import Time
-from desispec import util
-from desiutil import stats as dustat
+from desispec.qa import qalib
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
 
-
-#- Few utility functions that a corresponding method of a QA class may call
-
-def ampregion(image):
-    """
-    Get the pixel boundary regions for amps
-       
-    Args:
-        image: desispec.image.Image object
-    """
-    from desispec.preproc import _parse_sec_keyword
-
-    pixboundary=[]
-    for kk in ['1','2','3','4']: #- 4 amps
-        #- get the amp region in pix
-        ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-        pixboundary.append(ampboundary)  
-    return pixboundary        
-
-def fiducialregion(frame,psf):
-    """ 
-    Get the fiducial amplifier regions on the CCD pixel to fiber by wavelength space
-       
-    Args:
-        frame: desispec.frame.Frame object
-        psf: desispec.psf.PSF like object
-    """
-    from desispec.preproc import _parse_sec_keyword
-
-    startspec=0 #- will be None if don't have fibers on the right of the CCD.
-    endspec=499 #- will be None if don't have fibers on the right of the CCD
-    startwave0=0 #- lower index for the starting fiber
-    startwave1=0 #- lower index for the last fiber for the amp region
-    endwave0=frame.wave.shape[0] #- upper index for the starting fiber
-    endwave1=frame.wave.shape[0] #- upper index for the last fiber for that amp
-    pixboundary=[]
-    fidboundary=[]
-    
-    #- Adding the min, max boundary individually for the benefit of dumping to yaml.
-    leftmax=499 #- for amp 1 and 3
-    rightmin=0 #- for amp 2 and 4
-    bottommax=frame.wave.shape[0] #- for amp 1 and 2
-    topmin=0 #- for amp 3 and 4
-
-    for kk in ['1','2','3','4']: #- 4 amps
-        #- get the amp region in pix
-        ampboundary=_parse_sec_keyword(frame.meta["CCDSEC"+kk])
-        pixboundary.append(ampboundary)
-        for ispec in range(frame.flux.shape[0]):
-            if np.all(psf.x(ispec) > ampboundary[1].start):
-                startspec=ispec
-                #-cutting off wavelenth boundaries from startspec 
-                yy=psf.y(ispec,frame.wave)
-                k=np.where(yy > ampboundary[0].start)[0]
-                startwave0=k[0]
-                yy=psf.y(ispec,frame.wave)
-                k=np.where(yy < ampboundary[0].stop)[0]
-                endwave0=k[-1]                
-                break
-            else:
-                startspec=None
-                startwave0=None
-                endwave0=None
-        if startspec is not None:
-            for ispec in range(frame.flux.shape[0])[::-1]:
-                if np.all(psf.x(ispec) < ampboundary[1].stop):
-                    endspec=ispec 
-                    #-cutting off wavelenth boundaries from startspec 
-                    yy=psf.y(ispec,frame.wave)
-                    k=np.where(yy > ampboundary[0].start)[0]
-                    startwave1=k[0]
-                    yy=psf.y(ispec,frame.wave)
-                    k=np.where(yy < ampboundary[0].stop)[0]
-                    endwave1=k[-1]  
-                    break
-        else:
-            endspec=None
-            startwave1=None
-            endwave1=None
-
-        startwave=max(startwave0,startwave1) 
-        endwave=min(endwave0,endwave1)
-        if endspec is not None:
-            #endspec+=1 #- last entry exclusive in slice, so add 1
-            #endwave+=1
-
-            if endspec < leftmax:
-                leftmax=endspec
-            if startspec > rightmin:
-                rightmin=startspec
-            if endwave < bottommax:
-                bottommax=endwave
-            if startwave > topmin:
-                topmin=startwave
-        else:
-            rightmin=0 #- Only if no spec in right side of CCD. passing 0 to encertain valid data type. Nontype throws a type error in yaml.dump. 
-
-        #fiducialb=(slice(startspec,endspec,None),slice(startwave,endwave,None))  #- Note: y,x --> spec, wavelength 
-        #fidboundary.append(fiducialb)
-
-    #- return pixboundary,fidboundary
-    return leftmax,rightmin,bottommax,topmin
-
-def slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin):
-    """
-    Runs fiducialregion function and makes the boundary slice for the amps:
-    
-    Returns (list):
-        list of tuples of slices for spec- wavelength boundary for the amps.
-    """
-    leftmax+=1 #- last entry not counted in slice
-    bottommax+=1
-    if rightmin ==0:
-        return [(slice(0,leftmax,None),slice(0,bottommax,None)), (slice(None,None,None),slice(None,None,None)),
-                (slice(0,leftmax,None),slice(topmin,frame.wave.shape[0],None)),(slice(None,None,None),slice(None,None,None))]
-    else:
-        return [(slice(0,leftmax,None),slice(0,bottommax,None)), (slice(rightmin,frame.nspec,None),slice(0,bottommax,None)),
-                (slice(0,leftmax,None),slice(topmin,frame.wave.shape[0],None)),(slice(rightmin,frame.nspec,None),slice(topmin,frame.wave.shape[0]-1,None))]
-
-
-def getrms(image):
-    """
-    Calculate the rms of the pixel values)
-    
-    Args:
-        image: 2d array
-    """
-    pixdata=image.ravel()
-    rms=np.std(pixdata)
-    return rms
-
-
-def countpix(image,nsig=None,ncounts=None):
-    """
-    Count the pixels above a given threshold.
-    
-    Threshold can be in n times sigma or counts. 
-    
-    Args:
-        image: 2d image array 
-        nsig: threshold in units of sigma, e.g 2 for 2 sigma
-        ncounts: threshold in units of count, e.g 100
-    """
-    if nsig is not None:
-        sig=np.std(image.ravel())
-        counts_nsig=np.where(image.ravel() > nsig*sig)[0].shape[0]
-        return counts_nsig
-    if ncounts is not None:
-        counts_thresh=np.where(image.ravel() > ncounts)[0].shape[0]
-        return counts_thresh
-
-def countbins(flux,threshold=0):
-    """
-    Count the number of bins above a given threshold on each fiber
-    
-    Args:
-        flux: 2d (nspec,nwave)
-        threshold: threshold counts 
-    """
-    counts=np.zeros(flux.shape[0])
-    for ii in range(flux.shape[0]):
-        ok=np.where(flux[ii]> threshold)[0]
-        counts[ii]=ok.shape[0]
-    return counts
-
-def continuum(wave,flux,wmin=None,wmax=None):
-    """
-    Find the continuum of the spectrum inside a wavelength region.
-    
-    Args:
-        wave: 1d wavelength array
-        flux: 1d counts/flux array
-        wmin and wmax: region to consider for the continuum
-    """
-    if wmin is None:
-        wmin=min(wave)
-    if wmax is None:
-        wmax=max(wave)
-
-    kk=np.where((wave>wmin) & (wave < wmax))
-    newwave=wave[kk]
-    newflux=flux[kk]
-    #- find the median continuum 
-    medcont=np.median(newflux)
-    return medcont
-
-def integrate_spec(wave,flux):
-    """
-    Calculate the integral of the spectrum in the given range using trapezoidal integration
-
-    Note: limits of integration are min and max values of wavelength
-    
-    Args:
-        wave: 1d wavelength array
-        flux: 1d flux array 
-    """   
-    integral=np.trapz(flux,wave)
-    return integral
-
-def sky_resid(param, frame, skymodel, quick_look=False):
-    """
-    Algorithm for sky residual
-    To be called from desispec.sky.qa_skysub and desispec.qa.qa_quicklook.Sky_residual.run_qa
-    Args: 
-        param : dict of QA parameters
-        frame : desispec.Frame object after sky subtraction
-        skymodel : desispec.SkyModel object #- no need of this as frame is sky subtracted.
-    Returns a qa dictionary for sky resid
-    """
-    # Output dict
-    qadict = {}
-    qadict['NREJ'] = int(skymodel.nrej)
-
-    # Grab sky fibers on this frame
-    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
-    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
-    nfibers=len(skyfibers)
-    qadict['NSKY_FIB'] = int(nfibers)
-
-    #current_ivar=frame.ivar[skyfibers].copy()
-    #flux = frame.flux[skyfibers]
-
-    # Subtract
-    #res = flux - skymodel.flux[skyfibers] # Residuals
-    #res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers])
-
-    #- Residuals
-    res=frame.flux[skyfibers] #- as this frame is already sky subtracted
-    res_ivar=frame.ivar[skyfibers]
-
-    # Chi^2 and Probability
-    chi2_fiber = np.sum(res_ivar*(res**2),1)
-    chi2_prob = np.zeros(nfibers)
-    for ii in range(nfibers):
-        # Stats
-        dof = np.sum(res_ivar[ii,:] > 0.)
-        chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
-    # Bad models
-    qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
-    if qadict['NBAD_PCHI'] > 0:
-        log.warning("Bad Sky Subtraction in {:d} fibers".format(
-                qadict['NBAD_PCHI']))
-    # Median residual
-    qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
-    log.info("Median residual for sky fibers = {:g}".format(
-        qadict['MED_RESID']))
-
-    # Residual percentiles
-    perc = dustat.perc(res, per=param['PER_RESID'])
-    qadict['RESID_PER'] = [float(iperc) for iperc in perc]
-
-    #- Residuals in wave and fiber axes
-    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)        
-    qadict["SKY_FIBERID"]=skyfibers.tolist()
-    qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
-
-    #- Weighted average for each bin on all fibers
-    qadict["WAVG_RES_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)        
-
-    #- Histograms for residual/sigma #- inherited from qa_plots.frame_skyres()
-    binsz = param['BIN_SZ']
-    gd_res = res_ivar > 0.
-    devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
-    i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
-    rng = tuple( binsz*np.array([i0,i1]) )
-    nbin = i1-i0
-    hist, edges = np.histogram(devs, range=rng, bins=nbin)
-    
-    qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
-    qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
-    
-    #- Add additional metrics for quicklook
-    if quick_look:
-        qadict["WAVELENGTH"]=frame.wave
-    # Return
-    return qadict
-
-def SN_ratio(flux,ivar):
-    """
-    SN Ratio
-
-    At current QL setting, can't use offline QA for S/N calculation for sky 
-    subtraction, as that requires frame before sky subtration as QA itself 
-    does the sky subtration. QL should take frame after sky subtration. 
-    Also a S/N calculation there needs skymodel object (as it is specific 
-    to Sky subtraction), that is not needed for S/N calculation itself.
-
-    Args:
-        flux (array): 2d [nspec,nwave] the signal (typically for spectra, 
-            this comes from frame object
-        ivar (array): 2d [nspec,nwave] corresponding inverse variance
-    """
-
-    #- we calculate median and total S/N assuming no correlation bin by bin
-    medsnr=np.zeros(flux.shape[0])
-    #totsnr=np.zeros(flux.shape[0])
-    for ii in range(flux.shape[0]):
-        signalmask=flux[ii,:]>0 #- mask negative values
-        snr=flux[ii,signalmask]*np.sqrt(ivar[ii,signalmask])
-        medsnr[ii]=np.median(snr)
-        # totsnr[ii]=np.sqrt(np.sum(snr**2))
-    return medsnr #, totsnr
-
-def SignalVsNoise(frame,params,fidboundary=None):
-    """
-    Signal vs. Noise
-
-    Take flux and inverse variance arrays and calculate S/N for individual
-    targets (ELG, LRG, QSO, STD) and for each amplifier of the camera.
-
-    Args:
-        flux (array): 2d [nspec,nwave] the signal (typically for spectra, 
-            this comes from frame object
-        ivar (array): 2d [nspec,nwave] corresponding inverse variance
-        fidboundary : list of slices indicating where to select in fiber
-            and wavelength directions for each amp (output of fiducialregion)
-    """
-
-    #- we calculate median and total S/N assuming no correlation bin by bin
-
-    medsnr=SN_ratio(frame.flux,frame.ivar)
-    elgfibers=np.where(frame.fibermap['OBJTYPE']=='ELG')[0]
-    elg_medsnr=medsnr[elgfibers]
-    elg_mag=np.zeros(len(elgfibers))
-    for ii,fib in enumerate(elgfibers):
-        elg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
-    elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
-
-    lrgfibers=np.where(frame.fibermap['OBJTYPE']=='LRG')[0]
-    lrg_medsnr=medsnr[lrgfibers]
-    lrg_mag=np.zeros(len(lrgfibers))
-    for ii,fib in enumerate(lrgfibers):
-        lrg_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
-    lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
-
-    qsofibers=np.where(frame.fibermap['OBJTYPE']=='QSO')[0]
-    qso_medsnr=medsnr[qsofibers]
-    qso_mag=np.zeros(len(qsofibers))
-    for ii,fib in enumerate(qsofibers):
-        qso_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"]
-    qso_snr_mag=np.array((qso_medsnr,qso_mag))
-
-    stdfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
-    std_medsnr=medsnr[stdfibers]
-    std_mag=np.zeros(len(stdfibers))
-    for ii,fib in enumerate(stdfibers):
-        std_mag[ii]=frame.fibermap['MAG'][fib][frame.fibermap['FILTER'][fib]=="DECAM_R"] 
-    std_snr_mag=np.array((std_medsnr,std_mag))
-
-    average_amp = None
-    if fidboundary is not None:        
-        average1=average2=average3=average4=0.0
-        medsnr1=SN_ratio(frame.flux[fidboundary[0]],frame.ivar[fidboundary[0]])
-        average1=np.mean(medsnr1)
-
-        medsnr3=SN_ratio(frame.flux[fidboundary[2]],frame.ivar[fidboundary[2]])
-        average3=np.mean(medsnr3)
-
-        if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
-            medsnr2=SN_ratio(frame.flux[fidboundary[1]],frame.ivar[fidboundary[1]])
-            average2=np.mean(medsnr2)
-
-        if fidboundary[3][0].start is not None : #- to the right top of the CCD
-            medsnr4=SN_ratio(frame.flux[fidboundary[3]],frame.ivar[fidboundary[3]])
-            average4=np.mean(medsnr4)
-
-        average_amp=np.array([average1,average2,average3,average4])
-
-    qadict={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
-
-    return qadict
-
-def gauss(x,a,mu,sigma):
-    """
-    Gaussian fit of input data
-    """
-    return a*np.exp(-(x-mu)**2/(2*sigma**2))
 
 def qlf_post(qadict):
     """
@@ -472,7 +94,7 @@ class Get_RMS(MonitoringAlg):
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
-        rmsccd=getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
+        rmsccd=qalib.getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
         if amps:
             rms_amps=[]
             rms_over_amps=[]
@@ -482,9 +104,9 @@ class Get_RMS(MonitoringAlg):
             for kk in ['1','2','3','4']:
                 thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
-                rms_thisover_thisamp=getrms(image.pix[thisoverscanboundary])
+                rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary])
                 thisoverscan_values=np.ravel(image.pix[thisoverscanboundary])
-                rms_thisamp=getrms(image.pix[thisampboundary])
+                rms_thisamp=qalib.getrms(image.pix[thisampboundary])
                 rms_amps.append(rms_thisamp)
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
@@ -567,9 +189,9 @@ class Count_Pixels(MonitoringAlg):
         retval["PARAMS"] = param
 
         #- get the counts over entire CCD
-        npix3sig=countpix(image.pix,nsig=3) #- above 3 sigma
-        npixlo=countpix(image.pix,ncounts=param['CUTLO']) #- above 100 pixel count
-        npixhi=countpix(image.pix,ncounts=param['CUTHI']) #- above 500 pixel count
+        npix3sig=qalib.countpix(image.pix,nsig=3) #- above 3 sigma
+        npixlo=qalib.countpix(image.pix,ncounts=param['CUTLO']) #- above 100 pixel count
+        npixhi=qalib.countpix(image.pix,ncounts=param['CUTHI']) #- above 500 pixel count
         #- get the counts for each amp
         if amps:
             npix3sig_amps=[]
@@ -579,11 +201,11 @@ class Count_Pixels(MonitoringAlg):
             from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                npix3sig_thisamp=countpix(image.pix[ampboundary],nsig=3)
+                npix3sig_thisamp=qalib.countpix(image.pix[ampboundary],nsig=3)
                 npix3sig_amps.append(npix3sig_thisamp)
-                npixlo_thisamp=countpix(image.pix[ampboundary],ncounts=param['CUTLO'])
+                npixlo_thisamp=qalib.countpix(image.pix[ampboundary],ncounts=param['CUTLO'])
                 npixlo_amps.append(npixlo_thisamp)
-                npixhi_thisamp=countpix(image.pix[ampboundary],ncounts=param['CUTHI'])
+                npixhi_thisamp=qalib.countpix(image.pix[ampboundary],ncounts=param['CUTHI'])
                 npixhi_amps.append(npixhi_thisamp)
             retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi, "NPIX3SIG_AMP": npix3sig_amps, "NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps}
         else:
@@ -659,7 +281,7 @@ class Integrate_Spec(MonitoringAlg):
         integrals=np.zeros(flux.shape[0])
 
         for ii in range(len(integrals)):
-            integrals[ii]=integrate_spec(wave,flux[ii])
+            integrals[ii]=qalib.integrate_spec(wave,flux[ii])
         
         #- average integrals over star fibers
         starfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
@@ -677,7 +299,7 @@ class Integrate_Spec(MonitoringAlg):
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
 
-            fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
+            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
 
             int_avg_amps=np.zeros(4)
            
@@ -692,7 +314,7 @@ class Integrate_Spec(MonitoringAlg):
                     integ_thisamp=np.zeros(stdflux_thisamp.shape[0])
 
                     for ii in range(stdflux_thisamp.shape[0]):
-                        integ_thisamp[ii]=integrate_spec(wave,stdflux_thisamp[ii])
+                        integ_thisamp[ii]=qalib.integrate_spec(wave,stdflux_thisamp[ii])
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
             retval["METRICS"]={"INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist()}
@@ -796,8 +418,8 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
         contfiberhigh=[]
         meancontfiber=[]
         for ii in skyfiber:
-            contlow=continuum(frame.wave[selectlow],frame.flux[ii,selectlow])
-            conthigh=continuum(frame.wave[selecthigh],frame.flux[ii,selecthigh])
+            contlow=qalib.continuum(frame.wave[selectlow],frame.flux[ii,selectlow])
+            conthigh=qalib.continuum(frame.wave[selecthigh],frame.flux[ii,selecthigh])
             contfiberlow.append(contlow)
             contfiberhigh.append(conthigh)
             meancontfiber.append(np.mean((contlow,conthigh)))
@@ -810,7 +432,7 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
 
-            fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
+            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
 
             k1=np.where(skyfiber < fidboundary[0][0].stop)[0]
             maxsky_index=max(k1)
@@ -985,8 +607,8 @@ class Sky_Peaks(MonitoringAlg):
 
         nspec_counts=np.array(nspec_counts)
         sky_counts=np.array(sky_counts)
-        rms_nspec=getrms(nspec_counts)
-        rms_skyspec=getrms(sky_counts)
+        rms_nspec=qalib.getrms(nspec_counts)
+        rms_skyspec=qalib.getrms(sky_counts)
 
         if amps:
 
@@ -998,10 +620,10 @@ class Sky_Peaks(MonitoringAlg):
                 amp4=np.array(amp4)
             amp1=np.array(amp1)
             amp3=np.array(amp3)
-            amp1_rms=getrms(amp1)
-            amp2_rms=getrms(amp2)
-            amp3_rms=getrms(amp3)
-            amp4_rms=getrms(amp4)
+            amp1_rms=qalib.getrms(amp1)
+            amp2_rms=qalib.getrms(amp2)
+            amp3_rms=qalib.getrms(amp3)
+            amp4_rms=qalib.getrms(amp4)
             rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
 
             retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp}
@@ -1112,14 +734,14 @@ class Calc_XWSigma(MonitoringAlg):
                 xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
                 ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
  
-                xpopt1,xpcov1=curve_fit(gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1
+                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
+                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1
 ,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2
+                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
+                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2
 ,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3
+                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
+                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3
 ,int(np.mean(xpix_peak3))])
 
                 xsigma1=np.abs(xpopt1[2])
@@ -1152,16 +774,16 @@ class Calc_XWSigma(MonitoringAlg):
                 xpix_peak5=np.arange(int(round(xpix[8]))-dp,int(round(xpix[9]))+dp+1,1)
                 ypix_peak5=np.arange(int(round(ypix[8])),int(round(ypix[9])),1)
 
-                xpopt1,xpcov1=curve_fit(gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
-                xpopt4,xpcov4=curve_fit(gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
-                wpopt4,wpcov4=curve_fit(gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
-                xpopt5,xpcov5=curve_fit(gauss,np.arange(len(xpix_peak5)),image.pix[int(np.mean(ypix_peak5)),xpix_peak5])
-                wpopt5,wpcov5=curve_fit(gauss,np.arange(len(ypix_peak5)),image.pix[ypix_peak5,int(np.mean(xpix_peak5))])
+                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
+                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
+                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
+                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
+                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
+                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
+                xpopt4,xpcov4=curve_fit(qalib.gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
+                wpopt4,wpcov4=curve_fit(qalib.gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
+                xpopt5,xpcov5=curve_fit(qalib.gauss,np.arange(len(xpix_peak5)),image.pix[int(np.mean(ypix_peak5)),xpix_peak5])
+                wpopt5,wpcov5=curve_fit(qalib.gauss,np.arange(len(ypix_peak5)),image.pix[ypix_peak5,int(np.mean(xpix_peak5))])
 
                 xsigma1=np.abs(xpopt1[2])
                 wsigma1=np.abs(wpopt1[2])
@@ -1199,18 +821,18 @@ class Calc_XWSigma(MonitoringAlg):
                 xpix_peak6=np.arange(int(round(xpix[10]))-dp,int(round(xpix[11]))+dp+1,1)
                 ypix_peak6=np.arange(int(round(ypix[10])),int(round(ypix[11])),1)
  
-                xpopt1,xpcov1=curve_fit(gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
-                xpopt4,xpcov4=curve_fit(gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
-                wpopt4,wpcov4=curve_fit(gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
-                xpopt5,xpcov5=curve_fit(gauss,np.arange(len(xpix_peak5)),image.pix[int(np.mean(ypix_peak5)),xpix_peak5])
-                wpopt5,wpcov5=curve_fit(gauss,np.arange(len(ypix_peak5)),image.pix[ypix_peak5,int(np.mean(xpix_peak5))])
-                xpopt6,xpcov6=curve_fit(gauss,np.arange(len(xpix_peak6)),image.pix[int(np.mean(ypix_peak6)),xpix_peak6])
-                wpopt6,wpcov6=curve_fit(gauss,np.arange(len(ypix_peak6)),image.pix[ypix_peak6,int(np.mean(xpix_peak6))])
+                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
+                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
+                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
+                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
+                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
+                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
+                xpopt4,xpcov4=curve_fit(qalib.gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
+                wpopt4,wpcov4=curve_fit(qalib.gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
+                xpopt5,xpcov5=curve_fit(qalib.gauss,np.arange(len(xpix_peak5)),image.pix[int(np.mean(ypix_peak5)),xpix_peak5])
+                wpopt5,wpcov5=curve_fit(qalib.gauss,np.arange(len(ypix_peak5)),image.pix[ypix_peak5,int(np.mean(xpix_peak5))])
+                xpopt6,xpcov6=curve_fit(qalib.gauss,np.arange(len(xpix_peak6)),image.pix[int(np.mean(ypix_peak6)),xpix_peak6])
+                wpopt6,wpcov6=curve_fit(qalib.gauss,np.arange(len(ypix_peak6)),image.pix[ypix_peak6,int(np.mean(xpix_peak6))])
 
                 xsigma1=np.abs(xpopt1[2])
                 wsigma1=np.abs(wpopt1[2])
@@ -1490,9 +1112,9 @@ class CountSpectralBins(MonitoringAlg):
                          )
         retval["PARAMS"] = param
         
-        countslo=countbins(frame.flux,threshold=param['CUTLO'])
-        countsmed=countbins(frame.flux,threshold=param['CUTMED'])
-        countshi=countbins(frame.flux,threshold=param['CUTHI'])
+        countslo=qalib.countbins(frame.flux,threshold=param['CUTLO'])
+        countsmed=qalib.countbins(frame.flux,threshold=param['CUTMED'])
+        countshi=qalib.countbins(frame.flux,threshold=param['CUTHI'])
 
         goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than 500 counts
         ngoodfibers=goodfibers.shape[0]
@@ -1505,30 +1127,30 @@ class CountSpectralBins(MonitoringAlg):
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
 
-            leftmax,rightmin,bottommax,topmin = fiducialregion(frame,psf)  
-            fidboundary=slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)          
-            countslo_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTLO'])
+            leftmax,rightmin,bottommax,topmin = qalib.fiducialregion(frame,psf)  
+            fidboundary=qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)          
+            countslo_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTLO'])
             averagelo_amp1=np.mean(countslo_amp1)
-            countsmed_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTMED'])
+            countsmed_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTMED'])
             averagemed_amp1=np.mean(countsmed_amp1)
-            countshi_amp1=countbins(frame.flux[fidboundary[0]],threshold=param['CUTHI'])
+            countshi_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTHI'])
             averagehi_amp1=np.mean(countshi_amp1)
 
-            countslo_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTLO'])
+            countslo_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTLO'])
             averagelo_amp3=np.mean(countslo_amp3)
-            countsmed_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTMED'])
+            countsmed_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTMED'])
             averagemed_amp3=np.mean(countsmed_amp3)
-            countshi_amp3=countbins(frame.flux[fidboundary[2]],threshold=param['CUTHI'])
+            countshi_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTHI'])
             averagehi_amp3=np.mean(countshi_amp3)
 
 
             if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
 
-                countslo_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTLO'])
+                countslo_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTLO'])
                 averagelo_amp2=np.mean(countslo_amp2)
-                countsmed_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTMED'])
+                countsmed_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTMED'])
                 averagemed_amp2=np.mean(countsmed_amp2)
-                countshi_amp2=countbins(frame.flux[fidboundary[1]],threshold=param['CUTHI'])
+                countshi_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTHI'])
                 averagehi_amp2=np.mean(countshi_amp2)
 
             else:
@@ -1538,11 +1160,11 @@ class CountSpectralBins(MonitoringAlg):
 
             if fidboundary[3][0].start is not None: #- to the right top of the CCD
 
-                countslo_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTLO'])
+                countslo_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTLO'])
                 averagelo_amp4=np.mean(countslo_amp4)
-                countsmed_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTMED'])
+                countsmed_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTMED'])
                 averagemed_amp4=np.mean(countsmed_amp4)
-                countshi_amp4=countbins(frame.flux[fidboundary[3]],threshold=param['CUTHI'])
+                countshi_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTHI'])
                 averagehi_amp4=np.mean(countshi_amp4)
 
             else:
@@ -1634,7 +1256,6 @@ class Sky_Residual(MonitoringAlg):
 
     def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
         from desispec.sky import qa_skysub
-        from desispec import util
 
         if skymodel is None:
             raise IOError("Must have skymodel to find residual. It can't be None")
@@ -1654,7 +1275,7 @@ class Sky_Residual(MonitoringAlg):
                          PER_RESID=95.,   # Percentile for residual distribution
                         )
         retval["PARAMS"] = param
-        qadict=sky_resid(param,frame,skymodel,quick_look=True)
+        qadict=qalib.sky_resid(param,frame,skymodel,quick_look=True)
 
         retval["METRICS"] = {}
         for key in qadict.keys():
@@ -1746,8 +1367,8 @@ class Calculate_SNR(MonitoringAlg):
             rightmin = dict_countbins["RIGHT_MIN_FIBER"]
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
-            fidboundary = slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-        qadict = SignalVsNoise(frame,params,fidboundary=fidboundary)
+            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
+        qadict = qalib.SignalVsNoise(frame,params,fidboundary=fidboundary)
         retval["METRICS"] = qadict
         retval["PARAMS"] = params
         #- http post if valid

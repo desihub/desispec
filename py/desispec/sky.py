@@ -231,7 +231,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
         qadict: dict of QA outputs
           Need to record simple Python objects for yaml (str, float, int)
     """
-    from desispec.qa import qa_quicklook as qa
+    from desispec.qa import qalib
     import copy
 
     log=get_logger()
@@ -250,10 +250,10 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame as it is
     subtract_sky(tempframe,skymodel)
 
-    qadict_resid = qa.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
+    qadict_resid = qalib.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
     qadict=qadict_resid.copy()
 
-    qadict_snr = qa.SignalVsNoise(tempframe,param)
+    qadict_snr = qalib.SignalVsNoise(tempframe,param)
     qadict.update(qadict_snr)
     
     return qadict

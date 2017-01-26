@@ -5,6 +5,7 @@ tests desispec.ql_qa
 import unittest
 import numpy as np
 import os
+from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
 from desispec.quicklook import procalgs as PAs
 from desispec.quicklook import qas
@@ -163,29 +164,29 @@ class TestQL(unittest.TestCase):
 
     #- test some qa utillities functions:
     def test_ampregion(self):
-        pixboundary=QA.ampregion(self.image)
+        pixboundary=qalib.ampregion(self.image)
         self.assertEqual(pixboundary[0][1],slice(0,self.nx,None))
         self.assertEqual(pixboundary[3][0],slice(self.ny,self.ny+self.ny,None))
 
 
     def test_getrms(self):
-        img_rms=QA.getrms(self.image.pix)
+        img_rms=qalib.getrms(self.image.pix)
         self.assertEqual(img_rms,np.std(self.image.pix))
 
     def test_countpix(self):
         pix=self.image.pix
-        counts1=QA.countpix(pix,nsig=3) #- counts avove 3 sigma
-        counts2=QA.countpix(pix,nsig=4) #- counts above 4 sigma
+        counts1=qalib.countpix(pix,nsig=3) #- counts avove 3 sigma
+        counts2=qalib.countpix(pix,nsig=4) #- counts above 4 sigma
         self.assertLess(counts2,counts1)
-        counts3=QA.countpix(pix,ncounts=15)
-        counts4=QA.countpix(pix,ncounts=20)
+        counts3=qalib.countpix(pix,ncounts=15)
+        counts4=qalib.countpix(pix,ncounts=20)
         self.assertLess(counts4,counts3)
 
     def test_sky_resid(self):
         import copy
         param = dict(
                      PCHI_RESID=0.05,PER_RESID=95.,BIN_SZ=0.1)
-        qadict=QA.sky_resid(param,self.frame,self.skymodel,quick_look=True)
+        qadict=qalib.sky_resid(param,self.frame,self.skymodel,quick_look=True)
         kk=np.where(self.frame.fibermap['OBJTYPE']=='SKY')[0]
         self.assertEqual(qadict['NSKY_FIB'],len(kk))
 
@@ -197,8 +198,8 @@ class TestQL(unittest.TestCase):
         desispec.sky.subtract_sky(frame1,skym1)
         desispec.sky.subtract_sky(frame2,skym2)
 
-        qa1=QA.sky_resid(param,frame1,skym1)
-        qa2=QA.sky_resid(param,frame2,skym2)
+        qa1=qalib.sky_resid(param,frame1,skym1)
+        qa2=qalib.sky_resid(param,frame2,skym2)
         self.assertLess(qa1['MED_RESID'],qa2['MED_RESID']) #- residuals must be smaller for case 1
 
     def testSignalVsNoise(self):
@@ -208,7 +209,7 @@ class TestQL(unittest.TestCase):
         #- copy frame not to override
         thisframe=copy.deepcopy(self.frame)
         desispec.sky.subtract_sky(thisframe,self.skymodel)
-        qadict=QA.SignalVsNoise(thisframe,params)
+        qadict=qalib.SignalVsNoise(thisframe,params)
         #- make sure all the S/N is positive
         self.assertTrue(np.all(qadict['MEDIAN_SNR']) > 0)
 
@@ -219,8 +220,8 @@ class TestQL(unittest.TestCase):
         frame2=copy.deepcopy(self.frame)
         desispec.sky.subtract_sky(frame1,skym1)
         desispec.sky.subtract_sky(frame2,skym2)
-        qa1=QA.SignalVsNoise(frame1,params)
-        qa2=QA.SignalVsNoise(frame2,params)
+        qa1=qalib.SignalVsNoise(frame1,params)
+        qa2=qalib.SignalVsNoise(frame2,params)
         self.assertTrue(np.all(qa2['MEDIAN_SNR'] > qa1['MEDIAN_SNR']))
    
     #- QA: bias overscan
