@@ -1,8 +1,15 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+# -*- coding: utf-8 -*-
+"""Test desispec.io.
+"""
+from __future__ import absolute_import, division
+# The line above will help with 2to3 support.
 import unittest, os
 from uuid import uuid1
 from pkg_resources import resource_filename
+from datetime import timedelta
 import numpy as np
-import sqlite3
+# import sqlite3
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.sky import SkyModel
@@ -15,10 +22,13 @@ from astropy.table import Table
 from shutil import rmtree
 
 class TestIO(unittest.TestCase):
+    """Test desiutil.io
+    """
 
-    #- Create unique test filename in a subdirectory
     @classmethod
     def setUpClass(cls):
+        """Create unique test filename in a subdirectory.
+        """
         cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
         cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
         cls.testbrfile = 'test-{uuid}/test-br-{uuid}.fits'.format(uuid=uuid1())
@@ -34,9 +44,10 @@ class TestIO(unittest.TestCase):
                 cls.origEnv[e] = os.environ[e]
             os.environ[e] = cls.testEnv[e]
 
-    #- Cleanup test files if they exist
     @classmethod
     def tearDownClass(cls):
+        """Cleanup test files if they exist.
+        """
         for testfile in [cls.testfile, cls.testyfile, cls.testbrfile]:
             if os.path.exists(testfile):
                 os.remove(testfile)
@@ -54,8 +65,11 @@ class TestIO(unittest.TestCase):
             rmtree(cls.testDir)
 
     def test_fitsheader(self):
+        """Test desispec.io.util.fitsheader.
+        """
         #- None is ok; just returns blank Header
-        header = desispec.io.util.fitsheader(None)
+        from ..io.util import fitsheader
+        header = fitsheader(None)
         self.assertTrue(isinstance(header, fits.Header))
         self.assertEqual(len(header), 0)
 
@@ -63,7 +77,7 @@ class TestIO(unittest.TestCase):
         hdr = dict()
         hdr['BLAT'] = 'foo'
         hdr['BAR'] = (1, 'biz bat')
-        header = desispec.io.util.fitsheader(hdr)
+        header = fitsheader(hdr)
         self.assertTrue(isinstance(header, fits.Header))
         self.assertEqual(header['BLAT'], 'foo')
         self.assertEqual(header['BAR'], 1)
@@ -73,21 +87,21 @@ class TestIO(unittest.TestCase):
         hdr = list()
         hdr.append( ('BLAT', 'foo') )
         hdr.append( ('BAR', (1, 'biz bat')) )
-        header = desispec.io.util.fitsheader(hdr)
+        header = fitsheader(hdr)
         self.assertTrue(isinstance(header, fits.Header))
         self.assertEqual(header['BLAT'], 'foo')
         self.assertEqual(header['BAR'], 1)
         self.assertEqual(header.comments['BAR'], 'biz bat')
 
         #- fits.Header -> fits.Header
-        header = desispec.io.util.fitsheader(header)
+        header = fitsheader(header)
         self.assertTrue(isinstance(header, fits.Header))
         self.assertEqual(header['BLAT'], 'foo')
         self.assertEqual(header['BAR'], 1)
         self.assertEqual(header.comments['BAR'], 'biz bat')
 
         #- Can't convert and int into a fits Header
-        self.assertRaises(ValueError, desispec.io.util.fitsheader, (1,))
+        self.assertRaises(ValueError, fitsheader, (1,))
 
     def _make_frame(self, nspec=5, nwave=10, ndiag=3):
         wave = np.arange(nwave)
@@ -165,6 +179,9 @@ class TestIO(unittest.TestCase):
             self.assertTrue(match, 'Fibermap column {} mismatch'.format(name))
 
     def test_sky_rw(self):
+        """Test reading and writing sky files.
+        """
+        from ..io.sky import read_sky, write_sky
         nspec, nwave = 5,10
         wave = np.arange(nwave)
         flux = np.random.uniform(size=(nspec, nwave))
@@ -175,8 +192,8 @@ class TestIO(unittest.TestCase):
         for mask in (mask_int, mask_uint):
             # skyflux,skyivar,skymask,cskyflux,cskyivar,wave
             sky = SkyModel(wave, flux, ivar, mask)
-            desispec.io.write_sky(self.testfile, sky)
-            xsky = desispec.io.read_sky(self.testfile)
+            write_sky(self.testfile, sky)
+            xsky = read_sky(self.testfile)
 
             self.assertTrue(np.all(sky.wave.astype('f4').astype('f8')  == xsky.wave))
             self.assertTrue(np.all(sky.flux.astype('f4').astype('f8')  == xsky.flux))
@@ -452,9 +469,12 @@ class TestIO(unittest.TestCase):
         self.assertTrue(qaframe.flavor == xqaframe.flavor)
 
     def test_native_endian(self):
+        """Test desiutil.io.util.native_endian.
+        """
+        from ..io.util import native_endian
         for dtype in ('>f8', '<f8', '<f4', '>f4', '>i4', '<i4', '>i8', '<i8'):
             data1 = np.arange(100).astype(dtype)
-            data2 = desispec.io.util.native_endian(data1)
+            data2 = native_endian(data1)
             self.assertTrue(data2.dtype.isnative, dtype+' is not native endian')
             self.assertTrue(np.all(data1 == data2))
 
@@ -523,35 +543,42 @@ class TestIO(unittest.TestCase):
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
     def test_download(self):
+        """Test desiutil.io.download.
+        """
         #
         # Test by downloading a single file.  This sidesteps any issues
         # with running multiprocessing within the unittest environment.
         #
-        filename = desispec.io.findfile('sky',expid=2,night='20150510',camera='b0',spectrograph=0)
-        paths = desispec.io.download(filename)
+        from ..io.meta import findfile
+        from ..io.download import download
+        filename = findfile('sky',expid=2,night='20150510',camera='b0',spectrograph=0)
+        paths = download(filename)
         self.assertEqual(paths[0],filename)
         self.assertTrue(os.path.exists(paths[0]))
         #
         # Deliberately test a non-existent file.
         #
-        filename = desispec.io.findfile('sky',expid=2,night='20150510',camera='b9',spectrograph=9)
-        paths = desispec.io.download(filename)
+        filename = findfile('sky',expid=2,night='20150510',camera='b9',spectrograph=9)
+        paths = download(filename)
         self.assertIsNone(paths[0])
         # self.assertFalse(os.path.exists(paths[0]))
 
     def test_database(self):
         """Test desispec.io.database.
         """
-        pass
-        # conn = sqlite3.connect(':memory:')
-        # c = conn.cursor(desispec.io.RawDataCursor)
-        # schema = resource_filename('desispec', 'data/db/raw_data.sql')
-        # with open(schema) as sql:
-        #     script = sql.read()
-        # c.executescript(script)
-        # c.connection.commit()
+        #
+        # Test the UTC settings.
+        #
+        from ..io.database import utc, Base
+        self.assertEqual(utc.tzname('foo'), 'UTC')
+        self.assertEqual(utc.utcoffset('foo'), timedelta(0))
+        self.assertEqual(utc.dst('foo'), timedelta(0))
+        self.assertIsNotNone(Base.metadata.tables)
 
 
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)

@@ -1,6 +1,4 @@
-#
-# See top-level LICENSE.rst file for Copyright information
-#
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
 desispec.io
@@ -8,9 +6,8 @@ desispec.io
 
 Tools for data and metadata I/O.
 """
-
-# help with 2to3 support
 from __future__ import absolute_import, division, print_function
+# The line above will help with 2to3 support.
 
 from .meta import (findfile, get_exposures, get_files, get_raw_files,
     rawdata_root, specprod_root, validate_night, get_pipe_plandir,
