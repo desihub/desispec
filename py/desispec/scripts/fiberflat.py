@@ -29,6 +29,12 @@ def parse(options=None):
                         help='path of QA file')
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file')
+    parser.add_argument('--nsig', type = float, default = 4, required=False,
+                        help = 'nsigma clipping')
+    parser.add_argument('--acc', type = float, default = 5.e-4, required=False,
+                        help = 'required accuracy (iterative loop)')
+    
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -44,7 +50,7 @@ def main(args) :
 
     # Process
     frame = read_frame(args.infile)
-    fiberflat = compute_fiberflat(frame)
+    fiberflat = compute_fiberflat(frame,nsig_clipping=args.nsig,accuracy=args.acc)
 
     # QA
     if (args.qafile is not None):

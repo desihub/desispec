@@ -51,6 +51,7 @@ def parse(options=None):
     parser.add_argument("--legendre-degree", type = int, default=5, required=False, help="Legendre polynomial degree for traces")
     parser.add_argument("--triplet-matching", default=False, action="store_true", help="use triplet matching method for line identification (slower but expected more robust)")
     parser.add_argument("--ntrack", type = int, default=5, required=False, help="Number of solutions to be tracked (only used with triplet-matching, more is safer but slower)")
+    parser.add_argument("--toler", type = float, default=0.5, required=False, help="Allowed fractional variation of d wave / dy around prior")
     parser.add_argument("--nmax", type = int, default=100, required=False, help="Max number of measured emission lines kept in triplet-matching algorithm")
     parser.add_argument("--out-line-list", type = str, default=False, required=False, help="Write to the list of lines found (can be used as input to specex)")
     
@@ -192,7 +193,7 @@ def main(args):
                 xfit[:,ii] = dufits.func_val(wv_array, fit_dict)
         
         all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, arc_ivar, xfit, gauss)
-
+        
         ############################
         # Line list
         camera = header['CAMERA'].lower()
@@ -224,7 +225,7 @@ def main(args):
             id_dict["flux"]  =  flux
             
             try:
-                desiboot.id_arc_lines_using_triplets(id_dict, gd_lines, dlamb,ntrack=args.ntrack,nmax=args.nmax)
+                desiboot.id_arc_lines_using_triplets(id_dict, gd_lines, dlamb,ntrack=args.ntrack,nmax=args.nmax,toler=args.toler)
             except : 
                 log.warning(sys.exc_info())
                 log.warning("fiber {:d} ID_ARC failed".format(ii))
