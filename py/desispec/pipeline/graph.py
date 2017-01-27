@@ -48,16 +48,22 @@ def graph_name(*args):
         return ""
 
 
-def graph_name_split(name):
+def graph_night_split(name):
     """
     Split graph object name into night and the remainder.
 
     Args:
-        name (str): the object name.
+        name (str): the full object name.
 
     Returns:
         tuple containing the night and the remainder of the name.
     """
+    # do we have just the night?
+    pat = re.compile(r"^[0-9]{8}$")
+    mat = pat.match(name)
+    if mat is not None:
+        return (name, "")
+
     patstr = "([0-9]{{8}}){}(.*)".format(_graph_sep)
     pat = re.compile(patstr)
     mat = pat.match(name)
@@ -69,7 +75,95 @@ def graph_name_split(name):
     return ret
 
 
-def graph_path(type, name):
+def graph_name_split(name):
+    """
+    Split graph object name into its type and properties.
+
+    Args:
+        name (str): the object name without the night.
+
+    Returns:
+        tuple containing the type and type-specific properties.
+    """
+    typepat = re.compile(r"(.*?)-(.*)")
+    mat = typepat.match(name)
+    if mat is None:
+        raise RuntimeError("string {} is not an object name".format(name))
+    else:
+        typestr = mat.group(1)
+        propstr = mat.group(2)
+
+    ret = (typestr, propstr)
+    
+    if typestr == "pix":
+        pat = re.compile(r"([brz])([0-9])-([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2), mat.group(3))
+    elif typestr == "fibermap":
+        pat = re.compile(r"([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1))
+    elif typestr == "psfboot":
+        pat = re.compile(r"([brz])([0-9])")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2))
+    elif typestr == "psf":
+        pat = re.compile(r"([brz])([0-9])-([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2), mat.group(3))
+    elif typestr == "psfnight":
+        pat = re.compile(r"([brz])([0-9])")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2))
+    elif typestr == "frame":
+        pat = re.compile(r"([brz])([0-9])-([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2), mat.group(3))
+    elif typestr == "fiberflat":
+        pat = re.compile(r"([brz])([0-9])-([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2), mat.group(3))
+    elif typestr == "sky":
+        pat = re.compile(r"([brz])([0-9])-([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2), mat.group(3))
+    elif typestr == "stdstars":
+        pat = re.compile(r"([0-9])-([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2))
+    elif typestr == "calib":
+        pat = re.compile(r"([brz])([0-9])-([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2), mat.group(3))
+    elif typestr == "cframe":
+        pat = re.compile(r"([brz])([0-9])-([0-9]{8})")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2), mat.group(3))
+    elif typestr == "brick":
+        pat = re.compile(r"([brz])-(.*)")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2))
+    elif typestr == "zbest":
+        ret = (typestr, propstr)
+    else:
+        raise RuntimeError("object has unknown type {}".format(typestr))
+
+    return ret
+
+
+def graph_path(name):
     """
     Convert object name in the graph to a filesystem path.
 
@@ -79,136 +173,78 @@ def graph_path(type, name):
     filesystem path of an object.
 
     Args:
-        type (str): object type.
         name (str): the name of the object in the graph.
 
     Returns:
         str: Filesystem path to object.
     """
-    path = ""
-    if type == "night":
+    (night, obj) = graph_night_split(name)
+
+    if obj == "":
+        # we just have a night
         proddir = os.path.abspath(io.specprod_root())
-        path = os.path.join(proddir, "exposures", name)
+        path = os.path.join(proddir, "exposures", night)
+
     else:
-        night = None
+        path = ""
+        tp = graph_name_split(obj)
+        type = tp[0]
+
         expid = None
         camera = None
         brickname = None
         band = None
         spectrograph = None
+
         if type == "fibermap":
-            patstr = "([0-9]{{8}}){}fibermap-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid fibermap name".format(name))
-            night = mat.group(1)
-            expid = int(mat.group(2))
+            expid = int(tp[1])
         elif type == "pix":
-            patstr = "([0-9]{{8}}){}pix-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid pix name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
-            expid = int(mat.group(3))
+            band = tp[1]
+            spectrograph = int(tp[2])
+            expid = int(tp[3])
         elif type == "psfboot":
-            patstr = "([0-9]{{8}}){}psfboot-([brz][0-9])".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid psfboot name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
+            band = tp[1]
+            spectrograph = int(tp[2])
         elif type == "psf":
-            patstr = "([0-9]{{8}}){}psf-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid psf name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
-            expid = int(mat.group(3))
+            band = tp[1]
+            spectrograph = int(tp[2])
+            expid = int(tp[3])
         elif type == "psfnight":
-            patstr = "([0-9]{{8}}){}psfnight-([brz][0-9])".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid psfnight name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
+            band = tp[1]
+            spectrograph = int(tp[2])
         elif type == "frame":
-            patstr = "([0-9]{{8}}){}frame-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid frame name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
-            expid = int(mat.group(3))
+            band = tp[1]
+            spectrograph = int(tp[2])
+            expid = int(tp[3])
         elif type == "fiberflat":
-            patstr = "([0-9]{{8}}){}fiberflat-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid fiberflat name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
-            expid = int(mat.group(3))
+            band = tp[1]
+            spectrograph = int(tp[2])
+            expid = int(tp[3])
         elif type == "sky":
-            patstr = "([0-9]{{8}}){}sky-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid sky name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
-            expid = int(mat.group(3))
+            band = tp[1]
+            spectrograph = int(tp[2])
+            expid = int(tp[3])
         elif type == "stdstars":
-            patstr = "([0-9]{{8}}){}stdstars-([0-9])-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid standard star name".format(name))
-            night = mat.group(1)
-            spectrograph = int(mat.group(2))
-            expid = int(mat.group(3))
+            spectrograph = int(tp[1])
+            expid = int(tp[2])
         elif type == "calib":
-            patstr = "([0-9]{{8}}){}calib-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid calibration name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
-            expid = int(mat.group(3))
+            band = tp[1]
+            spectrograph = int(tp[2])
+            expid = int(tp[3])
         elif type == "cframe":
-            patstr = "([0-9]{{8}}){}cframe-([brz][0-9])-([0-9]{{8}})".format(_graph_sep)
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid cframe name".format(name))
-            night = mat.group(1)
-            camera = mat.group(2)
-            expid = int(mat.group(3))
+            band = tp[1]
+            spectrograph = int(tp[2])
+            expid = int(tp[3])
         elif type == "brick":
-            patstr = "brick-([brz])-(.*)"
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid brick name".format(name))
-            band = mat.group(1)
-            brickname = mat.group(2)
+            band = tp[1]
+            brickname = tp[2]
         elif type == "zbest":
-            patstr = "zbest-(.*)"
-            pat = re.compile(patstr)
-            mat = pat.match(name)
-            if mat is None:
-                raise RuntimeError("{} is not a valid zbest name".format(name))
-            brickname = mat.group(1)
+            brickname = tp[1]
         else:
             raise RuntimeError("unknown type {}".format(type))
+
+        if (band is not None) and (spectrograph is not None):
+            camera = "{}{}".format(band, spectrograph)
 
         path = io.findfile(type, night=night, expid=expid, camera=camera, brickname=brickname, band=band, spectrograph=spectrograph)
     return path
@@ -227,18 +263,20 @@ def graph_prune(grph, name, descend=False):
     Returns:
         nothing- graph is modified in place.
     """
-
-    # unlink from parents
-    for p in grph[name]["in"]:
-        grph[p]["out"].remove(name)
     if descend:
-        # recursively process children
-        for c in grph[name]["out"]:
-            graph_prune(grph, c, descend=True)
+        # recursively process children.  some nodes may have
+        # been deleted in earlier branches of the recursion.
+        outcopy = list(grph[name]["out"])
+        for c in outcopy:
+            if c in grph:
+                graph_prune(grph, c, descend=True)
     else:
         # not removing children, so only unlink
         for c in grph[name]["out"]:
             grph[c]["in"].remove(name)
+    # unlink from parents
+    for p in grph[name]["in"]:
+        grph[p]["out"].remove(name)
     del grph[name]
     return
 

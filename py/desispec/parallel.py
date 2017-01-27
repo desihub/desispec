@@ -172,13 +172,15 @@ def stdouterr_redirected(to=os.devnull, comm=None):
     ##### assert that Python and C stdio write using the same file descriptor
     ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
 
-    def _redirect_stdout(to):
+    def _redirect_stdout(out_to, err_to):
         sys.stdout.close() # + implicit flush()
-        os.dup2(to.fileno(), fd) # fd writes to "to" file
+        os.dup2(out_to.fileno(), fd) # fd writes to "to" file
         sys.stdout = os.fdopen(fd, "w") # Python writes to fd
+        
         sys.stderr.close() # + implicit flush()
-        os.dup2(to.fileno(), fde) # fd writes to "to" file
+        os.dup2(err_to.fileno(), fde) # fd writes to "to" file
         sys.stderr = os.fdopen(fde, "w") # Python writes to fd
+        
         # update desi logging to use new stdout
         while len(log.handlers) > 0:
             h = log.handlers[0]
@@ -189,43 +191,50 @@ def stdouterr_redirected(to=os.devnull, comm=None):
         ch.setFormatter(formatter)
         log.addHandler(ch)
 
-    with os.fdopen(os.dup(fd), "w") as old_stdout:
-        if (comm is None) or (comm.rank == 0):
-            log.debug("Begin log redirection to {} at {}".format(to, time.asctime()))
+    # redirect both stdout and stderr to the same file
+
+    if (comm is None) or (comm.rank == 0):
+        log.debug("Begin log redirection to {} at {}".format(to, time.asctime()))
+    sys.stdout.flush()
+    sys.stderr.flush()
+    pto = to
+    if comm is None:
+        with open(pto, "w") as file:
+            _redirect_stdout(out_to=file, err_to=file)
+    else:
+        pto = "{}_{}".format(to, comm.rank)
+        with open(pto, "w") as file:
+            _redirect_stdout(out_to=file, err_to=file)
+
+    old_stdout = os.fdopen(os.dup(fd), "w")
+    old_stderr = os.fdopen(os.dup(fde), "w")
+
+    try:
+        yield # allow code to be run with the redirected stdout
+    finally:
         sys.stdout.flush()
         sys.stderr.flush()
-        pto = to
-        if comm is None:
-            with open(pto, "w") as file:
-                _redirect_stdout(to=file)
-        else:
-            pto = "{}_{}".format(to, comm.rank)
-            with open(pto, "w") as file:
-                _redirect_stdout(to=file)
-        try:
-            yield # allow code to be run with the redirected stdout
-        finally:
-            sys.stdout.flush()
-            sys.stderr.flush()
-            _redirect_stdout(to=old_stdout) # restore stdout.
-                                            # buffering and flags such as
-                                            # CLOEXEC may be different
-            if comm is not None:
-                # concatenate per-process files
-                comm.barrier()
-                if comm.rank == 0:
-                    with open(to, "w") as outfile:
-                        for p in range(comm.size):
-                            outfile.write("================= Process {} =================\n".format(p))
-                            fname = "{}_{}".format(to, p)
-                            with open(fname) as infile:
-                                outfile.write(infile.read())
-                            os.remove(fname)
-                comm.barrier()
 
-            if (comm is None) or (comm.rank == 0):
-                log.debug("End log redirection to {} at {}".format(to, time.asctime()))
-            sys.stdout.flush()
-            sys.stderr.flush()
+        # restore old stdout and stderr
+
+        _redirect_stdout(out_to=old_stdout, err_to=old_stderr)
+
+        if comm is not None:
+            # concatenate per-process files
+            comm.barrier()
+            if comm.rank == 0:
+                with open(to, "w") as outfile:
+                    for p in range(comm.size):
+                        outfile.write("================= Process {} =================\n".format(p))
+                        fname = "{}_{}".format(to, p)
+                        with open(fname) as infile:
+                            outfile.write(infile.read())
+                        os.remove(fname)
+            comm.barrier()
+
+        if (comm is None) or (comm.rank == 0):
+            log.debug("End log redirection to {} at {}".format(to, time.asctime()))
+        sys.stdout.flush()
+        sys.stderr.flush()
             
     return
