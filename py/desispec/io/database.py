@@ -620,33 +620,34 @@ def main():
     #
     from argparse import ArgumentParser
     from pkg_resources import resource_filename
-    parser = ArgumentParser(description=("Create and load a DESI metadata "+
-                                         "database."))
-    # parser.add_argument('-a', '--area', action='store_true', dest='fixarea',
-    #     help='If area is not specified in the brick file, recompute it.')
-    parser.add_argument('-b', '--bricks', action='store', dest='brickfile',
-        default='bricks-0.50-2.fits', metavar='FILE',
-        help='Read brick data from FILE.')
-    parser.add_argument('-c', '--clobber', action='store_true', dest='clobber',
-        help='Delete any existing file before loading.')
-    parser.add_argument('-d', '--data', action='store', dest='datapath',
-        default=os.path.join(os.environ['DESI_SPECTRO_SIM'],
-                             os.environ['SPECPROD']),
-        metavar='DIR', help='Load the data in DIR.')
-    parser.add_argument('-f', '--filename', action='store', dest='dbfile',
-        default='metadata.db', metavar='FILE',
-        help="Store data in FILE.")
-    parser.add_argument('-p', '--pass', action='store', dest='obs_pass',
-        default=0, type=int, metavar='PASS',
-        help="Only simulate frames associated with PASS.")
-    parser.add_argument('-s', '--simulate', action='store_true',
-        dest='simulate', help="Run a simulation using DESI tiles.")
-    parser.add_argument('-t', '--tiles', action='store', dest='tilefile',
-        default='desi-tiles.fits', metavar='FILE',
-        help='Read tile data from FILE.')
-    parser.add_argument('-v', '--verbose', action='store_true', dest='verbose',
-        help='Print extra information.')
-    options = parser.parse_args()
+    prsr = ArgumentParser(description=("Create and load a DESI metadata "+
+                                       "database."))
+    # prsr.add_argument('-a', '--area', action='store_true', dest='fixarea',
+    #                   help=('If area is not specified in the brick file, ' +
+    #                         'recompute it.'))
+    prsr.add_argument('-b', '--bricks', action='store', dest='brickfile',
+                      default='bricks-0.50-2.fits', metavar='FILE',
+                      help='Read brick data from FILE.')
+    prsr.add_argument('-c', '--clobber', action='store_true', dest='clobber',
+                      help='Delete any existing file(s) before loading.')
+    prsr.add_argument('-d', '--data', action='store', dest='datapath',
+                      default=os.path.join(os.environ['DESI_SPECTRO_SIM'],
+                                           os.environ['SPECPROD']),
+                      metavar='DIR', help='Load the data in DIR.')
+    prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
+                      default='metadata.db', metavar='FILE',
+                      help="Store data in FILE.")
+    prsr.add_argument('-p', '--pass', action='store', dest='obs_pass',
+                      default=0, type=int, metavar='PASS',
+                      help="Only simulate frames associated with PASS.")
+    prsr.add_argument('-s', '--simulate', action='store_true', dest='simulate',
+                      help="Run a simulation using DESI tiles.")
+    prsr.add_argument('-t', '--tiles', action='store', dest='tilefile',
+                      default='desi-tiles.fits', metavar='FILE',
+                      help='Read tile data from FILE.')
+    prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
+                      help='Print extra information.')
+    options = prsr.parse_args()
     #
     # Logging
     #
@@ -673,14 +674,18 @@ def main():
     except MultipleResultsFound:
         log.info("Status table already loaded.")
     except NoResultFound:
-        session.add_all([Status(status='not processed'), Status(status='failed'), Status(status='succeeded')])
+        session.add_all([Status(status='not processed'),
+                         Status(status='failed'),
+                         Status(status='succeeded')])
         session.commit()
     try:
         q = session.query(ExposureFlavor).one()
     except MultipleResultsFound:
         log.info("ExposureFlavor table already loaded.")
     except NoResultFound:
-        session.add_all([ExposureFlavor(flavor='science'), ExposureFlavor(flavor='arc'), ExposureFlavor(flavor='flat')])
+        session.add_all([ExposureFlavor(flavor='science'),
+                         ExposureFlavor(flavor='arc'),
+                         ExposureFlavor(flavor='flat')])
         session.commit()
     try:
         q = session.query(Brick).one()
@@ -693,10 +698,15 @@ def main():
             brick_data = hdulist[1].data
         brick_list = [brick_data[col].tolist() for col in brick_data.names]
         if 'area' not in brick_data.names:
-            brick_area = (np.radians(brick_data['ra2']) - np.radians(brick_data['ra1']))*(np.sin(np.radians(brick_data['dec2'])) - np.sin(np.radians(brick_data['dec1'])))
+            brick_area = ((np.radians(brick_data['ra2']) -
+                           np.radians(brick_data['ra1'])) *
+                          (np.sin(np.radians(brick_data['dec2'])) -
+                           np.sin(np.radians(brick_data['dec1']))))
             brick_list.append(brick_area.tolist())
-        brick_columns = ('name', 'id', 'q', 'row', 'col', 'ra', 'dec', 'ra1', 'ra2', 'dec1', 'dec2', 'area')
-        session.add_all([Brick(**b) for b in [dict(zip(brick_columns, row)) for row in zip(*brick_list)]])
+        brick_columns = ('name', 'id', 'q', 'row', 'col', 'ra', 'dec',
+                         'ra1', 'ra2', 'dec1', 'dec2', 'area')
+        session.add_all([Brick(**b) for b in [dict(zip(brick_columns, row))
+                                              for row in zip(*brick_list)]])
         session.commit()
         log.info("Finished loading bricks.")
     try:
@@ -709,8 +719,11 @@ def main():
         with fits.open(tile_file) as hdulist:
             tile_data = hdulist[1].data
         tile_list = [tile_data[col].tolist() for col in tile_data.names]
-        tile_columns = ('id', 'ra', 'dec', 'desi_pass', 'in_desi', 'ebv_med', 'airmass', 'star_density', 'exposefac', 'program', 'obsconditions')
-        session.add_all([Tile(**t) for t in [dict(zip(tile_columns, row)) for row in zip(*tile_list)]])
+        tile_columns = ('id', 'ra', 'dec', 'desi_pass', 'in_desi', 'ebv_med',
+                        'airmass', 'star_density', 'exposefac', 'program',
+                        'obsconditions')
+        session.add_all([Tile(**t) for t in [dict(zip(tile_columns, row))
+                                             for row in zip(*tile_list)]])
         session.commit()
         log.info("Finished loading bricks.")
     if options.simulate:
@@ -723,12 +736,11 @@ def main():
         log.info("Finished loading frames.")
     else:
         log.info("Loading real data.")
-        exposurepaths = glob(os.path.join(options.datapath,
-                                          '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'))
+        expaths = glob(os.path.join(options.datapath, '[0-9]'*8))
         exposures = list()
-        for e in exposurepaths:
+        for e in expaths:
             log.info("Loading exposures in {0}.".format(e))
             exposures += load_data(session, e)
-        log.info("Loaded exposures: {0}.".format(', '.join(map(str,exposures))))
+        log.info("Loaded exposures: {0}.".format(', '.join(map(str, exposures))))
     session.close()
     return 0
