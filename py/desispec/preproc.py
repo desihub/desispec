@@ -117,8 +117,8 @@ def _global_background(image,patch_width=200) :
     bins0=np.linspace(0,image.shape[0],float(image.shape[0])/patch_width).astype(int)
     bins1=np.linspace(0,image.shape[1],float(image.shape[1])/patch_width).astype(int)
     bkg_grid=np.zeros((bins0.size-1,bins1.size-1))
-    for j in xrange(bins1.size-1) :
-        for i in xrange(bins0.size-1) :
+    for j in range(bins1.size-1) :
+        for i in range(bins0.size-1) :
             bkg_grid[i,j]=np.median(image[bins0[i]:bins0[i+1],bins1[j]:bins1[j+1]])
     
     nodes0=bins0[:-1]+(bins0[1]-bins0[0])/2.
@@ -169,7 +169,7 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
             pos=ii0[axis].stop
             bins=np.linspace(ii0[axis-1].start,ii0[axis-1].stop,float(ii0[axis-1].stop-ii0[axis-1].start)/patch_width).astype(int)
             delta=np.zeros((bins.size-1))
-            for i in xrange(bins.size-1) :
+            for i in range(bins.size-1) :
                 if axis==0 :            
                     delta[i]=np.median(tmp_image[pos-stitch_width:pos,bins[i]:bins[i+1]])-np.median(tmp_image[pos:pos+stitch_width,bins[i]:bins[i+1]])
                 else :
