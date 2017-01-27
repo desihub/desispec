@@ -114,7 +114,6 @@ class TestBinScripts(unittest.TestCase):
         for i in range(0, self.nspec, 3):
             fibermap['OBJTYPE'][i] = 'SKY'
             fibermap['OBJTYPE'][i+1] = 'STD'
-
         return fibermap
 
     def _write_fibermap(self):

@@ -98,21 +98,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     qaframe: QAFrame object
     """
 
-    # Sky fibers
-    ##skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
-    ##assert np.max(skyfibers) < 500  #- indices, not fiber numbers
-
-    # Residuals
-    ##res = frame.flux[skyfibers] - skymodel.flux[skyfibers] # Residuals
-    ##res_ivar = util.combine_ivar(frame.ivar[skyfibers], skymodel.ivar[skyfibers])
-    ##med_res = np.median(res,0)
-
-    # Deviates
-    ##gd_res = res_ivar > 0.
-    ##devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
-
-    # Calculations
-    ##wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
+    # Access metrics
     '''
     wavg_ivar = np.sum(res_ivar,0)
     chi2_wavg = np.sum(wavg_res**2 * wavg_ivar)
@@ -127,7 +113,6 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     # Plot
     fig = plt.figure(figsize=(8, 10.0))
     gs = gridspec.GridSpec(4,2)
-
     xmin,xmax = np.min(frame.wave), np.max(frame.wave)
 
     # Simple residual plot
@@ -135,9 +120,6 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax0.plot(frame.wave, med_res, label='Median Res')
     ax0.plot(frame.wave, signal.medfilt(med_res,51), color='black', label='Median**2 Res')
     ax0.plot(frame.wave, signal.medfilt(wavg_res,51), color='red', label='Med WAvgRes')
-    #ax_flux.plot(wave, sky_sig, label='Model Error')
-    #ax_flux.plot(wave,true_flux*scl, label='Truth')
-    #ax_flux.get_xaxis().set_ticks([]) # Suppress labeling
 
     #
     ax0.plot([xmin,xmax], [0., 0], '--', color='gray')
@@ -161,23 +143,14 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax1 = plt.subplot(gs[1,0])
     xmin,xmax = -5., 5.
 
-    ##binsz = 0.1
-    ##i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
-    ##rng = tuple( binsz*np.array([i0,i1]) )
-    ##nbin = i1-i0
     # Histogram
-    ##hist, edges = np.histogram(devs, range=rng, bins=nbin)
-
     binsz = qaframe.qa_data['SKYSUB']["PARAMS"]["BIN_SZ"]
     hist = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_1D"])
     edges = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_EDGES"])
 
     xhist = (edges[1:] + edges[:-1])/2.
-    #ax.hist(xhist, color='black', bins=edges, weights=hist)#, histtype='step')
     ax1.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
     # PDF for Gaussian
-    ##area = len(devs) * binsz
-
     area = binsz * np.sum(hist)
 
     xppf = np.linspace(scipy.stats.norm.ppf(0.0001), scipy.stats.norm.ppf(0.9999), 100)
@@ -199,7 +172,6 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     show_meta(ax2, qaresid, 'SKYSUB', outfil)
     
     #- SNR Plot
-
     elg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["ELG_SNR_MAG"]
     lrg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["LRG_SNR_MAG"]
     qso_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["QSO_SNR_MAG"]
@@ -211,7 +183,6 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax6 = plt.subplot(gs[3,1])
 
     ax3.set_ylabel(r'Median S/N')
-    #ax3.set_xlabel(r'Mag. (DECAM_R)')
     ax3.set_xlabel('')
     ax3.set_title(r'ELG')
     if len(elg_snr_mag[1]) > 0:  #- at least 1 elg fiber?   
@@ -228,7 +199,6 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
             ax3.plot(elg_snr_mag[1][select],elg_snr_mag[0][select],'b.')
 
     ax4.set_ylabel('')
-    #ax4.set_xlabel(r'Mag. (DECAM_R)')
     ax4.set_xlabel('')
     ax4.set_title(r'LRG')
     if len(lrg_snr_mag[1]) > 0:  #- at least 1 lrg fiber?

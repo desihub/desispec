@@ -1347,13 +1347,6 @@ class Calculate_SNR(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- select band for mag, using DECAM_R if present
-
-        # filter_pick=["" for x in range(len(frame.fibermap))]        
-        # for ii in range(len(frame.fibermap)):
-        #    if "DECAM_R" in frame.fibermap["FILTER"][ii]: filter_pick[ii]="DECAM_R"
-        #    else: filter_pick[ii]= -1 #- only accepting "DECAM_R" now
-        # filter_pick=np.array(filter_pick)
-
         if param is None:
             log.info("Param is None. Using default param instead")
             params = dict(
