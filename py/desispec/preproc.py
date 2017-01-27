@@ -229,7 +229,7 @@ def read_ccd_calibration(header, primary_header, filename) :
     dateobs=_parse_date_obs(primary_header["DATE-OBS"])
     dosver=primary_header["DOSVER"].strip()
     feever=header["FEEVER"].strip()
-    ccdname=header["CCDNAME"].strip()
+    detector=header["DETECTOR"].strip()
     
     log.info("DATE-OBS=%d"%dateobs)
     found=False
@@ -250,8 +250,8 @@ def read_ccd_calibration(header, primary_header, filename) :
         if feever != data[version]["FEEVER"].strip() :
             log.info("Skip version %s with FEEVER=%s != %s"%(data[version]["FEEVER"],feever))
             continue
-        if ccdname != data[version]["CCDNAME"].strip() :
-            log.info("Skip version %s with CCDNAME=%s != %s"%(data[version]["CCDNAME"],ccdname))
+        if detector != data[version]["DETECTOR"].strip() :
+            log.info("Skip version %s with DETECTOR=%s != %s"%(data[version]["DETECTOR"],detector))
             continue
         
         log.info("Found data version %s for camera %s in %s"%(version,cameraid,filename))

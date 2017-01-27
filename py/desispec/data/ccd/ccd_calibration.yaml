@@ -18,7 +18,7 @@ b1:
   V0:
 # cross-talk measured with 'desi_compute_crosstalk -i preproc-b1-00001448.fits -t 100 -m 100000'
     AMPLIFIERS: ABCD
-    CCDNAME: CCDS1B
+    DETECTOR: itl_4kx4k_02
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
@@ -51,7 +51,7 @@ r1:
 # cross-talk measured with 'desi_compute_crosstalk -i preproc-r1-00001502.fits -t 2000 -m 15000'
 # cross-talk is allowed to be asymmetric eventhough fit compatible with symmetric cross-talk
     AMPLIFIERS: ABCD
-    CCDNAME: CCDS1R
+    DETECTOR: lbnl_4kx4k_1102_reverse
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
@@ -85,7 +85,7 @@ z1:
   V0:
 #  desi_compute_crosstalk -i preproc-z1-00001502.fits -t 1000 -m 10000 
     AMPLIFIERS: ABCD
-    CCDNAME: CCDS1Z
+    DETECTOR: lbnl_4kx4k_1002_reverse
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
