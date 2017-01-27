@@ -1,3 +1,5 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+# -*- coding: utf-8 -*-
 """
 desispec.io.database
 ====================
@@ -45,30 +47,15 @@ Base = declarative_base()
 
 
 frame2brick = Table('frame2brick', Base.metadata,
-                    Column('frame_id', ForeignKey('frame.id'), primary_key=True),
-                    Column('brick_id', ForeignKey('brick.id'), primary_key=True))
-
-
-# tile2brick = Table('tile2brick', Base.metadata,
-#                    Column('tile_id', ForeignKey('tile.id'), primary_key=True),
-#                    Column('petal_id', Integer, primary_key=True),
-#                    Column('brick_id', ForeignKey('brick.id'), primary_key=True))
-
-
-class Tile2Brick(Base):
-    __tablename__ = 'tile2brick'
-
-    tile_id = Column(Integer, ForeignKey('tile.id'), primary_key=True)
-    petal_id = Column(Integer, primary_key=True)
-    brick_id = Column(Integer, ForeignKey('brick.id'), primary_key=True)
-    # tile = relationship('Tile', back_populates='bricks')
-    # brick = relationship('Brick', back_populates='tiles')
-
-    def __repr__(self):
-        return "<Tile2Brick(tile_id={0.tile_id:d}, petal_id={0.petal_id:d}, brick_id={0.brick_id:d})>".format(self)
+                    Column('frame_id', ForeignKey('frame.id'),
+                           primary_key=True),
+                    Column('brick_id', ForeignKey('brick.id'),
+                           primary_key=True))
 
 
 class Brick(Base):
+    """Representation of a region of the sky.
+    """
     __tablename__ = 'brick'
 
     id = Column(Integer, primary_key=True)
@@ -84,15 +71,21 @@ class Brick(Base):
     dec2 = Column(Float, nullable=False)
     area = Column(Float, nullable=False)
 
-    frames = relationship('Frame', secondary=frame2brick, back_populates='bricks')
-    # tiles = relationship('Tile2Brick', back_populates='brick')
-    # tiles = relationship('Tile', secondary=lambda: Tile2Brick.__table__, back_populates='bricks')
+    frames = relationship('Frame', secondary=frame2brick,
+                          back_populates='bricks')
 
     def __repr__(self):
-        return "<Brick(id={0.id:d}, name='{0.name}', q={0.q:d}, row={0.row:d}, col={0.col:d}, ra={0.ra:f}, dec={0.dec:f}, ra1={0.ra1:f}, dec1={0.dec1:f}, ra2={0.ra2:f}, dec2={0.dec2:f}, area={0.area:f})>".format(self)
+        return ("<Brick(id={0.id:d}, name='{0.name}', q={0.q:d}, " +
+                "row={0.row:d}, col={0.col:d}, " +
+                "ra={0.ra:f}, dec={0.dec:f}, " +
+                "ra1={0.ra1:f}, dec1={0.dec1:f}, " +
+                "ra2={0.ra2:f}, dec2={0.dec2:f}, " +
+                "area={0.area:f})>").format(self)
 
 
 class Tile(Base):
+    """Representation of a particular pointing of the telescope.
+    """
     __tablename__ = 'tile'
 
     id = Column(Integer, primary_key=True)
@@ -106,9 +99,6 @@ class Tile(Base):
     exposefac = Column(Float, nullable=False)
     program = Column(String, nullable=False)
     obsconditions = Column(Integer, nullable=False)
-
-    # bricks = relationship('Tile2Brick', back_populates='tile')
-    # bricks = relationship('Brick', secondary=lambda: Tile2Brick.__table__, back_populates='tiles')
 
     def _constants(self):
         """Define mathematical constants associated with a tile.
@@ -125,7 +115,12 @@ class Tile(Base):
         super(Tile, self).__init__(*args, **kwargs)
 
     def __repr__(self):
-        return "<Tile(id={0.id:d}, ra={0.ra:f}, dec={0.dec:f}, desi_pass={0.desi_pass:d}, in_desi={0.in_desi:d}, ebv_med={0.ebv_med:f}, airmass={0.airmass:f}, star_density={0.star_density:f}, exposefac={0.exposefac:f}, program='{0.program}', obsconditions={0.obsconditions:d})>".format(self)
+        return ("<Tile(id={0.id:d}, ra={0.ra:f}, dec={0.dec:f}, " +
+                "desi_pass={0.desi_pass:d}, in_desi={0.in_desi:d}, " +
+                "ebv_med={0.ebv_med:f}, airmass={0.airmass:f}, " +
+                "star_density={0.star_density:f}, " +
+                "exposefac={0.exposefac:f}, program='{0.program}', " +
+                "obsconditions={0.obsconditions:d})>").format(self)
 
     @reconstructor
     def init_on_load(self):
@@ -235,7 +230,8 @@ class Tile(Base):
         return bricks
 
     def petals(self, Npetals=10):
-        """Convert a tile into a set of :class:`~matplotlib.patches.Wedge` objects.
+        """Convert a tile into a set of :class:`~matplotlib.patches.Wedge`
+        objects.
 
         Parameters
         ----------
@@ -325,8 +321,10 @@ class Tile(Base):
                    timedelta(seconds=(exptime*(self.id%2140))))
         band_map = {'b': 10, 'r': 20, 'z': 30}
         band_id_offset = 10**8
-        frame_data = {'id': (band_map[band]+spectrograph)*band_id_offset + self.id,
-                      'name': "{0}{1:d}-{2:08d}".format(band, spectrograph, self.id),
+        frame_data = {'id': ((band_map[band]+spectrograph)*band_id_offset +
+                             self.id),
+                      'name': "{0}{1:d}-{2:08d}".format(band, spectrograph,
+                                                        self.id),
                       'band': band,
                       'spectrograph': spectrograph,
                       'expid': self.id,
@@ -344,15 +342,19 @@ class Tile(Base):
 
 
 class Frame(Base):
+    """Representation of a particular pointing, exposure, spectrograph and
+    band (a.k.a. 'channel' or 'arm').
+    """
     __tablename__ = 'frame'
 
     id = Column(Integer, primary_key=True)  # e.g. 1900012345
     name = Column(String(11), unique=True, nullable=False)  # e.g. b0-00012345
-    band = Column(String(1), nullable=False)  # b, r, z, might be called 'channel' or 'arm'
+    band = Column(String(1), nullable=False)  # b, r, z
     spectrograph = Column(Integer, nullable=False)  # 0, 1, 2, ...
     expid = Column(Integer, nullable=False)  # exposure number
     night = Column(String, ForeignKey('night.night'), nullable=False)
-    flavor = Column(String, ForeignKey('exposureflavor.flavor'), nullable=False)
+    flavor = Column(String, ForeignKey('exposureflavor.flavor'),
+                    nullable=False)
     telra = Column(Float, nullable=False)
     teldec = Column(Float, nullable=False)
     tile_id = Column(Integer, nullable=False, default=-1)
@@ -361,13 +363,22 @@ class Frame(Base):
     alt = Column(Float, nullable=False)
     az = Column(Float, nullable=False)
 
-    bricks = relationship('Brick', secondary=frame2brick, back_populates='frames')
+    bricks = relationship('Brick', secondary=frame2brick,
+                          back_populates='frames')
 
     def __repr__(self):
-        return "<Frame(id='{0.id}', band='{0.band}', spectrograph={0.spectrograph:d}, expid={0.expid:d}, night='{0.night}', flavor='{0.flavor}', telra={0.telra:f}, teldec={0.teldec:f}, tileid={0.tileid:d}, exptime={0.exptime:f}, dateobs='{0.dateobs}', alt={0.alt:f}, az={0.az:f})>".format(self)
+        return ("<Frame(id='{0.id}', band='{0.band}', " +
+                "spectrograph={0.spectrograph:d}, expid={0.expid:d}, " +
+                "night='{0.night}', flavor='{0.flavor}', " +
+                "telra={0.telra:f}, teldec={0.teldec:f}, " +
+                "tileid={0.tileid:d}, exptime={0.exptime:f}, " +
+                "dateobs='{0.dateobs}', " +
+                "alt={0.alt:f}, az={0.az:f})>").format(self)
 
 
 class Night(Base):
+    """List of observation nights.  Used to constrain the possible values.
+    """
     __tablename__ = 'night'
 
     night = Column(String(8), primary_key=True)
@@ -377,6 +388,8 @@ class Night(Base):
 
 
 class ExposureFlavor(Base):
+    """List of exposure flavors.  Used to constrain the possible values.
+    """
     __tablename__ = 'exposureflavor'
 
     flavor = Column(String, primary_key=True)
@@ -386,6 +399,8 @@ class ExposureFlavor(Base):
 
 
 class Status(Base):
+    """List of possible processing statuses.
+    """
     __tablename__ = 'status'
 
     status = Column(String, primary_key=True)
@@ -395,6 +410,9 @@ class Status(Base):
 
 
 class FrameStatus(Base):
+    """Representation of the status of a particular
+    :class:`~desispec.io.database.Frame`.
+    """
     __tablename__ = 'framestatus'
 
     id = Column(Integer, primary_key=True)
@@ -403,9 +421,13 @@ class FrameStatus(Base):
     stamp = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self):
-        return "<FrameStatus(id={0.id:d}, frame_id={0.frame_id:d}, status='{0.status}', stamp='{0.stamp}')>".format(self)
+        return ("<FrameStatus(id={0.id:d}, frame_id={0.frame_id:d}, " +
+                "status='{0.status}', stamp='{0.stamp}')>").format(self)
 
 class BrickStatus(Base):
+    """Representation of the status of a particular
+    :class:`~desispec.io.database.Brick`.
+    """
     __tablename__ = 'brickstatus'
 
     id = Column(Integer, primary_key=True)
@@ -414,7 +436,8 @@ class BrickStatus(Base):
     stamp = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self):
-        return "<BrickStatus(id={0.id:d}, brick_id={0.brick_id:d}, status='{0.status}', stamp='{0.stamp}')>".format(self)
+        return ("<BrickStatus(id={0.id:d}, brick_id={0.brick_id:d}, " +
+                "status='{0.status}', stamp='{0.stamp}')>").format(self)
 
 
 def get_all_tiles(session, obs_pass=0, limit=0):
@@ -442,25 +465,6 @@ def get_all_tiles(session, obs_pass=0, limit=0):
     return q.all()
 
 
-def load_tile2brick(session, obs_pass=0):
-    """Load the tile2brick table using simulated tiles.
-
-    Parameters
-    ----------
-    session : :class:`sqlalchemy.orm.session.Session`
-        Database connection.
-    obs_pass : :class:`int`, optional
-        Select only tiles from this pass.
-    """
-    tile2brick_names = ('tile_id', 'petal_id', 'brick_id')
-    tiles = get_all_tiles(session, obs_pass=obs_pass)
-    for tile in tiles:
-        petal2brick = tile.overlapping_bricks(session, map_petals=True)
-        for p in petal2brick:
-            nb = len(petal2brick[p])
-            session.add_all([Tile2Brick(**tb) for tb in [dict(zip(tile2brick_names, row)) for row in zip([tile.id]*nb, [p]*nb, petal2brick[p])]])
-
-
 def load_simulated_data(session, obs_pass=0):
     """Load simulated frame and brick data.
 
@@ -475,14 +479,6 @@ def load_simulated_data(session, obs_pass=0):
     tiles = get_all_tiles(session, obs_pass=obs_pass)
     status = 'succeeded'
     for t in tiles:
-        # rows = session.query(Tile2Brick).filter_by(tile_id=t.id).all()
-        # petal2brick = dict()
-        # for r in rows:
-        #     brick = session.query(Brick).filter_by(id=r.brick_id).one()
-        #     try:
-        #         petal2brick[r.petal_id].append(brick)
-        #     except KeyError:
-        #         petal2brick[r.petal_id] = [brick]
         for band in 'brz':
             for spectrograph in range(10):
                 frame, bricks = t.simulate_frame(session, band, spectrograph)
@@ -500,16 +496,10 @@ def load_simulated_data(session, obs_pass=0):
                 #     session.add(Status(status=status))
                 session.add(frame)
                 session.add(FrameStatus(frame_id=frame.id, status=status, stamp=frame.dateobs))
-                # for brick in petal2brick[spectrograph]:
-                #     session.add(BrickStatus(brick_id=brick.id, status=status, stamp=frame.dateobs))
-                # frame.bricks = petal2brick[spectrograph]
                 for brick in bricks:
                     session.add(BrickStatus(brick_id=brick.id, status=status, stamp=frame.dateobs))
                 frame.bricks = bricks
         session.commit()
-        #
-        #
-        #
         log.info("Completed insert of tileid = {0:d}.".format(t.id))
     return
 
@@ -613,9 +603,6 @@ def load_data(session, datapath):
             for brick in bricks:
                 session.add(BrickStatus(brick_id=brick.id, status=status, stamp=frame.dateobs))
         session.commit()
-        #
-        #
-        #
         log.info("Completed insert of fibermap = {0}.".format(f))
     return exposures
 
@@ -727,14 +714,6 @@ def main():
         session.commit()
         log.info("Finished loading bricks.")
     if options.simulate:
-        # try:
-        #     q = session.query(Tile2Brick).one()
-        # except MultipleResultsFound:
-        #     log.info("Tile2Brick table already loaded.")
-        # except NoResultFound:
-        #     load_tile2brick(session, options.obs_pass)
-        #     session.commit()
-        # log.info("Completed tile2brick mapping.")
         try:
             q = session.query(Frame).one()
         except MultipleResultsFound:
