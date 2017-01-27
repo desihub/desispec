@@ -40,6 +40,14 @@ to use, but also only if a single camera is specified.
                         help = 'pixflat image calibration file')
     parser.add_argument('--mask', type = str, default = None, required=False,
                         help = 'mask image calibration file')
+    parser.add_argument('--nobias', action = 'store_true',
+                        help = 'no bias subtraction')
+    parser.add_argument('--nodark', action = 'store_true',
+                        help = 'no dark subtraction')
+    parser.add_argument('--nopixflat',action = 'store_true', 
+                        help = 'no pixflat correction')
+    parser.add_argument('--nomask', action = 'store_true',
+                        help = 'no prior masking of pixels')
 
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
@@ -70,6 +78,21 @@ def main(args=None):
         args = parse()
     elif isinstance(args, (list, tuple)):
         args = parse(args)
+
+    bias=True
+    if args.bias : bias=args.bias
+    if args.nobias : bias=False
+    dark=True
+    if args.dark : dark=args.dark
+    if args.nodark : dark=False
+    pixflat=True
+    if args.pixflat : pixflat=args.pixflat
+    if args.nopixflat : pixflat=False
+    mask=True
+    if args.mask : mask=args.mask
+    if args.nomask : mask=False
+    
+
         
     if args.cameras is None:
         args.cameras = [c+str(i) for c in 'brz' for i in range(10)]
@@ -98,7 +121,7 @@ def main(args=None):
         try:
             img = io.read_raw(args.infile, camera,
 
-                              bias=args.bias, dark=args.dark, pixflat=args.pixflat, mask=args.mask, bkgsub=args.bkgsub, nocosmic=args.nocosmic,
+                              bias=bias, dark=dark, pixflat=pixflat, mask=mask, bkgsub=args.bkgsub, nocosmic=args.nocosmic,
                               cosmics_nsig=args.cosmics_nsig,
                               cosmics_cfudge=args.cosmics_cfudge,
                               cosmics_c2fudge=args.cosmics_c2fudge,

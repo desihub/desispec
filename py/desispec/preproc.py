@@ -223,8 +223,8 @@ def read_ccd_calibration(header, primary_header, filename) :
     if not cameraid in data :
         log.error("Cannot find data for camera %s in filename %s"%(cameraid,filename))
         raise KeyError("Cannot find  data for camera %s in filename %s"%(cameraid,filename))
-    log.info("Found data for camera %s in filename %s"%(cameraid,filename))
     data=data[cameraid]
+    log.info("Found %d data for camera %s in filename %s"%(len(data),cameraid,filename))
     log.info("Finding matching version ...")
     dateobs=_parse_date_obs(primary_header["DATE-OBS"])
     dosver=primary_header["DOSVER"].strip()
@@ -233,38 +233,80 @@ def read_ccd_calibration(header, primary_header, filename) :
     
     log.info("DATE-OBS=%d"%dateobs)
     found=False
+    matching_data=None
     for version in data :
         log.info("Checking version %s"%version)
         datebegin=int(data[version]["DATE-OBS-BEGIN"])
         if dateobs < datebegin :
-            log.info("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(datebegin,dateobs))
+            log.info("Skip version %s with DATE-OBS-BEGIN=%d > DATE-OBS=%d"%(version,datebegin,dateobs))
             continue
         if "DATE-OBS-END" in data[version] and data[version]["DATE-OBS-END"].lower() != "none" :
             dateend=int(data[version]["DATE-OBS-END"])
             if dateobs >= dateend :
-                log.info("Skip version %s with DATE-OBS-END=%d <= DATE-OBS=%d"%(datebegin,dateobs))
+                log.info("Skip version %s with DATE-OBS-END=%d <= DATE-OBS=%d"%(version,datebegin,dateobs))
                 continue
+        if detector != data[version]["DETECTOR"].strip() :
+            log.info("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))
+            continue
         if dosver != data[version]["DOSVER"].strip() :
-            log.info("Skip version %s with DOSVER=%s != %s "%(data[version]["DOSVER"],dosver))
+            log.info("Skip version %s with DOSVER=%s != %s "%(version,data[version]["DOSVER"],dosver))
             continue
         if feever != data[version]["FEEVER"].strip() :
-            log.info("Skip version %s with FEEVER=%s != %s"%(data[version]["FEEVER"],feever))
+            log.info("Skip version %s with FEEVER=%s != %s"%(version,data[version]["FEEVER"],feever))
             continue
-        if detector != data[version]["DETECTOR"].strip() :
-            log.info("Skip version %s with DETECTOR=%s != %s"%(data[version]["DETECTOR"],detector))
-            continue
-        
+           
         log.info("Found data version %s for camera %s in %s"%(version,cameraid,filename))
+        if found :
+            log.error("But we already has a match. Please fix this ambiguity in %s"%filename)
+            raise KeyError("Duplicate possible calibration data. Please fix this ambiguity in %s"%filename)
         found=True
-        data=data[version]
+        matching_data=data[version]
+    data=matching_data
+        
 
     if not found :
         log.error("Didn't find matching calibration data in %s"%(filename))
         raise KeyError("Didn't find matching calibration data in %s"%(filename))
     return data
 
+def get_calibration_image(calibration_data,calibration_data_path,keyword,entry) :
 
-def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=False, mask=None, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None):
+    
+    
+    if entry is False : return False # we don't want do anything
+
+    
+    filename = None
+    if entry is True :
+        # we have to find the filename
+        if calibration_data is None :
+            log.error("DESI_CCD_CALIBRATION_DATA environment variable must be set in order to find the calibration fits files")
+            raise IOError("DESI_CCD_CALIBRATION_DATA environment variable must be set in order to find the calibration fits files")
+        if keyword in calibration_data :             
+            filename = "%s/%s"%(calibration_data_path,calibration_data[keyword])
+        else :
+            return False # we say in the calibration data we don't need this
+    elif isinstance(entry,str) :
+        filename = entry
+    else :        
+        return entry # it's expected to be an image array
+        
+
+    log.info("Using %s %s"%(keyword,filename))
+    if keyword == "BIAS" :
+        return read_bias(filename=filename)
+    elif keyword == "MASK" :
+        return read_mask(filename=filename)
+    elif keyword == "DARK" :
+        return read_dark(filename=filename)
+    elif keyword == "PIXFLAT" :
+        return read_pixflat(filename=filename)
+    else :
+        log.error("Don't known how to read %s in %s"%(keyword,path))
+        raise ValueError("Don't known how to read %s in %s"%(keyword,path))
+    return False
+
+def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None):
 
     '''
     preprocess image using metadata in header
@@ -284,7 +326,7 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
         True: use default calibration data for that night
         ndarray: use that array
         filename (str or unicode): read HDU 0 and use that
-        DATE-OBS is required in header if bias, pixflat, or mask=True
+        DATE-OBS is required in primary_header if bias, pixflat, or mask=True
 
 
     
@@ -346,9 +388,8 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
         calibration_data_path = os.environ["DESI_CCD_CALIBRATION_DATA"]
     else :
         calibration_data_path = None
-        error_message_for_calibration_data="DESI_CCD_CALIBRATION_DATA environment variable must be set in order to find fits files listed in %s"%ccd_calibration_filename
+        calibration_data      = None
     
-
     #- TODO: Check for required keywords first
 
     #- Subtract bias image
@@ -357,28 +398,15 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
     #- convert rawimage to float64 : this is the output format of read_image
     rawimage = rawimage.astype(np.float64)
     
-    if bias is not False :
-        if bias is None and "BIAS" in calibration_data : 
-            if calibration_data_path is None :
-                log.error(error_message_for_calibration_data)
-                raise IOError(error_message_for_calibration_data)
-            bias = "%s/%s"%(calibration_data_path,calibration_data["BIAS"])
-            
-        if bias is True:
-            #- use default bias file for this camera/night
-            dateobs = header['DATE-OBS']
-            bias = read_bias(camera=camera, dateobs=dateobs)
-        ### elif isinstance(bias, (str, unicode)):
-        elif isinstance(bias, str):
-            #- treat as filename
-            log.info("Using bias %s"%bias)
-            bias = read_bias(filename=bias)
-
-        if bias.shape == rawimage.shape:
+    bias = get_calibration_image(calibration_data,calibration_data_path,"BIAS",bias)
+    
+    if bias is not False : #- it's an array
+        if bias.shape == rawimage.shape  :
+            log.info("subtracting bias")
             rawimage = rawimage - bias
         else:
             raise ValueError('shape mismatch bias {} != rawimage {}'.format(bias.shape, rawimage.shape))
-
+    
 
     if calibration_data and "AMPLIFIERS" in calibration_data :
         amp_ids=list(calibration_data["AMPLIFIERS"])
@@ -415,48 +443,25 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
         
 
     #- Load mask
-    if mask is not False :
-        if calibration_data and  mask is  None  and "MASK" in calibration_data :
-            if calibration_data_path is None :
-                log.error(error_message_for_calibration_data)
-                raise IOError(error_message_for_calibration_data)
-            mask = "%s/%s"%(calibration_data_path,calibration_data["MASK"])
-            
-        if mask is True:
-            dateobs = header['DATE-OBS']
-            mask = read_mask(camera=camera, dateobs=dateobs)
-        ### elif isinstance(mask, (str, unicode)):
-        elif isinstance(mask, str):
-            log.info("Using mask %s"%mask)
-            mask = read_mask(filename=mask)
-    if mask is None :
+    mask = get_calibration_image(calibration_data,calibration_data_path,"MASK",mask)
+        
+    if mask is False :
         mask = np.zeros(image.shape, dtype=np.int32)
-
-    if mask.shape != image.shape:
-        raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
-
-    #- Load dark if exists
-    if dark is not False : 
-        if dark is None and "DARK" in calibration_data :
-            if calibration_data_path is None :
-                log.error(error_message_for_calibration_data)
-                raise IOError(error_message_for_calibration_data)
-            dark = "%s/%s"%(calibration_data_path,calibration_data["DARK"])
-            
-        if dark is None :
-            dateobs = header['DATE-OBS']
-            dark = read_dark(camera=camera, dateobs=dateobs)            
-        elif isinstance(dark, str):
-            #- treat as filename
-            log.info("Using dark %s"%dark)
-            dark = read_dark(dark)
-            if dark.shape != image.shape :
-                log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
-                raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
+    else :
+        if mask.shape != image.shape :
+            raise ValueError('shape mismatch mask {} != image {}'.format(mask.shape, image.shape))
+    
+    #- Load dark
+    dark = get_calibration_image(calibration_data,calibration_data_path,"DARK",dark)
+    
+    if dark is not False :
+        if dark.shape != image.shape :
+            log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
+            raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
         exptime =  primary_header['EXPTIME']
         log.info("Multiplying dark by exptime %f"%(exptime))
         dark *= exptime
-                
+    
             
     
     for amp in amp_ids :
@@ -551,7 +556,8 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
         mask[kk][saturated] |= ccdmask.SATURATED
         
         #- subtract dark prior to multiplication by gain
-        if dark is not False and dark is not None :
+        if dark is not False  :
+            log.info("subtracting dark for amp %s"%amp)
             data -= dark[kk]
         
         image[kk] = data*gain
@@ -610,14 +616,8 @@ def preproc(rawimage, header, primary_header, bias=False, dark=False, pixflat=Fa
             
     
     #- Divide by pixflat image
-    if pixflat is not False and pixflat is not None:
-        if pixflat is True:
-            dateobs = header['DATE-OBS']
-            pixflat = read_pixflat(camera=camera, dateobs=dateobs)
-        ### elif isinstance(pixflat, (str, unicode)):
-        elif isinstance(pixflat, str):
-            pixflat = read_pixflat(filename=pixflat)
-
+    pixflat = get_calibration_image(calibration_data,calibration_data_path,"PIXFLAT",pixflat)
+    if pixflat is not False :
         if pixflat.shape != image.shape:
             raise ValueError('shape mismatch pixflat {} != image {}'.format(pixflat.shape, image.shape))
 
