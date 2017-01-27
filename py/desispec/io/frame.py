@@ -7,16 +7,16 @@ I/O routines for Frame objects
 import os.path
 
 import numpy as np
-import scipy,scipy.sparse
+import scipy, scipy.sparse
 from astropy.io import fits
 
 from desiutil.depend import add_dependencies
-import desiutil.io
+from desiutil.io import encode_table
 
-from desispec.frame import Frame
-from desispec.io import findfile
-from desispec.io.util import fitsheader, native_endian, makepath
-from desispec.log import get_logger
+from ..frame import Frame
+from .meta import findfile
+from .util import fitsheader, native_endian, makepath
+from ..log import get_logger
 
 log = get_logger()
 
@@ -44,7 +44,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         hdr = fitsheader(header)
     else:
         hdr = fitsheader(frame.meta)
-        
+
     add_dependencies(hdr)
 
     hdus = fits.HDUList()
@@ -63,13 +63,13 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     hdus.append( fits.ImageHDU(frame.wave.astype('f4'), name='WAVELENGTH') )
     hdus[-1].header['BUNIT'] = 'Angstrom'
     hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
-    
+
     if fibermap is not None:
-        fibermap = desiutil.io.encode_table(fibermap)  #- unicode -> bytes
+        fibermap = encode_table(fibermap)  #- unicode -> bytes
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.fibermap is not None:
-        fibermap = desiutil.io.encode_table(frame.fibermap)  #- unicode -> bytes
+        fibermap = encode_table(frame.fibermap)  #- unicode -> bytes
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif frame.spectrograph is not None:
@@ -114,14 +114,14 @@ def read_frame(filename, nspec=None):
         mask = native_endian(fx['MASK'].data)
     else:
         mask = None   #- let the Frame object create the default mask
-        
+
     resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
-    
+
     if 'FIBERMAP' in fx:
         fibermap = fx['FIBERMAP'].data
     else:
         fibermap = None
-        
+
     if 'CHI2PIX' in fx:
         chi2pix = native_endian(fx['CHI2PIX'].data.astype('f8'))
     else:
