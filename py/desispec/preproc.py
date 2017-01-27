@@ -280,10 +280,16 @@ def get_calibration_image(calibration_data,calibration_data_path,keyword,entry) 
     if entry is True :
         # we have to find the filename
         if calibration_data is None :
-            log.error("DESI_CCD_CALIBRATION_DATA environment variable must be set in order to find the calibration fits files")
-            raise IOError("DESI_CCD_CALIBRATION_DATA environment variable must be set in order to find the calibration fits files")
-        if keyword in calibration_data :             
-            filename = "%s/%s"%(calibration_data_path,calibration_data[keyword])
+            log.error("no calibration data was found")
+            raise ValueError("no calibration data was found")
+        if keyword in calibration_data :
+            basefilename=calibration_data[keyword]
+            if calibration_data_path is None :
+                error_message = "DESI_CCD_CALIBRATION_DATA environment variable must be set in order to find the calibration file %s"%basefilename
+                log.error(error_message)
+                raise IOError(error_message)
+        
+            filename = "%s/%s"%(calibration_data_path,basefilename)
         else :
             return False # we say in the calibration data we don't need this
     elif isinstance(entry,str) :
@@ -388,7 +394,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         calibration_data_path = os.environ["DESI_CCD_CALIBRATION_DATA"]
     else :
         calibration_data_path = None
-        calibration_data      = None
+    
     
     #- TODO: Check for required keywords first
 
