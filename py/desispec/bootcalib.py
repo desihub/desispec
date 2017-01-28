@@ -147,7 +147,7 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     # Roll to find peaks (simple algorithm)
     # nwidth = 5
     nstep = max(1,nwidth // 2)
-    for kk in xrange(-nstep,nstep):
+    for kk in range(-nstep,nstep):
         if kk < 0:
             test = np.roll(spec,kk) < np.roll(spec,kk+1)
         else:
@@ -1614,7 +1614,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     prihdu = fits.PrimaryHDU(XCOEFF)
     prihdu.header['WAVEMIN'] = WAVEMIN
     prihdu.header['WAVEMAX'] = WAVEMAX
-    prihdu.header['EXTNAME'] = 'XCOEFF'
+    prihdu.header['EXTNAME'] = 'XTRACE'
     prihdu.header['PSFTYPE'] = 'bootcalib'
     
     from desiutil.depend import add_dependencies
@@ -1639,8 +1639,8 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
         if "EXPID" in fiberflat_header:
             prihdu.header["FLAEXPID"] = fiberflat_header["EXPID"]
     
-    yhdu = fits.ImageHDU(YCOEFF, name='YCOEFF')
-
+    yhdu = fits.ImageHDU(YCOEFF, name='YTRACE')
+    
     # also save wavemin wavemax in yhdu
     yhdu.header['WAVEMIN'] = WAVEMIN
     yhdu.header['WAVEMAX'] = WAVEMAX

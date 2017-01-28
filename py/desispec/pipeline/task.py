@@ -19,6 +19,7 @@ from .. import log as desilog
 from ..log import get_logger
 from ..util import option_list
 from ..parallel import default_nproc
+from .. import io
 
 from ..scripts import bootcalib
 from ..scripts import specex
@@ -81,7 +82,7 @@ class WorkerBootcalib(Worker):
     Bootstrap the trace locations from arc images.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -117,6 +118,9 @@ class WorkerBootcalib(Worker):
         log = get_logger()
 
         node = grph[task]
+        night, obj = graph_night_split(task)
+        (temp, band, spec) = graph_name_split(obj)
+        cam = "{}{}".format(band, spec)
 
         arcs = []
         flats = []
@@ -133,18 +137,17 @@ class WorkerBootcalib(Worker):
         firstarc = sorted(arcs)[0]
         firstflat = sorted(flats)[0]
 
-        arcpath = graph_path("pix", firstarc)
-        flatpath = graph_path("pix", firstflat)
-        outpath = graph_path("psfboot", task)
+        arcpath = graph_path(firstarc)
+        flatpath = graph_path(firstflat)
+        outpath = graph_path(task)
 
-        #qafile, qafig = qa_path(outpath)
+        #qapath = io.findfile("qa_bootcalib", night=night, camera=cam, band=band, spectrograph=spec)
         
         # build list of options
         options = {}
         options["fiberflat"] = flatpath
         options["arcfile"] = arcpath
-        #options["qafile"] = qafile
-        # options["qafig"] = qafig
+        #options["qafile"] = qapath
         options["outfile"] = outpath
         options.update(opts)
         optarray = option_list(options)
@@ -166,7 +169,7 @@ class WorkerSpecex(Worker):
     Estimate the PSF from arc images.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -216,6 +219,9 @@ class WorkerSpecex(Worker):
         log = get_logger()
 
         node = grph[task]
+        night, obj = graph_night_split(task)
+        (temp, band, spec, expid) = graph_name_split(obj)
+        cam = "{}{}".format(band, spec)
 
         pix = []
         boot = []
@@ -229,9 +235,9 @@ class WorkerSpecex(Worker):
             raise RuntimeError("specex needs exactly one psfboot file")
         if len(pix) != 1:
             raise RuntimeError("specex needs exactly one image file")
-        bootfile = graph_path("psfboot", boot[0])
-        imgfile = graph_path("pix", pix[0])
-        outfile = graph_path("psf", task)
+        bootfile = graph_path(boot[0])
+        imgfile = graph_path(pix[0])
+        outfile = graph_path(task)
 
         options = {}
         options["input"] = imgfile
@@ -262,7 +268,7 @@ class WorkerSpecexCombine(Worker):
     Combine multiple PSF estimates into one.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -294,10 +300,10 @@ class WorkerSpecexCombine(Worker):
 
         node = grph[task]
 
-        outfile = graph_path("psfnight", task)
+        outfile = graph_path(task)
         infiles = []
         for input in node["in"]:
-            infiles.append(graph_path("psf", input))
+            infiles.append(graph_path(input))
 
         specex.mean_psf(infiles, outfile)
 
@@ -309,7 +315,7 @@ class WorkerSpecter(Worker):
     Extract a frame using Specter"s ex2d.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -349,6 +355,9 @@ class WorkerSpecter(Worker):
         log = get_logger()
 
         node = grph[task]
+        night, obj = graph_night_split(task)
+        (temp, band, spec) = graph_name_split(obj)
+        cam = "{}{}".format(band, spec)
 
         pix = []
         psf = []
@@ -370,10 +379,10 @@ class WorkerSpecter(Worker):
         if len(fm) != 1:
             raise RuntimeError("extraction needs exactly one fibermap file")
 
-        imgfile = graph_path("pix", pix[0])
-        psffile = graph_path("psfnight", psf[0])
-        fmfile = graph_path("fibermap", fm[0])
-        outfile = graph_path("frame", task)
+        imgfile = graph_path(pix[0])
+        psffile = graph_path(psf[0])
+        fmfile = graph_path(fm[0])
+        outfile = graph_path(task)
 
         options = {}
         options["input"] = imgfile
@@ -411,7 +420,7 @@ class WorkerFiberflat(Worker):
     Compute the 1D fiberflat.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -440,11 +449,14 @@ class WorkerFiberflat(Worker):
         log = get_logger()
 
         node = grph[task]
+        night, obj = graph_night_split(task)
+        (temp, band, spec) = graph_name_split(obj)
+        cam = "{}{}".format(band, spec)
 
         if len(node["in"]) != 1:
             raise RuntimeError("fiberflat should have only one input frame")
-        framefile = graph_path("frame", node["in"][0])
-        outfile = graph_path("fiberflat", task)
+        framefile = graph_path(node["in"][0])
+        outfile = graph_path(task)
         
         #qafile, qafig = qa_path(outfile)
 
@@ -472,7 +484,7 @@ class WorkerSky(Worker):
     Compute the sky model.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -546,7 +558,7 @@ class WorkerStdstars(Worker):
     Compute the standard stars for use in flux calibration.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -633,7 +645,7 @@ class WorkerFluxcal(Worker):
     Compute the flux calibration.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -721,7 +733,7 @@ class WorkerProcexp(Worker):
     Apply the calibration to a frame.
     """
     def __init__(self, opts):
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -808,7 +820,7 @@ class WorkerRedmonster(Worker):
         self.nproc = 24
         if "nproc" in opts:
             self.nproc = opts["nproc"]
-        super().__init__()
+        super(Worker, self).__init__()
 
 
     def max_nproc(self):
@@ -859,6 +871,36 @@ class WorkerRedmonster(Worker):
         args = zfind.parse(optarray)
         zfind.main(args, comm=comm)
 
+        return
+
+
+
+class WorkerNoop(Worker):
+    """
+    Fake Worker that simply creates the output files for a task.
+    """
+    def __init__(self, opts):
+        self.defaults = opts
+        super(Worker, self).__init__()
+
+    def max_nproc(self):
+        return 1
+
+    def default_options(self):
+        return self.defaults
+
+    def run(self, grph, task, opts, comm=None):
+        nproc = 1
+        rank = 0
+        if comm is not None:
+            nproc = comm.size
+            rank = comm.rank
+        log = get_logger()
+        node = grph[task]
+        p = graph_path(node["type"], task)
+        log.info("NOOP Worker creating {}".format(p))
+        with open(p, "w") as f:
+            f.write("NOOP\n")
         return
 
 

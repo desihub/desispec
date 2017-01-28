@@ -18,7 +18,7 @@ b1:
   V0:
 # cross-talk measured with 'desi_compute_crosstalk -i preproc-b1-00001448.fits -t 100 -m 100000'
     AMPLIFIERS: ABCD
-    CCDNAME: CCDS1B
+    DETECTOR: itl_4kx4k_02
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
@@ -46,12 +46,19 @@ b1:
     BIAS: 20161221/bias-b1.fits
     DARK: 20161221/dark-b1.fits
 
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM 
 r1:
   V0:
 # cross-talk measured with 'desi_compute_crosstalk -i preproc-r1-00001502.fits -t 2000 -m 15000'
 # cross-talk is allowed to be asymmetric eventhough fit compatible with symmetric cross-talk
     AMPLIFIERS: ABCD
-    CCDNAME: CCDS1R
+    DETECTOR: lbnl_4kx4k_1102_reverse
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
@@ -81,11 +88,19 @@ r1:
     BIAS: 20161221/bias-r1.fits
     DARK: 20161221/dark-r1.fits
 
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM 
+
 z1:
   V0:
 #  desi_compute_crosstalk -i preproc-z1-00001502.fits -t 1000 -m 10000 
     AMPLIFIERS: ABCD
-    CCDNAME: CCDS1Z
+    DETECTOR: lbnl_4kx4k_1002_reverse
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
@@ -116,3 +131,236 @@ z1:
     DARK: 20161221/dark-z1.fits
     MASK: 20161221/mask-z1.fits
     
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM 
+
+
+
+
+#####################################
+## DUMMY VALUES FOR SIMULATION TESTS
+#####################################
+
+b0:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r0:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z0:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM    
+b2:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r2:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z2:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+b3:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r3:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z3:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+b4:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r4:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z4:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+b5:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r5:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z5:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+b6:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r6:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z6:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+b7:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r7:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z7:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+b8:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r8:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z8:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+b9:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+r9:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM       
+z9:
+  SIM:
+      AMPLIFIERS: '1234'      
+      DATE-OBS-BEGIN: '19000101'
+      DATE-OBS-END: None  
+      DOSVER: SIM
+      FEEVER: SIM
+      DETECTOR: SIM
+
+

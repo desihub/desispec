@@ -195,7 +195,7 @@ def run_step(step, grph, opts, comm=None):
 
             # slice out just the graph for this task
 
-            (night, gname) = graph_name_split(tasks[t])
+            (night, gname) = graph_night_split(tasks[t])
 
             # check if all inputs exist
 
@@ -203,7 +203,7 @@ def run_step(step, grph, opts, comm=None):
             if group_rank == 0:
                 for iname in grph[tasks[t]]['in']:
                     ind = grph[iname]
-                    fspath = graph_path(ind['type'], iname)
+                    fspath = graph_path(iname)
                     if not os.path.exists(fspath):
                         missing += 1
                         log.error("skipping step {} task {} due to missing input {}".format(step, tasks[t], fspath))
@@ -353,7 +353,7 @@ def retry_task(failpath, newopts=None):
 
     rundir = io.get_pipe_rundir()
     logdir = os.path.join(rundir, io.get_pipe_logdir())
-    (night, gname) = graph_name_split(name)
+    (night, gname) = graph_night_split(name)
 
     nlogdir = os.path.join(logdir, night)
             
@@ -604,6 +604,85 @@ def nersc_job(path, logroot, desisetup, commands, nodes=1, \
             f.write("else\n")
             f.write("  app=${ex}\n")
             f.write("fi\n")
+            f.write("echo calling {} at `date`\n\n".format(executable))
+            f.write("export STARTTIME=`date +%Y%m%d-%H:%M:%S`\n")
+            f.write("echo ${{run}} ${{app}} {}\n".format(" ".join(comlist)))
+            f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(" ".join(comlist)))
+            if multisrun:
+                f.write(" &")
+            f.write("\n\n")
+        if multisrun:
+            f.write("wait\n\n")
+
+        f.write("echo done with slurm script at `date`\n")
+
+    return
+
+
+def nersc_shifter_job(path, img, specdata, specredux, desimodel, logroot, desisetup, commands, nodes=1, \
+    nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
+    queue="debug", jobname="desipipe"):
+
+    hours = int(minutes/60)
+    fullmin = int(minutes - 60*hours)
+    timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
+
+    totalnodes = nodes
+    if multisrun:
+        # we are running every command as a separate srun
+        # and backgrounding them.  In this case, the nodes
+        # given are per command, so we need to compute the
+        # total.
+        totalnodes = nodes * len(commands)
+
+    with open(path, "w") as f:
+        f.write("#!/bin/bash -l\n\n")
+        f.write("#SBATCH --image={}\n".format(img))
+        if queue == "debug":
+            f.write("#SBATCH --partition=debug\n")
+        else:
+            f.write("#SBATCH --partition=regular\n")
+        f.write("#SBATCH --account=desi\n")
+        f.write("#SBATCH --nodes={}\n".format(totalnodes))
+        f.write("#SBATCH --time={}\n".format(timestr))
+        f.write("#SBATCH --job-name={}\n".format(jobname))
+        f.write("#SBATCH --output={}_%j.log\n".format(logroot))
+        f.write("#SBATCH --volume=/project/projectdirs/desi:/desi/root\n")
+        f.write("#SBATCH --volume={}:/desi/model\n".format(desimodel))
+        f.write("#SBATCH --volume={}:/desi/spectro_data\n".format(specdata))
+        f.write("#SBATCH --volume={}:/desi/spectro_redux\n".format(specredux))
+
+        f.write("echo Starting slurm script at `date`\n\n")
+        f.write("source {}\n\n".format(desisetup))
+
+        f.write("node_cores=0\n")
+        f.write("if [ ${NERSC_HOST} = edison ]; then\n")
+        f.write("  module load shifter\n")
+        f.write("  node_cores=24\n")
+        f.write("else\n")
+        f.write("  node_cores=32\n")
+        f.write("fi\n")
+        f.write("\n")
+        f.write("nodes={}\n".format(nodes))
+        f.write("node_proc={}\n".format(nodeproc))
+        f.write("node_thread=$(( node_cores / node_proc ))\n")
+        f.write("procs=$(( nodes * node_proc ))\n\n")
+        if openmp:
+            f.write("export OMP_NUM_THREADS=${node_thread}\n")
+            f.write("\n")
+        runstr = "srun"
+        if multiproc:
+            runstr = "{} --cpu_bind=no".format(runstr)
+        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}} shifter\"\n\n".format(runstr))
+        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write("echo \"job datestamp = ${now}\"\n")
+        f.write("log={}_${{now}}.log\n\n".format(logroot))
+        f.write("envlog={}_${{now}}.env\n".format(logroot))
+        f.write("env > ${envlog}\n\n")
+        for com in commands:
+            comlist = com.split(" ")
+            executable = comlist.pop(0)
+            f.write("app={}\n".format(executable))
             f.write("echo calling {} at `date`\n\n".format(executable))
             f.write("export STARTTIME=`date +%Y%m%d-%H:%M:%S`\n")
             f.write("echo ${{run}} ${{app}} {}\n".format(" ".join(comlist)))
