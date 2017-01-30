@@ -48,7 +48,9 @@ to use, but also only if a single camera is specified.
                         help = 'no pixflat correction')
     parser.add_argument('--nomask', action = 'store_true',
                         help = 'no prior masking of pixels')
-
+    parser.add_argument('--nocrosstalk', action = 'store_true',
+                        help = 'no cross-talk correction')
+    
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
     parser.add_argument('--cosmics-cfudge', type = float, default = 3, required=False,
@@ -121,11 +123,13 @@ def main(args=None):
         try:
             img = io.read_raw(args.infile, camera,
 
-                              bias=bias, dark=dark, pixflat=pixflat, mask=mask, bkgsub=args.bkgsub, nocosmic=args.nocosmic,
+                              bias=bias, dark=dark, pixflat=pixflat, mask=mask, bkgsub=args.bkgsub,
+                              nocosmic=args.nocosmic,                              
                               cosmics_nsig=args.cosmics_nsig,
                               cosmics_cfudge=args.cosmics_cfudge,
                               cosmics_c2fudge=args.cosmics_c2fudge,
-                              ccd_calibration_filename=ccd_calibration_filename
+                              ccd_calibration_filename=ccd_calibration_filename,
+                              nocrosstalk=args.nocrosstalk,
             )
         except IOError:
             log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
