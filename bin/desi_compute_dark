@@ -46,7 +46,13 @@ for filename in args.image :
     fitsfile.close()
     
     # read raw data and preprocess them
-    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=True,ccd_calibration_filename=False)
+    bias=False
+    if args.bias : bias=args.bias
+    dark=False
+    pixflat=False
+    mask=False
+    
+    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=True,mask=mask,dark=dark,pixflat=pixflat,ccd_calibration_filename=False)
     if shape is None :
         shape=img.pix.shape
     log.info("adding dark %s divided by exposure time %f s"%(filename,exptime))
