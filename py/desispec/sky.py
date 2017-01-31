@@ -83,7 +83,8 @@ def compute_sky(frame, nsig_clipping=4.) :
 
         log.info("iter %d solving"%iteration)
 
-        skyflux=cholesky_solve(A.todense(),B)
+        #skyflux=cholesky_solve(A.todense(),B)
+        skyflux=np.linalg.lstsq(A.todense(),B)[0]
 
         log.info("iter %d compute chi2"%iteration)
 
@@ -132,7 +133,9 @@ def compute_sky(frame, nsig_clipping=4.) :
 
 
     # solve once again to get deconvolved sky variance
-    skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+    #skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+    skyflux = np.linalg.lstsq(A.todense(),B)[0]
+    skycovar = np.linalg.pinv(A.todense())
 
     #- sky inverse variance, but incomplete and not needed anyway
     # skyvar=np.diagonal(skycovar)

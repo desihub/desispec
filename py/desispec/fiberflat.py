@@ -144,7 +144,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
             F = np.ones((flux.shape[1]))
             ok=np.where((mean_spectrum!=0)&(ivar[fiber]>0))[0]
             F[ok] = flux[fiber,ok]/mean_spectrum[ok]
-            smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],F[ok],smoothing_res,ivar[fiber,ok])
+            smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],F[ok],smoothing_res,ivar[fiber,ok]*mean_spectrum[ok]**2)*(ivar[fiber]*mean_spectrum**2>0)
             
         
         # normalize to get a mean fiberflat=1
@@ -157,9 +157,9 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
         
         
         # this is the max difference between two iterations
-        max_diff=np.max(np.abs(smooth_fiberflat-previous_smooth_fiberflat)*(ivar>0.)) 
+        max_diff=np.max(np.abs(smooth_fiberflat-previous_smooth_fiberflat)*(ivar*mean_spectrum**2>0.)) 
         previous_smooth_fiberflat=smooth_fiberflat.copy()
-        
+        print max_diff
         # we don't start the rejection tests until we have converged on this
         if max_diff>0.01 :
             log.info("1st pass, max diff. = %g > 0.01 , continue iterating before outlier rejection"%(max_diff))
@@ -168,7 +168,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
 
         chi2=ivar*(flux-smooth_fiberflat*mean_spectrum)**2
         
-        if True :  
+        if False :  
             nsig_clipping_for_this_pass = nsig_clipping
             
             # not more than 5 pixels per fiber at a time
@@ -183,7 +183,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
                         nout_iter += bad.size
                         ok=np.where((mean_spectrum!=0)&(ivar[fiber]>0))[0]
                         F[ok] = flux[fiber,ok]/mean_spectrum[ok]
-                        smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],F[ok],smoothing_res,ivar[fiber,ok])
+                        smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],F[ok],smoothing_res,ivar[fiber,ok]*mean_spectrum[ok]**2)*(ivar[fiber]*mean_spectrum**2>0)
                         chi2[fiber]=ivar[fiber]*(flux[fiber]-smooth_fiberflat[fiber]*mean_spectrum)**2
                     else :
                         break
@@ -197,7 +197,6 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
                 chi2pdf=sum_chi2/ndf
             log.info("1st pass iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d (nsig=%f)"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,nsig_clipping_for_this_pass))
 
-        
         if max_diff>accuracy :
             log.info("1st pass iter #%d max diff. = %g > requirement = %g , continue iterating"%(iteration,max_diff,accuracy))
             continue
@@ -206,7 +205,6 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
             break
 
     log.info("after 1st pass : nout = %d/%d"%(np.sum(ivar==0),np.size(ivar.flatten())))
-    
     # 2nd pass is full solution including deconvolved spectrum, no outlier rejection
     for iteration in range(max_iterations) : 
         
@@ -236,8 +234,8 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
             A = A+(sqrtwflatR.T*sqrtwflatR).tocsr()
             B += sqrtwflatR.T.dot(np.sqrt(ivar[fiber])*flux[fiber])
             
-        mean_spectrum=cholesky_solve(A.todense(),B)
-            
+        #mean_spectrum=cholesky_solve(A.todense(),B)
+        mean_spectrum=np.linalg.lstsq(A.todense(),B)[0]
             
         # fit smooth fiberflat
         smoothing_res=100. #A
@@ -252,14 +250,17 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
             
             M = R.dot(mean_spectrum)            
             ok=np.where(M!=0)[0]
-            smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],flux[fiber,ok]/M[ok],smoothing_res,ivar[fiber,ok])
+            smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],flux[fiber,ok]/M[ok],smoothing_res,ivar[fiber,ok]*M[ok]**2)*(ivar[fiber,:]*M**2>0)
+            w=np.isnan(smooth_fiberflat[fiber])
+            if w.sum()>0:
+                ivar[fiber]=0
+                smooth_fiberflat[fiber]=0
         
         # normalize to get a mean fiberflat=1
         mean=np.mean(smooth_fiberflat,axis=0)
         ok=np.where(mean!=0)[0]
         smooth_fiberflat[:,ok] /= mean[ok]
         mean_spectrum *= mean
-        
         chi2=ivar*(flux-smooth_fiberflat*mean_spectrum)**2
         
         # this is the max difference between two iterations
@@ -278,9 +279,7 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
         
         log.info("2nd pass, iter %d, max diff. = %g > requirement = %g, continue iterating"%(iteration,max_diff,accuracy))
         
-
     log.info("Total number of masked pixels=%d"%nout_tot)
-
     log.info("3rd pass, final computation of fiber flat")
 
     # now use mean spectrum to compute flat field correction without any smoothing
@@ -350,8 +349,12 @@ def compute_fiberflat(frame, nsig_clipping=4., accuracy=5.e-4, minval=0.1, maxva
             x=np.arange(wave.size)
             
             ok=np.where(fiberflat_ivar[fiber]>0)[0]
-            smooth_fiberflat=spline_fit(x,x[ok],fiberflat[fiber,ok],smoothing_res,fiberflat_ivar[fiber,ok])
-            fiberflat[fiber,bad] = smooth_fiberflat[bad]
+            try:
+                smooth_fiberflat=spline_fit(x,x[ok],fiberflat[fiber,ok],smoothing_res,fiberflat_ivar[fiber,ok])
+                fiberflat[fiber,bad] = smooth_fiberflat[bad]
+            except:
+                fiberflat[fiber,bad] = 1.
+                fiberflat_ivar[fiber,bad]=0.
                     
         if nbad_tot>0 :
             log.info("3rd pass : fiber #%d masked pixels = %d (%d iterations)"%(fiber,nbad_tot,iteration))
