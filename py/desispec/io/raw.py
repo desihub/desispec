@@ -47,7 +47,7 @@ def read_raw(filename, camera, **kwargs):
 
     if "fill_header" in kwargs :
         hdus = kwargs["fill_header"]
-        print("will add header keywords from hdus",hdus)
+        log.info("will add header keywords from hdus %s"%str(hdus))
         for hdu in hdus :
             try :
                 ihdu = int(hdu)
@@ -58,12 +58,12 @@ def read_raw(filename, camera, **kwargs):
                 hdu_header = fx[hdu].header
                 for key in hdu_header:
                     if ( key not in blacklist ) and ( key not in header ) :
-                        print("adding",key,"=",hdu_header[key])
+                        log.debug("adding",key,"=",hdu_header[key])
                         header[key] = hdu_header[key]                        
                     else :
-                        print("key",key,"already in header or blacklisted")
+                        log.debug("key %s already in header or blacklisted"%key)
             else :
-                print("warning HDU",hdu,"not in fits file")
+                log.warning("warning HDU %s not in fits file"%str(hdu))
         
         kwargs.pop("fill_header")
     
