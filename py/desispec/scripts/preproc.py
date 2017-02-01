@@ -68,7 +68,7 @@ to use, but also only if a single camera is specified.
                         help = 'do not read calibration data from yaml file in desispec')
     parser.add_argument('--ccd-calib-filename', required=False, default=None,
                         help = 'specify a difference ccd calibration filename (for dev. purpose), default is in desispec/data/ccd')
-    
+    parser.add_argument('--fill-header', type = str, default = None,  nargs ='*', help="fill camera header with contents of those of other hdus")
     
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
@@ -130,6 +130,7 @@ def main(args=None):
                               cosmics_c2fudge=args.cosmics_c2fudge,
                               ccd_calibration_filename=ccd_calibration_filename,
                               nocrosstalk=args.nocrosstalk,
+                              fill_header=args.fill_header
             )
         except IOError:
             log.error('Error while reading or preprocessing camera {} in {}'.format(camera, args.infile))
