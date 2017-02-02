@@ -119,7 +119,7 @@ class WorkerBootcalib(Worker):
 
         node = grph[task]
         night, obj = graph_night_split(task)
-        (temp, band, spec) = graph_name_split(obj)
+        (temp, band, spec, expid) = graph_name_split(obj)
         cam = "{}{}".format(band, spec)
 
         arcs = []
@@ -356,7 +356,7 @@ class WorkerSpecter(Worker):
 
         node = grph[task]
         night, obj = graph_night_split(task)
-        (temp, band, spec) = graph_name_split(obj)
+        (temp, band, spec, expid) = graph_name_split(obj)
         cam = "{}{}".format(band, spec)
 
         pix = []
@@ -450,7 +450,7 @@ class WorkerFiberflat(Worker):
 
         node = grph[task]
         night, obj = graph_night_split(task)
-        (temp, band, spec) = graph_name_split(obj)
+        (temp, band, spec, expid) = graph_name_split(obj)
         cam = "{}{}".format(band, spec)
 
         if len(node["in"]) != 1:
@@ -527,9 +527,9 @@ class WorkerSky(Worker):
         if len(flat) != 1:
             raise RuntimeError("sky needs exactly one fiberflat file")
 
-        framefile = graph_path("frame", frm[0])
-        flatfile = graph_path("fiberflat", flat[0])
-        outfile = graph_path("sky", task)
+        framefile = graph_path(frm[0])
+        flatfile = graph_path(flat[0])
+        outfile = graph_path(task)
         
         #qafile, qafig = qa_path(outfile)
 
@@ -610,13 +610,13 @@ class WorkerStdstars(Worker):
             elif inode["type"] == "sky":
                 sky.append(input)
 
-        outfile = graph_path("stdstars", task)
+        outfile = graph_path(task)
         
         #qafile, qafig = qa_path(outfile)
         
-        framefiles = [graph_path("frame", x) for x in frm]
-        skyfiles = [graph_path("sky", x) for x in sky]
-        flatfiles = [graph_path("fiberflat", x) for x in flat]
+        framefiles = [graph_path(x) for x in frm]
+        skyfiles = [graph_path(x) for x in sky]
+        flatfiles = [graph_path(x) for x in flat]
 
         options = {}
         options["frames"] = framefiles
@@ -698,11 +698,11 @@ class WorkerFluxcal(Worker):
         if len(star) != 1:
             raise RuntimeError("fluxcal needs exactly one star file")
 
-        framefile = graph_path("frame", frm[0])
-        flatfile = graph_path("fiberflat", flat[0])
-        skyfile = graph_path("sky", sky[0])
-        starfile = graph_path("stdstars", star[0])
-        outfile = graph_path("calib", task)
+        framefile = graph_path(frm[0])
+        flatfile = graph_path(flat[0])
+        skyfile = graph_path(sky[0])
+        starfile = graph_path(star[0])
+        outfile = graph_path(task)
         
         #qafile, qafig = qa_path(outfile)
 
@@ -786,11 +786,11 @@ class WorkerProcexp(Worker):
         if len(cal) != 1:
             raise RuntimeError("procexp needs exactly one calib file")
 
-        framefile = graph_path("frame", frm[0])
-        flatfile = graph_path("fiberflat", flat[0])
-        skyfile = graph_path("sky", sky[0])
-        calfile = graph_path("calib", cal[0])
-        outfile = graph_path("cframe", task)
+        framefile = graph_path(frm[0])
+        flatfile = graph_path(flat[0])
+        skyfile = graph_path(sky[0])
+        calfile = graph_path(cal[0])
+        outfile = graph_path(task)
 
         options = {}
         options["infile"] = framefile
@@ -853,7 +853,7 @@ class WorkerRedmonster(Worker):
         node = grph[task]
 
         brick = node["brick"]
-        outfile = graph_path("zbest", task)
+        outfile = graph_path(task)
         #qafile, qafig = qa_path(outfile)
         options = {}
         options["brick"] = brick
@@ -897,7 +897,7 @@ class WorkerNoop(Worker):
             rank = comm.rank
         log = get_logger()
         node = grph[task]
-        p = graph_path(node["type"], task)
+        p = graph_path(task)
         log.info("NOOP Worker creating {}".format(p))
         with open(p, "w") as f:
             f.write("NOOP\n")

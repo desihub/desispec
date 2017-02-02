@@ -7,6 +7,8 @@ Desispec Change Log
 
 * Fix brick update corruption (PR #314)
 * close PSF file after initializing PSF object
+* fix graph_path usage in workers
+* update io.write_raw to enable writing simulated raw data with new headers
 
 0.12.0 (2016-11-09)
 -------------------

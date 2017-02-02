@@ -12,7 +12,7 @@ import time
 import numpy as np
 from astropy.io import fits
 
-from desispec.pipeline import runcmd
+from desispec.util import runcmd
 from desispec import io
 from desispec.qa import QA_Exposure
 from desispec.log import get_logger
