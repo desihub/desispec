@@ -619,7 +619,7 @@ def nersc_job(path, logroot, desisetup, commands, nodes=1, \
     return
 
 
-def nersc_shifter_job(path, img, specdata, specredux, desimodel, logroot, desisetup, commands, nodes=1, \
+def nersc_shifter_job(path, img, specdata, specredux, desiroot, desimodel, logroot, desisetup, commands, nodes=1, \
     nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
     queue="debug", jobname="desipipe"):
 
@@ -647,10 +647,7 @@ def nersc_shifter_job(path, img, specdata, specredux, desimodel, logroot, desise
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name={}\n".format(jobname))
         f.write("#SBATCH --output={}_%j.log\n".format(logroot))
-        f.write("#SBATCH --volume=/project/projectdirs/desi:/desi/root\n")
-        f.write("#SBATCH --volume={}:/desi/model\n".format(desimodel))
-        f.write("#SBATCH --volume={}:/desi/spectro_data\n".format(specdata))
-        f.write("#SBATCH --volume={}:/desi/spectro_redux\n".format(specredux))
+        f.write("#SBATCH --volume=\"{}:/desi/root;{}:/desi/model;{}:/desi/spectro_data;{}:/desi/spectro_redux\"\n\n".format(desiroot, desimodel, specdata, specredux))
 
         f.write("echo Starting slurm script at `date`\n\n")
         f.write("source {}\n\n".format(desisetup))

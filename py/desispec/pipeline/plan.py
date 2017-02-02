@@ -60,7 +60,7 @@ def select_nights(allnights, nightstr):
     return nights
 
 
-def create_prod(nightstr=None):
+def create_prod(nightstr=None, extra={}):
     """
     Create or update a production.
 
@@ -125,7 +125,7 @@ def create_prod(nightstr=None):
 
     optfile = os.path.join(rundir, "options.yaml")
     if not os.path.isfile(optfile):
-        opts = default_options()
+        opts = default_options(extra=extra)
         yaml_write(optfile, opts)
 
     # get list of nights

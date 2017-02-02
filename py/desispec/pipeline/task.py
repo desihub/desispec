@@ -119,7 +119,7 @@ class WorkerBootcalib(Worker):
 
         node = grph[task]
         night, obj = graph_night_split(task)
-        (temp, band, spec, expid) = graph_name_split(obj)
+        (temp, band, spec) = graph_name_split(obj)
         cam = "{}{}".format(band, spec)
 
         arcs = []
@@ -193,7 +193,19 @@ class WorkerSpecex(Worker):
         # opts["legendre_deg_x"] = 1
         # opts["trace_deg_wave"] = 6
         # opts["trace_deg_x"] = 6
+
+        # to get the lampline location, look in our path for specex
+        # and use that install prefix to find the data directory.
+        # if that directory does not exist, use a default NERSC
+        # location.
         opts["lamplines"] = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt"
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exefile = os.path.join(path, "specex_desi_psf_fit")
+            if os.path.isfile(exefile) and os.access(exefile, os.X_OK):
+                specexdir = os.path.join(path, "..", "data")
+                opts["lamplines"] = os.path.join(specexdir, "specex_linelist_boss.txt")
+        
         return opts
 
 
@@ -558,6 +570,9 @@ class WorkerStdstars(Worker):
     Compute the standard stars for use in flux calibration.
     """
     def __init__(self, opts):
+        self.starmodels = None
+        if "starmodels" in opts:
+            self.starmodels = opts["starmodels"]
         super(Worker, self).__init__()
 
 
@@ -568,11 +583,14 @@ class WorkerStdstars(Worker):
     def default_options(self):
         log = get_logger()
         opts = {}
-        if "DESI_ROOT" in os.environ:
-            opts["starmodels"] = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+        if self.starmodels is not None:
+            opts["starmodels"] = self.starmodels
         else:
-            log.warning("$DESI_ROOT not set; using NERSC default /project/projectdirs/desi")
-            opts["starmodels"] = "/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+            if "DESI_ROOT" in os.environ:
+                opts["starmodels"] = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+            else:
+                log.warning("$DESI_ROOT not set; using NERSC default /project/projectdirs/desi")
+                opts["starmodels"] = "/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
         return opts
 
 
@@ -931,15 +949,19 @@ def get_worker(step, name, opts):
     return worker
 
 
-def default_options():
+def default_options(extra={}):
 
     log = get_logger()
 
     allopts = {}
 
     for step in step_types:
-        allopts["{}_worker".format(step)] = default_workers[step]
-        allopts["{}_worker_opts".format(step)] = {}
+        defwork = default_workers[step]
+        allopts["{}_worker".format(step)] = defwork
+        if defwork in extra:
+            allopts["{}_worker_opts".format(step)] = extra[defwork]
+        else:
+            allopts["{}_worker_opts".format(step)] = {}
         worker = get_worker(step, None, {})
         allopts[step] = worker.default_options()
 

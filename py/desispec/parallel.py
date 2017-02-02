@@ -10,12 +10,22 @@ from __future__ import print_function, absolute_import, division
 import os
 import sys
 import time
+import io
 from contextlib import contextmanager
 import logging
+
+import ctypes
 
 import numpy as np
 
 from .log import get_logger
+
+
+# C file descriptors for stderr and stdout, used in redirection
+# context manager.
+libc = ctypes.CDLL(None)
+c_stdout = ctypes.c_void_p.in_dll(libc, 'stdout')
+c_stderr = ctypes.c_void_p.in_dll(libc, 'stderr')
 
 
 # Multiprocessing environment setup
@@ -147,41 +157,58 @@ def dist_discrete(worksizes, workers, id, pow=1.0):
     return dist[id]
 
 
-
 @contextmanager
-def stdouterr_redirected(to=os.devnull, comm=None):
+def stdouterr_redirected(to=None, comm=None):
     """
     Redirect stdout and stderr to a file.
 
     The general technique is based on:
 
     http://stackoverflow.com/questions/5081657
+    http://eli.thegreenplace.net/2015/redirecting-all-kinds-of-stdout-in-python/
 
     One difference here is that each process in the communicator
     redirects to a different temporary file, and the upon exit
     from the context the rank zero process concatenates these
     in order to the file result.
     """
-    sys.stdout.flush()
-    sys.stderr.flush()
-    fd = sys.stdout.fileno()
-    fde = sys.stderr.fileno()
+    
+    # The currently active POSIX file descriptors
+    fd_out = sys.stdout.fileno()
+    fd_err = sys.stderr.fileno()
 
+    # The DESI logger
     log = get_logger()
 
-    ##### assert that Python and C stdio write using the same file descriptor
-    ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
+    def _redirect(out_to, err_to):
 
-    def _redirect_stdout(out_to, err_to):
-        sys.stdout.close() # + implicit flush()
-        os.dup2(out_to.fileno(), fd) # fd writes to "to" file
-        sys.stdout = os.fdopen(fd, "w") # Python writes to fd
+        # Flush the C-level buffers
+        libc.fflush(c_stdout)
+        libc.fflush(c_stderr)
+
+        # This closes the python file handles, and marks the POSIX
+        # file descriptors for garbage collection- UNLESS those
+        # are the special file descriptors for stderr/stdout.
+        sys.stdout.close()
+        sys.stderr.close()
+
+        # Close fd_out/fd_err if they are open, and copy the
+        # input file descriptors to these.
+        os.dup2(out_to, fd_out)
+        os.dup2(err_to, fd_err)
         
-        sys.stderr.close() # + implicit flush()
-        os.dup2(err_to.fileno(), fde) # fd writes to "to" file
-        sys.stderr = os.fdopen(fde, "w") # Python writes to fd
-        
-        # update desi logging to use new stdout
+        # Create a new sys.stdout / sys.stderr that points to the 
+        # redirected POSIX file descriptors.  In Python 3, these
+        # are actually higher level IO objects.
+        if sys.version_info[0] < 3:
+            sys.stdout = os.fdopen(fd_out, "wb")
+            sys.stderr = os.fdopen(fd_err, "wb")
+        else:
+            # Python 3 case
+            sys.stdout = io.TextIOWrapper(os.fdopen(fd_out, 'wb'))
+            sys.stderr = io.TextIOWrapper(os.fdopen(fd_err, 'wb'))
+
+        # update DESI logging to use new stdout
         while len(log.handlers) > 0:
             h = log.handlers[0]
             log.removeHandler(h)
@@ -193,31 +220,39 @@ def stdouterr_redirected(to=os.devnull, comm=None):
 
     # redirect both stdout and stderr to the same file
 
+    if to is None:
+        to = "/dev/null"
+
     if (comm is None) or (comm.rank == 0):
         log.debug("Begin log redirection to {} at {}".format(to, time.asctime()))
-    sys.stdout.flush()
-    sys.stderr.flush()
-    pto = to
-    if comm is None:
-        with open(pto, "w") as file:
-            _redirect_stdout(out_to=file, err_to=file)
-    else:
-        pto = "{}_{}".format(to, comm.rank)
-        with open(pto, "w") as file:
-            _redirect_stdout(out_to=file, err_to=file)
 
-    old_stdout = os.fdopen(os.dup(fd), "w")
-    old_stderr = os.fdopen(os.dup(fde), "w")
+    # Save the original file descriptors so we can restore them later
+    saved_fd_out = os.dup(fd_out)
+    saved_fd_err = os.dup(fd_err)
 
     try:
-        yield # allow code to be run with the redirected stdout
+        pto = to
+        if comm is not None:
+            if to != "/dev/null":
+                pto = "{}_{}".format(to, comm.rank)
+        
+        # open python file, which creates low-level POSIX file 
+        # descriptor.
+        file = open(pto, "w")
+
+        # redirect stdout/stderr to this new file descriptor.
+        _redirect(out_to=file.fileno(), err_to=file.fileno())
+
+        yield # allow code to be run with the redirected output
+
+        # close python file handle, which will mark POSIX file
+        # descriptor for garbage collection.  That is fine since
+        # we are about to overwrite those in the finally clause.
+        file.close()
+
     finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
-
         # restore old stdout and stderr
-
-        _redirect_stdout(out_to=old_stdout, err_to=old_stderr)
+        _redirect(out_to=saved_fd_out, err_to=saved_fd_err)
 
         if comm is not None:
             # concatenate per-process files
@@ -234,7 +269,10 @@ def stdouterr_redirected(to=os.devnull, comm=None):
 
         if (comm is None) or (comm.rank == 0):
             log.debug("End log redirection to {} at {}".format(to, time.asctime()))
+        
+        # flush python handles for good measure
         sys.stdout.flush()
         sys.stderr.flush()
             
     return
+
