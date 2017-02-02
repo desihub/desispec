@@ -35,6 +35,7 @@ def xy2hdr(xyslice):
 class TestQL(unittest.TestCase):
 
     def tearDown(self):
+        self.rawimage.close()
         for filename in [self.framefile, self.rawfile, self.pixfile, self.fibermapfile, self.skyfile]:
             if os.path.exists(filename):
                 os.remove(filename)
@@ -116,6 +117,9 @@ class TestQL(unittest.TestCase):
         assert not np.any(rawimage == 0.0)        
 
         #- write to the rawfile and read it in QA test
+        hdr['DOSVER'] = 'SIM'
+        hdr['FEEVER'] = 'SIM'
+        hdr['DETECTOR'] = 'SIM'
         desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
         
