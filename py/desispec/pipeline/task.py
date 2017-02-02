@@ -119,7 +119,7 @@ class WorkerBootcalib(Worker):
 
         node = grph[task]
         night, obj = graph_night_split(task)
-        (temp, band, spec) = graph_name_split(obj)
+        (temp, band, spec, expid) = graph_name_split(obj)
         cam = "{}{}".format(band, spec)
 
         arcs = []
@@ -356,7 +356,7 @@ class WorkerSpecter(Worker):
 
         node = grph[task]
         night, obj = graph_night_split(task)
-        (temp, band, spec) = graph_name_split(obj)
+        (temp, band, spec, expid) = graph_name_split(obj)
         cam = "{}{}".format(band, spec)
 
         pix = []
@@ -450,7 +450,7 @@ class WorkerFiberflat(Worker):
 
         node = grph[task]
         night, obj = graph_night_split(task)
-        (temp, band, spec) = graph_name_split(obj)
+        (temp, band, spec, expid) = graph_name_split(obj)
         cam = "{}{}".format(band, spec)
 
         if len(node["in"]) != 1:
