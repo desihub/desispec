@@ -10,7 +10,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import re
 from glob import glob
-from datetime import datetime, timedelta, tzinfo
+from datetime import datetime
 import numpy as np
 from astropy.io import fits
 from pytz import utc
