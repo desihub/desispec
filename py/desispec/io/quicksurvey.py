@@ -225,7 +225,7 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
             i = data_names.index(i)
             data_list[i] = [convert[col](x) for x in data_list[i]]
     session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-                                        for row in zip(*data_list)]])
+                                        for row in zip(*data_list)])
     # session.add_all([tcls(**b) for b in [dict(zip(data_names, row))
     #                                      for row in zip(*data_list)]])
     session.commit()
