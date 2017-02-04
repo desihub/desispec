@@ -13,6 +13,7 @@ from glob import glob
 from datetime import datetime, timedelta, tzinfo
 import numpy as np
 from astropy.io import fits
+from pytz import utc
 from sqlalchemy import (create_engine, text, Table, ForeignKey, Column,
                         Integer, String, Float, DateTime)
 from sqlalchemy.ext.declarative import declarative_base
@@ -22,25 +23,6 @@ from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from matplotlib.patches import Circle, Polygon, Wedge
 from matplotlib.collections import PatchCollection
 from ..log import get_logger, DEBUG
-
-
-class UTC(tzinfo):
-    """Representation of UTC for time zones.
-    """
-    ZERO = timedelta(0)
-    # HOUR = timedelta(hours=1)
-
-    def utcoffset(self, dt):
-        return self.ZERO
-
-    def tzname(self, dt):
-        return "UTC"
-
-    def dst(self, dt):
-        return self.ZERO
-
-
-utc = UTC()
 
 
 Base = declarative_base()

@@ -13,6 +13,7 @@ from glob import glob
 from datetime import datetime, timedelta, tzinfo
 import numpy as np
 from astropy.io import fits
+from pytz import utc
 from sqlalchemy import (create_engine, Table, ForeignKey, Column,
                         Integer, String, Float, DateTime)
 from sqlalchemy.ext.declarative import declarative_base
@@ -22,25 +23,6 @@ from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 # from matplotlib.patches import Circle, Polygon, Wedge
 # from matplotlib.collections import PatchCollection
 from ..log import get_logger, DEBUG
-
-
-class UTC(tzinfo):
-    """Representation of UTC for time zones.
-    """
-    ZERO = timedelta(0)
-    # HOUR = timedelta(hours=1)
-
-    def utcoffset(self, dt):
-        return self.ZERO
-
-    def tzname(self, dt):
-        return "UTC"
-
-    def dst(self, dt):
-        return self.ZERO
-
-
-utc = UTC()
 
 
 Base = declarative_base()
@@ -332,40 +314,39 @@ def main():
     Session = sessionmaker()
     Session.configure(bind=engine)
     session = Session()
-    try:
-        q = session.query(Truth).one()
-    except MultipleResultsFound:
-        log.info("Truth table already loaded.")
-    except NoResultFound:
-        truth_file = os.path.join(options.datapath, 'input', 'dark',
-                                  'truth.fits')
-        log.info("Loading truth from {0}.".format(truth_file))
-        load_file(truth_file, session, Truth)
-        log.info("Finished loading truth.")
-    try:
-        q = session.query(Target).one()
-    except MultipleResultsFound:
-        log.info("Target table already loaded.")
-    except NoResultFound:
-        expand_decam = {'DECAM_FLUX': ('decam_flux_u', 'decam_flux_g',
-                                       'decam_flux_r', 'decam_flux_i',
-                                       'decam_flux_z', 'decam_flux_Y')}
-        target_file = os.path.join(options.datapath, 'input', 'dark',
-                                   'target.fits')
-        log.info("Loading target from {0}.".format(target_file))
-        load_file(target_file, session, Target, expand=expand_decam)
-        log.info("Finished loading target.")
-    try:
-        q = session.query(ObsList).one()
-    except MultipleResultsFound:
-        log.info("Obslist table already loaded.")
-    except NoResultFound:
-        expand_obslist = {'DATE-OBS': 'dateobs'}
-        convert_obslist = {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)}
-        obslist_file = os.path.join(options.datapath, 'input', 'obsconditions',
-                                    'Benchmark030_001', 'obslist_all.fits')
-        log.info("Loading obslist from {0}.".format(obslist_file))
-        load_file(obslist_file, session, ObsList, expand=expand_obslist,
-                  convert=convert_obslist)
-        log.info("Finished loading obslist.")
+    #
+    # Load configuration
+    #
+    loader = [{'tcls': Truth,
+               'path': ('input', 'dark', 'truth.fits'),
+               'expand': None,
+               'convert': None},
+              {'tcls': Target,
+               'path': ('input', 'dark', 'target.fits'),
+               'expand': {'DECAM_FLUX': ('decam_flux_u', 'decam_flux_g',
+                                         'decam_flux_r', 'decam_flux_i',
+                                         'decam_flux_z', 'decam_flux_Y')},
+               'convert': None},
+              {'tcls': ObsList,
+               'path': ('input', 'obsconditions', 'Benchmark030_001', 'obslist_all.fits'),
+               'expand': {'DATE-OBS': 'dateobs'},
+               'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)}},
+              {'tcls': ZCat,
+               'path': ('output', 'dark', '4', 'zcat.fits'),
+               'expand': None,
+               'convert': None}]
+    #
+    # Load the tables that correspond to a single file.
+    #
+    for l in loader:
+        tn = l['tcls'].__tablename__
+        try:
+            q = session.query(l['tcls']).one()
+        except MultipleResultsFound:
+            log.info("{0} table already loaded.".format(tn.title()))
+        except NoResultFound:
+            filepath = os.path.join(options.datapath, *l['path'])
+            log.info("Loading {0} from {1}.".format(tn, filepath))
+            load_file(filepath, session, l['tcls'], expand=l['expand'], convert=l['convert'])
+            log.info("Finished loading {0}.".format(tn))
     return 0
