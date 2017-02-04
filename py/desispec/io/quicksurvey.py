@@ -13,11 +13,11 @@ from glob import glob
 from datetime import datetime, timedelta, tzinfo
 import numpy as np
 from astropy.io import fits
-from sqlalchemy import (create_engine, text, Table, ForeignKey, Column,
+from sqlalchemy import (create_engine, Table, ForeignKey, Column,
                         Integer, String, Float, DateTime)
 from sqlalchemy.ext.declarative import declarative_base
 # from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import sessionmaker, relationship, reconstructor
+from sqlalchemy.orm import sessionmaker, relationship  # , reconstructor
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 # from matplotlib.patches import Circle, Polygon, Wedge
 # from matplotlib.collections import PatchCollection
@@ -115,7 +115,72 @@ class Target(Base):
                 "galdepth_r={0.galdepth_r:f})>").format(self)
 
 
-def load_file(filepath, session, tcls, expand=None):
+class ObsList(Base):
+    """Representation of the obslist table.
+    """
+    __tablename__ = 'obslist'
+
+    tileid = Column(Integer, primary_key=True)
+    ra = Column(Float, nullable=False)
+    dec = Column(Float, nullable=False)
+    program = Column(String, nullable=False)
+    ebmv = Column(Float, nullable=False)
+    maxlen = Column(Float, nullable=False)
+    moonfrac = Column(Float, nullable=False)
+    moondist = Column(Float, nullable=False)
+    moonalt = Column(Float, nullable=False)
+    seeing = Column(Float, nullable=False)
+    lintrans = Column(Float, nullable=False)
+    airmass = Column(Float, nullable=False)
+    dessn2 = Column(Float, nullable=False)
+    status = Column(Integer, nullable=False)
+    exptime = Column(Float, nullable=False)
+    obssn2 = Column(Float, nullable=False)
+    dateobs = Column(DateTime(timezone=True), nullable=False)
+    mjd = Column(Float, nullable=False)
+
+    def __repr__(self):
+        return ("<ObsList(tileid={0.tileid:d}, " +
+                "ra={0.ra:f}, dec={0.dec:f}, " +
+                "program='{0.program}', " +
+                "ebmv={0.ebmv:f}, " +
+                "maxlen={0.maxlen:f}, " +
+                "moonfrac={0.moonfrac:f}, " +
+                "moondist={0.moondist:f}, " +
+                "moonalt={0.moonalt:f}, " +
+                "seeing={0.seeing:f}, " +
+                "lintrans={0.lintrans:f}, " +
+                "airmass={0.airmass:f}, " +
+                "dessn2={0.dessn2:f}, " +
+                "status={0.status:d}, " +
+                "exptime={0.exptime:f}, " +
+                "obssn2={0.obssn2:f}, " +
+                "dateobs='{0.dateobs}', " +
+                "mjd={0.mjd:f})>").format(self)
+
+
+class ZCat(Base):
+    """Representation of the zcat table.
+    """
+    __tablename__ = 'zcat'
+
+    targetid = Column(Integer, primary_key=True)
+    brickname = Column(String, nullable=False)
+    spectype = Column(String, nullable=False)
+    z = Column(Float, nullable=False)
+    zerr = Column(Float, nullable=False)
+    zwarn = Column(Integer, nullable=False)
+    numobs = Column(Integer, nullable=False)
+
+    def __repr__(self):
+        return ("<ZCat(targetid={0.targetid:d}, " +
+                "brickname='{0.brickname}', " +
+                "spectype='{0.spectype}', " +
+                "z={0.z:f}, zerr={0.zerr:f}, " +
+                "zwarn={0.zwarn:d}, numobs={0.numobs:d})>").format(self)
+
+
+def load_file(filepath, session, tcls, expand=None, convert=None):
     """Load a FITS file into the database, assuming that FITS column names map
     to database column names with no surprises.
 
@@ -125,10 +190,13 @@ def load_file(filepath, session, tcls, expand=None):
         Full path to the FITS file.
     session : :class:`sqlalchemy.orm.session.Session`
         Database connection.
-    tcls
+    tcls : :class:`sqlalchemy.ext.declarative.api.DeclarativeMeta`
         The table to load, represented by its class.
     expand : :class:`dict`, optional
         If set, map FITS column names to one or more alternative column names.
+    convert : :class:`dict`, optional
+        If set, convert the data for a named (database) column using the
+        supplied function.
     """
     with fits.open(filepath) as hdulist:
         data = hdulist[1].data
@@ -152,10 +220,37 @@ def load_file(filepath, session, tcls, expand=None):
                 for j, n in enumerate(expand[col]):
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
-    session.add_all([tcls(**b) for b in [dict(zip(data_names, row))
-                                         for row in zip(*data_list)]])
+    if convert is not None:
+        for col in convert:
+            i = data_names.index(i)
+            data_list[i] = [convert[col](x) for x in data_list[i]]
+    session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
+                                        for row in zip(*data_list)]])
+    # session.add_all([tcls(**b) for b in [dict(zip(data_names, row))
+    #                                      for row in zip(*data_list)]])
     session.commit()
     return
+
+
+def convert_dateobs(timestamp, tzinfo=None):
+    """Convert a string `timestamp` into a :class:`datetime.datetime` object.
+
+    Parameters
+    ----------
+    timestamp : :class:`str`
+        Timestamp in string format.
+    tzinfo : :class:`datetime.tzinfo`, optional
+        If set, add time zone to the timestamp.
+
+    Returns
+    -------
+    :class:`datetime.datetime`
+        The converted `timestamp`.
+    """
+    x = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
+    if tzinfo is not None:
+        x.tzinfo = tzinfo
+    return x
 
 
 def main():
@@ -244,4 +339,17 @@ def main():
         log.info("Loading target from {0}.".format(target_file))
         load_file(target_file, session, Target, expand=expand_decam)
         log.info("Finished loading target.")
+    try:
+        q = session.query(ObsList).one()
+    except MultipleResultsFound:
+        log.info("Obslist table already loaded.")
+    except NoResultFound:
+        expand_obslist = {'DATE-OBS': 'dateobs'}
+        convert_obslist = {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)}
+        obslist_file = os.path.join(options.datapath, 'input', 'obsconditions',
+                                    'Benchmark030_001', 'obslist_all.fits')
+        log.info("Loading obslist from {0}.".format(obslist_file))
+        load_file(obslist_file, session, ObsList, expand=expand_obslist,
+                  convert=convert_obslist)
+        log.info("Finished loading obslist.")
     return 0
