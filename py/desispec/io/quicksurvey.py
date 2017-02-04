@@ -233,8 +233,13 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
     data_rows = list(zip(*data_list))
     del data_list
     log.info("Converted columns into rows.")
-    session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-                                        for row in data_rows])
+    N = 10000
+    for k in range(len(data_rows)//N + 1):
+        session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
+                                            for row in data_rows[k*N, (k+1)*N])
+        log.info("Inserted {0:d} rows.".format((k+1)*N))
+    # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
+    #                                     for row in data_rows])
     # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
     #                                     for row in zip(*data_list)])
     # session.add_all([tcls(**b) for b in [dict(zip(data_names, row))
