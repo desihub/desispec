@@ -200,8 +200,10 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
     """
     with fits.open(filepath) as hdulist:
         data = hdulist[1].data
+    log.info("Read data from {0}.".format(filepath))
     data_list = [data[col].tolist() for col in data.names]
     data_names = [col.lower() for col in data.names]
+    log.info("Initial column conversion complete.")
     if expand is not None:
         for col in expand:
             if isinstance(expand[col], str):
@@ -220,10 +222,12 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
                 for j, n in enumerate(expand[col]):
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
+    log.info("Column expansion complete.")
     if convert is not None:
         for col in convert:
             i = data_names.index(i)
             data_list[i] = [convert[col](x) for x in data_list[i]]
+    log.info("Column conversion complete.")
     session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
                                         for row in zip(*data_list)])
     # session.add_all([tcls(**b) for b in [dict(zip(data_names, row))
