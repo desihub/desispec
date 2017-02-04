@@ -10,7 +10,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import re
 from glob import glob
-from datetime import datetime, timedelta, tzinfo
+from datetime import datetime, timedelta
 import numpy as np
 from astropy.io import fits
 from pytz import utc
@@ -538,8 +538,7 @@ def load_data(session, datapath):
                 teldec = hdulist[0].header['TELDEC']
                 tile_id = hdulist[0].header['TILEID']
                 exptime = hdulist[0].header['EXPTIME']
-                dateobs = datetime.strptime(hdulist[0].header['DATE-OBS'], '%Y-%m-%dT%H:%M:%S')
-                dateobs.tzinfo = utc
+                dateobs = datetime.strptime(hdulist[0].header['DATE-OBS'], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=utc)
                 try:
                     alt = hdulist[0].header['ALT']
                 except KeyError:

@@ -247,7 +247,7 @@ def convert_dateobs(timestamp, tzinfo=None):
     """
     x = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
     if tzinfo is not None:
-        x.tzinfo = tzinfo
+        x = x.replace(tzinfo=tzinfo)
     return x
 
 
