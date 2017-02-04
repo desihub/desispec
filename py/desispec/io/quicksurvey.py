@@ -198,6 +198,7 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
         If set, convert the data for a named (database) column using the
         supplied function.
     """
+    log = get_logger()
     with fits.open(filepath) as hdulist:
         data = hdulist[1].data
     log.info("Read data from {0}.".format(filepath))
