@@ -322,7 +322,7 @@ def main():
                'expand': None,
                'convert': None},
               {'tcls': Target,
-               'path': ('input', 'dark', 'target.fits'),
+               'path': ('input', 'dark', 'targets.fits'),
                'expand': {'DECAM_FLUX': ('decam_flux_u', 'decam_flux_g',
                                          'decam_flux_r', 'decam_flux_i',
                                          'decam_flux_z', 'decam_flux_Y')},
