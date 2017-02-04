@@ -236,7 +236,7 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
     N = 10000
     for k in range(len(data_rows)//N + 1):
         session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-                                            for row in data_rows[k*N, (k+1)*N]])
+                                            for row in data_rows[k*N:(k+1)*N]])
         log.info("Inserted {0:d} rows.".format((k+1)*N))
     # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
     #                                     for row in data_rows])
