@@ -1,0 +1,5 @@
+#!/usr/bin/env python
+# See top-level LICENSE.rst file for Copyright information
+from desispec.io.quicksurvey import main
+from sys import exit
+exit(main())
