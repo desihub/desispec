@@ -224,13 +224,19 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
     log.info("Column expansion complete.")
+    del data
     if convert is not None:
         for col in convert:
             i = data_names.index(i)
             data_list[i] = [convert[col](x) for x in data_list[i]]
     log.info("Column conversion complete.")
+    data_rows = list(zip(*data_list))
+    del data_list
+    log.info("Converted columns into rows.")
     session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-                                        for row in zip(*data_list)])
+                                        for row in data_rows])
+    # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
+    #                                     for row in zip(*data_list)])
     # session.add_all([tcls(**b) for b in [dict(zip(data_names, row))
     #                                      for row in zip(*data_list)]])
     session.commit()
