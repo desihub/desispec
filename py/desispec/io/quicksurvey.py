@@ -209,7 +209,7 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
     del data
     if convert is not None:
         for col in convert:
-            i = data_names.index(i)
+            i = data_names.index(col)
             data_list[i] = [convert[col](x) for x in data_list[i]]
     log.info("Column conversion complete.")
     data_rows = list(zip(*data_list))
