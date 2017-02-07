@@ -139,7 +139,6 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
     # 1st pass is median for spectrum, flat field without resolution
     # outlier rejection
-    
     for iteration in range(max_iterations) :
         
         # use median for spectrum
@@ -157,10 +156,11 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             if w.sum()==0:
                 continue
             F = flux[fib,:]*0
-            w=mean_spectrum!=0
+            w=(mean_spectrum!=0) & (ivar[fib,:]>0)
             F[w]= flux[fib,w]/mean_spectrum[w]
-            smooth_fiberflat[fib,:] = spline_fit(wave,wave,F,smoothing_res,ivar[fib,:]*mean_spectrum**2)
+            smooth_fiberflat[fib,:] = spline_fit(wave,wave[w],F[w],smoothing_res,ivar[fib,w]*mean_spectrum[w]**2)
             chi2 = ivar[fib,:]*(flux[fib,:]-mean_spectrum*smooth_fiberflat[fib,:])**2
+            w=np.isnan(chi2)
             bad=np.where(chi2>nsig_clipping**2)[0]
             if bad.size>0 :
                 if bad.size>max_rej_it : # not more than 5 pixels at a time
@@ -190,14 +190,15 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     for i in range(smooth_fiberflat.shape[1]):
         w=ivar[:,i]>0
         if w.sum()>0:
-            mean[i]=np.mean(smooth_fiberflat[w,i])
+            mean[i]=np.median(smooth_fiberflat[w,i])
     smooth_fiberflat = smooth_fiberflat/mean
 
     previous_smooth_fiberflat = smooth_fiberflat*0
     log.info("after 1st pass : nout = %d/%d"%(np.sum(ivar==0),np.size(ivar.flatten())))
     # 2nd pass is full solution including deconvolved spectrum, no outlier rejection
     for iteration in range(max_iterations) : 
-        
+        ## reset sum_chi2
+        sum_chi2=0
         log.info("2nd pass, iter %d : mean deconvolved spectrum"%iteration)
         
         # fit mean spectrum
@@ -240,7 +241,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             R = frame.R[fiber]
             
             M = R.dot(mean_spectrum)
-            ok=np.where(M!=0)[0]
+            ok=(M!=0) & (ivar[fiber,:]>0)
             smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],flux[fiber,ok]/M[ok],smoothing_res,ivar[fiber,ok]*M[ok]**2)*(ivar[fiber,:]*M**2>0)
             chi2 = ivar[fiber]*(flux[fiber]-smooth_fiberflat[fiber]*M)**2
             sum_chi2 += chi2.sum()
@@ -254,7 +255,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         for i in range(nwave):
             w = ivar[:,i]>0
             if w.sum()>0:
-                mean[i]=np.mean(smooth_fiberflat[w,i])
+                mean[i]=np.median(smooth_fiberflat[w,i])
         ok=np.where(mean!=0)[0]
         smooth_fiberflat[:,ok] /= mean[ok]
         
@@ -303,7 +304,8 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         nbad_tot=0
         iteration=0
         while iteration<500 :
-            smooth_fiberflat=spline_fit(wave,wave,fiberflat[fiber],smoothing_res,fiberflat_ivar[fiber])
+            w=fiberflat_ivar[fiber,:]>0
+            smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
             chi2=fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2
             bad=np.where(chi2>nsig_for_mask**2)[0]
             if bad.size>0 :
@@ -342,7 +344,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             smoothing_res=float(max(100,2*length))
             x=np.arange(wave.size)
             
-            ok=np.where(fiberflat_ivar[fiber]>0)[0]
+            ok=fiberflat_ivar[fiber]>0
             try:
                 smooth_fiberflat=spline_fit(x,x[ok],fiberflat[fiber,ok],smoothing_res,fiberflat_ivar[fiber,ok])
                 fiberflat[fiber,bad] = smooth_fiberflat[bad]

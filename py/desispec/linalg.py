@@ -104,7 +104,7 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
     mins = np.amin(dknots,axis=1)
     w=mins<res
     knots = knots[w]
-
+   
     toto=scipy.interpolate.splrep(input_wave,input_flux,w=input_ivar,k=order,task=-1,t=knots)
     output_flux = scipy.interpolate.splev(output_wave,toto)
     return output_flux
