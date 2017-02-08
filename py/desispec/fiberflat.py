@@ -20,7 +20,7 @@ from desispec.log import get_logger
 import math
 
 
-def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=100.,max_bad=100,max_rej_it=5) :
+def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=100.,max_bad=100,max_rej_it=5,min_sn=0) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelength grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
@@ -36,6 +36,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         smoothing_res: [optional] spacing between spline fit nodes for smoothing the fiberflat
         max_bad: [optional] mask entire fiber if more than max_bad-1 initially unmasked pixels are masked during the iterations
         max_rej_it: [optional] reject at most the max_rej_it worst pixels in each iteration
+        min_sn: [optional] mask portions with signal to noise less than min_sn
 
 
     Returns:
@@ -112,6 +113,10 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     smooth_fiberflat=np.ones((flux.shape))
     
     chi2=np.zeros((flux.shape))
+
+    ## mask low sn portions
+    w = flux*np.sqrt(ivar)<min_sn
+    ivar[w]=0
 
     ## 0th pass: reject pixels according to minval and maxval
     mean_spectrum = np.zeros(flux.shape[1])
