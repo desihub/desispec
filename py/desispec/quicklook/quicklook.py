@@ -273,7 +273,7 @@ def runpipeline(pl,convdict,conf):
                 qargs["dict_countbins"]=passqadict #- pass this to all QA downstream
 
                 if qa.name=="RESIDUAL" or qa.name=="Sky_Residual":
-                    res=qa(oldinp,inp[1],**qargs)
+                    res=qa(inp[0],inp[1],**qargs)
                     
                 else:
                     if isinstance(inp,tuple):

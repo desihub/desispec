@@ -145,8 +145,8 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     gdp = gdp & (np.arange(npix) > 2.*nwidth) & (np.arange(npix) < (npix-2.*nwidth))
 
     # Roll to find peaks (simple algorithm)
-    nwidth = 5
-    nstep = nwidth // 2
+    # nwidth = 5
+    nstep = max(1,nwidth // 2)
     for kk in range(-nstep,nstep):
         if kk < 0:
             test = np.roll(spec,kk) < np.roll(spec,kk+1)
@@ -354,8 +354,11 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
     #log.info("y=%s"%str(y))
     #log.info("w=%s"%str(w))
     
-    y = id_dict["pixpk"]
     
+    y = id_dict["pixpk"]
+
+    log.info("ny=%d nw=%d"%(len(y),len(w)))
+
     if nmax<10 :
         nmax=10
         log.warning("force nmax=10 (arg was too small: {:d})".format(nmax))
@@ -436,7 +439,8 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
     # loop on best matches ( = most populated bins)
     count=0
     for histo_bin in best_histo_bins[:ntrack] :
-        if  histogram_ravel[histo_bin]<4 and count>5 :
+        
+        if  histogram_ravel[histo_bin]<4 and count>3 :
             log.warning("stopping here")
             break
         count += 1
@@ -770,8 +774,8 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
     elif camera[0] == 'r':  
         dlamb = 0.527
     elif camera[0] == 'z':  
-        dlamb = 0.599  # Ang
-
+        #dlamb = 0.599  # Ang
+        dlamb = 0.608  # Ang (from teststand, ranges (fiber & wave) from 0.54 to 0.66)
     # read good lines
     if good_lines_filename is not None :
         filename = good_lines_filename
@@ -1066,7 +1070,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
         ypos = flat.shape[0]//2
 
     # Cut image
-    cutimg = flat[ypos-15:ypos+15, :]
+    cutimg = flat[ypos-50:ypos+50, :]
 
     # Smash
     cut = np.median(cutimg, axis=0)
@@ -1075,7 +1079,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     #srt = np.sort(cutimg.flatten()) # this does not work for sparse fibers
     #thresh = srt[int(cutimg.size*0.95)] / 2. # this does not work for sparse fibers
     
-    thresh = np.max(cut)/50.
+    thresh = np.max(cut)/20.
     pixels_below_threshold=np.where(cut<thresh)[0]
     if pixels_below_threshold.size>2 :
         values_below_threshold = sigma_clip(cut[pixels_below_threshold],sigma=3,iters=200)
@@ -1258,6 +1262,7 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         # Generate PSF
         dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq], np.ones(nx))
         psf = cst*np.exp(-0.5 * (dx_img/sigma[qq])**2)/sigma[qq]
+        
         #dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
         #g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
         #psf = mask * g_init(dx_img)
@@ -1265,9 +1270,24 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         #all_spec[:,qq] = np.sum(psf*img,axis=1) / np.sum(psf,axis=1)
         #all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
         a=np.sum(img_ivar[:,minx:maxx+1]*psf**2,axis=1)
-        ok=(a>0)
-        all_spec[ok,qq] = np.sum(img_ivar[ok,minx:maxx+1]*psf[ok]*img[ok,minx:maxx+1],axis=1) / a[ok]
+        b=np.sum(img_ivar[:,minx:maxx+1]*psf*img[:,minx:maxx+1],axis=1)
+        ok=(a>1.e-6) 
+        all_spec[ok,qq] = b[ok] / a[ok]
+        
+        #import astropy.io.fits as pyfits
+        #h=pyfits.HDUList([pyfits.PrimaryHDU(),
+        #                  pyfits.ImageHDU(img[:,minx:maxx+1],name="FLUX"),
+        #                  pyfits.ImageHDU(img_ivar[:,minx:maxx+1],name="IVAR"),
+        #                  pyfits.ImageHDU(psf,name="PSF"),
+        #                  pyfits.ImageHDU(a,name="A"),
+        #                  pyfits.ImageHDU(b,name="B")])
+        #h.writeto("test.fits")
+        #sys.exit(12)
+        
+                          
+                          
 
+        
     # Return
     return all_spec
 
@@ -1594,7 +1614,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     prihdu = fits.PrimaryHDU(XCOEFF)
     prihdu.header['WAVEMIN'] = WAVEMIN
     prihdu.header['WAVEMAX'] = WAVEMAX
-    prihdu.header['EXTNAME'] = 'XCOEFF'
+    prihdu.header['EXTNAME'] = 'XTRACE'
     prihdu.header['PSFTYPE'] = 'bootcalib'
     
     from desiutil.depend import add_dependencies
@@ -1619,8 +1639,8 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
         if "EXPID" in fiberflat_header:
             prihdu.header["FLAEXPID"] = fiberflat_header["EXPID"]
     
-    yhdu = fits.ImageHDU(YCOEFF, name='YCOEFF')
-
+    yhdu = fits.ImageHDU(YCOEFF, name='YTRACE')
+    
     # also save wavemin wavemax in yhdu
     yhdu.header['WAVEMIN'] = WAVEMIN
     yhdu.header['WAVEMAX'] = WAVEMAX

@@ -38,11 +38,15 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     # /project/projectdirs/desi/spectro/redux/alpha-3/calib2d/psf/20150107
     #
     naxis=4
-    if img.camera[0].lower() == 'b':
+
+    
+    band=img.camera[0].lower()
+    
+    if band == 'b':
         psf=np.array([0.366247,0.391422,0.172965,0.184552])
-    elif img.camera[0].lower() == 'r':
+    elif band == 'r':
         psf=np.array([0.39508155,0.2951822,0.13044542,0.14904523])
-    elif img.camera[0].lower() == 'z':
+    elif band == 'z':
         psf=np.array([0.513852,0.537679,0.297071,0.276298])
     else :
         log.error("do not have psf for camera '%s'"%img.camera)
@@ -106,7 +110,9 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     # with one the axis.
     # I change the algorithm to accept 3 out of 4 valid tests
     first_criterion=np.ones(pix.shape)
-    tmp=pix-nsig/np.sqrt(pixivar)
+    nonullivar=pixivar>0
+    tmp=np.zeros(pix.shape)
+    tmp[nonullivar]=pix[nonullivar]-nsig/np.sqrt(pixivar[nonullivar])
     for a in range(naxis) :
         first_criterion += (tmp>back[a])
     first_criterion=(first_criterion>=3).astype(bool)
@@ -117,10 +123,11 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     # here the number of sigmas is the parameter cfudge
     # c2fudge alters the PSF
     second_criterion=np.zeros(pix.shape).astype(bool)
-    tmp=pix-cfudge/np.sqrt(pixivar)
+    tmp=np.zeros(pix.shape)
+    tmp[nonullivar]=pix[nonullivar]-cfudge/np.sqrt(pixivar[nonullivar])
     for a in range(naxis) :
         second_criterion |= ( tmp*c2fudge*psf[a] > ( back[a]+cfudge*sigmaback[a] ) )
-
+    
 
     log.debug("npix selected                       = %d"%pix.size)
     log.debug("npix rejected 1st criterion         = %d"%np.sum(first_criterion))
@@ -205,7 +212,7 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
     log.info("end : %s pixels rejected"%(np.sum(rejected)))
     return rejected
 
-def reject_cosmic_rays(img) :
+def reject_cosmic_rays(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=False) :
     """Cosmic ray rejection
     Input is a pre-processed image : desispec.Image
     The image mask is modified
@@ -214,5 +221,5 @@ def reject_cosmic_rays(img) :
        img: input desispec.Image
 
     """
-    rejected=reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=20,dilate=False)
+    rejected=reject_cosmic_rays_ala_sdss(img,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge,niter=20,dilate=False)
     img.mask[rejected] |= ccdmask.COSMIC

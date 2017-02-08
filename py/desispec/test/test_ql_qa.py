@@ -5,6 +5,7 @@ tests desispec.ql_qa
 import unittest
 import numpy as np
 import os
+from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
 from desispec.quicklook import procalgs as PAs
 from desispec.quicklook import qas
@@ -34,7 +35,8 @@ def xy2hdr(xyslice):
 class TestQL(unittest.TestCase):
 
     def tearDown(self):
-        for filename in [self.framefile, self.rawfile, self.pixfile, self.fibermapfile]:
+        self.rawimage.close()
+        for filename in [self.framefile, self.rawfile, self.pixfile, self.fibermapfile, self.skyfile]:
             if os.path.exists(filename):
                 os.remove(filename)
 
@@ -44,8 +46,9 @@ class TestQL(unittest.TestCase):
         self.rawfile = 'test-raw-abcd.fits'
         self.pixfile = 'test-pix-abcd.fits'
         self.framefile = 'test-frame-abcd.fits'
-        self.fibermapfile = 'test_fibermap-abcd.fits'
- 
+        self.fibermapfile = 'test-fibermap-abcd.fits'
+        self.skyfile = 'test-sky-abcd.fits'
+
         #- use specter psf for this test
         self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits')
         self.config={}
@@ -114,6 +117,9 @@ class TestQL(unittest.TestCase):
         assert not np.any(rawimage == 0.0)        
 
         #- write to the rawfile and read it in QA test
+        hdr['DOSVER'] = 'SIM'
+        hdr['FEEVER'] = 'SIM'
+        hdr['DETECTOR'] = 'SIM'
         desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
         
@@ -129,30 +135,110 @@ class TestQL(unittest.TestCase):
         self.image = desispec.image.Image(img_pix, img_ivar, img_mask, camera='r0',meta=hdr)
         desispec.io.write_image(self.pixfile, self.image)
         
-        self.fibermap = desispec.io.empty_fibermap(100)
+        self.fibermap = desispec.io.empty_fibermap(30)
+        self.fibermap['OBJTYPE'][::2]='ELG'
+        self.fibermap['OBJTYPE'][::3]='STD'
+        self.fibermap['OBJTYPE'][::5]='QSO'
+        self.fibermap['OBJTYPE'][::7]='SKY'   #- 0 LRG fibers
+        #- add a filter and arbitrary magnitude
+        self.fibermap['MAG'][:29]=np.tile(np.random.uniform(18,20,29),5).reshape(29,5) #- Last fiber left
+        self.fibermap['FILTER'][:29]=np.tile(['DECAM_R','..','..','..','..'],(29,1)) #- last fiber left 
+        
         desispec.io.write_fibermap(self.fibermapfile, self.fibermap)        
+        
+        #- make a test frame file
+        self.night=hdr['NIGHT']
+        nspec=30
+        nwave=200
+        wave=np.arange(nwave)
+        flux=np.random.uniform(size=(nspec,nwave))
+        ivar=np.ones_like(flux)
+        resolution_data=np.ones((nspec,13,nwave))
+        self.frame=desispec.frame.Frame(wave,flux,ivar,resolution_data=resolution_data,fibermap=self.fibermap)
+        #self.frame.meta = dict(CAMERA=self.camera,FLAVOR='dark',NIGHT=self.night, EXPID=self.expid)
+        desispec.io.write_frame(self.framefile, self.frame)
+
+        #- make a skymodel
+        sky=np.ones_like(self.frame.flux)*0.5
+        skyivar=np.ones_like(sky)
+        self.mask=np.zeros(sky.shape,dtype=np.uint32)
+        self.skymodel=desispec.sky.SkyModel(wave,sky,skyivar,self.mask)
+        self.skyfile=desispec.io.write_sky(self.skyfile,self.skymodel)
         
 
     #- test some qa utillities functions:
     def test_ampregion(self):
-        pixboundary=QA.ampregion(self.image)
+        pixboundary=qalib.ampregion(self.image)
         self.assertEqual(pixboundary[0][1],slice(0,self.nx,None))
         self.assertEqual(pixboundary[3][0],slice(self.ny,self.ny+self.ny,None))
 
 
     def test_getrms(self):
-        img_rms=QA.getrms(self.image.pix)
+        img_rms=qalib.getrms(self.image.pix)
         self.assertEqual(img_rms,np.std(self.image.pix))
 
     def test_countpix(self):
         pix=self.image.pix
-        counts1=QA.countpix(pix,nsig=3) #- counts avove 3 sigma
-        counts2=QA.countpix(pix,nsig=4) #- counts above 4 sigma
+        counts1=qalib.countpix(pix,nsig=3) #- counts avove 3 sigma
+        counts2=qalib.countpix(pix,nsig=4) #- counts above 4 sigma
         self.assertLess(counts2,counts1)
-        counts3=QA.countpix(pix,ncounts=15)
-        counts4=QA.countpix(pix,ncounts=20)
+        counts3=qalib.countpix(pix,ncounts=15)
+        counts4=qalib.countpix(pix,ncounts=20)
         self.assertLess(counts4,counts3)
+
+    def test_sky_resid(self):
+        import copy
+        param = dict(
+                     PCHI_RESID=0.05,PER_RESID=95.,BIN_SZ=0.1)
+        qadict=qalib.sky_resid(param,self.frame,self.skymodel,quick_look=True)
+        kk=np.where(self.frame.fibermap['OBJTYPE']=='SKY')[0]
+        self.assertEqual(qadict['NSKY_FIB'],len(kk))
+
+        #- run with different sky flux
+        skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
+        skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
+        frame1=copy.deepcopy(self.frame)
+        frame2=copy.deepcopy(self.frame)
+        desispec.sky.subtract_sky(frame1,skym1)
+        desispec.sky.subtract_sky(frame2,skym2)
+
+        qa1=qalib.sky_resid(param,frame1,skym1)
+        qa2=qalib.sky_resid(param,frame2,skym2)
+        self.assertLess(qa1['MED_RESID'],qa2['MED_RESID']) #- residuals must be smaller for case 1
+
+    def testSignalVsNoise(self):
+        import copy
+        params=None
+        #- first get the sky subtracted frame
+        #- copy frame not to override
+        thisframe=copy.deepcopy(self.frame)
+        desispec.sky.subtract_sky(thisframe,self.skymodel)
+        qadict=qalib.SignalVsNoise(thisframe,params)
+        #- make sure all the S/N is positive
+        self.assertTrue(np.all(qadict['MEDIAN_SNR']) > 0)
+
+        #- Reduce sky
+        skym1=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux,self.skymodel.ivar,self.mask)
+        skym2=desispec.sky.SkyModel(self.frame.wave,self.skymodel.flux*0.5,self.skymodel.ivar,self.mask)
+        frame1=copy.deepcopy(self.frame)
+        frame2=copy.deepcopy(self.frame)
+        desispec.sky.subtract_sky(frame1,skym1)
+        desispec.sky.subtract_sky(frame2,skym2)
+        qa1=qalib.SignalVsNoise(frame1,params)
+        qa2=qalib.SignalVsNoise(frame2,params)
+        self.assertTrue(np.all(qa2['MEDIAN_SNR'] > qa1['MEDIAN_SNR']))
    
+        #- test for tracer not present 
+        nullfibermap=desispec.io.empty_fibermap(10)
+        qa=qalib.SignalVsNoise(self.frame,params)
+
+        self.assertEqual(self.fibermap['MAG'][29][0],0)   #- No mag for last fiber
+        self.assertEqual(self.fibermap['FILTER'][29][0],'') #- No filter for last fiber
+
+        self.assertEqual(len(qa['MEDIAN_SNR']),30)
+        self.assertEqual(len(qa['LRG_FIBERID']),0) #- LRG was not present by construction
+
+        
     #- QA: bias overscan
     def testBiasOverscan(self):
         qa=QA.Bias_From_Overscan('bias',self.config) #- initialize with fake config and name
@@ -165,7 +251,7 @@ class TestQL(unittest.TestCase):
         qargs["paname"]="abc"
         res1=qa(inp,**qargs)
         self.assertEqual(len(res1['METRICS']['BIAS_AMP']),4)
-
+        
 
 if __name__ == '__main__':
     unittest.main()

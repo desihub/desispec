@@ -13,9 +13,7 @@ from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.log import get_logger
 from desispec import util
-
 from desiutil import stats as dustat
-
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
@@ -227,7 +225,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     along current_ivar to do so.
 
     Args:
-        param : dict of QA parameters
+        param : dict of QA parameters : see qa_frame.init_skysub for example
         frame : desispec.Frame object
         skymodel : desispec.SkyModel object
         quick_look : bool, optional
@@ -236,55 +234,18 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
         qadict: dict of QA outputs
           Need to record simple Python objects for yaml (str, float, int)
     """
-    log=get_logger()
+    from desispec.qa import qalib
+    import copy
 
-    # Output dict
-    qadict = {}
-    qadict['NREJ'] = int(skymodel.nrej)
+    #- QAs
+    #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately. 
+    tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame unaffected so that downstream pipeline uses it.
+    subtract_sky(tempframe,skymodel) #- Note: sky subtract is done to get residuals. As part of pipeline it is done in fluxcalib stage
 
-    # Grab sky fibers on this frame
-    skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
-    assert np.max(skyfibers) < 500  #- indices, not fiber numbers
-    nfibers=len(skyfibers)
-    qadict['NSKY_FIB'] = int(nfibers)
+    qadict = qalib.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
 
-    current_ivar=frame.ivar[skyfibers].copy()
-    flux = frame.flux[skyfibers]
-
-    # Subtract
-    res = flux - skymodel.flux[skyfibers] # Residuals
-    res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers])
-
-    # Chi^2 and Probability
-    chi2_fiber = np.sum(res_ivar*(res**2),1)
-    chi2_prob = np.zeros(nfibers)
-    for ii in range(nfibers):
-        # Stats
-        dof = np.sum(res_ivar[ii,:] > 0.)
-        chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
-    # Bad models
-    qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
-    if qadict['NBAD_PCHI'] > 0:
-        log.warning("Bad Sky Subtraction in {:d} fibers".format(
-                qadict['NBAD_PCHI']))
-
-    # Median residual
-    qadict['MED_RESID'] = float(np.median(res)) # Median residual (counts)
-    log.info("Median residual for sky fibers = {:g}".format(
-        qadict['MED_RESID']))
-
-    # Residual percentiles
-    perc = dustat.perc(res, per=param['PER_RESID'])
-    qadict['RESID_PER'] = [float(iperc) for iperc in perc]
-
-    #- Add per fiber median residuals
-    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
-
-    #- Evaluate residuals in wave axis for quicklook
-    if quick_look:
-        
-        qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
-        qadict["WAVELENGTH"]=frame.wave
-        qadict["SKY_FIBERID"]=skyfibers.tolist()
-    # Return
+    qadict_snr = qalib.SignalVsNoise(tempframe,param)
+    qadict.update(qadict_snr)
+    
     return qadict
+

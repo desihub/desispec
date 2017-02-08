@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+
+
+import sys,string
+import astropy.io.fits as pyfits
+import argparse
+import numpy as np
+
+from desispec import io
+from desispec.log import get_logger
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                 description="Compute a master dark",
+                                 epilog='''
+                                 Input is a list of raw dark images, possibly with various exposure times.
+                                 Raw images are preprocessed without dark,mask,gain correction and without cosmic-ray masking.
+                                 Only an optional bias correction is applied.
+                                 The result is the median of the preprocessed images divided by their exposure time.
+                                 We use for this the keyword EXPTIME in the raw image primary header.                                 
+                                 ''')
+
+
+parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
+                    help = 'path of raws image fits files')
+parser.add_argument('-o','--outfile', type = str, default = None, required = True, 
+                    help = 'output median image filename')
+parser.add_argument('--camera',type = str, required = True, 
+                    help = 'header HDU (int or string)')
+parser.add_argument('--bias', type = str, default = None, required=False,
+                        help = 'bias image calibration file (standard preprocessing calibration is turned off)')
+
+args        = parser.parse_args()
+log = get_logger()
+
+log.info("read images ...")
+
+shape=None
+images=[]
+for filename in args.image :
+    
+    log.info(filename)
+
+    # collect exposure times
+    fitsfile=pyfits.open(filename)
+    exptime = fitsfile[0].header["EXPTIME"]
+    fitsfile.close()
+    
+    # read raw data and preprocess them
+    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=True,ccd_calibration_filename=False)
+    if shape is None :
+        shape=img.pix.shape
+    log.info("adding dark %s divided by exposure time %f s"%(filename,exptime))
+    images.append(img.pix.ravel()/exptime)
+
+
+log.info("compute median image ...")
+medimage=np.median(images,axis=0).reshape(shape)
+
+log.info("write result in %s ..."%args.outfile)
+hdulist=pyfits.HDUList([pyfits.PrimaryHDU(medimage)])
+i=0
+for filename in args.image :
+    hdulist[0].header["INPUT%03d"%i]=filename
+    i+=1
+hdulist.writeto(args.outfile,clobber="True")
+log.info("done")
+
+

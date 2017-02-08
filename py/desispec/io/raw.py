@@ -36,6 +36,7 @@ def read_raw(filename, camera, **kwargs):
 
     rawimage = fx[camera.upper()].data
     header = fx[camera.upper()].header
+    primary_header= fx[0].header
 
     if 'INHERIT' in header and header['INHERIT']:
         h0 = fx[0].header
@@ -45,7 +46,7 @@ def read_raw(filename, camera, **kwargs):
 
     fx.close()
 
-    img = desispec.preproc.preproc(rawimage, header, **kwargs)
+    img = desispec.preproc.preproc(rawimage, header, primary_header, **kwargs)
     return img
 
 def write_raw(filename, rawdata, header, camera=None, primary_header=None):
@@ -74,6 +75,17 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         message = 'dtype {} not supported for raw data'.format(rawdata.dtype)
         log.fatal(message)
         raise ValueError(message)
+
+    fail_message = ''
+    for required_key in ['DOSVER', 'FEEVER', 'DETECTOR']:
+        if required_key not in primary_header:
+            if required_key in header:
+                primary_header[required_key] = header[required_key]
+            else:
+                fail_message = fail_message + \
+                    'Keyword {} must be in header or primary_header\n'.format(required_key)
+    if fail_message != '':
+        raise ValueError(fail_message)
 
     #- Check required keywords before writing anything
     missing_keywords = list()
