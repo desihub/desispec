@@ -1270,7 +1270,7 @@ class Sky_Residual(MonitoringAlg):
         
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
+            param = dict(BIN_SZ=0.1, #- Bin size for histograms
                          PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
                          PER_RESID=95.,   # Percentile for residual distribution
                         )
