@@ -1,5 +1,5 @@
 """
-tests for quicklook pas
+tests for Quicklook Pipeline steps in desispec.quicklook.procalgs
 """
 
 import unittest
@@ -99,7 +99,7 @@ class TestQL_PA(unittest.TestCase):
         desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
 
-    #- Individual tests already exist in offline tests. These will only test the call
+    #- Individual tests already exist in offline tests. So we will mostly test the call etc. here
     def testPreproc(self):
         pa=PA.Preproc('Preproc',self.config,logger=log)
         log.info("Test preproc")

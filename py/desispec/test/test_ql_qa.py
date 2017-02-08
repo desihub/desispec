@@ -1,5 +1,5 @@
 """
-tests desispec.ql_qa
+tests for Quicklook QA class and functions. It also indludes tests on low level functions on desispec.qa.qalib
 """
 
 import unittest
@@ -7,9 +7,6 @@ import numpy as np
 import os
 from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
-from desispec.quicklook import procalgs as PAs
-from desispec.quicklook import qas
-from desispec.quicklook import quicklook as ql
 from pkg_resources import resource_filename
 import desispec
 from desispec.preproc import _parse_sec_keyword
@@ -172,7 +169,9 @@ class TestQL(unittest.TestCase):
         skyivar=np.ones_like(sky)
         self.mask=np.zeros(sky.shape,dtype=np.uint32)
         self.skymodel=desispec.sky.SkyModel(wave,sky,skyivar,self.mask)
-        self.skyfile=desispec.io.write_sky(self.skyfile,self.skymodel)        
+        self.skyfile=desispec.io.write_sky(self.skyfile,self.skymodel)
+        
+        #- Make a dummy boundary map for wavelength-flux in pixel space
         self.map2pix={}
         self.map2pix["LEFT_MAX_FIBER"] = 14
         self.map2pix["RIGHT_MIN_FIBER"] = 17
@@ -186,7 +185,7 @@ class TestQL(unittest.TestCase):
 
     def test_fiducialregion(self):
         leftmax,rightmin,bottommax,topmin=qalib.fiducialregion(self.frame,self.psf)
-        self.assertEqual(leftmax,self.nspec-1) 
+        self.assertEqual(leftmax,self.nspec-1)  #- as only 30 spectra defined 
         self.assertLess(bottommax,topmin)
 
 
