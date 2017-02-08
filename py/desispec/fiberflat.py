@@ -235,7 +235,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         ## print "toto"
         ## reg.setdiag(0.01*A.diagonal())
         ## A += reg
-        print "deconvolving"
+        print("deconvolving")
         mean_spectrum=np.linalg.lstsq(A.todense(),B)[0]
         for fiber in range(nfibers) :
 
