@@ -247,6 +247,8 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             
             M = R.dot(mean_spectrum)
             ok=(M!=0) & (ivar[fiber,:]>0)
+            if ok.sum()==0:
+                continue
             smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],flux[fiber,ok]/M[ok],smoothing_res,ivar[fiber,ok]*M[ok]**2)*(ivar[fiber,:]*M**2>0)
             chi2 = ivar[fiber]*(flux[fiber]-smooth_fiberflat[fiber]*M)**2
             sum_chi2 += chi2.sum()
@@ -310,6 +312,8 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         iteration=0
         while iteration<500 :
             w=fiberflat_ivar[fiber,:]>0
+            if w.sum()==0:
+                continue
             smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
             chi2=fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2
             bad=np.where(chi2>nsig_for_mask**2)[0]
@@ -350,13 +354,11 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             x=np.arange(wave.size)
             
             ok=fiberflat_ivar[fiber]>0
-            try:
-                smooth_fiberflat=spline_fit(x,x[ok],fiberflat[fiber,ok],smoothing_res,fiberflat_ivar[fiber,ok])
-                fiberflat[fiber,bad] = smooth_fiberflat[bad]
-            except:
-                fiberflat[fiber,bad] = 1.
-                fiberflat_ivar[fiber,bad]=0.
-                    
+            if ok.sum()==0:
+                continue
+            smooth_fiberflat=spline_fit(x,x[ok],fiberflat[fiber,ok],smoothing_res,fiberflat_ivar[fiber,ok])
+            fiberflat[fiber,bad] = smooth_fiberflat[bad]
+
         if nbad_tot>0 :
             log.info("3rd pass : fiber #%d masked pixels = %d (%d iterations)"%(fiber,nbad_tot,iteration))
     
