@@ -49,14 +49,14 @@ class TestQL(unittest.TestCase):
         self.qafig = 'test_qa.png'
 
         #- use specter psf for this test
-        #- self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') #- Using this crashes fiducialregion. Using desimodel psf 
-        self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
+        self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
+        #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
         self.config={}
 
         #- rawimage
 
         hdr = dict()
-        hdr['CAMERA'] = 'b1'
+        hdr['CAMERA'] = 'z1'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
 
         #- Dimensions per amp
@@ -129,7 +129,7 @@ class TestQL(unittest.TestCase):
         desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
         
-        #- read psf, since using desimodel psf, should use specter.PSF.load_psf instead of desispec.PSF(), otherwise need to create a psfboot somewhere.
+        #- read psf, should use specter.PSF.load_psf instead of desispec.PSF(), otherwise need to create a psfboot somewhere.
 
         self.psf=load_psf(self.psffile)
 
@@ -155,7 +155,7 @@ class TestQL(unittest.TestCase):
         #- make a test frame file
         self.night=hdr['NIGHT']
         self.nspec = nspec = 30
-        wave=np.arange(3600.0,5600.0,1.0) #- b channel
+        wave=np.arange(7600.0,9800.0,1.0) #- b channel
         nwave = self.nwave = len(wave)
         flux=np.random.uniform(size=(nspec,nwave))+100.
         ivar=np.ones_like(flux)
