@@ -119,9 +119,10 @@ class Get_RMS(MonitoringAlg):
             qlf_post(retval)  
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_RMS
             plot_RMS(retval,qafig)            
@@ -215,9 +216,10 @@ class Count_Pixels(MonitoringAlg):
             qlf_post(retval)      
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countpix
             plot_countpix(retval,qafig)
@@ -325,9 +327,10 @@ class Integrate_Spec(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_integral
             plot_integral(retval,qafig)
@@ -460,8 +463,10 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
             qlf_post(retval)    
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
+            f.close()
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_continuum
@@ -634,9 +639,10 @@ class Sky_Peaks(MonitoringAlg):
             qlf_post(retval)
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_peaks
             plot_sky_peaks(retval,qafig)
@@ -933,9 +939,10 @@ class Calc_XWSigma(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_XWSigma
             plot_XWSigma(retval,qafig)
@@ -1032,9 +1039,10 @@ class Bias_From_Overscan(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_bias_overscan
             plot_bias_overscan(retval,qafig)
@@ -1190,9 +1198,10 @@ class CountSpectralBins(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countspectralbins
             plot_countspectralbins(retval,qafig)
@@ -1270,7 +1279,7 @@ class Sky_Residual(MonitoringAlg):
         
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
+            param = dict(BIN_SZ=0.1, #- Bin size for histograms
                          PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
                          PER_RESID=95.,   # Percentile for residual distribution
                         )
@@ -1285,9 +1294,10 @@ class Sky_Residual(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_residuals
             plot_residuals(retval,qafig)
@@ -1369,9 +1379,10 @@ class Calculate_SNR(MonitoringAlg):
             qlf_post(retval)            
 
         if qafile is not None:
-            yaml.dump(retval,open(qafile,"wb"))
+            f=open(qafile,"w")
+            yaml.dump(retval,f)
             log.info("Output QA data is in {}".format(qafile))
-
+            f.close()
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
             plot_SNR(retval,qafig)         

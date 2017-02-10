@@ -84,9 +84,12 @@ def fiducialregion(frame,psf):
             endspec=None
             startwave1=None
             endwave1=None
-
-        startwave=max(startwave0,startwave1) 
-        endwave=min(endwave0,endwave1)
+        if startwave0 is not None and startwave1 is not None:
+            startwave=max(startwave0,startwave1) 
+        else: startwave = None
+        if endwave0 is not None and endwave1 is not None:
+            endwave=min(endwave0,endwave1)
+        else: endwave = None
         if endspec is not None:
             #endspec+=1 #- last entry exclusive in slice, so add 1
             #endwave+=1
