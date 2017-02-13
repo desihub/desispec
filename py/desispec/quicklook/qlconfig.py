@@ -303,6 +303,7 @@ def build_config(config):
     outconfig={}
 
     outconfig['Camera'] = config.camera
+    outconfig['Expid'] = config.expid
     #DataType=config.datatype
     outconfig['DumpIntermediates'] = config.dumpintermediates
     outconfig['FiberMap']=config.fibermap

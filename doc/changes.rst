@@ -8,6 +8,10 @@ desispec Change Log
 * Fix brick update corruption (PR `#314`_).
 * Close PSF file after initializing PSF object.
 * Refactor :mod:`desispec.io.database` to use SQLAlchemy_.
+* Fix :func:`~desispec.pipeline.graph.graph_path` usage in workers.
+* Update :func:`desispec.io.raw.write_raw` to enable writing simulated raw
+  data with new headers.
+* Allow ``test_bootcalib`` to run even if NERSC portal is returning 403 errors.
 
 .. _`#314`: https://github.com/desihub/desispec/pull/314
 .. _SQLAlchemy: http://www.sqlalchemy.org

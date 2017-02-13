@@ -76,6 +76,17 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
         log.fatal(message)
         raise ValueError(message)
 
+    fail_message = ''
+    for required_key in ['DOSVER', 'FEEVER', 'DETECTOR']:
+        if required_key not in primary_header:
+            if required_key in header:
+                primary_header[required_key] = header[required_key]
+            else:
+                fail_message = fail_message + \
+                    'Keyword {} must be in header or primary_header\n'.format(required_key)
+    if fail_message != '':
+        raise ValueError(fail_message)
+
     #- Check required keywords before writing anything
     missing_keywords = list()
     if camera is None and 'CAMERA' not in header:
