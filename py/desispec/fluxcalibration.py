@@ -328,7 +328,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     current_ivar=stdstars.ivar.copy()
 
     #- Start with a first pass median rejection
-    median_calib = np.median(stdstars.flux / convolved_model_flux, axis=0)
+    calib = (convolved_model_flux!=0)*(stdstars.flux/(convolved_model_flux + (convolved_model_flux==0)))
+    median_calib = np.median(calib, axis=0)
     chi2 = stdstars.ivar * (stdstars.flux - convolved_model_flux*median_calib)**2
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
@@ -382,7 +383,18 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
         log.info("iter %d solving"%iteration)
         ### log.debug('cond(A) {:g}'.format(np.linalg.cond(A)))
         #calibration=cholesky_solve(A, B)
-        calibration=np.linalg.lstsq(A, B)[0]
+        w = np.diagonal(A)>0
+        A_pos_def = A[w,:]
+        A_pos_def = A_pos_def[:,w]
+        calibration = B*0
+#        try:
+        calibration[w]=cholesky_solve(A_pos_def, B[w])
+#        except:
+#           log.info('cholesky fails in iteration {}, trying svd'.format(iteration))
+#            try:
+#                calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
+#            except:
+
 
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2

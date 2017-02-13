@@ -20,7 +20,7 @@ from desispec.log import get_logger
 import math
 
 
-def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=100.,max_bad=100,max_rej_it=5,min_sn=0) :
+def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=20.,max_bad=100,max_rej_it=5,min_sn=0) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelength grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
@@ -190,7 +190,6 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             break
     ## flatten fiberflat
     ## normalize smooth_fiberflat:
-
     mean=np.ones(smooth_fiberflat.shape[1])
     for i in range(smooth_fiberflat.shape[1]):
         w=ivar[:,i]>0
@@ -235,8 +234,19 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         ## print "toto"
         ## reg.setdiag(0.01*A.diagonal())
         ## A += reg
-        print("deconvolving")
-        mean_spectrum=np.linalg.lstsq(A.todense(),B)[0]
+        log.info("deconvolving")
+        w = A.diagonal() > 0
+        index = np.arange(nwave)
+        A_pos_def = A.todense()
+        A_pos_def = A_pos_def[w,:]
+        A_pos_def = A_pos_def[:,w]
+        mean_spectrum = np.zeros(nwave)
+        try:
+            mean_spectrum[w]=cholesky_solve(A_pos_def,B[w])
+        except:
+            mean_spectrum[w]=np.linalg.lstsq(A_pos_def,B[w])
+            log.info("cholesky failes, trying svd inverse in iter {}",iteration)
+
         for fiber in range(nfibers) :
 
             if np.sum(ivar[fiber]>0)==0 :
@@ -276,6 +286,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             chi2pdf=sum_chi2/ndf
         log.info("2nd pass, iter %d, chi2=%f ndf=%d chi2pdf=%f"%(iteration,sum_chi2,ndf,chi2pdf))
         
+
         if max_diff<accuracy :
             break
         
@@ -312,7 +323,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         iteration=0
         while iteration<500 :
             w=fiberflat_ivar[fiber,:]>0
-            if w.sum()==0:
+            if w.sum()<100:
                 continue
             smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
             chi2=fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2
@@ -356,8 +367,12 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             ok=fiberflat_ivar[fiber]>0
             if ok.sum()==0:
                 continue
-            smooth_fiberflat=spline_fit(x,x[ok],fiberflat[fiber,ok],smoothing_res,fiberflat_ivar[fiber,ok])
-            fiberflat[fiber,bad] = smooth_fiberflat[bad]
+            try:
+                smooth_fiberflat=spline_fit(x,x[ok],fiberflat[fiber,ok],smoothing_res,fiberflat_ivar[fiber,ok])
+                fiberflat[fiber,bad] = smooth_fiberflat[bad]
+            except:
+                fiberflat[fiber,bad] = 1
+                fiberflat_ivar[fiber,bad]=0
 
         if nbad_tot>0 :
             log.info("3rd pass : fiber #%d masked pixels = %d (%d iterations)"%(fiber,nbad_tot,iteration))

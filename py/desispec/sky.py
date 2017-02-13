@@ -80,9 +80,16 @@ def compute_sky(frame, nsig_clipping=4.) :
             B += sqrtwR.T*sqrtwflux[fiber]
 
         log.info("iter %d solving"%iteration)
-
-        #skyflux=cholesky_solve(A.todense(),B)
-        skyflux=np.linalg.lstsq(A.todense(),B)[0]
+    
+        w = A.diagonal()>0
+        A_pos_def = A.todense()[w,:]
+        A_pos_def = A_pos_def[:,w]
+        skyflux = B*0
+        try:
+            skyflux[w]=cholesky_solve(A_pos_def,B[w])
+        except:
+            log.info("cholesky failed, trying svd in iteration {}".format(iteration))
+            skyflux[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
 
         log.info("iter %d compute chi2"%iteration)
 
