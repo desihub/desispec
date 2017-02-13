@@ -87,12 +87,14 @@ class Bricks(object):
         dec = np.atleast_1d(dec)
         ra = np.atleast_1d(ra)
         irow = ((dec+90.0+self._bricksize/2)/self._bricksize).astype(int)
-        names = list()
-        for i in range(len(ra)):
-            ncol = self._ncol_per_row[irow[i]]
-            j = int(ra[i]/360 * ncol)
-            names.append(self._brickname[irow[i]][j])
 
+        ncol = self._ncol_per_row[irow]
+        jj = (ra/360.0 * ncol).astype(int)
+        names = np.empty(len(ra), dtype='S8')
+        for thisrow in set(irow):
+            these = np.where(thisrow == irow)[0]
+            names[these] = np.array(self._brickname[thisrow])[jj[these]]
+            
         if np.isscalar(inra):
             return names[0]
         else:
