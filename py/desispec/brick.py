@@ -94,7 +94,7 @@ class Bricks(object):
         for thisrow in set(irow):
             these = np.where(thisrow == irow)[0]
             names[these] = np.array(self._brickname[thisrow])[jj[these]]
-            
+
         if np.isscalar(inra):
             return names[0]
         else:
