@@ -75,11 +75,11 @@ class Bricks(object):
 
     def brickname(self, ra, dec):
         """Return string name of brick that contains (ra, dec) [degrees]
-        
+
         Args:
             ra (float) : Right Ascension in degrees
             dec (float) : Declination in degrees
-            
+
         Returns:
             brick name string
         """
@@ -90,7 +90,7 @@ class Bricks(object):
 
         ncol = self._ncol_per_row[irow]
         jj = (ra/360.0 * ncol).astype(int)
-        names = np.empty(len(ra), dtype='S8')
+        names = np.empty(len(ra), dtype='U8')
         for thisrow in set(irow):
             these = np.where(thisrow == irow)[0]
             names[these] = np.array(self._brickname[thisrow])[jj[these]]
@@ -98,7 +98,7 @@ class Bricks(object):
         if np.isscalar(inra):
             return names[0]
         else:
-            return np.array(names)
+            return names
 
     def brick_radec(self, ra, dec):
         """Return center (ra,dec) of brick that contains input (ra, dec) [deg]
