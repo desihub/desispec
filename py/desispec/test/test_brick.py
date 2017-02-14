@@ -26,22 +26,22 @@ class TestBrick(unittest.TestCase):
             '0002p000', '0007p005', '0007p010', '0012p010', '0017p015'])
 
     def test_brickname_scalar(self):
-        """Test a scalar brick name conversion.
+        """Test scalar to brick name conversion.
         """
         b = brickname(0, 0)
         self.assertEqual(b, '0002p000')
 
     def test_brickname_array(self):
-        """Test an array brick name conversion.
+        """Test array to brick name conversion.
         """
         bricknames = brickname(self.ra, self.dec)
         self.assertEqual(len(bricknames), len(self.ra))
         self.assertTrue((bricknames == self.names).all())
 
-    def test3(self):
-        """This test is nonsensical, because it is a repeat of test2.
+    def test_brickname_list(self):
+        """Test list to brick name conversion.
         """
-        bricknames = brickname(np.array(self.ra), np.array(self.dec))
+        bricknames = brickname(self.ra.tolist(), self.dec.tolist())
         self.assertEqual(len(bricknames), len(self.ra))
         self.assertTrue((bricknames == self.names).all())
 
