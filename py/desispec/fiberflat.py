@@ -20,7 +20,7 @@ from desispec.log import get_logger
 import math
 
 
-def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=20.,max_bad=100,max_rej_it=5,min_sn=0) :
+def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=20.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelength grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
@@ -37,6 +37,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         max_bad: [optional] mask entire fiber if more than max_bad-1 initially unmasked pixels are masked during the iterations
         max_rej_it: [optional] reject at most the max_rej_it worst pixels in each iteration
         min_sn: [optional] mask portions with signal to noise less than min_sn
+        diag_epsilon: [optional] size of the regularization term in the deconvolution
 
 
     Returns:
@@ -197,6 +198,8 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             mean[i]=np.median(smooth_fiberflat[w,i])
     smooth_fiberflat = smooth_fiberflat/mean
 
+    median_spectrum = mean_spectrum*1.
+
     previous_smooth_fiberflat = smooth_fiberflat*0
     log.info("after 1st pass : nout = %d/%d"%(np.sum(ivar==0),np.size(ivar.flatten())))
     # 2nd pass is full solution including deconvolved spectrum, no outlier rejection
@@ -228,23 +231,17 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
                 
             A = A+(sqrtwflatR.T*sqrtwflatR).tocsr()
             B += sqrtwflatR.T.dot(np.sqrt(ivar[fiber])*flux[fiber])
-        ## add a regularization factor
-        ## print "regularization"
-        ## reg = scipy.sparse.lil_matrix((nwave,nwave))
-        ## print "toto"
-        ## reg.setdiag(0.01*A.diagonal())
-        ## A += reg
+        A_pos_def = A.todense()
         log.info("deconvolving")
         w = A.diagonal() > 0
-        index = np.arange(nwave)
-        A_pos_def = A.todense()
+
         A_pos_def = A_pos_def[w,:]
         A_pos_def = A_pos_def[:,w]
         mean_spectrum = np.zeros(nwave)
         try:
             mean_spectrum[w]=cholesky_solve(A_pos_def,B[w])
         except:
-            mean_spectrum[w]=np.linalg.lstsq(A_pos_def,B[w])
+            mean_spectrum[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
             log.info("cholesky failes, trying svd inverse in iter {}",iteration)
 
         for fiber in range(nfibers) :
@@ -291,7 +288,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             break
         
         log.info("2nd pass, iter %d, max diff. = %g > requirement = %g, continue iterating"%(iteration,max_diff,accuracy))
-        
+
     log.info("Total number of masked pixels=%d"%nout_tot)
     log.info("3rd pass, final computation of fiber flat")
 
