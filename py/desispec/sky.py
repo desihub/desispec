@@ -17,7 +17,7 @@ from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
-def compute_sky(frame, nsig_clipping=4.) :
+def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
     """Compute a sky model.
 
     Input has to correspond to sky fibers only.
@@ -59,7 +59,7 @@ def compute_sky(frame, nsig_clipping=4.) :
     #nfibers=min(nfibers,2)
 
     nout_tot=0
-    for iteration in range(20) :
+    for iteration in range(max_iterations) :
 
         A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
         B=np.zeros((nwave))

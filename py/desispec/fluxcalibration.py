@@ -387,14 +387,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
         A_pos_def = A[w,:]
         A_pos_def = A_pos_def[:,w]
         calibration = B*0
-#        try:
-        calibration[w]=cholesky_solve(A_pos_def, B[w])
-#        except:
-#           log.info('cholesky fails in iteration {}, trying svd'.format(iteration))
-#            try:
-#                calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
-#            except:
-
+        try:
+            calibration[w]=cholesky_solve(A_pos_def, B[w])
+        except np.linalg.linalg.LinAlgError:
+            log.info('cholesky fails in iteration {}, trying svd'.format(iteration))
+            calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
 
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2
