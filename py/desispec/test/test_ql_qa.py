@@ -1,5 +1,5 @@
 """
-tests desispec.ql_qa
+tests for Quicklook QA class and functions. It also indludes tests on low level functions on desispec.qa.qalib
 """
 
 import unittest
@@ -7,9 +7,6 @@ import numpy as np
 import os
 from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
-from desispec.quicklook import procalgs as PAs
-from desispec.quicklook import qas
-from desispec.quicklook import quicklook as ql
 from pkg_resources import resource_filename
 import desispec
 from desispec.preproc import _parse_sec_keyword
@@ -36,7 +33,7 @@ class TestQL(unittest.TestCase):
 
     def tearDown(self):
         self.rawimage.close()
-        for filename in [self.framefile, self.rawfile, self.pixfile, self.fibermapfile, self.skyfile]:
+        for filename in [self.framefile, self.rawfile, self.pixfile, self.fibermapfile, self.skyfile, self.qafile, self.qafig]:
             if os.path.exists(filename):
                 os.remove(filename)
 
@@ -48,18 +45,21 @@ class TestQL(unittest.TestCase):
         self.framefile = 'test-frame-abcd.fits'
         self.fibermapfile = 'test-fibermap-abcd.fits'
         self.skyfile = 'test-sky-abcd.fits'
+        self.qafile = 'test_qa.yaml'
+        self.qafig = 'test_qa.png'
 
         #- use specter psf for this test
-        self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits')
+        self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
+        #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
         self.config={}
 
         #- rawimage
 
         hdr = dict()
-        hdr['CAMERA'] = 'b1'
+        hdr['CAMERA'] = 'z1'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
 
-        #- Dimensions per amp, not full 4-quad CCD
+        #- Dimensions per amp
         ny = self.ny = 500
         nx = self.nx = 400
         noverscan = nover = 50
@@ -109,6 +109,12 @@ class TestQL(unittest.TestCase):
             rawimage[xy] += offset[amp]
             rawimage[xy] += np.random.normal(scale=rdnoise[amp], size=shape)/gain[amp]
 
+        #- set CCD parameters
+        self.ccdsec1=hdr["CCDSEC1"]
+        self.ccdsec2=hdr["CCDSEC2"]
+        self.ccdsec3=hdr["CCDSEC3"]
+        self.ccdsec4=hdr["CCDSEC4"]
+
         #- raw data are integers, not floats
         rawimg = rawimage.astype(np.int32)
         self.expid=hdr["EXPID"]
@@ -123,12 +129,12 @@ class TestQL(unittest.TestCase):
         desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
         
-        #- read psf, since using specter test psf, should use specter.PSF.load_psf instead of desispec.PSF(), otherwise need to create a psfboot somewhere.
+        #- read psf, should use specter.PSF.load_psf instead of desispec.PSF(), otherwise need to create a psfboot somewhere.
 
         self.psf=load_psf(self.psffile)
 
         #- make the test pixfile, fibermap file
-        img_pix = np.random.normal(0, 10.0, size=(400,400))
+        img_pix = rawimg #np.random.normal(0, 10.0, size=(400,400))
         img_ivar = np.ones_like(img_pix) / 3.0**2
         img_mask = np.zeros(img_pix.shape, dtype=np.uint32)
         img_mask[200] = 1
@@ -145,17 +151,17 @@ class TestQL(unittest.TestCase):
         self.fibermap['FILTER'][:29]=np.tile(['DECAM_R','..','..','..','..'],(29,1)) #- last fiber left 
         
         desispec.io.write_fibermap(self.fibermapfile, self.fibermap)        
-        
+
         #- make a test frame file
         self.night=hdr['NIGHT']
-        nspec=30
-        nwave=200
-        wave=np.arange(nwave)
-        flux=np.random.uniform(size=(nspec,nwave))
+        self.nspec = nspec = 30
+        wave=np.arange(7600.0,9800.0,1.0) #- b channel
+        nwave = self.nwave = len(wave)
+        flux=np.random.uniform(size=(nspec,nwave))+100.
         ivar=np.ones_like(flux)
         resolution_data=np.ones((nspec,13,nwave))
         self.frame=desispec.frame.Frame(wave,flux,ivar,resolution_data=resolution_data,fibermap=self.fibermap)
-        #self.frame.meta = dict(CAMERA=self.camera,FLAVOR='dark',NIGHT=self.night, EXPID=self.expid)
+        self.frame.meta = dict(CAMERA=self.camera,FLAVOR='dark',NIGHT=self.night, EXPID=self.expid,CCDSEC1=self.ccdsec1,CCDSEC2=self.ccdsec2,CCDSEC3=self.ccdsec3,CCDSEC4=self.ccdsec4)
         desispec.io.write_frame(self.framefile, self.frame)
 
         #- make a skymodel
@@ -165,12 +171,22 @@ class TestQL(unittest.TestCase):
         self.skymodel=desispec.sky.SkyModel(wave,sky,skyivar,self.mask)
         self.skyfile=desispec.io.write_sky(self.skyfile,self.skymodel)
         
-
-    #- test some qa utillities functions:
+        #- Make a dummy boundary map for wavelength-flux in pixel space
+        self.map2pix={}
+        self.map2pix["LEFT_MAX_FIBER"] = 14
+        self.map2pix["RIGHT_MIN_FIBER"] = 17
+        self.map2pix["BOTTOM_MAX_WAVE_INDEX"] = 900
+        self.map2pix["TOP_MIN_WAVE_INDEX"] = 1100
+    #- test some qa utility functions:
     def test_ampregion(self):
         pixboundary=qalib.ampregion(self.image)
         self.assertEqual(pixboundary[0][1],slice(0,self.nx,None))
         self.assertEqual(pixboundary[3][0],slice(self.ny,self.ny+self.ny,None))
+
+    def test_fiducialregion(self):
+        leftmax,rightmin,bottommax,topmin=qalib.fiducialregion(self.frame,self.psf)
+        self.assertEqual(leftmax,self.nspec-1)  #- as only 30 spectra defined 
+        self.assertLess(bottommax,topmin)
 
 
     def test_getrms(self):
@@ -179,11 +195,11 @@ class TestQL(unittest.TestCase):
 
     def test_countpix(self):
         pix=self.image.pix
-        counts1=qalib.countpix(pix,nsig=3) #- counts avove 3 sigma
+        counts1=qalib.countpix(pix,nsig=3) #- counts above 3 sigma
         counts2=qalib.countpix(pix,nsig=4) #- counts above 4 sigma
         self.assertLess(counts2,counts1)
-        counts3=qalib.countpix(pix,ncounts=15)
-        counts4=qalib.countpix(pix,ncounts=20)
+        counts3=qalib.countpix(pix,ncounts=200)
+        counts4=qalib.countpix(pix,ncounts=250)
         self.assertLess(counts4,counts3)
 
     def test_sky_resid(self):
@@ -238,8 +254,7 @@ class TestQL(unittest.TestCase):
         self.assertEqual(len(qa['MEDIAN_SNR']),30)
         self.assertEqual(len(qa['LRG_FIBERID']),0) #- LRG was not present by construction
 
-        
-    #- QA: bias overscan
+    #- Test each individual QA:
     def testBiasOverscan(self):
         qa=QA.Bias_From_Overscan('bias',self.config) #- initialize with fake config and name
         inp=self.rawimage
@@ -248,10 +263,161 @@ class TestQL(unittest.TestCase):
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True
+        qargs["qafile"]=self.qafile
+        qargs["qafig"]=self.qafig
         qargs["paname"]="abc"
         res1=qa(inp,**qargs)
         self.assertEqual(len(res1['METRICS']['BIAS_AMP']),4)
         
+    def testGetRMS(self):
+        qa=QA.Get_RMS('rms',self.config)
+        inp=self.image
+        qargs={}
+        qargs["PSFFile"]=self.psf
+        qargs["camera"]=self.camera
+        qargs["expid"]=self.expid
+        qargs["amps"]=True
+        qargs["paname"]="abc"
+        qargs["qafile"]=self.qafile
+        qargs["qafig"]=self.qafig
+        resl=qa(inp,**qargs)
+        self.assertTrue("yaml" in qargs["qafile"])
+        self.assertTrue("png" in qargs["qafig"])
+        self.assertTrue(len(resl['METRICS']['RMS_OVER_AMP'])==4)
+        self.assertTrue((np.all(resl['METRICS']['RMS_OVER_AMP'])>0))
+
+    #def testCalcXWSigma(self):
+    #    qa=QA.Calc_XWSigma('xwsigma',self.config)
+    #    inp=self.image
+    #    qargs={}
+    #    qargs["PSFFile"]=self.psf
+    #    qargs["FiberMap"]=self.fibermap
+    #    qargs["camera"]=self.camera
+    #    qargs["expid"]=self.expid
+    #    qargs["amps"]=False
+    #    qargs["paname"]="abc"
+    #    resl=qa(inp,**qargs)
+    #    assertTrue(np.all(resl["METRICS"]["XSIGMA"])>0)
+
+
+    def testCountPixels(self):
+        qa=QA.Count_Pixels('countpix',self.config)
+        inp=self.image
+        qargs={}
+        qargs["PSFFile"]=self.psf
+        qargs["camera"]=self.camera
+        qargs["expid"]=self.expid
+        qargs["amps"]=False
+        qargs["paname"]="abc"
+        resl=qa(inp,**qargs)
+        self.assertTrue(resl['METRICS']['NPIX_LOW'] > resl['METRICS']['NPIX_HIGH'])
+        #- test if amp QAs exist
+        qargs["amps"] = True
+        resl2=qa(inp,**qargs)
+        self.assertTrue(len(resl2['METRICS']['NPIX3SIG_AMP'])==4)
+
+    def testCountSpectralBins(self):
+        qa=QA.CountSpectralBins('countbins',self.config)
+        inp=self.frame
+        qargs={}
+        qargs["PSFFile"]=self.psf
+        qargs["camera"]=self.camera
+        qargs["expid"]=self.expid
+        qargs["amps"]=True
+        qargs["paname"]="abc"
+        qargs["qafile"]=self.qafile
+        qargs["qafig"]=self.qafig
+        resl=qa(inp,**qargs)
+        self.assertTrue(np.all(resl["METRICS"]["NBINSMED"]-resl["METRICS"]["NBINSHIGH"])>=0)
+        self.assertTrue(np.all(resl["METRICS"]["NBINSLOW"]-resl["METRICS"]["NBINSMED"])>=0)
+        self.assertLess(resl["BOTTOM_MAX_WAVE_INDEX"],resl["TOP_MIN_WAVE_INDEX"])
+
+    def testSkyCont(self):
+        qa=QA.Sky_Continuum('skycont',self.config)
+        inp=self.frame
+        qargs={}
+        qargs["camera"]=self.camera
+        qargs["expid"]=self.expid
+        qargs["amps"]=False
+        qargs["paname"]="abc"
+        resl=qa(inp,**qargs)
+        self.assertTrue(resl["METRICS"]["SKYFIBERID"]==[0,7,14,21,28]) #- as defined in the fibermap
+        self.assertTrue(resl["METRICS"]["SKYCONT"]>0)
+        #- Test for amp True Case
+        qargs["amps"]=True
+        qargs["dict_countbins"]=self.map2pix #- This is not the full dict but contains the map needed here.
+        resl2=qa(inp,**qargs)
+        self.assertTrue(np.all(resl2["METRICS"]["SKYCONT_AMP"])>0)
+        
+
+    def testSkyPeaks(self):
+        qa=QA.Sky_Peaks('skypeaks',self.config)
+        inp=self.frame
+        qargs={}
+        qargs["camera"]=self.camera
+        qargs["expid"]=self.expid
+        qargs["amps"]=True
+        qargs["paname"]="abc"
+        qargs["dict_countbins"]=self.map2pix
+        resl=qa(inp,**qargs)
+        self.assertTrue(np.all(resl['METRICS']['SUMCOUNT_RMS_AMP'])>=0.)
+        self.assertTrue(resl['METRICS']['SUMCOUNT_RMS']>0)
+
+    def testIntegrateSpec(self):
+        qa=QA.Integrate_Spec('integ',self.config)
+        inp=self.frame
+        qargs={}
+        qargs["PSFFile"]=self.psf
+        qargs["camera"]=self.camera
+        qargs["expid"]=self.expid
+        qargs["amps"]=False
+        qargs["paname"]="abc"
+        qargs["dict_countbins"]=self.map2pix
+        resl=qa(inp,**qargs)
+        self.assertTrue(resl['METRICS']['INTEG_AVG'] >0)
+        self.assertTrue(len(resl["METRICS"]["INTEG"])==len(resl["METRICS"]["STD_FIBERID"]))
+        #- Test for amps
+        qargs["amps"]=True
+        qargs["dict_countbins"]=self.map2pix
+        resl2=qa(inp,**qargs)
+        self.assertTrue(np.all(resl2["METRICS"]["INTEG_AVG_AMP"])>0)
+        
+    def testSkyResidual(self):
+        qa=QA.Sky_Residual('skyresid',self.config)
+        inp=self.frame
+        sky=self.skymodel
+        qargs={}
+        qargs["PSFFile"]=self.psf
+        qargs["camera"]=self.camera
+        qargs["expid"]=self.expid
+        qargs["amps"]=True
+        qargs["paname"]="abc"
+        qargs["dict_countbins"]=self.map2pix
+        resl=qa(inp,sky,**qargs)
+        self.assertTrue(resl["METRICS"]["NREJ"]==self.skymodel.nrej)
+        self.assertTrue(len(resl["METRICS"]["MED_RESID_WAVE"]) == self.nwave)
+        self.assertTrue(len(resl["METRICS"]["MED_RESID_FIBER"]) == 5) #- 5 sky fibers in the input
+        self.assertTrue(resl["PARAMS"]["BIN_SZ"] == 0.1)
+        #- test with different parameter set:
+        qargs["param"]={"BIN_SZ": 0.2, "PCHI_RESID": 0.05,  "PER_RESID": 95.}
+        resl2=qa(inp,sky,**qargs)
+        self.assertTrue(len(resl["METRICS"]["DEVS_1D"])>len(resl2["METRICS"]["DEVS_1D"])) #- larger histogram bin size than default 0.1
+
+    def testCalculateSNR(self):
+        qa=QA.Calculate_SNR('snr',self.config)
+        inp=self.frame
+        qargs={}
+        qargs["PSFFile"]=self.psf
+        qargs["camera"]=self.camera
+        qargs["expid"]=self.expid
+        qargs["amps"]=True
+        qargs["paname"]="abc"
+        qargs["qafile"]=self.qafile #- no LRG by construction.
+        qargs["dict_countbins"]=self.map2pix
+        resl=qa(inp,**qargs)
+        self.assertTrue("yaml" in qargs["qafile"])
+        self.assertTrue(len(resl["METRICS"]["MEDIAN_SNR"])==self.nspec) #- positive definite
+
 
 if __name__ == '__main__':
     unittest.main()

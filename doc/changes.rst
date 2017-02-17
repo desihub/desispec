@@ -9,6 +9,7 @@ Desispec Change Log
 * close PSF file after initializing PSF object
 * fix graph_path usage in workers
 * update io.write_raw to enable writing simulated raw data with new headers
+* allow test_bootcalib to run even if NERSC portal is returning 403 errors
 
 0.12.0 (2016-11-09)
 -------------------

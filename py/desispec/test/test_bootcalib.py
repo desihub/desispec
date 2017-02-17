@@ -29,24 +29,22 @@ class TestBoot(unittest.TestCase):
         cls.data_unavailable = False
 
         # Grab the data
-        if not os.path.exists(cls.testarc):
-            url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
-            try:
-                f = requests.get(url_arc)
-            except:
-                cls.data_unavailable = True
-            else:
-                with open(cls.testarc, "wb") as code:
-                    code.write(f.content)
-        if not os.path.exists(cls.testflat):
-            url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
-            try:
-                f = requests.get(url_flat)
-            except:
-                cls.data_unavailable = True
-            else:
-                with open(cls.testflat, "wb") as code:
-                    code.write(f.content)
+        url_arc = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000000.fits.gz'
+        url_flat = 'https://portal.nersc.gov/project/desi/data/spectest/pix-sub_b0-00000001.fits.gz'
+        for url, outfile in [(url_arc, cls.testarc), (url_flat, cls.testflat)]:
+            if not os.path.exists(outfile):
+                try:
+                    f = requests.get(url)
+                except:
+                    cls.data_unavailable = True
+                else:
+                    if f.status_code == 200:
+                        with open(outfile, "wb") as code:
+                            code.write(f.content)
+                    else:
+                        print('ERROR: Unable to fetch {}; HTTP status {}'.format(
+                            url, f.status_code))
+                        cls.data_unavailable = True
 
     @classmethod
     def tearDownClass(cls):

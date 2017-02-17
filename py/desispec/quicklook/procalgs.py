@@ -99,13 +99,13 @@ class Preproc(pas.PipelineAlg):
 
         rawimage=input_raw[camera.upper()].data
         header=input_raw[camera.upper()].header
-
+        primary_header=input_raw[0].header
         if 'INHERIT' in header and header['INHERIT']:
             h0 = input_raw[0].header
             for key in h0:
                 if key not in header:
                     header[key] = h0[key]
-        img = desispec.preproc.preproc(rawimage,header,bias=bias,pixflat=pixflat,mask=mask)
+        img = desispec.preproc.preproc(rawimage,header,primary_header,bias=bias,pixflat=pixflat,mask=mask)
         if dump and dumpfile is not None:
             from desispec import io
             night = img.meta['NIGHT']
