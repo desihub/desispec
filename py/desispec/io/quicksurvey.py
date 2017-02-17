@@ -184,12 +184,13 @@ def load_file(filepath, session, tcls, expand=None, convert=None,
         If set, load database `chunksize` rows at a time (default 10000).
     """
     log = get_logger()
+    tn = tcls.__tablename__
     with fits.open(filepath) as hdulist:
         data = hdulist[1].data
     log.info("Read data from {0}.".format(filepath))
     data_list = [data[col].tolist() for col in data.names]
     data_names = [col.lower() for col in data.names]
-    log.info("Initial column conversion complete.")
+    log.info("Initial column conversion complete on {0}.".format(tn))
     if expand is not None:
         for col in expand:
             if isinstance(expand[col], str):
@@ -208,20 +209,20 @@ def load_file(filepath, session, tcls, expand=None, convert=None,
                 for j, n in enumerate(expand[col]):
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
-    log.info("Column expansion complete.")
+    log.info("Column expansion complete on {0}.".format(tn))
     del data
     if convert is not None:
         for col in convert:
             i = data_names.index(col)
             data_list[i] = [convert[col](x) for x in data_list[i]]
-    log.info("Column conversion complete.")
+    log.info("Column conversion complete on {0}.".format(tn))
     data_rows = list(zip(*data_list))
     del data_list
-    log.info("Converted columns into rows.")
+    log.info("Converted columns into rows on {0}.".format(tn))
     for k in range(len(data_rows)//chunksize + 1):
         session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
                                             for row in data_rows[k*chunksize:(k+1)*chunksize]])
-        log.info("Inserted {0:d} rows.".format((k+1)*chunksize))
+        log.info("Inserted {0:d} rows in {1}.".format((k+1)*chunksize, tn))
     # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
     #                                     for row in data_rows])
     # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
@@ -264,10 +265,12 @@ def main():
     #
     # command-line arguments
     #
+    from sys import argv
     from argparse import ArgumentParser
     from pkg_resources import resource_filename
     prsr = ArgumentParser(description=("Load quicksurvey simulation into a " +
-                                       "database."))
+                                       "database."),
+                          prog=os.path.basename(argv[0]))
     # prsr.add_argument('-a', '--area', action='store_true', dest='fixarea',
     #                   help=('If area is not specified in the brick file, ' +
     #                         'recompute it.'))
@@ -283,12 +286,9 @@ def main():
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
                       default='quicksurvey.db', metavar='FILE',
                       help="Store data in FILE.")
-    prsr.add_argument('-n', '--rows', action='store', dest='chunksize',
+    prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
                       type=int, default=10000, metavar='N',
                       help="Load N rows at a time.")
-    # prsr.add_argument('-p', '--pass', action='store', dest='obs_pass',
-    #                   default=0, type=int, metavar='PASS',
-    #                   help="Only simulate frames associated with PASS.")
     # prsr.add_argument('-s', '--simulate', action='store_true', dest='simulate',
     #                   help="Run a simulation using DESI tiles.")
     # prsr.add_argument('-t', '--tiles', action='store', dest='tilefile',
