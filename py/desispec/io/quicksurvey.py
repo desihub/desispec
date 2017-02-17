@@ -162,7 +162,8 @@ class ZCat(Base):
                 "zwarn={0.zwarn:d}, numobs={0.numobs:d})>").format(self)
 
 
-def load_file(filepath, session, tcls, expand=None, convert=None):
+def load_file(filepath, session, tcls, expand=None, convert=None,
+              chunksize=10000):
     """Load a FITS file into the database, assuming that FITS column names map
     to database column names with no surprises.
 
@@ -179,6 +180,8 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
     convert : :class:`dict`, optional
         If set, convert the data for a named (database) column using the
         supplied function.
+    chunksize : :class:`int`, optional
+        If set, load database `chunksize` rows at a time (default 10000).
     """
     log = get_logger()
     with fits.open(filepath) as hdulist:
@@ -215,11 +218,10 @@ def load_file(filepath, session, tcls, expand=None, convert=None):
     data_rows = list(zip(*data_list))
     del data_list
     log.info("Converted columns into rows.")
-    N = 10000
-    for k in range(len(data_rows)//N + 1):
+    for k in range(len(data_rows)//chunksize + 1):
         session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-                                            for row in data_rows[k*N:(k+1)*N]])
-        log.info("Inserted {0:d} rows.".format((k+1)*N))
+                                            for row in data_rows[k*chunksize:(k+1)*chunksize]])
+        log.info("Inserted {0:d} rows.".format((k+1)*chunksize))
     # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
     #                                     for row in data_rows])
     # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
@@ -281,6 +283,9 @@ def main():
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
                       default='quicksurvey.db', metavar='FILE',
                       help="Store data in FILE.")
+    prsr.add_argument('-n', '--rows', action='store', dest='chunksize',
+                      type=int, default=10000, metavar='N',
+                      help="Load N rows at a time.")
     # prsr.add_argument('-p', '--pass', action='store', dest='obs_pass',
     #                   default=0, type=int, metavar='PASS',
     #                   help="Only simulate frames associated with PASS.")
@@ -303,7 +308,10 @@ def main():
     #
     # Create the file.
     #
-    db_file = os.path.join(options.datapath, options.dbfile)
+    if os.path.basename(options.dbfile) == options.dbfile:
+        db_file = os.path.join(options.datapath, options.dbfile)
+    else:
+        db_file = options.dbfile
     if options.clobber and os.path.exists(db_file):
         log.info("Removing file: {0}.".format(db_file))
         os.remove(db_file)
@@ -347,6 +355,7 @@ def main():
         except NoResultFound:
             filepath = os.path.join(options.datapath, *l['path'])
             log.info("Loading {0} from {1}.".format(tn, filepath))
-            load_file(filepath, session, l['tcls'], expand=l['expand'], convert=l['convert'])
+            load_file(filepath, session, l['tcls'], expand=l['expand'],
+                      convert=l['convert'], chunksize=options.chunksize)
             log.info("Finished loading {0}.".format(tn))
     return 0
