@@ -119,12 +119,12 @@ class Bricks(object):
         return xra, xdec
 
 _bricks = None
-def brickname(ra, dec):
+def brickname(ra, dec, bricksize=0.5):
     """Return brick name of brick covering (ra, dec) [degrees]
     """
     global _bricks
     if _bricks is None:
-        _bricks = Bricks()
+        _bricks = Bricks(bricksize=bricksize)
 
     return _bricks.brickname(ra, dec)
 #
