@@ -321,7 +321,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         while iteration<500 :
             w=fiberflat_ivar[fiber,:]>0
             if w.sum()<100:
-                continue
+                break
             smooth_fiberflat=spline_fit(wave,wave[w],fiberflat[fiber,w],smoothing_res,fiberflat_ivar[fiber,w])
             chi2=fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2
             bad=np.where(chi2>nsig_for_mask**2)[0]
