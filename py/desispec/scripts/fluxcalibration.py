@@ -83,7 +83,7 @@ def main(args) :
     fibers = fibermap['FIBER'][:][w]
     if np.any(fibers != model_fibers):
         i_model_fibers = list(fibers)
-        i_model_fibers = [i_model_fiber.index(i) for i in model_fibers]
+        i_model_fibers = [i_model_fibers.index(i) for i in model_fibers]
         for i in i_model_fibers:
             log.error("inconsistency with spectrum %d, OBJTYPE='%s' in fibermap"%(i,fibermap["OBJTYPE"][i]))
         sys.exit(12)
