@@ -11,6 +11,7 @@ from __future__ import absolute_import, unicode_literals
 import unittest
 import numpy as np
 from ..brick import brickname
+from .. import brick
 
 
 class TestBrick(unittest.TestCase):
@@ -45,6 +46,13 @@ class TestBrick(unittest.TestCase):
         self.assertEqual(len(bricknames), len(self.ra))
         self.assertTrue((bricknames == self.names).all())
 
+    def test_bricksize(self):
+        brick._bricks = None
+        blat = brickname(0, 0, bricksize=0.5)
+        self.assertEqual(brick._bricks.bricksize, 0.5)
+        blat = brickname(0, 0, bricksize=0.25)
+        self.assertEqual(brick._bricks.bricksize, 0.25)
+        brick._bricks = None
 
 def test_suite():
     """Allows testing of only this module with the command::
