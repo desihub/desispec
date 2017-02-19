@@ -78,16 +78,12 @@ def main(args) :
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
 
-    ## get the fiber indices
-    w = np.array([objtype.strip() == 'STD' for objtype in fibermap['OBJTYPE'][:]])
-    fibers = fibermap['FIBER'][:][w]
-
     ## check whether star fibers from args.models are consistent with fibers from fibermap
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
-    if np.any(fibers != model_fibers):
-        l_model_fibers = list(model_fibers)
-        i_model_fibers = [l_model_fibers.index(i) for i in fibers if i in l_model_fibers]
-        for i in i_model_fibers:
+    
+    w = np.where(fibermap["OBJTYPE"][model_fibers] != 'STD')[0]
+    if len(w)>0:
+        for i in model_fibers:
             log.error("inconsistency with spectrum %d, OBJTYPE='%s' in fibermap"%(i,fibermap["OBJTYPE"][i]))
         sys.exit(12)
 
