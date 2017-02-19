@@ -73,6 +73,10 @@ class Bricks(object):
         self._center_ra = center_ra
         self._edges_ra = edges_ra
 
+    @property
+    def bricksize(self):
+        return self._bricksize
+
     def brickname(self, ra, dec):
         """Return string name of brick that contains (ra, dec) [degrees]
 
@@ -123,7 +127,7 @@ def brickname(ra, dec, bricksize=0.5):
     """Return brick name of brick covering (ra, dec) [degrees]
     """
     global _bricks
-    if _bricks is None:
+    if _bricks is None or _bricks.bricksize != bricksize:
         _bricks = Bricks(bricksize=bricksize)
 
     return _bricks.brickname(ra, dec)
