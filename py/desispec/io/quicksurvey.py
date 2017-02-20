@@ -22,7 +22,7 @@ from sqlalchemy.orm import sessionmaker, relationship  # , reconstructor
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 # from matplotlib.patches import Circle, Polygon, Wedge
 # from matplotlib.collections import PatchCollection
-from ..log import get_logger, DEBUG
+from ..log import desi_logger, get_logger, DEBUG, INFO
 
 
 Base = declarative_base()
@@ -167,6 +167,7 @@ class FiberAssign(Base):
     """
     __tablename__ = 'fiberassign'
 
+    faid = Column(Integer, primary_key=True)  # Temporary dummy PK.
     tileid = Column(Integer, nullable=False)
     fiber = Column(Integer, nullable=False)
     positioner = Column(Integer, nullable=False)
@@ -183,7 +184,8 @@ class FiberAssign(Base):
     brickname = Column(String, nullable=False)
 
     def __repr__(self):
-        return ("<FiberAssign(tileid={0.tileid:d}, " +
+        return ("<FiberAssign(faid={0.faid:d}, " +
+                "tileid={0.tileid:d}, " +
                 "fiber={0.fiber:d}, " +
                 "positioner={0.positioner:d}, " +
                 "numtarget={0.numtarget:d}, " +
@@ -198,7 +200,7 @@ class FiberAssign(Base):
 
 
 def load_file(filepath, session, tcls, expand=None, convert=None,
-              chunksize=10000):
+              chunksize=10000, maxrows=0):
     """Load a FITS file into the database, assuming that FITS column names map
     to database column names with no surprises.
 
@@ -217,13 +219,18 @@ def load_file(filepath, session, tcls, expand=None, convert=None,
         supplied function.
     chunksize : :class:`int`, optional
         If set, load database `chunksize` rows at a time (default 10000).
+    maxrows : :class:`int`, optional
+        If set, stop loading after `maxrows` are loaded.  Alteratively,
+        set `maxrows` to zero (0) to load all rows.
     """
     log = get_logger()
     tn = tcls.__tablename__
     with fits.open(filepath) as hdulist:
         data = hdulist[1].data
+    if maxrows == 0:
+        maxrows = len(data)
     log.info("Read data from {0}.".format(filepath))
-    data_list = [data[col].tolist() for col in data.names]
+    data_list = [data[col][0:maxrows].tolist() for col in data.names]
     data_names = [col.lower() for col in data.names]
     log.info("Initial column conversion complete on {0}.".format(tn))
     if expand is not None:
@@ -251,14 +258,23 @@ def load_file(filepath, session, tcls, expand=None, convert=None,
             i = data_names.index(col)
             data_list[i] = [convert[col](x) for x in data_list[i]]
     log.info("Column conversion complete on {0}.".format(tn))
-    data_rows = list(zip(*data_list))
-    del data_list
-    log.info("Converted columns into rows on {0}.".format(tn))
-    for k in range(len(data_rows)//chunksize + 1):
-        session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-                                            for row in data_rows[k*chunksize:(k+1)*chunksize]])
+    # data_rows = list(zip(*data_list))
+    # del data_list
+    # if maxrows == 0:
+    #     maxrows = len(data_rows)
+    # log.info("Converted columns into rows on {0}.".format(tn))
+    # for k in range(maxrows//chunksize + 1):
+    #     session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
+    #                                         for row in data_rows[k*chunksize:(k+1)*chunksize]])
+    #     log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
+    #                                                       maxrows), tn))
+    for k in range(maxrows//chunksize + 1):
+        data_insert = [dict([(col, data_list[i].pop(0))
+                             for i, col in enumerate(data_names)])
+                       for j in range(chunksize)]
+        session.bulk_insert_mappings(tcls, data_insert)
         log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
-                                                          len(data_rows)), tn))
+                                                          maxrows), tn))
     session.commit()
     return
 
@@ -285,6 +301,7 @@ def load_fiberassign(datapath, session, maxpass=4):
         return
     log.info("Found {0:d} tile files.".format(len(tile_files)))
     tileidre = re.compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+    faid = 0
     for f in tile_files:
         m = tileidre.search(f)
         if m is None:
@@ -295,8 +312,9 @@ def load_fiberassign(datapath, session, maxpass=4):
             data = hdulist[1].data
         log.info("Read data from {0}.".format(f))
         n_rows = len(data)
-        data_list = [tileid]*n_rows + [data[col].tolist() for col in data.names]
-        data_names = ['tileid'] + [col.lower() for col in data.names]
+        data_list = (list(range(faid+1, faid+n_rows+1)) + [tileid]*n_rows +
+                     [data[col].tolist() for col in data.names])
+        data_names = ['faid', 'tileid'] + [col.lower() for col in data.names]
         # del data
         log.info("Initial column conversion complete on {0:d}, {1:d}.".format(passid, tileid))
         data_rows = list(zip(*data_list))
@@ -308,6 +326,8 @@ def load_fiberassign(datapath, session, maxpass=4):
                   "for {2:d}, {3:d}.").format(n_rows,
                                               FiberAssign.__tablename__,
                                               passid, tileid))
+        session.commit()
+        faid += n_rows
     return
 
 
@@ -364,6 +384,9 @@ def main():
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
                       default='quicksurvey.db', metavar='FILE',
                       help="Store data in FILE.")
+    prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
+                      type=int, default=0, metavar='M',
+                      help="Load up to M rows in the tables (default is all rows).")
     prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
                       type=int, default=10000, metavar='N',
                       help="Load N rows at a time.")
@@ -379,10 +402,11 @@ def main():
     #
     # Logging
     #
+    assert desi_logger is None
     if options.verbose:
-        log = get_logger(DEBUG)
+        log = get_logger(DEBUG, timestamp=True)
     else:
-        log = get_logger()
+        log = get_logger(INFO, timestamp=True)
     #
     # Create the file.
     #
@@ -434,6 +458,18 @@ def main():
             filepath = os.path.join(options.datapath, *l['path'])
             log.info("Loading {0} from {1}.".format(tn, filepath))
             load_file(filepath, session, l['tcls'], expand=l['expand'],
-                      convert=l['convert'], chunksize=options.chunksize)
+                      convert=l['convert'], chunksize=options.chunksize,
+                      maxrows=options.maxrows)
             log.info("Finished loading {0}.".format(tn))
+    #
+    # Load fiber assignment files.
+    #
+    try:
+        q = session.query(FiberAssign).one()
+    except MultipleResultsFound:
+        log.info("FiberAssign table already loaded.")
+    except NoResultFound:
+        log.info("Loading FiberAssign from {0}.".format(options.datapath))
+        load_fiberassign(options.datapath, session)
+        log.info("Finished loading FiberAssign.")
     return 0

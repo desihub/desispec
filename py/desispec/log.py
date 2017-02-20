@@ -24,11 +24,12 @@ CRITICAL=logging.CRITICAL  # A serious error, indicating that the program itself
 # see example of usage in test/test_log.py
 
 
-def get_logger(level=None) :
+def get_logger(level=None, timestamp=False):
     """Returns a default DESI logger
 
     Args:
        level: debugging level.
+       timestamp: if set, include a time stamp in the log message.
 
     If environment variable :envvar:`DESI_LOGLEVEL` exists and has value  DEBUG,INFO,WARNING or ERROR (upper or lower case),
     it overules the level argument.
@@ -71,8 +72,10 @@ def get_logger(level=None) :
 
     ch = logging.StreamHandler(sys.stdout)
 
-    #formatter = logging.Formatter('%(asctime)s:%(name)s:%(levelname)s:%(message)s')
-    formatter = logging.Formatter('%(levelname)s:%(filename)s:%(lineno)s:%(funcName)s: %(message)s')
+    if timestamp:
+        formatter = logging.Formatter('%(levelname)s:%(filename)s:%(lineno)s:%(funcName)s:%(asctime)s: %(message)s', datefmt='%Y-%m-%dT%H:%M:%S')
+    else:
+        formatter = logging.Formatter('%(levelname)s:%(filename)s:%(lineno)s:%(funcName)s: %(message)s')
 
     ch.setFormatter(formatter)
 

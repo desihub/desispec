@@ -15,7 +15,7 @@ from ..frame import Frame
 
 
 class TestIO(unittest.TestCase):
-    """Test desiutil.io
+    """Test desiutil.io.
     """
 
     @classmethod
