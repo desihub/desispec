@@ -162,6 +162,41 @@ class ZCat(Base):
                 "zwarn={0.zwarn:d}, numobs={0.numobs:d})>").format(self)
 
 
+class FiberAssign(Base):
+    """Representation of the fiberassign table.
+    """
+    __tablename__ = 'fiberassign'
+
+    tileid = Column(Integer, nullable=False)
+    fiber = Column(Integer, nullable=False)
+    positioner = Column(Integer, nullable=False)
+    numtarget = Column(Integer, nullable=False)
+    priority = Column(Integer, nullable=False)
+    targetid = Column(Integer, nullable=False)
+    desi_target = Column(Integer, nullable=False)
+    bgs_target = Column(Integer, nullable=False)
+    mws_target = Column(Integer, nullable=False)
+    ra = Column(Float, nullable=False)
+    dec = Column(Float, nullable=False)
+    xfocal_design = Column(Float, nullable=False)
+    yfocal_design = Column(Float, nullable=False)
+    brickname = Column(String, nullable=False)
+
+    def __repr__(self):
+        return ("<FiberAssign(tileid={0.tileid:d}, " +
+                "fiber={0.fiber:d}, " +
+                "positioner={0.positioner:d}, " +
+                "numtarget={0.numtarget:d}, " +
+                "priority={0.priority:d}, " +
+                "targetid={0.targetid:d}, " +
+                "desi_target={0.desi_target:d}, bgs_target={0.bgs_target}, " +
+                "mws_target={0.mws_target:d}, " +
+                "ra={0.ra:f}, dec={0.dec:f}, " +
+                "xfocal_design={0.xfocal_design:f}, " +
+                "yfocal_design={0.yfocal_design:f}, " +
+                "brickname='{0.brickname}')>").format(self)
+
+
 def load_file(filepath, session, tcls, expand=None, convert=None,
               chunksize=10000):
     """Load a FITS file into the database, assuming that FITS column names map
@@ -222,14 +257,57 @@ def load_file(filepath, session, tcls, expand=None, convert=None,
     for k in range(len(data_rows)//chunksize + 1):
         session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
                                             for row in data_rows[k*chunksize:(k+1)*chunksize]])
-        log.info("Inserted {0:d} rows in {1}.".format((k+1)*chunksize, tn))
-    # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-    #                                     for row in data_rows])
-    # session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-    #                                     for row in zip(*data_list)])
-    # session.add_all([tcls(**b) for b in [dict(zip(data_names, row))
-    #                                      for row in zip(*data_list)]])
+        log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
+                                                          len(data_rows)), tn))
     session.commit()
+    return
+
+
+def load_fiberassign(datapath, session, maxpass=4):
+    """Load fiber assignment files into the fiberassign table.
+
+    Parameters
+    ----------
+    datapath : :class:`str`
+        Full path to the directory containing tile files.
+    session : :class:`sqlalchemy.orm.session.Session`
+        Database connection.
+    maxpass : :class:`int`, optional
+        Search for pass numbers up to this value (default 4).
+    """
+    log = get_logger()
+    fiberpath = os.path.join(datapath, '[0-{0:d}]'.format(maxpass),
+                             'fiberassign', 'tile_*.fits')
+    log.info("Using tile file search path: {0}.".format(fiberpath))
+    tile_files = glob(fiberpath)
+    if len(tile_files) == 0:
+        log.error("No tile files found!")
+        return
+    log.info("Found {0:d} tile files.".format(len(tile_files)))
+    tileidre = re.compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+    for f in tile_files:
+        m = tileidre.search(f)
+        if m is None:
+            log.error("Could not match {0}!".format(f))
+            continue
+        passid, tileid = map(int, m.groups())
+        with fits.open(f) as hdulist:
+            data = hdulist[1].data
+        log.info("Read data from {0}.".format(f))
+        n_rows = len(data)
+        data_list = [tileid]*n_rows + [data[col].tolist() for col in data.names]
+        data_names = ['tileid'] + [col.lower() for col in data.names]
+        # del data
+        log.info("Initial column conversion complete on {0:d}, {1:d}.".format(passid, tileid))
+        data_rows = list(zip(*data_list))
+        # del data_list
+        log.info("Converted columns into rows on {0:d}, {1:d}.".format(passid, tileid))
+        session.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
+                                                   for row in data_rows])
+        log.info(("Inserted {0:d} rows in {1} " +
+                  "for {2:d}, {3:d}.").format(n_rows,
+                                              FiberAssign.__tablename__,
+                                              passid, tileid))
     return
 
 
