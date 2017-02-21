@@ -242,7 +242,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             mean_spectrum[w]=cholesky_solve(A_pos_def,B[w])
         except:
             mean_spectrum[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
-            log.info("cholesky failes, trying svd inverse in iter {}",iteration)
+            log.info("cholesky failes, trying svd inverse in iter {}".format(iteration))
 
         for fiber in range(nfibers) :
 
