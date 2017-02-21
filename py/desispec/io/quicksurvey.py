@@ -22,8 +22,8 @@ from sqlalchemy.orm import sessionmaker, relationship  # , reconstructor
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 # from matplotlib.patches import Circle, Polygon, Wedge
 # from matplotlib.collections import PatchCollection
-from ..log import desi_logger, get_logger, DEBUG, INFO
-
+from ..log import get_logger, DEBUG, INFO
+# import desispec.log as dlog
 
 Base = declarative_base()
 
@@ -402,7 +402,7 @@ def main():
     #
     # Logging
     #
-    assert desi_logger is None
+    # assert dlog.desi_logger is None
     if options.verbose:
         log = get_logger(DEBUG, timestamp=True)
     else:

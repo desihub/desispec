@@ -14,7 +14,7 @@ from desispec.image import Image
 from desispec import cosmics
 from desispec.maskbits import ccdmask
 from desispec.log import get_logger
-log = get_logger()
+# log = get_logger()
 
 def _parse_date_obs(value):
     '''
@@ -75,6 +75,7 @@ def _overscan(pix, nsigma=5, niter=3):
         nsigma (float) : number of standard deviations for sigma clipping
         niter (int) : number of iterative refits
     '''
+    log=get_logger()
     #- normalized median absolute deviation as robust version of RMS
     #- see https://en.wikipedia.org/wiki/Median_absolute_deviation
     overscan = np.median(pix)
@@ -145,6 +146,7 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
 
     Returns background image with same shape as input image
     '''
+    log=get_logger()
 
 
     log.info("fit a smooth background over the whole image with median patches of size %dx%d"%(patch_width,patch_width))
@@ -212,6 +214,9 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     return bkg
 
 def read_ccd_calibration(header, primary_header, filename) :
+    """Please provide documentation for this function!
+    """
+    log=get_logger()
 
     if not os.path.isfile(filename) :
         log.error("Cannot find calibration data file '%s'"%filename)
@@ -271,8 +276,9 @@ def read_ccd_calibration(header, primary_header, filename) :
     return data
 
 def get_calibration_image(calibration_data,calibration_data_path,keyword,entry) :
-
-
+    """Please provide documentation for this function!
+    """
+    log=get_logger()
 
     if entry is False : return False # we don't want do anything
 
@@ -377,6 +383,7 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     The inverse variance is estimated from the readnoise and the image itself,
     and thus is biased.
     '''
+    log=get_logger()
 
     calibration_data = None
 

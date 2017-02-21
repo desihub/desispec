@@ -38,6 +38,9 @@ def get_logger(level=None, timestamp=False):
 
     global desi_logger
 
+    # if not timestamp:
+    #     raise ValueError("I got called prematurely!")
+
     desi_level=os.getenv("DESI_LOGLEVEL")
     if desi_level is not None and (desi_level != "" ) :
         # forcing the level to the value of DESI_LOGLEVEL, ignoring the requested logging level.

@@ -18,7 +18,6 @@ from .meta import findfile
 from .util import fitsheader, native_endian, makepath
 from ..log import get_logger
 
-log = get_logger()
 
 def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     """Write a frame fits file and returns path to file written.
@@ -38,6 +37,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         to create a Frame object to pass into write_frame,
         frame = Frame(wave, flux, ivar, resolution_data)
     """
+    log = get_logger()
     outfile = makepath(outfile, 'frame')
 
     if header is not None:

@@ -15,7 +15,7 @@ from desispec.qa import QA_Brick
 from desispec.io import findfile
 from desispec.io.util import makepath
 from desispec.log import get_logger
-log=get_logger()
+# log=get_logger()
 
 
 def read_qa_data(filename):
@@ -69,6 +69,7 @@ def load_qa_frame(filename, frame=None, flavor=None):
     Returns:
         qa_frame: QA_Frame object
     """
+    log=get_logger()
     if os.path.isfile(filename): # Read from file, if it exists
         qaframe = read_qa_frame(filename)
         log.info("Loaded QA file {:s}".format(filename))
@@ -95,6 +96,7 @@ def load_qa_brick(filename):
     Returns:
     qa_brick: QA_Brick object
     """
+    log=get_logger()
     if os.path.isfile(filename): # Read from file, if it exists
         qabrick = read_qa_brick(filename)
         log.info("Loaded QA file {:s}".format(filename))
@@ -183,6 +185,7 @@ def load_qa_prod(inroot):
     Returns:
         odict : dict
     """
+    log=get_logger()
     infile = inroot+'.yaml'
     log.info("Loading QA prod file: {:s}".format(infile))
     # Read
@@ -203,6 +206,7 @@ def write_qa_prod(outroot, qaprod):
         outfile or odict : str or dict
     """
     from desiutil.io import combine_dicts
+    log=get_logger()
     outfile = outroot+'.yaml'
     outfile = makepath(outfile, 'qa')
 
@@ -219,5 +223,3 @@ def write_qa_prod(outroot, qaprod):
     log.info('Wrote QA_Prod file: {:s}'.format(outfile))
 
     return outfile
-
-
