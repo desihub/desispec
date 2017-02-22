@@ -56,7 +56,7 @@ def ql_main(args=None):
     if args.config is not None:
         if os.path.exists(args.config):
             if "yaml" in args.config:
-                configdict=yaml.load(open(args.config,'rb'))
+                configdict=yaml.load(open(args.config,'r'))
         else:
             log.critical("Can't open config file {}".format(args.config))
             sys.exit("Can't open config file")
@@ -70,8 +70,10 @@ def ql_main(args=None):
         #- save this config to a file
         if args.save:
             if "yaml" in args.save:
-                yaml.dump(configdict,open(args.save,"wb"))
+                f=open(args.save,"w")
+                yaml.dump(configdict,f)
                 log.info("Output saved for this configuration to {}".format(args.save))
+                f.close()
             else:
                 log.info("Can save config to only yaml output. Put a yaml in the argument")
         
@@ -79,15 +81,15 @@ def ql_main(args=None):
     res=quicklook.runpipeline(pipeline,convdict,configdict)
     inpname=configdict["RawImage"]
     camera=configdict["Camera"]
-    chan,spectrograph,expid=quicklook.get_chan_spec_exp(inpname,camera=camera) #- may be other ways to get it as well
+    expid=configdict["Expid"]
 
     if isinstance(res,image.Image):
         if configdict["OutputFile"]: finalname=configdict["OutputFile"]
-        else: finalname="image-{}{:d}-{:08d}.fits".format(chan,spectrograph,expid)
+        else: finalname="image-{}-{:08d}.fits".format(camera,expid)
         imIO.write_image(finalname,res,meta=None)        
     elif isinstance(res,frame.Frame):
         if configdict["OutputFile"]: finalname=configdict["OutputFile"]
-        else: finalname="frame-{}{:d}-{:08d}.fits".format(chan,spectrograph,expid)
+        else: finalname="frame-{}-{:08d}.fits".format(camera,expid)
         frIO.write_frame(finalname,res,header=None)
     else:
         log.error("Result of pipeline is in unkown type {}. Don't know how to write".format(type(res)))

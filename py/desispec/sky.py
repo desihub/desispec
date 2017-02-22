@@ -17,7 +17,7 @@ from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
-def compute_sky(frame, nsig_clipping=4.) :
+def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
     """Compute a sky model.
 
     Input has to correspond to sky fibers only.
@@ -59,7 +59,7 @@ def compute_sky(frame, nsig_clipping=4.) :
     #nfibers=min(nfibers,2)
 
     nout_tot=0
-    for iteration in range(20) :
+    for iteration in range(max_iterations) :
 
         A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
         B=np.zeros((nwave))
@@ -80,8 +80,16 @@ def compute_sky(frame, nsig_clipping=4.) :
             B += sqrtwR.T*sqrtwflux[fiber]
 
         log.info("iter %d solving"%iteration)
-
-        skyflux=cholesky_solve(A.todense(),B)
+    
+        w = A.diagonal()>0
+        A_pos_def = A.todense()[w,:]
+        A_pos_def = A_pos_def[:,w]
+        skyflux = B*0
+        try:
+            skyflux[w]=cholesky_solve(A_pos_def,B[w])
+        except:
+            log.info("cholesky failed, trying svd in iteration {}".format(iteration))
+            skyflux[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
 
         log.info("iter %d compute chi2"%iteration)
 
@@ -130,7 +138,9 @@ def compute_sky(frame, nsig_clipping=4.) :
 
 
     # solve once again to get deconvolved sky variance
-    skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+    #skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+    skyflux = np.linalg.lstsq(A.todense(),B)[0]
+    skycovar = np.linalg.pinv(A.todense())
 
     #- sky inverse variance, but incomplete and not needed anyway
     # skyvar=np.diagonal(skycovar)

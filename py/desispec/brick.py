@@ -73,13 +73,17 @@ class Bricks(object):
         self._center_ra = center_ra
         self._edges_ra = edges_ra
 
+    @property
+    def bricksize(self):
+        return self._bricksize
+
     def brickname(self, ra, dec):
         """Return string name of brick that contains (ra, dec) [degrees]
-        
+
         Args:
             ra (float) : Right Ascension in degrees
             dec (float) : Declination in degrees
-            
+
         Returns:
             brick name string
         """
@@ -87,16 +91,18 @@ class Bricks(object):
         dec = np.atleast_1d(dec)
         ra = np.atleast_1d(ra)
         irow = ((dec+90.0+self._bricksize/2)/self._bricksize).astype(int)
-        names = list()
-        for i in range(len(ra)):
-            ncol = self._ncol_per_row[irow[i]]
-            j = int(ra[i]/360 * ncol)
-            names.append(self._brickname[irow[i]][j])
+
+        ncol = self._ncol_per_row[irow]
+        jj = (ra/360.0 * ncol).astype(int)
+        names = np.empty(len(ra), dtype='U8')
+        for thisrow in set(irow):
+            these = np.where(thisrow == irow)[0]
+            names[these] = np.array(self._brickname[thisrow])[jj[these]]
 
         if np.isscalar(inra):
             return names[0]
         else:
-            return np.array(names)
+            return names
 
     def brick_radec(self, ra, dec):
         """Return center (ra,dec) of brick that contains input (ra, dec) [deg]
@@ -117,12 +123,12 @@ class Bricks(object):
         return xra, xdec
 
 _bricks = None
-def brickname(ra, dec):
+def brickname(ra, dec, bricksize=0.5):
     """Return brick name of brick covering (ra, dec) [degrees]
     """
     global _bricks
-    if _bricks is None:
-        _bricks = Bricks()
+    if _bricks is None or _bricks.bricksize != bricksize:
+        _bricks = Bricks(bricksize=bricksize)
 
     return _bricks.brickname(ra, dec)
 #

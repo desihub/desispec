@@ -98,6 +98,13 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
     n=int((w2-w1)/res)
     res=(w2-w1)/(n+1)
     knots=w1+res*(0.5+np.arange(n))
+
+    ## check that nodes are close to pixels
+    dknots = abs(knots[:,None]-input_wave)
+    mins = np.amin(dknots,axis=1)
+    w=mins<res
+    knots = knots[w]
+   
     toto=scipy.interpolate.splrep(input_wave,input_flux,w=input_ivar,k=order,task=-1,t=knots)
     output_flux = scipy.interpolate.splev(output_wave,toto)
     return output_flux
