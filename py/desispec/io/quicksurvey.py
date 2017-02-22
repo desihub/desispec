@@ -18,14 +18,17 @@ from sqlalchemy import (create_engine, Table, ForeignKey, Column,
                         Integer, String, Float, DateTime)
 from sqlalchemy.ext.declarative import declarative_base
 # from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import sessionmaker, relationship  # , reconstructor
+from sqlalchemy.orm import scoped_session, sessionmaker, relationship  # , reconstructor
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 # from matplotlib.patches import Circle, Polygon, Wedge
 # from matplotlib.collections import PatchCollection
 from ..log import get_logger, DEBUG, INFO
 # import desispec.log as dlog
 
+
 Base = declarative_base()
+engine = None
+dbSession = scoped_session(sessionmaker())
 
 
 class Truth(Base):
@@ -167,9 +170,8 @@ class FiberAssign(Base):
     """
     __tablename__ = 'fiberassign'
 
-    faid = Column(Integer, primary_key=True)  # Temporary dummy PK.
-    tileid = Column(Integer, nullable=False)
-    fiber = Column(Integer, nullable=False)
+    tileid = Column(Integer, primary_key=True)
+    fiber = Column(Integer, primary_key=True)
     positioner = Column(Integer, nullable=False)
     numtarget = Column(Integer, nullable=False)
     priority = Column(Integer, nullable=False)
@@ -199,7 +201,9 @@ class FiberAssign(Base):
                 "brickname='{0.brickname}')>").format(self)
 
 
-def load_file(filepath, session, tcls, expand=None, convert=None,
+# def load_file(filepath, session, tcls, expand=None, convert=None,
+#               chunksize=10000, maxrows=0):
+def load_file(filepath, tcls, expand=None, convert=None,
               chunksize=10000, maxrows=0):
     """Load a FITS file into the database, assuming that FITS column names map
     to database column names with no surprises.
@@ -230,6 +234,13 @@ def load_file(filepath, session, tcls, expand=None, convert=None,
     if maxrows == 0:
         maxrows = len(data)
     log.info("Read data from {0}.".format(filepath))
+    for col in data.names:
+        if data[col].dtype.kind == 'f':
+            bad = np.isnan(data[col][0:maxrows])
+            if np.any(bad):
+                nbad = bad.sum()
+                log.warning("{0:d} rows of bad data detected in column {1} of {2}.".format(nbad, col, filepath))
+    log.info("Integrity check complete on {0}.".format(tn))
     data_list = [data[col][0:maxrows].tolist() for col in data.names]
     data_names = [col.lower() for col in data.names]
     log.info("Initial column conversion complete on {0}.".format(tn))
@@ -258,29 +269,38 @@ def load_file(filepath, session, tcls, expand=None, convert=None,
             i = data_names.index(col)
             data_list[i] = [convert[col](x) for x in data_list[i]]
     log.info("Column conversion complete on {0}.".format(tn))
-    # data_rows = list(zip(*data_list))
-    # del data_list
-    # if maxrows == 0:
-    #     maxrows = len(data_rows)
-    # log.info("Converted columns into rows on {0}.".format(tn))
+    data_rows = list(zip(*data_list))
+    del data_list
+    log.info("Converted columns into rows on {0}.".format(tn))
+    for k in range(maxrows//chunksize + 1):
+        data_chunk = [dict(zip(data_names, row))
+                      for row in data_rows[k*chunksize:(k+1)*chunksize]]
+        if len(data_chunk) > 0:
+            engine.execute(tcls.__table__.insert(), data_chunk)
+            # session.bulk_insert_mappings(tcls, data_chunk)
+            log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
+                                                              maxrows), tn))
     # for k in range(maxrows//chunksize + 1):
-    #     session.bulk_insert_mappings(tcls, [dict(zip(data_names, row))
-    #                                         for row in data_rows[k*chunksize:(k+1)*chunksize]])
+    #     data_insert = [dict([(col, data_list[i].pop(0))
+    #                          for i, col in enumerate(data_names)])
+    #                    for j in range(chunksize)]
+    #     session.bulk_insert_mappings(tcls, data_insert)
     #     log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
     #                                                       maxrows), tn))
-    for k in range(maxrows//chunksize + 1):
-        data_insert = [dict([(col, data_list[i].pop(0))
-                             for i, col in enumerate(data_names)])
-                       for j in range(chunksize)]
-        session.bulk_insert_mappings(tcls, data_insert)
-        log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
-                                                          maxrows), tn))
-    session.commit()
+    # session.commit()
+    # dbSession.commit()
     return
 
 
-def load_fiberassign(datapath, session, maxpass=4):
+# def load_fiberassign(datapath, session, maxpass=4):
+def load_fiberassign(datapath, maxpass=4):
     """Load fiber assignment files into the fiberassign table.
+
+    Tile files can appear in multiple epochs, so for a given tileid, load
+    the tile file with the largest value of epoch.  In the "real world",
+    a tile file appears in each epoch until it is observed, therefore
+    the tile file corresponding to the actual observation is the one
+    with the largest epoch.
 
     Parameters
     ----------
@@ -292,7 +312,8 @@ def load_fiberassign(datapath, session, maxpass=4):
         Search for pass numbers up to this value (default 4).
     """
     log = get_logger()
-    fiberpath = os.path.join(datapath, '[0-{0:d}]'.format(maxpass),
+    fiberpath = os.path.join(datapath, 'output', 'dark',
+                             '[0-{0:d}]'.format(maxpass),
                              'fiberassign', 'tile_*.fits')
     log.info("Using tile file search path: {0}.".format(fiberpath))
     tile_files = glob(fiberpath)
@@ -301,33 +322,51 @@ def load_fiberassign(datapath, session, maxpass=4):
         return
     log.info("Found {0:d} tile files.".format(len(tile_files)))
     tileidre = re.compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
-    faid = 0
+    #
+    # Find the latest epoch for every tile file.
+    #
+    latest_tiles = dict()
     for f in tile_files:
         m = tileidre.search(f)
         if m is None:
             log.error("Could not match {0}!".format(f))
             continue
-        passid, tileid = map(int, m.groups())
+        epoch, tileid = map(int, m.groups())
+        if tileid in latest_tiles:
+            if latest_tiles[tileid][0] < epoch:
+                latest_tiles[tileid] = (epoch, f)
+        else:
+            latest_tiles[tileid] = (epoch, f)
+    log.info("Identified {0:d} tile files for loading.".format(len(latest_tiles)))
+    #
+    # Read the identified tile files.
+    #
+    for tileid in latest_tiles:
+        epoch, f = latest_tiles[tileid]
         with fits.open(f) as hdulist:
             data = hdulist[1].data
         log.info("Read data from {0}.".format(f))
+        for col in ('RA', 'DEC', 'XFOCAL_DESIGN', 'YFOCAL_DESIGN'):
+            data[col][np.isnan(data[col])] = -9999.0
+            assert not np.any(np.isnan(data[col]))
+            assert np.all(np.isfinite(data[col]))
         n_rows = len(data)
-        data_list = (list(range(faid+1, faid+n_rows+1)) + [tileid]*n_rows +
+        data_list = ([[tileid]*n_rows] +
                      [data[col].tolist() for col in data.names])
-        data_names = ['faid', 'tileid'] + [col.lower() for col in data.names]
-        # del data
-        log.info("Initial column conversion complete on {0:d}, {1:d}.".format(passid, tileid))
+        data_names = ['tileid'] + [col.lower() for col in data.names]
+        log.info("Initial column conversion complete on tileid = {0:d}.".format(tileid))
         data_rows = list(zip(*data_list))
-        # del data_list
-        log.info("Converted columns into rows on {0:d}, {1:d}.".format(passid, tileid))
-        session.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
-                                                   for row in data_rows])
+        log.info("Converted columns into rows on tileid = {0:d}.".format(tileid))
+        # session.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
+        #                                            for row in data_rows])
+        dbSession.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
+                                                     for row in data_rows])
         log.info(("Inserted {0:d} rows in {1} " +
-                  "for {2:d}, {3:d}.").format(n_rows,
-                                              FiberAssign.__tablename__,
-                                              passid, tileid))
-        session.commit()
-        faid += n_rows
+                  "for tileid = {2:d}.").format(n_rows,
+                                                FiberAssign.__tablename__,
+                                                tileid))
+        # session.commit()
+        dbSession.commit()
     return
 
 
@@ -360,6 +399,7 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    global engine
     #
     # command-line arguments
     #
@@ -417,13 +457,17 @@ def main():
     if options.clobber and os.path.exists(db_file):
         log.info("Removing file: {0}.".format(db_file))
         os.remove(db_file)
+    #
+    # SQLAlchemy stuff.
+    #
     engine = create_engine('sqlite:///'+db_file, echo=options.verbose)
+    dbSession.remove()
+    dbSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
     log.info("Begin creating schema.")
     Base.metadata.create_all(engine)
     log.info("Finished creating schema.")
-    Session = sessionmaker()
-    Session.configure(bind=engine)
-    session = Session()
+    # Session.configure(bind=engine)
+    # session = Session()
     #
     # Load configuration
     #
@@ -450,26 +494,52 @@ def main():
     #
     for l in loader:
         tn = l['tcls'].__tablename__
-        try:
-            q = session.query(l['tcls']).one()
-        except MultipleResultsFound:
-            log.info("{0} table already loaded.".format(tn.title()))
-        except NoResultFound:
+        #
+        # Don't use .one().  It actually fetches *all* rows.
+        #
+        # q = session.query(l['tcls']).first()
+        q = dbSession.query(l['tcls']).first()
+        if q is None:
             filepath = os.path.join(options.datapath, *l['path'])
             log.info("Loading {0} from {1}.".format(tn, filepath))
-            load_file(filepath, session, l['tcls'], expand=l['expand'],
+            # load_file(filepath, session, l['tcls'], expand=l['expand'],
+            #           convert=l['convert'], chunksize=options.chunksize,
+            #           maxrows=options.maxrows)
+            load_file(filepath, l['tcls'], expand=l['expand'],
                       convert=l['convert'], chunksize=options.chunksize,
                       maxrows=options.maxrows)
             log.info("Finished loading {0}.".format(tn))
+        else:
+            log.info("{0} table already loaded.".format(tn.title()))
+        # try:
+        #     q = session.query(l['tcls']).one()
+        # except MultipleResultsFound:
+        #     log.info("{0} table already loaded.".format(tn.title()))
+        # except NoResultFound:
+        #     filepath = os.path.join(options.datapath, *l['path'])
+        #     log.info("Loading {0} from {1}.".format(tn, filepath))
+        #     load_file(filepath, session, l['tcls'], expand=l['expand'],
+        #               convert=l['convert'], chunksize=options.chunksize,
+        #               maxrows=options.maxrows)
+        #     log.info("Finished loading {0}.".format(tn))
     #
     # Load fiber assignment files.
     #
-    try:
-        q = session.query(FiberAssign).one()
-    except MultipleResultsFound:
-        log.info("FiberAssign table already loaded.")
-    except NoResultFound:
+    # q = session.query(FiberAssign).first()
+    q = dbSession.query(FiberAssign).first()
+    if q is None:
         log.info("Loading FiberAssign from {0}.".format(options.datapath))
-        load_fiberassign(options.datapath, session)
+        # load_fiberassign(options.datapath, session)
+        load_fiberassign(options.datapath)
         log.info("Finished loading FiberAssign.")
+    else:
+        log.info("FiberAssign table already loaded.")
+    # try:
+    #     q = session.query(FiberAssign).one()
+    # except MultipleResultsFound:
+    #     log.info("FiberAssign table already loaded.")
+    # except NoResultFound:
+    #     log.info("Loading FiberAssign from {0}.".format(options.datapath))
+    #     load_fiberassign(options.datapath, session)
+    #     log.info("Finished loading FiberAssign.")
     return 0
