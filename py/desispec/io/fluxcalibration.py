@@ -144,6 +144,7 @@ def read_stdstar_templates(stellarmodelfile):
         else: #lin bins
             model_wave_step   = cdelt1
             model_wave_offset = (crval1-cdelt1*(crpix1-1))
+            n_model_wave = phdu[0].data.shape[1]
             wavebins=model_wave_step*numpy.arange(n_model_wave) + model_wave_offset
         
     paramData=phdu[1].data

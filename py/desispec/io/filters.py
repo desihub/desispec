@@ -11,7 +11,7 @@ def load_filter(given_filter):
         files have them in uppercase, so it should be in upper case like SDSS, DECAM or
         WISE. Speclite has lower case so are mapped here.
     """
-
+    
     filternamemap={}
     filttype=str.split(given_filter,'_')
     if filttype[0]=='SDSS':

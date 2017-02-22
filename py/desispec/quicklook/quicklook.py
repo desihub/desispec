@@ -164,7 +164,9 @@ def testconfig(outfilename="qlconfig.yaml"):
           }
 
     if "yaml" in outfilename:
-        yaml.dump(conf,open(outfilename,"wb"))
+        f=open(outfilename,"w")
+        yaml.dump(conf,f)
+        f.close()
     else:
         log.warning("Only yaml defined. Use yaml format in the output config file")
         sys.exit(0)
@@ -290,8 +292,10 @@ def runpipeline(pl,convdict,conf):
                 log.warning("Failed to run QA {} error was {}".format(qa.name,e))
         if len(qaresult):
             #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
-            yaml.dump(qaresult,open(paconf[s]["OutputFile"],"wb"))
+            f = open(paconf[s]["OutputFile"],"w")
+            yaml.dump(qaresult,f)
             hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
+            f.close()
         else:
             hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
     hb.stop("Pipeline processing finished. Serializing result")

@@ -328,7 +328,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     current_ivar=stdstars.ivar.copy()
 
     #- Start with a first pass median rejection
-    median_calib = np.median(stdstars.flux / convolved_model_flux, axis=0)
+    calib = (convolved_model_flux!=0)*(stdstars.flux/(convolved_model_flux + (convolved_model_flux==0)))
+    median_calib = np.median(calib, axis=0)
     chi2 = stdstars.ivar * (stdstars.flux - convolved_model_flux*median_calib)**2
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
@@ -381,7 +382,16 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
 
         log.info("iter %d solving"%iteration)
         ### log.debug('cond(A) {:g}'.format(np.linalg.cond(A)))
-        calibration=cholesky_solve(A, B)
+        #calibration=cholesky_solve(A, B)
+        w = np.diagonal(A)>0
+        A_pos_def = A[w,:]
+        A_pos_def = A_pos_def[:,w]
+        calibration = B*0
+        try:
+            calibration[w]=cholesky_solve(A_pos_def, B[w])
+        except np.linalg.linalg.LinAlgError:
+            log.info('cholesky fails in iteration {}, trying svd'.format(iteration))
+            calibration[w] = np.linalg.lstsq(A_pos_def,B[w])[0]
 
         log.info("iter %d fit smooth correction per fiber"%iteration)
         # fit smooth fiberflat and compute chi2
@@ -390,8 +400,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
                 log.info("iter %d fiber %d(smooth)"%(iteration,fiber))
 
             M = stdstars.R[fiber].dot(calibration*model_flux[fiber])
-
-            pol=np.poly1d(np.polyfit(stdstars.wave,stdstars.flux[fiber]/(M+(M==0)),deg=1,w=current_ivar[fiber]*M**2))
+            
+            try:
+                pol=np.poly1d(np.polyfit(stdstars.wave,stdstars.flux[fiber]/(M+(M==0)),deg=1,w=current_ivar[fiber]*M**2))
+            except:
+                current_ivar[fiber]=0.
             smooth_fiber_correction[fiber]=pol(stdstars.wave)
             chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
 
@@ -529,7 +542,8 @@ def apply_flux_calibration(frame, fluxcalib):
 
     # check same wavelength, die if not the case
     mval=np.max(np.abs(frame.wave-fluxcalib.wave))
-    if mval > 0.00001 :
+    #if mval > 0.00001 :
+    if mval > 0.001 :
         log.error("not same wavelength (should raise an error instead)")
         sys.exit(12)
 
