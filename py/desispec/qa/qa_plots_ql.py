@@ -348,13 +348,13 @@ def plot_XWSigma(qa_dict,outfile):
     ax1.tick_params(axis='y',labelsize=10)
     plt.xlim(0,len(xfiber))
 
-#    ax2=fig.add_subplot(222)
-#    hist_w=ax2.bar(wfiber,wsigma,align='center')
-#    ax2.set_xlabel("Fiber #",fontsize=10)
-#    ax2.set_ylabel("W std. dev. (# of pixels)",fontsize=10)
-#    ax2.tick_params(axis='x',labelsize=10)
-#    ax2.tick_params(axis='y',labelsize=10)
-#    plt.xlim(0,len(wfiber))
+    ax2=fig.add_subplot(222)
+    hist_w=ax2.bar(wfiber,wsigma,align='center')
+    ax2.set_xlabel("Fiber #",fontsize=10)
+    ax2.set_ylabel("W std. dev. (# of pixels)",fontsize=10)
+    ax2.tick_params(axis='x',labelsize=10)
+    ax2.tick_params(axis='y',labelsize=10)
+    plt.xlim(0,len(wfiber))
 
     if "XSIGMA_AMP" in qa_dict["METRICS"]:
         xsigma_amp=qa_dict["METRICS"]["XSIGMA_AMP"]
