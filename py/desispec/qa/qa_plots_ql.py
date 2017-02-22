@@ -63,18 +63,21 @@ def plot_countspectralbins(qa_dict,outfile):
     ax1.set_ylabel('Photon Counts > {:d}'.format(cutlo),fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
+    ax1.set_xlim(0)
 
     hist_med=ax2.bar(index,binsmed,color='r',align='center')
     ax2.set_xlabel('Fiber #',fontsize=10)
     ax2.set_ylabel('Photon Counts > {:d}'.format(cutmed),fontsize=10)
     ax2.tick_params(axis='x',labelsize=10)
     ax2.tick_params(axis='y',labelsize=10)
+    ax2.set_xlim(0)
 
     hist_med=ax3.bar(index,binshi,color='g',align='center')
     ax3.set_xlabel('Fiber #',fontsize=10)
     ax3.set_ylabel('Photon Counts > {:d}'.format(cuthi),fontsize=10)
     ax3.tick_params(axis='x',labelsize=10)
     ax3.tick_params(axis='y',labelsize=10)
+    ax3.set_xlim(0)
 
     #- plotting if amp is turned on
     if "NBINSLOW_AMP" in qa_dict["METRICS"]:
@@ -598,6 +601,7 @@ def plot_sky_continuum(qa_dict,outfile):
     ax1.tick_params(axis='y',labelsize=10)
     ax1.set_xticks(index)
     ax1.set_xticklabels(fiberid)
+    ax1.set_xlim(0)
     
     if "SKYCONT_AMP" in qa_dict["METRICS"]:
         skycont_amps=np.array(qa_dict["METRICS"]["SKYCONT_AMP"])
@@ -756,6 +760,7 @@ def plot_residuals(qa_dict,outfile):
     ax2.tick_params(axis='y',labelsize=10)
     ax2.set_xticks(index)
     ax2.set_xticklabels(skyfiberid)
+    ax2.set_xlim(0)
     #plt.tight_layout()
     fig.savefig(outfile)
     
@@ -817,6 +822,7 @@ def plot_SNR(qa_dict,outfile):
     ax1.set_ylabel('Median S/N',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
+    ax1.set_xlim(0)
 
     #- plot for amp zones
     if "MEDIAN_AMP_SNR" in qa_dict["METRICS"]:

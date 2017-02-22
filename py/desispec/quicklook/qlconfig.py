@@ -92,7 +92,7 @@ class Make_Config(object):
             elif self.camera[0] == 'b':
                 self.wavelength='3550,5730,0.8'
             elif self.camera[0] == 'z':
-                self.wavelength='7650,9840,0.8'
+                self.wavelength='7650,9830,0.8'
 
         paopt_initialize={'camera': self.camera}
 
