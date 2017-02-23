@@ -150,7 +150,7 @@ class ZCat(Base):
     __tablename__ = 'zcat'
 
     targetid = Column(Integer, primary_key=True)
-    brickname = Column(String, nullable=False)
+    brickname = Column(String, index=True, nullable=False)
     spectype = Column(String, nullable=False)
     z = Column(Float, nullable=False)
     zerr = Column(Float, nullable=False)
@@ -170,12 +170,12 @@ class FiberAssign(Base):
     """
     __tablename__ = 'fiberassign'
 
-    tileid = Column(Integer, primary_key=True)
+    tileid = Column(Integer, index=True, primary_key=True)
     fiber = Column(Integer, primary_key=True)
     positioner = Column(Integer, nullable=False)
     numtarget = Column(Integer, nullable=False)
     priority = Column(Integer, nullable=False)
-    targetid = Column(Integer, nullable=False)
+    targetid = Column(Integer, index=True, nullable=False)
     desi_target = Column(Integer, nullable=False)
     bgs_target = Column(Integer, nullable=False)
     mws_target = Column(Integer, nullable=False)
@@ -183,7 +183,7 @@ class FiberAssign(Base):
     dec = Column(Float, nullable=False)
     xfocal_design = Column(Float, nullable=False)
     yfocal_design = Column(Float, nullable=False)
-    brickname = Column(String, nullable=False)
+    brickname = Column(String, index=True, nullable=False)
 
     def __repr__(self):
         return ("<FiberAssign(faid={0.faid:d}, " +
