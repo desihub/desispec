@@ -7,23 +7,11 @@ desispec.io.quicksurvey
 Code for loading quicksurvey outputs into a database.
 """
 from __future__ import absolute_import, division, print_function
-import os
-import re
-from glob import glob
-from datetime import datetime
 import numpy as np
-from astropy.io import fits
-from pytz import utc
-from sqlalchemy import (create_engine, Table, ForeignKey, Column,
+from sqlalchemy import (create_engine, ForeignKey, Column,
                         Integer, String, Float, DateTime)
 from sqlalchemy.ext.declarative import declarative_base
-# from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.orm import scoped_session, sessionmaker, relationship  # , reconstructor
-from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
-# from matplotlib.patches import Circle, Polygon, Wedge
-# from matplotlib.collections import PatchCollection
-from ..log import get_logger, DEBUG, INFO
-# import desispec.log as dlog
+from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 
 
 Base = declarative_base()
@@ -201,10 +189,8 @@ class FiberAssign(Base):
                 "brickname='{0.brickname}')>").format(self)
 
 
-# def load_file(filepath, session, tcls, expand=None, convert=None,
-#               chunksize=10000, maxrows=0):
 def load_file(filepath, tcls, expand=None, convert=None,
-              chunksize=10000, maxrows=0):
+              chunksize=50000, maxrows=0):
     """Load a FITS file into the database, assuming that FITS column names map
     to database column names with no surprises.
 
@@ -222,11 +208,13 @@ def load_file(filepath, tcls, expand=None, convert=None,
         If set, convert the data for a named (database) column using the
         supplied function.
     chunksize : :class:`int`, optional
-        If set, load database `chunksize` rows at a time (default 10000).
+        If set, load database `chunksize` rows at a time (default 50000).
     maxrows : :class:`int`, optional
         If set, stop loading after `maxrows` are loaded.  Alteratively,
         set `maxrows` to zero (0) to load all rows.
     """
+    from astropy.io import fits
+    from ..log import get_logger
     log = get_logger()
     tn = tcls.__tablename__
     with fits.open(filepath) as hdulist:
@@ -239,7 +227,8 @@ def load_file(filepath, tcls, expand=None, convert=None,
             bad = np.isnan(data[col][0:maxrows])
             if np.any(bad):
                 nbad = bad.sum()
-                log.warning("{0:d} rows of bad data detected in column {1} of {2}.".format(nbad, col, filepath))
+                log.warning(("{0:d} rows of bad data detected in column " +
+                             "{1} of {2}.").format(nbad, col, filepath))
     log.info("Integrity check complete on {0}.".format(tn))
     data_list = [data[col][0:maxrows].tolist() for col in data.names]
     data_names = [col.lower() for col in data.names]
@@ -277,7 +266,6 @@ def load_file(filepath, tcls, expand=None, convert=None,
                       for row in data_rows[k*chunksize:(k+1)*chunksize]]
         if len(data_chunk) > 0:
             engine.execute(tcls.__table__.insert(), data_chunk)
-            # session.bulk_insert_mappings(tcls, data_chunk)
             log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
                                                               maxrows), tn))
     # for k in range(maxrows//chunksize + 1):
@@ -292,7 +280,6 @@ def load_file(filepath, tcls, expand=None, convert=None,
     return
 
 
-# def load_fiberassign(datapath, session, maxpass=4):
 def load_fiberassign(datapath, maxpass=4):
     """Load fiber assignment files into the fiberassign table.
 
@@ -311,17 +298,22 @@ def load_fiberassign(datapath, maxpass=4):
     maxpass : :class:`int`, optional
         Search for pass numbers up to this value (default 4).
     """
+    from os.path import join
+    from re import compile
+    from glob import glob
+    from astropy.io import fits
+    from ..log import get_logger
     log = get_logger()
-    fiberpath = os.path.join(datapath, 'output', 'dark',
-                             '[0-{0:d}]'.format(maxpass),
-                             'fiberassign', 'tile_*.fits')
+    fiberpath = join(datapath, 'output', 'dark',
+                     '[0-{0:d}]'.format(maxpass),
+                     'fiberassign', 'tile_*.fits')
     log.info("Using tile file search path: {0}.".format(fiberpath))
     tile_files = glob(fiberpath)
     if len(tile_files) == 0:
         log.error("No tile files found!")
         return
     log.info("Found {0:d} tile files.".format(len(tile_files)))
-    tileidre = re.compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+    tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
     #
     # Find the latest epoch for every tile file.
     #
@@ -357,15 +349,12 @@ def load_fiberassign(datapath, maxpass=4):
         log.info("Initial column conversion complete on tileid = {0:d}.".format(tileid))
         data_rows = list(zip(*data_list))
         log.info("Converted columns into rows on tileid = {0:d}.".format(tileid))
-        # session.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
-        #                                            for row in data_rows])
         dbSession.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
                                                      for row in data_rows])
         log.info(("Inserted {0:d} rows in {1} " +
                   "for tileid = {2:d}.").format(n_rows,
                                                 FiberAssign.__tablename__,
                                                 tileid))
-        # session.commit()
         dbSession.commit()
     return
 
@@ -385,6 +374,7 @@ def convert_dateobs(timestamp, tzinfo=None):
     :class:`datetime.datetime`
         The converted `timestamp`.
     """
+    from datetime import datetime
     x = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
     if tzinfo is not None:
         x = x.replace(tzinfo=tzinfo)
@@ -400,27 +390,21 @@ def main():
         An integer suitable for passing to :func:`sys.exit`.
     """
     global engine
-    #
-    # command-line arguments
-    #
+    from os import remove
+    from os.path import basename, exists, join
     from sys import argv
     from argparse import ArgumentParser
     from pkg_resources import resource_filename
+    from pytz import utc
+    from ..log import get_logger, DEBUG, INFO
+    #
+    # command-line arguments
+    #
     prsr = ArgumentParser(description=("Load quicksurvey simulation into a " +
                                        "database."),
-                          prog=os.path.basename(argv[0]))
-    # prsr.add_argument('-a', '--area', action='store_true', dest='fixarea',
-    #                   help=('If area is not specified in the brick file, ' +
-    #                         'recompute it.'))
-    # prsr.add_argument('-b', '--bricks', action='store', dest='brickfile',
-    #                   default='bricks-0.50-2.fits', metavar='FILE',
-    #                   help='Read brick data from FILE.')
+                          prog=basename(argv[0]))
     prsr.add_argument('-c', '--clobber', action='store_true', dest='clobber',
                       help='Delete any existing file(s) before loading.')
-    # prsr.add_argument('-d', '--data', action='store', dest='datapath',
-    #                   default=os.path.join(os.environ['DESI_SPECTRO_SIM'],
-    #                                        os.environ['SPECPROD']),
-    #                   metavar='DIR', help='Load the data in DIR.')
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
                       default='quicksurvey.db', metavar='FILE',
                       help="Store data in FILE.")
@@ -428,13 +412,8 @@ def main():
                       type=int, default=0, metavar='M',
                       help="Load up to M rows in the tables (default is all rows).")
     prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
-                      type=int, default=10000, metavar='N',
-                      help="Load N rows at a time.")
-    # prsr.add_argument('-s', '--simulate', action='store_true', dest='simulate',
-    #                   help="Run a simulation using DESI tiles.")
-    # prsr.add_argument('-t', '--tiles', action='store', dest='tilefile',
-    #                   default='desi-tiles.fits', metavar='FILE',
-    #                   help='Read tile data from FILE.')
+                      type=int, default=50000, metavar='N',
+                      help="Load N rows at a time (default %(default)s).")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
     prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
@@ -442,7 +421,6 @@ def main():
     #
     # Logging
     #
-    # assert dlog.desi_logger is None
     if options.verbose:
         log = get_logger(DEBUG, timestamp=True)
     else:
@@ -450,13 +428,13 @@ def main():
     #
     # Create the file.
     #
-    if os.path.basename(options.dbfile) == options.dbfile:
-        db_file = os.path.join(options.datapath, options.dbfile)
+    if basename(options.dbfile) == options.dbfile:
+        db_file = join(options.datapath, options.dbfile)
     else:
         db_file = options.dbfile
-    if options.clobber and os.path.exists(db_file):
+    if options.clobber and exists(db_file):
         log.info("Removing file: {0}.".format(db_file))
-        os.remove(db_file)
+        remove(db_file)
     #
     # SQLAlchemy stuff.
     #
@@ -466,8 +444,6 @@ def main():
     log.info("Begin creating schema.")
     Base.metadata.create_all(engine)
     log.info("Finished creating schema.")
-    # Session.configure(bind=engine)
-    # session = Session()
     #
     # Load configuration
     #
@@ -497,49 +473,24 @@ def main():
         #
         # Don't use .one().  It actually fetches *all* rows.
         #
-        # q = session.query(l['tcls']).first()
         q = dbSession.query(l['tcls']).first()
         if q is None:
-            filepath = os.path.join(options.datapath, *l['path'])
+            filepath = join(options.datapath, *l['path'])
             log.info("Loading {0} from {1}.".format(tn, filepath))
-            # load_file(filepath, session, l['tcls'], expand=l['expand'],
-            #           convert=l['convert'], chunksize=options.chunksize,
-            #           maxrows=options.maxrows)
             load_file(filepath, l['tcls'], expand=l['expand'],
                       convert=l['convert'], chunksize=options.chunksize,
                       maxrows=options.maxrows)
             log.info("Finished loading {0}.".format(tn))
         else:
             log.info("{0} table already loaded.".format(tn.title()))
-        # try:
-        #     q = session.query(l['tcls']).one()
-        # except MultipleResultsFound:
-        #     log.info("{0} table already loaded.".format(tn.title()))
-        # except NoResultFound:
-        #     filepath = os.path.join(options.datapath, *l['path'])
-        #     log.info("Loading {0} from {1}.".format(tn, filepath))
-        #     load_file(filepath, session, l['tcls'], expand=l['expand'],
-        #               convert=l['convert'], chunksize=options.chunksize,
-        #               maxrows=options.maxrows)
-        #     log.info("Finished loading {0}.".format(tn))
     #
     # Load fiber assignment files.
     #
-    # q = session.query(FiberAssign).first()
     q = dbSession.query(FiberAssign).first()
     if q is None:
         log.info("Loading FiberAssign from {0}.".format(options.datapath))
-        # load_fiberassign(options.datapath, session)
         load_fiberassign(options.datapath)
         log.info("Finished loading FiberAssign.")
     else:
         log.info("FiberAssign table already loaded.")
-    # try:
-    #     q = session.query(FiberAssign).one()
-    # except MultipleResultsFound:
-    #     log.info("FiberAssign table already loaded.")
-    # except NoResultFound:
-    #     log.info("Loading FiberAssign from {0}.".format(options.datapath))
-    #     load_fiberassign(options.datapath, session)
-    #     log.info("Finished loading FiberAssign.")
     return 0
