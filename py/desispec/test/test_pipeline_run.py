@@ -51,7 +51,6 @@ class TestPipelineRun(unittest.TestCase):
         opts["data"] = self.raw
         opts["redux"] = self.redux
         opts["prod"] = self.prod
-        opts["model"] = self.model
         opts["shifter"] = self.shifter
         sopts = option_list(opts)
         sargs = pipe_prod.parse(sopts)
