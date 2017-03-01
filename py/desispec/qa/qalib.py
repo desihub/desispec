@@ -301,8 +301,7 @@ def SN_ratio(flux,ivar):
     medsnr=np.zeros(flux.shape[0])
     #totsnr=np.zeros(flux.shape[0])
     for ii in range(flux.shape[0]):
-        signalmask=flux[ii,:]>0 #- mask negative values
-        snr=flux[ii,signalmask]*np.sqrt(ivar[ii,signalmask])
+        snr=flux[ii]*np.sqrt(ivar[ii])
         medsnr[ii]=np.median(snr)
         # totsnr[ii]=np.sqrt(np.sum(snr**2))
     return medsnr #, totsnr
