@@ -136,10 +136,14 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
 
     log.info("nout tot=%d"%nout_tot)
 
-
+    
     # solve once again to get deconvolved sky variance
-    skyflux = np.linalg.lstsq(A.todense(),B)[0]
-    skycovar = np.linalg.pinv(A.todense())
+    try :
+        skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+    except np.linalg.linalg.LinAlgError :
+        log.warning("cholesky_solve_and_invert failed, switching to np.linalg.lstsq and np.linalg.pinv")
+        skyflux = np.linalg.lstsq(A.todense(),B)[0]
+        skycovar = np.linalg.pinv(A.todense())
 
     #- sky inverse variance, but incomplete and not needed anyway
     # skyvar=np.diagonal(skycovar)
