@@ -46,7 +46,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()
+    current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
 
@@ -138,7 +138,6 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
 
 
     # solve once again to get deconvolved sky variance
-    #skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
     skyflux = np.linalg.lstsq(A.todense(),B)[0]
     skycovar = np.linalg.pinv(A.todense())
 

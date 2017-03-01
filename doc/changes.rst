@@ -11,6 +11,7 @@ Desispec Change Log
 * update io.write_raw to enable writing simulated raw data with new headers
 * allow test_bootcalib to run even if NERSC portal is returning 403 errors
 * add Brick.bricksize property; allow brick.brickname to specify bricksize
+* do svd inverses when cholesky decompositions fail in fiberflat, sky subtraction,   and flux calibration
 
 0.12.0 (2016-11-09)
 -------------------
