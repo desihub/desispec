@@ -475,7 +475,9 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     # compute convolved calib
     ccalibration = np.zeros(frame.flux.shape)
     for i in range(frame.nspec):
-        ccalibration[i]=frame.R[i].dot(calibration)/frame.R[i].dot(np.ones(calibration.shape))
+        norm=frame.R[i].dot(np.ones(calibration.shape))
+        w=norm>0
+        ccalibration[i][w]=frame.R[i].dot(calibration)[w]/norm[w]
 
     # Use diagonal of mean calibration covariance for output.
     ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
