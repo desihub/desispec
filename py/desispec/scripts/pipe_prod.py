@@ -21,6 +21,10 @@ from .. import pipeline as pipe
 
 
 def step_props(first, last, specs, night):
+    """
+    Internal helper function used only in the desi_pipe
+    script to build names of scripts and directories.
+    """
     specstr = ""
     if specs is not None:
         specstr = " --spectrographs {}".format(",".join([ "{}".format(x) for x in specs ]))
@@ -50,6 +54,10 @@ def step_props(first, last, specs, night):
 def compute_step_shell(setupfile, first, last, specs, night, 
     ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads
     ):
+    """
+    Internal helper function used only in the desi_pipe script to
+    generate bash (non-NERSC) job scripts.
+    """
     
     (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname) = step_props(first, last, specs, night)
 
@@ -79,6 +87,10 @@ def compute_step_slurm(setupfile, first, last, specs, night,
     nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
     queue="debug", minutes=30
     ):
+    """
+    Internal helper function used only in the desi_pipe script to
+    generate NERSC job scripts.
+    """
 
     (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname) = step_props(first, last, specs, night)
 
@@ -119,6 +131,10 @@ def compute_step_shifter(img, specdata, specredux, desiroot, setupfile,
     nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
     queue="debug", minutes=30
     ):
+    """
+    Internal helper function used only in the desi_pipe script to
+    generate NERSC job scripts that use shifter.
+    """
 
     (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname) = step_props(first, last, specs, night)
 
@@ -158,6 +174,10 @@ def compute_step(img, specdata, specredux, desiroot, setupfile,
     shell_threads, nersc_maxnodes, nersc_nodecores, nersc_threads, nersc_mp, 
     nersc_queue_thresh, queue="debug", minutes=30
     ):
+    """
+    Internal helper function used only in the desi_pipe script to
+    generate the job scripts.
+    """
 
     scr_shell = compute_step_shell(setupfile, first, last, specs, night, 
                 ntask, taskproc, shell_mpi_run, shell_maxcores, shell_threads)

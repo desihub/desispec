@@ -171,6 +171,10 @@ def stdouterr_redirected(to=None, comm=None):
     redirects to a different temporary file, and the upon exit
     from the context the rank zero process concatenates these
     in order to the file result.
+
+    Args:
+        to (str): The output file name.
+        comm (mpi4py.MPI.Comm): The optional MPI communicator.
     """
     
     # The currently active POSIX file descriptors

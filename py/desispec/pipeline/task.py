@@ -950,6 +950,17 @@ def get_worker(step, name, opts):
 
 
 def default_options(extra={}):
+    """
+    Get the default options for all workers.
+
+    Args:
+        extra (dict): optional extra options to add to the 
+            default options for each worker class.
+
+    Returns (dict):
+        the default options dictionary, suitable for writing
+        to the default options.yaml file.
+    """
 
     log = get_logger()
 
