@@ -66,7 +66,10 @@ def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,shifted_st
 def _func(arg) :
     return compute_chi2(**arg)
 
-def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00005):
+
+
+
+def redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, stdflux, ncpu=1, z_max=0.005, z_res=0.00005, template_error=0.):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
 
@@ -76,14 +79,10 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         ivar : A dictionary 1D inverse variance of flux
         resolution_data: resolution corresponding to the star's fiber
         stdwave : 1D standard star template wavelengths [Angstroms]
-        stdflux : 2D[nstd, nwave] template flux
-        teff : 1D[nstd] effective model temperature
-        logg : 1D[nstd] model surface gravity
-        feh : 1D[nstd] model metallicity
+        stdflux : 1D[nwave] template flux        
         ncpu : number of cpu for multiprocessing
 
     Returns:
-        index : index of standard star
         redshift : redshift of standard star
         chipdf : reduced chi2
 
@@ -103,11 +102,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     cameras = list(flux.keys())
     log = get_logger()
     log.debug(time.asctime())
-
-    # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
-    #####################################
-    canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh+1.5)**2)
-    #log.info("canonical model=%s"%str(canonical_model))
 
     # resampling on a log wavelength grid
     #####################################
@@ -136,6 +130,8 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     for cam in cameras :
         tmp_flux,tmp_ivar=resample_flux(resampled_wave,wave[cam],flux[cam],ivar[cam])
         resampled_data[cam]=tmp_flux
+
+        
         resampled_ivar[cam]=tmp_ivar
 
         # we need to have the model on a larger grid than the data wave for redshifting
@@ -149,7 +145,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         tmp_res[:,npix:-npix] = resolution_data[cam]
         tmp_res[:,-npix:] = np.tile(resolution_data[cam][:,-1],(npix,1)).T
         # resampled model at camera resolution, with margin
-        tmp=resample_flux(extended_cam_wave,stdwave,stdflux[canonical_model])
+        tmp=resample_flux(extended_cam_wave,stdwave,stdflux)
         tmp=Resolution(tmp_res).dot(tmp)
         # map on log lam grid
         resampled_model[cam]=resample_flux(resampled_wave,extended_cam_wave,tmp)
@@ -158,6 +154,12 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         tmp=applySmoothingFilter(resampled_data[cam])
         resampled_data[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=tmp**2
+        
+        if template_error>0 :
+            ok=np.where(resampled_ivar[cam]>0)[0]
+            if ok.size > 0 :
+                resampled_ivar[cam][ok] = 1./ ( 1/resampled_ivar[cam][ok] + template_error**2 )
+                
         tmp=applySmoothingFilter(resampled_model[cam])
         resampled_model[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=(tmp!=0)
@@ -172,7 +174,58 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
                 chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:])**2)
     i=np.argmin(chi2)-margin
     z=10**(i*lstep)-1
-    #log.info("Best z=%f"%z)
+    log.debug("Best z=%f"%z)
+    return z, chi2[i]
+    
+def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00002, template_error=0):
+    """For each input spectrum, identify which standard star template is the closest
+    match, factoring out broadband throughput/calibration differences.
+
+    Args:
+        wave : A dictionary of 1D array of vacuum wavelengths [Angstroms]. Example below.
+        flux : A dictionary of 1D observed flux for the star
+        ivar : A dictionary 1D inverse variance of flux
+        resolution_data: resolution corresponding to the star's fiber
+        stdwave : 1D standard star template wavelengths [Angstroms]
+        stdflux : 2D[nstd, nwave] template flux
+        teff : 1D[nstd] effective model temperature
+        logg : 1D[nstd] model surface gravity
+        feh : 1D[nstd] model metallicity
+        ncpu : number of cpu for multiprocessing
+
+    Returns:
+        index : index of standard star
+        sec_index : index of second best fit standard star
+        sec_frac : fraction of second best star flux that minimize chi2 model=(1-sec_frac)*flux[index] +sec_frac*flux[sec_index]
+        redshift : redshift of standard star
+        chipdf : reduced chi2
+
+    Notes:
+      - wave and stdwave can be on different grids that don't
+        necessarily overlap
+      - wave does not have to be uniform or monotonic.  Multiple cameras
+        can be supported by concatenating their wave and flux arrays
+    """
+    # I am treating the input arguments from three frame files as dictionary. For example
+    # wave{"r":rwave,"b":bwave,"z":zwave}
+    # Each data(3 channels) is compared to every model.
+
+    # flux should be already flat fielded and sky subtracted.
+    # First normalize both data and model by dividing by median filter.
+
+    cameras = list(flux.keys())
+    log = get_logger()
+    log.debug(time.asctime())
+
+    # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
+    #####################################
+    canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh+1.5)**2)
+    #log.info("canonical model=%s"%str(canonical_model))
+
+    # fit redshift on canonical model
+    #####################################    
+    z,chi2 = redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, stdflux[canonical_model], ncpu, z_max, z_res)
+    
 
     normalized_flux={}
     normalized_ivar={}
@@ -185,6 +238,11 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         ok=np.where(normalized_ivar[cam]>0)[0]
         if ok.size>0 :
             normalized_ivar[cam][ok] *= (normalized_flux[cam][ok]<1.+3/np.sqrt(normalized_ivar[cam][ok]))
+
+        # add error propto to flux to account for model error
+        if template_error>0 and ok.size>0 :
+            normalized_ivar[cam][ok] = 1./ ( 1./normalized_ivar[cam][ok] + template_error**2 )
+        
         ndata += np.sum(normalized_ivar[cam]>0)
 
 
@@ -219,13 +277,63 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         log.debug("Not using multiprocessing for {} cpus".format(ncpu))
         model_chi2 = [_func(x) for x in func_args]
         log.debug("Finished serial loop over compute_chi2")
-        
-    best_model_id=np.argmin(np.array(model_chi2))
+
+    best_model_ids=np.argsort(np.array(model_chi2))[:2]
+    best_model_id=best_model_ids[0]
+    second_best_model_id=best_model_ids[1]
+    
     best_chi2=model_chi2[best_model_id]
     log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
-    # log.info("model star#%d chi2/ndf=%f best chi2/ndf=%f"%(star,chi2/ndata,best_chi2/ndata))
-
-    return best_model_id,z,best_chi2/ndata
+    
+    # try interpolating the two best ones
+   
+    
+    # refit redshift using best 
+    z,chi2 = redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, stdflux[best_model_id], ncpu=ncpu, z_max=z_max, z_res=z_res)
+    shifted_stdwave=stdwave/(1+z)
+    
+    # now interpolate between best and second best
+    
+    
+    # first save all convolved and smoothed data per cam
+    # we will put all cameras in a single array for simplicity
+    tmp_ivar  = np.array([])
+    tmp_flux  = np.array([])
+    for cam in normalized_flux:
+        tmp_ivar  = np.append(tmp_ivar,normalized_ivar[cam])
+        tmp_flux  = np.append(tmp_flux,normalized_flux[cam])
+    
+    # we do the same for all models of interest on the grid
+    tmp_models = []
+    for starid in best_model_ids :
+        log.debug("computing temp_model")
+        tmp_model = np.array([])
+        for cam in normalized_flux:
+            tmp=resample_flux(wave[cam],shifted_stdwave,stdflux[starid]) # this is slow
+            model=Resolution(resolution_data[cam]).dot(tmp) # this is slow
+            tmp=applySmoothingFilter(model) # this is fast
+            normalized_model = model/(tmp+(tmp==0))
+            tmp_model = np.append(tmp_model,normalized_model)
+        tmp_models.append(tmp_model)
+    
+    # model is (1-w)*tmp_models[0]+w*tmp_models[1]
+    res=tmp_flux-tmp_models[0]
+    der=tmp_models[1]-tmp_models[0]
+    
+    B = np.sum(tmp_ivar*res*der)
+    A = np.sum(tmp_ivar*der**2)
+    frac = B/A
+    if frac<0 : 
+        frac=0
+    elif frac>1 :
+        frac=1
+    log.debug("fractional weight of second best =%f"%frac)
+    
+    
+    best_chi2  = np.sum(tmp_ivar * (tmp_flux-( (1-frac)*tmp_models[0]+frac*tmp_models[1] ))**2)
+    ndata      = np.sum(tmp_ivar>0)
+    
+    return best_model_id,second_best_model_id,frac,z,best_chi2/ndata
 
 
 def normalize_templates(stdwave, stdflux, mags, filters):
@@ -271,7 +379,7 @@ def normalize_templates(stdwave, stdflux, mags, filters):
             sys.exit(0)
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipping=4.,debug=False):
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=4.,debug=False):
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
@@ -280,6 +388,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
       frame : Frame object with attributes wave, flux, ivar, resolution_data
       input_model_wave : 1D[nwave] array of model wavelengths
       input_model_flux : 2D[nstd, nwave] array of model fluxes
+      input_model_fibers : 1D[nstd] array of model fibers
       nsig_clipping : (optional) sigma clipping level
 
     Returns:
@@ -311,7 +420,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
     #- Pull out just the standard stars for convenience, but keep the
     #- full frame of spectra around because we will later need to convolved
     #- the calibration vector for each fiber individually
-    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    stdfibers = np.intersect1d( np.where(frame.fibermap['OBJTYPE'] == 'STD')[0] , input_model_fibers)
     stdstars = frame[stdfibers]
 
     nwave=stdstars.nwave
