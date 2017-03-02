@@ -240,8 +240,10 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
             normalized_ivar[cam][ok] *= (normalized_flux[cam][ok]<1.+3/np.sqrt(normalized_ivar[cam][ok]))
 
         # add error propto to flux to account for model error
-        if template_error>0 and ok.size>0 :
-            normalized_ivar[cam][ok] = 1./ ( 1./normalized_ivar[cam][ok] + template_error**2 )
+        if template_error>0  :
+            ok=np.where(normalized_ivar[cam]>0)[0]
+            if ok.size>0 :
+                normalized_ivar[cam][ok] = 1./ ( 1./normalized_ivar[cam][ok] + template_error**2 )
         
         ndata += np.sum(normalized_ivar[cam]>0)
 
@@ -584,8 +586,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     # compute convolved calib
     ccalibration = np.zeros(frame.flux.shape)
     for i in range(frame.nspec):
-        ccalibration[i]=frame.R[i].dot(calibration)/frame.R[i].dot(np.ones(calibration.shape))
-
+        norme = frame.R[i].dot(np.ones(calibration.shape))
+        ok=np.where(norme>0)[0]
+        if ok.size :
+            ccalibration[i][ok]=frame.R[i].dot(calibration)[ok]/norme[ok]
+        
     # Use diagonal of mean calibration covariance for output.
     ccalibcovar=R.dot(calibcovar).dot(R.T.todense())
     ccalibvar=np.array(np.diagonal(ccalibcovar))
