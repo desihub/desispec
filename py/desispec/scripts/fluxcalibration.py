@@ -33,7 +33,7 @@ def parse(options=None):
                         help = 'path of DESI sky fits file')
     parser.add_argument('--models', type = str, default = None, required=True,
                         help = 'path of spetro-photometric stellar spectra fits file')
-    parser.add_argument('--chi2cut', type = float, default = 0, required=True,
+    parser.add_argument('--chi2cut', type = float, default = 0., required=False,
                         help = 'apply a reduced chi2 cut for the selection of stars')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
