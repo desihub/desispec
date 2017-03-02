@@ -13,6 +13,11 @@ from astropy.io import fits
 from astropy.table import Table
 from ..frame import Frame
 
+try:
+    import sqlalchemy
+    sqlalchemy_available = True
+except ImportError:
+    sqlalchemy_available = False
 
 class TestIO(unittest.TestCase):
     """Test desiutil.io.
@@ -600,6 +605,7 @@ class TestIO(unittest.TestCase):
         self.assertIsNone(paths[0])
         # self.assertFalse(os.path.exists(paths[0]))
 
+    @unittest.skipUnless(sqlalchemy_available, "sqlalchemy not installed; skipping DB tests")
     def test_database(self):
         """Test desispec.io.database.
         """
