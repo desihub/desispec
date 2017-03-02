@@ -123,11 +123,9 @@ def main(args) :
             log.error("incompatible fibermap")
             raise ValueError("incompatible fibermap")
         
-        if camera in frames:
-            log.error("cannot handle for now several frame of same camera (%s)"%camera)
-            raise ValueError("cannot handle for now several frame of same camera (%s)"%camera)
-            
-        frames[camera]=frame
+        if not camera in frames :
+            frames[camera]=[]
+        frames[camera].append(frame)
         
     for filename in args.skymodels :
         log.info("reading %s"%filename)
@@ -135,13 +133,9 @@ def main(args) :
         header=fits.getheader(filename, 0)
         camera=safe_read_key(header,"CAMERA").strip().lower()
                 
-        # NEED TO ADD MORE CHECKS
-        if camera in skies:
-            log.error("cannot handle several skymodels of same camera (%s)"%camera)
-            raise ValueError("cannot handle several skymodels of same camera (%s)"%camera)
-            
-        
-        skies[camera]=sky
+        if not camera in skies :
+            skies[camera]=[]
+        skies[camera].append(sky)
     
     for filename in args.fiberflats :
         log.info("reading %s"%filename)
@@ -151,9 +145,10 @@ def main(args) :
         
         # NEED TO ADD MORE CHECKS
         if camera in flats:
-            log.error("cannot handle several flats of same camera (%s)"%camera)
-            raise ValueError("cannot handle several flats of same camera (%s)"%camera)
-        flats[camera]=flat
+            log.warning("cannot handle several flats of same camera (%s), will use only the first one"%camera)
+            #raise ValueError("cannot handle several flats of same camera (%s)"%camera)
+        else :
+            flats[camera]=flat
     
 
     if starindices.size == 0 :
@@ -182,21 +177,23 @@ def main(args) :
             log.warning("Missing flat for %s"%cam)
             frames.pop(cam)
             continue
-        
-        frames[cam].flux = frames[cam].flux[starindices]
-        frames[cam].ivar = frames[cam].ivar[starindices]
-        
 
-        frames[cam].ivar *= (frames[cam].mask[starindices] == 0)
-        frames[cam].ivar *= (skies[cam].ivar[starindices] != 0)
-        frames[cam].ivar *= (skies[cam].mask[starindices] == 0)
-        frames[cam].ivar *= (flats[cam].ivar[starindices] != 0)
-        frames[cam].ivar *= (flats[cam].mask[starindices] == 0)
-        frames[cam].flux *= ( frames[cam].ivar > 0) # just for clean plots
-        for star in range(frames[cam].flux.shape[0]) :
-            ok=np.where((frames[cam].ivar[star]>0)&(flats[cam].fiberflat[star]!=0))[0]
-            if ok.size > 0 :
-                frames[cam].flux[star] = frames[cam].flux[star]/flats[cam].fiberflat[star] - skies[cam].flux[star]
+        flat=flats[cam]
+        for frame,sky in zip(frames[cam],skies[cam]) :
+            frame.flux = frame.flux[starindices]
+            frame.ivar = frame.ivar[starindices]
+            frame.ivar *= (frame.mask[starindices] == 0)
+            frame.ivar *= (sky.ivar[starindices] != 0)
+            frame.ivar *= (sky.mask[starindices] == 0)
+            frame.ivar *= (flat.ivar[starindices] != 0)
+            frame.ivar *= (flat.mask[starindices] == 0)
+            frame.flux *= ( frame.ivar > 0) # just for clean plots
+            for star in range(frame.flux.shape[0]) :
+                ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
+                if ok.size > 0 :
+                    frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
+    
+        
     nstars = starindices.size
     starindices=None # we don't need this anymore
     
@@ -247,11 +244,12 @@ def main(args) :
         ivar = {}
         resolution_data = {}
         for camera in frames :
-            band=camera[0]
-            wave[band]=frames[camera].wave
-            flux[band]=frames[camera].flux[star]
-            ivar[band]=frames[camera].ivar[star]
-            resolution_data[band]=frames[camera].resolution_data[star]
+            for i,frame in enumerate(frames[camera]) :
+                identifier="%s-%d"%(camera,i)
+                wave[identifier]=frame.wave
+                flux[identifier]=frame.flux[star]
+                ivar[identifier]=frame.ivar[star]
+                resolution_data[identifier]=frame.resolution_data[star]
         
         # preselec models based on magnitudes
         
