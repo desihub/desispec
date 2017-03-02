@@ -64,8 +64,10 @@ def read_stdstar_models(filename):
         flux = native_endian(fx['FLUX'].data.astype('f8'))
         wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
         fibers = native_endian(fx['FIBERS'].data)
-    
-    return flux, wave, fibers
+        metadata = fx['METADATA'].data
+        
+
+    return flux, wave, fibers , metadata
 
 
 def write_flux_calibration(outfile, fluxcalib, header=None):
