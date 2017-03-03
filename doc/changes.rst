@@ -12,8 +12,10 @@ desispec Change Log
 * Update :func:`desispec.io.raw.write_raw` to enable writing simulated raw
   data with new headers.
 * Allow ``test_bootcalib`` to run even if NERSC portal is returning 403 errors.
-* Add ``bricksize`` property to :class:`desispec.brick.Bricks`; allow 
+* Add ``bricksize`` property to :class:`desispec.brick.Bricks`; allow
   :meth:`~desispec.brick.Bricks.brickname` to specify bricksize.
+* Do SVD inverses when cholesky decompositions fail in fiberflat, sky
+  subtraction, and flux calibration.
 
 .. _`#314`: https://github.com/desihub/desispec/pull/314
 .. _SQLAlchemy: http://www.sqlalchemy.org

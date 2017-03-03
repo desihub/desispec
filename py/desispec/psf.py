@@ -36,6 +36,9 @@ class PSF(object):
             arm = hdr['CAMERA'].lower()[0]
             npix_x = hdr['NPIX_X']
             npix_y = hdr['NPIX_Y']
+
+            if 'XSIGMA' in psfdata:
+                self.xsigma_boot=psfdata['XSIGMA'].data
         
             if arm not in ['b','r','z']:
                 raise ValueError("arm not in b, r, or z. File should be of the form psfboot-r0.fits.")  
@@ -195,3 +198,11 @@ class PSF(object):
                 ww.append(wfit)
         return np.array(ww)
 
+    def xsigma(self,ispec,wave):
+        if hasattr(self,'xsigma_boot'):
+            if np.isscalar(wave):
+                return self.xsigma_boot[ispec]
+            else:
+                return np.full(len(wave),self.xsigma_boot[ispec]) #- constant xsigma for a given fiber
+
+    
