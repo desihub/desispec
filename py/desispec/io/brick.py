@@ -1,3 +1,5 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+# -*- coding: utf-8 -*-
 """
 desispec.io.brick
 =================
@@ -10,9 +12,8 @@ for a description of the relevant data models.
 See :doc:`coadd` and `DESI-doc-1056 <https://desi.lbl.gov/DocDB/cgi-bin/private/ShowDocument?docid=1056>`_
 for general information about the coaddition dataflow and algorithms.
 """
-
+from __future__ import absolute_import, division, print_function
 import os
-import os.path
 import re
 import warnings
 
@@ -21,20 +22,21 @@ import astropy.io.fits
 from astropy import table
 
 from desiutil.depend import add_dependencies
-import desispec.io.util
-import desiutil.io
+from desiutil.io import encode_table
 
-#- For backwards compatibility, derive brickname from filename
+
+# For backwards compatibility, derive brickname from filename
 def _parse_brick_filename(filepath):
     """return (channel, brickname) from /path/to/brick-[brz]-{brickname}.fits
     """
     filename = os.path.basename(filepath)
     warnings.warn('Deriving channel and brickname from filename {} instead of contents'.format(filename))
-    m = re.match('brick-([brz])-(\w+).fits', filename)
+    m = re.match(r'brick-([brz])-(\w+).fits', filename)
     if m is None:
         raise ValueError('Unable to derive channel and brickname from '+filename)
     else:
         return m.groups()  #- (channel, brickname)
+
 
 class BrickBase(object):
     """Represents objects in a single brick and possibly also a single band b,r,z.
@@ -55,7 +57,9 @@ class BrickBase(object):
         IOError: Unable to open existing file in 'readonly' mode.
         OSError: Unable to create a new parent directory in 'update' mode.
     """
-    def __init__(self,path,mode = 'readonly',header = None):
+    def __init__(self, path, mode='readonly', header=None):
+        from .util import fitsheader
+        from .fibermap import fibermap_columns, fibermap_comments
         if mode not in ('readonly','update'):
             raise RuntimeError('Invalid mode %r' % mode)
         self.path = path
@@ -71,13 +75,13 @@ class BrickBase(object):
                 self.channel = header['CHANNEL']
             else:
                 self.channel = 'brz'  #- could be any spectrograph channel
-                
+
             # Create the parent directory, if necessary.
             head,tail = os.path.split(self.path)
             if not os.path.exists(head):
                 os.makedirs(head)
             # Create empty HDUs. It would be good to refactor io.frame to avoid any duplication here.
-            hdr = desispec.io.util.fitsheader(header)
+            hdr = fitsheader(header)
             add_dependencies(hdr)
             hdr['EXTNAME'] = ('FLUX', '1e-17 erg/(s cm2 Angstrom)')
             hdr['BUNIT'] = '1e-17 erg/(s cm2 Angstrom)'
@@ -87,25 +91,25 @@ class BrickBase(object):
             hdu2.header['BUNIT'] = 'Angstrom'
             hdu3 = astropy.io.fits.ImageHDU(name='RESOLUTION')
             # Create an HDU4 using the columns from fibermap with a few extras added.
-            columns = desispec.io.fibermap.fibermap_columns[:]
+            columns = fibermap_columns[:]
             columns.extend([
                 ('NIGHT','i4'),
                 ('EXPID','i4'),
                 ('INDEX','i4'),
                 ])
             data = np.empty(shape = (0,),dtype = columns)
-            data = desiutil.io.encode_table(data)   #- unicode -> bytes
+            data = encode_table(data)   #- unicode -> bytes
             data.meta['EXTNAME'] = 'FIBERMAP'
             for key, value in header.items():
                 data.meta[key] = value
             hdu4 = astropy.io.fits.convenience.table_to_hdu(data)
 
             # Add comments for fibermap columns.
-            num_fibermap_columns = len(desispec.io.fibermap.fibermap_comments)
+            num_fibermap_columns = len(fibermap_comments)
             for i in range(1,1+num_fibermap_columns):
                 key = 'TTYPE%d' % i
                 name = hdu4.header[key]
-                comment = desispec.io.fibermap.fibermap_comments[name]
+                comment = fibermap_comments[name]
                 hdu4.header[key] = (name,comment)
             # Add comments for our additional columns.
             hdu4.header['TTYPE%d' % (1+num_fibermap_columns)] = ('NIGHT','Night of exposure YYYYMMDD')
@@ -200,13 +204,14 @@ class BrickBase(object):
             self.hdu_list.writeto(self.path,clobber = True)
         self.hdu_list.close()
 
+
 class Brick(BrickBase):
     """Represents the combined cframe exposures in a single brick and band.
 
     See :class:`BrickBase` for constructor info.
     """
-    def __init__(self,path,mode = 'readonly',header = None):
-        BrickBase.__init__(self,path,mode,header)
+    def __init__(self, path, mode='readonly', header=None):
+        super(Brick, self).__init__(path, mode, header)
 
     def add_objects(self,flux,ivar,wave,resolution,object_data,night,expid):
         """Add a list of objects to this brick file from the same night and exposure.
@@ -223,7 +228,7 @@ class Brick(BrickBase):
         Raises:
             RuntimeError: Can only add objects in update mode.
         """
-        BrickBase.add_objects(self,flux,ivar,wave,resolution)
+        super(Brick, self).add_objects(flux,ivar,wave,resolution)
 
         augmented_data = table.Table(object_data)
         augmented_data['NIGHT'] = int(night)
@@ -235,16 +240,18 @@ class Brick(BrickBase):
             augmented_data = table.vstack([orig_data, augmented_data])
 
         #- unicode -> ascii columns
-        augmented_data = desiutil.io.encode_table(augmented_data)
+        augmented_data = encode_table(augmented_data)
 
         updated_hdu = astropy.io.fits.convenience.table_to_hdu(augmented_data)
         updated_hdu.header = fibermap_hdu.header
         self.hdu_list['FIBERMAP'].data = updated_hdu.data
 
+
 class CoAddedBrick(BrickBase):
-    """Represents the co-added exposures in a single brick and, possibly, a single band.
+    """Represents the co-added exposures in a single brick and, possibly,
+    a single band.
 
     See :class:`BrickBase` for constructor info.
     """
-    def __init__(self,path,mode = 'readonly',header = None):
-        BrickBase.__init__(self,path,mode,header)
+    def __init__(self, path, mode='readonly', header=None):
+        super(CoAddedBrick, self).__init__(path, mode, header)

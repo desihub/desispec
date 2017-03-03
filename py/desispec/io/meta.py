@@ -1,3 +1,5 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+# -*- coding: utf-8 -*-
 """
 desispec.io.meta
 ================
@@ -6,7 +8,6 @@ IO metadata functions.
 """
 
 import os
-import os.path
 import datetime
 import glob
 import re
@@ -334,4 +335,3 @@ def get_pipe_faildir():
         The name of the subdirectory.
     """
     return "failed"
-
