@@ -13,8 +13,7 @@ import time
 import io
 from contextlib import contextmanager
 import logging
-
-import ctypes
+import platform
 
 import numpy as np
 
@@ -22,11 +21,14 @@ from .log import get_logger
 
 
 # C file descriptors for stderr and stdout, used in redirection
-# context manager.
-libc = ctypes.CDLL(None)
-c_stdout = ctypes.c_void_p.in_dll(libc, 'stdout')
-c_stderr = ctypes.c_void_p.in_dll(libc, 'stderr')
-
+# context manager.  Works on Linux but not on Mac
+if platform.system() == 'Linux':
+    import ctypes
+    libc = ctypes.CDLL(None)
+    c_stdout = ctypes.c_void_p.in_dll(libc, 'stdout')
+    c_stderr = ctypes.c_void_p.in_dll(libc, 'stderr')
+else:
+    libc = None
 
 # Multiprocessing environment setup
 
@@ -187,8 +189,9 @@ def stdouterr_redirected(to=None, comm=None):
     def _redirect(out_to, err_to):
 
         # Flush the C-level buffers
-        libc.fflush(c_stdout)
-        libc.fflush(c_stderr)
+        if libc is not None:
+            libc.fflush(c_stdout)
+            libc.fflush(c_stderr)
 
         # This closes the python file handles, and marks the POSIX
         # file descriptors for garbage collection- UNLESS those
