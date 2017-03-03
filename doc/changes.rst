@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.12.1 (unreleased)
+0.13.1 (unreleased)
+-------------------
+
+* No changes yet
+
+0.13.0 (2017-03-03)
 -------------------
 
 * Fix brick update corruption (PR `#314`_).
@@ -16,6 +21,9 @@ desispec Change Log
   :meth:`~desispec.brick.Bricks.brickname` to specify bricksize.
 * Do SVD inverses when cholesky decompositions fail in fiberflat, sky
   subtraction, and flux calibration.
+* Algorithm updates for teststand and BOSS data
+* pipeline updates for docker/shifter
+* quicklook updates
 
 .. _`#314`: https://github.com/desihub/desispec/pull/314
 .. _SQLAlchemy: http://www.sqlalchemy.org
