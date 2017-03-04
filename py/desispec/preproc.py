@@ -332,17 +332,14 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             CAMERA, BIASSECx, DATASECx, CCDSECx
             where x = A, B, C, D for each of the 4 amplifiers
             (also supports old naming convention 1, 2, 3, 4).
-
+        primary_header: dict-like metadata fit keywords EXPTIME, DOSVER
+            DATE-OBS is also required if bias, pixflat, or mask=True
 
     Optional bias, pixflat, and mask can each be:
         False: don't apply that step
         True: use default calibration data for that night
         ndarray: use that array
         filename (str or unicode): read HDU 0 and use that
-        DATE-OBS is required in primary_header if bias, pixflat, or mask=True
-
-
-
 
     Optional background subtraction with median filtering if bkgsub=True
 
