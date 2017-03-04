@@ -182,7 +182,7 @@ class TestFluxCalibration(unittest.TestCase):
         frame.fibermap['OBJTYPE'][stdfibers] = 'STD'
         input_model_wave=modelwave
         input_model_flux=modelflux[0:3] # assuming the first three to be best models,3 is exclusive here
-        fluxCalib =compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipping=4.)
+        fluxCalib =compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers=stdfibers,nsig_clipping=4.)
         # assert the output
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)
@@ -198,7 +198,7 @@ class TestFluxCalibration(unittest.TestCase):
         frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
         nstd = np.count_nonzero(frame.fibermap['OBJTYPE'] == 'STD')
         frame.flux[0] = np.mean(frame.flux[0])        
-        fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[0:nstd])
+        fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[0:nstd],input_model_fibers=np.arange(nstd))
 
     def test_masked_data(self):
         """Test compute_fluxcalibration with some ivar=0 data
@@ -209,7 +209,7 @@ class TestFluxCalibration(unittest.TestCase):
         frame.fibermap['OBJTYPE'][2:2+nstd] = 'STD'
         frame.ivar[2:2+nstd, 20:22] = 0
         
-        fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[2:2+nstd], debug=True)
+        fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[2:2+nstd], input_model_fibers=np.arange(2,2+nstd), debug=True)
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)
 
