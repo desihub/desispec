@@ -17,6 +17,7 @@ import sys
 import time
 from astropy import units
 import multiprocessing
+#import scipy.interpolate
 
 #rebin spectra into new wavebins. This should be equivalent to desispec.interpolation.resample_flux. So may not be needed here
 #But should move from here anyway.
@@ -26,7 +27,9 @@ def rebinSpectra(spectra,oldWaveBins,newWaveBins):
     specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
     return specnew
 
-def applySmoothingFilter(flux):
+def applySmoothingFilter(flux) :
+    # it was checked that the width of the median_filter has little impact on best fit stars
+    # smoothing the ouput (with a spline for instance) does not improve the fit
     return scipy.ndimage.filters.median_filter(flux,200)
 #
 # Import some global constants.
@@ -49,29 +52,22 @@ try:
 except TypeError:
     hc = 1.9864458241717586e-08
 
-def compute_chi2(wave,normalized_flux,normalized_ivar,resolution_data,shifted_stdwave,star_stdflux) :
-    chi2 = None
-    try :
-        chi2=0.
-        for cam in normalized_flux:
-            tmp=resample_flux(wave[cam],shifted_stdwave,star_stdflux) # this is slow
-            model=Resolution(resolution_data[cam]).dot(tmp) # this is slow
-            tmp=applySmoothingFilter(model) # this is fast
-            normalized_model = model/(tmp+(tmp==0))
-            chi2 += np.sum(normalized_ivar[cam]*(normalized_flux[cam]-normalized_model)**2)
-    except :
-        chi2 = 1e20
-    return chi2
+def resample_template(data_wave_per_camera,resolution_data_per_camera,template_wave,template_flux,template_id) :
+    output_flux=np.array([])
+    for cam in data_wave_per_camera :
+        flux1=resample_flux(data_wave_per_camera[cam],template_wave,template_flux) # this is slow
+        flux2=Resolution(resolution_data_per_camera[cam]).dot(flux1) # this is slow
+        norme=applySmoothingFilter(flux2) # this is fast
+        flux3=flux2/(norme+(norme==0))
+        output_flux = np.append(output_flux,flux3)
+    return template_id,output_flux
 
 def _func(arg) :
-    return compute_chi2(**arg)
+    return resample_template(**arg)
 
 
-
-
-def redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, stdflux, ncpu=1, z_max=0.005, z_res=0.00005, template_error=0.):
-    """For each input spectrum, identify which standard star template is the closest
-    match, factoring out broadband throughput/calibration differences.
+def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.005, z_res=0.00005, template_error=0.):
+    """ Redshift fit of a single template
 
     Args:
         wave : A dictionary of 1D array of vacuum wavelengths [Angstroms]. Example below.
@@ -80,11 +76,10 @@ def redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, std
         resolution_data: resolution corresponding to the star's fiber
         stdwave : 1D standard star template wavelengths [Angstroms]
         stdflux : 1D[nwave] template flux        
-        ncpu : number of cpu for multiprocessing
-
+        
     Returns:
         redshift : redshift of standard star
-        chipdf : reduced chi2
+        
 
     Notes:
       - wave and stdwave can be on different grids that don't
@@ -92,20 +87,13 @@ def redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, std
       - wave does not have to be uniform or monotonic.  Multiple cameras
         can be supported by concatenating their wave and flux arrays
     """
-    # I am treating the input arguments from three frame files as dictionary. For example
-    # wave{"r":rwave,"b":bwave,"z":zwave}
-    # Each data(3 channels) is compared to every model.
-
-    # flux should be already flat fielded and sky subtracted.
-    # First normalize both data and model by dividing by median filter.
-
     cameras = list(flux.keys())
     log = get_logger()
     log.debug(time.asctime())
 
     # resampling on a log wavelength grid
     #####################################
-    # need to go fast at the beginning ... so we resample both data and model on a log grid
+    # need to go fast so we resample both data and model on a log grid
 
     # define grid
     minwave = 100000.
@@ -119,7 +107,7 @@ def redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, std
     minlwave=np.log10(minwave)
     maxlwave=np.log10(maxwave) # desired, but readjusted
     nstep=(maxlwave-minlwave)/lstep
-    #print "nstep=",nstep
+    
     resampled_lwave=minlwave+lstep*np.arange(nstep)
     resampled_wave=10**resampled_lwave
 
@@ -166,17 +154,320 @@ def redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, std
 
     # fit the best redshift
     chi2=np.zeros((2*margin+1))
+    ndata=np.zeros((2*margin+1))
     for i in range(-margin,margin+1) :
         for cam in cameras :
+            ndata[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]>0)
             if i<margin :
-                chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:-margin+i])**2)
+                chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:-margin+i])**2)                
             else :
                 chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:])**2)
+    
     i=np.argmin(chi2)-margin
     z=10**(i*lstep)-1
     log.debug("Best z=%f"%z)
-    return z, chi2[i]
+    return z
+   
+
+def _compute_coef(w,coords) :
+    """ Function used by interpolate_on_parameter_grid
+
+    Args:
+        w : 1D[npar] array of weights, one for each parameter axis
+        coords : 2D[ntemplates,npar] array of coordinates of template nodes on cube for interpolation
+        
+    Returns:
+        coefficients : 1D[ntemplates] linear coefficient of each template (sum=1)
+        derivative   : 2D[npar,ntemplates] derivative of linear coefficient wrt w
+
+    Notes :
+        the linear coefficient of each template is a product of the form, for instance, w[0]*(1-w[1])*w[2]
+    """
+    ns=coords.shape[0]
+    npar=coords.shape[1]
+    coef=np.ones(ns)
+    dcoefdw=np.ones((npar,ns))
+    for s in range(ns) :
+            coef[s]=1.
+            for a in range(npar) :
+                if coords[s,a]==0 :
+                    coef[s] *= w[a]
+                else :
+                    coef[s] *= (1-w[a])
+        
+    for a in range(npar) :
+        for s in range(ns) :
+            dcoefdw[a,s]=1.
+            for a2 in range(npar) :
+                if(a2!=a) :
+                    if coords[s,a2]==0 :
+                        dcoefdw[a,s] *= w[a2]
+                    else :
+                        dcoefdw[a,s] *= (1-w[a2]) 
+                else :
+                    if coords[s,a]==1 :
+                        dcoefdw[a,s] *= -1
+    return coef,dcoefdw
+
+def _compute_model(coef,templates) :
+    """ Function used by interpolate_on_parameter_grid
+        Computes model from coefficients (used several times in routine)
+    Args:
+        coef : 1D[ntemplates] array of coefficients
+        templates : 2D[ntemplates,nwave] array of template spectra
+        
+    Returns:
+        model : 1D[nwave]
+    """
+    model = np.zeros(templates[0].size)
+    for c,m in zip(coef,templates) :
+        model += c*m
+    return model
     
+def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2) :
+    """ 3D Interpolation routine among templates based on a grid of parameters teff, logg, feh.
+        The tricky part is to define a cube on the parameter grid populated with templates, and it is not always possible.
+        The routine never extrapolates, so that we stay in the range of input parameters.
+
+    Args:
+        data_wave : 1D[nwave] array of wavelength (concatenated list of input wavelength of different cameras and exposures)
+        data_flux : 1D[nwave] array of normalized flux = (input flux)/median_filter(input flux) (concatenated list)
+        data_ivar : 1D[nwave] array of inverse variance of normalized flux
+        template_flux : 2D[ntemplates,nwave] array of normalized flux of templates (after resample, convolution and division by median_filter)
+        teff : 1D[ntemplates]
+        logg : 1D[ntemplates]
+        feh  : 1D[ntemplates]
+        template_chi2 : 1D[ntemplatess] array of precomputed chi2 = sum(data_ivar*(data_flux-template_flux)**2)
+    
+    Returns:
+       coefficients : best fit coefficient of linear combination of templates (only 8 of them around the one with best template_chi2 
+                      are potentially non null
+       chi2 : chi2 of the linear combination
+    """
+    
+    log = get_logger()
+    log.debug("starting interpolation on grid")
+
+    best_model_id = np.argmin(template_chi2)
+    ndata=np.sum(data_ivar>0)
+    
+    log.debug("best model id=%d chi2/ndata=%f teff=%d logg=%2.1f feh=%2.1f"%(best_model_id,template_chi2[best_model_id]/ndata,teff[best_model_id],logg[best_model_id],feh[best_model_id]))
+    
+    ntemplates=template_flux.shape[0]
+    
+    # physical parameters define axes
+    npar=3
+    param=np.zeros((npar,ntemplates))
+    param[0]=teff
+    param[1]=logg
+    param[2]=feh
+
+    # grid nodes coordinates (unique values of the parameters)
+    uparam=[]
+    for a in range(npar) : 
+        uparam.append(np.unique(param[a]))
+    for a in range(npar) : 
+        log.debug("param %d : %s"%(a,str(uparam[a])))
+    
+    # the parameters of the fit are npar interpolation coefficients w
+    w=np.zeros(npar)
+    eps=0. # could start with an offset
+
+    # index on grid of the two best models along each axis of the grid, one of which being the best match
+    desired_node_cube_coords=np.zeros((npar,2)).astype(int)    
+    desired_node_grid_coords=np.zeros((npar,2)).astype(int)    
+       
+    for a in range(npar) : # a is an axis 
+        
+        # this is the coordinate on axis 'a' of the best node
+        ibest=np.where(uparam[a]==param[a,best_model_id])[0][0]
+        
+        # selection of all grid nodes with templates on the same "line" of direction 'a'
+        line_selection=np.ones(ntemplates).astype(bool)
+        for a2 in range(npar) :
+            if a2 != a : line_selection &= (param[a2]==param[a2,best_model_id])
+
+        if np.sum(line_selection)<2 :
+            log.warning("Cannot interpolate; the best fit is in a corner of the populated parameter grid")
+            final_coefficients = np.zeros(ntemplates)
+            final_coefficients[best_model_id] = 1.
+            return final_coefficients,template_chi2[best_model_id]
+            
+        left_selection  = line_selection & (param[a]<param[a,best_model_id])
+        right_selection = line_selection & (param[a]>param[a,best_model_id])
+
+        # now we have to decide which direction to go from here to set one edge of the cube
+        if np.sum(right_selection)==0 : # no choise
+            desired_node_grid_coords[a,0]=np.where(uparam[a]==np.max(param[a][left_selection]))[0][0]
+            desired_node_grid_coords[a,1]=ibest            
+            w[a]=eps # model = w*left+(1-w)*right, here best in on the right (eps~0)
+        elif np.sum(left_selection)==0 : # no choise
+            desired_node_grid_coords[a,0]=ibest
+            desired_node_grid_coords[a,1]=np.where(uparam[a]==np.min(param[a][right_selection]))[0][0]
+            w[a]=(1-eps)  # model = w*left+(1-w)*right, here best in on the left
+        else :
+            # choice based on chi2
+            im=np.where(uparam[a]==np.max(param[a][left_selection]))[0][0] # grid coord
+            ip=np.where(uparam[a]==np.min(param[a][right_selection]))[0][0] # grid coord
+            # need to get template id to read chi2
+            jm=np.where(line_selection&(param[a]==uparam[a][im]))[0][0]
+            jp=np.where(line_selection&(param[a]==uparam[a][ip]))[0][0]
+            if template_chi2[jm]<template_chi2[jp] : # we go left
+                desired_node_grid_coords[a,0]=im
+                desired_node_grid_coords[a,1]=ibest
+                w[a]=eps
+                
+            else : # we go right
+                desired_node_grid_coords[a,0]=ibest
+                desired_node_grid_coords[a,1]=ip
+                w[a]=(1-eps)
+        #log.debug("desired_node_grid_coords[%d]=%s"%(a,str(desired_node_grid_coords[a])))
+
+    # interpolation scheme based on a cube where the best node is one corner
+    # we have 2**npar nodes which are the corners of a cube
+    ns=8
+    node_template_ids=-1*np.ones(ns).astype(int) 
+    node_cube_coords=np.zeros((ns,3)).astype(int) # 0 or 1
+    node_grid_coords=np.zeros((ns,3)).astype(int)
+    
+    s=0
+
+    
+    # distance weighting
+    dweights=np.zeros(npar)
+    for a in range(npar) :
+       dweights[a] = 1. / np.std(param[a])**2  
+
+    for k0 in range(2) :        
+        for k1 in range(2) :             
+            for k2 in range(2) : 
+                node_cube_coords[s,0]=k0
+                node_cube_coords[s,1]=k1
+                node_cube_coords[s,2]=k2
+                i0=desired_node_grid_coords[0,k0]
+                i1=desired_node_grid_coords[1,k1]
+                i2=desired_node_grid_coords[2,k2]
+                p0=uparam[0][i0]
+                p1=uparam[1][i1]
+                p2=uparam[2][i2]
+                #log.debug("star %d [%d,%d,%d];[%d,%d,%d];[%f,%f,%f]"%(s,k0,k1,k2,i0,i1,i2,p0,p1,p2))
+
+                
+                
+                # the grid is rectangular, but not fully filled, so we cant always find exact match
+                dist=(dweights[0]*(param[0]-p0)**2+dweights[1]*(param[1]-p1)**2+dweights[2]*(param[2]-p2)**2)
+                ii=np.argsort(dist)
+                for i in ii :
+                    if i in node_template_ids[:s] : # already there
+                        continue
+                    node_template_ids[s]=i
+                    break
+                if node_template_ids[s]==-1 :
+                    log.error("didn't find a node for this axis")
+                    sys.exit(12)                
+                
+                # update indices
+                log.debug("node %d [%d,%d,%d];[%d,%d,%d];[%f,%f,%f] id=%d"%(s,k0,k1,k2,i0,i1,i2,p0,p1,p2,node_template_ids[s]))
+                s+=1
+
+    # we are done with the indexing and choice of template nodes
+    # node_flux
+    node_template_flux = template_flux[node_template_ids]
+    
+    # compute all weighted scalar products among templates
+    HA=np.zeros((ns,ns))
+    for s in range(ns) :
+        for s2 in range(ns) :
+            if HA[s2,s] != 0 :
+                HA[s,s2] = HA[s2,s]
+            else :
+                HA[s,s2] = np.sum(data_ivar*node_template_flux[s]*node_template_flux[s2])            
+
+    # initial state
+    coef , dcoefdw = _compute_coef(w,node_cube_coords)
+    log.debug("init coef=%s"%coef)
+    model=_compute_model(coef,node_template_flux)
+    chi2=np.sum(data_ivar*(data_flux-model)**2)
+    log.debug("init w=%s chi2/ndata=%f"%(w,chi2/ndata))
+    
+    # now we have to do the fit
+    # fitting one axis at a time (simultaneous fit of 3 axes was tested and found inefficient : rapidly stuck on edges)
+    # it has to be iterative because the model is a non-linear combination of parameters w, ex: w[0]*(1-w[1])*(1-w[2])
+    for loop in range(50) :
+        
+        previous_chi2=chi2.copy()
+        previous_w=w.copy()
+
+        for a in range(npar) :
+            previous_chi2_a=chi2.copy()
+            
+            # updated coef and derivative (non linear)
+            coef , dcoefdw = _compute_coef(w,node_cube_coords)
+            # checking
+            # must be = 1
+            #log.debug("sum(coef)=%f"%np.sum(coef))
+            # must be = 0
+            #log.debug("sum(dcoefdw)=%s"%np.sum(dcoefdw,axis=1))
+            
+            # current model
+            model=_compute_model(coef,node_template_flux)
+            # residuals
+            res=data_flux-model
+            
+            A=0.
+            B=0.
+            for s in range(ns) :
+                for s2 in range(ns) :
+                    A += dcoefdw[a,s]*dcoefdw[a,s2]*HA[s,s2]
+                B += dcoefdw[a,s]*np.sum(data_ivar*res*node_template_flux[s])
+            dw=B/A
+            # dw is the best fit increment of w 
+            #log.debug("dw=%f"%dw)
+
+            # test if this improves chi2
+            tmp_w=w.copy()
+            tmp_w[a]+=dw
+            # apply bounds
+            if tmp_w[a]>1 :
+                tmp_w[a]=1
+            elif tmp_w[a]<0 :
+                tmp_w[a]=0
+            
+            tmp_coef , junk = _compute_coef(tmp_w,node_cube_coords)
+            tmp_model=_compute_model(tmp_coef,node_template_flux)
+            tmp_res=data_flux-tmp_model
+            tmp_chi2=np.sum(data_ivar*tmp_res**2)
+            
+            #log.debug("loop #%d a=%d w=%s chi2/ndata=%f"%(loop,a,w,chi2/data_flux.size))
+            if tmp_chi2<previous_chi2_a :
+                w=tmp_w
+                chi2=tmp_chi2
+            elif tmp_chi2>previous_chi2_a+1e-12 :
+                log.warning("the fitted dw gave a larger chi2 ??? %f"%(tmp_chi2-previous_chi2_a))
+            
+        log.debug("loop #%d w=%s chi2/ndata=%f (-dchi2_loop=%f -dchi2_tot=%f)"%(loop,w,chi2/ndata,previous_chi2-chi2,template_chi2[best_model_id]-chi2))
+        diff=np.max(np.abs(w-previous_w))
+        if diff < 0.001 :
+            break
+
+    '''
+    # useful debugging plot
+    import matplotlib.pyplot as plt
+    plt.figure()        
+    ok=np.where(data_ivar>0)[0]
+    plt.errorbar(data_wave[ok],data_flux[ok],1./np.sqrt(data_ivar[ok]),fmt="o")
+    ii=np.argsort(data_wave)
+    plt.plot(data_wave[ii],model[ii],"-",c="r")
+    plt.show()
+    '''
+    
+    input_number_of_templates=template_flux.shape[0]
+    final_coefficients=np.zeros(input_number_of_templates)
+    final_coefficients[node_template_ids]=coef
+    
+    return final_coefficients,chi2
+        
+
 def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, logg, feh, ncpu=1, z_max=0.005, z_res=0.00002, template_error=0):
     """For each input spectrum, identify which standard star template is the closest
     match, factoring out broadband throughput/calibration differences.
@@ -194,9 +485,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         ncpu : number of cpu for multiprocessing
 
     Returns:
-        index : index of standard star
-        sec_index : index of second best fit standard star
-        sec_frac : fraction of second best star flux that minimize chi2 model=(1-sec_frac)*flux[index] +sec_frac*flux[sec_index]
+        coef : numpy.array of linear coefficient of standard stars        
         redshift : redshift of standard star
         chipdf : reduced chi2
 
@@ -209,133 +498,116 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # I am treating the input arguments from three frame files as dictionary. For example
     # wave{"r":rwave,"b":bwave,"z":zwave}
     # Each data(3 channels) is compared to every model.
-
     # flux should be already flat fielded and sky subtracted.
-    # First normalize both data and model by dividing by median filter.
+
+
 
     cameras = list(flux.keys())
     log = get_logger()
     log.debug(time.asctime())
 
-    # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
-    #####################################
-    canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh+1.5)**2)
-    #log.info("canonical model=%s"%str(canonical_model))
+    
+    # normalize data and store them in single array
+    data_wave=np.array([])
+    data_flux=np.array([])
+    data_ivar=np.array([])
+    for cam in cameras :
+        data_wave=np.append(data_wave,wave[cam])
+        tmp=applySmoothingFilter(flux[cam]) # this is fast
+        data_flux=np.append(data_flux,flux[cam]/(tmp+(tmp==0)))
+        data_ivar=np.append(data_ivar,ivar[cam]*tmp**2)
+    
+    # mask potential cosmics
+    ok=np.where(data_ivar>0)[0]
+    if ok.size>0 :
+        data_ivar[ok] *= (data_flux[ok]<1.+3/np.sqrt(data_ivar[ok]))
 
-    # fit redshift on canonical model
-    #####################################    
-    z,chi2 = redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, stdflux[canonical_model], ncpu, z_max, z_res)
+    # add error propto to flux to account for model error
+    if template_error>0  :
+        ok=np.where(data_ivar>0)[0]
+        if ok.size>0 :
+            data_ivar[ok] = 1./ ( 1./data_ivar[ok] + template_error**2 )
+
+    # mask sky lines
+    # in vacuum
+    # mask blue lines that can affect fit of Balmer series
+    # line at 5577 has a stellar line close to it !
+    # line at 7853. has a stellar line close to it !
+    # line at 9790.5 has a stellar line close to it !
+    # all of this is based on analysis of a few exposures of BOSS data
+    skylines=np.array([4358,5461,5577,5889.5,5895.5,6300,7821.5,7853.,7913.,9790.5])    
+    hw=4. # A
+    for line in skylines :
+        data_ivar[(data_wave>=(line-hw))&(data_wave<=(line+hw))]=0.
+
+    ndata = np.sum(data_ivar>0)
     
 
-    normalized_flux={}
-    normalized_ivar={}
-    ndata=0
-    for cam in cameras :
-        tmp=applySmoothingFilter(flux[cam]) # this is fast
-        normalized_flux[cam] = flux[cam]/(tmp+(tmp==0))
-        normalized_ivar[cam] = ivar[cam]*tmp**2
-        # mask potential cosmics
-        ok=np.where(normalized_ivar[cam]>0)[0]
-        if ok.size>0 :
-            normalized_ivar[cam][ok] *= (normalized_flux[cam][ok]<1.+3/np.sqrt(normalized_ivar[cam][ok]))
-
-        # add error propto to flux to account for model error
-        if template_error>0  :
-            ok=np.where(normalized_ivar[cam]>0)[0]
-            if ok.size>0 :
-                normalized_ivar[cam][ok] = 1./ ( 1./normalized_ivar[cam][ok] + template_error**2 )
+    # start looking at models
+    
+    # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
+    canonical_model=np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh+1.5)**2)
+    
+    # fit redshift on canonical model
+    # we use the original data to do this
+    # because we resample both the data and model on a logarithmic grid in the routine
+    z = redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux[canonical_model], z_max, z_res)
+    
         
-        ndata += np.sum(normalized_ivar[cam]>0)
-
-
-
-
     # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
+    
+    ntemplates=stdflux.shape[0]
 
-    nstars=stdflux.shape[0]
+    # here we take into account the redshift once and for all
     shifted_stdwave=stdwave/(1+z)
-
+    
     func_args = []
-    # need to parallelize this
-    for star in range(nstars) :
-        arguments={"wave":wave,
-                   "normalized_flux":normalized_flux,
-                   "normalized_ivar":normalized_ivar,
-                   "resolution_data":resolution_data,
-                   "shifted_stdwave":shifted_stdwave,
-                   "star_stdflux":stdflux[star]}
+    # need to parallelize the model resampling
+    for template_id in range(ntemplates) :
+        arguments={"data_wave_per_camera":wave,
+                   "resolution_data_per_camera":resolution_data,
+                   "template_wave":shifted_stdwave,
+                   "template_flux":stdflux[template_id],
+                   "template_id":template_id}
         func_args.append( arguments )
-
+    
+    
     if ncpu > 1:
         log.debug("creating multiprocessing pool with %d cpus"%ncpu); sys.stdout.flush()
         pool = multiprocessing.Pool(ncpu)
         log.debug("Running pool.map() for {} items".format(len(func_args))); sys.stdout.flush()
-        model_chi2 =  pool.map(_func, func_args)
+        results  =  pool.map(_func, func_args)
         log.debug("Finished pool.map()"); sys.stdout.flush()
         pool.close()
         pool.join()
         log.debug("Finished pool.join()"); sys.stdout.flush()
     else:
         log.debug("Not using multiprocessing for {} cpus".format(ncpu))
-        model_chi2 = [_func(x) for x in func_args]
+        results = [_func(x) for x in func_args]
         log.debug("Finished serial loop over compute_chi2")
 
-    best_model_ids=np.argsort(np.array(model_chi2))[:2]
-    best_model_id=best_model_ids[0]
-    second_best_model_id=best_model_ids[1]
+    # collect results
+    # in case the exit of the multiprocessing pool is not ordered as the input
+    # we returned the template_id
+    template_flux=np.zeros((ntemplates,data_flux.size))
+    for result in results :
+        template_id = result[0]
+        template_flux[template_id] = result[1]
+
+    # compute model chi2
+    template_chi2=np.zeros(ntemplates)
+    for template_id in range(ntemplates) :
+        template_chi2[template_id] = np.sum(data_ivar*(data_flux-template_flux[template_id])**2)
     
-    best_chi2=model_chi2[best_model_id]
+    best_model_id=np.argmin(template_chi2) 
+    best_chi2=template_chi2[best_model_id]
     log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
     
-    # try interpolating the two best ones
-   
+    # interpolate around best model using parameter grid
+    coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
+    log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
     
-    # refit redshift using best 
-    z,chi2 = redshift_fit_of_one_template(wave, flux, ivar, resolution_data, stdwave, stdflux[best_model_id], ncpu=ncpu, z_max=z_max, z_res=z_res)
-    shifted_stdwave=stdwave/(1+z)
-    
-    # now interpolate between best and second best
-    
-    
-    # first save all convolved and smoothed data per cam
-    # we will put all cameras in a single array for simplicity
-    tmp_ivar  = np.array([])
-    tmp_flux  = np.array([])
-    for cam in normalized_flux:
-        tmp_ivar  = np.append(tmp_ivar,normalized_ivar[cam])
-        tmp_flux  = np.append(tmp_flux,normalized_flux[cam])
-    
-    # we do the same for all models of interest on the grid
-    tmp_models = []
-    for starid in best_model_ids :
-        log.debug("computing temp_model")
-        tmp_model = np.array([])
-        for cam in normalized_flux:
-            tmp=resample_flux(wave[cam],shifted_stdwave,stdflux[starid]) # this is slow
-            model=Resolution(resolution_data[cam]).dot(tmp) # this is slow
-            tmp=applySmoothingFilter(model) # this is fast
-            normalized_model = model/(tmp+(tmp==0))
-            tmp_model = np.append(tmp_model,normalized_model)
-        tmp_models.append(tmp_model)
-    
-    # model is (1-w)*tmp_models[0]+w*tmp_models[1]
-    res=tmp_flux-tmp_models[0]
-    der=tmp_models[1]-tmp_models[0]
-    
-    B = np.sum(tmp_ivar*res*der)
-    A = np.sum(tmp_ivar*der**2)
-    frac = B/A
-    if frac<0 : 
-        frac=0
-    elif frac>1 :
-        frac=1
-    log.debug("fractional weight of second best =%f"%frac)
-    
-    
-    best_chi2  = np.sum(tmp_ivar * (tmp_flux-( (1-frac)*tmp_models[0]+frac*tmp_models[1] ))**2)
-    ndata      = np.sum(tmp_ivar>0)
-    
-    return best_model_id,second_best_model_id,frac,z,best_chi2/ndata
+    return coef,z,chi2/ndata
 
 
 def normalize_templates(stdwave, stdflux, mags, filters):

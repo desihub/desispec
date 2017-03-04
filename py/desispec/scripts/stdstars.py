@@ -30,10 +30,10 @@ def parse(options=None):
     parser.add_argument('--starmodels', type = str, help = 'path of spectro-photometric stellar spectra fits')
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
     parser.add_argument('--ncpu', type = int, default = default_nproc, required = False, help = 'use ncpu for multiprocessing')
-    parser.add_argument('--delta-color', type = float, default = 0.1, required = False, help = 'max delta-color for the selection of standard stars (on top of meas. errors)')
+    parser.add_argument('--delta-color', type = float, default = 0.2, required = False, help = 'max delta-color for the selection of standard stars (on top of meas. errors)')
     parser.add_argument('--color', type = str, default = "G-R", required = False, help = 'color for selection of standard stars')
-    parser.add_argument('--z-max', type = float, default = 0.005, required = False, help = 'max peculiar velocity (blue/red)shift range')
-    parser.add_argument('--z-res', type = float, default = 0.00005, required = False, help = 'dz grid resolution')
+    parser.add_argument('--z-max', type = float, default = 0.008, required = False, help = 'max peculiar velocity (blue/red)shift range')
+    parser.add_argument('--z-res', type = float, default = 0.00002, required = False, help = 'dz grid resolution')
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 10% for BOSS b1)')
     
     args = None
@@ -275,23 +275,37 @@ def main(args) :
         model_colors = model_mags[:,model_index1]-model_mags[:,model_index2]
 
         # selection
-        selection = np.where(np.abs(model_colors-star_color)<args.delta_color)[0]
+        selection = np.abs(model_colors-star_color)<args.delta_color
+        # smallest cube in parameter space including this selection (needed for interpolation)
+        new_selection = (teff>=np.min(teff[selection]))&(teff<=np.max(teff[selection]))
+        new_selection &= (logg>=np.min(logg[selection]))&(logg<=np.max(logg[selection]))
+        new_selection &= (feh>=np.min(feh[selection]))&(feh<=np.max(feh[selection]))
+        selection = np.where(new_selection)[0]
+        
         
         log.info("star#%d fiber #%d, %s = %s-%s = %f, number of pre-selected models = %d/%d"%(star,starfibers[star],args.color,filter1,filter2,star_color,selection.size,stdflux.shape[0]))
         
-        index_in_selection,second_index_in_selection,frac,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux[selection], teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res,template_error=args.template_error)
+        #index_in_selection,second_index_in_selection,frac,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux[selection], teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res,template_error=args.template_error)
         
-        bestModelIndex[star]       = selection[index_in_selection]
-        secondbestModelIndex[star] = selection[second_index_in_selection]
-        secondbestfrac[star]       = frac
-        log.info('Star Fiber: {0}; TemplateID1: {1}; TemplateID2: {2}; Frac: {3} Redshift: {4}; Chisq/dof: {5}'.format(starfibers[star],bestModelIndex[star],secondbestModelIndex[star],secondbestfrac[star],redshift[star],chi2dof[star]))
+        coefficients,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux[selection], teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res,template_error=args.template_error)
+        
+        total_number_of_models        = stdflux.shape[0]
+        total_coefficients            = np.zeros(total_number_of_models)
+        total_coefficients[selection] = coefficients
+        
+        log.warning("NEED TO SAVE THE COEFFICIENTS")
+        
+        bestModelIndex[star]       = 0 
+        log.info('Star Fiber: {0}; TemplateID: {1}; Redshift: {2}; Chisq/dof: {3}'.format(starfibers[star],0,redshift[star],chi2dof[star]))
         # Apply redshift to original spectrum at full resolution
-        tmp1=np.interp(stdwave,stdwave/(1+redshift[star]),stdflux[bestModelIndex[star]])
-        tmp2=np.interp(stdwave,stdwave/(1+redshift[star]),stdflux[secondbestModelIndex[star]])
-        tmp=(1.-frac)*tmp1+frac*tmp2
+        
+        res=np.zeros(stdwave.size)
+        for i,c in enumerate(total_coefficients) :
+            if c != 0 :
+                res += c*np.interp(stdwave,stdwave/(1+redshift[star]),stdflux[i])
         
         # Normalize the best model using reported magnitude
-        normalizedflux=normalize_templates(stdwave,tmp,imaging_mags[star],imaging_filters[star])
+        normalizedflux=normalize_templates(stdwave,res,imaging_mags[star],imaging_filters[star])
         normflux.append(normalizedflux)
     
     
@@ -300,9 +314,7 @@ def main(args) :
     normflux=np.array(normflux)
     data={}
     data['BESTMODEL']=bestModelIndex
-    data['TEMPLATEID']=bestModelIndex
-    data['SECONDBESTID']=secondbestModelIndex
-    data['SECONDBESTFRAC']=secondbestfrac
+    data['TEMPLATEID']=bestModelIndex   
     data['CHI2DOF']=chi2dof
     data['REDSHIFT']=redshift
     norm_model_file=args.outfile

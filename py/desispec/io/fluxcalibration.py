@@ -40,11 +40,9 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     from astropy.io.fits import Column
     BESTMODEL=Column(name='BESTMODEL',format='K',array=data['BESTMODEL'])
     TEMPLATEID=Column(name='TEMPLATEID',format='K',array=data['TEMPLATEID'])
-    SECONDBESTID=Column(name='SECONDBESTID',format='K',array=data['SECONDBESTID'])
-    SECONDBESTFRAC=Column(name='SECONDBESTFRAC',format='D',array=data['SECONDBESTFRAC'])
     CHI2DOF=Column(name='CHI2DOF',format='D',array=data['CHI2DOF'])
     REDSHIFT=Column(name='REDSHIFT',format='D',array=data['REDSHIFT'])
-    cols=fits.ColDefs([BESTMODEL,TEMPLATEID,SECONDBESTID,SECONDBESTFRAC,CHI2DOF,REDSHIFT])
+    cols=fits.ColDefs([BESTMODEL,TEMPLATEID,CHI2DOF,REDSHIFT])
     tbhdu=fits.BinTableHDU.from_columns(cols, name='METADATA')
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
