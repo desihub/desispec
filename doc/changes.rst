@@ -2,10 +2,15 @@
 desispec Change Log
 ===================
 
-0.13.1 (unreleased)
+0.13.2 (unreleased)
 -------------------
 
 * No changes yet
+
+0.13.1 (2017-03-03)
+-------------------
+
+* Fix installation of data/ccd/ccd_calibration.yaml
 
 0.13.0 (2017-03-03)
 -------------------
