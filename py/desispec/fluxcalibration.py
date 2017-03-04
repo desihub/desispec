@@ -950,7 +950,11 @@ def apply_flux_calibration(frame, fluxcalib):
 
     C = fluxcalib.calib
     frame.flux = frame.flux * (C>0) / (C+(C==0))
-    frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
+    frame.ivar *= (fluxcalib.ivar>0) * (C>0)
+    for i in range(nfibers) :
+        ok=np.where(frame.ivar[i]>0)[0]        
+        if ok.size>0 :
+            frame.ivar[i,ok] = 1./( 1./(frame.ivar[i,ok]*C[i,ok]**2)+frame.flux[i,ok]**2/(fluxcalib.ivar[i,ok]*C[i,ok]**4)  )
 
 
 def ZP_from_calib(wave, calib):
