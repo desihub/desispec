@@ -17,6 +17,7 @@ import sys
 import time
 from astropy import units
 import multiprocessing
+from pkg_resources import resource_exists, resource_filename
 #import scipy.interpolate
 
 #rebin spectra into new wavebins. This should be equivalent to desispec.interpolation.resample_flux. So may not be needed here
@@ -540,6 +541,17 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     for line in skylines :
         data_ivar[(data_wave>=(line-hw))&(data_wave<=(line+hw))]=0.
 
+    # mask telluric lines
+    srch_filename = "data/arc_lines/telluric_lines.txt"
+    if not resource_exists('desispec', srch_filename):
+        log.error("Cannot find telluric mask file {:s}".format(srch_filename))
+        raise Exception("Cannot find telluric mask file {:s}".format(srch_filename))
+    telluric_mask_filename = resource_filename('desispec', srch_filename)
+    telluric_features = np.loadtxt(telluric_mask_filename)
+    log.debug("Masking telluric features from file %s"%telluric_mask_filename)
+    for feature in telluric_features :
+        data_ivar[(data_wave>=feature[0])&(data_wave<=feature[1])]=0.
+    
     ndata = np.sum(data_ivar>0)
     
 
