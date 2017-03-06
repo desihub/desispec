@@ -558,6 +558,9 @@ def apply_flux_calibration(frame, fluxcalib):
     = 1/(ivar(F)*C**2) + F**2*(1/C**2)**2*Var(C)
     = 1/(ivar(F)*C**2) + F**2*Var(C)/C**4
     = 1/(ivar(F)*C**2) + F**2/(ivar(C)*C**4)
+    ==> ivar(F/C) = ivar(F)*ivar(C)*C**6 / (ivar(C)*C**4 + F**2*C**2*ivar(F))
+                  = ivar(F)*ivar(C)*C**2 / (ivar(C) + F'**2*ivar(F))
+
     """
     # for fiber in range(nfibers) :
     #     C = fluxcalib.calib[fiber]
@@ -566,7 +569,11 @@ def apply_flux_calibration(frame, fluxcalib):
 
     C = fluxcalib.calib
     frame.flux = frame.flux * (C>0) / (C+(C==0))
-    frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
+    #frame.ivar = (frame.ivar>0) * (fluxcalib.ivar>0) * (C>0) / (1./((frame.ivar+(frame.ivar==0))*(C**2+(C==0))) + frame.flux**2/(fluxcalib.ivar*C**4+(fluxcalib.ivar*(C==0)))   )
+    ivar = frame.ivar*0
+    w = (frame.ivar>0) & (frame.flux**2*fluxcalib.ivar>0)
+    ivar[w] = (frame.ivar*fluxcalib.ivar*C**2)[w]/(fluxcalib.ivar[w] + (frame.flux**2*frame.ivar)[w])
+    frame.ivar = ivar
 
 
 def ZP_from_calib(wave, calib):
