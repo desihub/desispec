@@ -54,14 +54,18 @@ except TypeError:
     hc = 1.9864458241717586e-08
 
 def resample_template(data_wave_per_camera,resolution_data_per_camera,template_wave,template_flux,template_id) :
+    output_wave=np.array([])
     output_flux=np.array([])
-    for cam in data_wave_per_camera :
+    sorted_keys = list(data_wave_per_camera.keys())
+    sorted_keys.sort() # force sorting the keys to agree with data (found unpredictable ordering in tests)
+    for cam in sorted_keys :
         flux1=resample_flux(data_wave_per_camera[cam],template_wave,template_flux) # this is slow
         flux2=Resolution(resolution_data_per_camera[cam]).dot(flux1) # this is slow
         norme=applySmoothingFilter(flux2) # this is fast
         flux3=flux2/(norme+(norme==0))
         output_flux = np.append(output_flux,flux3)
-    return template_id,output_flux
+        output_wave = np.append(output_wave,data_wave_per_camera[cam]) # need to add wave to avoid wave/flux matching errors
+    return template_id,output_wave,output_flux
 
 def _func(arg) :
     return resample_template(**arg)
@@ -170,61 +174,33 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
     return z
    
 
-def _compute_coef(w,coords) :
-    """ Function used by interpolate_on_parameter_grid
-
-    Args:
-        w : 1D[npar] array of weights, one for each parameter axis
-        coords : 2D[ntemplates,npar] array of coordinates of template nodes on cube for interpolation
-        
-    Returns:
-        coefficients : 1D[ntemplates] linear coefficient of each template (sum=1)
-        derivative   : 2D[npar,ntemplates] derivative of linear coefficient wrt w
-
-    Notes :
-        the linear coefficient of each template is a product of the form, for instance, w[0]*(1-w[1])*w[2]
+def _compute_coef(coord,node_coords) :
+    """ Function used by interpolate_on_parameter_grid2    
     """
-    ns=coords.shape[0]
-    npar=coords.shape[1]
-    coef=np.ones(ns)
-    dcoefdw=np.ones((npar,ns))
-    for s in range(ns) :
-            coef[s]=1.
-            for a in range(npar) :
-                if coords[s,a]==0 :
-                    coef[s] *= w[a]
-                else :
-                    coef[s] *= (1-w[a])
-        
-    for a in range(npar) :
-        for s in range(ns) :
-            dcoefdw[a,s]=1.
-            for a2 in range(npar) :
-                if(a2!=a) :
-                    if coords[s,a2]==0 :
-                        dcoefdw[a,s] *= w[a2]
-                    else :
-                        dcoefdw[a,s] *= (1-w[a2]) 
-                else :
-                    if coords[s,a]==1 :
-                        dcoefdw[a,s] *= -1
-    return coef,dcoefdw
-
-def _compute_model(coef,templates) :
-    """ Function used by interpolate_on_parameter_grid
-        Computes model from coefficients (used several times in routine)
-    Args:
-        coef : 1D[ntemplates] array of coefficients
-        templates : 2D[ntemplates,nwave] array of template spectra
-        
-    Returns:
-        model : 1D[nwave]
-    """
-    model = np.zeros(templates[0].size)
-    for c,m in zip(coef,templates) :
-        model += c*m
-    return model
     
+    n_nodes=node_coords.shape[0]
+    npar=node_coords.shape[1]
+    coef=np.ones(n_nodes)
+    for s in range(n_nodes) :
+        coef[s]=1.
+        for a in range(npar) :
+            dist=np.abs(node_coords[s,a]-coord[a]) # distance between model point and node along axis a
+            
+            # piece-wise linear version
+            if dist>1 :
+                coef[s]=0.
+                break
+            coef[s] *= (1.-dist)
+            
+            # we could alternatively have used b-spline of higher order
+    
+    norme=np.sum(coef)
+    if norme<=0 : # we are outside of valid grid
+        return np.zeros(coef.shape) # will be detected in fitter
+    coef /= norme
+    return coef
+
+  
 def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2) :
     """ 3D Interpolation routine among templates based on a grid of parameters teff, logg, feh.
         The tricky part is to define a cube on the parameter grid populated with templates, and it is not always possible.
@@ -255,6 +231,8 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     log.debug("best model id=%d chi2/ndata=%f teff=%d logg=%2.1f feh=%2.1f"%(best_model_id,template_chi2[best_model_id]/ndata,teff[best_model_id],logg[best_model_id],feh[best_model_id]))
     
     ntemplates=template_flux.shape[0]
+
+    log_linear = False # if True , model = exp( sum_i a_i * log(template_flux_i) ), else model = sum_i a_i * template_flux_i
     
     # physical parameters define axes
     npar=3
@@ -267,129 +245,71 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     uparam=[]
     for a in range(npar) : 
         uparam.append(np.unique(param[a]))
-    for a in range(npar) : 
-        log.debug("param %d : %s"%(a,str(uparam[a])))
+    #for a in range(npar) : 
+    #    log.debug("param %d : %s"%(a,str(uparam[a])))
     
-    # the parameters of the fit are npar interpolation coefficients w
-    w=np.zeros(npar)
-    eps=0. # could start with an offset
-
-    # index on grid of the two best models along each axis of the grid, one of which being the best match
-    desired_node_cube_coords=np.zeros((npar,2)).astype(int)    
-    desired_node_grid_coords=np.zeros((npar,2)).astype(int)    
-       
-    for a in range(npar) : # a is an axis 
-        
+   
+    node_grid_coords=np.zeros((npar,3)).astype(int)   
+    for a in range(npar) : # a is an axis         
         # this is the coordinate on axis 'a' of the best node
-        ibest=np.where(uparam[a]==param[a,best_model_id])[0][0]
-        
-        # selection of all grid nodes with templates on the same "line" of direction 'a'
-        line_selection=np.ones(ntemplates).astype(bool)
-        for a2 in range(npar) :
-            if a2 != a : line_selection &= (param[a2]==param[a2,best_model_id])
-
-        if np.sum(line_selection)<2 :
-            log.warning("Cannot interpolate; the best fit is in a corner of the populated parameter grid")
-            final_coefficients = np.zeros(ntemplates)
-            final_coefficients[best_model_id] = 1.
-            return final_coefficients,template_chi2[best_model_id]
-            
-        left_selection  = line_selection & (param[a]<param[a,best_model_id])
-        right_selection = line_selection & (param[a]>param[a,best_model_id])
-
-        # now we have to decide which direction to go from here to set one edge of the cube
-        if np.sum(right_selection)==0 : # no choise
-            desired_node_grid_coords[a,0]=np.where(uparam[a]==np.max(param[a][left_selection]))[0][0]
-            desired_node_grid_coords[a,1]=ibest            
-            w[a]=eps # model = w*left+(1-w)*right, here best in on the right (eps~0)
-        elif np.sum(left_selection)==0 : # no choise
-            desired_node_grid_coords[a,0]=ibest
-            desired_node_grid_coords[a,1]=np.where(uparam[a]==np.min(param[a][right_selection]))[0][0]
-            w[a]=(1-eps)  # model = w*left+(1-w)*right, here best in on the left
-        else :
-            # choice based on chi2
-            im=np.where(uparam[a]==np.max(param[a][left_selection]))[0][0] # grid coord
-            ip=np.where(uparam[a]==np.min(param[a][right_selection]))[0][0] # grid coord
-            # need to get template id to read chi2
-            jm=np.where(line_selection&(param[a]==uparam[a][im]))[0][0]
-            jp=np.where(line_selection&(param[a]==uparam[a][ip]))[0][0]
-            if template_chi2[jm]<template_chi2[jp] : # we go left
-                desired_node_grid_coords[a,0]=im
-                desired_node_grid_coords[a,1]=ibest
-                w[a]=eps
-                
-            else : # we go right
-                desired_node_grid_coords[a,0]=ibest
-                desired_node_grid_coords[a,1]=ip
-                w[a]=(1-eps)
-        #log.debug("desired_node_grid_coords[%d]=%s"%(a,str(desired_node_grid_coords[a])))
-
-    # interpolation scheme based on a cube where the best node is one corner
-    # we have 2**npar nodes which are the corners of a cube
-    ns=8
-    node_template_ids=-1*np.ones(ns).astype(int) 
-    node_cube_coords=np.zeros((ns,3)).astype(int) # 0 or 1
-    node_grid_coords=np.zeros((ns,3)).astype(int)
+        i=np.where(uparam[a]==param[a,best_model_id])[0][0]
+        node_grid_coords[a]=np.array([i-1,i,i+1])
+        log.debug("node_grid_coords[%d]=%s"%(a,node_grid_coords[a]))
     
-    s=0
-
+    # we don't always have a template on all nodes
+    node_template_ids=[] 
+    node_cube_coords=[] 
+    for i0,j0 in zip(node_grid_coords[0],[-1,0,1]) :
+        for i1,j1 in zip(node_grid_coords[1],[-1,0,1]) :
+            for i2,j2 in zip(node_grid_coords[2],[-1,0,1]) :
+                
+                # check whether coord is in grid
+                in_grid = (i0>=0)&(i0<uparam[0].size)&(i1>=0)&(i1<uparam[1].size)&(i2>=0)&(i2<uparam[2].size)
+                if not in_grid :
+                    continue
+                # check whether there is a template on this node
+                selection=np.where((param[0]==uparam[0][i0])&(param[1]==uparam[1][i1])&(param[2]==uparam[2][i2]))[0]
+                if selection.size == 0 : # no template on node
+                    log.debug("not template for params = %f,%f,%f"%(uparam[0][i0],uparam[1][i1],uparam[2][i2]))
+                    continue
+                # we have one
+                node_cube_coords.append([j0,j1,j2])
+                node_template_ids.append(selection[0])
+    node_template_ids=np.array(node_template_ids).astype(int)
+    node_cube_coords=np.array(node_cube_coords).astype(int)
     
-    # distance weighting
-    dweights=np.zeros(npar)
-    for a in range(npar) :
-       dweights[a] = 1. / np.std(param[a])**2  
-
-    for k0 in range(2) :        
-        for k1 in range(2) :             
-            for k2 in range(2) : 
-                node_cube_coords[s,0]=k0
-                node_cube_coords[s,1]=k1
-                node_cube_coords[s,2]=k2
-                i0=desired_node_grid_coords[0,k0]
-                i1=desired_node_grid_coords[1,k1]
-                i2=desired_node_grid_coords[2,k2]
-                p0=uparam[0][i0]
-                p1=uparam[1][i1]
-                p2=uparam[2][i2]
-                #log.debug("star %d [%d,%d,%d];[%d,%d,%d];[%f,%f,%f]"%(s,k0,k1,k2,i0,i1,i2,p0,p1,p2))
-
-                
-                
-                # the grid is rectangular, but not fully filled, so we cant always find exact match
-                dist=(dweights[0]*(param[0]-p0)**2+dweights[1]*(param[1]-p1)**2+dweights[2]*(param[2]-p2)**2)
-                ii=np.argsort(dist)
-                for i in ii :
-                    if i in node_template_ids[:s] : # already there
-                        continue
-                    node_template_ids[s]=i
-                    break
-                if node_template_ids[s]==-1 :
-                    log.error("didn't find a node for this axis")
-                    sys.exit(12)                
-                
-                # update indices
-                log.debug("node %d [%d,%d,%d];[%d,%d,%d];[%f,%f,%f] id=%d"%(s,k0,k1,k2,i0,i1,i2,p0,p1,p2,node_template_ids[s]))
-                s+=1
-
+    # the parameters of the fit are npar coordinates in the range [-1,1] centered on best fit node
+    coord=np.zeros(npar)
+    
+    n_templates = node_template_ids.size
+    
     # we are done with the indexing and choice of template nodes
-    # node_flux
     node_template_flux = template_flux[node_template_ids]
-    
-    # compute all weighted scalar products among templates
-    HA=np.zeros((ns,ns))
-    for s in range(ns) :
-        for s2 in range(ns) :
-            if HA[s2,s] != 0 :
-                HA[s,s2] = HA[s2,s]
+        
+    # compute all weighted scalar products among templates (only works if linear combination, not the log version)
+    HB=np.zeros(n_templates)
+    HA=np.zeros((n_templates,n_templates))
+    for t in range(n_templates) :
+        HB[t] = np.sum(data_ivar*data_flux*node_template_flux[t])
+        for t2 in range(n_templates) :
+            if HA[t2,t] != 0 :
+                HA[t,t2] = HA[t2,t]
             else :
-                HA[s,s2] = np.sum(data_ivar*node_template_flux[s]*node_template_flux[s2])            
-
+                HA[t,t2] = np.sum(data_ivar*node_template_flux[t]*node_template_flux[t2])
+    
+    chi2_0 = np.sum(data_ivar*data_flux**2)
+    
+    # chi2  =  np.sum(data_ivar*(data_flux-model)**2)
+    #       =  chi2_0 - 2*np.sum(data_ivar*data_flux*model) + np.sum(data_ivar*model**2)
+    # model = sum_i coef_i model_i
+    # chi2  =  chi2_0 - 2* sum_i coef_i * HB[i] + sum_ij coef_i * coef_j * HA[i,j]
+    # chi2  =  chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
+    
+    
     # initial state
-    coef , dcoefdw = _compute_coef(w,node_cube_coords)
-    log.debug("init coef=%s"%coef)
-    model=_compute_model(coef,node_template_flux)
-    chi2=np.sum(data_ivar*(data_flux-model)**2)
-    log.debug("init w=%s chi2/ndata=%f"%(w,chi2/ndata))
+    coef = _compute_coef(coord,node_cube_coords)
+    chi2 = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
+    log.debug("init coord=%s chi2/ndata=%f"%(coord,chi2/ndata))
     
     # now we have to do the fit
     # fitting one axis at a time (simultaneous fit of 3 axes was tested and found inefficient : rapidly stuck on edges)
@@ -397,68 +317,58 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     for loop in range(50) :
         
         previous_chi2=chi2.copy()
-        previous_w=w.copy()
-
+        previous_coord=coord.copy()
+        
         for a in range(npar) :
             previous_chi2_a=chi2.copy()
             
-            # updated coef and derivative (non linear)
-            coef , dcoefdw = _compute_coef(w,node_cube_coords)
-            # checking
-            # must be = 1
-            #log.debug("sum(coef)=%f"%np.sum(coef))
-            # must be = 0
-            #log.debug("sum(dcoefdw)=%s"%np.sum(dcoefdw,axis=1))
+            # it's a linear combination of templates, but the model is non-linear function of coordinates
+            # so there is no gain in trying to fit robustly with Gauss-Newton, we simply do a scan
+            # it is converging rapidely (need however to iterate on axes)
+            xcoord=coord.copy()
+            xx=np.linspace(-1,1,41) # keep points on nodes , 41 is the resolution, 0.05 of node inter-distance
+            chi2=np.zeros(xx.shape)
+            for i,x in enumerate(xx) :
+                xcoord[a]=x
+                coef = _compute_coef(xcoord,node_cube_coords)
+                if np.sum(coef)==0 : # outside valid range
+                    chi2[i]=1e20
+                else :
+                    chi2[i] = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
             
-            # current model
-            model=_compute_model(coef,node_template_flux)
-            # residuals
-            res=data_flux-model
-            
-            A=0.
-            B=0.
-            for s in range(ns) :
-                for s2 in range(ns) :
-                    A += dcoefdw[a,s]*dcoefdw[a,s2]*HA[s,s2]
-                B += dcoefdw[a,s]*np.sum(data_ivar*res*node_template_flux[s])
-            dw=B/A
-            # dw is the best fit increment of w 
-            #log.debug("dw=%f"%dw)
-
-            # test if this improves chi2
-            tmp_w=w.copy()
-            tmp_w[a]+=dw
-            # apply bounds
-            if tmp_w[a]>1 :
-                tmp_w[a]=1
-            elif tmp_w[a]<0 :
-                tmp_w[a]=0
-            
-            tmp_coef , junk = _compute_coef(tmp_w,node_cube_coords)
-            tmp_model=_compute_model(tmp_coef,node_template_flux)
-            tmp_res=data_flux-tmp_model
-            tmp_chi2=np.sum(data_ivar*tmp_res**2)
-            
-            #log.debug("loop #%d a=%d w=%s chi2/ndata=%f"%(loop,a,w,chi2/data_flux.size))
-            if tmp_chi2<previous_chi2_a :
-                w=tmp_w
-                chi2=tmp_chi2
-            elif tmp_chi2>previous_chi2_a+1e-12 :
-                log.warning("the fitted dw gave a larger chi2 ??? %f"%(tmp_chi2-previous_chi2_a))
-            
-        log.debug("loop #%d w=%s chi2/ndata=%f (-dchi2_loop=%f -dchi2_tot=%f)"%(loop,w,chi2/ndata,previous_chi2-chi2,template_chi2[best_model_id]-chi2))
-        diff=np.max(np.abs(w-previous_w))
+            ibest=np.argmin(chi2)
+            chi2=chi2[ibest]
+            coord[a]=xx[ibest]
+        
+        log.debug("loop #%d coord=%s chi2/ndata=%f (-dchi2_loop=%f -dchi2_tot=%f)"%(loop,coord,chi2/ndata,previous_chi2-chi2,template_chi2[best_model_id]-chi2))
+        diff=np.max(np.abs(coord-previous_coord))
         if diff < 0.001 :
             break
-
+    
+    
     '''
     # useful debugging plot
     import matplotlib.pyplot as plt
     plt.figure()        
     ok=np.where(data_ivar>0)[0]
-    plt.errorbar(data_wave[ok],data_flux[ok],1./np.sqrt(data_ivar[ok]),fmt="o")
-    ii=np.argsort(data_wave)
-    plt.plot(data_wave[ii],model[ii],"-",c="r")
+    ii=np.argsort(data_wave[ok])
+    twave=data_wave[ok][ii]
+    tflux=data_flux[ok][ii]
+    tivar=data_ivar[ok][ii]
+    #plt.errorbar(twave,tflux,1./np.sqrt(tivar),fmt="o")
+    plt.plot(twave,tflux,".",c="gray",alpha=0.2)
+    dw=np.min(twave[twave>twave[0]+0.5]-twave[0])
+    print("dw=",dw)
+    bins=np.linspace(twave[0],twave[-1],(twave[-1]-twave[0])/dw+1)
+    sw,junk=np.histogram(twave,bins=bins,weights=tivar)
+    swx,junk=np.histogram(twave,bins=bins,weights=tivar*twave)
+    swy,junk=np.histogram(twave,bins=bins,weights=tivar*tflux)
+    tflux=swy[sw>0]/sw[sw>0]
+    twave2=swx[sw>0]/sw[sw>0]
+    terr=1./np.sqrt(sw[sw>0])
+    plt.errorbar(twave2,tflux,terr,fmt="o",alpha=0.5)
+                                        
+    plt.plot(twave,model[ok][ii],"-",c="r")
     plt.show()
     '''
     
@@ -512,7 +422,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     data_wave=np.array([])
     data_flux=np.array([])
     data_ivar=np.array([])
-    for cam in cameras :
+    sorted_keys = list(wave.keys())
+    sorted_keys.sort() # force sorting the keys to agree with models (found unpredictable ordering in tests)
+    for cam in sorted_keys :
         data_wave=np.append(data_wave,wave[cam])
         tmp=applySmoothingFilter(flux[cam]) # this is fast
         data_flux=np.append(data_flux,flux[cam]/(tmp+(tmp==0)))
@@ -603,8 +515,14 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # we returned the template_id
     template_flux=np.zeros((ntemplates,data_flux.size))
     for result in results :
-        template_id = result[0]
-        template_flux[template_id] = result[1]
+        template_id       = result[0]
+        template_tmp_wave = result[1]
+        template_tmp_flux = result[2]
+        mdiff=np.max(np.abs(data_wave-template_tmp_wave)) # just a safety check
+        if mdiff>1.e-5 :
+            log.error("error indexing of wave and flux somewhere above, checking if it's just an ordering issue, max diff=%f"%mdiff)
+            raise ValueError("wavelength array difference cannot be fixed with reordering, ordered max diff=%f"%mdiff)
+        template_flux[template_id] = template_tmp_flux
 
     # compute model chi2
     template_chi2=np.zeros(ntemplates)
