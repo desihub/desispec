@@ -192,7 +192,7 @@ def main(args) :
                 ok=np.where((frame.ivar[star]>0)&(flat.fiberflat[star]!=0))[0]
                 if ok.size > 0 :
                     frame.flux[star] = frame.flux[star]/flat.fiberflat[star] - sky.flux[star]
-    
+            frame.resolution_data = frame.resolution_data[starindices]
         
     nstars = starindices.size
     starindices=None # we don't need this anymore
@@ -226,13 +226,13 @@ def main(args) :
     
     # LOOP ON STARS TO FIND BEST MODEL
     ############################################
-    bestModelIndex=np.arange(nstars)
-    secondbestModelIndex=np.arange(nstars)
-    secondbestfrac=np.zeros((nstars))
-    templateID=np.arange(nstars)
+    linear_coefficients=np.zeros((nstars,stdflux.shape[0]))
     chi2dof=np.zeros((nstars))
     redshift=np.zeros((nstars))
     normflux=[]
+
+    star_colors_array=np.zeros((nstars))
+    model_colors_array=np.zeros((nstars))
     
     for star in range(nstars) :
         
@@ -260,7 +260,9 @@ def main(args) :
         filter1=imaging_filters[star][index1]
         filter2=imaging_filters[star][index2]        
         star_color=imaging_mags[star][index1]-imaging_mags[star][index2]
+        star_colors_array[star]=star_color
         
+
         # compute models color
         model_index1=-1
         model_index2=-1        
@@ -289,23 +291,24 @@ def main(args) :
         
         coefficients,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux[selection], teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res,template_error=args.template_error)
         
-        total_number_of_models        = stdflux.shape[0]
-        total_coefficients            = np.zeros(total_number_of_models)
-        total_coefficients[selection] = coefficients
+        linear_coefficients[star,selection] = coefficients
         
-        log.warning("NEED TO SAVE THE COEFFICIENTS")
-        
-        bestModelIndex[star]       = 0 
-        log.info('Star Fiber: {0}; TemplateID: {1}; Redshift: {2}; Chisq/dof: {3}'.format(starfibers[star],0,redshift[star],chi2dof[star]))
+        log.info('Star Fiber: {0}; TEFF: {1}; LOGG: {2}; FEH: {3}; Redshift: {4}; Chisq/dof: {5}'.format(starfibers[star],np.inner(teff,linear_coefficients[star]),np.inner(logg,linear_coefficients[star]),np.inner(feh,linear_coefficients[star]),redshift[star],chi2dof[star]))
         # Apply redshift to original spectrum at full resolution
         
-        res=np.zeros(stdwave.size)
-        for i,c in enumerate(total_coefficients) :
+        model=np.zeros(stdwave.size)
+        for i,c in enumerate(linear_coefficients[star]) :
             if c != 0 :
-                res += c*np.interp(stdwave,stdwave/(1+redshift[star]),stdflux[i])
+                model += c*np.interp(stdwave,stdwave/(1+redshift[star]),stdflux[i])
         
+        # Compute final model color
+        mag1=load_filter(model_filters[index1]).get_ab_magnitude(model*fluxunits,stdwave)
+        mag2=load_filter(model_filters[index2]).get_ab_magnitude(model*fluxunits,stdwave)
+        model_colors_array[star] = mag1-mag2
+        
+
         # Normalize the best model using reported magnitude
-        normalizedflux=normalize_templates(stdwave,res,imaging_mags[star],imaging_filters[star])
+        normalizedflux=normalize_templates(stdwave,model,imaging_mags[star],imaging_filters[star])
         normflux.append(normalizedflux)
     
     
@@ -313,11 +316,15 @@ def main(args) :
     # Now write the normalized flux for all best models to a file
     normflux=np.array(normflux)
     data={}
-    data['BESTMODEL']=bestModelIndex
-    data['TEMPLATEID']=bestModelIndex   
+    data['LOGG']=linear_coefficients.dot(logg)
+    data['TEFF']= linear_coefficients.dot(teff)
+    data['FEH']= linear_coefficients.dot(feh)
     data['CHI2DOF']=chi2dof
     data['REDSHIFT']=redshift
+    data['COEFF']=linear_coefficients
+    data['DATA_%s'%args.color]=star_colors_array
+    data['MODEL_%s'%args.color]=model_colors_array
     norm_model_file=args.outfile
     io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers,data)
-
+    
 
