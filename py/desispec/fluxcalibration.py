@@ -346,6 +346,25 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
             break
     
     
+    
+    
+    
+    
+    input_number_of_templates=template_flux.shape[0]
+    final_coefficients=np.zeros(input_number_of_templates)
+    final_coefficients[node_template_ids]=coef
+    
+    log.debug("COORD=%s"%coord)
+    log.debug("COEF=%s"%coef)    
+    #for i in np.where(final_coefficients>0)[0] :
+    #    log.debug("TEFF[%d]=%f"%(i,teff[i]))
+    #    log.debug("LOGG[%d]=%f"%(i,logg[i]))
+    #    log.debug("FEH[%d]=%f"%(i,feh[i]))
+    log.debug("TEFF=%f"%np.inner(final_coefficients,teff))
+    log.debug("LOGG=%f"%np.inner(final_coefficients,logg))
+    log.debug("FEH=%f"%np.inner(final_coefficients,feh))
+    log.debug("Contributing template Ids=%s"%np.where(final_coefficients!=0)[0])
+    
     '''
     # useful debugging plot
     import matplotlib.pyplot as plt
@@ -367,14 +386,14 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     twave2=swx[sw>0]/sw[sw>0]
     terr=1./np.sqrt(sw[sw>0])
     plt.errorbar(twave2,tflux,terr,fmt="o",alpha=0.5)
-                                        
+    model = np.zeros(data_flux.shape)
+    for c,t in zip(coef,node_template_flux) :
+        model += c*t
     plt.plot(twave,model[ok][ii],"-",c="r")
+    
     plt.show()
     '''
-    
-    input_number_of_templates=template_flux.shape[0]
-    final_coefficients=np.zeros(input_number_of_templates)
-    final_coefficients[node_template_ids]=coef
+
     
     return final_coefficients,chi2
         
