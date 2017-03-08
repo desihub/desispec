@@ -60,7 +60,7 @@ def select_nights(allnights, nightstr):
     return nights
 
 
-def create_prod(nightstr=None):
+def create_prod(nightstr=None, extra={}):
     """
     Create or update a production.
 
@@ -71,6 +71,11 @@ def create_prod(nightstr=None):
 
     Args:
         nightstr (str): comma-separated list of regex patterns.
+        extra (dict): dictionary of extra options for the task
+            workers that will be added to the initial options.yaml
+            file for the production.  The keys are the worker
+            class names and the values are dictionaries that are
+            passed to the constructor of each worker class.
 
     Returns:
         tuple containing the number of exposures of each type
@@ -125,7 +130,7 @@ def create_prod(nightstr=None):
 
     optfile = os.path.join(rundir, "options.yaml")
     if not os.path.isfile(optfile):
-        opts = default_options()
+        opts = default_options(extra=extra)
         yaml_write(optfile, opts)
 
     # get list of nights

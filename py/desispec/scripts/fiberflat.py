@@ -1,6 +1,6 @@
 """
-desispec.fiberflat
-==================
+desispec.scripts.fiberflat
+==========================
 
 Utility functions to compute a fiber flat correction and apply it
 We try to keep all the (fits) io separated.
@@ -33,8 +33,8 @@ def parse(options=None):
                         help = 'nsigma clipping')
     parser.add_argument('--acc', type = float, default = 5.e-4, required=False,
                         help = 'required accuracy (iterative loop)')
-    
-    
+
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -70,5 +70,3 @@ def main(args) :
     # Write
     write_fiberflat(args.outfile, fiberflat, frame.meta)
     log.info("successfully wrote %s"%args.outfile)
-
-

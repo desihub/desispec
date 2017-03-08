@@ -8,8 +8,6 @@ import os
 import astropy.io
 import numpy as np
 
-import desiutil.io
-
 def iterfiles(root, prefix):
     '''
     Returns iterator over files starting with `prefix` found under `root` dir
@@ -89,6 +87,7 @@ def makepath(outfile, filetype=None):
 
     TODO: maybe a different name?
     """
+    from .meta import findfile
     #- if this doesn't look like a filename, interpret outfile as a tuple of
     #- (night, expid, ...) via findfile.  Only works if filetype is set.
     ### if (filetype is not None) and (not isinstance(outfile, (str, unicode))):
@@ -106,15 +105,15 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
                    extname=None, clobber=False):
     """Utility function to write a fits binary table complete with
     comments and units in the FITS header too.  DATA can either be
-    dictionary, an Astropy Table, a numpy.recarray or a numpy.ndarray. 
+    dictionary, an Astropy Table, a numpy.recarray or a numpy.ndarray.
     """
     from astropy.table import Table
-
+    from desiutil.io import encode_table
     #- Convert data as needed
     if isinstance(data, (np.recarray, np.ndarray, Table)):
-        outdata = desiutil.io.encode_table(data, encoding='ascii')
+        outdata = encode_table(data, encoding='ascii')
     else:
-        outdata = desiutil.io.encode_table(_dict2ndarray(data), encoding='ascii')
+        outdata = encode_table(_dict2ndarray(data), encoding='ascii')
 
     # hdu = astropy.io.fits.BinTableHDU(outdata, header=header, name=extname)
     hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
@@ -165,25 +164,25 @@ def _dict2ndarray(data, columns=None):
     Convert a dictionary of ndarrays into a structured ndarray
 
     Also works if DATA is an AstroPy Table.
-    
+
     Args:
         data: input dictionary, each value is an ndarray
         columns: optional list of column names
-        
+
     Returns:
         structured numpy.ndarray with named columns from input data dictionary
-        
+
     Notes:
         data[key].shape[0] must be the same for every key
         every entry in columns must be a key of data
-    
+
     Example
         d = dict(x=np.arange(10), y=np.arange(10)/2)
         nddata = _dict2ndarray(d, columns=['x', 'y'])
     """
     if columns is None:
         columns = list(data.keys())
-        
+
     dtype = list()
     for key in columns:
         ### dtype.append( (key, data[key].dtype, data[key].shape) )
@@ -191,11 +190,11 @@ def _dict2ndarray(data, columns=None):
             dtype.append( (key, data[key].dtype) )
         else:
             dtype.append( (key, data[key].dtype, data[key].shape[1:]) )
-        
-    nrows = len(data[key])  #- use last column to get length    
+
+    nrows = len(data[key])  #- use last column to get length
     xdata = np.empty(nrows, dtype=dtype)
-    
+
     for key in columns:
         xdata[key] = data[key]
-    
+
     return xdata

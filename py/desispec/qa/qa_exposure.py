@@ -9,7 +9,7 @@ import os
 
 from desispec.log import get_logger
 
-log=get_logger()
+# log=get_logger()
 
 
 class QA_Exposure(object):
@@ -18,7 +18,7 @@ class QA_Exposure(object):
         Class to organize and execute QA for a DESI Exposure
 
         x.flavor, x.data
-        
+
         Args:
             expid: int -- Exposure ID
             night: str -- YYYYMMDD
