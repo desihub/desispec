@@ -369,8 +369,8 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     
     
     
-    
-    
+    coef = _compute_coef(coord,node_cube_coords)
+    chi2 = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
     
     input_number_of_templates=template_flux.shape[0]
     final_coefficients=np.zeros(input_number_of_templates)
@@ -500,12 +500,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         for feature in telluric_features :
             ivar[cam][(wave[cam]>=feature[0])&(wave[cam]<=feature[1])]=0.
     
-    if False :
-        log.debug("mask Calcium H&K lines")
-        for cam in wave.keys() :
-            hw=4.
-            for line in [3933.66,3968.47] :
-                ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
     
 
     # add error propto to flux to account for model error
