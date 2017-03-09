@@ -132,8 +132,6 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
     for cam in cameras :
         tmp_flux,tmp_ivar=resample_flux(resampled_wave,wave[cam],flux[cam],ivar[cam])
         resampled_data[cam]=tmp_flux
-
-        
         resampled_ivar[cam]=tmp_ivar
 
         # we need to have the model on a larger grid than the data wave for redshifting
@@ -177,10 +175,24 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
                 chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:-margin+i])**2)                
             else :
                 chi2[i+margin] += np.sum(resampled_ivar[cam][margin:-margin]*(resampled_data[cam][margin:-margin]-resampled_model[cam][margin+i:])**2)
+    import matplotlib.pyplot as plt
     
     i=np.argmin(chi2)-margin
     z=10**(i*lstep)-1
     log.debug("Best z=%f"%z)
+    '''
+    log.debug("i=%d"%i)
+    log.debug("lstep=%f"%lstep)
+    log.debug("margin=%d"%margin)
+    plt.figure()
+    #plt.plot(chi2)
+    for cam in cameras :
+        ok=np.where(resampled_ivar[cam]>0)[0]
+        #plt.plot(resampled_wave[ok],resampled_data[cam][ok],"o",c="gray")
+        plt.errorbar(resampled_wave[ok],resampled_data[cam][ok],1./np.sqrt(resampled_ivar[cam][ok]),fmt="o",color="gray")        
+        plt.plot(resampled_wave[margin:-margin],resampled_model[cam][margin+i:-margin+i],"-",c="r")
+    plt.show()
+    '''
     return z
    
 
@@ -387,7 +399,6 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     #plt.errorbar(twave,tflux,1./np.sqrt(tivar),fmt="o")
     plt.plot(twave,tflux,".",c="gray",alpha=0.2)
     dw=np.min(twave[twave>twave[0]+0.5]-twave[0])
-    print("dw=",dw)
     bins=np.linspace(twave[0],twave[-1],(twave[-1]-twave[0])/dw+1)
     sw,junk=np.histogram(twave,bins=bins,weights=tivar)
     swx,junk=np.histogram(twave,bins=bins,weights=tivar*twave)
@@ -400,7 +411,6 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
     for c,t in zip(coef,node_template_flux) :
         model += c*t
     plt.plot(twave,model[ok][ii],"-",c="r")
-    
     plt.show()
     '''
 
@@ -446,6 +456,64 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     log = get_logger()
     log.debug(time.asctime())
 
+    # fit continuum and save it
+    continuum={}
+    for cam in wave.keys() :
+        tmp,tmp_ivar=applySmoothingFilter(flux[cam]) # this is fast
+        continuum[cam] = tmp
+        ivar[cam]     *= (tmp_ivar>0)
+    
+    # mask out wavelength that could bias the fit
+    
+    log.debug("mask potential cosmics (3 sigma positive fluctuations)")
+    for cam in wave.keys() :
+        ok=np.where((ivar[cam]>0))[0]
+        if ok.size>0 :
+            ivar[cam][ok] *= (flux[cam][ok]<(continuum[cam][ok]+3/np.sqrt(ivar[cam][ok])))
+    
+    
+    log.debug("mask sky lines")
+    # in vacuum
+    # mask blue lines that can affect fit of Balmer series
+    # line at 5577 has a stellar line close to it !
+    # line at 7853. has a stellar line close to it !
+    # mask everything above 8270A because it can bias the star redshift 
+    # all of this is based on analysis of a few exposures of BOSS data
+    # in vacuum
+    skylines=np.array([4047.5,4359.3,5462.3,5578.9,5891.3,5897.3,6301.8,6365.4,7823.3,7855.2])
+    
+    hw=6. # A
+    for cam in wave.keys() :
+        for line in skylines :
+            ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
+        ivar[cam][wave[cam]>8270]=0.
+    
+    # mask telluric lines
+    srch_filename = "data/arc_lines/telluric_lines.txt"
+    if not resource_exists('desispec', srch_filename):
+        log.error("Cannot find telluric mask file {:s}".format(srch_filename))
+        raise Exception("Cannot find telluric mask file {:s}".format(srch_filename))
+    telluric_mask_filename = resource_filename('desispec', srch_filename)
+    telluric_features = np.loadtxt(telluric_mask_filename)
+    log.debug("Masking telluric features from file %s"%telluric_mask_filename)
+    for cam in wave.keys() :
+        for feature in telluric_features :
+            ivar[cam][(wave[cam]>=feature[0])&(wave[cam]<=feature[1])]=0.
+    
+    if False :
+        log.debug("mask Calcium H&K lines")
+        for cam in wave.keys() :
+            hw=4.
+            for line in [3933.66,3968.47] :
+                ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
+    
+
+    # add error propto to flux to account for model error
+    if template_error>0  :
+        for cam in wave.keys() :
+            ok=np.where(ivar[cam]>0)[0]
+            if ok.size>0 :
+                ivar[cam][ok] = 1./ ( 1./ivar[cam][ok] + (template_error*continuum[cam][ok] )**2 )
     
     # normalize data and store them in single array
     data_wave=np.array([])
@@ -455,47 +523,12 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     sorted_keys.sort() # force sorting the keys to agree with models (found unpredictable ordering in tests)
     for cam in sorted_keys :
         data_wave=np.append(data_wave,wave[cam])
-        tmp,tmp_ivar=applySmoothingFilter(flux[cam]) # this is fast
-        data_flux=np.append(data_flux,flux[cam]/(tmp+(tmp==0)))
-        data_ivar=np.append(data_ivar,ivar[cam]*tmp**2*(tmp_ivar>0))
-    
-    # mask potential cosmics
-    ok=np.where(data_ivar>0)[0]
-    if ok.size>0 :
-        data_ivar[ok] *= (data_flux[ok]<1.+3/np.sqrt(data_ivar[ok]))
-
-    # add error propto to flux to account for model error
-    if template_error>0  :
-        ok=np.where(data_ivar>0)[0]
-        if ok.size>0 :
-            data_ivar[ok] = 1./ ( 1./data_ivar[ok] + template_error**2 )
-
-    # mask sky lines
-    # in vacuum
-    # mask blue lines that can affect fit of Balmer series
-    # line at 5577 has a stellar line close to it !
-    # line at 7853. has a stellar line close to it !
-    # line at 9790.5 has a stellar line close to it !
-    # all of this is based on analysis of a few exposures of BOSS data
-    skylines=np.array([4358,5461,5577,5889.5,5895.5,6300,7821.5,7853.,7913.,9790.5])    
-    hw=4. # A
-    for line in skylines :
-        data_ivar[(data_wave>=(line-hw))&(data_wave<=(line+hw))]=0.
-
-    # mask telluric lines
-    srch_filename = "data/arc_lines/telluric_lines.txt"
-    if not resource_exists('desispec', srch_filename):
-        log.error("Cannot find telluric mask file {:s}".format(srch_filename))
-        raise Exception("Cannot find telluric mask file {:s}".format(srch_filename))
-    telluric_mask_filename = resource_filename('desispec', srch_filename)
-    telluric_features = np.loadtxt(telluric_mask_filename)
-    log.debug("Masking telluric features from file %s"%telluric_mask_filename)
-    for feature in telluric_features :
-        data_ivar[(data_wave>=feature[0])&(data_wave<=feature[1])]=0.
+        data_flux=np.append(data_flux,flux[cam]/(continuum[cam]+(continuum[cam]==0)))
+        data_ivar=np.append(data_ivar,ivar[cam]*continuum[cam]**2)
     
     ndata = np.sum(data_ivar>0)
     
-
+    
     # start looking at models
     
     # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
@@ -505,15 +538,14 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # we use the original data to do this
     # because we resample both the data and model on a logarithmic grid in the routine
     z = redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux[canonical_model], z_max, z_res)
-    
-        
+            
     # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
     
     ntemplates=stdflux.shape[0]
 
     # here we take into account the redshift once and for all
     shifted_stdwave=stdwave/(1+z)
-    
+        
     func_args = []
     # need to parallelize the model resampling
     for template_id in range(ntemplates) :
@@ -561,7 +593,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     best_model_id=np.argmin(template_chi2) 
     best_chi2=template_chi2[best_model_id]
     log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
-    
+        
     # interpolate around best model using parameter grid
     coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
     log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
