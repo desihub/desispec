@@ -31,7 +31,16 @@ def rebinSpectra(spectra,oldWaveBins,newWaveBins):
 def applySmoothingFilter(flux) :
     # it was checked that the width of the median_filter has little impact on best fit stars
     # smoothing the ouput (with a spline for instance) does not improve the fit
-    return scipy.ndimage.filters.median_filter(flux,200)
+    width=200
+    tmp=scipy.ndimage.filters.median_filter(flux,width)
+    ivar=np.ones(flux.shape)
+
+    if flux.size > 3*width :
+        tmp[:width]=flux[:width]
+        tmp[-width:]=flux[-width:]
+        ivar[:width]=0.
+        ivar[-width:]=0.
+    return tmp,ivar
 #
 # Import some global constants.
 #
@@ -61,7 +70,7 @@ def resample_template(data_wave_per_camera,resolution_data_per_camera,template_w
     for cam in sorted_keys :
         flux1=resample_flux(data_wave_per_camera[cam],template_wave,template_flux) # this is slow
         flux2=Resolution(resolution_data_per_camera[cam]).dot(flux1) # this is slow
-        norme=applySmoothingFilter(flux2) # this is fast
+        norme,norme_ivar=applySmoothingFilter(flux2) # this is fast
         flux3=flux2/(norme+(norme==0))
         output_flux = np.append(output_flux,flux3)
         output_wave = np.append(output_wave,data_wave_per_camera[cam]) # need to add wave to avoid wave/flux matching errors
@@ -144,16 +153,17 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
         resampled_model[cam]=resample_flux(resampled_wave,extended_cam_wave,tmp)
 
         # we now normalize both model and data
-        tmp=applySmoothingFilter(resampled_data[cam])
+        tmp,tmp_ivar=applySmoothingFilter(resampled_data[cam])
         resampled_data[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=tmp**2
+        resampled_ivar[cam]*=(tmp_ivar>0)
         
         if template_error>0 :
             ok=np.where(resampled_ivar[cam]>0)[0]
             if ok.size > 0 :
                 resampled_ivar[cam][ok] = 1./ ( 1/resampled_ivar[cam][ok] + template_error**2 )
                 
-        tmp=applySmoothingFilter(resampled_model[cam])
+        tmp,tmp_ivar=applySmoothingFilter(resampled_model[cam])        
         resampled_model[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=(tmp!=0)
 
@@ -445,9 +455,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     sorted_keys.sort() # force sorting the keys to agree with models (found unpredictable ordering in tests)
     for cam in sorted_keys :
         data_wave=np.append(data_wave,wave[cam])
-        tmp=applySmoothingFilter(flux[cam]) # this is fast
+        tmp,tmp_ivar=applySmoothingFilter(flux[cam]) # this is fast
         data_flux=np.append(data_flux,flux[cam]/(tmp+(tmp==0)))
-        data_ivar=np.append(data_ivar,ivar[cam]*tmp**2)
+        data_ivar=np.append(data_ivar,ivar[cam]*tmp**2*(tmp_ivar>0))
     
     # mask potential cosmics
     ok=np.where(data_ivar>0)[0]
