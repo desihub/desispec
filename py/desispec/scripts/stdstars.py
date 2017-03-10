@@ -299,7 +299,7 @@ def main(args) :
         model=np.zeros(stdwave.size)
         for i,c in enumerate(linear_coefficients[star]) :
             if c != 0 :
-                model += c*np.interp(stdwave,stdwave/(1+redshift[star]),stdflux[i])
+                model += c*np.interp(stdwave,stdwave*(1+redshift[star]),stdflux[i])
         
         # Compute final model color
         mag1=load_filter(model_filters[index1]).get_ab_magnitude(model*fluxunits,stdwave)

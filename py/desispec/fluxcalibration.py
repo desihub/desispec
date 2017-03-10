@@ -178,7 +178,7 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
     import matplotlib.pyplot as plt
     
     i=np.argmin(chi2)-margin
-    z=10**(i*lstep)-1
+    z=10**(-i*lstep)-1
     log.debug("Best z=%f"%z)
     '''
     log.debug("i=%d"%i)
@@ -538,7 +538,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     ntemplates=stdflux.shape[0]
 
     # here we take into account the redshift once and for all
-    shifted_stdwave=stdwave/(1+z)
+    shifted_stdwave=stdwave*(1+z)
         
     func_args = []
     # need to parallelize the model resampling
