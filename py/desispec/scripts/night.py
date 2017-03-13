@@ -67,7 +67,7 @@ def validate_inputs(options):
     month = (int_night - year*10000) // 100
     day = int_night - year*10000 - month*100
     try:
-        assert 1969 < year < 3000
+        assert 1969 < year < 2038
         assert 0 < month < 13
         assert 0 < day < 32
     except AssertionError:
