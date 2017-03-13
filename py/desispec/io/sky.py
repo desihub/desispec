@@ -4,14 +4,10 @@ desispec.io.sky
 
 IO routines for sky.
 """
+from __future__ import absolute_import, division
 import os
 from astropy.io import fits
 
-from desiutil.depend import add_dependencies
-
-from desispec.sky import SkyModel
-from desispec.io import findfile
-from desispec.io.util import fitsheader, native_endian, makepath
 
 def write_sky(outfile, skymodel, header=None):
     """Write sky model.
@@ -25,6 +21,9 @@ def write_sky(outfile, skymodel, header=None):
             mask : 2D mask for sky flux
         header : optional fits header data (fits.Header, dict, or list)
     """
+    from desiutil.depend import add_dependencies
+    from .util import fitsheader, makepath
+
     outfile = makepath(outfile, 'sky')
 
     #- Convert header to fits.Header if needed
@@ -52,9 +51,12 @@ def write_sky(outfile, skymodel, header=None):
 def read_sky(filename) :
     """Read sky model and return SkyModel object with attributes
     wave, flux, ivar, mask, header.
-    
+
     skymodel.wave is 1D common wavelength grid, the others are 2D[nspec, nwave]
     """
+    from .meta import findfile
+    from .util import native_endian
+    from ..sky import SkyModel
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, str):
         night, expid, camera = filename

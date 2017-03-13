@@ -14,7 +14,7 @@ from desiutil.depend import add_dependencies
 import desispec.io.util
 import desispec.preproc
 from desispec.log import get_logger
-log = get_logger()
+# log = get_logger()
 
 def read_raw(filename, camera, **kwargs):
     '''
@@ -68,6 +68,8 @@ def write_raw(filename, rawdata, header, camera=None, primary_header=None):
     CCDSECx, BIASSECx, DATASECx where x=1,2,3, or 4
     DATE-OBS, GAINx and RDNOISEx will generate a non-fatal warning if missing
     '''
+    log = get_logger()
+
     header = desispec.io.util.fitsheader(header)
     primary_header = desispec.io.util.fitsheader(primary_header)
 

@@ -10,20 +10,20 @@ import numpy as np
 from desispec import util
 from desispec.resolution import Resolution
 from desispec.coaddition import Spectrum
-from desispec.log import get_logger
+# from desispec.log import get_logger
 from desispec import util
-log = get_logger()
+# log = get_logger()
 
 # class Spectrum(object):
 #     def __init__(self, wave, flux, ivar, mask=None, R=None):
 #         """Lightweight wrapper of a single spectrum
-#         
+#
 #         Args:
 #             wave (1D ndarray): wavelength in Angstroms
 #             flux (1D ndarray): flux (photons or ergs/s/cm^2/A)
 #             ivar (1D ndarray): inverse variance of flux
 #             R : Resolution object
-#             
+#
 #         All args become attributes.  This is syntactic sugar.
 #         """
 #         self.wave = wave
@@ -33,9 +33,9 @@ log = get_logger()
 #             self.mask = np.zeros(self.flux.shape, dtype=int)
 #         else:
 #             self.mask = mask
-#             
+#
 #         self.R = R
-#         
+#
 
 class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
@@ -45,7 +45,7 @@ class Frame(object):
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
         x.wave, x.flux, x.ivar, x.mask, x.resolution_data, x.header, sp.R
-        
+
         Args:
             wave: 1D[nwave] wavelength in Angstroms
             flux: 2D[nspec, nwave] flux
@@ -92,9 +92,9 @@ class Frame(object):
         self.fibermap = fibermap
         self.nspec, self.nwave = self.flux.shape
         self.chi2pix = chi2pix
-        
+
         fibers_per_spectrograph = 500   #- hardcode; could get from desimodel
-        
+
         if mask is None:
             self.mask = np.zeros(flux.shape, dtype=np.uint32)
         else:
@@ -138,25 +138,25 @@ class Frame(object):
 
         if self.meta is not None:
             self.meta['FIBERMIN'] = np.min(self.fibers)
-         
+
     def __getitem__(self, index):
         """
         Return a subset of the spectra on this frame
-        
+
         If index is an integer, return a single Spectrum object, otherwise
         return a Frame object with the subset of spectra that are sliced
         by index, which can be anything that can index or slice a numpy array.
-        
+
         i.e.
             type(self[1:3]) == Frame
-            type(self[1])   == Spectrum #- not Frame 
-            
+            type(self[1])   == Spectrum #- not Frame
+
         This is analogous to how integers vs. slices or arrays return either
         scalars or arrays when indexing numpy.ndarray .
         """
         if isinstance(index, numbers.Integral):
             return Spectrum(self.wave, self.flux[index], self.ivar[index], self.mask[index], self.R[index])
-        
+
         #- convert index to 1d array to maintain dimentionality of sliced arrays
         if not isinstance(index, slice):
             index = np.atleast_1d(index)
@@ -165,20 +165,20 @@ class Frame(object):
             rdata = self.resolution_data[index, :, :]
         else:
             rdata = None
-        
+
         if self.fibermap is not None:
             fibermap = self.fibermap[index]
         else:
             fibermap = None
-            
+
         if self.chi2pix is not None:
             chi2pix = self.chi2pix[index]
         else:
             chi2pix = None
-        
+
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
                     meta=self.meta, fibermap=fibermap, chi2pix=chi2pix)
-        
+
         return result
