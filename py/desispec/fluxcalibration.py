@@ -28,14 +28,13 @@ def rebinSpectra(spectra,oldWaveBins,newWaveBins):
     specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
     return specnew
 
-def applySmoothingFilter(flux) :
+def applySmoothingFilter(flux,width=200,margin_correction=True) :
     # it was checked that the width of the median_filter has little impact on best fit stars
     # smoothing the ouput (with a spline for instance) does not improve the fit
-    width=200
     tmp=scipy.ndimage.filters.median_filter(flux,width)
     ivar=np.ones(flux.shape)
 
-    if flux.size > 3*width :
+    if margin_correction and flux.size > 3*width :
         tmp[:width]=flux[:width]
         tmp[-width:]=flux[-width:]
         ivar[:width]=0.
@@ -65,6 +64,7 @@ except TypeError:
 def resample_template(data_wave_per_camera,resolution_data_per_camera,template_wave,template_flux,template_id) :
     output_wave=np.array([])
     output_flux=np.array([])
+    output_norm=np.array([])
     sorted_keys = list(data_wave_per_camera.keys())
     sorted_keys.sort() # force sorting the keys to agree with data (found unpredictable ordering in tests)
     for cam in sorted_keys :
@@ -73,12 +73,20 @@ def resample_template(data_wave_per_camera,resolution_data_per_camera,template_w
         norme,norme_ivar=applySmoothingFilter(flux2) # this is fast
         flux3=flux2/(norme+(norme==0))
         output_flux = np.append(output_flux,flux3)
+        output_norm = np.append(output_norm,norme)
         output_wave = np.append(output_wave,data_wave_per_camera[cam]) # need to add wave to avoid wave/flux matching errors
-    return template_id,output_wave,output_flux
+    return template_id,output_wave,output_flux,output_norm
+
 
 def _func(arg) :
     return resample_template(**arg)
 
+def smooth_template(template_id,camera_index,template_flux) :
+    norme,ivar = applySmoothingFilter(template_flux)
+    return template_id,camera_index,norme
+
+def _func2(arg) :
+    return smooth_template(**arg)
 
 def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.005, z_res=0.00005, template_error=0.):
     """ Redshift fit of a single template
@@ -544,13 +552,18 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # normalize data and store them in single array
     data_wave=np.array([])
     data_flux=np.array([])
+    data_continuum=np.array([])
     data_ivar=np.array([])
+    data_index=np.array([])
     sorted_keys = list(wave.keys())
     sorted_keys.sort() # force sorting the keys to agree with models (found unpredictable ordering in tests)
-    for cam in sorted_keys :
+    for index,cam in enumerate(sorted_keys) :
+        data_index=np.append(data_index,np.ones(wave[cam].size)*index)
         data_wave=np.append(data_wave,wave[cam])
         data_flux=np.append(data_flux,flux[cam]/(continuum[cam]+(continuum[cam]==0)))
+        data_continuum=np.append(data_continuum,continuum[cam])
         data_ivar=np.append(data_ivar,ivar[cam]*continuum[cam]**2)
+    data_index=data_index.astype(int)
     
     ndata = np.sum(data_ivar>0)
     
@@ -595,21 +608,24 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     else:
         log.debug("Not using multiprocessing for {} cpus".format(ncpu))
         results = [_func(x) for x in func_args]
-        log.debug("Finished serial loop over compute_chi2")
+        log.debug("Finished serial loop")
 
     # collect results
     # in case the exit of the multiprocessing pool is not ordered as the input
     # we returned the template_id
     template_flux=np.zeros((ntemplates,data_flux.size))
+    template_norm=np.zeros((ntemplates,data_flux.size))
     for result in results :
         template_id       = result[0]
         template_tmp_wave = result[1]
         template_tmp_flux = result[2]
+        template_tmp_norm = result[3]
         mdiff=np.max(np.abs(data_wave-template_tmp_wave)) # just a safety check
         if mdiff>1.e-5 :
             log.error("error indexing of wave and flux somewhere above, checking if it's just an ordering issue, max diff=%f"%mdiff)
             raise ValueError("wavelength array difference cannot be fixed with reordering, ordered max diff=%f"%mdiff)
         template_flux[template_id] = template_tmp_flux
+        template_norm[template_id] = template_tmp_norm
 
     # compute model chi2
     template_chi2=np.zeros(ntemplates)
@@ -624,6 +640,68 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
     log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
     
+    log.debug("use best fit to derive calibration and apply it to the templates before refitting the star ...")
+    # the division by the median filtered spectrum leaves some imprint of the input transmission
+    # so we will apply calibration to the model and redo the whole fit
+    # to make sure this is not driving the stellar model selection.
+
+    
+    log.debug("remultiply template by their norme")
+    template_flux *= template_norm 
+    
+    log.debug("compute best fit model")
+    model=np.zeros(data_wave.size)
+    for c,t in zip(coef,template_flux) :
+        if c>0 : model += c*t
+
+
+    func_args=[]    
+    for index in np.unique(data_index) :
+        log.debug("compute calib for cam index %d"%index)
+        ii=np.where(data_index==index)[0]
+        calib = (data_flux[ii]*data_continuum[ii])/(model[ii]+(model[ii]==0))
+        scalib,scalibivar = applySmoothingFilter(calib,width=400,margin_correction=False)
+        log.debug("multiply templates by calib for cam index %d"%index)
+        template_flux[:,ii] *= scalib
+        
+        # apply this to all the templates and recompute median filter
+        for t in range(template_flux.shape[0]) :
+            arguments={"template_id":t,"camera_index":index,"template_flux":template_flux[t][ii]}
+            func_args.append(arguments)
+    
+    if ncpu > 1:
+        log.debug("divide templates by median filters using multiprocessing.Pool of ncpu=%d"%ncpu)
+        pool = multiprocessing.Pool(ncpu)
+        results  =  pool.map(_func2, func_args)
+        log.debug("finished pool.map()"); sys.stdout.flush()
+        pool.close()
+        pool.join()
+        log.debug("finished pool.join()"); sys.stdout.flush()
+    else :
+        log.debug("divide templates serially")
+        results = [_func2(x) for x in func_args]
+        log.debug("Finished serial loop")
+    
+    # collect results
+    for result in results :
+        template_id = result[0]
+        index  = result[1]
+        template_flux[template_id][data_index==index] /= (result[2] + (result[2]==0))
+    
+    log.debug("refit the model ...")
+    template_chi2=np.zeros(ntemplates)
+    for template_id in range(ntemplates) :
+        template_chi2[template_id] = np.sum(data_ivar*(data_flux-template_flux[template_id])**2)
+    
+    best_model_id=np.argmin(template_chi2) 
+    best_chi2=template_chi2[best_model_id]
+    log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
+        
+    # interpolate around best model using parameter grid
+    coef,chi2 = interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux, teff, logg, feh, template_chi2)
+    log.debug("after interpolation chi2/ndf {}".format(chi2/ndata))
+    
+
     return coef,z,chi2/ndata
 
 
