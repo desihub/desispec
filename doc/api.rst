@@ -208,6 +208,9 @@ Full desispec API Reference
 .. automodule:: desispec.scripts.mergebundles
     :members:
 
+.. automodule:: desispec.scripts.night
+    :members:
+
 .. automodule:: desispec.scripts.pipe_prod
     :members:
 

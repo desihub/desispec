@@ -22,7 +22,7 @@ def parse_night(stage):
     :class:`argparse.Namespace`
         The parsed command-line options.
     """
-    from os import basename
+    from os.path import basename
     from sys import argv
     from argparse import ArgumentParser
     desc = {'start': 'Begin DESI pipeline processing for a particular night.',
@@ -61,24 +61,24 @@ def validate_inputs(options):
     try:
         int_night = int(night)
     except ValueError:
-        log.critical("Could not convert 'night' = {0} to integer!".format(night))
-        return 1
+        log.critical("Could not convert 'night' = '{0}' to integer!".format(night))
+        return 2
     year = int_night // 10000
     month = (int_night - year*10000) // 100
     day = int_night - year*10000 - month*100
     try:
-        assert 2000 < year < 3000
+        assert 1969 < year < 3000
         assert 0 < month < 13
         assert 0 < day < 32
     except AssertionError:
-        log.critical("Value for 'night' = {0} is not a valid calendar date!".format(night))
-        return 1
+        log.critical("Value for 'night' = '{0}' is not a valid calendar date!".format(night))
+        return 3
     for k in ('DESI_SPECTRO_REDUX', 'SPECPROD'):
         try:
             val = environ[k]
         except KeyError:
             log.critical("{0} is not set!".format(k))
-            return 1
+            return 4
         else:
             log.info('{0}={1}'.format(k, val))
     return 0
@@ -95,6 +95,7 @@ def start_main():
     from desiutil.log import get_logger
     options = parse_night('start')
     status = validate_inputs(options)
+    log = get_logger()
     log.info("Called with night = {0}.".format(options.night))
     return status
 
@@ -110,6 +111,7 @@ def update_main():
     from desiutil.log import get_logger
     options = parse_night('update')
     status = validate_inputs(options)
+    log = get_logger()
     log.info("Called with night = {0}.".format(options.night))
     return status
 
@@ -125,5 +127,6 @@ def end_main():
     from desiutil.log import get_logger
     options = parse_night('end')
     status = validate_inputs(options)
+    log = get_logger()
     log.info("Called with night = {0}.".format(options.night))
     return status
