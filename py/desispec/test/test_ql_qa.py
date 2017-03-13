@@ -365,7 +365,7 @@ class TestQL(unittest.TestCase):
 
         #- manually insert sky peaks for xwsigma
         zpeaks = np.array([8401.5,8432.4,8467.5,9479.4,9505.6,9521.8])
-        fibers = np.arange(30)
+        fibers = np.arange(5)
         peak1 = PSF.xy(psf,fibers,zpeaks[0])
         pix1 = np.rint(peak1)
         peak2 = PSF.xy(psf,fibers,zpeaks[1])
@@ -461,6 +461,9 @@ class TestQL(unittest.TestCase):
 
         self.image = desispec.image.Image(img_pix, img_ivar, img_mask, camera='z1',meta=hdr)
         desispec.io.write_image(self.pixfile, self.image)
+
+        self.fibermap = desispec.io.empty_fibermap(5)
+        desispec.io.write_fibermap(self.fibermapfile, self.fibermap)
 
         inp=self.image
         qargs={}
