@@ -35,6 +35,8 @@ def parse(options=None):
                         help = 'path of spetro-photometric stellar spectra fits file')
     parser.add_argument('--chi2cut', type = float, default = 0., required=False,
                         help = 'apply a reduced chi2 cut for the selection of stars')
+    parser.add_argument('--chi2cut-nsig', type = float, default = 3., required=False,
+                        help = 'discard n-sigma outliers from the reduced chi2 of the standard star fit')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
     parser.add_argument('--qafile', type=str, default=None, required=False,
@@ -90,7 +92,20 @@ def main(args) :
             model_fibers=model_fibers[ok]
             model_metadata=model_metadata[:][ok]
     
-
+    # automatically reject stars that ar chi2 outliers
+    if args.chi2cut_nsig > 0 :
+        mchi2=np.median(model_metadata["CHI2DOF"])
+        rmschi2=np.std(model_metadata["CHI2DOF"])
+        maxchi2=mchi2+args.chi2cut_nsig*rmschi2
+        ok=np.where(model_metadata["CHI2DOF"]<maxchi2)[0]
+        nstars=model_flux.shape[0]
+        nbad=nstars-ok.size
+        if nbad>0 :
+            log.warning("discarding %d star(s) out of %d because reduced chi2 outliers (at %d sigma, giving rchi2<%f )"%(nbad,nstars,args.chi2cut_nsig,maxchi2))
+            model_flux=model_flux[ok]
+            model_fibers=model_fibers[ok]
+            model_metadata=model_metadata[:][ok]
+    
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
 
