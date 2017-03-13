@@ -367,7 +367,39 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
         if diff < 0.001 :
             break
     
-    
+    # finally perform an exact best fit per axis 
+    for loop in range(50) :
+        previous_chi2=chi2.copy()
+        previous_coord=coord.copy()
+        for a in range(npar) :
+            if coord[a]==-1 or coord[a]==1 :
+                continue # we are on edge, no gain in refitting
+            xcoord=coord.copy()
+            coef_minus = _compute_coef(xcoord,node_cube_coords)
+            eps=0.001
+            xcoord[a] += eps
+            coef_plus  = _compute_coef(xcoord,node_cube_coords)
+            dcoef_dcoord = (coef_plus-coef_minus)/eps # do a numeric derivative
+            #log.debug("dcoef_dcoord=%s"%dcoef_dcoord)
+            B = np.inner(dcoef_dcoord,HB) - np.inner(dcoef_dcoord,HA.dot(coef_minus))        
+            A = np.inner(dcoef_dcoord,HA.dot(dcoef_dcoord))
+            if A>0 :
+                dcoord=B/A
+                #log.debug("dcoord=%f"%dcoord)
+                tmp_coord=coord.copy()
+                tmp_coord[a] += dcoord
+                if tmp_coord[a]<-1 or tmp_coord[a]>1 :
+                    #log.debug("do not allow extrapolations")
+                    continue            
+                coef = _compute_coef(tmp_coord,node_cube_coords)
+                tmp_chi2 = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
+                if tmp_chi2 < chi2 :
+                    log.debug("Improved chi2 by %f with a shift along %d of %f"%(chi2-tmp_chi2,a,dcoord))
+                    coord=tmp_coord
+                    chi2 = tmp_chi2
+        diff=np.max(np.abs(coord-previous_coord))
+        if diff < 0.001 :
+            break    
     
     coef = _compute_coef(coord,node_cube_coords)
     chi2 = chi2_0 - 2*np.inner(coef,HB) + np.inner(coef,HA.dot(coef))
