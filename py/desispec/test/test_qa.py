@@ -136,11 +136,21 @@ class TestQA(unittest.TestCase):
 
 
     def test_init_qa_exposure(self):
-        # Simple init
-        os.environ['SPECPROD'] = './'
-        os.environ['DESI_SPECTRO_REDUX'] = './'
+        """Test simple init.
+        """
+        from os import environ
+        cache_env = {'SPECPROD': None, 'DESI_SPECTRO_REDUX': None}
+        for k in cache_env:
+            if k in environ:
+                cache_env[k] = environ[k]
+            environ[k] = './'
         qaexp = QA_Exposure(1, '20150211', 'arc')
-        assert qaexp.expid == 1
+        self.assertEqual(qaexp.expid, 1)
+        for k in cache_env:
+            if cache_env[k] is None:
+                del environ[k]
+            else:
+                environ[k] = cache_env[k]
 
     def test_qa_exposure_load_write_data(self):
         #- Test loading data
@@ -174,6 +184,11 @@ class TestQA(unittest.TestCase):
 
     def runTest(self):
         pass
-                
-if __name__ == '__main__':
-    unittest.main()
+
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
