@@ -638,7 +638,7 @@ def normalize_templates(stdwave, stdflux, mags, filters):
             sys.exit(0)
     return normflux
 
-def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=4.,debug=False):
+def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_model_fibers, nsig_clipping=4.,deg=2,debug=False):
     """Compute average frame throughput based on data frame.(wave,flux,ivar,resolution_data)
     and spectro-photometrically calibrated stellar models (model_wave,model_flux).
     Wave and model_wave are not necessarily on the same grid
@@ -684,6 +684,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
     nwave=stdstars.nwave
     nstds=stdstars.flux.shape[0]
+
+    dwave=(stdstars.wave-np.mean(stdstars.wave))/(stdstars.wave[-1]-stdstars.wave[0]) # normalized wave for polynomial fit
 
     # resample model to data grid and convolve by resolution
     model_flux=np.zeros((nstds, nwave))
@@ -770,10 +772,10 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             M = stdstars.R[fiber].dot(calibration*model_flux[fiber])
             
             try:
-                pol=np.poly1d(np.polyfit(stdstars.wave,stdstars.flux[fiber]/(M+(M==0)),deg=1,w=current_ivar[fiber]*M**2))
+                pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
             except:
                 current_ivar[fiber]=0.
-            smooth_fiber_correction[fiber]=pol(stdstars.wave)
+            smooth_fiber_correction[fiber]=pol(dwave)
             chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
 
         log.info("iter {0:d} rejecting".format(iteration))
