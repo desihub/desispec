@@ -7,12 +7,16 @@ from __future__ import absolute_import, division
 import unittest
 
 
-class TestIO(unittest.TestCase):
+class TestScripts(unittest.TestCase):
     """Test desispec.scripts.
     """
 
     @classmethod
     def setUpClass(cls):
+        # from os import environ
+        # for k in ('DESI_SPECTRO_REDUX', 'SPECPROD'):
+        #     if k in environ:
+        #         raise AssertionError("{0}={1} was pre-defined in the environment!".format(k, environ[k]))
         cls.environ_cache = dict()
 
     @classmethod
