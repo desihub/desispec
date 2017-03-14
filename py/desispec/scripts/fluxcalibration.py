@@ -112,13 +112,13 @@ def main(args) :
     ## check whether star fibers from args.models are consistent with fibers from fibermap
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
     
-    w = np.where(fibermap["OBJTYPE"][model_fibers] != 'STD')[0]
+    w = np.where(fibermap["OBJTYPE"][model_fibers%500] != 'STD')[0]
     if len(w)>0:
-        for i in model_fibers:
+        for i in model_fibers%500:
             log.error("inconsistency with spectrum %d, OBJTYPE='%s' in fibermap"%(i,fibermap["OBJTYPE"][i]))
         sys.exit(12)
 
-    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers)
+    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500)
 
     # QA
     if (args.qafile is not None):
