@@ -9,6 +9,7 @@ from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
 from pkg_resources import resource_filename
 import desispec
+import desispec.sky
 from desispec.preproc import _parse_sec_keyword
 from specter.psf import load_psf,PSF
 import astropy.io.fits as fits
