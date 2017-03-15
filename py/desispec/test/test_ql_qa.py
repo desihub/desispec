@@ -11,7 +11,7 @@ from pkg_resources import resource_filename
 import desispec
 import desispec.sky
 from desispec.preproc import _parse_sec_keyword
-from specter.psf import load_psf,PSF
+from specter.psf import load_psf
 import astropy.io.fits as fits
 from desispec.quicklook import qllogger
 
@@ -367,17 +367,17 @@ class TestQL(unittest.TestCase):
         #- manually insert sky peaks for xwsigma
         zpeaks = np.array([8401.5,8432.4,8467.5,9479.4,9505.6,9521.8])
         fibers = np.arange(5)
-        peak1 = PSF.xy(psf,fibers,zpeaks[0])
+        peak1 = psf.xy(fibers,zpeaks[0])
         pix1 = np.rint(peak1)
-        peak2 = PSF.xy(psf,fibers,zpeaks[1])
+        peak2 = psf.xy(fibers,zpeaks[1])
         pix2 = np.rint(peak2)
-        peak3 = PSF.xy(psf,fibers,zpeaks[2])
+        peak3 = psf.xy(fibers,zpeaks[2])
         pix3 = np.rint(peak3)
-        peak4 = PSF.xy(psf,fibers,zpeaks[3])
+        peak4 = psf.xy(fibers,zpeaks[3])
         pix4 = np.rint(peak4)
-        peak5 = PSF.xy(psf,fibers,zpeaks[4])
+        peak5 = psf.xy(fibers,zpeaks[4])
         pix5 = np.rint(peak5)
-        peak6 = PSF.xy(psf,fibers,zpeaks[5])
+        peak6 = psf.xy(fibers,zpeaks[5])
         pix6 = np.rint(peak6)
 
         for i in range(len(fibers)):
