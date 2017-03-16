@@ -9,13 +9,15 @@ Entry points for start/update/end night scripts.
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 
-def parse_night(stage):
+def parse_night(stage, *args):
     """Parse command-line options for start/update/end night scripts.
 
     Parameters
     ----------
     stage : :class:`str`
         The stage of the launch, one of 'start', 'update', 'end'.
+    args : iterable
+        Additional arguments are parsed for test purposes.
 
     Returns
     -------
@@ -33,7 +35,10 @@ def parse_night(stage):
                       choices=('start', 'update', 'end'),
                       help='Override value of stage for testing purposes.')
     prsr.add_argument('night', metavar='YYYYMMDD', help='Night ID.')
-    options = prsr.parse_args()
+    if len(args) > 0:
+        options = prsr.parse_args(args)
+    else:  # pragma: no cover
+        options = prsr.parse_args()
     return options
 
 

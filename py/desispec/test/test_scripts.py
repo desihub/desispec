@@ -58,10 +58,35 @@ class TestScripts(unittest.TestCase):
         self.environ_cache.clear()
         return
 
+    def test_delivery(self):
+        """Test desispec.scripts.delivery.
+        """
+        from ..scripts.delivery import parse_delivery
+        with self.assertRaises(SystemExit):
+            options = parse_delivery([])
+        with self.assertRaises(SystemExit):
+            options = parse_delivery('filename', '2', '20170317', 'foo')
+        options = parse_delivery('filename', '2', '20170317', 'start')
+        self.assertEqual(options.filename, 'filename')
+        self.assertEqual(options.exposure, 2)
+        self.assertEqual(options.night, '20170317')
+        self.assertEqual(options.nightStatus, 'start')
+
     def test_night(self):
         """Test desispec.scripts.night.
         """
-        from ..scripts.night import validate_inputs
+        from ..scripts.night import validate_inputs, parse_night
+        #
+        # Test argument parser.
+        #
+        with self.assertRaises(KeyError):
+            options = parse_night('foo')
+        options = parse_night('start', '20170317')
+        self.assertEqual(options.stage, 'start')
+        self.assertEqual(options.night, '20170317')
+        #
+        # Test validator.
+        #
         class DummyOptions(object): pass
         options = DummyOptions()
         self.dummy_environment({'DESI_SPECTRO_REDUX': 'foo', 'SPECPROD': 'bar'})
