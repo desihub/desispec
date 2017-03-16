@@ -50,5 +50,9 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    from desiutil.log import get_logger
+    log = get_logger()
     options = parse_delivery()
+    log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
+    log.info("Calling desi_{0.nightStatus}_night {0.night}.".format(options))
     return 0

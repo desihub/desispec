@@ -66,6 +66,8 @@ class TestScripts(unittest.TestCase):
             options = parse_delivery([])
         with self.assertRaises(SystemExit):
             options = parse_delivery('filename', '2', '20170317', 'foo')
+        with self.assertRaises(SystemExit):
+            options = parse_delivery('filename', 'foo', '20170317', 'start')
         options = parse_delivery('filename', '2', '20170317', 'start')
         self.assertEqual(options.filename, 'filename')
         self.assertEqual(options.exposure, 2)
