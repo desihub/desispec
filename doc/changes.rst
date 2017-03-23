@@ -5,7 +5,11 @@ desispec Change Log
 0.13.2 (unreleased)
 -------------------
 
-* Force documentation errors to cause Travis errors.
+* Add framework for DTS delivery and nightly processing scripts (PR `#365`_).
+* Force documentation errors to cause Travis errors (PR `#364`_).
+
+.. _`#364`: https://github.com/desihub/desispec/pull/364
+.. _`#365`: https://github.com/desihub/desispec/pull/365
 
 0.13.1 (2017-03-03)
 -------------------
