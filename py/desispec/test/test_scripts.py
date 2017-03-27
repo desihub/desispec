@@ -4,6 +4,8 @@
 """
 from __future__ import absolute_import, division
 # The line above will help with 2to3 support.
+
+import os
 import unittest
 
 
@@ -101,8 +103,16 @@ class TestScripts(unittest.TestCase):
             self.assertEqual(status, statuses[n])
         self.clear_environment()
         options.night = '20170317'
+
+        #- Test that a missing environment variable causes a validation failure
+        orig_DSR = os.getenv('DESI_SPECTRO_REDUX')
+        if 'DESI_SPECTRO_REDUX' in os.environ:
+            del os.environ['DESI_SPECTRO_REDUX']
+
         status = validate_inputs(options)
         self.assertEqual(status, 4)
+        if orig_DSR is not None:
+            os.environ['DESI_SPECTRO_REDUX'] = orig_DSR
 
 
 def test_suite():
