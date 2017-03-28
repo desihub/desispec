@@ -16,7 +16,7 @@ from desiutil.io import encode_table
 from ..frame import Frame
 from .meta import findfile
 from .util import fitsheader, native_endian, makepath
-from ..log import get_logger
+from desiutil.log import get_logger
 
 
 def write_frame(outfile, frame, header=None, fibermap=None, units=None):

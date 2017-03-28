@@ -17,7 +17,7 @@ from specter.psf import load_psf
 from specter.extract import ex2d
 
 from desispec import io
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec.frame import Frame
 from desispec.maskbits import specmask
 
@@ -101,7 +101,7 @@ def main(args):
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
         dw = 0.5
-        
+
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)
     bundlesize = args.bundlesize
@@ -139,7 +139,7 @@ regularize: {regularize}
     ivar = results['ivar']
     Rdata = results['resolution_data']
     chi2pix = results['chi2pix']
-    
+
     mask = np.zeros(flux.shape, dtype=np.uint32)
     mask[results['pixmask_fraction']>0.5] |= specmask.SOMEBADPIX
     mask[results['pixmask_fraction']==1.0] |= specmask.ALLBADPIX
@@ -227,12 +227,12 @@ def main_mpi(args, comm=None):
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
         dw = 0.5
-        
+
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)
 
     #- Confirm that this PSF covers these wavelengths for these spectra
-    
+
     psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=0))
     psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-1))
     if psf_wavemin > wstart:
@@ -317,7 +317,7 @@ def main_mpi(args, comm=None):
 
         #- The actual extraction
         try:
-            results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b], 
+            results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b],
                 bnspec[b], wave, regularize=args.regularize, ndecorr=True,
                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
                 full_output=True)

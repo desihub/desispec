@@ -6,7 +6,7 @@ Classes for use by redshift finders.
 """
 
 import numpy as np
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 class ZfindBase(object):
     """Class documentation goes here.

@@ -20,7 +20,7 @@ import desispec.scripts.pipe_prod as pipe_prod
 
 import desispec.io as io
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 from . import pipehelpers as ph
 

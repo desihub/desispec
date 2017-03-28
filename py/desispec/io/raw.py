@@ -13,7 +13,7 @@ from desiutil.depend import add_dependencies
 
 import desispec.io.util
 import desispec.preproc
-from desispec.log import get_logger
+from desiutil.log import get_logger
 # log = get_logger()
 
 def read_raw(filename, camera, **kwargs):

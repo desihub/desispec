@@ -9,7 +9,7 @@ from desispec.io import write_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.qa import qa_plots
-from desispec.log import get_logger
+from desiutil.log import get_logger
 import argparse
 import numpy as np
 
@@ -73,5 +73,3 @@ def main(args) :
     # write result
     write_sky(args.outfile, skymodel, frame.meta)
     log.info("successfully wrote %s"%args.outfile)
-
-

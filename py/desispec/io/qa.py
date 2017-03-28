@@ -14,7 +14,7 @@ from desispec.qa import QA_Frame
 from desispec.qa import QA_Brick
 from desispec.io import findfile
 from desispec.io.util import makepath
-from desispec.log import get_logger
+from desiutil.log import get_logger
 # log=get_logger()
 
 

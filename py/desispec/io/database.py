@@ -22,7 +22,7 @@ from sqlalchemy.orm import sessionmaker, relationship, reconstructor
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from matplotlib.patches import Circle, Polygon, Wedge
 from matplotlib.collections import PatchCollection
-from ..log import get_logger, DEBUG
+from desiutil.log import get_logger, DEBUG
 
 
 Base = declarative_base()

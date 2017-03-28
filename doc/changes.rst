@@ -5,7 +5,7 @@ desispec Change Log
 0.13.3 (unreleased)
 -------------------
 
-* No changes yet
+* Replace all instances of :mod:`desispec.log` with ``desiutil.log``.
 
 0.13.2 (2017-03-27)
 -------------------

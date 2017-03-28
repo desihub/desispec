@@ -12,7 +12,7 @@ import numpy as np
 from desispec.io import read_frame
 from desispec.io import write_fiberflat
 from desispec.fiberflat import compute_fiberflat
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
 from desispec.qa import qa_plots
