@@ -14,7 +14,7 @@ import json
 
 from desispec.zfind import ZfindBase
 from desispec.interpolation import resample_flux
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 class RedMonsterZfind(ZfindBase):
     """Class documentation goes here.
@@ -35,9 +35,9 @@ class RedMonsterZfind(ZfindBase):
         from redmonster.physics.zfinder import ZFinder
         from redmonster.physics.zfitter import ZFitter
         from redmonster.physics.zpicker2 import ZPicker
-        
+
         log=get_logger()
-        
+
 
         #- RedMonster templates don't quite go far enough into the blue,
         #- so chop off some data
@@ -73,7 +73,7 @@ class RedMonsterZfind(ZfindBase):
         else:
             if isinstance(objtype, str):
                 objtype = [objtype,]
-                
+
             objtype = [x.upper() for x in objtype]
             for x in objtype:
                 if x in ['ELG', 'LRG']:
@@ -82,7 +82,7 @@ class RedMonsterZfind(ZfindBase):
                     templatetypes.add(x)
                 else:
                     raise ValueError('Unknown objtype '+x)
-            
+
         #- list of (templatename, zmin, zmax) to fix
         self.template_dir = os.getenv('REDMONSTER_TEMPLATES_DIR')
         self.templates = list()
@@ -99,7 +99,7 @@ class RedMonsterZfind(ZfindBase):
         #- Find and refine best redshift per template
         self.zfinders = list()
         self.zfitters = list()
-        
+
         for template, zmin, zmax, group in self.templates:
             start=time.time()
             zfind = ZFinder(os.path.join(self.template_dir, template), npoly=npoly, zmin=zmin, zmax=zmax, nproc=nproc, group=group)
@@ -111,10 +111,10 @@ class RedMonsterZfind(ZfindBase):
             zfit.z_refine2()
             stop=time.time()
             log.debug("Time to refine the redshift fit of %d fibers for template %s =%f sec"%(zfit.z.shape[0],template,stop-start))
-            
+
             for ifiber in range(zfit.z.shape[0]) :
                 log.debug("(after z_refine2) fiber #%d %s chi2s=%s zs=%s"%(ifiber,template,zfit.chi2vals[ifiber],zfit.z[ifiber]))
-            
+
             self.zfinders.append(zfind)
             self.zfitters.append(zfit)
 
@@ -165,4 +165,3 @@ class _RedMonsterSpecObj(object):
         self.plate = self.mjd = self.fiberid = 0
         self.hdr = None
         self.plugmap = None
-

@@ -2,7 +2,7 @@
 from __future__ import absolute_import, division
 
 from desispec.qa import QA_Prod
-from desispec.log import get_logger
+from desiutil.log import get_logger
 import argparse
 import numpy as np
 
@@ -70,5 +70,3 @@ def main(args) :
         # Finish
         print("Writing {:s}".format(outfile))
         pp.close()
-
-

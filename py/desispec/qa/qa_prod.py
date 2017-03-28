@@ -10,7 +10,7 @@ from desispec.io import get_exposures
 from desispec.io import get_files
 from desispec.io import read_frame
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 # log = get_logger()
 

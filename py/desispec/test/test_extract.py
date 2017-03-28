@@ -4,7 +4,7 @@ try:
     from specter.psf import load_psf
     nospecter = False
 except ImportError:
-    from desispec.log import get_logger
+    from desiutil.log import get_logger
     log = get_logger()
     log.error('specter not installed; skipping extraction tests')
     nospecter = True
@@ -23,7 +23,7 @@ from astropy.io import fits
 import numpy as np
 
 class TestExtract(unittest.TestCase):
-    
+
     @classmethod
     def setUpClass(cls):
         cls.testhash = uuid.uuid4()
@@ -33,14 +33,14 @@ class TestExtract(unittest.TestCase):
         cls.fibermapfile = 'test-fibermap-{}.fits'.format(cls.testhash)
         cls.psffile = resource_filename('specter', 'test/t/psf-monospot.fits')
         # cls.psf = load_psf(cls.psffile)
-        
+
         pix = np.random.normal(0, 3.0, size=(400,400))
         ivar = np.ones_like(pix) / 3.0**2
         mask = np.zeros(pix.shape, dtype=np.uint32)
         mask[200] = 1
         img = desispec.image.Image(pix, ivar, mask, camera='z0')
         desispec.io.write_image(cls.imgfile, img)
-        
+
         fibermap = desispec.io.empty_fibermap(100)
         desispec.io.write_fibermap(cls.fibermapfile, fibermap)
 
@@ -48,17 +48,17 @@ class TestExtract(unittest.TestCase):
         for filename in (self.outfile, self.outmodel):
             if os.path.exists(filename):
                 os.remove(filename)
-        
+
     @classmethod
     def tearDownClass(cls):
         for filename in glob('test-*{}*.fits'.format(cls.testhash)):
             if os.path.exists(filename):
                 os.remove(filename)
-           
+
     @unittest.skipIf(nospecter, 'specter not installed; skipping extraction test')
     def test_extract(self):
         template = "desi_extract_spectra -i {} -p {} -w 7500,7600,0.75 -f {} -s 0 -n 3 -o {} -m {}"
-        
+
         cmd = template.format(self.imgfile, self.psffile, self.fibermapfile, self.outfile, self.outmodel)
         opts = cmd.split(" ")[1:]
         args = desispec.scripts.extract.parse(opts)
@@ -69,7 +69,7 @@ class TestExtract(unittest.TestCase):
         model1 = fits.getdata(self.outmodel)
         os.remove(self.outfile)
         os.remove(self.outmodel)
-        
+
         desispec.scripts.extract.main_mpi(args, comm=None)
         self.assertTrue(os.path.exists(self.outfile))
         frame2 = desispec.io.read_frame(self.outfile)
@@ -85,7 +85,7 @@ class TestExtract(unittest.TestCase):
         #- We'll open a separate ticket about that, but allow to pass for now
         ### self.assertTrue(np.allclose(model1, model2, rtol=1e-15, atol=1e-15))
         self.assertTrue(np.allclose(model1, model2, rtol=1e-11, atol=1e-11))
-        
+
         #- Check that units made it into the file
         self.assertEqual(frame1.meta['BUNIT'], 'photon/bin')
         self.assertEqual(frame2.meta['BUNIT'], 'photon/bin')
@@ -93,17 +93,17 @@ class TestExtract(unittest.TestCase):
     def test_boxcar(self):
         from desispec.boxcar import do_boxcar
         psf = load_psf(self.psffile)
-        
+
         pix = np.random.normal(0, 3.0, size=(psf.npix_y, psf.npix_x))
         ivar = np.ones_like(pix) / 3.0**2
         mask = np.zeros(pix.shape, dtype=np.uint32)
         img = desispec.image.Image(pix, ivar, mask, camera='z0')
-        
+
         outwave = np.arange(7500, 7600)
         nwave = len(outwave)
         nspec = 5
         flux, ivar, resolution = do_boxcar(img, psf, outwave, boxwidth=2.5, nspec=nspec)
-        
+
         self.assertEqual(flux.shape, (nspec, nwave))
         self.assertEqual(ivar.shape, (nspec, nwave))
         self.assertEqual(resolution.shape[0], nspec)
@@ -122,7 +122,7 @@ class TestExtract(unittest.TestCase):
         model1 = fits.getdata(self.outmodel)
         os.remove(self.outfile)
         os.remove(self.outmodel)
-        
+
         desispec.scripts.extract.main_mpi(args, comm=None)
         self.assertTrue(os.path.exists(self.outfile))
         frame2 = desispec.io.read_frame(self.outfile)

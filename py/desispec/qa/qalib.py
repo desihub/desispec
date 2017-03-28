@@ -5,13 +5,13 @@ simple low level library functions for offline and online qas
 import numpy as np
 import scipy.stats
 from desiutil import stats as dustat
-from desispec.log import get_logger
+from desiutil.log import get_logger
 log=get_logger()
 
 def ampregion(image):
     """
     Get the pixel boundary regions for amps
-       
+
     Args:
         image: desispec.image.Image object
     """
@@ -21,13 +21,13 @@ def ampregion(image):
     for kk in ['1','2','3','4']: #- 4 amps
         #- get the amp region in pix
         ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-        pixboundary.append(ampboundary)  
-    return pixboundary        
+        pixboundary.append(ampboundary)
+    return pixboundary
 
 def fiducialregion(frame,psf):
-    """ 
+    """
     Get the fiducial amplifier regions on the CCD pixel to fiber by wavelength space
-       
+
     Args:
         frame: desispec.frame.Frame object
         psf: desispec.psf.PSF like object
@@ -42,7 +42,7 @@ def fiducialregion(frame,psf):
     endwave1=frame.wave.shape[0] #- upper index for the last fiber for that amp
     pixboundary=[]
     fidboundary=[]
-    
+
     #- Adding the min, max boundary individually for the benefit of dumping to yaml.
     leftmax=499 #- for amp 1 and 3
     rightmin=0 #- for amp 2 and 4
@@ -56,13 +56,13 @@ def fiducialregion(frame,psf):
         for ispec in range(frame.flux.shape[0]):
             if np.all(psf.x(ispec) > ampboundary[1].start):
                 startspec=ispec
-                #-cutting off wavelenth boundaries from startspec 
+                #-cutting off wavelenth boundaries from startspec
                 yy=psf.y(ispec,frame.wave)
                 k=np.where(yy > ampboundary[0].start)[0]
                 startwave0=k[0]
                 yy=psf.y(ispec,frame.wave)
                 k=np.where(yy < ampboundary[0].stop)[0]
-                endwave0=k[-1]                
+                endwave0=k[-1]
                 break
             else:
                 startspec=None
@@ -71,21 +71,21 @@ def fiducialregion(frame,psf):
         if startspec is not None:
             for ispec in range(frame.flux.shape[0])[::-1]:
                 if np.all(psf.x(ispec) < ampboundary[1].stop):
-                    endspec=ispec 
-                    #-cutting off wavelenth boundaries from startspec 
+                    endspec=ispec
+                    #-cutting off wavelenth boundaries from startspec
                     yy=psf.y(ispec,frame.wave)
                     k=np.where(yy > ampboundary[0].start)[0]
                     startwave1=k[0]
                     yy=psf.y(ispec,frame.wave)
                     k=np.where(yy < ampboundary[0].stop)[0]
-                    endwave1=k[-1]  
+                    endwave1=k[-1]
                     break
         else:
             endspec=None
             startwave1=None
             endwave1=None
         if startwave0 is not None and startwave1 is not None:
-            startwave=max(startwave0,startwave1) 
+            startwave=max(startwave0,startwave1)
         else: startwave = None
         if endwave0 is not None and endwave1 is not None:
             endwave=min(endwave0,endwave1)
@@ -103,9 +103,9 @@ def fiducialregion(frame,psf):
             if startwave > topmin:
                 topmin=startwave
         else:
-            rightmin=0 #- Only if no spec in right side of CCD. passing 0 to encertain valid data type. Nontype throws a type error in yaml.dump. 
+            rightmin=0 #- Only if no spec in right side of CCD. passing 0 to encertain valid data type. Nontype throws a type error in yaml.dump.
 
-        #fiducialb=(slice(startspec,endspec,None),slice(startwave,endwave,None))  #- Note: y,x --> spec, wavelength 
+        #fiducialb=(slice(startspec,endspec,None),slice(startwave,endwave,None))  #- Note: y,x --> spec, wavelength
         #fidboundary.append(fiducialb)
 
     #- return pixboundary,fidboundary
@@ -113,9 +113,9 @@ def fiducialregion(frame,psf):
 
 def slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin):
     """
-    leftmax,rightmin,bottommax,topmin - Indices in spec-wavelength space for different amps (e.g output from fiducialregion function) 
+    leftmax,rightmin,bottommax,topmin - Indices in spec-wavelength space for different amps (e.g output from fiducialregion function)
     #- This could be merged to fiducialregion function
-    
+
     Returns (list):
         list of tuples of slices for spec- wavelength boundary for the amps.
     """
@@ -132,7 +132,7 @@ def slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin):
 def getrms(image):
     """
     Calculate the rms of the pixel values)
-    
+
     Args:
         image: 2d array
     """
@@ -144,11 +144,11 @@ def getrms(image):
 def countpix(image,nsig=None,ncounts=None):
     """
     Count the pixels above a given threshold.
-    
-    Threshold can be in n times sigma or counts. 
-    
+
+    Threshold can be in n times sigma or counts.
+
     Args:
-        image: 2d image array 
+        image: 2d image array
         nsig: threshold in units of sigma, e.g 2 for 2 sigma
         ncounts: threshold in units of count, e.g 100
     """
@@ -163,10 +163,10 @@ def countpix(image,nsig=None,ncounts=None):
 def countbins(flux,threshold=0):
     """
     Count the number of bins above a given threshold on each fiber
-    
+
     Args:
         flux: 2d (nspec,nwave)
-        threshold: threshold counts 
+        threshold: threshold counts
     """
     counts=np.zeros(flux.shape[0])
     for ii in range(flux.shape[0]):
@@ -177,7 +177,7 @@ def countbins(flux,threshold=0):
 def continuum(wave,flux,wmin=None,wmax=None):
     """
     Find the median continuum of the spectrum inside a wavelength region.
-    
+
     Args:
         wave: 1d wavelength array
         flux: 1d counts/flux array
@@ -191,7 +191,7 @@ def continuum(wave,flux,wmin=None,wmax=None):
     kk=np.where((wave>wmin) & (wave < wmax))
     newwave=wave[kk]
     newflux=flux[kk]
-    #- find the median continuum 
+    #- find the median continuum
     medcont=np.median(newflux)
     return medcont
 
@@ -200,11 +200,11 @@ def integrate_spec(wave,flux):
     Calculate the integral of the spectrum in the given range using trapezoidal integration
 
     Note: limits of integration are min and max values of wavelength
-    
+
     Args:
         wave: 1d wavelength array
-        flux: 1d flux array 
-    """   
+        flux: 1d flux array
+    """
     integral=np.trapz(flux,wave)
     return integral
 
@@ -212,7 +212,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     """
     Algorithm for sky residual
     To be called from desispec.sky.qa_skysub and desispec.qa.qa_quicklook.Sky_residual.run_qa
-    Args: 
+    Args:
         param : dict of QA parameters
         frame : desispec.Frame object after sky subtraction
         skymodel : desispec.SkyModel object
@@ -261,12 +261,12 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
     #- Residuals in wave and fiber axes
-    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)        
+    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
     qadict["SKY_FIBERID"]=skyfibers.tolist()
     qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
 
     #- Weighted average for each bin on all fibers
-    qadict["WAVG_RES_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)        
+    qadict["WAVG_RES_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
 
     #- Histograms for residual/sigma #- inherited from qa_plots.frame_skyres()
     binsz = param['BIN_SZ']
@@ -276,10 +276,10 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     rng = tuple( binsz*np.array([i0,i1]) )
     nbin = i1-i0
     hist, edges = np.histogram(devs, range=rng, bins=nbin)
-    
+
     qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
     qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
-    
+
     #- Add additional metrics for quicklook
     if quick_look:
         qadict["WAVELENGTH"]=frame.wave
@@ -292,7 +292,7 @@ def SN_ratio(flux,ivar):
     median snr for the spectra, flux should be sky subtracted.
 
     Args:
-        flux (array): 2d [nspec,nwave] the signal (typically for spectra, 
+        flux (array): 2d [nspec,nwave] the signal (typically for spectra,
             this comes from frame object
         ivar (array): 2d [nspec,nwave] corresponding inverse variance
     """
@@ -314,7 +314,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
     targets (ELG, LRG, QSO, STD) and for each amplifier of the camera.
 
     Args:
-        flux (array): 2d [nspec,nwave] the signal (typically for spectra, 
+        flux (array): 2d [nspec,nwave] the signal (typically for spectra,
             this comes from frame object
         ivar (array): 2d [nspec,nwave] corresponding inverse variance
         fidboundary : list of slices indicating where to select in fiber
@@ -374,13 +374,13 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     #- Median S/N for different amp zones.
     average_amp = None
-    if fidboundary is not None:      
+    if fidboundary is not None:
         averages=[]
         for ii in range(4):
             if fidboundary[ii][0].start is not None:  #- have fibers in this amp?
                 medsnramp=SN_ratio(frame.flux[fidboundary[ii]],frame.ivar[fidboundary[ii]])
                 averages.append(np.mean(medsnramp))
-            else: 
+            else:
                 averages.append(None)
 
         average_amp=np.array(averages)
@@ -394,4 +394,3 @@ def gauss(x,a,mu,sigma):
     Gaussian fit of input data
     """
     return a*np.exp(-(x-mu)**2/(2*sigma**2))
-

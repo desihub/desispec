@@ -7,19 +7,19 @@ import astropy.io.fits as pyfits
 import argparse
 from desispec.preproc import  _parse_sec_keyword
 import matplotlib.pyplot as plt
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Compute the electronic cross-talk coefficient among the amplifiers of a CCD image",
                                  epilog='''
                                  Input is a preprocessed arc lamp image with a sufficient number of bright lines
-                                 to evaluate unambiguously the cross-talk.                                 
+                                 to evaluate unambiguously the cross-talk.
                                  ''')
-parser.add_argument('-i','--image', type = str, default = None, required = True, 
+parser.add_argument('-i','--image', type = str, default = None, required = True,
                     help = 'path of preprocessed image fits file')
-parser.add_argument('-t','--threshold', type = float, default = 2000, required = False, 
+parser.add_argument('-t','--threshold', type = float, default = 2000, required = False,
                     help = 'flux threshold to detect cross-talk in other amps')
-parser.add_argument('-m','--maxflux',type = float, default = 15000, required = False, 
+parser.add_argument('-m','--maxflux',type = float, default = 15000, required = False,
                     help = 'max flux to avoid saturation issues')
 parser.add_argument('--plot',action="store_true",help="show the fit")
 
@@ -27,7 +27,7 @@ parser.add_argument('--plot',action="store_true",help="show the fit")
 args        = parser.parse_args()
 log = get_logger()
 
-    
+
 image_file  = pyfits.open(args.image)
 flux = image_file[0].data
 ivar = image_file["IVAR"].data*(image_file["MASK"].data==0)
@@ -39,10 +39,10 @@ amplifiers=["A","B","C","D"]
 # and  python axis 0 = fits axis 1 = y corresponding to row number (as in ds9 display)
 # the ccd looks like :
 # C D
-# A B 
+# A B
 # for cross talk, we need a symmetric 4x4 flip_matrix
 # of coordinates ABCD giving flip of both axis
-# when computing crosstalk of 
+# when computing crosstalk of
 #    A   B   C   D
 #
 # A  AA  AB  AC  AD
@@ -67,13 +67,13 @@ for a1 in range(4) :
     amp1=amplifiers[a1]
     ccdsec1=header["CCDSEC%s"%amp1]
     ii1 =  _parse_sec_keyword(ccdsec1)
-    
+
     a1flux=flux[ii1]
     mask=(flux[ii1]>args.threshold)&(flux[ii1]<args.maxflux)
     if a1flux[mask].size<10 :
         log.warning("not enough pix above threshold in %s"%amp1)
         continue
-    
+
     for a2 in range(4) :
         if a1 == a2 :
             continue
@@ -82,26 +82,26 @@ for a1 in range(4) :
         ii2 =  _parse_sec_keyword(ccdsec2)
         a2flux=flux[ii2]
         a2ivar=ivar[ii2]
-        
+
         if fip_axis_0[a1,a2]==-1 :
             a2flux=a2flux[::-1]
             a2ivar=a2ivar[::-1]
         if fip_axis_1[a1,a2]==-1 :
            a2flux=a2flux[:,::-1]
            a2ivar=a2ivar[:,::-1]
-        
+
         mask12 = mask&(a2ivar>0)
 
-        
+
         npix=np.sum(mask12)
-        
+
         f1=a1flux[mask].ravel()
         f2=a2flux[mask].ravel()
-        
-        
+
+
         nbins=int(npix/50.)
         fbins=args.threshold*np.exp(np.linspace(0.,np.log(args.maxflux/args.threshold),nbins))
-        
+
         mf1=np.zeros(fbins.size-1)
         mf2=np.zeros(fbins.size-1)
         ef2=np.zeros(fbins.size-1)
@@ -110,7 +110,7 @@ for a1 in range(4) :
             if ok.size<3 :
                 continue
             if1=f1[ok]
-            if2=f2[ok]            
+            if2=f2[ok]
             imf2=np.median(if2) # robust estimate in bin
             imf1=np.median(if1) # also a median to avoid biases
             irms2=1.4826*np.median(np.abs(if2-imf2)) # robust estimate of rms in bins
@@ -125,11 +125,11 @@ for a1 in range(4) :
         if i.size<2 :
             log.warning("cannot measure cross-talk for %s%s"%(amp1,amp2))
             continue
-        
+
         mf1=mf1[i]
         mf2=mf2[i]
         ef2=ef2[i]
-        
+
         w=1./ef2**2
         A = np.zeros((2,2))
         B = np.zeros(2)
@@ -138,27 +138,21 @@ for a1 in range(4) :
         A[1,1] = np.sum(w*mf1**2)
         B[0]   = np.sum(w*mf2)
         B[1]   = np.sum(w*mf1*mf2)
-        
+
         Ai = np.linalg.inv(A)
         X  = Ai.dot(B)
         cross_talk = X[1]
         cross_err  = np.sqrt(Ai[1,1])
         offset     = X[0]
-        
+
         log.info("%s%s = %f +- %f sig=%f"%(amp1,amp2,cross_talk,cross_err,np.abs(cross_talk/cross_err)))
-        
-        
+
+
         if args.plot :
             plt.figure("c%s%s"%(amp1,amp2))
             plt.errorbar(mf1,mf2,ef2,color="b",fmt="o")
             plt.plot(mf1,offset+mf1*cross_talk,"-",color="r")
             plt.xlabel("flux in amp %s"%amp1)
-            plt.ylabel("flux in amp %s"%amp2)        
+            plt.ylabel("flux in amp %s"%amp2)
 if args.plot :
     plt.show()
-       
-
-        
-        
-
-

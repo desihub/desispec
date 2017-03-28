@@ -12,7 +12,7 @@ from desispec.io.qa import load_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.fluxcalibration import compute_flux_calibration
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec.qa import qa_plots
 
 import argparse
@@ -39,7 +39,7 @@ def parse(options=None):
                         help='path of QA file.')
     parser.add_argument('--qafig', type = str, default = None, required=False,
                         help = 'path of QA figure file')
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -80,7 +80,7 @@ def main(args) :
 
     ## check whether star fibers from args.models are consistent with fibers from fibermap
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
-    
+
     w = np.where(fibermap["OBJTYPE"][model_fibers] != 'STD')[0]
     if len(w)>0:
         for i in model_fibers:
@@ -109,4 +109,3 @@ def main(args) :
     write_flux_calibration(args.outfile, fluxcalib, header=frame.meta)
 
     log.info("successfully wrote %s"%args.outfile)
-

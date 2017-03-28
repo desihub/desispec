@@ -17,7 +17,7 @@ from astropy.io import fits
 from desispec.util import runcmd
 import desispec.pipeline as pipe
 import desispec.io as io
-import desispec.log as logging
+import desiutil.log as logging
 
 import desispec.scripts.makebricks as makebricks
 
@@ -75,7 +75,7 @@ def sim(night, nspec=5, clobber=False):
         night (str): YEARMMDD
         nspec (int, optional): number of spectra to include
         clobber (bool, optional): rerun steps even if outputs already exist
-        
+
     Raises:
         RuntimeError if any script fails
     """
@@ -109,15 +109,15 @@ def sim(night, nspec=5, clobber=False):
 
 def integration_test(night=None, nspec=5, clobber=False):
     """Run an integration test from raw data simulations through redshifts
-    
+
     Args:
         night (str, optional): YEARMMDD, defaults to current night
         nspec (int, optional): number of spectra to include
         clobber (bool, optional): rerun steps even if outputs already exist
-        
+
     Raises:
         RuntimeError if any script fails
-      
+
     """
     log = logging.get_logger()
     log.setLevel(logging.DEBUG)
@@ -204,7 +204,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Brick     True  z        ->  Class  z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for b in bricks:
-        zbest = io.read_zbest(io.findfile('zbest', brickname=b))        
+        zbest = io.read_zbest(io.findfile('zbest', brickname=b))
         for i in range(len(zbest.z)):
             if zbest.spectype[i] == 'ssp_em_galaxy':
                 objtype = 'GAL'

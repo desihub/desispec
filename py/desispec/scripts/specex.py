@@ -15,7 +15,7 @@ from ctypes.util import find_library
 
 from astropy.io import fits
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 
 libspecex = None
@@ -280,7 +280,7 @@ def mean_psf(inputs, output):
         psf = fits.open(input)
         if refhead is None :
             hdulist = psf
-            refhead = psf[1].header            
+            refhead = psf[1].header
             nbundles = (psf[1].header["BUNDLMAX"]-psf[1].header["BUNDLMIN"])+1
             nfibers = (psf[1].header["FIBERMAX"]-psf[1].header["FIBERMIN"])+1
             nfibers_per_bundle = nfibers/nbundles
@@ -290,12 +290,12 @@ def mean_psf(inputs, output):
             if not compatible(psf[1].header,refhead) :
                 raise RuntimeError("psfs {} and {} are not compatible".format(inputs[0], input))
         tables.append(psf[1].data)
-        
+
         rchi2 = np.zeros(nbundles)
         for b in range(nbundles) :
             rchi2[b] = psf[1].header["B{:02d}RCHI2".format(b)]
         bundle_rchi2.append(rchi2)
-    
+
     bundle_rchi2 = np.array(bundle_rchi2)
     log.debug("bundle_rchi2 = {}".format(bundle_rchi2))
 
@@ -305,16 +305,16 @@ def mean_psf(inputs, output):
         # check WAVEMIN WAVEMAX compatibility
         WAVEMIN = tables[0][entry]["WAVEMIN"]
         WAVEMAX = tables[0][entry]["WAVEMAX"]
-        
+
         # for p in range(1,npsf) :
         #     if tables[p][entry]["WAVEMIN"] != WAVEMIN :
-        #         log.error("WAVEMIN not compatible for param %s : %f!=%f"%(PARAM,tables[p][entry]["WAVEMIN"],WAVEMIN)) 
+        #         log.error("WAVEMIN not compatible for param %s : %f!=%f"%(PARAM,tables[p][entry]["WAVEMIN"],WAVEMIN))
         #         sys.exit(12)
         #     if tables[p][entry]["WAVEMAX"] != WAVEMAX :
         #         log.error("WAVEMAX not compatible for param %s : %f!=%f"%(PARAM,tables[p][entry]["WAVEMAX"],WAVEMAX))
         #         sys.exit(12)
-        
-        # will need to readdress coefs ...         
+
+        # will need to readdress coefs ...
         coeff = [tables[0][entry]["COEFF"]]
         npar = coeff[0][1].size
         for p in range(1, npsf) :
@@ -328,7 +328,7 @@ def mean_psf(inputs, output):
                 iwavemin = tables[p][entry]["WAVEMIN"]
                 iwavemax = tables[p][entry]["WAVEMAX"]
                 wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
-                ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.                
+                ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
                 for f in range(icoeff.shape[0]) :
                     val = legval(iu,icoeff[f])
                     ocoeff[f] = legfit(ou,val,deg=npar-1)
@@ -337,22 +337,22 @@ def mean_psf(inputs, output):
                 #print ocoeff[2]
                 coeff.append(ocoeff)
         coeff = np.array(coeff)
-        
+
         output_rchi2 = np.zeros((bundle_rchi2.shape[1]))
         output_coeff = np.zeros(tables[0][entry]["COEFF"].shape)
-        
+
         #log.info("input coeff.shape  = %d"%coeff.shape)
         #log.info("output coeff.shape = %d"%output_coeff.shape)
-        
+
         # now merge, using rchi2 as selection score
         rchi2_threshold = 2.0
         for bundle in range(bundle_rchi2.shape[1]) :
-            
+
             ok = np.where(bundle_rchi2[:,bundle] < rchi2_threshold)[0]
             #ok=np.array([0,1]) # debug
             if entry == 0:
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle, ok.size))
-            
+
             fibers = np.arange(bundle*nfibers_per_bundle,(bundle+1)*nfibers_per_bundle)
             if ok.size >= 2: # use median
                 for f in fibers :
@@ -362,22 +362,22 @@ def mean_psf(inputs, output):
                 for f in fibers :
                     output_coeff[f] = coeff[ok[0],f]
                 output_rchi2[bundle] = bundle_rchi2[ok[0],bundle]
-                    
+
             else: # we have a problem here, take the smallest rchi2
                 i = np.argmin(bundle_rchi2[:,bundle])
                 for f in fibers :
                     output_coeff[f] = coeff[i,f]
                 output_rchi2[bundle] = bundle_rchi2[i,bundle]
-        
+
         # now copy this in output table
         hdulist[1].data["COEFF"][entry] = output_coeff
         # change bundle chi2
         for bundle in range(output_rchi2.size) :
             hdulist[1].header["B{:02d}RCHI2".format(bundle)] = output_rchi2[bundle]
-        
+
         # alter other keys in header
         hdulist[1].header["EXPID"] = 0.0 # it's a mix , need to add the expids here
-        
+
     # save output PSF
     hdulist.writeto(output, clobber=True)
     log.info("wrote {}".format(output))

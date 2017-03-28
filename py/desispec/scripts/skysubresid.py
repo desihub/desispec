@@ -1,7 +1,7 @@
 # Script for generating plots on SkySub residuals
 from __future__ import absolute_import, division
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 import argparse
 import numpy as np
 
@@ -122,6 +122,3 @@ def main(args) :
             # Plot
             skysub_resid(sky_wave, sky_flux, sky_res,
                          outfile='tmp{:s}.png'.format(channel))
-
-
-
