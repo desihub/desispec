@@ -27,6 +27,11 @@ def parse_delivery(*args):
     from argparse import ArgumentParser
     desc = "Script called by DTS when files are delivered."
     prsr = ArgumentParser(prog=basename(argv[0]), description=desc)
+    prsr.add_argument('-n', '--nersc-host', metavar='NERSC_HOST',
+                      dest='nersc_host', default='edison',
+                      help='Run night commands on this host (default %(default)s).')
+    prsr.add_argument('-p', '--prefix', metavar='PREFIX', action='append',
+                      help="Prepend one or more commands to the night command.")
     prsr.add_argument('filename', metavar='FILE',
                       help='Filename with path of delivered file.')
     prsr.add_argument('exposure', type=int, metavar='EXPID',
@@ -50,9 +55,14 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    from shlex import split, quote
     from desiutil.log import get_logger
     log = get_logger()
     options = parse_delivery()
+    remote_command = 'desi_{0.nightStatus}_night {0.night}'.format(options)
+    if len(options.prefix) > 0:
+        remote_command = '; '.join(options.prefix) + '; ' + remote_command
+    command = ['ssh', '-q', options.nersc_host, quote(remote_command)]
     log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
-    log.info("Calling desi_{0.nightStatus}_night {0.night}.".format(options))
+    log.info("Calling: {0}.".format(command))
     return 0
