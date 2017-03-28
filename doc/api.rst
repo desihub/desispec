@@ -88,6 +88,9 @@ Full desispec API Reference
 .. automodule:: desispec.linalg
     :members:
 
+.. automodule:: desispec.log
+    :members:
+
 .. automodule:: desispec.maskbits
     :members:
 

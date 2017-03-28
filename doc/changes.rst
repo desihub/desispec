@@ -5,7 +5,9 @@ desispec Change Log
 0.13.3 (unreleased)
 -------------------
 
-* Replace all instances of :mod:`desispec.log` with ``desiutil.log``.
+* Replace all instances of :mod:`desispec.log` with ``desiutil.log``;
+  :func:`~desispec.log.get_logger` now prints a warning that users need
+  to switch.
 
 0.13.2 (2017-03-27)
 -------------------
