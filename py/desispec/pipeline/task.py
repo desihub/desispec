@@ -15,8 +15,7 @@ import os
 import sys
 import re
 
-from .. import log as desilog
-from desiutil.log import get_logger
+from desiutil.log import get_logger, DEBUG
 from ..util import option_list
 from ..parallel import default_nproc
 from .. import io
@@ -255,7 +254,7 @@ class WorkerSpecex(Worker):
         options["input"] = imgfile
         options["bootfile"] = bootfile
         options["output"] = outfile
-        if log.getEffectiveLevel() == desilog.DEBUG:
+        if log.getEffectiveLevel() == DEBUG:
             options["verbose"] = True
         if len(opts) > 0:
             extarray = option_list(opts)
