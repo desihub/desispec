@@ -9,13 +9,16 @@ Entry points for start/update/end night scripts.
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 
+log = None
+
+
 def stage_from_command():
     """Extract the processing stage from the executable command.
 
     Returns
     -------
-    :func:`tuple`
-        The extracted stage and night.
+    :class:`str`
+        The extracted stage.
 
     Raises
     ------
@@ -27,11 +30,16 @@ def stage_from_command():
     stage = basename(argv[0]).split('_')[1]
     if stage not in ('start', 'update', 'end'):
         raise KeyError('Command does not match one of the stages!')
-    return (stage, argv[1])
+    return stage
 
 
-def update_logger():
+def update_logger(options):
     """Reconfigure the default logging object.
+
+    Parameters
+    ----------
+    options : :class:`argparse.Namespace`
+        The parsed command-line options.
 
     Returns
     -------
@@ -44,8 +52,7 @@ def update_logger():
     from desiutil.log import get_logger
     log = get_logger()
     fmt = None
-    stage, night = stage_from_command()
-    filename = join(environ['HOME'], 'desi_{0}_night_{1}.log'.format(stage, night))
+    filename = join(environ['HOME'], 'desi_{0.stage}_night_{0.night}.log'.format(options))
     if log.hasHandlers():
         for h in log.handlers:
             if fmt is None:
@@ -55,9 +62,6 @@ def update_logger():
     h.setFormatter(fmt)
     log.addHandler(h)
     return log
-
-
-log = update_logger()
 
 
 def parse_night(stage, *args):
@@ -96,6 +100,8 @@ def parse_night(stage, *args):
 def validate_inputs(options):
     """Ensure that all inputs to the start/update/end night scripts are valid.
 
+    In addition the log object for this command is initialized here.
+
     Parameters
     ----------
     options : :class:`argparse.Namespace`
@@ -106,7 +112,9 @@ def validate_inputs(options):
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    global log
     from os import environ
+    log = update_logger(options)
     try:
         night = options.night
     except AttributeError:
@@ -148,7 +156,7 @@ def main():
         An integer suitable for passing to :func:`sys.exit`.
     """
     from time import sleep
-    stage, night = stage_from_command()
+    stage = stage_from_command()
     options = parse_night(stage)
     status = validate_inputs(options)
     log.info("Called with night = {0}.".format(options.night))
