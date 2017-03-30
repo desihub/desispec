@@ -89,55 +89,56 @@ def validate_inputs(options):
     return 0
 
 
-def start_main():
-    """Entry point for :command:`desi_start_night`.
+def update_logger(log, filename):
+    """Reconfigure the default logging object.
+
+    Parameters
+    ----------
+    log : :class:`logging.Logger`
+        Log object to reconfigure.
+    filename : :class:`str`
+        Filename to associate with a :class:`~logging.handlers.FileHandler`
+        object.
+
+    Returns
+    -------
+    :class:`logging.Logger`
+        The updated object.
+    """
+    from logging import FileHandler
+    fmt = None
+    if log.hasHandlers():
+        for h in log.handlers:
+            if fmt is None:
+                fmt = h.formatter
+            log.removeHandler(h)
+    h = FileHandler(filename)
+    h.setFormatter(fmt)
+    log.addHandler(h)
+    return log
+
+
+def main():
+    """Entry point for :command:`desi_start_night`,
+    :command:`desi_update_night` and :command:`desi_end_night`.
 
     Returns
     -------
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    from os import basename, environ
+    from os.path import join
+    from sys import argv
     from time import sleep
     from desiutil.log import get_logger
-    options = parse_night('start')
-    status = validate_inputs(options)
     log = get_logger()
+    stage = basename(argv[0]).split('_')[1]
+    options = parse_night(stage)
+    status = validate_inputs(options)
+    logfile = join(environ['HOME'], 'desi_{0.stage}_night_{0.night}.log'.format(options))
+    log = update_logger(log, logfile)
     log.info("Called with night = {0}.".format(options.night))
     sleep(120)
-    return status
-
-
-def update_main():
-    """Entry point for :command:`desi_update_night`.
-
-    Returns
-    -------
-    :class:`int`
-        An integer suitable for passing to :func:`sys.exit`.
-    """
-    from time import sleep
-    from desiutil.log import get_logger
-    options = parse_night('update')
-    status = validate_inputs(options)
-    log = get_logger()
-    log.info("Called with night = {0}.".format(options.night))
-    sleep(120)
-    return status
-
-
-def end_main():
-    """Entry point for :command:`desi_end_night`.
-
-    Returns
-    -------
-    :class:`int`
-        An integer suitable for passing to :func:`sys.exit`.
-    """
-    from time import sleep
-    from desiutil.log import get_logger
-    options = parse_night('end')
-    status = validate_inputs(options)
-    log = get_logger()
-    log.info("Called with night = {0}.".format(options.night))
-    sleep(120)
+    log.info("All done.")
     return status
