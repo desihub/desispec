@@ -127,8 +127,8 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    from os import basename, environ
-    from os.path import join
+    from os import environ
+    from os.path import basename, join
     from sys import argv
     from time import sleep
     from desiutil.log import get_logger
