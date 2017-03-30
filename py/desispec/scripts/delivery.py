@@ -63,7 +63,8 @@ def main():
     remote_command = 'desi_{0.nightStatus}_night {0.night}'.format(options)
     if options.prefix is not None:
         remote_command = '; '.join(options.prefix) + '; ' + remote_command
-    command = ['ssh', '-q', options.nersc_host, quote(remote_command)]
+    remote_command += ' > /dev/null 2>&1 &'
+    command = ['ssh', '-n', '-q', options.nersc_host, quote(remote_command)]
     log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
     log.info("Calling: {0}.".format(' '.join(command)))
     # proc = Popen(command)

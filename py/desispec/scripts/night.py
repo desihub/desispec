@@ -97,11 +97,13 @@ def start_main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    from time import sleep
     from desiutil.log import get_logger
     options = parse_night('start')
     status = validate_inputs(options)
     log = get_logger()
     log.info("Called with night = {0}.".format(options.night))
+    sleep(120)
     return status
 
 
@@ -113,11 +115,13 @@ def update_main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    from time import sleep
     from desiutil.log import get_logger
     options = parse_night('update')
     status = validate_inputs(options)
     log = get_logger()
     log.info("Called with night = {0}.".format(options.night))
+    sleep(120)
     return status
 
 
@@ -129,9 +133,11 @@ def end_main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    from time import sleep
     from desiutil.log import get_logger
     options = parse_night('end')
     status = validate_inputs(options)
     log = get_logger()
     log.info("Called with night = {0}.".format(options.night))
+    sleep(120)
     return status
