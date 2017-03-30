@@ -8,6 +8,7 @@ Entry points for start/update/end night scripts.
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+log = update_logger()
 
 def parse_night(stage, *args):
     """Parse command-line options for start/update/end night scripts.
@@ -56,8 +57,6 @@ def validate_inputs(options):
         An integer suitable for passing to :func:`sys.exit`.
     """
     from os import environ
-    from desiutil.log import get_logger
-    log = get_logger()
     try:
         night = options.night
     except AttributeError:
@@ -89,24 +88,22 @@ def validate_inputs(options):
     return 0
 
 
-def update_logger(log, filename):
+def update_logger():
     """Reconfigure the default logging object.
-
-    Parameters
-    ----------
-    log : :class:`logging.Logger`
-        Log object to reconfigure.
-    filename : :class:`str`
-        Filename to associate with a :class:`~logging.handlers.FileHandler`
-        object.
 
     Returns
     -------
     :class:`logging.Logger`
         The updated object.
     """
+    from os import environ
+    from os.path import join
     from logging import FileHandler
+    from desiutil.log import get_logger
+    log = get_logger()
     fmt = None
+    stage, night = stage_from_command()
+    filename = join(environ['HOME'], 'desi_{0}_night_{1}.log'.format(stage, night))
     if log.hasHandlers():
         for h in log.handlers:
             if fmt is None:
@@ -118,6 +115,27 @@ def update_logger(log, filename):
     return log
 
 
+def stage_from_command():
+    """Extract the processing stage from the executable command.
+
+    Returns
+    -------
+    :func:`tuple`
+        The extracted stage and night.
+
+    Raises
+    ------
+    KeyError
+        If the extracted string does not match the set of stages.
+    """
+    from sys import argv
+    from os.path import basename
+    stage = basename(argv[0]).split('_')[1]
+    if stage not in ('start', 'update', 'end'):
+        raise KeyError('Command does not match one of the stages!')
+    return (stage, argv[1])
+
+
 def main():
     """Entry point for :command:`desi_start_night`,
     :command:`desi_update_night` and :command:`desi_end_night`.
@@ -127,17 +145,9 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    from os import environ
-    from os.path import basename, join
-    from sys import argv
     from time import sleep
-    from desiutil.log import get_logger
-    log = get_logger()
-    stage = basename(argv[0]).split('_')[1]
     options = parse_night(stage)
     status = validate_inputs(options)
-    logfile = join(environ['HOME'], 'desi_{0.stage}_night_{0.night}.log'.format(options))
-    log = update_logger(log, logfile)
     log.info("Called with night = {0}.".format(options.night))
     sleep(120)
     log.info("All done.")
