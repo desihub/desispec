@@ -148,6 +148,7 @@ def main():
         An integer suitable for passing to :func:`sys.exit`.
     """
     from time import sleep
+    stage, night = stage_from_command()
     options = parse_night(stage)
     status = validate_inputs(options)
     log.info("Called with night = {0}.".format(options.night))
