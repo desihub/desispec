@@ -8,6 +8,28 @@ Entry points for start/update/end night scripts.
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+
+def stage_from_command():
+    """Extract the processing stage from the executable command.
+
+    Returns
+    -------
+    :func:`tuple`
+        The extracted stage and night.
+
+    Raises
+    ------
+    KeyError
+        If the extracted string does not match the set of stages.
+    """
+    from sys import argv
+    from os.path import basename
+    stage = basename(argv[0]).split('_')[1]
+    if stage not in ('start', 'update', 'end'):
+        raise KeyError('Command does not match one of the stages!')
+    return (stage, argv[1])
+
+
 def update_logger():
     """Reconfigure the default logging object.
 
@@ -114,27 +136,6 @@ def validate_inputs(options):
         else:
             log.info('{0}={1}'.format(k, val))
     return 0
-
-
-def stage_from_command():
-    """Extract the processing stage from the executable command.
-
-    Returns
-    -------
-    :func:`tuple`
-        The extracted stage and night.
-
-    Raises
-    ------
-    KeyError
-        If the extracted string does not match the set of stages.
-    """
-    from sys import argv
-    from os.path import basename
-    stage = basename(argv[0]).split('_')[1]
-    if stage not in ('start', 'update', 'end'):
-        raise KeyError('Command does not match one of the stages!')
-    return (stage, argv[1])
 
 
 def main():
