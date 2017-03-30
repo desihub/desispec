@@ -8,7 +8,35 @@ Entry points for start/update/end night scripts.
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+def update_logger():
+    """Reconfigure the default logging object.
+
+    Returns
+    -------
+    :class:`logging.Logger`
+        The updated object.
+    """
+    from os import environ
+    from os.path import join
+    from logging import FileHandler
+    from desiutil.log import get_logger
+    log = get_logger()
+    fmt = None
+    stage, night = stage_from_command()
+    filename = join(environ['HOME'], 'desi_{0}_night_{1}.log'.format(stage, night))
+    if log.hasHandlers():
+        for h in log.handlers:
+            if fmt is None:
+                fmt = h.formatter
+            log.removeHandler(h)
+    h = FileHandler(filename)
+    h.setFormatter(fmt)
+    log.addHandler(h)
+    return log
+
+
 log = update_logger()
+
 
 def parse_night(stage, *args):
     """Parse command-line options for start/update/end night scripts.
@@ -86,33 +114,6 @@ def validate_inputs(options):
         else:
             log.info('{0}={1}'.format(k, val))
     return 0
-
-
-def update_logger():
-    """Reconfigure the default logging object.
-
-    Returns
-    -------
-    :class:`logging.Logger`
-        The updated object.
-    """
-    from os import environ
-    from os.path import join
-    from logging import FileHandler
-    from desiutil.log import get_logger
-    log = get_logger()
-    fmt = None
-    stage, night = stage_from_command()
-    filename = join(environ['HOME'], 'desi_{0}_night_{1}.log'.format(stage, night))
-    if log.hasHandlers():
-        for h in log.handlers:
-            if fmt is None:
-                fmt = h.formatter
-            log.removeHandler(h)
-    h = FileHandler(filename)
-    h.setFormatter(fmt)
-    log.addHandler(h)
-    return log
 
 
 def stage_from_command():
