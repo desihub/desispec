@@ -67,5 +67,5 @@ def main():
     command = ['ssh', '-n', '-q', options.nersc_host, quote(remote_command)]
     log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
     log.info("Calling: {0}.".format(' '.join(command)))
-    # proc = Popen(command)
+    proc = Popen(command)
     return 0
