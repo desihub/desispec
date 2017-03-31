@@ -90,7 +90,7 @@ def move_file(filename, dst):
     from desiutil.log import get_logger
     log = get_logger()
     if not exists(dst):
-        log.info("mkdir('{0}', 0o2750)".format(dst))
+        log.info("mkdir('{0}', 0o2770)".format(dst))
         mkdir(dst, 0o2770)
     log.info("move('{0}', '{1}')".format(filename, dst))
     return move(filename, dst)
