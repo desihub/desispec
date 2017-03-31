@@ -576,7 +576,17 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # fit redshift on canonical model
     # we use the original data to do this
     # because we resample both the data and model on a logarithmic grid in the routine
-    z = redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux[canonical_model], z_max, z_res)
+    tmp_ivar = ivar.copy()
+    
+    if True : # mask Ca H&K lines. Present in ISM, can bias the stellar redshift fit
+        log.debug("Mask ISM lines for redshift")
+        ismlines=np.array([3934.77,3969.59])
+        hw=6. # A
+        for cam in wave.keys() :
+            for line in ismlines :
+                tmp_ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
+    
+    z = redshift_fit(wave, flux, tmp_ivar, resolution_data, stdwave, stdflux[canonical_model], z_max, z_res)
             
     # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
     
