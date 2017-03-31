@@ -53,7 +53,9 @@ def update_logger(options):
     log = get_logger()
     fmt = None
     try:
-        filename = join(environ['HOME'], 'desi_{0.stage}_night_{0.night}.log'.format(options))
+        filename = join(environ['DESI_SPECTRO_DATA'],
+                        options.night,
+                        'desi_{0.stage}_night_{0.night}.log'.format(options))
     except AttributeError:
         # This can happen during tests.
         return log
