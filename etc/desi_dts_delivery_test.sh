@@ -78,10 +78,10 @@ for e in ${exposures}; do
     desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/fibermap-${e}.fits ${expid} ${night} ${stage}
     /bin/sleep ${latency}
     /bin/cp -v ${src}/guider-${e}.fits.fz ${dst}
-    desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/fibermap-${e}.fits ${expid} ${night} update
+    desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/guider-${e}.fits.fz ${expid} ${night} update
     /bin/sleep ${latency}
     /bin/cp -v ${src}/desi-${e}.fits.fz ${dst}
-    desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/fibermap-${e}.fits ${expid} ${night} update
+    desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/desi-${e}.fits.fz ${expid} ${night} update
     /bin/sleep ${naptime}
     stage=update
 done
