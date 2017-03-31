@@ -47,13 +47,13 @@ def parse_delivery(*args):
     return options
 
 
-def check_exposure(inbox, expid):
+def check_exposure(dst, expid):
     """Ensure that all files associated with an exposure have arrived.
 
     Parameters
     ----------
-    inbox : :class:`str`
-        Delivery directory.
+    dst : :class:`str`
+        Delivery directory, typically ``DESI_SPECTRO_DATA/NIGHT``.
     expid : :class:`int`
         Exposure number.
 
@@ -64,7 +64,36 @@ def check_exposure(inbox, expid):
     """
     from os.path import exists, join
     files = ('fibermap-{0:08d}.fits', 'desi-{0:08d}.fits.fz', 'guider-{0:08d}.fits.fz')
-    return all([exists(join(inbox, f.format(expid))) for f in files])
+    return all([exists(join(dst, f.format(expid))) for f in files])
+
+
+def move_file(filename, dst):
+    """Move delivered file from the DTS spool to the final raw data area.
+
+    This function will ensure that the destination directory exists.
+
+    Parameters
+    ----------
+    filename : :class:`str`
+        The name, including full path, of the file to move.
+    dst : :class:`str`
+        The destination *directory*.
+
+    Returns
+    -------
+    :class:`str`
+        The value returned by :func:`shutil.move`.
+    """
+    from os import mkdir
+    from os.path import exists, isdir
+    from shutil import move
+    from desiutil.log import get_logger
+    log = get_logger()
+    if not exists(dst):
+        log.info("mkdir('{0}', 0o2750)".format(dst))
+        mkdir(dst, 0o2750)
+    log.info("move('{0}', '{1}')".format(filename, dst))
+    return move(filename, dst)
 
 
 def main():
@@ -75,7 +104,8 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    from os.path import dirname
+    from os import environ
+    from os.path import dirname, join
     from subprocess import Popen
     from desiutil.log import get_logger
     log = get_logger()
@@ -88,7 +118,10 @@ def main():
                       ' &)')
     command = ['ssh', '-n', '-q', options.nersc_host, remote_command]
     log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
-    exposure_arrived = check_exposure(dirname(options.filename), options.exposure)
+    dst = join(environ['DESI_SPECTRO_DATA'], options.night)
+    log.info("Using {0} as raw data directory.".format(dst))
+    move_file(options.filename, dst)
+    exposure_arrived = check_exposure(dst, options.exposure)
     if options.nightStatus in ('start', 'end') or exposure_arrived:
         log.info("Calling: {0}.".format(' '.join(command)))
         proc = Popen(command)
