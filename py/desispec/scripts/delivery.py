@@ -47,6 +47,26 @@ def parse_delivery(*args):
     return options
 
 
+def check_exposure(inbox, expid):
+    """Ensure that all files associated with an exposure have arrived.
+
+    Parameters
+    ----------
+    inbox : :class:`str`
+        Delivery directory.
+    expid : :class:`int`
+        Exposure number.
+
+    Returns
+    -------
+    :class:`bool`
+        ``True`` if all files have arrived.
+    """
+    from os.path import exists, join
+    files = ('fibermap-{0:08d}.fits', 'desi-{0:08d}.fits.fz', 'guider-{0:08d}.fits.fz')
+    return all([exists(join(inbox, f.format(expid))) for f in files])
+
+
 def main():
     """Entry point for :command:`desi_dts_delivery`.
 
@@ -67,6 +87,8 @@ def main():
                       ' &)')
     command = ['ssh', '-n', '-q', options.nersc_host, remote_command]
     log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
-    log.info("Calling: {0}.".format(' '.join(command)))
-    proc = Popen(command)
+    exposure_arrived = check_exposure(dirname(options.filename), options.exposure)
+    if options.stage in ('start', 'end') or exposure_arrived:
+        log.info("Calling: {0}.".format(' '.join(command)))
+        proc = Popen(command)
     return 0
