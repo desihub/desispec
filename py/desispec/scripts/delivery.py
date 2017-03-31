@@ -75,6 +75,7 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    from os.path import dirname
     from subprocess import Popen
     from desiutil.log import get_logger
     log = get_logger()
