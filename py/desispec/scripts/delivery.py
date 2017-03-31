@@ -60,10 +60,12 @@ def main():
     from desiutil.log import get_logger
     log = get_logger()
     options = parse_delivery()
-    remote_command = 'desi_{0.nightStatus}_night {0.night}'.format(options)
+    remote_command = ['desi_{0.nightStatus}_night {0.night}'.format(options)]
     if options.prefix is not None:
-        remote_command = '; '.join(options.prefix) + '; ' + remote_command
-    remote_command += ' > /dev/null 2>&1 &'
+        remote_command = options.prefix + remote_command
+    remote_command = ('(' +
+                      '; '.join([c + ' &> /dev/null' for c in remote_command]) +
+                      ' &)')
     command = ['ssh', '-n', '-q', options.nersc_host, quote(remote_command)]
     log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
     log.info("Calling: {0}.".format(' '.join(command)))
