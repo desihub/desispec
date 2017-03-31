@@ -8,6 +8,9 @@ desispec Change Log
 * Replace all instances of :mod:`desispec.log` with ``desiutil.log``;
   :func:`~desispec.log.get_logger` now prints a warning that users need
   to switch.
+* Working DTS delivery script and DTS simulator (PR `#367`_).
+
+.. _`#365`: https://github.com/desihub/desispec/pull/367
 
 0.13.2 (2017-03-27)
 -------------------

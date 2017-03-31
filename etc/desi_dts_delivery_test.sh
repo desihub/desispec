@@ -73,7 +73,8 @@ exposures=$(/bin/ls -1 ${src}/fibermap-* | /usr/bin/tr '.-' ' ' | /usr/bin/awk '
 stage=start
 for e in ${exposures}; do
     # This hack removes leading zeros.
-    expid=$((e + 0))
+    # expid=$((e + 0))
+    expid=$(perl -ne 'chomp; s/^0+//; $_ ? print "$_\n" : print "0\n";' <<< ${e})
     /bin/cp -v ${src}/fibermap-${e}.fits ${dst}
     desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/fibermap-${e}.fits ${expid} ${night} ${stage}
     /bin/sleep ${latency}
