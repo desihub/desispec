@@ -75,13 +75,13 @@ for e in ${exposures}; do
     # This hack removes leading zeros.
     expid=$((e + 0))
     /bin/cp -v ${src}/fibermap-${e}.fits ${dst}
-    desi_dts_delivery ${deliveryOptions} ${dst}/fibermap-${e}.fits ${expid} ${night} ${stage}
+    desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/fibermap-${e}.fits ${expid} ${night} ${stage}
     /bin/sleep ${latency}
     /bin/cp -v ${src}/guider-${e}.fits.fz ${dst}
-    desi_dts_delivery ${deliveryOptions} ${dst}/fibermap-${e}.fits ${expid} ${night} update
+    desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/fibermap-${e}.fits ${expid} ${night} update
     /bin/sleep ${latency}
     /bin/cp -v ${src}/desi-${e}.fits.fz ${dst}
-    desi_dts_delivery ${deliveryOptions} ${dst}/fibermap-${e}.fits ${expid} ${night} update
+    desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/fibermap-${e}.fits ${expid} ${night} update
     /bin/sleep ${naptime}
     stage=update
 done
@@ -89,4 +89,4 @@ done
 # Dummy file to signal end-of-night
 #
 /bin/cp -v ${src}/weather* ${dst}
-desi_dts_delivery ${deliveryOptions} ${dst}/weather-${night}.fits ${expid} ${night} end
+desi_dts_delivery -p "module load desimodules" -p "module switch desispec/my-master" -n edisongrid ${dst}/weather-${night}.fits ${expid} ${night} end
