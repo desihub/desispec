@@ -6,7 +6,6 @@ python -m desispec.test.integration_test_quicklook
 import os
 import sys
 import argparse
-import desimodel.io
 import desisim.io
 import desispec.pipeline as pipe
 import desispec.log as logging
@@ -16,7 +15,7 @@ from desispec.quicklook import qlconfig
 desi_templates_available = 'DESI_ROOT' in os.environ
 desi_root_available = 'DESI_ROOT' in os.environ
 
-def check_env(args=None):
+def check_env():
     """
     Check required environment variables; raise RuntimeException if missing
     """
