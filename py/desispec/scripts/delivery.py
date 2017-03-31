@@ -56,7 +56,6 @@ def main():
         An integer suitable for passing to :func:`sys.exit`.
     """
     from subprocess import Popen
-    from shlex import split, quote
     from desiutil.log import get_logger
     log = get_logger()
     options = parse_delivery()
@@ -66,7 +65,7 @@ def main():
     remote_command = ('(' +
                       '; '.join([c + ' &> /dev/null' for c in remote_command]) +
                       ' &)')
-    command = ['ssh', '-n', '-q', options.nersc_host, quote(remote_command)]
+    command = ['ssh', '-n', '-q', options.nersc_host, remote_command]
     log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
     log.info("Calling: {0}.".format(' '.join(command)))
     proc = Popen(command)
