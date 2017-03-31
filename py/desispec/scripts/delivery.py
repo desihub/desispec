@@ -89,7 +89,7 @@ def main():
     command = ['ssh', '-n', '-q', options.nersc_host, remote_command]
     log.info("Received file {0.filename} with exposure number {0.exposure:d}.".format(options))
     exposure_arrived = check_exposure(dirname(options.filename), options.exposure)
-    if options.stage in ('start', 'end') or exposure_arrived:
+    if options.nightStatus in ('start', 'end') or exposure_arrived:
         log.info("Calling: {0}.".format(' '.join(command)))
         proc = Popen(command)
     return 0
