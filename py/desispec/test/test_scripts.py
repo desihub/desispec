@@ -93,7 +93,9 @@ class TestScripts(unittest.TestCase):
         #
         class DummyOptions(object): pass
         options = DummyOptions()
-        self.dummy_environment({'DESI_SPECTRO_REDUX': 'foo', 'SPECPROD': 'bar'})
+        self.dummy_environment({'DESI_SPECTRO_DATA': 'data',
+                                'DESI_SPECTRO_REDUX': 'foo',
+                                'SPECPROD': 'bar'})
         status = validate_inputs(options)
         self.assertEqual(status, 1)
         statuses = {'foobar': 2, '20170317': 0, '18580101': 3}

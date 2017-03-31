@@ -9,6 +9,67 @@ Entry points for start/update/end night scripts.
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 
+log = None
+
+
+def stage_from_command():
+    """Extract the processing stage from the executable command.
+
+    Returns
+    -------
+    :class:`str`
+        The extracted stage.
+
+    Raises
+    ------
+    KeyError
+        If the extracted string does not match the set of stages.
+    """
+    from sys import argv
+    from os.path import basename
+    stage = basename(argv[0]).split('_')[1]
+    if stage not in ('start', 'update', 'end'):
+        raise KeyError('Command does not match one of the stages!')
+    return stage
+
+
+def update_logger(options):
+    """Reconfigure the default logging object.
+
+    Parameters
+    ----------
+    options : :class:`argparse.Namespace`
+        The parsed command-line options.
+
+    Returns
+    -------
+    :class:`logging.Logger`
+        The updated object.
+    """
+    from os import environ
+    from os.path import join
+    from logging import FileHandler
+    from desiutil.log import get_logger
+    log = get_logger()
+    fmt = None
+    try:
+        filename = join(environ['DESI_SPECTRO_DATA'],
+                        options.night,
+                        'desi_{0.stage}_night_{0.night}.log'.format(options))
+    except (AttributeError, KeyError):
+        # This can happen during tests.
+        return log
+    if log.hasHandlers():
+        for h in log.handlers:
+            if fmt is None:
+                fmt = h.formatter
+            log.removeHandler(h)
+    h = FileHandler(filename)
+    h.setFormatter(fmt)
+    log.addHandler(h)
+    return log
+
+
 def parse_night(stage, *args):
     """Parse command-line options for start/update/end night scripts.
 
@@ -45,6 +106,8 @@ def parse_night(stage, *args):
 def validate_inputs(options):
     """Ensure that all inputs to the start/update/end night scripts are valid.
 
+    In addition the log object for this command is initialized here.
+
     Parameters
     ----------
     options : :class:`argparse.Namespace`
@@ -55,9 +118,9 @@ def validate_inputs(options):
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
+    global log
     from os import environ
-    from desiutil.log import get_logger
-    log = get_logger()
+    log = update_logger(options)
     try:
         night = options.night
     except AttributeError:
@@ -78,7 +141,7 @@ def validate_inputs(options):
     except AssertionError:
         log.critical("Value for 'night' = '{0}' is not a valid calendar date!".format(night))
         return 3
-    for k in ('DESI_SPECTRO_REDUX', 'SPECPROD'):
+    for k in ('DESI_SPECTRO_DATA', 'DESI_SPECTRO_REDUX', 'SPECPROD'):
         try:
             val = environ[k]
         except KeyError:
@@ -89,49 +152,20 @@ def validate_inputs(options):
     return 0
 
 
-def start_main():
-    """Entry point for :command:`desi_start_night`.
+def main():
+    """Entry point for :command:`desi_start_night`,
+    :command:`desi_update_night` and :command:`desi_end_night`.
 
     Returns
     -------
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    from desiutil.log import get_logger
-    options = parse_night('start')
+    from time import sleep
+    stage = stage_from_command()
+    options = parse_night(stage)
     status = validate_inputs(options)
-    log = get_logger()
     log.info("Called with night = {0}.".format(options.night))
-    return status
-
-
-def update_main():
-    """Entry point for :command:`desi_update_night`.
-
-    Returns
-    -------
-    :class:`int`
-        An integer suitable for passing to :func:`sys.exit`.
-    """
-    from desiutil.log import get_logger
-    options = parse_night('update')
-    status = validate_inputs(options)
-    log = get_logger()
-    log.info("Called with night = {0}.".format(options.night))
-    return status
-
-
-def end_main():
-    """Entry point for :command:`desi_end_night`.
-
-    Returns
-    -------
-    :class:`int`
-        An integer suitable for passing to :func:`sys.exit`.
-    """
-    from desiutil.log import get_logger
-    options = parse_night('end')
-    status = validate_inputs(options)
-    log = get_logger()
-    log.info("Called with night = {0}.".format(options.night))
+    sleep(120)
+    log.info("All done.")
     return status
