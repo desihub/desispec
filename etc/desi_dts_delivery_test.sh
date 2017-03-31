@@ -7,7 +7,6 @@ function usage {
     local execName=$(basename $0)
     (
     echo "usage ${execName} [-h] [-D DIR] [-n NIGHT] [-p SECONDS] [-S DIR]"
-    echo "        DATA - Type of data to transfer."
     echo "          -D - Destination directory."
     echo "          -h - Print usage information and exit."
     echo "          -n - Set the night value, if necessary."
