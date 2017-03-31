@@ -91,7 +91,7 @@ def move_file(filename, dst):
     log = get_logger()
     if not exists(dst):
         log.info("mkdir('{0}', 0o2750)".format(dst))
-        mkdir(dst, 0o2750)
+        mkdir(dst, 0o2770)
     log.info("move('{0}', '{1}')".format(filename, dst))
     return move(filename, dst)
 
