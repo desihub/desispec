@@ -52,7 +52,11 @@ def update_logger(options):
     from desiutil.log import get_logger
     log = get_logger()
     fmt = None
-    filename = join(environ['HOME'], 'desi_{0.stage}_night_{0.night}.log'.format(options))
+    try:
+        filename = join(environ['HOME'], 'desi_{0.stage}_night_{0.night}.log'.format(options))
+    except AttributeError:
+        # This can happen during tests.
+        return log
     if log.hasHandlers():
         for h in log.handlers:
             if fmt is None:
