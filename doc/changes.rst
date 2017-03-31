@@ -10,7 +10,7 @@ desispec Change Log
   to switch.
 * Working DTS delivery script and DTS simulator (PR `#367`_).
 
-.. _`#365`: https://github.com/desihub/desispec/pull/367
+.. _`#367`: https://github.com/desihub/desispec/pull/367
 
 0.13.2 (2017-03-27)
 -------------------

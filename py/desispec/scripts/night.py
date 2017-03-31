@@ -56,7 +56,7 @@ def update_logger(options):
         filename = join(environ['DESI_SPECTRO_DATA'],
                         options.night,
                         'desi_{0.stage}_night_{0.night}.log'.format(options))
-    except AttributeError:
+    except (AttributeError, KeyError):
         # This can happen during tests.
         return log
     if log.hasHandlers():
@@ -141,7 +141,7 @@ def validate_inputs(options):
     except AssertionError:
         log.critical("Value for 'night' = '{0}' is not a valid calendar date!".format(night))
         return 3
-    for k in ('DESI_SPECTRO_REDUX', 'SPECPROD'):
+    for k in ('DESI_SPECTRO_DATA', 'DESI_SPECTRO_REDUX', 'SPECPROD'):
         try:
             val = environ[k]
         except KeyError:
