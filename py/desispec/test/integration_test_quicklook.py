@@ -3,6 +3,7 @@ Run integration test for quicklook pipeline
 
 python -m desispec.test.integration_test_quicklook
 """
+from shutil import copyfile
 import os
 import sys
 import argparse
@@ -199,7 +200,7 @@ def sim(night, nspec, ql_specprod):
             if runcmd(cmd) != 0:
                 raise RuntimeError('desi_extract_spectra failed for camera z0')
 
-        os.rename(os.path.join(sim_dir,'fibermap-{:08d}.fits'.format(expid)),os.path.join(data_dir,'fibermap-{:08d}.fits'.format(expid)))
+        copyfile(os.path.join(sim_dir,'fibermap-{:08d}.fits'.format(expid)),os.path.join(data_dir,'fibermap-{:08d}.fits'.format(expid)))
         os.remove(os.path.join(data_dir,'simpix-{:08d}.fits'.format(expid)))
 
     for camera in ['r0','z0']:
