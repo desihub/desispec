@@ -15,8 +15,7 @@ import os
 import sys
 import re
 
-from .. import log as desilog
-from ..log import get_logger
+from desiutil.log import get_logger, DEBUG
 from ..util import option_list
 from ..parallel import default_nproc
 from .. import io
@@ -42,8 +41,8 @@ class Worker(object):
     This is a base class that simply defines the API.  Each
     pipeline task worker has some default options, and a maximum
     number of UNIX processes it can use.  For example if extracting
-    20 DESI bundles with at most one process per bundle, then it might 
-    return 20 for this number.  A worker has a "run" method which takes 
+    20 DESI bundles with at most one process per bundle, then it might
+    return 20 for this number.  A worker has a "run" method which takes
     some inputs and produces some outputs.
     """
     def __init__(self):
@@ -65,7 +64,7 @@ class Worker(object):
         """
         Run the specified task.
 
-        This runs the task, with the given options, using the 
+        This runs the task, with the given options, using the
         specified communicator.
 
         Args:
@@ -142,7 +141,7 @@ class WorkerBootcalib(Worker):
         outpath = graph_path(task)
 
         #qapath = io.findfile("qa_bootcalib", night=night, camera=cam, band=band, spectrograph=spec)
-        
+
         # build list of options
         options = {}
         options["fiberflat"] = flatpath
@@ -205,7 +204,7 @@ class WorkerSpecex(Worker):
             if os.path.isfile(exefile) and os.access(exefile, os.X_OK):
                 specexdir = os.path.join(path, "..", "data")
                 opts["lamplines"] = os.path.join(specexdir, "specex_linelist_boss.txt")
-        
+
         return opts
 
 
@@ -255,7 +254,7 @@ class WorkerSpecex(Worker):
         options["input"] = imgfile
         options["bootfile"] = bootfile
         options["output"] = outfile
-        if log.getEffectiveLevel() == desilog.DEBUG:
+        if log.getEffectiveLevel() == DEBUG:
             options["verbose"] = True
         if len(opts) > 0:
             extarray = option_list(opts)
@@ -469,7 +468,7 @@ class WorkerFiberflat(Worker):
             raise RuntimeError("fiberflat should have only one input frame")
         framefile = graph_path(node["in"][0])
         outfile = graph_path(task)
-        
+
         #qafile, qafig = qa_path(outfile)
 
         options = {}
@@ -542,7 +541,7 @@ class WorkerSky(Worker):
         framefile = graph_path(frm[0])
         flatfile = graph_path(flat[0])
         outfile = graph_path(task)
-        
+
         #qafile, qafig = qa_path(outfile)
 
         options = {}
@@ -629,9 +628,9 @@ class WorkerStdstars(Worker):
                 sky.append(input)
 
         outfile = graph_path(task)
-        
+
         #qafile, qafig = qa_path(outfile)
-        
+
         framefiles = [graph_path(x) for x in frm]
         skyfiles = [graph_path(x) for x in sky]
         flatfiles = [graph_path(x) for x in flat]
@@ -643,7 +642,7 @@ class WorkerStdstars(Worker):
         options["outfile"] = outfile
         options["ncpu"] = str(default_nproc)
         #- TODO: no QA for fitting standard stars yet
-        
+
         options.update(opts)
         optarray = option_list(options)
 
@@ -721,7 +720,7 @@ class WorkerFluxcal(Worker):
         skyfile = graph_path(sky[0])
         starfile = graph_path(star[0])
         outfile = graph_path(task)
-        
+
         #qafile, qafig = qa_path(outfile)
 
         options = {}
@@ -954,7 +953,7 @@ def default_options(extra={}):
     Get the default options for all workers.
 
     Args:
-        extra (dict): optional extra options to add to the 
+        extra (dict): optional extra options to add to the
             default options for each worker class.
 
     Returns (dict):
@@ -977,4 +976,3 @@ def default_options(extra={}):
         allopts[step] = worker.default_options()
 
     return allopts
-

@@ -10,7 +10,7 @@ import argparse
 
 import os
 from desispec import io
-from desispec.log import get_logger
+from desiutil.log import get_logger
 log = get_logger()
 
 def parse(options=None):
@@ -44,7 +44,7 @@ to use, but also only if a single camera is specified.
                         help = 'no bias subtraction')
     parser.add_argument('--nodark', action = 'store_true',
                         help = 'no dark subtraction')
-    parser.add_argument('--nopixflat',action = 'store_true', 
+    parser.add_argument('--nopixflat',action = 'store_true',
                         help = 'no pixflat correction')
     parser.add_argument('--nomask', action = 'store_true',
                         help = 'no prior masking of pixels')
@@ -58,21 +58,21 @@ to use, but also only if a single camera is specified.
 
     parser.add_argument('--bkgsub', action='store_true',
                         help = 'do a background subtraction prior to cosmic ray rejection')
-    parser.add_argument('--nocosmic', action='store_true', 
+    parser.add_argument('--nocosmic', action='store_true',
                         help = 'do not try and reject cosmic rays')
-    parser.add_argument('--zero-masked', action='store_true', 
+    parser.add_argument('--zero-masked', action='store_true',
                         help = 'set to zero the flux of masked pixels (for convenience to display images, no impact on analysis)')
     parser.add_argument('--no-ccd-calib-filename', action='store_true',
                         help = 'do not read calibration data from yaml file in desispec')
     parser.add_argument('--ccd-calib-filename', required=False, default=None,
                         help = 'specify a difference ccd calibration filename (for dev. purpose), default is in desispec/data/ccd')
-    
-    
+
+
     #- uses sys.argv if options=None
     args = parser.parse_args(options)
-    
+
     return args
-    
+
 def main(args=None):
     if args is None:
         args = parse()
@@ -91,18 +91,18 @@ def main(args=None):
     mask=True
     if args.mask : mask=args.mask
     if args.nomask : mask=False
-    
 
-        
+
+
     if args.cameras is None:
         args.cameras = [c+str(i) for c in 'brz' for i in range(10)]
     else:
         args.cameras = args.cameras.split(',')
-    
+
     if (args.bias is not None) or (args.pixflat is not None) or (args.mask is not None) or (args.dark is not None):
         if len(args.cameras) > 1:
             raise ValueError('must use only one camera with --bias, --dark, --pixflat, --mask options')
-    
+
     if (args.pixfile is not None) and len(args.cameras) > 1:
             raise ValueError('must use only one camera with --pixfile option')
 
@@ -110,13 +110,13 @@ def main(args=None):
         args.outdir = os.getcwd()
 
     ccd_calibration_filename = None
-    
+
     if args.no_ccd_calib_filename :
         ccd_calibration_filename = False
     elif args.ccd_calib_filename is not None :
         ccd_calibration_filename = args.ccd_calib_filename
-    
-    
+
+
     for camera in args.cameras:
         try:
             img = io.read_raw(args.infile, camera,
@@ -133,7 +133,7 @@ def main(args=None):
 
         if(args.zero_masked) :
             img.pix *= (img.mask==0)
-        
+
         if args.pixfile is None:
             night = img.meta['NIGHT']
             expid = img.meta['EXPID']
@@ -143,7 +143,3 @@ def main(args=None):
             pixfile = args.pixfile
 
         io.write_image(pixfile, img)
-        
-        
-    
-    

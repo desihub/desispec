@@ -9,7 +9,7 @@ import numpy as np
 from .resolution import Resolution
 from .linalg import cholesky_solve, cholesky_solve_and_invert, spline_fit
 from .interpolation import resample_flux
-from .log import get_logger
+from desiutil.log import get_logger
 from .io.filters import load_filter
 from desispec import util
 import scipy, scipy.sparse, scipy.ndimage
@@ -219,7 +219,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         log.debug("Not using multiprocessing for {} cpus".format(ncpu))
         model_chi2 = [_func(x) for x in func_args]
         log.debug("Finished serial loop over compute_chi2")
-        
+
     best_model_id=np.argmin(np.array(model_chi2))
     best_chi2=model_chi2[best_model_id]
     log.debug("selected best model {} chi2/ndf {}".format(best_model_id, best_chi2/ndata))
@@ -400,7 +400,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,nsig_clipp
                 log.info("iter %d fiber %d(smooth)"%(iteration,fiber))
 
             M = stdstars.R[fiber].dot(calibration*model_flux[fiber])
-            
+
             try:
                 pol=np.poly1d(np.polyfit(stdstars.wave,stdstars.flux[fiber]/(M+(M==0)),deg=1,w=current_ivar[fiber]*M**2))
             except:

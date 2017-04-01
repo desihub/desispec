@@ -6,7 +6,7 @@ Some linear algebra functions.
 """
 import numpy as np
 import scipy,scipy.linalg,scipy.interpolate
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 def cholesky_solve(A,B,overwrite=False,lower=False):
     """Returns the solution X of the linear system A.X=B
@@ -68,19 +68,19 @@ def cholesky_invert(A) :
 
 def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=None,order=3):
     """Performs spline fit of input_flux vs. input_wave and resamples at output_wave
-    
+
     Args:
         output_wave : 1D array of output wavelength samples
         input_wave : 1D array of input wavelengths
         input_flux : 1D array of input flux density
         required_resolution (float) : resolution for spline knot placement
-    
+
     Options:
         input_ivar : 1D array of weights for input_flux
         order (int) : spline order
-        
+
     Returns:
-        output_flux : 1D array of flux sampled at output_wave    
+        output_flux : 1D array of flux sampled at output_wave
     """
     if input_ivar is not None :
         selection=np.where(input_ivar>0)[0]
@@ -104,7 +104,7 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
     mins = np.amin(dknots,axis=1)
     w=mins<res
     knots = knots[w]
-   
+
     toto=scipy.interpolate.splrep(input_wave,input_flux,w=input_ivar,k=order,task=-1,t=knots)
     output_flux = scipy.interpolate.splev(output_wave,toto)
     return output_flux

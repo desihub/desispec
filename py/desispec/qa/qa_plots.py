@@ -8,7 +8,7 @@ import scipy
 import pdb
 import copy
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec import fluxcalibration as dsflux
 from desispec.util import set_backend
 set_backend()
@@ -170,13 +170,13 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax2 = plt.subplot(gs[1,1])
     ax2.set_axis_off()
     show_meta(ax2, qaresid, 'SKYSUB', outfil)
-    
+
     #- SNR Plot
     elg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["ELG_SNR_MAG"]
     lrg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["LRG_SNR_MAG"]
     qso_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["QSO_SNR_MAG"]
     star_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["STAR_SNR_MAG"]
-    
+
     ax3 = plt.subplot(gs[2,0])
     ax4 = plt.subplot(gs[2,1])
     ax5 = plt.subplot(gs[3,0])
@@ -185,7 +185,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax3.set_ylabel(r'Median S/N')
     ax3.set_xlabel('')
     ax3.set_title(r'ELG')
-    if len(elg_snr_mag[1]) > 0:  #- at least 1 elg fiber?   
+    if len(elg_snr_mag[1]) > 0:  #- at least 1 elg fiber?
         select=np.where((elg_snr_mag[1] != np.array(None)) & (~np.isnan(elg_snr_mag[1])) & (np.abs(elg_snr_mag[1])!=np.inf))[0] #- Remove None, nan and inf values in mag
         if select.shape[0]>0:
 
@@ -682,5 +682,3 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
             pp.close()
     else:  # Show
         plt.show()
-
-

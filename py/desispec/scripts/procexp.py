@@ -11,7 +11,7 @@ from desispec.io.fluxcalibration import read_flux_calibration
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.fluxcalibration import apply_flux_calibration
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 import argparse
 import sys
@@ -74,5 +74,3 @@ def main(args):
     write_frame(args.outfile, frame, units='1e-17 erg/(s cm2 A)')
 
     log.info("successfully wrote %s"%args.outfile)
-
-

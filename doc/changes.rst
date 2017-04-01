@@ -2,15 +2,29 @@
 desispec Change Log
 ===================
 
-0.13.2 (unreleased)
+0.13.3 (unreleased)
 -------------------
 
-* No changes yet
+* Replace all instances of :mod:`desispec.log` with ``desiutil.log``;
+  :func:`~desispec.log.get_logger` now prints a warning that users need
+  to switch.
+* Working DTS delivery script and DTS simulator (PR `#367`_).
+
+.. _`#367`: https://github.com/desihub/desispec/pull/367
+
+0.13.2 (2017-03-27)
+-------------------
+
+* Add framework for DTS delivery and nightly processing scripts (PR `#365`_).
+* Force documentation errors to cause Travis errors (PR `#364`_).
+
+.. _`#364`: https://github.com/desihub/desispec/pull/364
+.. _`#365`: https://github.com/desihub/desispec/pull/365
 
 0.13.1 (2017-03-03)
 -------------------
 
-* Fix installation of data/ccd/ccd_calibration.yaml
+* Fix installation of ``data/ccd/ccd_calibration.yaml``.
 
 0.13.0 (2017-03-03)
 -------------------

@@ -18,7 +18,7 @@ import scipy.sparse.linalg
 import desispec.resolution
 from desispec import util
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 class Spectrum(object):
     """A reduced flux spectrum with an associated diagonal inverse covariance and resolution matrix.
@@ -40,7 +40,7 @@ class Spectrum(object):
         assert (mask is None) or (mask.shape == wave.shape), "wave and mask should have same shape"
         assert (resolution is None) or (isinstance(resolution, desispec.resolution.Resolution))
         assert (resolution is None) or (resolution.shape[0] == len(wave)), "resolution size mismatch to wave"
-        
+
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
@@ -109,7 +109,7 @@ class Spectrum(object):
         # Create self.mask if needed to merge with other.mask
         if self.mask is None and other.mask is not None:
             self.mask = np.zeros(len(self.wave), dtype=np.uint32)
-        
+
         # Accumulate weighted deconvolved fluxes.
         if np.array_equal(self.wave,other.wave):
             self.Cinv = self.Cinv + other.Cinv
@@ -123,7 +123,7 @@ class Spectrum(object):
             if (self.mask is not None) and (other.mask is not None):
                 mask_resampler = (resampler != 0).T
                 self.mask |= mask_resampler.T.dot(other.mask)
-                
+
         # Make sure we don't forget to call finalize.
         self.flux = None
         self.ivar = None

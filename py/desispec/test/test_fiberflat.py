@@ -17,7 +17,7 @@ from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.fiberflat import FiberFlat
 from desispec.fiberflat import compute_fiberflat, apply_fiberflat
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec.io import write_frame
 import desispec.io as io
 
@@ -38,9 +38,9 @@ def _get_data():
     flux = np.tile(y, nspec).reshape(nspec, nwave)
     ivar = np.ones(flux.shape)
     mask = np.zeros(flux.shape, dtype=int)
-    
+
     return wave, flux, ivar, mask
-    
+
 
 class TestFiberFlat(unittest.TestCase):
 
@@ -68,7 +68,7 @@ class TestFiberFlat(unittest.TestCase):
         """
         wave, flux, ivar, mask = _get_data()
         nspec, nwave = flux.shape
-        
+
         #- Setup data for a Resolution matrix
         sigma = 4.0
         ndiag = 11
@@ -83,18 +83,18 @@ class TestFiberFlat(unittest.TestCase):
         #- Run the code
         frame = Frame(wave, flux, ivar, mask, Rdata, spectrograph=0)
         ff = compute_fiberflat(frame)
-            
+
         #- Check shape of outputs
         self.assertEqual(ff.fiberflat.shape, flux.shape)
         self.assertEqual(ff.ivar.shape, flux.shape)
         self.assertEqual(ff.mask.shape, flux.shape)
         self.assertEqual(len(ff.meanspec), nwave)
-        
+
         #- Identical inputs should result in identical ouputs
         for i in range(1, nspec):
             self.assertTrue(np.all(ff.fiberflat[i] == ff.fiberflat[0]))
             self.assertTrue(np.all(ff.ivar[i] == ff.ivar[0]))
-        
+
     def test_resolution(self):
         """
         Test that identical spectra convolved with different resolutions
@@ -102,7 +102,7 @@ class TestFiberFlat(unittest.TestCase):
         """
         wave, flux, ivar, mask = _get_data()
         nspec, nwave = flux.shape
-        
+
         #- Setup a Resolution matrix that varies with fiber and wavelength
         #- Note: this is actually the transpose of the resolution matrix
         #- I wish I was creating, but as long as we self-consistently
@@ -136,7 +136,7 @@ class TestFiberFlat(unittest.TestCase):
         """
         wave, flux, ivar, mask = _get_data()
         nspec, nwave = flux.shape
-        
+
         #- Setup data for a Resolution matrix
         sigma = 4.0
         ndiag = 21
@@ -152,15 +152,15 @@ class TestFiberFlat(unittest.TestCase):
         flux[1] *= 1.1
         flux[2] *= 1.2
         flux[3] *= 0.8
-        
+
         #- Convolve with the (common) resolution matrix
         convflux = np.empty_like(flux)
         for i in range(nspec):
             convflux[i] = Resolution(Rdata[i]).dot(flux[i])
-        
+
         frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0)
         ff = compute_fiberflat(frame)
-                
+
         #- flux[1] is brighter, so should fiberflat[1].  etc.
         self.assertTrue(np.allclose(ff.fiberflat[0], ff.fiberflat[1]/1.1))
         self.assertTrue(np.allclose(ff.fiberflat[0], ff.fiberflat[2]/1.2))
@@ -173,7 +173,7 @@ class TestFiberFlat(unittest.TestCase):
         """
         wave, flux, ivar, mask = _get_data()
         nspec, nwave = flux.shape
-        
+
         #- Setup a Resolution matrix that varies with fiber and wavelength
         #- Note: this is actually the transpose of the resolution matrix
         #- I wish I was creating, but as long as we self-consistently
@@ -187,7 +187,7 @@ class TestFiberFlat(unittest.TestCase):
                 kernel = np.exp(-xx**2/(2*sigma[i*nwave+j]**2))
                 kernel /= sum(kernel)
                 Rdata[i,:,j] = kernel
-    
+
         #- Vary the input flux prior to calculating the fiber flat
         flux[1] *= 1.1
         flux[2] *= 1.2
@@ -198,16 +198,16 @@ class TestFiberFlat(unittest.TestCase):
         convflux = np.empty_like(flux)
         for i in range(nspec):
             convflux[i] = Resolution(Rdata[i]).dot(flux[i])
-    
+
         #- Run the code
         frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0)
         #- Set an accuracy for this
         accuracy=1.e-9
         ff = compute_fiberflat(frame,accuracy=accuracy)
-        
+
         #- Compare variation with middle fiber
         mid = ff.fiberflat.shape[0] // 2
-           
+
         diff = (ff.fiberflat[1]/1.1 - ff.fiberflat[mid])
         self.assertLess(np.max(np.abs(diff)), accuracy)
 
@@ -219,7 +219,7 @@ class TestFiberFlat(unittest.TestCase):
 
         diff = (ff.fiberflat[4]*1.2 - ff.fiberflat[mid])
         self.assertLess(np.max(np.abs(diff)), accuracy)
-        
+
     def test_apply_fiberflat(self):
         '''test apply_fiberflat interface and changes to flux and mask'''
         wave = np.arange(5000, 5050)
@@ -228,7 +228,7 @@ class TestFiberFlat(unittest.TestCase):
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones_like(flux)
         frame = Frame(wave, flux, ivar, spectrograph=0)
-        
+
         fiberflat = np.ones_like(flux)
         ffivar = 2*np.ones_like(flux)
         ffmask = np.zeros_like(flux)
@@ -237,7 +237,7 @@ class TestFiberFlat(unittest.TestCase):
         fiberflat[2, 0:10] = 0  #- bad fiberflat
         ffivar[2, 10:20] = 0    #- bad fiberflat
         ffmask[2, 20:30] = 1    #- bad fiberflat
-        
+
         ff = FiberFlat(wave, fiberflat, ffivar)
 
         origframe = copy.deepcopy(frame)
@@ -260,7 +260,7 @@ class TestFiberFlat(unittest.TestCase):
         frame.wave = frame.wave + 0.1
         with self.assertRaises(ValueError):
             apply_fiberflat(frame, ff)
-        
+
     def test_apply_fiberflat_ivar(self):
         '''test error propagation in apply_fiberflat'''
         wave = np.arange(5000, 5010)
@@ -287,7 +287,7 @@ class TestFiberFlat(unittest.TestCase):
         ff = FiberFlat(wave, fiberflat, ffivar)
         frame = copy.deepcopy(origframe)
         apply_fiberflat(frame, ff)
-        
+
         #- c = a/b
         #- (sigma_c/c)^2 = (sigma_a/a)^2 + (sigma_b/b)^2
         var = frame.flux**2 * (1.0/(origframe.ivar * origframe.flux**2) + \
@@ -311,7 +311,7 @@ class TestFiberFlat(unittest.TestCase):
         # generate the frame data
         wave, flux, ivar, mask = _get_data()
         nspec, nwave = flux.shape
-        
+
         #- Setup data for a Resolution matrix
         sigma = 4.0
         ndiag = 11
@@ -347,8 +347,8 @@ class TestFiberFlat(unittest.TestCase):
         # run it
         args = ffscript.parse(options=argstr)
         ffscript.main(args)
-        
-                
+
+
 class TestFiberFlatObject(unittest.TestCase):
 
     def setUp(self):
@@ -377,10 +377,10 @@ class TestFiberFlatObject(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             FiberFlat(self.wave, self.wave, self.ivar, self.mask, self.meanspec)
-            
+
         with self.assertRaises(ValueError):
             FiberFlat(self.wave, self.fiberflat, self.ivar, self.mask, self.fiberflat)
-            
+
         with self.assertRaises(ValueError):
             FiberFlat(self.wave, self.fiberflat[0:2], self.ivar, self.mask, self.meanspec)
 
@@ -407,4 +407,4 @@ class TestFiberFlatObject(unittest.TestCase):
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
-    unittest.main()           
+    unittest.main()
