@@ -44,8 +44,8 @@ b1:
     CROSSTALKDA: 0.
     CROSSTALKDB: 0.
     CROSSTALKDC: -0.006775
-    BIAS: 20161221/bias-b1.fits
-    DARK: 20161221/dark-b1.fits
+    BIAS: 20170131/bias-b1.fits
+    DARK: 20170131/dark-b1.fits
 
   SIM:
       AMPLIFIERS: '1234'      
@@ -88,8 +88,8 @@ r1:
     CROSSTALKDC: -0.000678
     OVERSCANA: PER_ROW
     OVERSCANB: PER_ROW    
-    BIAS: 20161221/bias-r1.fits
-    DARK: 20161221/dark-r1.fits
+    BIAS: 20170131/bias-r1.fits
+    DARK: 20170131/dark-r1.fits
 
   SIM:
       AMPLIFIERS: '1234'      
@@ -132,9 +132,9 @@ z1:
     CROSSTALKDC: 0.
     OVERSCANA: PER_ROW
     OVERSCANC: PER_ROW  
-    BIAS: 20161221/bias-z1.fits
-    DARK: 20161221/dark-z1.fits
-    MASK: 20161221/mask-z1.fits
+    BIAS: 20170131/bias-z1.fits
+    DARK: 20170131/dark-z1.fits
+    MASK: 20170131/mask-z1.fits
     
   SIM:
       AMPLIFIERS: '1234'      
