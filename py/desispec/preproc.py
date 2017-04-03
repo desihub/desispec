@@ -464,7 +464,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if dark.shape != image.shape :
             log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
             raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
-        exptime =  primary_header['EXPTIME']
+        
+        if 'EXPREQ' in primary_header :
+            exptime =  primary_header['EXPREQ']
+            log.warning("On teststand data use EXPREQ and not EXPTIME which is unreliable")
+        else :
+            exptime =  primary_header['EXPTIME']
+        
         log.info("Multiplying dark by exptime %f"%(exptime))
         dark *= exptime
     
