@@ -16,8 +16,7 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
                                  Raw images are preprocessed without dark,mask,gain correction and without cosmic-ray masking.
                                  Only an optional bias correction is applied.
                                  The result is the median of the preprocessed images divided by their exposure time.
-                                 We use for this the keyword EXPTIME in the raw image primary header.                                 
-                                 ''')
+                                 We use for this the keyword EXPREQ in the raw image primary header, or EXPTIME if the former is absent.                                 ''')
 
 
 parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
@@ -42,7 +41,12 @@ for filename in args.image :
 
     # collect exposure times
     fitsfile=pyfits.open(filename)
-    exptime = fitsfile[0].header["EXPTIME"]
+    primary_header = fitsfile[0].header
+    if "EXPREQ" in primary_header :
+        exptime = primary_header["EXPREQ"]
+        log.warning("Using EXPREQ and not EXPTIME, because a more accurate quantity on teststand")
+    else :
+        exptime = primary_header["EXPTIME"]
     fitsfile.close()
     
     # read raw data and preprocess them
