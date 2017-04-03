@@ -17,16 +17,17 @@
 b1:
   V0:
 # cross-talk measured with 'desi_compute_crosstalk -i preproc-b1-00001448.fits -t 100 -m 100000'
+# gain measurement described in docdb:2657
     AMPLIFIERS: ABCD
     DETECTOR: itl_4kx4k_02
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
     FEEVER: v20160312
-    GAINA: 1.0
-    GAINB: 1.0
-    GAINC: 1.0
-    GAIND: 1.0
+    GAINA: 0.587
+    GAINB: 0.614
+    GAINC: 0.630
+    GAIND: 0.615
     SATURLEVA: 200000.0
     SATURLEVB: 200000.0
     SATURLEVC: 200000.0
@@ -57,16 +58,18 @@ r1:
   V0:
 # cross-talk measured with 'desi_compute_crosstalk -i preproc-r1-00001502.fits -t 2000 -m 15000'
 # cross-talk is allowed to be asymmetric eventhough fit compatible with symmetric cross-talk
+# gain measurement described in docdb:2657
+# note amplifier A is very noisy, gain no measured, set = 1.726/1.073=1.6 from continuity with amp C, but uncertain
     AMPLIFIERS: ABCD
     DETECTOR: lbnl_4kx4k_1102_reverse
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
     FEEVER: v20160312
-    GAINA: 1.0
-    GAINB: 1.0
-    GAINC: 1.0
-    GAIND: 1.0
+    GAINA: 1.6
+    GAINB: 1.658
+    GAINC: 1.726
+    GAIND: 1.723
     SATURLEVA: 20000.0
     SATURLEVB: 20000.0
     SATURLEVC: 20000.0
@@ -98,17 +101,19 @@ r1:
 
 z1:
   V0:
-#  desi_compute_crosstalk -i preproc-z1-00001502.fits -t 1000 -m 10000 
+# desi_compute_crosstalk -i preproc-z1-00001502.fits -t 1000 -m 10000 
+# gain measurement described in docdb:2657
+# note amplifier C is very noisy, gain no measured, set = 0.9 , but very uncertain (important non-linearities)
     AMPLIFIERS: ABCD
     DETECTOR: lbnl_4kx4k_1002_reverse
     DATE-OBS-BEGIN: '20161221'
     DATE-OBS-END: None
     DOSVER: trunk
     FEEVER: v20160312
-    GAINA: 1.0
-    GAINB: 1.0
-    GAINC: 1.0
-    GAIND: 1.0
+    GAINA: 0.970
+    GAINB: 0.978
+    GAINC: 0.9
+    GAIND: 0.626
     SATURLEVA: 200000.0
     SATURLEVB: 200000.0
     SATURLEVC: 200000.0
