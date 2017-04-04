@@ -1,5 +1,5 @@
 """
-desispec.quicksky
+desispec.quicklook.quicksky
 
 Here will be the sky computing and sky subtraction routines for QL
 """
@@ -20,8 +20,7 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
     Args: fframe: fiberflat fielded frame object
           fibermap: fibermap object
           apply_resolution: if True, uses the resolution in the frame object to evaluate
-                            sky allowing fiber to fiber variation of resolution.
-        
+          sky allowing fiber to fiber variation of resolution.
     """
     nspec=fframe.nspec
     nwave=fframe.nwave
