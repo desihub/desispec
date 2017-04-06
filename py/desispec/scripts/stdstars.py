@@ -18,6 +18,7 @@ from desispec.interpolation import resample_flux
 from desispec.log import get_logger
 from desispec.parallel import default_nproc
 from desispec.io.filters import load_filter
+from desispec.dustextinction import ext_odonnell
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
@@ -78,6 +79,11 @@ def get_color(mags,filters,color_name) :
         log.warning("cannot compute '%s' color from %s"%(color_name,filters))
         return 0.
     return mags[index1]-mags[index2]
+
+def dust_transmission(wave,ebv) :
+    Rv = 3.1
+    extinction = ext_odonnell(wave,Rv=Rv)
+    return 10**(-Rv*extinction*ebv/2.5)
 
 def main(args) :
     """ finds the best models of all standard stars in the frame
@@ -162,7 +168,13 @@ def main(args) :
     imaging_mags=fibermap["MAG"][starindices]
     
     log.warning("NO MAG ERRORS IN FIBERMAP, I AM IGNORING MEASUREMENT ERRORS !!")
-    log.warning("NO EXTINCTION VALUES IN FIBERMAP, I AM IGNORING THIS FOR NOW !!")
+    
+    ebv=np.zeros(starindices.size)
+    if "SFD_EBV" in fibermap.columns.names  :
+        log.info("Using 'SFD_EBV' from fibermap")
+        ebv=fibermap["SFD_EBV"][starindices] 
+    else : 
+        log.warning("NO EXTINCTION VALUES IN FIBERMAP!!")
     
     
     # DIVIDE FLAT AND SUBTRACT SKY , TRIM DATA
@@ -223,7 +235,29 @@ def main(args) :
             model_mags[m,index]=filter_response.get_ab_magnitude(stdflux[m]*fluxunits,stdwave)
     log.info("done computing model mags")
     
-    
+    mean_extinction_delta_mags = None
+    mean_ebv = np.mean(ebv)
+    if mean_ebv > 0 :
+        log.info("Compute a mean delta_color from average E(B-V) = %3.2f based on canonial model star"%mean_ebv)
+        # compute a mean delta_color from mean_ebv based on canonial model star
+        #######################################################################
+        # will then use this color offset in the model pre-selection
+        # find canonical f-type model: Teff=6000, logg=4, Fe/H=-1.5
+        canonical_model = np.argmin((teff-6000.0)**2+(logg-4.0)**2+(feh+1.5)**2)
+        canonical_model_mags_without_extinction = model_mags[canonical_model]
+        canonical_model_mags_with_extinction    = np.zeros(canonical_model_mags_without_extinction.shape)
+
+        canonical_model_reddened_flux = stdflux[canonical_model]*dust_transmission(stdwave,mean_ebv)                
+        for index in range(len(model_filters)) :
+            if model_filters[index].startswith('WISE'):
+                log.warning('not computing stdstar {} mags'.format(model_filters[index]))
+                continue
+            filter_response=load_filter(model_filters[index])
+            canonical_model_mags_with_extinction[index]=filter_response.get_ab_magnitude(canonical_model_reddened_flux*fluxunits,stdwave)
+
+        mean_extinction_delta_mags = canonical_model_mags_with_extinction - canonical_model_mags_without_extinction
+         
+
     # LOOP ON STARS TO FIND BEST MODEL
     ############################################
     linear_coefficients=np.zeros((nstars,stdflux.shape[0]))
@@ -262,6 +296,9 @@ def main(args) :
         star_color=imaging_mags[star][index1]-imaging_mags[star][index2]
         star_colors_array[star]=star_color
         
+        
+            
+
 
         # compute models color
         model_index1=-1
@@ -276,6 +313,16 @@ def main(args) :
             log.error("cannot compute '%s' model color from %s"%(color_name,filters))
         model_colors = model_mags[:,model_index1]-model_mags[:,model_index2]
 
+        # apply extinction here
+        # use the colors derived from the cannonical model with the mean ebv of the stars
+        # and simply apply a scaling factor based on the ebv of this star
+        # this is sufficiently precise for the broad model pre-selection we are doing here
+        # the exact reddening of the star to each pre-selected model is 
+        # apply afterwards
+        if mean_extinction_delta_mags is not None  and mean_ebv != 0 :
+            delta_color = ( mean_extinction_delta_mags[model_index1] - mean_extinction_delta_mags[model_index2] ) * ebv[star]/mean_ebv 
+            model_colors += delta_color
+            log.info("Apply a %s-%s color offset = %4.3f to the models for star with E(B-V)=%4.3f"%(model_filters[model_index1],model_filters[model_index2],delta_color,ebv[star]))
         # selection
         selection = np.abs(model_colors-star_color)<args.delta_color
         # smallest cube in parameter space including this selection (needed for interpolation)
@@ -289,23 +336,29 @@ def main(args) :
         
         #index_in_selection,second_index_in_selection,frac,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux[selection], teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res,template_error=args.template_error)
         
-        coefficients,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux[selection], teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res,template_error=args.template_error)
+        # apply extinction to selected_models
+        dust_transmission_of_this_star = dust_transmission(stdwave,ebv[star])
+        selected_reddened_stdflux = stdflux[selection]*dust_transmission_of_this_star
+        
+        coefficients,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,selected_reddened_stdflux, teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res,template_error=args.template_error)
         
         linear_coefficients[star,selection] = coefficients
         
         log.info('Star Fiber: {0}; TEFF: {1}; LOGG: {2}; FEH: {3}; Redshift: {4}; Chisq/dof: {5}'.format(starfibers[star],np.inner(teff,linear_coefficients[star]),np.inner(logg,linear_coefficients[star]),np.inner(feh,linear_coefficients[star]),redshift[star],chi2dof[star]))
+
         # Apply redshift to original spectrum at full resolution
-        
         model=np.zeros(stdwave.size)
         for i,c in enumerate(linear_coefficients[star]) :
             if c != 0 :
                 model += c*np.interp(stdwave,stdwave*(1+redshift[star]),stdflux[i])
+
+        # Apply dust extinction
+        model *= dust_transmission_of_this_star
         
         # Compute final model color
-        mag1=load_filter(model_filters[index1]).get_ab_magnitude(model*fluxunits,stdwave)
-        mag2=load_filter(model_filters[index2]).get_ab_magnitude(model*fluxunits,stdwave)
-        model_colors_array[star] = mag1-mag2
-        
+        mag1=load_filter(model_filters[model_index1]).get_ab_magnitude(model*fluxunits,stdwave)
+        mag2=load_filter(model_filters[model_index2]).get_ab_magnitude(model*fluxunits,stdwave)
+        model_colors_array[star] = mag1-mag2        
 
         # Normalize the best model using reported magnitude
         normalizedflux=normalize_templates(stdwave,model,imaging_mags[star],imaging_filters[star])
