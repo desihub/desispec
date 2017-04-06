@@ -219,6 +219,9 @@ class BoxcarExtraction(pas.PipelineAlg):
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
+        if "Usepsfboot" in kwargs:
+             usepsfboot=kwargs["Usepsfboot"]
+        else: usepsfboot = False
 
         if "Wavelength" not in kwargs:
             wstart = np.ceil(psf.wmin)
@@ -270,16 +273,16 @@ class BoxcarExtraction(pas.PipelineAlg):
         return self.run_pa(input_image,psf
                            ,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,
-                           dump=dump,dumpfile=dumpfile,maskFile=maskFile)
+                           dump=dump,dumpfile=dumpfile,maskFile=maskFile,usepsfboot=usepsfboot)
 
 
     def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
                fibers=None, fibermap=None,dump=False,dumpfile=None,
-               maskFile=None):
+               maskFile=None,usepsfboot=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
-                                  nspec=nspec,maskFile=maskFile)
+                                  nspec=nspec,maskFile=maskFile,usepsfboot=usepsfboot)
 
         #- write to a frame object
         
@@ -593,17 +596,20 @@ class ComputeSky_QL(pas.PipelineAlg):
             fibermap=kwargs["FiberMap"]
         else: fibermap=None
 
+        if "Apply_resolution" in kwargs:
+            apply_resolution=kwargs["Apply_resolution"]
+
         if "Outfile" not in kwargs:
             raise qlexceptions.ParameterException("Need output file name to write skymodel")
 
         outputfile=kwargs["Outfile"]
-        return self.run_pa(input_frame,outputfile,fibermap=fibermap)
+        return self.run_pa(input_frame,outputfile,fibermap=fibermap,apply_resolution=apply_resolution)
     
-    def run_pa(self,input_frame,outputfile,fibermap=None): #- input frame should be already fiberflat fielded
+    def run_pa(self,input_frame,outputfile,fibermap=None,apply_resolution=False): #- input frame should be already fiberflat fielded
         from desispec.io.sky import write_sky
         from desispec.quicklook.quicksky import compute_sky
        
-        skymodel=compute_sky(input_frame,fibermap)                
+        skymodel=compute_sky(input_frame,fibermap,apply_resolution=apply_resolution)                
         
         write_sky(outputfile,skymodel,input_frame.meta)
         log.info("Sky Model file wrtten. Exiting the pipeline for this configuration")
@@ -683,8 +689,11 @@ class SubtractSky_QL(pas.PipelineAlg):
 
             log.info("No sky file given. Computing sky first")
             from desispec.quicklook.quicksky import compute_sky
+            if "Apply_resolution" in kwargs:
+                apply_resolution=kwargs["Apply_resolution"]
+            else: apply_resolution = False
             fibermap=input_frame.fibermap
-            skymodel=compute_sky(input_frame,fibermap)
+            skymodel=compute_sky(input_frame,fibermap,apply_resolution=apply_resolution)
             if outskyfile is not None:
                 from desispec.io.sky import write_sky
                 log.info("writing an output sky model file %s "%outskyfile)
