@@ -11,8 +11,15 @@ import numpy as np
 import desispec.io as io
 import desispec.image as dimg
 
+fake_env_cache = {'DESI_ROOT': None, 'DESI_SPECTRO_DATA': None,
+                  'DESI_SPECTRO_REDUX': None, 'SPECPROD': None,
+                  'DESIMODEL': None}
 
 def fake_env(raw, redux, prod, model):
+    global fake_env_cache
+    for k in fake_env_cache:
+        if k in os.environ:
+            fake_env_cache[k] = os.environ[k]
     os.environ["DESI_SPECTRO_DATA"] = raw
     os.environ["DESI_ROOT"] = raw
     os.environ["DESI_SPECTRO_REDUX"] = redux
@@ -20,6 +27,15 @@ def fake_env(raw, redux, prod, model):
     os.environ["DESIMODEL"] = model
     return
 
+def fake_env_clean():
+    global fake_env_cache
+    for k in fake_env_cache:
+        if fake_env_cache[k] is None:
+            del os.environ[k]
+        else:
+            os.environ[k] = fake_env_cache[k]
+            fake_env_cache[k] = None
+    return
 
 def fake_redux(prod):
     dirhash = uuid.uuid4()
@@ -79,7 +95,7 @@ def fake_raw():
         mask = np.zeros(pix.shape, dtype=np.uint32)
         img = dimg.Image(pix, ivar, mask, camera=cam)
         io.write_image(pfile, img)
-    
+
     # flat
 
     expid = "00000001"
@@ -146,4 +162,3 @@ def fake_raw():
         io.write_image(pfile, img)
 
     return rawdir
-

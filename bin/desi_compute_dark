@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 
 from desispec import io
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description="Compute a master dark",
@@ -21,9 +21,9 @@ parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFo
 
 parser.add_argument('-i','--image', type = str, default = None, required = True, nargs="*",
                     help = 'path of raws image fits files')
-parser.add_argument('-o','--outfile', type = str, default = None, required = True, 
+parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'output median image filename')
-parser.add_argument('--camera',type = str, required = True, 
+parser.add_argument('--camera',type = str, required = True,
                     help = 'header HDU (int or string)')
 parser.add_argument('--bias', type = str, default = None, required=False,
                         help = 'bias image calibration file (standard preprocessing calibration is turned off)')
@@ -36,7 +36,7 @@ log.info("read images ...")
 shape=None
 images=[]
 for filename in args.image :
-    
+
     log.info(filename)
 
     # collect exposure times
@@ -48,7 +48,7 @@ for filename in args.image :
     else :
         exptime = primary_header["EXPTIME"]
     fitsfile.close()
-    
+
     # read raw data and preprocess them
     bias=False
     if args.bias : bias=args.bias
@@ -74,5 +74,3 @@ for filename in args.image :
     i+=1
 hdulist.writeto(args.outfile,clobber="True")
 log.info("done")
-
-

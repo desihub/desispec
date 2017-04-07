@@ -15,7 +15,7 @@ from astropy.io import fits
 from desispec.util import runcmd
 from desispec import io
 from desispec.qa import QA_Exposure
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 #- prevent nose from trying to run this test since it takes too long
 __test__ = False
@@ -62,15 +62,15 @@ def check_env():
 #- TODO: fix usage of night to be something other than today
 def integration_test(night=None, nspec=5, clobber=False):
     """Run an integration test from raw data simulations through redshifts
-    
+
     Args:
         night (str, optional): YEARMMDD, defaults to current night
         nspec (int, optional): number of spectra to include
         clobber (bool, optional): rerun steps even if outputs already exist
-        
+
     Raises:
         RuntimeError if any script fails
-      
+
     """
     log = get_logger()
     #- YEARMMDD string, rolls over at noon not midnight

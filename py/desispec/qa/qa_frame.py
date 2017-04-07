@@ -7,9 +7,9 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 import os
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
-log=get_logger()
+# log=get_logger()
 
 class QA_Frame(object):
     def __init__(self, inp):
@@ -17,7 +17,7 @@ class QA_Frame(object):
         Class to organize and execute QA for a DESI frame
 
         x.flavor, x.qa_data, x.camera
-        
+
         Args:
             inp : Frame object or dict
               * Frame -- Must contain meta data
@@ -48,7 +48,7 @@ class QA_Frame(object):
 
     def init_qatype(self, qatype, param, re_init=False):
         """Initialize parameters for a given qatype
-        qatype: str  
+        qatype: str
           Type of QA to be performed (e.g. SKYSUB)
         param: dict
           Dict of parameters to guide QA
@@ -98,6 +98,7 @@ class QA_Frame(object):
         Returns:
 
         """
+        log=get_logger()
         assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso','gray']
 
         # Standard FLUXCALIB input parameters
@@ -118,7 +119,7 @@ class QA_Frame(object):
         self.init_qatype('FLUXCALIB', flux_dict, re_init=re_init)
 
     def init_skysub(self, re_init=False):
-        """Initialize parameters for SkySub QA 
+        """Initialize parameters for SkySub QA
         QA method is desispec.sky.qa_skysub
 
         Parameters:
@@ -142,12 +143,12 @@ class QA_Frame(object):
         """Run QA tests of a given type
         Over-writes previous QA of this type, unless otherwise specified
 
-        qatype: str  
+        qatype: str
           Type of QA to be performed (e.g. SKYSUB)
         inputs: tuple
           Set of inputs for the tests
         clobber: bool, optional [True]
-          Over-write previous QA 
+          Over-write previous QA
         """
         from desispec.sky import qa_skysub
         from desispec.fiberflat import qa_fiberflat
@@ -191,5 +192,3 @@ class QA_Frame(object):
         """
         return ('{:s}: night={:s}, expid={:d}, camera={:s}, flavor={:s}'.format(
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
-
-

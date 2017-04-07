@@ -1,54 +1,103 @@
+===================
+desispec Change Log
+===================
 
-Desispec Change Log
-========================
-
-0.12.1 (unreleased)
+0.13.3 (unreleased)
 -------------------
 
-* Fix brick update corruption (PR #314)
-* close PSF file after initializing PSF object
-* fix graph_path usage in workers
-* update io.write_raw to enable writing simulated raw data with new headers
-* allow test_bootcalib to run even if NERSC portal is returning 403 errors
-* add Brick.bricksize property; allow brick.brickname to specify bricksize
+* Replace all instances of :mod:`desispec.log` with ``desiutil.log``;
+  :func:`~desispec.log.get_logger` now prints a warning that users need
+  to switch.
+* Working DTS delivery script and DTS simulator (PR `#367`_).
+
+.. _`#367`: https://github.com/desihub/desispec/pull/367
+
+0.13.2 (2017-03-27)
+-------------------
+
+* Add framework for DTS delivery and nightly processing scripts (PR `#365`_).
+* Force documentation errors to cause Travis errors (PR `#364`_).
+
+.. _`#364`: https://github.com/desihub/desispec/pull/364
+.. _`#365`: https://github.com/desihub/desispec/pull/365
+
+0.13.1 (2017-03-03)
+-------------------
+
+* Fix installation of ``data/ccd/ccd_calibration.yaml``.
+
+0.13.0 (2017-03-03)
+-------------------
+
+* Fix brick update corruption (PR `#314`_).
+* Close PSF file after initializing PSF object.
+* Refactor :mod:`desispec.io.database` to use SQLAlchemy_.
+* Fix :func:`~desispec.pipeline.graph.graph_path` usage in workers.
+* Update :func:`desispec.io.raw.write_raw` to enable writing simulated raw
+  data with new headers.
+* Allow ``test_bootcalib`` to run even if NERSC portal is returning 403 errors.
+* Add ``bricksize`` property to :class:`desispec.brick.Bricks`; allow
+  :meth:`~desispec.brick.Bricks.brickname` to specify bricksize.
+* Do SVD inverses when cholesky decompositions fail in fiberflat, sky
+  subtraction, and flux calibration.
+* Algorithm updates for teststand and BOSS data
+* pipeline updates for docker/shifter
+* quicklook updates
+
+.. _`#314`: https://github.com/desihub/desispec/pull/314
+.. _SQLAlchemy: http://www.sqlalchemy.org
 
 0.12.0 (2016-11-09)
 -------------------
 
-* Update integration test to use stdstar_templates_v1.1.fits
-* Support asymmetric resolution matrices (PR #288)
-* Quicklook updates (PR #294, #293, #285)
-* Fix BUNIT and wavelength f4 vs. f8 
-* Significant pipeline code refactor (PR #300 and #290)
-* fix docstrings for sphinx build (PR #308)
+* Update integration test to use stdstar_templates_v1.1.fits.
+* Support asymmetric resolution matrices (PR `#288`_).
+* Quicklook updates (PR `#294`_, `#293`_, `#285`_).
+* Fix BUNIT and wavelength f4 *versus* f8.
+* Significant pipeline code refactor (PR `#300`_ and `#290`_).
+* fix docstrings for sphinx build (PR `#308`_).
+
+.. _`#288`: https://github.com/desihub/desispec/pull/288
+.. _`#294`: https://github.com/desihub/desispec/pull/294
+.. _`#293`: https://github.com/desihub/desispec/pull/293
+.. _`#285`: https://github.com/desihub/desispec/pull/285
+.. _`#300`: https://github.com/desihub/desispec/pull/300
+.. _`#290`: https://github.com/desihub/desispec/pull/290
+.. _`#308`: https://github.com/desihub/desispec/pull/308
+
 
 0.11.0 (2016-10-14)
 -------------------
 
 * Update template Module file to reflect DESI+Anaconda infrastructure.
-* update redmonster wrapper for reproducibility
-* Brick.get_target_ids() returns them in the order they appear in input file
-* set BUNIT header keywords (#284)
-* Improved pipeline logging robustness
-* MPI updates for robustness and non-NERSC operation
-* more py3 fixes
+* Update redmonster wrapper for reproducibility.
+* :meth:`desispec.io.brick.BrickBase.get_target_ids` returns target IDs in the order they appear in input file.
+* Set BUNIT header keywords (PR `#284`_).
+* Improved pipeline logging robustness.
+* MPI updates for robustness and non-NERSC operation.
+* More py3 fixes.
+
+.. _`#284`: https://github.com/desihub/desispec/pull/284
 
 0.10.0 (2016-09-10)
 -------------------
 
-PR #266 update for python 3.5:
+PR `#266`_ update for Python 3.5:
 
-* Many little updates to work for both python 2.7 and 3.5
-* internally fibermap is now an astropy Table instead of FITS_rec table
-* Bug fix for flux calibration QA
-* requires desiutil >= 1.8.0
+* Many little updates to work for both python 2.7 and 3.5.
+* Internally fibermap is now a :class:`~astropy.table.Table` instead of :class:`~astropy.io.fits.FITS_rec` table.
+* Bug fix for flux calibration QA.
+* Requires desiutil_ >= 1.8.0.
+
+.. _`#266`: https://github.com/desihub/desispec/pull/266
+.. _desiutil: https://github.com/desihub/desiutil
 
 0.9.0 (2016-08-18)
 ------------------
 
-PR #258 (requires specter >=0.6.0)
+PR `#258`_ (requires specter_ >= 0.6.0)
 
-* propagate pixel model goodness of fit to flag outliers from unmasked cosmics
+* Propagate pixel model goodness of fit to flag outliers from unmasked cosmics.
 * desi_extract_spectra --model option to output 2D pixel model
 * fix pipeline bug in call to desi_bootcalib (no --qafig option)
 * adds extraction tests
@@ -59,6 +108,9 @@ Misc:
 * More quicklook QA (PR #260 and #262)
 * Added support for template groups in redmonster (PR #255)
 * Lots more pipeline docs (PR #261)
+
+.. _specter: https://github.com/desihub/specter
+.. _`#258`: https://github.com/desihub/desispec/pull/258
 
 0.8.1 (2016-07-18)
 ------------------

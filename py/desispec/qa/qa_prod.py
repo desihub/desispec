@@ -10,9 +10,9 @@ from desispec.io import get_exposures
 from desispec.io import get_files
 from desispec.io import read_frame
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
-log = get_logger()
+# log = get_logger()
 
 
 class QA_Prod(object):
@@ -112,6 +112,7 @@ class QA_Prod(object):
         from desispec.io.fluxcalibration import read_flux_calibration
         from desispec.qa import qa_plots
         from desispec.io.fluxcalibration import read_stdstar_models
+        log = get_logger()
 
         # Loop on nights
         path_nights = glob.glob(self.specprod_dir+'/exposures/*')
@@ -182,6 +183,7 @@ class QA_Prod(object):
         from desispec.qa import QA_Exposure
         from desispec.io import write_qa_prod
         import pdb
+        log = get_logger()
         # Remake?
         if make_frameqa:
             self.make_frameqa(**kwargs)

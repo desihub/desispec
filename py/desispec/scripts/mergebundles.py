@@ -19,7 +19,7 @@ from astropy.io import fits
 
 from desispec.frame import Frame
 import desispec.io
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 import argparse
 
@@ -79,7 +79,7 @@ def main(args):
     R = np.zeros( (nspec, ndiag, nwave) )
     fibermap = desispec.io.empty_fibermap(nspec, specmin=fibermin)
     mask = np.zeros( (nspec, nwave), dtype=np.uint32)
-    chi2pix = np.zeros( (nspec, nwave) )    
+    chi2pix = np.zeros( (nspec, nwave) )
 
     #- Fill them!
     for filename in args.files :
@@ -94,14 +94,14 @@ def main(args):
         fx.close()
 
         ii = xfibermap['FIBER'] % nspec
-        
+
         flux[ii] = xflux
         ivar[ii] = xivar
         R[ii] = xR
         fibermap[ii] = xfibermap
         mask[ii] = xmask
         chi2pix[ii] = xchi2pix
-        
+
     #- Write it out
     print("Writing", args.output)
     frame = Frame(w, flux, ivar, mask=mask, resolution_data=R,
@@ -113,4 +113,3 @@ def main(args):
     if args.delete:
         for filename in args.files:
             os.remove(filename)
-

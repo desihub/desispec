@@ -39,7 +39,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.cm as cm
 from matplotlib.backends.backend_pdf import PdfPages
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desiutil import funcfits as dufits
 from numpy.polynomial.legendre import legval
 
@@ -160,13 +160,13 @@ def find_arc_lines(spec,rms_thresh=7.,nwidth=5):
     ngd = gdpix.size
     xpk = np.zeros(ngd)
     flux = np.zeros(ngd)
-    
+
     for jj,igdpix in enumerate(gdpix):
         # Simple flux-weight
         pix = np.arange(igdpix-nstep,igdpix+nstep+1,dtype=int)
         flux[jj] =  np.sum(spec[pix])
         xpk[jj] = np.sum(pix*spec[pix]) / flux[jj]
-    
+
     # Finish
     return xpk , flux
 
@@ -218,7 +218,7 @@ def remove_duplicates_y_id(yw,y,y_id,w_id) :
 def refine_solution(y,w,y_id,w_id,deg=3,tolerance=5.) :
 
     log = get_logger()
-        
+
     # remove duplicates
     transfo=np.poly1d(np.polyfit(y[y_id],w[w_id],deg=deg))
     wy=transfo(y)
@@ -226,7 +226,7 @@ def refine_solution(y,w,y_id,w_id,deg=3,tolerance=5.) :
     transfo=np.poly1d(np.polyfit(w[w_id],y[y_id],deg=deg))
     yw=transfo(w)
     y_id,w_id=remove_duplicates_y_id(yw,y,y_id,w_id)
-    
+
     if len(y_id) != len(np.unique(y_id)) :
         log.error("duplicate AT INIT y_id={:s}".format(str(y_id)))
     if len(w_id) != len(np.unique(w_id)) :
@@ -249,7 +249,7 @@ def refine_solution(y,w,y_id,w_id,deg=3,tolerance=5.) :
 
         # apply transfo to measurements
         wy=transfo(y)
-                
+
         previous_rms = rms+0.
         rms=np.std(wy[y_id]-w[w_id])
 
@@ -267,7 +267,7 @@ def refine_solution(y,w,y_id,w_id,deg=3,tolerance=5.) :
                     y_id=np.append(y_id,i)
                     w_id=np.append(w_id,j)
                     break
-        
+
         previous_nmatch = nmatch+0
         nmatch=len(y_id)
 
@@ -284,19 +284,19 @@ def refine_solution(y,w,y_id,w_id,deg=3,tolerance=5.) :
         if nmatch>=min(w.size,y.size) :
             #print("break because %d>=min(%d,%d)"%(nmatch,w.size,y.size))
             break
-    
+
     return y_id,w_id,rms,loop
 
 def id_remainder(id_dict, llist, deg=4, tolerance=1., verbose=False) :
-    
+
     log = get_logger()
-    
+
     y_id=np.array(id_dict['id_idx']).astype(int)
     all_y=np.array(id_dict['pixpk'])
-    
+
     all_known_waves  = np.sort(np.array(llist["wave"]))
     identified_waves = np.array(id_dict["id_wave"]) # lines identified at previous steps
-    
+
     w_id=[]
     for w in identified_waves :
         i=np.argmin(np.abs(all_known_waves-w))
@@ -306,15 +306,15 @@ def id_remainder(id_dict, llist, deg=4, tolerance=1., verbose=False) :
         w_id.append(i)
     w_id = np.array(w_id).astype(int)
     y_id,w_id,rms,niter=refine_solution(all_y,all_known_waves,y_id,w_id,deg=deg,tolerance=tolerance)
-    
+
     id_dict['id_idx']  = np.sort(y_id)
     id_dict['id_pix']  = np.sort(all_y[y_id])
     id_dict['id_wave'] = np.sort(all_known_waves[w_id])
-    id_dict['rms'] = rms 
-    
+    id_dict['rms'] = rms
+
     log.info("{:d} matched for {:d} detected and {:d} known, rms = {:g}".format(len(y_id),len(all_y),len(all_known_waves),rms))
 
-    
+
 def compute_triplets(wave) :
 
     triplets=[]
@@ -353,8 +353,8 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
     log=get_logger()
     #log.info("y=%s"%str(y))
     #log.info("w=%s"%str(w))
-    
-    
+
+
     y = id_dict["pixpk"]
 
     log.info("ny=%d nw=%d"%(len(y),len(w)))
@@ -362,18 +362,18 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
     if nmax<10 :
         nmax=10
         log.warning("force nmax=10 (arg was too small: {:d})".format(nmax))
-    
+
     if len(y)>nmax :
         # log.info("down-selecting the number of detected lines from {:d} to {:d}".format(len(y),nmax))
         # keep at least the edges
         margin=3
         new_y=np.append(y[:margin],y[-margin:])
-        # now look at the flux to select the other ones 
+        # now look at the flux to select the other ones
         flux=id_dict["flux"][margin:-margin]
         ii=np.argsort(flux)
         new_y=np.append(new_y,y[margin:-margin][ii[-(nmax-2*margin):]])
         y = np.sort(new_y)
-    
+
     # compute triplets of waves of y positions
     y_triplets = compute_triplets(y)
     w_triplets = compute_triplets(w)
@@ -439,7 +439,7 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
     # loop on best matches ( = most populated bins)
     count=0
     for histo_bin in best_histo_bins[:ntrack] :
-        
+
         if  histogram_ravel[histo_bin]<4 and count>3 :
             log.warning("stopping here")
             break
@@ -486,15 +486,15 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
         if best_rms<0.2 and len(y_id)>=min(15,min(len(y),len(w))) :
             #log.info("stop here because we have a correct solution")
             break
-        
+
     if len(y) != len(id_dict["pixpk"]) :
-        #log.info("re-indexing the result")        
+        #log.info("re-indexing the result")
         tmp_y_id = []
         for i in best_y_id :
             tmp_y_id.append(np.argmin(np.abs(id_dict["pixpk"]-y[i])))
         best_y_id = np.array(tmp_y_id).astype(int)
         y = id_dict["pixpk"]
-        
+
     if len(best_w_id) == 0 :
         log.error("failed, no match")
         id_dict["status"]="failed"
@@ -512,10 +512,10 @@ def id_arc_lines_using_triplets(id_dict,w,dwdy_prior,d2wdy2_prior=1.5e-5,toler=0
     id_dict["rms"]=best_rms
     deg=max(1,min(3,best_y_id.size-2))
     id_dict["fit"]= dufits.func_fit(w[best_w_id],y[best_y_id],'polynomial',deg,xmin=0.,xmax=1.)
-    
+
     log.info("{:d} matched for {:d} detected and {:d} known as good, rms = {:g}".format(len(best_y_id),len(y),len(w),best_rms))
-    
-    
+
+
 
 ########################################################
 # Linelist routines
@@ -765,26 +765,26 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
 
     if lamps is None :
         lamps=np.array(["HgI","CdI","ArI","NeI"])
-    
+
     lines={}
 
     dlamb=0.6
     if camera[0] == 'b':
         dlamb = 0.589
-    elif camera[0] == 'r':  
+    elif camera[0] == 'r':
         dlamb = 0.527
-    elif camera[0] == 'z':  
+    elif camera[0] == 'z':
         #dlamb = 0.599  # Ang
         dlamb = 0.608  # Ang (from teststand, ranges (fiber & wave) from 0.54 to 0.66)
     # read good lines
     if good_lines_filename is not None :
         filename = good_lines_filename
-    else : 
+    else :
         if vacuum :
             filename = resource_filename('desispec', "data/arc_lines/goodlines_vacuum.ascii")
         else :
             filename = resource_filename('desispec', "data/arc_lines/goodlines_air.ascii")
-    
+
     log.info("Reading good lines in {:s}".format(filename))
     lines={}
     ifile=open(filename)
@@ -806,7 +806,7 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
             lines[ion]=[wave,]
     ifile.close()
     log.info("Good lines = {:s}".format(str(lines)))
-        
+
     log.info("Checking consistency with full line list")
     nbad=0
     for ion in lines:
@@ -830,7 +830,7 @@ def load_gdarc_lines(camera, llist, vacuum=True,lamps=None,good_lines_filename=N
     for lamp in lamps :
         if lamp in lines:
             gd_lines=np.append(gd_lines,lines[lamp])
-    
+
     # Sort and return
     gd_lines.sort()
     return dlamb, gd_lines
@@ -1078,7 +1078,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
     # Set flux threshold
     #srt = np.sort(cutimg.flatten()) # this does not work for sparse fibers
     #thresh = srt[int(cutimg.size*0.95)] / 2. # this does not work for sparse fibers
-    
+
     thresh = np.max(cut)/20.
     pixels_below_threshold=np.where(cut<thresh)[0]
     if pixels_below_threshold.size>2 :
@@ -1089,7 +1089,7 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
             new_thresh=max(thresh,nsig*rms)
             log.info("Threshold: {:f} -> {:f} ({:d}*rms: {:f})".format(thresh,new_thresh,nsig,nsig*rms))
             thresh=new_thresh
-    
+
     #gdp = cut > thresh
     # Roll to find peaks (simple algorithm)
     #nstep = nwidth // 2
@@ -1113,10 +1113,10 @@ def find_fiber_peaks(flat, ypos=None, nwidth=5, debug=False) :
             clusters.append(cluster)
             cluster=[i]
     clusters.append(cluster)
-    
-    
+
+
     log.info("Number of clusters found: {:d}".format(len(clusters)))
-        
+
     # Record max of each cluster
     xpk=np.zeros((len(clusters)), dtype=np.int64)
     for i in range(len(clusters)) :
@@ -1262,7 +1262,7 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         # Generate PSF
         dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq], np.ones(nx))
         psf = cst*np.exp(-0.5 * (dx_img/sigma[qq])**2)/sigma[qq]
-        
+
         #dx_img = xpix_img[:,minx:maxx+1] - np.outer(xtrc[:,qq],np.ones(img.shape[1]))
         #g_init = models.Gaussian1D(amplitude=1., mean=0., stddev=sigma[qq])
         #psf = mask * g_init(dx_img)
@@ -1271,9 +1271,9 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         #all_spec[:,qq] = np.sum(psf*img[:,minx:maxx+1],axis=1) / np.sum(psf,axis=1)
         a=np.sum(img_ivar[:,minx:maxx+1]*psf**2,axis=1)
         b=np.sum(img_ivar[:,minx:maxx+1]*psf*img[:,minx:maxx+1],axis=1)
-        ok=(a>1.e-6) 
+        ok=(a>1.e-6)
         all_spec[ok,qq] = b[ok] / a[ok]
-        
+
         #import astropy.io.fits as pyfits
         #h=pyfits.HDUList([pyfits.PrimaryHDU(),
         #                  pyfits.ImageHDU(img[:,minx:maxx+1],name="FLUX"),
@@ -1283,11 +1283,11 @@ def extract_sngfibers_gaussianpsf(img, img_ivar, xtrc, sigma, box_radius=2, verb
         #                  pyfits.ImageHDU(b,name="B")])
         #h.writeto("test.fits")
         #sys.exit(12)
-        
-                          
-                          
 
-        
+
+
+
+
     # Return
     return all_spec
 
@@ -1444,60 +1444,60 @@ def trace_fweight(fimage, xinit, ycen=None, invvar=None, radius=2., debug=False)
 def fix_ycoeff_outliers(xcoeff, ycoeff, deg=5, tolerance=2):
     '''
     Fix outliers in coefficients for wavelength solution, assuming a continuous function of CCD coordinates
-    
+
     Args:
         xcoeff[nfiber, ncoeff] : 2D array of Legendre coefficients for X(wavelength)
         ycoeff[nfiber, ncoeff] : 2D array of Legendre coefficients for Y(wavelength)
-    
+
     Options:
         deg : integer degree of polynomial to fit
         tolerance : replace fibers with difference of wavelength solution larger than this number of pixels after interpolation
-        
+
     Returns:
         new_ycoeff[nfiber, ncoeff] with outliers replaced by interpolations
-        
+
     For each coefficient, fit a polynomial vs. fiber number with one
     pass of sigma clipping.  Remaining outliers are than replaced with
     the interpolated fit value.
     '''
-    
+
     log = get_logger()
-    
+
     nfibers=ycoeff.shape[0]
     if nfibers < 3 :
         log.warning("only {:d} fibers, cannot interpolate coefs".format(nfibers))
         return ycoeff
     deg=min(deg,nfibers-1)
-    
+
     nwave=ycoeff.shape[1]+1
     wave_nodes = np.linspace(-1,1,nwave)
-    
+
     # get traces using fit coefs
     x=np.zeros((nfibers,nwave))
     y=np.zeros((nfibers,nwave))
-    
+
     for i in range(nfibers) :
         x[i] = legval(wave_nodes,xcoeff[i])
         y[i] = legval(wave_nodes,ycoeff[i])
-    
+
     new_ycoeff=ycoeff.copy()
-    
+
     bad_fibers=None
     while True : # loop to discard one fiber at a time
 
         # polynomial fit as a function of x for each wave
-        yf=np.zeros((nfibers,nwave)) 
+        yf=np.zeros((nfibers,nwave))
         xx=2*(x - np.min(x)) / (np.max(x) - np.min(x)) - 1
         for i in range(nwave) :
             c=np.polyfit(xx[:,i], y[:,i], deg)
             yf[:,i]=np.polyval(c, xx[:,i])
-        
+
         diff=np.max(np.abs(y-yf),axis=1)
-        
+
         for f in range(nfibers) :
             log.info("fiber {:d} maxdiff= {:f}".format(f,diff[f]))
-        
-            
+
+
         worst = np.argmax(diff)
         if diff[worst] > tolerance :
             log.warning("replace fiber {:d} trace by interpolation".format(worst))
@@ -1511,7 +1511,7 @@ def fix_ycoeff_outliers(xcoeff, ycoeff, deg=5, tolerance=2):
                 bad_fibers=np.unique(bad_fibers)
             continue
         break
-    
+
     return new_ycoeff
 
 
@@ -1545,7 +1545,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     if not without_arc:
         nlines=10000
         for ii,id_dict in enumerate(wv_solns):
-            if len(id_dict['id_pix']) > 0 : 
+            if len(id_dict['id_pix']) > 0 :
                 nlines_in_fiber=(np.array(id_dict['id_pix'])[id_dict['mask']==0]).size
                 #print("fiber #%d nlines=%d"%(ii,nlines_in_fiber))
                 nlines=min(nlines,nlines_in_fiber)
@@ -1575,12 +1575,12 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
                 WAVEMAX = max(WAVEMAX,id_dict['wave_max'])
         WAVEMIN -= 1.
         WAVEMAX += 1.
-    
+
     wv_array = np.linspace(WAVEMIN, WAVEMAX, num=ny)
     # Fit Legendre to y vs. wave
     for ii,id_dict in enumerate(wv_solns):
-        
-        
+
+
 
         # Fit y vs. wave
         if without_arc:
@@ -1591,12 +1591,12 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             else :
                 yleg_fit = None
                 mask = None
-        
+
         if yleg_fit is None :
             continue
 
         YCOEFF[ii, :] = yleg_fit['coeff']
-        
+
         # Fit x vs. wave
         yval = dufits.func_val(wv_array, yleg_fit)
         if fdicts is None:
@@ -1609,14 +1609,14 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
 
     # Fix outliers assuming that coefficients vary smoothly vs. CCD coordinates
     YCOEFF = fix_ycoeff_outliers(XCOEFF,YCOEFF,tolerance=2)
-    
+
     # Write the FITS file
     prihdu = fits.PrimaryHDU(XCOEFF)
     prihdu.header['WAVEMIN'] = WAVEMIN
     prihdu.header['WAVEMAX'] = WAVEMAX
     prihdu.header['EXTNAME'] = 'XTRACE'
     prihdu.header['PSFTYPE'] = 'bootcalib'
-    
+
     from desiutil.depend import add_dependencies
     add_dependencies(prihdu.header)
 
@@ -1638,9 +1638,9 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
             prihdu.header["FLANIGHT"] = fiberflat_header["NIGHT"]
         if "EXPID" in fiberflat_header:
             prihdu.header["FLAEXPID"] = fiberflat_header["EXPID"]
-    
+
     yhdu = fits.ImageHDU(YCOEFF, name='YTRACE')
-    
+
     # also save wavemin wavemax in yhdu
     yhdu.header['WAVEMIN'] = WAVEMIN
     yhdu.header['WAVEMAX'] = WAVEMAX
@@ -1649,7 +1649,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
 
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
 
-    
+
     hdulist.writeto(outfile, clobber=True)
 
 def write_line_list(filename,all_wv_soln,llist) :
@@ -1667,7 +1667,7 @@ def write_line_list(filename,all_wv_soln,llist) :
         ofile.write("{:s} {:f} 1 1\n".format(llist["Ion"][ii],w))
     ofile.close()
 
-    
+
 
 
 

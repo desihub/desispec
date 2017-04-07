@@ -92,7 +92,7 @@ class Make_Config(object):
             elif self.camera[0] == 'b':
                 self.wavelength='3550,5730,0.8'
             elif self.camera[0] == 'z':
-                self.wavelength='7650,9840,0.8'
+                self.wavelength='7650,9830,0.8'
 
         paopt_initialize={'camera': self.camera}
 
@@ -233,9 +233,9 @@ class Make_Config(object):
                }
         if qaname not in outmap:              
             raise IOError("No output name map available for this QA:",qaname)
-        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"qa","ql-{}-{}-{:08d}.yaml".format(outmap[qaname],self.camera,self.expid))
+        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.yaml".format(outmap[qaname],self.camera,self.expid))
 
-        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"qa","ql-{}-{}-{:08d}.png".format(outmap[qaname],self.camera,self.expid))
+        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.png".format(outmap[qaname],self.camera,self.expid))
 
         return (outfile,outfig)
 

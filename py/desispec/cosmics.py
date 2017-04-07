@@ -6,7 +6,7 @@ Utility functions to find cosmic rays
 """
 
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 import numpy as np
 import math
 import copy
@@ -39,9 +39,9 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     #
     naxis=4
 
-    
+
     band=img.camera[0].lower()
-    
+
     if band == 'b':
         psf=np.array([0.366247,0.391422,0.172965,0.184552])
     elif band == 'r':
@@ -127,7 +127,7 @@ def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     tmp[nonullivar]=pix[nonullivar]-cfudge/np.sqrt(pixivar[nonullivar])
     for a in range(naxis) :
         second_criterion |= ( tmp*c2fudge*psf[a] > ( back[a]+cfudge*sigmaback[a] ) )
-    
+
 
     log.debug("npix selected                       = %d"%pix.size)
     log.debug("npix rejected 1st criterion         = %d"%np.sum(first_criterion))

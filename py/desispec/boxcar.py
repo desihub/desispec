@@ -4,7 +4,7 @@ boxcar extraction for Spectra from Desi Image
 from __future__ import absolute_import, division, print_function
 import numpy as np
 
-def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
+def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usepsfboot=False):
     """Extracts spectra row by row, given the centroids
 
     Args:
@@ -13,6 +13,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
             Or do we just parse the traces here and write a separate wrapper to handle this? Leaving psf in the input argument now.
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels
+        usepsfboot: if True, use xsigma from psfboot file to calculate resolution data. 
 
     Returns flux, ivar, resolution
     """
@@ -119,8 +120,6 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
 
     fflux=np.zeros((nspec,len(wtarget)))
     iivar=np.zeros((nspec,len(wtarget)))
-    resolution=np.zeros((nspec,21,len(wtarget))) #- placeholder for online case. Offline should be usable
-    #TODO get the approximate resolution matrix for online purpose or don't need them? How to perform fiberflat, sky subtraction etc or should have different version of them for online?
 
     #- convert to per angstrom first and then resample to desired wave length grid.
 
@@ -130,5 +129,9 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None):
         flux[:,spec]/=dwave
         ivar[:,spec]*=dwave**2
         fflux[spec,:],iivar[spec,:]=resample_flux(wtarget,ww,flux[:,spec],ivar[:,spec])
+
+    #- Add zeroth order resolution from a constant Gaussian Xsigma from psfboot
+    from desispec.quicklook.procalgs import get_resolution
+    resolution=get_resolution(wtarget,fflux,iivar,psf,usepsfboot=usepsfboot)
 
     return fflux,iivar,resolution

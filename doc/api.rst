@@ -1,7 +1,8 @@
 .. _api:
 
+===========================
 Full desispec API Reference
-================================
+===========================
 
 .. automodule:: desispec
     :members:
@@ -90,25 +91,31 @@ Full desispec API Reference
 .. automodule:: desispec.log
     :members:
 
+.. automodule:: desispec.maskbits
+    :members:
+
+.. automodule:: desispec.parallel
+    :members:
+
 .. automodule:: desispec.pipeline
     :members:
 
 .. automodule:: desispec.pipeline.common
     :members:
 
-.. automodule:: desispec.pipeline.task
-    :members:
-
 .. automodule:: desispec.pipeline.graph
-    :members:
-
-.. automodule:: desispec.pipeline.state
     :members:
 
 .. automodule:: desispec.pipeline.plan
     :members:
 
 .. automodule:: desispec.pipeline.run
+    :members:
+
+.. automodule:: desispec.pipeline.state
+    :members:
+
+.. automodule:: desispec.pipeline.task
     :members:
 
 .. automodule:: desispec.preproc
@@ -135,7 +142,13 @@ Full desispec API Reference
 .. automodule:: desispec.qa.qa_plots
     :members:
 
+.. automodule:: desispec.qa.qa_prod
+    :members:
+
 .. automodule:: desispec.qa.qa_quicklook
+    :members:
+
+.. automodule:: desispec.qa.qalib
     :members:
 
 .. automodule:: desispec.quicklook
@@ -148,6 +161,9 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.quicklook.qas
+    :members:
+
+.. automodule:: desispec.quicklook.qlconfig
     :members:
 
 .. automodule:: desispec.quicklook.qlexceptions
@@ -172,6 +188,72 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.scripts
+    :members:
+
+.. automodule:: desispec.scripts.bootcalib
+    :members:
+
+.. automodule:: desispec.scripts.delivery
+    :members:
+
+.. automodule:: desispec.scripts.extract
+    :members:
+
+.. automodule:: desispec.scripts.fiberflat
+    :members:
+
+.. automodule:: desispec.scripts.fluxcalibration
+    :members:
+
+.. automodule:: desispec.scripts.makebricks
+    :members:
+
+.. automodule:: desispec.scripts.mergebundles
+    :members:
+
+.. automodule:: desispec.scripts.night
+    :members:
+
+.. automodule:: desispec.scripts.pipe_prod
+    :members:
+
+.. automodule:: desispec.scripts.pipe_run
+    :members:
+
+.. automodule:: desispec.scripts.pipe_status
+    :members:
+
+.. automodule:: desispec.scripts.preproc
+    :members:
+
+.. automodule:: desispec.scripts.procexp
+    :members:
+
+.. automodule:: desispec.scripts.qa_prod
+    :members:
+
+.. automodule:: desispec.scripts.quicklook
+    :members:
+
+.. automodule:: desispec.scripts.rejectcosmics
+    :members:
+
+.. automodule:: desispec.scripts.sky
+    :members:
+
+.. automodule:: desispec.scripts.skysubresid
+    :members:
+
+.. automodule:: desispec.scripts.specex
+    :members:
+
+.. automodule:: desispec.scripts.stdstars
+    :members:
+
+.. automodule:: desispec.scripts.updatecoadd
+    :members:
+
+.. automodule:: desispec.scripts.zfind
     :members:
 
 .. automodule:: desispec.sky

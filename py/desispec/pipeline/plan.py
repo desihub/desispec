@@ -19,7 +19,7 @@ import re
 import copy
 
 from .. import io
-from ..log import get_logger
+from desiutil.log import get_logger
 
 from .common import *
 from .graph import *
@@ -60,7 +60,7 @@ def select_nights(allnights, nightstr):
     return nights
 
 
-def create_prod(nightstr=None):
+def create_prod(nightstr=None, extra={}):
     """
     Create or update a production.
 
@@ -71,6 +71,11 @@ def create_prod(nightstr=None):
 
     Args:
         nightstr (str): comma-separated list of regex patterns.
+        extra (dict): dictionary of extra options for the task
+            workers that will be added to the initial options.yaml
+            file for the production.  The keys are the worker
+            class names and the values are dictionaries that are
+            passed to the constructor of each worker class.
 
     Returns:
         tuple containing the number of exposures of each type
@@ -86,7 +91,7 @@ def create_prod(nightstr=None):
 
     if not os.path.isdir(proddir):
         os.makedirs(proddir)
-    
+
     cal2d = os.path.join(proddir, "calib2d")
     if not os.path.isdir(cal2d):
         os.makedirs(cal2d)
@@ -125,7 +130,7 @@ def create_prod(nightstr=None):
 
     optfile = os.path.join(rundir, "options.yaml")
     if not os.path.isfile(optfile):
-        opts = default_options()
+        opts = default_options(extra=extra)
         yaml_write(optfile, opts)
 
     # get list of nights
@@ -174,7 +179,7 @@ def create_prod(nightstr=None):
         with open(os.path.join(plandir, "{}.dot".format(nt)), "w") as f:
             graph_dot(grph, f)
         yaml_write(os.path.join(plandir, "{}.yaml".format(nt)), grph)
-        
+
         # make per-exposure dirs
         for name, node in grph.items():
             if node["type"] == "fibermap":
@@ -190,7 +195,7 @@ def graph_night(rawnight):
     Generate the dependency graph for one night of data.
 
     Each node of the graph is a dictionary, with required keys "type",
-    "in", and "out".  Where "in" and "out" are lists of other nodes.  
+    "in", and "out".  Where "in" and "out" are lists of other nodes.
     Extra keys for each type are allowed.  Some keys (band, spec, etc)
     are technically redundant (since they could be obtained by working
     back up the graph to the raw data properties), however this is done
@@ -229,7 +234,7 @@ def graph_night(rawnight):
     # are excluded from the graph.
 
     expid = io.get_exposures(rawnight, raw=True)
-    
+
     campat = re.compile(r"([brz])([0-9])")
 
     keepspec = set()
@@ -239,7 +244,7 @@ def graph_night(rawnight):
         fibermap = io.get_raw_files("fibermap", rawnight, ex)
 
         # read the fibermap to get the exposure type, and while we are at it,
-        # also accumulate the total list of bricks        
+        # also accumulate the total list of bricks
 
         fmdata = io.read_fibermap(fibermap)
         flavor = fmdata.meta["FLAVOR"]
@@ -304,7 +309,7 @@ def graph_night(rawnight):
     keep = sorted(keepspec)
 
     # Now that we have added all the raw data to the graph, we work our way
-    # through the processing steps.  
+    # through the processing steps.
 
     # This step is a placeholder, in case we want to combine information from
     # multiple flats or arcs before running bootcalib.  We mark these bootcalib
@@ -505,7 +510,7 @@ def graph_night(rawnight):
                 flatid = fid
             elif (fid > flatid) and (fid < id):
                 flatid = fid
-                
+
         flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
 
@@ -693,4 +698,3 @@ def load_prod(nightstr=None, spectrographs=None, progress=None):
         grph.update(sgrph)
 
     return grph
-

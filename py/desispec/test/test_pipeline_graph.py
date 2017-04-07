@@ -31,7 +31,7 @@ class TestPipelineGraph(unittest.TestCase):
             shutil.rmtree(self.raw)
         if os.path.exists(self.redux):
             shutil.rmtree(self.redux)
-
+        ph.fake_env_clean()
 
     def test_graph_name(self):
         check = graph_name("foo", "bar", "blat")
@@ -204,4 +204,4 @@ class TestPipelineGraph(unittest.TestCase):
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
-    unittest.main()           
+    unittest.main()

@@ -1,17 +1,21 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+# -*- coding: utf-8 -*-
 """
 desispec.io.fiberflat
 =====================
 
 IO routines for fiberflat.
 """
+from __future__ import absolute_import
+# The line above will help with 2to3 support.
 import os
 from astropy.io import fits
 
 from desiutil.depend import add_dependencies
 
-from desispec.fiberflat import FiberFlat
-from desispec.io import findfile
-from desispec.io.util import fitsheader, native_endian, makepath
+from ..fiberflat import FiberFlat
+from .meta import findfile
+from .util import fitsheader, native_endian, makepath
 
 def write_fiberflat(outfile,fiberflat,header=None):
     """Write fiberflat object to outfile
@@ -40,7 +44,7 @@ def write_fiberflat(outfile,fiberflat,header=None):
     add_dependencies(hdr)
 
     ff = fiberflat   #- shorthand
-    
+
     hdus = fits.HDUList()
     hdus.append(fits.PrimaryHDU(ff.fiberflat.astype('f4'), header=hdr))
     hdus.append(fits.ImageHDU(ff.ivar.astype('f4'),     name='IVAR'))
@@ -48,7 +52,7 @@ def write_fiberflat(outfile,fiberflat,header=None):
     hdus.append(fits.ImageHDU(ff.meanspec.astype('f4'), name='MEANSPEC'))
     hdus.append(fits.ImageHDU(ff.wave.astype('f4'),     name='WAVELENGTH'))
     hdus[-1].header['BUNIT'] = 'Angstrom'
-    
+
     hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
     return outfile

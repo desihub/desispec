@@ -1,3 +1,5 @@
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
+# -*- coding: utf-8 -*-
 """
 desispec.io.database
 ====================
@@ -5,82 +7,129 @@ desispec.io.database
 Code for interacting with the file metadatabase.
 """
 from __future__ import absolute_import, division, print_function
-import sqlite3
-from astropy.io import fits
-import numpy as np
-from glob import glob
 import os
 import re
+from glob import glob
 from datetime import datetime, timedelta
-from ..log import get_logger, DEBUG
-from collections import namedtuple
+import numpy as np
+from astropy.io import fits
+from pytz import utc
+from sqlalchemy import (create_engine, text, Table, ForeignKey, Column,
+                        Integer, String, Float, DateTime)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.orm import sessionmaker, relationship, reconstructor
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from matplotlib.patches import Circle, Polygon, Wedge
 from matplotlib.collections import PatchCollection
+from desiutil.log import get_logger, DEBUG
 
 
-Brick = namedtuple('Brick', ['id', 'name', 'q', 'row', 'col', 'ra', 'dec',
-                             'ra1', 'ra2', 'dec1', 'dec2', 'area'])
+Base = declarative_base()
 
 
-class Tile(object):
-    """Simple object to store individual tile data.
+frame2brick = Table('frame2brick', Base.metadata,
+                    Column('frame_id', ForeignKey('frame.id'),
+                           primary_key=True),
+                    Column('brick_id', ForeignKey('brick.id'),
+                           primary_key=True))
+
+
+class Brick(Base):
+    """Representation of a region of the sky.
     """
-    radius = 1.605  # degrees
+    __tablename__ = 'brick'
 
-    def __init__(self, tileid, ra, dec, obs_pass, in_desi):
-        self._id = tileid
-        self._ra = ra
-        self._dec = dec
-        self._obs_pass = obs_pass
-        self._in_desi = bool(in_desi)
-        self._cos_radius = None
-        self._area = None
-        self._circum_square = None
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    q = Column(Integer, nullable=False)
+    row = Column(Integer, nullable=False)
+    col = Column(Integer, nullable=False)
+    ra = Column(Float, nullable=False)
+    dec = Column(Float, nullable=False)
+    ra1 = Column(Float, nullable=False)
+    dec1 = Column(Float, nullable=False)
+    ra2 = Column(Float, nullable=False)
+    dec2 = Column(Float, nullable=False)
+    area = Column(Float, nullable=False)
+
+    frames = relationship('Frame', secondary=frame2brick,
+                          back_populates='bricks')
 
     def __repr__(self):
-        return ("Tile(tileid={0.id:d}, ra={0.ra:f}, dec={0.ra:f}, " +
-                "obs_pass={0.obs_pass:d}, in_desi={0.in_desi})").format(self)
+        return ("<Brick(id={0.id:d}, name='{0.name}', q={0.q:d}, " +
+                "row={0.row:d}, col={0.col:d}, " +
+                "ra={0.ra:f}, dec={0.dec:f}, " +
+                "ra1={0.ra1:f}, dec1={0.dec1:f}, " +
+                "ra2={0.ra2:f}, dec2={0.dec2:f}, " +
+                "area={0.area:f})>").format(self)
+
+
+class Tile(Base):
+    """Representation of a particular pointing of the telescope.
+    """
+    __tablename__ = 'tile'
+
+    id = Column(Integer, primary_key=True)
+    ra = Column(Float, nullable=False)
+    dec = Column(Float, nullable=False)
+    desi_pass = Column(Integer, nullable=False)
+    in_desi = Column(Integer, nullable=False)
+    ebv_med = Column(Float, nullable=False)
+    airmass = Column(Float, nullable=False)
+    star_density = Column(Float, nullable=False)
+    exposefac = Column(Float, nullable=False)
+    program = Column(String, nullable=False)
+    obsconditions = Column(Integer, nullable=False)
+
+    def _constants(self):
+        """Define mathematical constants associated with a tile.
+        """
+        self._radius = 1.605  # degrees
+        self._cos_radius = 0.9996076746114829  # cos(radius)
+        self._area = 0.0024650531167640308  # steradians: 2*pi*(1-cos(radius))
+        self._circum_square = None
+        self._petal2brick = None
+        self._brick_polygons = None
+
+    def __init__(self, *args, **kwargs):
+        self._constants()
+        super(Tile, self).__init__(*args, **kwargs)
+
+    def __repr__(self):
+        return ("<Tile(id={0.id:d}, ra={0.ra:f}, dec={0.dec:f}, " +
+                "desi_pass={0.desi_pass:d}, in_desi={0.in_desi:d}, " +
+                "ebv_med={0.ebv_med:f}, airmass={0.airmass:f}, " +
+                "star_density={0.star_density:f}, " +
+                "exposefac={0.exposefac:f}, program='{0.program}', " +
+                "obsconditions={0.obsconditions:d})>").format(self)
+
+    @reconstructor
+    def init_on_load(self):
+        self._constants()
 
     @property
-    def id(self):
-        return self._id
-
-    @property
-    def ra(self):
-        return self._ra
-
-    @property
-    def dec(self):
-        return self._dec
-
-    @property
-    def obs_pass(self):
-        return self._obs_pass
-
-    @property
-    def in_desi(self):
-        return self._in_desi
+    def radius(self):
+        """Radius of tile in degrees.
+        """
+        return self._radius
 
     @property
     def cos_radius(self):
-        if self._cos_radius is None:
-            self._cos_radius = np.cos(np.radians(self.radius))
+        """Cosine of the radius, precomputed for speed.
+        """
         return self._cos_radius
 
     @property
     def area(self):
-        if self._area is None:
-            self._area = 2.0*np.pi*(1.0 - self.cos_radius)  # steradians
+        """Area of the tile in steradians.
+        """
         return self._area
 
     @property
     def circum_square(self):
-        """Given a `tile`, return the square that circumscribes it.
-
-        Returns
-        -------
-        :func:`tuple`
-            A tuple of RA, Dec, suitable for plotting.
+        """Defines a square-like region on the sphere which circumscribes
+        the tile.
         """
         if self._circum_square is None:
             tile_ra = self.ra + self.offset()
@@ -103,12 +152,12 @@ class Tile(object):
         Parameters
         ----------
         shift : :class:`float`, optional
-            Amount to offset.
+            Amount to offset in degrees.
 
         Returns
         -------
         :class:`float`
-            An amount to offset.
+            An amount to offset in degrees.
         """
         if self.ra < shift:
             return shift
@@ -141,35 +190,55 @@ class Tile(object):
             brick_ra2 -= 360.0
         return (brick_ra1, brick_ra2)
 
-    def petals(self, Npetals=10):
-        """Convert a tile into a set of Wedge objects.
+    def _coarse_overlapping_bricks(self, session):
+        """Get the bricks that *may* overlap a tile.
 
         Parameters
         ----------
-        Npetals : :class:`int`, optional
-            Number of petals.
+        session : :class:`sqlalchemy.orm.session.Session`
+            Database connection.
 
         Returns
         -------
         :class:`list`
-            A list of Wedge objects.
+            A list of :class:`~desispec.io.database.Brick` objects.
         """
-        p = list()
-        petal_angle = 360.0/Npetals
-        tile_ra = self.ra + self.offset()
-        for k in range(Npetals):
-            petal = Wedge((tile_ra, self.dec), self.radius, petal_angle*k,
-                          petal_angle*(k+1), facecolor='b')
-            p.append(petal)
-        return p
+        candidate_bricks = session.query(Brick).filter(text("(:dec + :radius > brick.dec1) AND (:dec - :radius < brick.dec2)")).params(dec=self.dec, radius=self._radius).all()
+        bricks = list()
+        for b in candidate_bricks:
+            if ((np.cos(np.radians(self.ra - b.ra1)) > self.cos_radius) or
+                (np.cos(np.radians(self.ra - b.ra2)) > self.cos_radius)):
+                bricks.append(b)
+        return bricks
 
-    def overlapping_bricks(self, candidates, map_petals=False):
-        """Convert a list of potentially overlapping bricks into actual overlaps.
+    def petals(self, Npetals=10):
+        """Convert a tile into a set of :class:`~matplotlib.patches.Wedge`
+        objects.
 
         Parameters
         ----------
-        candidates : :class:`list`
-            A list of candidate bricks.
+        Npetals : :class:`int`, optional
+            Number of petals (default 10).
+
+        Returns
+        -------
+        :class:`list`
+            A list of :class:`~matplotlib.patches.Wedge` objects.
+        """
+        petal_angle = 360.0/Npetals
+        tile_ra = self.ra + self.offset()
+        return [Wedge((tile_ra, self.dec), self.radius, petal_angle*k,
+                      petal_angle*(k+1), facecolor='b')
+                for k in range(Npetals)]
+
+    def overlapping_bricks(self, session, map_petals=False):
+        """Perform a geometric calculation to find bricks that overlap
+        a tile.
+
+        Parameters
+        ----------
+        session : :class:`sqlalchemy.orm.session.Session`
+            Database connection.
         map_petals : bool, optional
             If ``True`` a map of petal number to a list of overlapping bricks
             is returned.
@@ -177,553 +246,346 @@ class Tile(object):
         Returns
         -------
         :class:`list`
-            A list of Polygon objects.
+            If `map_petals` is ``False``, a list of
+            :class:`~matplotlib.patches.Polygon` objects. Otherwise, a
+            :class:`dict` mapping petal number to the
+            :class:`~desispec.io.database.Brick` objects that overlap that
+            petal.
         """
-        petals = self.petals()
-        petal2brick = dict()
-        bricks = list()
-        for b in candidates:
-            b_ra1, b_ra2 = self.brick_offset(b)
-            brick_corners = np.array([[b_ra1, b.dec1],
-                                      [b_ra2, b.dec1],
-                                      [b_ra2, b.dec2],
-                                      [b_ra1, b.dec2]])
-            brick = Polygon(brick_corners, closed=True, facecolor='r')
-            for i, p in enumerate(petals):
-                if brick.get_path().intersects_path(p.get_path()):
-                    brick.set_facecolor('g')
-                    if i in petal2brick:
-                        petal2brick[i].append(b.id)
-                    else:
-                        petal2brick[i] = [b.id]
-            bricks.append(brick)
+        if self._brick_polygons is None and self._petal2brick is None:
+            candidates = self._coarse_overlapping_bricks(session)
+            petals = self.petals()
+            self._petal2brick = dict()
+            self._brick_polygons = list()
+            for b in candidates:
+                b_ra1, b_ra2 = self.brick_offset(b)
+                brick_corners = np.array([[b_ra1, b.dec1],
+                                          [b_ra2, b.dec1],
+                                          [b_ra2, b.dec2],
+                                          [b_ra1, b.dec2]])
+                brick_poly = Polygon(brick_corners, closed=True, facecolor='r')
+                for i, p in enumerate(petals):
+                    if brick_poly.get_path().intersects_path(p.get_path()):
+                        brick_poly.set_facecolor('g')
+                        if i in self._petal2brick:
+                            self._petal2brick[i].append(b)
+                        else:
+                            self._petal2brick[i] = [b]
+                self._brick_polygons.append(brick_poly)
         if map_petals:
-            return petal2brick
-        return bricks
+            return self._petal2brick
+        return self._brick_polygons
 
-    def to_frame(self, band, spectrograph, flavor='science', exptime=1000.0):
+    def simulate_frame(self, session, band, spectrograph,
+                       flavor='science', exptime=1000.0):
         """Simulate a DESI frame given a Tile object.
 
         Parameters
         ----------
+        session : :class:`sqlalchemy.orm.session.Session`
+            Database connection.
         band : :class:`str`
             'b', 'r', 'z'
         spectrograph : :class:`int`
             Spectrograph number [0-9].
         flavor : :class:`str`, optional
-            Exposure flavor.
+            Exposure flavor (default 'science').
         exptime : :class:`float`, optional
-            Exposure time.
+            Exposure time in seconds (default 1000).
 
         Returns
         -------
-        :func:`tuple`
-            A tuple suitable for loading into the frame table.
+        :class:`tuple`
+            A tuple containing a :class:`~desispec.io.database.Frame` object
+            ready for loading, and a list of bricks that overlap.
         """
-        dateobs = (datetime(2017+self.obs_pass, 1, 1, 0, 0, 0) +
+        dateobs = (datetime(2017+self.desi_pass, 1, 1, 0, 0, 0, tzinfo=utc) +
                    timedelta(seconds=(exptime*(self.id%2140))))
-        frameid = "{0}{1:d}-{2:08d}".format(band, spectrograph, self.id)
-        night = dateobs.strftime("%Y%m%d")
-        return (frameid, band, spectrograph, self.id, night, flavor,
-                self.ra, self.dec, self.id, exptime, dateobs,
-                self.ra, self.dec)
+        band_map = {'b': 10, 'r': 20, 'z': 30}
+        band_id_offset = 10**8
+        frame_data = {'id': ((band_map[band]+spectrograph)*band_id_offset +
+                             self.id),
+                      'name': "{0}{1:d}-{2:08d}".format(band, spectrograph,
+                                                        self.id),
+                      'band': band,
+                      'spectrograph': spectrograph,
+                      'expid': self.id,
+                      'night': dateobs.strftime("%Y%m%d"),
+                      'flavor': flavor,
+                      'telra': self.ra,
+                      'teldec': self.dec,
+                      'tile_id': self.id,
+                      'exptime': exptime,
+                      'dateobs': dateobs,
+                      'alt': self.ra,
+                      'az': self.dec}
+        petal2brick = self.overlapping_bricks(session, map_petals=True)
+        return (Frame(**frame_data), petal2brick[spectrograph])
 
 
-class RawDataCursor(sqlite3.Cursor):
-    """Allow simple object-oriented interaction with raw data database.
+class Frame(Base):
+    """Representation of a particular pointing, exposure, spectrograph and
+    band (a.k.a. 'channel' or 'arm').
     """
-    insert_brick = """INSERT INTO brick
-        (brickname, brickid, brickq, brickrow, brickcol,
-        ra, dec, ra1, ra2, dec1, dec2, area)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?);"""
-    insert_tile = """INSERT INTO tile (tileid, ra, dec, pass, in_desi)
-        VALUES (?, ?, ?, ?, ?);"""
-    select_tile = "SELECT * FROM tile WHERE tileid = ?;"
-    insert_tile2brick = "INSERT INTO tile2brick (tileid, petalid, brickid) VALUES (?, ?, ?);"
-    select_tile2brick = "SELECT * from tile2brick WHERE tileid = ?;"
-    insert_frame = """INSERT INTO frame
-        (frameid, band, spectrograph, expid, night, flavor, telra, teldec, tileid, exptime, dateobs, alt, az)
-        VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"""
-    insert_frame2brick = "INSERT INTO frame2brick (frameid, brickid) VALUES (?, ?);"
-    insert_framestatus = "INSERT INTO framestatus (frameid, status, stamp) VALUES (?, ?, ?);"
-    insert_brickstatus = "INSERT INTO brickstatus (brickid, status, stamp) VALUES (?, ?, ?);"
-    insert_night = "INSERT INTO night (night) VALUES (?);"
-    select_night = "SELECT night FROM night WHERE night = ?;"
-    insert_status = "INSERT INTO status (status) VALUES (?);"
-    select_status = "SELECT status FROM status WHERE status = ?;"
-    insert_flavor = "INSERT INTO exposureflavor (flavor) VALUES (?);"
-    select_flavor = "SELECT flavor FROM exposureflavor WHERE flavor = ?;"
+    __tablename__ = 'frame'
 
-    def __init__(self, *args, **kwargs):
-        super(RawDataCursor, self).__init__(*args, **kwargs)
-        return
+    id = Column(Integer, primary_key=True)  # e.g. 1900012345
+    name = Column(String(11), unique=True, nullable=False)  # e.g. b0-00012345
+    band = Column(String(1), nullable=False)  # b, r, z
+    spectrograph = Column(Integer, nullable=False)  # 0, 1, 2, ...
+    expid = Column(Integer, nullable=False)  # exposure number
+    night = Column(String, ForeignKey('night.night'), nullable=False)
+    flavor = Column(String, ForeignKey('exposureflavor.flavor'),
+                    nullable=False)
+    telra = Column(Float, nullable=False)
+    teldec = Column(Float, nullable=False)
+    tile_id = Column(Integer, nullable=False, default=-1)
+    exptime = Column(Float, nullable=False)
+    dateobs = Column(DateTime(timezone=True), nullable=False)
+    alt = Column(Float, nullable=False)
+    az = Column(Float, nullable=False)
 
-    def load_brick(self, fitsfile, fix_area=False):
-        """Load a bricks FITS file into the database.
+    bricks = relationship('Brick', secondary=frame2brick,
+                          back_populates='frames')
 
-        Parameters
-        ----------
-        fitsfile : :class:`str`
-            The name of a bricks file.
-        fix_area : :class:`bool`, optional
-            If ``True``, deal with missing area column.
-        """
-        with fits.open(fitsfile) as f:
-            brickdata = f[1].data
-        bricklist = [ brickdata[col].tolist() for col in brickdata.names ]
-        if fix_area:
-            #
-            # This formula computes area in *steradians*.
-            #
-            area = ((np.radians(brickdata['ra2']) -
-                     np.radians(brickdata['ra1'])) *
-                    (np.sin(np.radians(brickdata['dec2'])) -
-                     np.sin(np.radians(brickdata['dec1']))))
-            bricklist.append(area.tolist())
-        self.executemany(self.insert_brick, list(zip(*bricklist)))
-        return
+    def __repr__(self):
+        return ("<Frame(id='{0.id}', band='{0.band}', " +
+                "spectrograph={0.spectrograph:d}, expid={0.expid:d}, " +
+                "night='{0.night}', flavor='{0.flavor}', " +
+                "telra={0.telra:f}, teldec={0.teldec:f}, " +
+                "tileid={0.tileid:d}, exptime={0.exptime:f}, " +
+                "dateobs='{0.dateobs}', " +
+                "alt={0.alt:f}, az={0.az:f})>").format(self)
 
-    def load_tile(self, tilefile):
-        """Load tile FITS file into the database.
 
-        Parameters
-        ----------
-        tilefile : :class:`str`
-            The name of a tile file.
-        """
-        with fits.open(tilefile) as f:
-            tile_data = f[1].data
-        tile_list = [tile_data['TILEID'].tolist(), tile_data['RA'].tolist(),
-                     tile_data['DEC'].tolist(), tile_data['PASS'].tolist(),
-                     tile_data['IN_DESI'].tolist()]
-        self.executemany(self.insert_tile, list(zip(*tile_list)))
-        return
+class Night(Base):
+    """List of observation nights.  Used to constrain the possible values.
+    """
+    __tablename__ = 'night'
 
-    def is_night(self, night):
-        """Returns ``True`` if the night is in the night table.
+    night = Column(String(8), primary_key=True)
 
-        Parameters
-        ----------
-        night : :class:`str`
-            Night name.
+    def __repr__(self):
+        return "<Night(night='{0.night}')>".format(self)
 
-        Returns
-        -------
-        :class:`bool`
-            ``True`` if the night is in the night table.
-        """
-        n = (night,)
-        self.execute(self.select_night, n)
-        rows = self.fetchall()
-        return len(rows) == 1
 
-    def load_night(self, nights):
-        """Load a night or multiple nights into the night table.
+class ExposureFlavor(Base):
+    """List of exposure flavors.  Used to constrain the possible values.
+    """
+    __tablename__ = 'exposureflavor'
 
-        Parameters
-        ----------
-        nights : :class:`str` or :class:`list`
-            A single night or list of nights.
-        """
-        if isinstance(nights, str):
-            my_nights = [nights]
-        else:
-            my_nights = nights
-        self.executemany(self.insert_night, list(zip(my_nights)))
-        return
+    flavor = Column(String, primary_key=True)
 
-    def is_status(self, status):
-        """Returns ``True`` if `status` is in the status table.
+    def __repr__(self):
+        return "<ExposureFlavor(flavor='{0.flavor}')>".format(self)
 
-        Parameters
-        ----------
-        status : :class:`str`
-            Status name.
 
-        Returns
-        -------
-        :class:`bool`
-            ``True`` if `status` is in the status table.
-        """
-        s = (status, )
-        self.execute(self.select_status, s)
-        rows = self.fetchall()
-        return len(rows) == 1
+class Status(Base):
+    """List of possible processing statuses.
+    """
+    __tablename__ = 'status'
 
-    def load_status(self, statuses):
-        """Load a status or multiple statuses into the status table.
+    status = Column(String, primary_key=True)
 
-        Parameters
-        ----------
-        statuses : :class:`str` or :class:`list`
-            A single night or list of nights.
-        """
-        if isinstance(statuses, str):
-            my_statuses = [statuses]
-        else:
-            my_statuses = statuses
-        self.executemany(self.insert_status, list(zip(my_statuses)))
-        return
+    def __repr__(self):
+        return "<Status(status='{0.status}')>".format(self)
 
-    def is_flavor(self, flavor):
-        """Returns ``True`` if the flavor is in the exposureflavor table.
 
-        Parameters
-        ----------
-        flavor : :class:`str`
-            A flavor name.
+class FrameStatus(Base):
+    """Representation of the status of a particular
+    :class:`~desispec.io.database.Frame`.
+    """
+    __tablename__ = 'framestatus'
 
-        Returns
-        -------
-        :class:`bool`
-            ``True`` if the flavor is in the flavor table.
-        """
-        f = (flavor,)
-        self.execute(self.select_flavor, f)
-        rows = self.fetchall()
-        return len(rows) == 1
+    id = Column(Integer, primary_key=True)
+    frame_id = Column(String, ForeignKey('frame.id'), nullable=False)
+    status = Column(String, ForeignKey('status.status'), nullable=False)
+    stamp = Column(DateTime(timezone=True), nullable=False)
 
-    def load_flavor(self, flavors):
-        """Load a flavor or multiple flavors into the exposureflavor table.
+    def __repr__(self):
+        return ("<FrameStatus(id={0.id:d}, frame_id={0.frame_id:d}, " +
+                "status='{0.status}', stamp='{0.stamp}')>").format(self)
 
-        Parameters
-        ----------
-        flavors : :class:`list` or :class:`str`
-            One or more flavor names.
-        """
-        if isinstance(flavors, str):
-            my_flavors = [flavors]
-        else:
-            my_flavors = flavors
-        self.executemany(self.insert_flavor, list(zip(my_flavors)))
-        return
+class BrickStatus(Base):
+    """Representation of the status of a particular
+    :class:`~desispec.io.database.Brick`.
+    """
+    __tablename__ = 'brickstatus'
 
-    def get_bricks(self, tile):
-        """Get the bricks that overlap a tile.
+    id = Column(Integer, primary_key=True)
+    brick_id = Column(Integer, ForeignKey('brick.id'), nullable=False)
+    status = Column(String, ForeignKey('status.status'), nullable=False)
+    stamp = Column(DateTime(timezone=True), nullable=False)
 
-        Parameters
-        ----------
-        tile : :class:`Tile`
-            A Tile object.
+    def __repr__(self):
+        return ("<BrickStatus(id={0.id:d}, brick_id={0.brick_id:d}, " +
+                "status='{0.status}', stamp='{0.stamp}')>").format(self)
 
-        Returns
-        -------
-        :class:`list`
-            A list of :class:`~desispec.io.database.Brick` objects that
-            overlap `tile`.
-        """
-        #
-        # RA wrap around can be handled by the requirements:
-        # cos(tile.ra - ra1) > cos(tile_radius) or
-        # cos(tile.ra - ra2) > cos(tile_radius)
-        #
-        # However sqlite3 doesn't have trig functions, so we do that "offboard".
-        #
-        q = """SELECT * FROM brick AS b
-               WHERE (? + {0:f} > b.dec1)
-               AND   (? - {0:f} < b.dec2)
-               ORDER BY dec, ra;""".format(tile.radius)
-        self.execute(q, (tile.dec, tile.dec))
-        bricks = list()
-        for b in map(Brick._make, self.fetchall()):
-            if ((np.cos(np.radians(tile.ra - b.ra1)) > tile.cos_radius) or
-                (np.cos(np.radians(tile.ra - b.ra2)) > tile.cos_radius)):
-                bricks.append(b)
-        return bricks
 
-    def get_bricks_by_name(self, bricknames):
-        """Search for and return brick data given the brick names.
+def get_all_tiles(session, obs_pass=0, limit=0):
+    """Get all tiles from the database.
 
-        Parameters
-        ----------
-        bricknames : :class:`list` or :class:`str`
-            Look up one or more brick names.
+    Parameters
+    ----------
+    session : :class:`sqlalchemy.orm.session.Session`
+        Database connection.
+    obs_pass : :class:`int`, optional
+        Select only tiles from this pass.
+    limit : :class:`int`, optional
+        Limit the number of tiles returned
 
-        Returns
-        -------
-        :class:`list`
-            A list of :class:`~desispec.io.database.Brick` objects.
-        """
-        if isinstance(bricknames, str):
-            b = [bricknames]
-        else:
-            b = bricknames
-        q = "SELECT * FROM brick WHERE brickname IN ({})".format(','.join(['?']*len(b)))
-        self.execute(q, b)
-        bricks = list()
-        for b in map(Brick._make, self.fetchall()):
-            bricks.append(b)
-        return bricks
+    Returns
+    -------
+    :class:`list`
+        A list of Tiles.
+    """
+    q = session.query(Tile).filter_by(in_desi=1)
+    if obs_pass > 0:
+        q = q.filter_by(desi_pass=obs_pass)
+    if limit > 0:
+        q = q.limit(limit)
+    return q.all()
 
-    def get_brickid_by_name(self, bricknames):
-        """Return the brickids that correspond to a set of bricknames.
 
-        Parameters
-        ----------
-        bricknames : :class:`list` or :class:`str`
-            Look up one or more brick names.
+def load_simulated_data(session, obs_pass=0):
+    """Load simulated frame and brick data.
 
-        Returns
-        -------
-        :class:`dict`
-            A mapping of brick name to brick id.
-        """
-        bid = dict()
-        bricks = self.get_bricks_by_name(bricknames)
-        for b in bricks:
-            bid[b.name] = b.id
-        return bid
+    Parameters
+    ----------
+    session : :class:`sqlalchemy.orm.session.Session`
+        Database connection.
+    obs_pass : :class:`int`, optional
+        If set, only simulate one pass.
+    """
+    log = get_logger()
+    tiles = get_all_tiles(session, obs_pass=obs_pass)
+    status = 'succeeded'
+    for t in tiles:
+        for band in 'brz':
+            for spectrograph in range(10):
+                frame, bricks = t.simulate_frame(session, band, spectrograph)
+                try:
+                    q = session.query(Night).filter_by(night=frame.night).one()
+                except NoResultFound:
+                    session.add(Night(night=frame.night))
+                try:
+                    q = session.query(ExposureFlavor).filter_by(flavor=frame.flavor).one()
+                except NoResultFound:
+                    session.add(ExposureFlavor(flavor=frame.flavor))
+                # try:
+                #     q = session.query(Status).filter_by(status=status).one()
+                # except NoResultFound:
+                #     session.add(Status(status=status))
+                session.add(frame)
+                session.add(FrameStatus(frame_id=frame.id, status=status, stamp=frame.dateobs))
+                for brick in bricks:
+                    session.add(BrickStatus(brick_id=brick.id, status=status, stamp=frame.dateobs))
+                frame.bricks = bricks
+        session.commit()
+        log.info("Completed insert of tileid = {0:d}.".format(t.id))
+    return
 
-    def get_tile(self, tileid, N_tiles=28810):
-        """Get the tile specified by `tileid` or a random tile.
 
-        Parameters
-        ----------
-        tileid : :class:`int`
-            Tile ID number.  Set to a non-positive integer to return a
-            random tile.
-        N_tiles : :class:`int`, optional
-            Override the number of tiles.
+def load_data(session, datapath):
+    """Load a night or multiple nights into the frame table.
 
-        Returns
-        -------
-        :class:`Tile`
-            A tile object.
-        """
-        #
-        # tileid is 1-indexed.
-        #
-        if tileid < 1:
-            i = np.random.randint(1, N_tiles+1)
-        else:
-            i = tileid
-        self.execute(self.select_tile, (i,))
-        rows = self.fetchall()
-        return Tile(*(rows[0]))
+    Parameters
+    ----------
+    session : :class:`sqlalchemy.orm.session.Session`
+        Database connection.
+    datapath : :class:`str`
+        Name of a data directory.
 
-    def get_all_tiles(self, obs_pass=0, limit=0):
-        """Get all tiles from the database.
-
-        Parameters
-        ----------
-        obs_pass : :class:`int`, optional
-            Select only tiles from this pass.
-        limit : :class:`int`, optional
-            Limit the number of tiles returned
-
-        Returns
-        -------
-        :class:`list`
-            A list of Tiles.
-        """
-        q = "SELECT * FROM tile WHERE in_desi = ?"
-        params = (1, )
-        if obs_pass > 0:
-            q += " AND pass = ?"
-            params = (1, obs_pass)
-        if limit > 0:
-            q += " LIMIT {0:d}".format(limit)
-        q += ';'
-        self.execute(q, params)
-        tiles = list()
-        for row in self.fetchall():
-            tiles.append(Tile(*row))
-        return tiles
-
-    def get_tile_bricks(self, tile):
-        """Get the bricks that overlap `tile`.
-
-        Parameters
-        ----------
-        tile : :class:`Tile`
-            A Tile object.
-
-        Returns
-        -------
-        :class:`dict`
-            The overlapping bricks in a mapping from petal number to brickid.
-        """
-        self.execute(self.select_tile2brick, (tile.id,))
-        rows = self.fetchall()
-        petal2brick = dict()
-        for r in rows:
-            try:
-                petal2brick[r[1]].append(r[2])
-            except KeyError:
-                petal2brick[r[1]] = [r[2]]
-        return petal2brick
-
-    def load_tile2brick(self, obs_pass=0):
-        """Load the tile2brick table using simulated tiles.
-
-        Parameters
-        ----------
-        obs_pass : :class:`int`, optional
-            Select only tiles from this pass.
-        """
-        tiles = self.get_all_tiles(obs_pass=obs_pass)
-        for tile in tiles:
-            # petal2brick[tile.id] = dict()
-            candidate_bricks = self.get_bricks(tile)
-            petal2brick = tile.overlapping_bricks(candidate_bricks, map_petals=True)
-            for p in petal2brick:
-                nb = len(petal2brick[p])
-                self.executemany(self.insert_tile2brick, list(zip([tile.id]*nb, [p]*nb, petal2brick[p])))
-        return
-
-    def load_simulated_data(self, obs_pass=0):
-        """Load simulated frame and brick data.
-
-        Parameters
-        ----------
-        obs_pass : :class:`int`, optional
-            If set, only simulate one pass.
-        """
-        log = get_logger()
-        tiles = self.get_all_tiles(obs_pass=obs_pass)
-        status = 'succeeded'
-        for t in tiles:
-            petal2brick = self.get_tile_bricks(t)
-            frame_data = list()
-            frame2brick_data = list()
-            framestatus_data = list()
-            brickstatus_data = list()
-            for band in 'brz':
-                for spectrograph in range(10):
-                    f = t.to_frame(band, spectrograph)
-                    if not self.is_night(f[4]):
-                        self.load_night(f[4])
-                    if not self.is_flavor(f[5]):
-                        self.load_flavor(f[5])
-                    if not self.is_status(status):
-                        self.load_status(status)
-                    frame_data.append(f)
-                    framestatus_data.append((f[0], status, f[10]))
-                    for brick in petal2brick[spectrograph]:
-                        frame2brick_data.append((f[0], brick))
-                        brickstatus_data.append((brick, status, f[10]))
-            #
-            #
-            #
-            self.insert_frame_data(frame_data, frame2brick_data,
-                                   framestatus_data, brickstatus_data)
-            log.info("Completed insert of tileid = {0:d}.".format(t.id))
-        return
-
-    def load_data(self, datapath):
-        """Load a night or multiple nights into the night table.
-
-        Parameters
-        ----------
-        datapath : :class:`str`
-            Name of a data directory.
-
-        Returns
-        -------
-        :class:`list`
-            A list of the exposure numbers found.
-        """
-        log = get_logger()
-        fibermaps = glob(os.path.join(datapath, 'fibermap*.fits'))
-        if len(fibermaps) == 0:
-            return []
-        # fibermap_ids = self.load_file(fibermaps)
-        fibermapre = re.compile(r'fibermap-([0-9]{8})\.fits')
-        exposures = [ int(fibermapre.findall(f)[0]) for f in fibermaps ]
-        frame_data = list()
-        frame2brick_data = list()
-        framestatus_data = list()
-        brickstatus_data = list()
-        status = 'succeeded'
-        for k, f in enumerate(fibermaps):
+    Returns
+    -------
+    :class:`list`
+        A list of the exposure numbers found.
+    """
+    log = get_logger()
+    fibermaps = glob(os.path.join(datapath, 'fibermap*.fits'))
+    if len(fibermaps) == 0:
+        return []
+    # fibermap_ids = self.load_file(fibermaps)
+    fibermapre = re.compile(r'fibermap-([0-9]{8})\.fits')
+    exposures = [ int(fibermapre.findall(f)[0]) for f in fibermaps ]
+    frame_data = list()
+    frame2brick_data = list()
+    framestatus_data = list()
+    brickstatus_data = list()
+    status = 'succeeded'
+    band_map = {'b': 10, 'r': 20, 'z': 30}
+    band_id_offset = 10**8
+    for k, f in enumerate(fibermaps):
+        with fits.open(f) as hdulist:
+            # fiberhdr = hdulist['FIBERMAP'].header
+            # night = fiberhdr['NIGHT']
+            # dateobs = datetime.strptime(fiberhdr['DATE-OBS'],
+            #                             '%Y-%m-%dT%H:%M:%S')
+            bricknames = list(set(hdulist['FIBERMAP'].data['BRICKNAME'].tolist()))
+        bricks = session.query(Brick).filter(Brick.name.in_(bricknames))
+        # datafiles = glob(os.path.join(datapath, 'desi-*-{0:08d}.fits'.format(exposures[k])))
+        # if len(datafiles) == 0:
+        datafiles = glob(os.path.join(datapath, 'pix-[brz][0-9]-{0:08d}.fits'.format(exposures[k])))
+        log.info("Found datafiles: {0}.".format(", ".join(datafiles)))
+        # datafile_ids = self.load_file(datafiles)
+        for f in datafiles:
             with fits.open(f) as hdulist:
-                # fiberhdr = hdulist['FIBERMAP'].header
-                # night = fiberhdr['NIGHT']
-                # dateobs = datetime.strptime(fiberhdr['DATE-OBS'],
-                #                             '%Y-%m-%dT%H:%M:%S')
-                bricknames = list(set(hdulist['FIBERMAP'].data['BRICKNAME'].tolist()))
-            brickids = self.get_brickid_by_name(bricknames)
-            # datafiles = glob(os.path.join(datapath, 'desi-*-{0:08d}.fits'.format(exposures[k])))
-            # if len(datafiles) == 0:
-            datafiles = glob(os.path.join(datapath, 'pix-[brz][0-9]-{0:08d}.fits'.format(exposures[k])))
-            log.info("Found datafiles: {0}.".format(", ".join(datafiles)))
-            # datafile_ids = self.load_file(datafiles)
-            for f in datafiles:
-                with fits.open(f) as hdulist:
-                    camera = hdulist[0].header['CAMERA']
-                    expid = int(hdulist[0].header['EXPID'])
-                    night = hdulist[0].header['NIGHT']
-                    flavor = hdulist[0].header['FLAVOR']
-                    telra = hdulist[0].header['TELRA']
-                    teldec = hdulist[0].header['TELDEC']
-                    tileid = hdulist[0].header['TILEID']
-                    exptime = hdulist[0].header['EXPTIME']
-                    dateobs = datetime.strptime(hdulist[0].header['DATE-OBS'], '%Y-%m-%dT%H:%M:%S')
-                    try:
-                        alt = hdulist[0].header['ALT']
-                    except KeyError:
-                        alt = 0.0
-                    try:
-                        az = hdulist[0].header['AZ']
-                    except KeyError:
-                        az = 0.0
-                band = camera[0]
-                assert band in 'brz'
-                spectrograph = int(camera[1])
-                assert 0 <= spectrograph <= 9
-                frameid = "{0}-{1:08d}".format(camera, expid)
-                if not self.is_night(night):
-                    self.load_night(night)
-                if not self.is_flavor(flavor):
-                    self.load_flavor(flavor)
-                if not self.is_status(status):
-                    self.load_status(status)
-                frame_data.append((
-                    frameid, # frameid, e.g. b0-00012345
-                    band, # b, r, z
-                    spectrograph, # 0-9
-                    expid, # expid
-                    night, # night
-                    flavor, # flavor
-                    telra, # telra
-                    teldec, # teldec
-                    tileid, # tileid
-                    exptime, # exptime
-                    dateobs, # dateobs
-                    alt, # alt
-                    az)) # az
-                framestatus_data.append( (frameid, status, dateobs) )
-                for i in brickids:
-                    frame2brick_data.append( (frameid, brickids[i]) )
-                    brickstatus_data.append( (brickids[i], status, dateobs) )
-        #
-        #
-        #
-        self.insert_frame_data(frame_data, frame2brick_data,
-                               framestatus_data, brickstatus_data)
-        log.info("Completed insert of frame data.")
-        return exposures
-
-    def insert_frame_data(self, frame, frame2brick, framestatus, brickstatus):
-        """Actually insert the data loaded from raw data files or simulations.
-
-        Parameters
-        ----------
-        frame : :class:`list`
-            Data to be inserted into the ``frame`` table.
-        frame : :class:`list`
-            Data to be inserted into the ``frame`` table.
-        frame : :class:`list`
-            Data to be inserted into the ``frame`` table.
-        frame : :class:`list`
-            Data to be inserted into the ``frame`` table.
-        """
-        self.executemany(self.insert_frame, frame)
-        self.executemany(self.insert_frame2brick, frame2brick)
-        self.executemany(self.insert_framestatus, framestatus)
-        self.executemany(self.insert_brickstatus, brickstatus)
-        return
+                camera = hdulist[0].header['CAMERA']
+                expid = int(hdulist[0].header['EXPID'])
+                night = hdulist[0].header['NIGHT']
+                flavor = hdulist[0].header['FLAVOR']
+                telra = hdulist[0].header['TELRA']
+                teldec = hdulist[0].header['TELDEC']
+                tile_id = hdulist[0].header['TILEID']
+                exptime = hdulist[0].header['EXPTIME']
+                dateobs = datetime.strptime(hdulist[0].header['DATE-OBS'], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=utc)
+                try:
+                    alt = hdulist[0].header['ALT']
+                except KeyError:
+                    alt = 0.0
+                try:
+                    az = hdulist[0].header['AZ']
+                except KeyError:
+                    az = 0.0
+            band = camera[0]
+            assert band in 'brz'
+            spectrograph = int(camera[1])
+            assert 0 <= spectrograph <= 9
+            frame_data = {'id': (band_map[band]+spectrograph) * band_id_offset + expid,
+                          'name': "{0}-{1:08d}".format(camera, expid),
+                          'band': band,
+                          'spectrograph': spectrograph,
+                          'expid': expid,
+                          'night': night,
+                          'flavor': flavor,
+                          'telra': telra,
+                          'teldec': teldec,
+                          'tile_id': tile_id,
+                          'exptime': exptime,
+                          'dateobs': dateobs,
+                          'alt': alt,
+                          'az': az}
+            frame = Frame(**frame_data)
+            try:
+                q = session.query(Night).filter_by(night=frame.night).one()
+            except NoResultFound:
+                session.add(Night(night=frame.night))
+            try:
+                q = session.query(ExposureFlavor).filter_by(flavor=frame.flavor).one()
+            except NoResultFound:
+                session.add(ExposureFlavor(flavor=frame.flavor))
+            # try:
+            #     q = session.query(Status).filter_by(status=status).one()
+            # except NoResultFound:
+            #     session.add(Status(status=status))
+            frame.bricks = bricks
+            session.add(frame)
+            session.add(FrameStatus(frame_id=frame.id, status=status, stamp=frame.dateobs))
+            for brick in bricks:
+                session.add(BrickStatus(brick_id=brick.id, status=status, stamp=frame.dateobs))
+        session.commit()
+        log.info("Completed insert of fibermap = {0}.".format(f))
+    return exposures
 
 
 def main():
@@ -739,33 +601,34 @@ def main():
     #
     from argparse import ArgumentParser
     from pkg_resources import resource_filename
-    parser = ArgumentParser(description=("Create and load a DESI metadata "+
-                                         "database."))
-    parser.add_argument('-a', '--area', action='store_true', dest='fixarea',
-        help='If area is not specified in the brick file, recompute it.')
-    parser.add_argument('-b', '--bricks', action='store', dest='brickfile',
-        default='bricks-0.50-2.fits', metavar='FILE',
-        help='Read brick data from FILE.')
-    parser.add_argument('-c', '--clobber', action='store_true', dest='clobber',
-        help='Delete any existing file before loading.')
-    parser.add_argument('-d', '--data', action='store', dest='datapath',
-        default=os.path.join(os.environ['DESI_SPECTRO_SIM'],
-                             os.environ['SPECPROD']),
-        metavar='DIR', help='Load the data in DIR.')
-    parser.add_argument('-f', '--filename', action='store', dest='dbfile',
-        default='metadata.db', metavar='FILE',
-        help="Store data in FILE.")
-    parser.add_argument('-p', '--pass', action='store', dest='obs_pass',
-        default=0, type=int, metavar='PASS',
-        help="Only simulate frames associated with PASS.")
-    parser.add_argument('-s', '--simulate', action='store_true',
-        dest='simulate', help="Run a simulation using DESI tiles.")
-    parser.add_argument('-t', '--tiles', action='store', dest='tilefile',
-        default='desi-tiles.fits', metavar='FILE',
-        help='Read tile data from FILE.')
-    parser.add_argument('-v', '--verbose', action='store_true', dest='verbose',
-        help='Print extra information.')
-    options = parser.parse_args()
+    prsr = ArgumentParser(description=("Create and load a DESI metadata "+
+                                       "database."))
+    # prsr.add_argument('-a', '--area', action='store_true', dest='fixarea',
+    #                   help=('If area is not specified in the brick file, ' +
+    #                         'recompute it.'))
+    prsr.add_argument('-b', '--bricks', action='store', dest='brickfile',
+                      default='bricks-0.50-2.fits', metavar='FILE',
+                      help='Read brick data from FILE.')
+    prsr.add_argument('-c', '--clobber', action='store_true', dest='clobber',
+                      help='Delete any existing file(s) before loading.')
+    prsr.add_argument('-d', '--data', action='store', dest='datapath',
+                      default=os.path.join(os.environ['DESI_SPECTRO_SIM'],
+                                           os.environ['SPECPROD']),
+                      metavar='DIR', help='Load the data in DIR.')
+    prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
+                      default='metadata.db', metavar='FILE',
+                      help="Store data in FILE.")
+    prsr.add_argument('-p', '--pass', action='store', dest='obs_pass',
+                      default=0, type=int, metavar='PASS',
+                      help="Only simulate frames associated with PASS.")
+    prsr.add_argument('-s', '--simulate', action='store_true', dest='simulate',
+                      help="Run a simulation using DESI tiles.")
+    prsr.add_argument('-t', '--tiles', action='store', dest='tilefile',
+                      default='desi-tiles.fits', metavar='FILE',
+                      help='Read tile data from FILE.')
+    prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
+                      help='Print extra information.')
+    options = prsr.parse_args()
     #
     # Logging
     #
@@ -776,51 +639,89 @@ def main():
     #
     # Create the file.
     #
-    dbfile = os.path.join(options.datapath, options.dbfile)
-    if options.clobber and os.path.exists(dbfile):
-        log.info("Removing file: {0}.".format(dbfile))
-        os.remove(dbfile)
-    if os.path.exists(dbfile):
-        script = None
-    else:
-        schema = resource_filename('desispec', 'data/db/raw_data.sql')
-        log.info("Reading schema from {0}.".format(schema))
-        with open(schema) as sql:
-            script = sql.read()
-    conn = sqlite3.connect(dbfile)
-    c = conn.cursor(RawDataCursor)
-    if script is not None:
-        c.executescript(script)
-        c.connection.commit()
-        log.info("Created schema.")
-        brickfile = os.path.join(options.datapath, options.brickfile)
-        c.load_brick(brickfile, fix_area=options.fixarea)
-        c.connection.commit()
-        log.info("Loaded bricks from {0}.".format(brickfile))
-    tilefile = os.path.join(options.datapath, options.tilefile)
-    if os.path.exists(tilefile):
-        c.execute("SELECT COUNT(*) FROM tile;")
-        rows = c.fetchall()
-        if rows[0][0] == 0:
-            c.load_tile(tilefile)
-            log.info("Loaded tiles from {0}.".format(tilefile))
-            c.connection.commit()
+    db_file = os.path.join(options.datapath, options.dbfile)
+    if options.clobber and os.path.exists(db_file):
+        log.info("Removing file: {0}.".format(db_file))
+        os.remove(db_file)
+    engine = create_engine('sqlite:///'+db_file, echo=options.verbose)
+    log.info("Begin creating schema.")
+    Base.metadata.create_all(engine)
+    log.info("Finished creating schema.")
+    Session = sessionmaker()
+    Session.configure(bind=engine)
+    session = Session()
+    try:
+        q = session.query(Status).one()
+    except MultipleResultsFound:
+        log.info("Status table already loaded.")
+    except NoResultFound:
+        session.add_all([Status(status='not processed'),
+                         Status(status='failed'),
+                         Status(status='succeeded')])
+        session.commit()
+    try:
+        q = session.query(ExposureFlavor).one()
+    except MultipleResultsFound:
+        log.info("ExposureFlavor table already loaded.")
+    except NoResultFound:
+        session.add_all([ExposureFlavor(flavor='science'),
+                         ExposureFlavor(flavor='arc'),
+                         ExposureFlavor(flavor='flat')])
+        session.commit()
+    try:
+        q = session.query(Brick).one()
+    except MultipleResultsFound:
+        log.info("Brick table already loaded.")
+    except NoResultFound:
+        brick_file = os.path.join(options.datapath, options.brickfile)
+        log.info("Loading bricks from {0}.".format(brick_file))
+        with fits.open(brick_file) as hdulist:
+            brick_data = hdulist[1].data
+        brick_list = [brick_data[col].tolist() for col in brick_data.names]
+        if 'area' not in brick_data.names:
+            brick_area = ((np.radians(brick_data['ra2']) -
+                           np.radians(brick_data['ra1'])) *
+                          (np.sin(np.radians(brick_data['dec2'])) -
+                           np.sin(np.radians(brick_data['dec1']))))
+            brick_list.append(brick_area.tolist())
+        brick_columns = ('name', 'id', 'q', 'row', 'col', 'ra', 'dec',
+                         'ra1', 'ra2', 'dec1', 'dec2', 'area')
+        session.add_all([Brick(**b) for b in [dict(zip(brick_columns, row))
+                                              for row in zip(*brick_list)]])
+        session.commit()
+        log.info("Finished loading bricks.")
+    try:
+        q = session.query(Tile).one()
+    except MultipleResultsFound:
+        log.info("Tile table already loaded.")
+    except NoResultFound:
+        tile_file = os.path.join(options.datapath, options.tilefile)
+        log.info("Loading tiles from {0}.".format(tile_file))
+        with fits.open(tile_file) as hdulist:
+            tile_data = hdulist[1].data
+        tile_list = [tile_data[col].tolist() for col in tile_data.names]
+        tile_columns = ('id', 'ra', 'dec', 'desi_pass', 'in_desi', 'ebv_med',
+                        'airmass', 'star_density', 'exposefac', 'program',
+                        'obsconditions')
+        session.add_all([Tile(**t) for t in [dict(zip(tile_columns, row))
+                                             for row in zip(*tile_list)]])
+        session.commit()
+        log.info("Finished loading bricks.")
     if options.simulate:
-        c.execute("SELECT COUNT(*) FROM tile2brick;")
-        rows = c.fetchall()
-        if rows[0][0] == 0:
-            c.load_tile2brick(obs_pass=options.obs_pass)
-            log.info("Completed tile2brick mapping.")
-            c.connection.commit()
-        c.load_simulated_data(obs_pass=options.obs_pass)
+        try:
+            q = session.query(Frame).one()
+        except MultipleResultsFound:
+            log.info("Frame table already loaded.")
+        except NoResultFound:
+            load_simulated_data(session, options.obs_pass)
+        log.info("Finished loading frames.")
     else:
-        exposurepaths = glob(os.path.join(options.datapath,
-                                          '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'))
+        log.info("Loading real data.")
+        expaths = glob(os.path.join(options.datapath, '[0-9]'*8))
         exposures = list()
-        for e in exposurepaths:
+        for e in expaths:
             log.info("Loading exposures in {0}.".format(e))
-            exposures += c.load_data(e)
-        log.info("Loaded exposures: {0}".format(', '.join(map(str,exposures))))
-    c.connection.commit()
-    c.connection.close()
+            exposures += load_data(session, e)
+        log.info("Loaded exposures: {0}.".format(', '.join(map(str, exposures))))
+    session.close()
     return 0

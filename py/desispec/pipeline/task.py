@@ -15,8 +15,7 @@ import os
 import sys
 import re
 
-from .. import log as desilog
-from ..log import get_logger
+from desiutil.log import get_logger, DEBUG
 from ..util import option_list
 from ..parallel import default_nproc
 from .. import io
@@ -42,8 +41,8 @@ class Worker(object):
     This is a base class that simply defines the API.  Each
     pipeline task worker has some default options, and a maximum
     number of UNIX processes it can use.  For example if extracting
-    20 DESI bundles with at most one process per bundle, then it might 
-    return 20 for this number.  A worker has a "run" method which takes 
+    20 DESI bundles with at most one process per bundle, then it might
+    return 20 for this number.  A worker has a "run" method which takes
     some inputs and produces some outputs.
     """
     def __init__(self):
@@ -65,7 +64,7 @@ class Worker(object):
         """
         Run the specified task.
 
-        This runs the task, with the given options, using the 
+        This runs the task, with the given options, using the
         specified communicator.
 
         Args:
@@ -119,7 +118,7 @@ class WorkerBootcalib(Worker):
 
         node = grph[task]
         night, obj = graph_night_split(task)
-        (temp, band, spec, expid) = graph_name_split(obj)
+        (temp, band, spec) = graph_name_split(obj)
         cam = "{}{}".format(band, spec)
 
         arcs = []
@@ -142,7 +141,7 @@ class WorkerBootcalib(Worker):
         outpath = graph_path(task)
 
         #qapath = io.findfile("qa_bootcalib", night=night, camera=cam, band=band, spectrograph=spec)
-        
+
         # build list of options
         options = {}
         options["fiberflat"] = flatpath
@@ -193,7 +192,19 @@ class WorkerSpecex(Worker):
         # opts["legendre_deg_x"] = 1
         # opts["trace_deg_wave"] = 6
         # opts["trace_deg_x"] = 6
+
+        # to get the lampline location, look in our path for specex
+        # and use that install prefix to find the data directory.
+        # if that directory does not exist, use a default NERSC
+        # location.
         opts["lamplines"] = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt"
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exefile = os.path.join(path, "specex_desi_psf_fit")
+            if os.path.isfile(exefile) and os.access(exefile, os.X_OK):
+                specexdir = os.path.join(path, "..", "data")
+                opts["lamplines"] = os.path.join(specexdir, "specex_linelist_boss.txt")
+
         return opts
 
 
@@ -243,7 +254,7 @@ class WorkerSpecex(Worker):
         options["input"] = imgfile
         options["bootfile"] = bootfile
         options["output"] = outfile
-        if log.getEffectiveLevel() == desilog.DEBUG:
+        if log.getEffectiveLevel() == DEBUG:
             options["verbose"] = True
         if len(opts) > 0:
             extarray = option_list(opts)
@@ -457,7 +468,7 @@ class WorkerFiberflat(Worker):
             raise RuntimeError("fiberflat should have only one input frame")
         framefile = graph_path(node["in"][0])
         outfile = graph_path(task)
-        
+
         #qafile, qafig = qa_path(outfile)
 
         options = {}
@@ -530,7 +541,7 @@ class WorkerSky(Worker):
         framefile = graph_path(frm[0])
         flatfile = graph_path(flat[0])
         outfile = graph_path(task)
-        
+
         #qafile, qafig = qa_path(outfile)
 
         options = {}
@@ -558,6 +569,9 @@ class WorkerStdstars(Worker):
     Compute the standard stars for use in flux calibration.
     """
     def __init__(self, opts):
+        self.starmodels = None
+        if "starmodels" in opts:
+            self.starmodels = opts["starmodels"]
         super(Worker, self).__init__()
 
 
@@ -568,11 +582,14 @@ class WorkerStdstars(Worker):
     def default_options(self):
         log = get_logger()
         opts = {}
-        if "DESI_ROOT" in os.environ:
-            opts["starmodels"] = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+        if self.starmodels is not None:
+            opts["starmodels"] = self.starmodels
         else:
-            log.warning("$DESI_ROOT not set; using NERSC default /project/projectdirs/desi")
-            opts["starmodels"] = "/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+            if "DESI_ROOT" in os.environ:
+                opts["starmodels"] = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+            else:
+                log.warning("$DESI_ROOT not set; using NERSC default /project/projectdirs/desi")
+                opts["starmodels"] = "/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
         return opts
 
 
@@ -611,9 +628,9 @@ class WorkerStdstars(Worker):
                 sky.append(input)
 
         outfile = graph_path(task)
-        
+
         #qafile, qafig = qa_path(outfile)
-        
+
         framefiles = [graph_path(x) for x in frm]
         skyfiles = [graph_path(x) for x in sky]
         flatfiles = [graph_path(x) for x in flat]
@@ -625,7 +642,7 @@ class WorkerStdstars(Worker):
         options["outfile"] = outfile
         options["ncpu"] = str(default_nproc)
         #- TODO: no QA for fitting standard stars yet
-        
+
         options.update(opts)
         optarray = option_list(options)
 
@@ -703,7 +720,7 @@ class WorkerFluxcal(Worker):
         skyfile = graph_path(sky[0])
         starfile = graph_path(star[0])
         outfile = graph_path(task)
-        
+
         #qafile, qafig = qa_path(outfile)
 
         options = {}
@@ -931,17 +948,31 @@ def get_worker(step, name, opts):
     return worker
 
 
-def default_options():
+def default_options(extra={}):
+    """
+    Get the default options for all workers.
+
+    Args:
+        extra (dict): optional extra options to add to the
+            default options for each worker class.
+
+    Returns (dict):
+        the default options dictionary, suitable for writing
+        to the default options.yaml file.
+    """
 
     log = get_logger()
 
     allopts = {}
 
     for step in step_types:
-        allopts["{}_worker".format(step)] = default_workers[step]
-        allopts["{}_worker_opts".format(step)] = {}
+        defwork = default_workers[step]
+        allopts["{}_worker".format(step)] = defwork
+        if defwork in extra:
+            allopts["{}_worker_opts".format(step)] = extra[defwork]
+        else:
+            allopts["{}_worker_opts".format(step)] = {}
         worker = get_worker(step, None, {})
         allopts[step] = worker.default_options()
 
     return allopts
-

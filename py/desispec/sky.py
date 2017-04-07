@@ -11,7 +11,7 @@ from desispec.resolution import Resolution
 from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec import util
 from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
@@ -46,7 +46,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
     nwave=frame.nwave
     nfibers=len(skyfibers)
 
-    current_ivar=frame.ivar[skyfibers].copy()
+    current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
 
@@ -80,7 +80,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
             B += sqrtwR.T*sqrtwflux[fiber]
 
         log.info("iter %d solving"%iteration)
-    
+
         w = A.diagonal()>0
         A_pos_def = A.todense()[w,:]
         A_pos_def = A_pos_def[:,w]
@@ -138,9 +138,12 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
 
 
     # solve once again to get deconvolved sky variance
-    #skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
-    skyflux = np.linalg.lstsq(A.todense(),B)[0]
-    skycovar = np.linalg.pinv(A.todense())
+    try :
+        skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+    except np.linalg.linalg.LinAlgError :
+        log.warning("cholesky_solve_and_invert failed, switching to np.linalg.lstsq and np.linalg.pinv")
+        skyflux = np.linalg.lstsq(A.todense(),B)[0]
+        skycovar = np.linalg.pinv(A.todense())
 
     #- sky inverse variance, but incomplete and not needed anyway
     # skyvar=np.diagonal(skycovar)
@@ -245,7 +248,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     import copy
 
     #- QAs
-    #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately. 
+    #- first subtract sky to get the sky subtracted frame. This is only for QA. Pipeline does it separately.
     tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame unaffected so that downstream pipeline uses it.
     subtract_sky(tempframe,skymodel) #- Note: sky subtract is done to get residuals. As part of pipeline it is done in fluxcalib stage
 
@@ -253,6 +256,5 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
 
     qadict_snr = qalib.SignalVsNoise(tempframe,param)
     qadict.update(qadict_snr)
-    
-    return qadict
 
+    return qadict

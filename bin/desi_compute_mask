@@ -8,7 +8,7 @@ import numpy as np
 #import matplotlib.pyplot as plt
 import scipy.ndimage.filters
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec.preproc import  _parse_sec_keyword
 from desispec.maskbits import ccdmask
 
@@ -22,22 +22,22 @@ description="Compute a mask using preprocessed dark images",
                                  This code was used to procude the EM spectrograph early NIR (Z1) ccd data mask.
                                  ''')
 
-parser.add_argument('-i','--image', type = str, default = None, required = True, 
+parser.add_argument('-i','--image', type = str, default = None, required = True,
                     help = 'path of preprocessed dark image fits file')
-parser.add_argument('-o','--out', type = str, default = None, required = True, 
+parser.add_argument('-o','--out', type = str, default = None, required = True,
                     help = 'path to output mask fits file')
-parser.add_argument('--nsig', type = float, default = 3., required = False, 
+parser.add_argument('--nsig', type = float, default = 3., required = False,
                     help = 'n sigma threshold')
-parser.add_argument('--frac', type = float, default = 0.2, required = False, 
+parser.add_argument('--frac', type = float, default = 0.2, required = False,
                     help = 'fraction of bad pixels in row or column above which the entire row or column is masked')
-parser.add_argument('--npix', type = float, default = 50., required = False, 
+parser.add_argument('--npix', type = float, default = 50., required = False,
                     help = 'number of pixels for median filtering')
 
 
 args = parser.parse_args()
 log  = get_logger()
 
-    
+
 image_file  = pyfits.open(args.image)
 flux = image_file[0].data
 ivar = image_file["IVAR"].data*(image_file["MASK"].data==0)
@@ -68,7 +68,7 @@ only_rows_or_columns = False
 if only_rows_or_columns :
     mask = masked_lines
 else :
-    mask |= masked_lines 
+    mask |= masked_lines
 
 
 log.info("mask all rows left (or right) of entirely masked row")
@@ -76,7 +76,7 @@ log.info("mask all rows left (or right) of entirely masked row")
 for i in np.arange(mask.shape[0]//2,mask.shape[0]) :
     ismasked=np.sum(mask[i]&ccdmask.BAD)==float(n1*ccdmask.BAD)
     if ismasked :
-        log.info("mask all rows >= %d"%i) 
+        log.info("mask all rows >= %d"%i)
         mask[i:] |=ccdmask.BAD
         break
 # down
@@ -102,7 +102,7 @@ for i in np.arange(mask.shape[1]//2,0,-1) :
         break
 
 if not only_rows_or_columns :
-    
+
     # unmask isolated masked pixels which are probably statistical fluctuations
     sum99=np.zeros(mask.shape)
     sum99[1:-1,1:-1]=mask[1:-1,1:-1]

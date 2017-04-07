@@ -12,7 +12,7 @@ from astropy.io import fits
 from desiutil.depend import add_dependencies
 import desiutil.io
 from desispec.zfind import ZfindBase
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 def write_zbest(filename, brickname, targetids, zfind, zspec=False):
     """Writes zfinder output to ``filename``.

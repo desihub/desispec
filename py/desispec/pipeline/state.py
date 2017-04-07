@@ -17,7 +17,7 @@ import subprocess as sp
 
 import numpy as np
 
-from ..log import get_logger
+from desiutil.log import get_logger
 from .. import util
 from .. import io
 
@@ -110,7 +110,7 @@ def graph_db_check(grph):
         path = graph_path(name)
 
         if not os.path.isfile(path):
-            # file does not exist 
+            # file does not exist
             nd["state"] = "none"
             continue
 
@@ -162,7 +162,7 @@ def graph_db_write(grph):
 
     This takes the in-memory graph and the states of all objects
     and writes this information to disk.  For now, this just dumps
-    to a yaml file.  In the future, this function will modify a 
+    to a yaml file.  In the future, this function will modify a
     database.
 
     Args:
@@ -189,4 +189,3 @@ def graph_db_write(grph):
         graph_dot(grph, f)
 
     return
-

@@ -53,8 +53,7 @@ env:
         # - SCIPY_VERSION=0.16
         - ASTROPY_VERSION=1.2.1
         # - SPHINX_VERSION=1.3
-        # Need desiutil master until >1.5.0 tag to get add_dependencies
-        - DESIUTIL_VERSION=1.8.0
+        - DESIUTIL_VERSION=1.9.3
         - SPECLITE_VERSION=0.5
         - SPECTER_VERSION=0.6.0
         # - HARP_VERSION=1.0.1
@@ -63,7 +62,7 @@ env:
         # These packages will always be installed.
         - CONDA_DEPENDENCIES="qt=4"
         # These packages will only be installed if we really need them.
-        - CONDA_ALL_DEPENDENCIES="scipy matplotlib coverage==3.7.1 pyyaml"
+        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage==3.7.1 pyyaml"
         # These packages will always be installed.
         - PIP_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
@@ -90,7 +89,7 @@ matrix:
         # Check for sphinx doc build warnings - we do this first because it
         # runs for a long time
         - os: linux
-          env: PYTHON_VERSION=2.7 SETUP_CMD='build_sphinx'
+          env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
                 CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                 PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
           # OPTIONAL_DEPS needed because the plot_directive in sphinx needs them
@@ -99,17 +98,17 @@ matrix:
         # Do a bdist_egg compile.  This will catch things like syntax errors
         # without needing to do a full python setup.py test
         - os: linux
-          env: PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
+          env: PYTHON_VERSION=3.5 SETUP_CMD='bdist_egg'
 
         # Default versions
         - os: linux
-          env: PYTHON_VERSION=2.7 SETUP_CMD='test --coverage'
+          env: PYTHON_VERSION=3.5 SETUP_CMD='test --coverage'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # Default versions
         - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='test'
+          env: PYTHON_VERSION=2.7 SETUP_CMD='test'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 

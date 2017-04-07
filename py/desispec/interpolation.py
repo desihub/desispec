@@ -7,7 +7,7 @@ Utility functions for interpolation of spectra over different wavelength grids.
 
 import numpy as np
 import sys
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 #import time # for debugging
 

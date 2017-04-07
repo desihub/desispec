@@ -13,8 +13,7 @@ import numpy as np
 
 import subprocess as sp
 
-from .log import get_logger
-from . import log as desilog
+from desiutil.log import get_logger, INFO
 
 
 def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
@@ -72,7 +71,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
     #- Use log.level to decide verbosity, but avoid long prefixes
     log.info(time.asctime())
     log.info("RUNNING: {}".format(cmd))
-    if log.level <= desilog.INFO:
+    if log.level <= INFO:
         if len(inputs) > 0:
             print("  Inputs")
             for x in inputs:
@@ -93,7 +92,7 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
             err = sp.call(cmd, shell=True)
         else:
             raise ValueError("Don't provide args unless cmd is function")
-                
+
     log.info(time.asctime())
     if err > 0:
         log.critical("FAILED {}".format(cmd))
@@ -182,7 +181,7 @@ def option_list(opts):
 def mask32(mask):
     '''
     Return an input mask as unsigned 32-bit
-    
+
     Raises ValueError if 64-bit input can't be cast to 32-bit without losing
     info (i.e. if it contains values > 2**32-1)
     '''
@@ -195,7 +194,7 @@ def mask32(mask):
             return mask.view('u4')
         else:
             return mask.astype('u4')
-            
+
     elif mask.dtype in (
         np.dtype('i8'),  np.dtype('u8'),
         np.dtype('>i8'), np.dtype('>u8'),
@@ -208,7 +207,7 @@ def mask32(mask):
         if np.any(mask64 > 2**32-1):
             raise ValueError("mask with values above 2**32-1 can't be cast to 32-bit")
         return np.asarray(mask, dtype='u4')
-        
+
     elif mask.dtype in (
         np.dtype('bool'), np.dtype('bool8'),
         np.dtype('i2'),  np.dtype('u2'),
@@ -228,7 +227,7 @@ def night2ymd(night):
     """
     assert isinstance(night, str), 'night is not a string'
     assert len(night) == 8, 'invalid YEARMMDD night string '+night
-    
+
     year = int(night[0:4])
     month = int(night[4:6])
     day = int(night[6:8])
@@ -236,20 +235,20 @@ def night2ymd(night):
         raise ValueError('YEARMMDD month should be 1-12, not {}'.format(month))
     if day < 1 or 31 < day:
         raise ValueError('YEARMMDD day should be 1-31, not {}'.format(day))
-        
+
     return (year, month, day)
-    
+
 def ymd2night(year, month, day):
     """
     convert year, month, day integers into cannonical YEARMMDD night string
     """
     return "{:04d}{:02d}{:02d}".format(year, month, day)
-    
+
 def combine_ivar(ivar1, ivar2):
     """
     Returns the combined inverse variance of two inputs, making sure not to
     divide by 0 in the process.
-    
+
     ivar1 and ivar2 may be scalar or ndarray but must have the same dimensions
     """
     iv1 = np.atleast_1d(ivar1)  #- handle list, tuple, ndarray, and scalar input
@@ -260,7 +259,7 @@ def combine_ivar(ivar1, ivar2):
     ii = (iv1 > 0) & (iv2 > 0)
     ivar = np.zeros(iv1.shape)
     ivar[ii] = 1.0 / (1.0/iv1[ii] + 1.0/iv2[ii])
-    
+
     #- Convert back to python float if input was scalar
     if isinstance(ivar1, (float, numbers.Integral)):
         return float(ivar)
@@ -280,5 +279,3 @@ def set_backend(backend='agg'):
         import matplotlib
         matplotlib.use(_matplotlib_backend)
     return
-
-

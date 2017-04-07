@@ -19,7 +19,7 @@ import argparse
 import re
 
 import desispec.io as io
-from desispec.log import get_logger
+from desiutil.log import get_logger
 import desispec.pipeline as pipe
 
 
@@ -30,7 +30,7 @@ def parse(options=None):
     parser.add_argument( "--last", required=False, default=None, help="last step of the pipeline to run")
     parser.add_argument("--nights", required=False, default=None, help="comma separated (YYYYMMDD) or regex pattern")
     parser.add_argument("--spectrographs", required=False, default=None, help="process only this comma-separated list of spectrographs")
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -65,7 +65,7 @@ def main(args, comm=None):
 
     pipe.run_steps(args.first, args.last, spectrographs=args.spectrographs, nightstr=args.nights, comm=comm)
     t2 = datetime.datetime.now()
-    
+
     if rank == 0:
         if "STARTTIME" in os.environ:
             try:
@@ -77,8 +77,7 @@ def main(args, comm=None):
                 log.error("unable to parse $STARTTIME={}".format(os.getenv("STARTTIME")))
         else:
             log.info("python startup time unknown since $STARTTIME not set")
-        
+
         dt = t2 - t1
         minutes, seconds = dt.seconds//60, dt.seconds%60
         log.info("Run time: {} min {} sec".format(minutes, seconds))
-

@@ -1,6 +1,6 @@
 """
-desispec.bootcalib
-==================
+desispec.scripts.bootcalib
+==========================
 
 Utility functions to perform a quick calibration of DESI data
 
@@ -12,7 +12,7 @@ TODO:
 from __future__ import print_function, absolute_import, division
 
 import numpy as np
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
 
@@ -44,7 +44,7 @@ def parse(options=None):
                         help = 'comma-separated used lamp elements, ex: HgI,NeI,ArI,CdI,KrI')
     parser.add_argument('--good-lines', type = str, default = None, required=False,
                         help = 'ascii files with good lines (default is data/arc_lines/goodlines_vacuum.ascii)')
-    
+
     parser.add_argument("--test", help="Debug?", default=False, action="store_true")
     parser.add_argument("--debug", help="Debug?", default=False, action="store_true")
     parser.add_argument("--trace_only", help="Quit after tracing?", default=False, action="store_true")
@@ -54,7 +54,7 @@ def parse(options=None):
     parser.add_argument("--toler", type = float, default=0.5, required=False, help="Allowed fractional variation of d wave / dy around prior")
     parser.add_argument("--nmax", type = int, default=100, required=False, help="Max number of measured emission lines kept in triplet-matching algorithm")
     parser.add_argument("--out-line-list", type = str, default=False, required=False, help="Write to the list of lines found (can be used as input to specex)")
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -64,14 +64,14 @@ def parse(options=None):
 
 
 def main(args):
-    
+
     log=get_logger()
 
     log.info("Starting")
 
     if args.triplet_matching :
         log.warning("triplet_matching option deprecated, this algorithm is now used for all cases")
-    
+
 
     lamps=None
     if args.lamps :
@@ -79,7 +79,7 @@ def main(args):
         log.info("Using lamps = %s"%str(lamps))
     else :
         log.info("Using default set of lamps")
-    
+
     if (args.psffile is None) and (args.fiberflat is None):
         raise IOError("Must provide either a PSF file or a fiberflat")
 
@@ -92,7 +92,7 @@ def main(args):
         QA = True
 
     fiberflat_header = None
-    
+
     if args.psffile is None:
         ###########
         # Read flat
@@ -152,7 +152,7 @@ def main(args):
         XCOEFF = psf_hdu[0].data
         xfit = None
         fdicts = None
-    
+
     arc_header = None
 
     # ARCS
@@ -168,13 +168,13 @@ def main(args):
             arc_ivar = arc_hdu[1].data*(arc_hdu[2].data==0)*(arc_hdu[1].data>0)
             # and mask pixels below -5 sigma (cures unmasked dead columns in sims.)
             arc_ivar *= (arc_hdu[0].data*np.sqrt(arc_hdu[1].data)>-5.)
-            # set to zero pixel values with null ivar              
+            # set to zero pixel values with null ivar
             arc = arc_hdu[0].data*(arc_ivar>0)
         else :
             arc = arc_hdu[0].data
             arc_ivar = np.ones(arc.shape)
             log.warning("found only %d HDU in arc, do not use ivar"%len(arc_hdu))
-        
+
         header = arc_hdu[0].header
         ny = arc.shape[0]
 
@@ -191,16 +191,16 @@ def main(args):
             for ii in range(nfiber):
                 fit_dict['coeff'] = XCOEFF[ii,:]
                 xfit[:,ii] = dufits.func_val(wv_array, fit_dict)
-        
+
         all_spec = desiboot.extract_sngfibers_gaussianpsf(arc, arc_ivar, xfit, gauss)
-        
+
         ############################
         # Line list
         camera = header['CAMERA'].lower()
         log.info("Loading line list")
         llist = desiboot.load_arcline_list(camera,vacuum=True,lamps=lamps)
         dlamb, gd_lines = desiboot.load_gdarc_lines(camera,llist,vacuum=True,lamps=lamps,good_lines_filename=args.good_lines)
-        
+
         #####################################
         # Loop to solve for wavelengths
         all_wv_soln = []
@@ -211,39 +211,39 @@ def main(args):
         # first loop to find arc lines and do a first matching
         for ii in range(all_spec.shape[1]):
             spec = all_spec[:,ii]
-            
+
             id_dict={}
-            id_dict["fiber"]  = ii 
-            id_dict["status"] = "none"            
+            id_dict["fiber"]  = ii
+            id_dict["status"] = "none"
             id_dict['id_pix'] = []
             id_dict['id_idx'] = []
             id_dict['id_wave'] = []
-            
+
             pixpk, flux = desiboot.find_arc_lines(spec)
-            
+
             id_dict["pixpk"] =  pixpk
             id_dict["flux"]  =  flux
-            
+
             try:
                 desiboot.id_arc_lines_using_triplets(id_dict, gd_lines, dlamb,ntrack=args.ntrack,nmax=args.nmax,toler=args.toler)
-            except : 
+            except :
                 log.warning(sys.exc_info())
                 log.warning("fiber {:d} ID_ARC failed".format(ii))
-                id_dict['status'] = "failed"                
+                id_dict['status'] = "failed"
                 id_dict_of_fibers.append(id_dict)
                 continue
-                        
-            # Add lines 
+
+            # Add lines
             if len(id_dict['pixpk'])>len(id_dict['id_pix']) :
                 desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
             log.info("Fiber #{:d} n_match={:d} n_detec={:d}".format(ii,len(id_dict['id_pix']),len(id_dict['pixpk'])))
             # Save
             id_dict_of_fibers.append(id_dict)
 
-        
-       
-        
-        # now record the list of waves identified in several fibers 
+
+
+
+        # now record the list of waves identified in several fibers
         matched_lines=np.array([])
         for ii in range(all_spec.shape[1]):
             matched_lines = np.append(matched_lines,id_dict_of_fibers[ii]['id_wave'])
@@ -256,36 +256,36 @@ def main(args):
                     ndet += 1
             print(line,"ndet=",ndet)
             number_of_detections.append(ndet)
-        
-        # choose which lines are ok and 
+
+        # choose which lines are ok and
         # ok if 5 detections (coincidental error very low)
         min_number_of_detections=min(5,all_spec.shape[1])
         number_of_detections=np.array(number_of_detections)
         good_matched_lines = matched_lines[number_of_detections>=min_number_of_detections]
         bad_matched_lines  = matched_lines[number_of_detections<min_number_of_detections]
-        
+
         log.info("good matched lines = {:s}".format(str(good_matched_lines)))
         log.info("bad matched lines  = {:s}".format(str(bad_matched_lines)))
-        
-        
+
+
         # loop again on all fibers
         for ii in range(all_spec.shape[1]):
             spec = all_spec[:,ii]
-            
+
             id_dict = id_dict_of_fibers[ii]
             n_matched_lines=len(id_dict['id_wave'])
             n_detected_lines=len(id_dict['pixpk'])
-            
+
             # did we find any bad line for this fiber?
             n_bad = np.intersect1d(id_dict['id_wave'],bad_matched_lines).size
             # how many good lines did we find
             n_good = np.intersect1d(id_dict['id_wave'],good_matched_lines).size
-            
+
 
             if id_dict['status']=="ok" and ( n_bad>0 or (n_good < good_matched_lines.size-1 and n_good<30) ) and  n_good<40 :
-                
+
                 log.info("Try to refit fiber {:d} with n_bad={:d} and n_good={:d} when n_good_all={:d} n_detec={:d}".format(ii,n_bad,n_good,good_matched_lines.size,n_detected_lines))
-                
+
                 try:
                     desiboot.id_arc_lines_using_triplets(id_dict,  good_matched_lines, dlamb,ntrack=args.ntrack,nmax=args.nmax)
                 except:
@@ -297,15 +297,15 @@ def main(args):
                     desiboot.id_remainder(id_dict, llist, deg=args.legendre_degree)
             else :
                 log.info("Do not refit fiber {:d} with n_bad={:d} and n_good={:d} when n_good_all={:d} n_detec={:d}".format(ii,n_bad,n_good,good_matched_lines.size,n_detected_lines))
-                    
+
             if id_dict['status'] != 'ok':
                 all_wv_soln.append(id_dict)
                 all_dlamb.append(0.)
                 log.warning("Fiber #{:d} failed, no final fit".format(ii))
                 continue
 
-            
-            
+
+
             # Final fit wave vs. pix too
             id_wave=np.array(id_dict['id_wave'])
             id_pix=np.array(id_dict['id_pix'])
@@ -328,11 +328,11 @@ def main(args):
             id_dict['wave_min'] = dufits.func_val(0,final_fit_pix)
             id_dict['wave_max'] = dufits.func_val(ny-1,final_fit_pix)
             id_dict['mask'] = mask
-            
+
             log.info("Fiber #{:d} final fit rms(y->wave) = {:g} A ; rms(wave->y) = {:g} pix ; nlines = {:d}".format(ii,rms,rms_pix,id_pix.size))
-    
+
             all_wv_soln.append(id_dict)
-        
+
         if QA:
             desiboot.qa_arc_spec(all_spec, all_wv_soln, pp)
             desiboot.qa_fiber_arcrms(all_wv_soln, pp)
@@ -351,12 +351,12 @@ def main(args):
          log.info("Writing list of lines found in {:s}".format(args.out_line_list))
          desiboot.write_line_list(args.out_line_list,all_wv_soln,llist)
          log.info("Successfully wrote {:s}".format(args.out_line_list))
-    
+
     ###########
     # All done
     if QA:
         log.info("Successfully wrote {:s}".format(args.qafile))
         pp.close()
     log.info("end")
-    
+
     return

@@ -20,7 +20,7 @@ import desispec.scripts.pipe_prod as pipe_prod
 
 import desispec.io as io
 
-from desispec.log import get_logger
+from desiutil.log import get_logger
 
 from . import pipehelpers as ph
 
@@ -43,7 +43,7 @@ class TestPipelineRun(unittest.TestCase):
             shutil.rmtree(self.raw)
         if os.path.exists(self.redux):
             shutil.rmtree(self.redux)
-
+        ph.fake_env_clean()
 
     def test_run(self):
         opts = {}
@@ -51,12 +51,11 @@ class TestPipelineRun(unittest.TestCase):
         opts["data"] = self.raw
         opts["redux"] = self.redux
         opts["prod"] = self.prod
-        opts["model"] = self.model
         opts["shifter"] = self.shifter
         sopts = option_list(opts)
         sargs = pipe_prod.parse(sopts)
         pipe_prod.main(sargs)
-        
+
         # modify the options to use our No-op worker
         rundir = io.get_pipe_rundir()
         optfile = os.path.join(rundir, "options.yaml")
@@ -85,4 +84,4 @@ class TestPipelineRun(unittest.TestCase):
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
-    unittest.main()           
+    unittest.main()

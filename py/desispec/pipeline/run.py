@@ -24,7 +24,7 @@ import logging
 
 import numpy as np
 
-from ..log import get_logger
+from desiutil.log import get_logger
 from .. import io
 from ..parallel import (dist_uniform, dist_discrete,
     stdouterr_redirected)
@@ -43,7 +43,7 @@ def run_step(step, grph, opts, comm=None):
 
     This function first takes the communicator and the maximum processes
     per task and splits the communicator to form groups of processes of
-    the desired size.  It then takes the full dependency graph and extracts 
+    the desired size.  It then takes the full dependency graph and extracts
     all the tasks for a given step.  These tasks are then distributed among
     the groups of processes.
 
@@ -152,7 +152,7 @@ def run_step(step, grph, opts, comm=None):
         else:
             if step == "zfind":
                 # We load balance the bricks across process groups based
-                # on the number of targets per brick.  All bricks with 
+                # on the number of targets per brick.  All bricks with
                 # < taskproc targets are weighted the same.
 
                 if ntask <= ngroup:
@@ -220,7 +220,7 @@ def run_step(step, grph, opts, comm=None):
 
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             ffile = os.path.join(nfaildir, "{}_{}.yaml".format(step, tasks[t]))
-            
+
             # For this task, we will temporarily redirect stdout and stderr
             # to a task-specific log file.
 
@@ -249,7 +249,7 @@ def run_step(step, grph, opts, comm=None):
 
                 except:
                     # The task threw an exception.  We want to dump all information
-                    # that will be needed to re-run the task.                    
+                    # that will be needed to re-run the task.
                     msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
                     log.error(msg)
                     exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -267,7 +267,7 @@ def run_step(step, grph, opts, comm=None):
                         fyml["procs"] = taskproc
                         log.error("Dumping yaml graph to "+ffile)
                         yaml_write(ffile, fyml)
-                    
+
                     # mark the step as failed in our group"s local graph
                     graph_set_recursive(grph, tasks[t], "fail")
 
@@ -356,7 +356,7 @@ def retry_task(failpath, newopts=None):
     (night, gname) = graph_night_split(name)
 
     nlogdir = os.path.join(logdir, night)
-            
+
     # For this task, we will temporarily redirect stdout and stderr
     # to a task-specific log file.
 
@@ -381,7 +381,7 @@ def retry_task(failpath, newopts=None):
             log.error(''.join(lines))
             if group_rank == 0:
                 failcount= 1
-            
+
     if comm is not None:
         failcount = comm.bcast(failcount, root=0)
 
@@ -402,7 +402,7 @@ def run_steps(first, last, spectrographs=None, nightstr=None, comm=None):
 
     This function first takes the communicator and the requested processes
     per task and splits the communicator to form groups of processes of
-    the desired size.  It then takes the full dependency graph and extracts 
+    the desired size.  It then takes the full dependency graph and extracts
     all the tasks for a given step.  These tasks are then distributed among
     the groups of processes.
 
@@ -619,7 +619,7 @@ def nersc_job(path, logroot, desisetup, commands, nodes=1, \
     return
 
 
-def nersc_shifter_job(path, img, specdata, specredux, desimodel, logroot, desisetup, commands, nodes=1, \
+def nersc_shifter_job(path, img, specdata, specredux, desiroot, logroot, desisetup, commands, nodes=1, \
     nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
     queue="debug", jobname="desipipe"):
 
@@ -647,10 +647,7 @@ def nersc_shifter_job(path, img, specdata, specredux, desimodel, logroot, desise
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name={}\n".format(jobname))
         f.write("#SBATCH --output={}_%j.log\n".format(logroot))
-        f.write("#SBATCH --volume=/project/projectdirs/desi:/desi/root\n")
-        f.write("#SBATCH --volume={}:/desi/model\n".format(desimodel))
-        f.write("#SBATCH --volume={}:/desi/spectro_data\n".format(specdata))
-        f.write("#SBATCH --volume={}:/desi/spectro_redux\n".format(specredux))
+        f.write("#SBATCH --volume=\"{}:/desi/root;{}:/desi/spectro_data;{}:/desi/spectro_redux\"\n\n".format(desiroot, specdata, specredux))
 
         f.write("echo Starting slurm script at `date`\n\n")
         f.write("source {}\n\n".format(desisetup))
@@ -696,5 +693,3 @@ def nersc_shifter_job(path, img, specdata, specredux, desimodel, logroot, desise
         f.write("echo done with slurm script at `date`\n")
 
     return
-
-
