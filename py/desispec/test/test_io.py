@@ -290,7 +290,7 @@ class TestIO(unittest.TestCase):
         data['REDSHIFT'] = np.zeros(nstd)
         write_stdstar_models(self.testfile, flux, wave, fibers, data)
 
-        fx, wx, fibx = read_stdstar_models(self.testfile)
+        fx, wx, fibx, metadata = read_stdstar_models(self.testfile)
         self.assertTrue(np.all(fx == flux.astype('f4').astype('f8')))
         self.assertTrue(np.all(wx == wave.astype('f4').astype('f8')))
         self.assertTrue(np.all(fibx == fibers))
