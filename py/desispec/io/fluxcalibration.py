@@ -39,7 +39,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     # metadata
     from astropy.io.fits import Column
     cols=[]
-    for k in data :
+    for k in data.keys() :
         if len(data[k].shape)==1 :
             cols.append(Column(name=k,format='D',array=data[k]))
     tbhdu=fits.BinTableHDU.from_columns(fits.ColDefs(cols), name='METADATA')
