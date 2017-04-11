@@ -81,15 +81,15 @@ class Bricks(object):
         """Return string name of brick that contains (ra, dec) [degrees]
 
         Args:
-            ra (float) : Right Ascension in degrees
-            dec (float) : Declination in degrees
+            ra (array or float) : Right Ascension in degrees
+            dec (array or float) : Declination in degrees
 
         Returns:
-            brick name string
+            brick name string or array of strings
         """
         inra, indec = ra, dec
         dec = np.atleast_1d(dec)
-        ra = np.atleast_1d(ra)
+        ra = np.atleast_1d(ra) % 360
         irow = ((dec+90.0+self._bricksize/2)/self._bricksize).astype(int)
 
         ncol = self._ncol_per_row[irow]
@@ -131,26 +131,3 @@ def brickname(ra, dec, bricksize=0.5):
         _bricks = Bricks(bricksize=bricksize)
 
     return _bricks.brickname(ra, dec)
-#
-# THIS CODE SHOULD BE MOVED TO A TEST.
-#
-if __name__ == '__main__':
-    import os
-    from astropy.io import fits
-    d = fits.getdata(os.getenv('HOME')+'/temp/bricks-0.50.fits')
-    b = Bricks(0.5)
-    ntest = 10000
-
-    ra = np.random.uniform(0, 360, size=ntest)
-    dec = np.random.uniform(-90, 90, size=ntest)
-    bricknames = b.brickname(ra, dec)
-
-    for row in range(len(b._center_dec)):
-        n = len(d.BRICKROW[d.BRICKROW==row])
-        if n != b._ncol_per_row[row]:
-            print(row, n, len(b._center_ra[row]))
-
-    for i in range(ntest):
-        ii = np.where( (d.DEC1 <= dec[i]) & (dec[i] < d.DEC2) & (d.RA1 <= ra[i]) & (ra[i] < d.RA2) )[0][0]
-        if bricknames[i] != d.BRICKNAME[ii]:
-            print(bricknames[i], d.BRICKNAME[ii], ra[i], dec[i], b.brick_radec(ra[i], dec[i]), (d.RA[ii], d.DEC[ii]))
