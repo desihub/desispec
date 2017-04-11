@@ -247,8 +247,7 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
         template_chi2 : 1D[ntemplatess] array of precomputed chi2 = sum(data_ivar*(data_flux-template_flux)**2)
     
     Returns:
-       coefficients : best fit coefficient of linear combination of templates (only 8 of them around the one with best template_chi2 
-                      are potentially non null
+       coefficients : best fit coefficient of linear combination of templates
        chi2 : chi2 of the linear combination
     """
     
