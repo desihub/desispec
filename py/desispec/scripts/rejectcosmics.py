@@ -7,7 +7,7 @@ This script finds cosmics in a pre-processed image and write the result in the m
 from desispec.io import image
 from desispec.maskbits import ccdmask
 from desispec.cosmics import reject_cosmic_rays
-from desispec.log import get_logger
+from desiutil.log import get_logger
 import argparse
 import numpy as np
 
@@ -53,4 +53,3 @@ def main(args) :
     image.write_image(outfile, img, meta=img.meta)
 
     log.info("done")
-

@@ -1,4 +1,7 @@
 """
+desispec.frame
+==============
+
 Lightweight wrapper class for spectra, to be returned by io.read_frame
 """
 
@@ -10,7 +13,7 @@ import numpy as np
 from desispec import util
 from desispec.resolution import Resolution
 from desispec.coaddition import Spectrum
-# from desispec.log import get_logger
+# from desiutil.log import get_logger
 from desispec import util
 # log = get_logger()
 

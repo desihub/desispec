@@ -13,7 +13,7 @@ from pkg_resources import resource_exists, resource_filename
 from desispec.image import Image
 from desispec import cosmics
 from desispec.maskbits import ccdmask
-from desispec.log import get_logger
+from desiutil.log import get_logger
 # log = get_logger()
 
 def _parse_date_obs(value):

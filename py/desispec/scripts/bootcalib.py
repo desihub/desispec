@@ -12,7 +12,7 @@ TODO:
 from __future__ import print_function, absolute_import, division
 
 import numpy as np
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec import bootcalib as desiboot
 from desiutil import funcfits as dufits
 

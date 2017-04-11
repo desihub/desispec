@@ -13,7 +13,7 @@ import traceback
 
 from desispec import io
 from desispec.interpolation import resample_flux
-from desispec.log import get_logger, WARNING
+from desiutil.log import get_logger, WARNING
 from desispec.zfind.redmonster import RedMonsterZfind
 from desispec.zfind import ZfindBase
 from desispec.io.qa import load_qa_brick, write_qa_brick
@@ -32,21 +32,21 @@ def parse(options=None):
         help="first spectrum to fit in file")
     parser.add_argument("-o", "--outfile", type=str, required=False,
         help="output file name")
-    parser.add_argument("--specprod_dir", type=str, required=False, default=None, 
+    parser.add_argument("--specprod_dir", type=str, required=False, default=None,
         help="override $DESI_SPECTRO_REDUX/$SPECPROD environment variable path")
     parser.add_argument("--objtype", type=str, required=False,
         help="only use templates for these objtypes (comma separated elg,lrg,qso,star)")
-    parser.add_argument('--zrange-galaxy', type=float, default=(0.0, 1.6), nargs=2, 
+    parser.add_argument('--zrange-galaxy', type=float, default=(0.0, 1.6), nargs=2,
                         help='minimum and maximum galaxy redshifts to consider')
-    parser.add_argument('--zrange-qso', type=float, default=(0.0, 3.5), nargs=2, 
+    parser.add_argument('--zrange-qso', type=float, default=(0.0, 3.5), nargs=2,
                         help='minimum and maximum QSO redshifts to consider')
-    parser.add_argument('--zrange-star', type=float, default=(-0.005, 0.005), nargs=2, 
+    parser.add_argument('--zrange-star', type=float, default=(-0.005, 0.005), nargs=2,
                         help='minimum and maximum stellar redshifts to consider')
     parser.add_argument("--zspec", action="store_true",
         help="also include spectra in output file")
-    parser.add_argument('--qafile', type=str, 
+    parser.add_argument('--qafile', type=str,
         help='path of QA file.')
-    parser.add_argument('--qafig', type=str, 
+    parser.add_argument('--qafig', type=str,
         help='path of QA figure file')
     parser.add_argument("--nproc", type=int, default=default_nproc,
         help="number of parallel processes for multiprocessing")
@@ -55,7 +55,7 @@ def parse(options=None):
     parser.add_argument("brickfiles", nargs="*")
 
     parser.add_argument("--print-info",type=str,help="print an info table on each spectrum and exit")
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -74,7 +74,7 @@ def main(args, comm=None) :
     if args.nproc < 1 :
         log.warning("Need nproc>=1, changing this %d -> 1"%args.nproc)
         args.nproc=1
-    
+
     if comm is not None:
         if args.nproc != 1:
             if comm.rank == 0:
@@ -121,7 +121,7 @@ def main(args, comm=None) :
     #    log.info("Fitting {} targets".format(args.nspec))
     #else:
     #    log.info("Fitting {} of {} targets".format(args.nspec, brick['b'].get_num_targets()))
-    
+
     #- Coadd individual exposures and combine channels
     #- Full coadd code is a bit slow, so try something quick and dirty for
     #- now to get something going for redshifting
@@ -205,10 +205,10 @@ def main(args, comm=None) :
     else :
         if (comm is None) or (comm.rank == 0):
             log.info("Fitting {} targets".format(nspec))
-    
+
     if (comm is None) or (comm.rank == 0):
         log.debug("flux.shape={}".format(flux.shape))
-    
+
     zf = None
     if comm is None:
         # Use multiprocessing built in to RedMonster.
@@ -217,7 +217,7 @@ def main(args, comm=None) :
                              objtype=args.objtype,zrange_galaxy= args.zrange_galaxy,
                              zrange_qso=args.zrange_qso,zrange_star=args.zrange_star,
                              nproc=args.nproc,npoly=args.npoly)
-    
+
     else:
         # Use MPI
 
@@ -230,7 +230,7 @@ def main(args, comm=None) :
             log.info("process {} idle".format(comm.rank))
 
         # do redshift fitting on each process.  If any process
-        # throws an exception, log that error and ensure that 
+        # throws an exception, log that error and ensure that
         # all processes raise an exception.  This ensures consistency
         # in the calling pipeline.
         myzf = None
@@ -262,7 +262,7 @@ def main(args, comm=None) :
 
         if comm.rank == 0:
             zf = ZfindBase(myzf.wave, np.zeros((nspec, myzf.nwave)), np.zeros((nspec, myzf.nwave)), R=None, results=None)
-        
+
         for p in range(comm.size):
             if comm.rank == 0:
                 if p == 0:
@@ -302,10 +302,10 @@ def main(args, comm=None) :
 
                         p_zwarn = comm.recv(source=p, tag=7)
                         zf.zwarn[p_slice] = p_zwarn
-                        
+
                         p_type = comm.recv(source=p, tag=8)
                         zf.spectype[p_slice] = p_type
-                        
+
                         p_subtype = comm.recv(source=p, tag=9)
                         zf.subtype[p_slice] = p_subtype
             else:
@@ -335,7 +335,7 @@ def main(args, comm=None) :
             ('ZERR',      zf.zerr.dtype),
             ('ZWARN',     zf.zwarn.dtype),
             ('SPECTYPE',  zf.spectype.dtype),
-            ('SUBTYPE',   zf.subtype.dtype),    
+            ('SUBTYPE',   zf.subtype.dtype),
         ]
 
         formatted_data  = np.empty(nspec, dtype=dtype)
@@ -344,7 +344,7 @@ def main(args, comm=None) :
         formatted_data['ZWARN']    = zf.zwarn
         formatted_data['SPECTYPE'] = zf.spectype
         formatted_data['SUBTYPE']  = zf.subtype
-        
+
         # Create a ZfindBase object with formatted results
         zfi = ZfindBase(None, None, None, results=formatted_data)
         zfi.nspec = nspec
@@ -374,4 +374,3 @@ def main(args, comm=None) :
         io.write_zbest(args.outfile, args.brick, good_targetids, zfi, zspec=args.zspec)
 
     return
-

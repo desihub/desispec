@@ -193,6 +193,9 @@ Full desispec API Reference
 .. automodule:: desispec.scripts.bootcalib
     :members:
 
+.. automodule:: desispec.scripts.delivery
+    :members:
+
 .. automodule:: desispec.scripts.extract
     :members:
 
@@ -206,6 +209,9 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.scripts.mergebundles
+    :members:
+
+.. automodule:: desispec.scripts.night
     :members:
 
 .. automodule:: desispec.scripts.pipe_prod

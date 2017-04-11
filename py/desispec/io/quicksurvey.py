@@ -214,7 +214,7 @@ def load_file(filepath, tcls, expand=None, convert=None,
         set `maxrows` to zero (0) to load all rows.
     """
     from astropy.io import fits
-    from ..log import get_logger
+    from desiutil.log import get_logger
     log = get_logger()
     tn = tcls.__tablename__
     with fits.open(filepath) as hdulist:
@@ -302,7 +302,7 @@ def load_fiberassign(datapath, maxpass=4):
     from re import compile
     from glob import glob
     from astropy.io import fits
-    from ..log import get_logger
+    from desiutil.log import get_logger
     log = get_logger()
     fiberpath = join(datapath, 'output', 'dark',
                      '[0-{0:d}]'.format(maxpass),
@@ -396,7 +396,7 @@ def main():
     from argparse import ArgumentParser
     from pkg_resources import resource_filename
     from pytz import utc
-    from ..log import get_logger, DEBUG, INFO
+    from desiutil.log import get_logger, DEBUG, INFO
     #
     # command-line arguments
     #

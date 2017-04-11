@@ -17,7 +17,7 @@ import ctypes
 
 import numpy as np
 
-from .log import get_logger
+from desiutil.log import get_logger
 
 
 # C file descriptors for stderr and stdout, used in redirection
@@ -119,7 +119,7 @@ def dist_discrete(worksizes, workers, id, pow=1.0):
     """
     Distribute indivisible blocks of items between groups.
 
-    Given some contiguous blocks of items which cannot be 
+    Given some contiguous blocks of items which cannot be
     subdivided, distribute these blocks to the specified
     number of groups in a way which minimizes the maximum
     total items given to any group.  Optionally weight the
@@ -135,8 +135,8 @@ def dist_discrete(worksizes, workers, id, pow=1.0):
         pow (float): The power to use for weighting
 
     Returns:
-        A tuple.  The first element of the tuple is the first 
-        block assigned to the worker ID, and the second element 
+        A tuple.  The first element of the tuple is the first
+        block assigned to the worker ID, and the second element
         is the number of blocks assigned to the worker.
     """
     chunks = np.array(worksizes, dtype=np.int64)
@@ -187,7 +187,7 @@ def stdouterr_redirected(to=None, comm=None):
         to (str): The output file name.
         comm (mpi4py.MPI.Comm): The optional MPI communicator.
     """
-    
+
     # The currently active POSIX file descriptors
     fd_out = sys.stdout.fileno()
     fd_err = sys.stderr.fileno()
@@ -213,8 +213,8 @@ def stdouterr_redirected(to=None, comm=None):
         # input file descriptors to these.
         os.dup2(out_to, fd_out)
         os.dup2(err_to, fd_err)
-        
-        # Create a new sys.stdout / sys.stderr that points to the 
+
+        # Create a new sys.stdout / sys.stderr that points to the
         # redirected POSIX file descriptors.  In Python 3, these
         # are actually higher level IO objects.
         if sys.version_info[0] < 3:
@@ -252,8 +252,8 @@ def stdouterr_redirected(to=None, comm=None):
         if comm is not None:
             if to != "/dev/null":
                 pto = "{}_{}".format(to, comm.rank)
-        
-        # open python file, which creates low-level POSIX file 
+
+        # open python file, which creates low-level POSIX file
         # descriptor.
         file = open(pto, "w")
 
@@ -286,10 +286,9 @@ def stdouterr_redirected(to=None, comm=None):
 
         if (comm is None) or (comm.rank == 0):
             log.debug("End log redirection to {} at {}".format(to, time.asctime()))
-        
+
         # flush python handles for good measure
         sys.stdout.flush()
         sys.stderr.flush()
-            
-    return
 
+    return

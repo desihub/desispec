@@ -15,18 +15,18 @@ from astropy import units
 from desispec import io
 from desispec.fluxcalibration import match_templates,normalize_templates
 from desispec.interpolation import resample_flux
-from desispec.log import get_logger
+from desiutil.log import get_logger
 from desispec.parallel import default_nproc
 from desispec.io.filters import load_filter
 from desispec.dustextinction import ext_odonnell
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
-    parser.add_argument('--frames', type = str, default = None, required=True, nargs='*', 
+    parser.add_argument('--frames', type = str, default = None, required=True, nargs='*',
                         help = 'list of path to DESI frame fits files (needs to be same exposure, spectro)')
-    parser.add_argument('--skymodels', type = str, default = None, required=True, nargs='*', 
+    parser.add_argument('--skymodels', type = str, default = None, required=True, nargs='*',
                         help = 'list of path to DESI sky model fits files (needs to be same exposure, spectro)')
-    parser.add_argument('--fiberflats', type = str, default = None, required=True, nargs='*', 
+    parser.add_argument('--fiberflats', type = str, default = None, required=True, nargs='*',
                         help = 'list of path to DESI fiberflats fits files (needs to be same exposure, spectro)')
     parser.add_argument('--starmodels', type = str, help = 'path of spectro-photometric stellar spectra fits')
     parser.add_argument('-o','--outfile', type = str, help = 'output file for normalized stdstar model flux')
@@ -54,13 +54,13 @@ def safe_read_key(header,key) :
     if value is None : # second try
         value=header[key.ljust(8).upper()]
     return value
-        
+
 def get_color_filter_indices(filters,color_name) :
     bands=color_name.strip().split("-")
     if len(bands) != 2 :
         log.error("cannot split color name '%s' as 'mag1-mag2'"%color_name)
         raise ValueError("cannot split color name '%s' as 'mag1-mag2'"%color_name)
-    
+
     index1 = -1
     for i,fname in enumerate(filters):
         if fname[-1]==bands[0] :
@@ -91,66 +91,66 @@ def main(args) :
     """
 
     log = get_logger()
-    
+
     log.info("mag delta %s = %f (for the pre-selection of stellar models)"%(args.color,args.delta_color))
-    
+
     frames={}
     flats={}
     skies={}
-    
+
     spectrograph=None
     starfibers=None
     starindices=None
     fibermap=None
-    
+
 
     # READ DATA
     ############################################
-    
+
     for filename in args.frames :
-        
+
         log.info("reading %s"%filename)
         frame=io.read_frame(filename)
         header=fits.getheader(filename, 0)
         frame_fibermap = frame.fibermap
         frame_starindices=np.where(frame_fibermap["OBJTYPE"]=="STD")[0]
         camera=safe_read_key(header,"CAMERA").strip().lower()
-        
+
         if spectrograph is None :
             spectrograph = frame.spectrograph
-            fibermap = frame_fibermap            
+            fibermap = frame_fibermap
             starindices=frame_starindices
             starfibers=fibermap["FIBER"][starindices]
-            
+
         elif spectrograph != frame.spectrograph :
             log.error("incompatible spectrographs %d != %d"%(spectrograph,frame.spectrograph))
             raise ValueError("incompatible spectrographs %d != %d"%(spectrograph,frame.spectrograph))
         elif starindices.size != frame_starindices.size or np.sum(starindices!=frame_starindices)>0 :
             log.error("incompatible fibermap")
             raise ValueError("incompatible fibermap")
-        
+
         if not camera in frames :
             frames[camera]=[]
         frames[camera].append(frame)
-        
+ 
     for filename in args.skymodels :
         log.info("reading %s"%filename)
         sky=io.read_sky(filename)
         header=fits.getheader(filename, 0)
         camera=safe_read_key(header,"CAMERA").strip().lower()
-                
         if not camera in skies :
             skies[camera]=[]
         skies[camera].append(sky)
-    
+        
     for filename in args.fiberflats :
         log.info("reading %s"%filename)
         header=fits.getheader(filename, 0)
-        flat=io.read_fiberflat(filename)        
+        flat=io.read_fiberflat(filename)
         camera=safe_read_key(header,"CAMERA").strip().lower()
-        
+
         # NEED TO ADD MORE CHECKS
         if camera in flats:
+
             log.warning("cannot handle several flats of same camera (%s), will use only the first one"%camera)
             #raise ValueError("cannot handle several flats of same camera (%s)"%camera)
         else :
@@ -160,15 +160,15 @@ def main(args) :
     if starindices.size == 0 :
         log.error("no STD star found in fibermap")
         raise ValueError("no STD star found in fibermap")
-    
+
     log.info("found %d STD stars"%starindices.size)
 
-    
+
     imaging_filters=fibermap["FILTER"][starindices]
     imaging_mags=fibermap["MAG"][starindices]
-    
+
     log.warning("NO MAG ERRORS IN FIBERMAP, I AM IGNORING MEASUREMENT ERRORS !!")
-    
+
     ebv=np.zeros(starindices.size)
     if "SFD_EBV" in fibermap.columns.names  :
         log.info("Using 'SFD_EBV' from fibermap")
@@ -178,9 +178,9 @@ def main(args) :
     
     
     # DIVIDE FLAT AND SUBTRACT SKY , TRIM DATA
-    ############################################     
+    ############################################
     for cam in frames :
-        
+
         if not cam in skies:
             log.warning("Missing sky for %s"%cam)
             frames.pop(cam)
@@ -189,6 +189,7 @@ def main(args) :
             log.warning("Missing flat for %s"%cam)
             frames.pop(cam)
             continue
+        
 
         flat=flats[cam]
         for frame,sky in zip(frames[cam],skies[cam]) :
@@ -208,23 +209,23 @@ def main(args) :
         
     nstars = starindices.size
     starindices=None # we don't need this anymore
-    
+
     # READ MODELS
-    ############################################   
+    ############################################
     log.info("reading star models in %s"%args.starmodels)
     stdwave,stdflux,templateid,teff,logg,feh=io.read_stdstar_templates(args.starmodels)
-    
+
     # COMPUTE MAGS OF MODELS FOR EACH STD STAR MAG
     ############################################
     model_filters = []
     for tmp in np.unique(imaging_filters) :
         if len(tmp)>0 : # can be one empty entry
             model_filters.append(tmp)
-    
+
     log.info("computing model mags %s"%model_filters)
     model_mags = np.zeros((stdflux.shape[0],len(model_filters)))
     fluxunits = 1e-17 * units.erg / units.s / units.cm**2 / units.Angstrom
-    
+
     for index in range(len(model_filters)) :
         if model_filters[index].startswith('WISE'):
             log.warning('not computing stdstar {} mags'.format(model_filters[index]))
@@ -257,6 +258,7 @@ def main(args) :
 
         mean_extinction_delta_mags = canonical_model_mags_with_extinction - canonical_model_mags_without_extinction
          
+    
 
     # LOOP ON STARS TO FIND BEST MODEL
     ############################################
@@ -265,19 +267,21 @@ def main(args) :
     redshift=np.zeros((nstars))
     normflux=[]
 
+
     star_colors_array=np.zeros((nstars))
     model_colors_array=np.zeros((nstars))
     
     for star in range(nstars) :
-        
+
         log.info("finding best model for observed star #%d"%star)
-        
+
         # np.array of wave,flux,ivar,resol
         wave = {}
         flux = {}
         ivar = {}
         resolution_data = {}
         for camera in frames :
+
             for i,frame in enumerate(frames[camera]) :
                 identifier="%s-%d"%(camera,i)
                 wave[identifier]=frame.wave
@@ -285,30 +289,28 @@ def main(args) :
                 ivar[identifier]=frame.ivar[star]
                 resolution_data[identifier]=frame.resolution_data[star]
         
-        # preselec models based on magnitudes
         
+        # preselec models based on magnitudes
+
         # compute star color
         index1,index2=get_color_filter_indices(imaging_filters[star],args.color)
         if index1<0 or index2<0 :
             log.error("cannot compute '%s' color from %s"%(color_name,filters))
         filter1=imaging_filters[star][index1]
-        filter2=imaging_filters[star][index2]        
+        filter2=imaging_filters[star][index2]
         star_color=imaging_mags[star][index1]-imaging_mags[star][index2]
         star_colors_array[star]=star_color
         
-        
-            
-
 
         # compute models color
         model_index1=-1
-        model_index2=-1        
+        model_index2=-1
         for i,fname in enumerate(model_filters) :
             if fname==filter1 :
                 model_index1=i
             elif fname==filter2 :
                 model_index2=i
-        
+
         if model_index1<0 or model_index2<0 :
             log.error("cannot compute '%s' model color from %s"%(color_name,filters))
         model_colors = model_mags[:,model_index1]-model_mags[:,model_index2]
@@ -324,6 +326,7 @@ def main(args) :
             model_colors += delta_color
             log.info("Apply a %s-%s color offset = %4.3f to the models for star with E(B-V)=%4.3f"%(model_filters[model_index1],model_filters[model_index2],delta_color,ebv[star]))
         # selection
+        
         selection = np.abs(model_colors-star_color)<args.delta_color
         # smallest cube in parameter space including this selection (needed for interpolation)
         new_selection = (teff>=np.min(teff[selection]))&(teff<=np.max(teff[selection]))
@@ -345,6 +348,7 @@ def main(args) :
         linear_coefficients[star,selection] = coefficients
         
         log.info('Star Fiber: {0}; TEFF: {1}; LOGG: {2}; FEH: {3}; Redshift: {4}; Chisq/dof: {5}'.format(starfibers[star],np.inner(teff,linear_coefficients[star]),np.inner(logg,linear_coefficients[star]),np.inner(feh,linear_coefficients[star]),redshift[star],chi2dof[star]))
+        
 
         # Apply redshift to original spectrum at full resolution
         model=np.zeros(stdwave.size)
@@ -363,8 +367,8 @@ def main(args) :
         # Normalize the best model using reported magnitude
         normalizedflux=normalize_templates(stdwave,model,imaging_mags[star],imaging_filters[star])
         normflux.append(normalizedflux)
-    
-    
+
+
 
     # Now write the normalized flux for all best models to a file
     normflux=np.array(normflux)
@@ -379,5 +383,4 @@ def main(args) :
     data['MODEL_%s'%args.color]=model_colors_array
     norm_model_file=args.outfile
     io.write_stdstar_models(args.outfile,normflux,stdwave,starfibers,data)
-    
 

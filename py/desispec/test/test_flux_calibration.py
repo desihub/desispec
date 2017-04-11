@@ -17,7 +17,7 @@ from desispec.frame import Frame
 from desispec.fluxcalibration import normalize_templates
 from desispec.fluxcalibration import FluxCalib
 from desispec.fluxcalibration import compute_flux_calibration, apply_flux_calibration
-from desispec.log import get_logger
+from desiutil.log import get_logger
 import desispec.io
 
 import speclite.filters
@@ -71,7 +71,7 @@ def get_frame_data(nspec=10):
     return frame
 
 def get_models(nspec=10, nwave=1000, wavemin=4000, wavemax=5000):
-    """ 
+    """
     Returns basic model data:
     - [1D] modelwave [nmodelwave]
     - [2D] modelflux [nmodel,nmodelwave]
@@ -82,10 +82,10 @@ def get_models(nspec=10, nwave=1000, wavemin=4000, wavemax=5000):
     y=np.sin(10*(model_wave-wavemin)/(wavemax-wavemin))+5.0
     model_flux=np.tile(y,nspec).reshape(nspec,len(model_wave))
     return model_wave,model_flux
-    
+
 
 class TestFluxCalibration(unittest.TestCase):
- 
+
     def test_match_templates(self):
         """
         Test with simple interface check for matching best templates with the std star flux
@@ -98,9 +98,9 @@ class TestFluxCalibration(unittest.TestCase):
         ivar={"b":frame.ivar,"r":frame.ivar/1.1,"z":frame.ivar/1.2}
         # resol_data={"b":np.mean(frame.resolution_data,axis=0),"r":np.mean(frame.resolution_data,axis=0),"z":np.mean(frame.resolution_data,axis=0)}
         resol_data={"b":frame.resolution_data,"r":frame.resolution_data,"z":frame.resolution_data}
-        
-        #model 
-        
+
+        #model
+
         nmodels = 10
         modelwave,modelflux=get_models(nmodels)
         teff = np.random.uniform(5000, 7000, nmodels)
@@ -132,7 +132,7 @@ class TestFluxCalibration(unittest.TestCase):
         """
         Test for normalization to a given magnitude for calibration
         """
-        
+
         stdwave=np.linspace(3000,11000,10000)
         stdflux=np.cos(stdwave)+100.
         mags=np.array((20,21))
@@ -153,7 +153,7 @@ class TestFluxCalibration(unittest.TestCase):
         stdwave=np.linspace(3000,11000,10000)
         stdflux=np.cos(stdwave)+100.
         mags=np.array([20,21,22])
-        
+
         # No correct filters
         with self.assertRaises(SystemExit):
             normflux=normalize_templates(stdwave,stdflux,mags,filters)
@@ -165,10 +165,10 @@ class TestFluxCalibration(unittest.TestCase):
         r = speclite.filters.load_filter('decam2014-r')
         rmag = r.get_ab_magnitude(1e-17*normflux, stdwave)
         self.assertAlmostEqual(rmag, mags[-1])
-        
+
         #check dimensionality
         self.assertEqual(stdflux.shape, normflux.shape)
-        
+
     def test_compute_fluxcalibration(self):
         """ Test compute_fluxcalibration interface
         """
@@ -197,6 +197,7 @@ class TestFluxCalibration(unittest.TestCase):
         nstd = 5
         frame.fibermap['OBJTYPE'][0:nstd] = 'STD'
         nstd = np.count_nonzero(frame.fibermap['OBJTYPE'] == 'STD')
+
         frame.flux[0] = np.mean(frame.flux[0])        
         fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[0:nstd],input_model_fibers=np.arange(nstd))
 
@@ -208,8 +209,9 @@ class TestFluxCalibration(unittest.TestCase):
         nstd = 1
         frame.fibermap['OBJTYPE'][2:2+nstd] = 'STD'
         frame.ivar[2:2+nstd, 20:22] = 0
-        
+
         fluxCalib = compute_flux_calibration(frame, modelwave, modelflux[2:2+nstd], input_model_fibers=np.arange(2,2+nstd), debug=True)
+        
         self.assertTrue(np.array_equal(fluxCalib.wave, frame.wave))
         self.assertEqual(fluxCalib.calib.shape,frame.flux.shape)
 
@@ -243,7 +245,7 @@ class TestFluxCalibration(unittest.TestCase):
         frame.flux[0,0:10]=0.0
         apply_flux_calibration(frame, fc)
         self.assertTrue(np.all(frame.flux[0, 0:10] == 0.0))
-        
+
         #fcivar=0 should result in frame.ivar=0
         fcivar=np.ones_like(origframe.flux)
         calib=np.ones_like(origframe.flux)
@@ -262,7 +264,7 @@ class TestFluxCalibration(unittest.TestCase):
         #frame=copy.deepcopy(origframe)
         #apply_flux_calibration(frame,fc)
         #self.assertTrue(np.all(frame.ivar[0,0:10]==0.0))
-        
+
         # test different wavelength bins
         frame=copy.deepcopy(origframe)
         calib = np.ones_like(frame.flux)

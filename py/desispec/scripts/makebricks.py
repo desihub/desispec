@@ -9,7 +9,7 @@ import os.path
 import numpy as np
 
 import desispec.io
-from desispec.log import get_logger, DEBUG
+from desiutil.log import get_logger, DEBUG
 
 
 def parse(options=None):
@@ -87,4 +87,3 @@ def main(args):
     except RuntimeError as e:
         log.critical(str(e))
         return -2
-
