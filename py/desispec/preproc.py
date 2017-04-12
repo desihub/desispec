@@ -319,7 +319,7 @@ def get_calibration_image(calibration_data,calibration_data_path,keyword,entry) 
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
-def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None):
+def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None, nocrosstalk=False):
 
     '''
     preprocess image using metadata in header
@@ -469,7 +469,15 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         if dark.shape != image.shape :
             log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
             raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
-        exptime =  primary_header['EXPTIME']
+        
+        
+        if calibration_data and "EXPTIMEKEY" in calibration_data :
+            exptime_key=calibration_data["EXPTIMEKEY"]
+            log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
+        else :
+            exptime_key="EXPTIME"
+        exptime =  primary_header[exptime_key]
+        
         log.info("Multiplying dark by exptime %f"%(exptime))
         dark *= exptime
 
@@ -573,59 +581,60 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
 
         image[kk] = data*gain
 
-    #- apply cross-talk
+    
+    if not nocrosstalk :
+        #- apply cross-talk
 
-    # the ccd looks like :
-    # C D
-    # A B
-    # for cross talk, we need a symmetric 4x4 flip_matrix
-    # of coordinates ABCD giving flip of both axis
-    # when computing crosstalk of
-    #    A   B   C   D
-    #
-    # A  AA  AB  AC  AD
-    # B  BA  BB  BC  BD
-    # C  CA  CB  CC  CD
-    # D  DA  DB  DC  BB
-    # orientation_matrix_defines change of orientation
-    #
-    fip_axis_0= np.array([[1,1,-1,-1],
-                          [1,1,-1,-1],
-                          [-1,-1,1,1],
-                          [-1,-1,1,1]])
-    fip_axis_1= np.array([[1,-1,1,-1],
-                          [-1,1,-1,1],
-                          [1,-1,1,-1],
-                          [-1,1,-1,1]])
+        # the ccd looks like :
+        # C D
+        # A B 
+        # for cross talk, we need a symmetric 4x4 flip_matrix
+        # of coordinates ABCD giving flip of both axis
+        # when computing crosstalk of 
+        #    A   B   C   D
+        #
+        # A  AA  AB  AC  AD
+        # B  BA  BB  BC  BD
+        # C  CA  CB  CC  CD
+        # D  DA  DB  DC  BB
+        # orientation_matrix_defines change of orientation
+        #
+        fip_axis_0= np.array([[1,1,-1,-1],
+                              [1,1,-1,-1],
+                              [-1,-1,1,1],
+                              [-1,-1,1,1]])    
+        fip_axis_1= np.array([[1,-1,1,-1],
+                              [-1,1,-1,1],
+                              [1,-1,1,-1],
+                              [-1,1,-1,1]])
 
-    for a1 in range(len(amp_ids)) :
-        amp1=amp_ids[a1]
-        ii1 = _parse_sec_keyword(header['CCDSEC'+amp1])
-        a1flux=image[ii1]
-        #a1mask=mask[ii1]
+        for a1 in range(len(amp_ids)) :
+            amp1=amp_ids[a1]
+            ii1 = _parse_sec_keyword(header['CCDSEC'+amp1])
+            a1flux=image[ii1]
+            #a1mask=mask[ii1]
 
-        for a2 in range(len(amp_ids)) :
-            if a1==a2 :
-                continue
-            amp2=amp_ids[a2]
-            if calibration_data is None : continue
-            if not "CROSSTALK%s%s"%(amp1,amp2) in calibration_data : continue
-            crosstalk=calibration_data["CROSSTALK%s%s"%(amp1,amp2)]
-            if crosstalk==0. : continue
-            log.info("Correct for crosstalk=%f from AMP %s into %s"%(crosstalk,amp1,amp2))
-            a12flux=crosstalk*a1flux.copy()
-            #a12mask=a1mask.copy()
-            if fip_axis_0[a1,a2]==-1 :
-                a12flux=a12flux[::-1]
-                #a12mask=a12mask[::-1]
-            if fip_axis_1[a1,a2]==-1 :
-                a12flux=a12flux[:,::-1]
-                #a12mask=a12mask[:,::-1]
-            ii2 = _parse_sec_keyword(header['CCDSEC'+amp2])
-            image[ii2] -= a12flux
-            # mask[ii2]  |= a12mask (not sure we really need to propagate the mask)
-
-
+            for a2 in range(len(amp_ids)) :
+                if a1==a2 :
+                    continue
+                amp2=amp_ids[a2]
+                if calibration_data is None : continue
+                if not "CROSSTALK%s%s"%(amp1,amp2) in calibration_data : continue
+                crosstalk=calibration_data["CROSSTALK%s%s"%(amp1,amp2)]
+                if crosstalk==0. : continue
+                log.info("Correct for crosstalk=%f from AMP %s into %s"%(crosstalk,amp1,amp2))
+                a12flux=crosstalk*a1flux.copy()
+                #a12mask=a1mask.copy()
+                if fip_axis_0[a1,a2]==-1 :
+                    a12flux=a12flux[::-1]
+                    #a12mask=a12mask[::-1]
+                if fip_axis_1[a1,a2]==-1 :
+                    a12flux=a12flux[:,::-1]
+                    #a12mask=a12mask[:,::-1]
+                ii2 = _parse_sec_keyword(header['CCDSEC'+amp2])
+                image[ii2] -= a12flux
+                # mask[ii2]  |= a12mask (not sure we really need to propagate the mask)
+    
     #- Divide by pixflat image
     pixflat = get_calibration_image(calibration_data,calibration_data_path,"PIXFLAT",pixflat)
     if pixflat is not False :

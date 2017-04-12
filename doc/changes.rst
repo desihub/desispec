@@ -9,8 +9,10 @@ desispec Change Log
   :func:`~desispec.log.get_logger` now prints a warning that users need
   to switch.
 * Working DTS delivery script and DTS simulator (PR `#367`_).
+* Preproc updates for crosstalk and teststand data (PR `#370`_).
 
 .. _`#367`: https://github.com/desihub/desispec/pull/367
+.. _`#370`: https://github.com/desihub/desispec/pull/370
 
 0.13.2 (2017-03-27)
 -------------------
