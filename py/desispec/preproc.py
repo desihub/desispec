@@ -470,11 +470,13 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
             log.error('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
             raise ValueError('shape mismatch dark {} != image {}'.format(dark.shape, image.shape))
         
-        if 'EXPREQ' in primary_header :
-            exptime =  primary_header['EXPREQ']
-            log.warning("On teststand data use EXPREQ and not EXPTIME which is unreliable")
+        
+        if calibration_data and "EXPTIMEKEY" in calibration_data :
+            exptime_key=calibration_data["EXPTIMEKEY"]
+            log.info("Using exposure time keyword %s for dark normalization"%exptime_key)
         else :
-            exptime =  primary_header['EXPTIME']
+            exptime_key="EXPTIME"
+        exptime =  primary_header[exptime_key]
         
         log.info("Multiplying dark by exptime %f"%(exptime))
         dark *= exptime
