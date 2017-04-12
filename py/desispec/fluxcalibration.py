@@ -18,17 +18,21 @@ import time
 from astropy import units
 import multiprocessing
 from pkg_resources import resource_exists, resource_filename
-#import scipy.interpolate
 
-#rebin spectra into new wavebins. This should be equivalent to desispec.interpolation.resample_flux. So may not be needed here
-#But should move from here anyway.
-
-def rebinSpectra(spectra,oldWaveBins,newWaveBins):
-    tck=scipy.interpolate.splrep(oldWaveBins,spectra,s=0,k=1)
-    specnew=scipy.interpolate.splev(newWaveBins,tck,der=0)
-    return specnew
 
 def applySmoothingFilter(flux,width=200,margin_correction=True) :
+    """ Return a smoothed version of the input flux array using a median filter
+
+    Args:
+        flux  : 1D array of flux 
+        width : size of the median filter box
+        margin_correction : returns original flux on margins because the median filter is biased
+    
+    Returns:
+        smooth_flux : median filtered flux of same size as input
+        ivar : array of same size as input, 0 on the edges if margin_correction is True
+    """
+
     # it was checked that the width of the median_filter has little impact on best fit stars
     # smoothing the ouput (with a spline for instance) does not improve the fit
     tmp=scipy.ndimage.filters.median_filter(flux,width)
@@ -62,6 +66,23 @@ except TypeError:
     hc = 1.9864458241717586e-08
 
 def resample_template(data_wave_per_camera,resolution_data_per_camera,template_wave,template_flux,template_id) :
+    """Resample a spectral template on the data wavelength grid. Then convolve the spectra by the resolution
+    for each camera. Also returns the result of applySmoothingFilter. This routine is used internally in
+    a call to multiprocessing.Pool. 
+    
+    Args:
+        data_wave_per_camera : A dictionary of 1D array of vacuum wavelengths [Angstroms], one entry per camera and exposure.
+        resolution_data_per_camera :  A dictionary of resolution corresponding for the fiber, one entry per camera and exposure.
+        template_wave : 1D array, input spectral template wavelength [Angstroms] (arbitrary spacing).
+        template_flux : 1D array, input spectral template flux density.
+        template_id   : int, template identification index, used to ensure matching of input/output after a multiprocessing run.
+    
+    Returns:
+        template_id   : int, template identification index, same as input.
+        output_wave   : A dictionary of 1D array of vacuum wavelengths
+        output_flux   : A dictionary of 1D array of output template flux
+        output_norm   : A dictionary of 1D array of output template smoothed flux
+    """
     output_wave=np.array([])
     output_flux=np.array([])
     output_norm=np.array([])
@@ -79,14 +100,17 @@ def resample_template(data_wave_per_camera,resolution_data_per_camera,template_w
 
 
 def _func(arg) :
+    """ Used for multiprocessing.Pool """
     return resample_template(**arg)
 
-def smooth_template(template_id,camera_index,template_flux) :
+def _smooth_template(template_id,camera_index,template_flux) :
+    """ Used for multiprocessing.Pool """
     norme,ivar = applySmoothingFilter(template_flux)
     return template_id,camera_index,norme
 
 def _func2(arg) :
-    return smooth_template(**arg)
+    """ Used for multiprocessing.Pool """
+    return _smooth_template(**arg)
 
 def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.005, z_res=0.00005, template_error=0.):
     """ Redshift fit of a single template
@@ -98,7 +122,10 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
         resolution_data: resolution corresponding to the star's fiber
         stdwave : 1D standard star template wavelengths [Angstroms]
         stdflux : 1D[nwave] template flux        
-        
+        z_max : float, maximum blueshift and redshift in scan, has to be positive
+        z_res : float, step of of redshift scan between [-z_max,+z_max]
+        template_error : float, assumed template flux relative error
+
     Returns:
         redshift : redshift of standard star
         
@@ -205,7 +232,14 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
    
 
 def _compute_coef(coord,node_coords) :
-    """ Function used by interpolate_on_parameter_grid2    
+    """ Function used by interpolate_on_parameter_grid2
+
+    Args:
+        coord : 1D array of coordinates of size n_axis
+        node_coords : 2D array of coordinates of nodes, shape = (n_nodes,n_axis)
+
+    Returns:
+        coef : 1D array of linear coefficients for each node, size = n_nodes   
     """
     
     n_nodes=node_coords.shape[0]
@@ -247,8 +281,8 @@ def interpolate_on_parameter_grid(data_wave, data_flux, data_ivar, template_flux
         template_chi2 : 1D[ntemplatess] array of precomputed chi2 = sum(data_ivar*(data_flux-template_flux)**2)
     
     Returns:
-       coefficients : best fit coefficient of linear combination of templates
-       chi2 : chi2 of the linear combination
+        coefficients : best fit coefficient of linear combination of templates
+        chi2 : chi2 of the linear combination
     """
     
     log = get_logger()
