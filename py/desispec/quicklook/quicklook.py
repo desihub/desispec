@@ -205,7 +205,10 @@ def getobject(conf,log):
     try:
         mod=__import__(conf["ModuleName"],fromlist=[conf["ClassName"]])
         klass=getattr(mod,conf["ClassName"])
-        return klass(conf["Name"],conf)
+        if "Name" in conf.keys():            
+            return klass(conf["Name"],conf)
+        else:
+            return klass(conf["ClassName"],conf)
     except Exception as e:
         log.error("Failed to import {} from {}. Error was '{}'".format(conf["ClassName"],conf["ModuleName"],e))
         return None

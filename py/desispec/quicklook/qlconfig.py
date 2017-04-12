@@ -317,10 +317,10 @@ def build_config(config):
     pipeline = []
     for ii,PA in enumerate(config.palist):
         pipe={'OutputFile': config.dump_qa()[1][0][PA]}
-        pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'Name': PA, 'kwargs': config.paargs[PA]}
+        pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'kwargs': config.paargs[PA]}
         pipe['QAs']=[]
         for jj, QA in enumerate(config.qalist[PA]):
-            pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'Name': QA, 'kwargs': config.qaargs[QA]}
+            pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'kwargs': config.qaargs[QA]}
             pipe['QAs'].append(pipe_qa)
         pipe['StepName']=PA
         pipeline.append(pipe)
