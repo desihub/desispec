@@ -24,6 +24,7 @@ b1:
     DATE-OBS-END: None
     DOSVER: trunk
     FEEVER: v20160312
+    EXPTIMEKEY: EXPREQ
     GAINA: 0.587
     GAINB: 0.614
     GAINC: 0.630
@@ -66,6 +67,7 @@ r1:
     DATE-OBS-END: None
     DOSVER: trunk
     FEEVER: v20160312
+    EXPTIMEKEY: EXPREQ
     GAINA: 1.6
     GAINB: 1.658
     GAINC: 1.726
@@ -110,6 +112,7 @@ z1:
     DATE-OBS-END: None
     DOSVER: trunk
     FEEVER: v20160312
+    EXPTIMEKEY: EXPREQ
     GAINA: 0.970
     GAINB: 0.978
     GAINC: 0.9
@@ -134,7 +137,7 @@ z1:
     OVERSCANC: PER_ROW  
     BIAS: 20170131/bias-z1.fits
     DARK: 20170131/dark-z1.fits
-    MASK: 20170131/mask-z1.fits
+    MASK: 20161221/mask-z1.fits
     
   SIM:
       AMPLIFIERS: '1234'      
