@@ -94,13 +94,14 @@ class Make_Config(object):
             elif self.camera[0] == 'z':
                 self.wavelength='7650,9830,0.8'
 
+        #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
         paopt_initialize={'camera': self.camera}
 
         paopt_preproc={'camera': self.camera, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("pix")} 
 
-        paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psfboot, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("frame")}
+        paopt_extract={'BoxWidth': 2.5, 'FiberMap': '%%FiberMap', 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': '%%PSFFile', 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("frame")}
 
-        paopt_apfflat={'FiberFlatFile': self.fiberflat, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("fframe")}
+        paopt_apfflat={'FiberFlatFile': '%%FiberFlatFile', 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("fframe")}
        
         paopt_skysub={'DumpIntermediates': self.dumpintermediates,'dumpfile': self.dump_pa("sframe")}
 
@@ -168,7 +169,7 @@ class Make_Config(object):
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': '%%PSFFile', 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': '%%FiberMap', 'param': params, 'qlf': self.qlf}
                 
         return qaopts 
    
