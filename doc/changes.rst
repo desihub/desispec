@@ -10,9 +10,11 @@ desispec Change Log
   to switch.
 * Working DTS delivery script and DTS simulator (PR `#367`_).
 * Preproc updates for crosstalk and teststand data (PR `#370`_).
+* Flux calibration algorithm updates (PR `#371`_).
 
 .. _`#367`: https://github.com/desihub/desispec/pull/367
 .. _`#370`: https://github.com/desihub/desispec/pull/370
+.. _`#371`: https://github.com/desihub/desispec/pull/371
 
 0.13.2 (2017-03-27)
 -------------------
