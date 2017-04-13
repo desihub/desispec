@@ -35,11 +35,15 @@ class Make_Config(object):
         self.amps=amps
 
         if rawdata_dir is None:
-            rawdata_dir=os.getenv('DESI_SPECTRO_DATA')
+            if 'QL_SPEC_DATA' not in os.environ:
+                log.critical("must set ${} environment variable".format('QL_SPEC_DATA'))
+            rawdata_dir=os.getenv('QL_SPEC_DATA')
         self.rawdata_dir=rawdata_dir 
 
         if specprod_dir is None:
-            specprod_dir=os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'))
+            if 'QL_SPEC_REDUX' not in os.environ:
+                log.critical("must set ${} environment variable".format('QL_SPEC_REDUX'))
+            specprod_dir=os.getenv('QL_SPEC_REDUX')
         self.specprod_dir=specprod_dir
 
         self.outdir=outdir
