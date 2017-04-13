@@ -33,6 +33,10 @@ def parse(options=None):
                         help = 'path of DESI sky fits file')
     parser.add_argument('--models', type = str, default = None, required=True,
                         help = 'path of spetro-photometric stellar spectra fits file')
+    parser.add_argument('--chi2cut', type = float, default = 0., required=False,
+                        help = 'apply a reduced chi2 cut for the selection of stars')
+    parser.add_argument('--chi2cut-nsig', type = float, default = 3., required=False,
+                        help = 'discard n-sigma outliers from the reduced chi2 of the standard star fit')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI flux calbration fits file')
     parser.add_argument('--qafile', type=str, default=None, required=False,
@@ -73,21 +77,48 @@ def main(args) :
     log.info("compute flux calibration")
 
     # read models
-    model_flux,model_wave,model_fibers=read_stdstar_models(args.models)
+    model_flux,model_wave,model_fibers,model_metadata=read_stdstar_models(args.models)
 
+    if args.chi2cut > 0 :
+        ok = np.where(model_metadata["CHI2DOF"]<args.chi2cut)[0]
+        if ok.size == 0 :
+            log.error("chi2cut has discarded all stars")
+            sys.exit(12)
+        nstars=model_flux.shape[0]
+        nbad=nstars-ok.size
+        if nbad>0 :
+            log.warning("discarding %d star(s) out of %d because of chi2cut"%(nbad,nstars))
+            model_flux=model_flux[ok]
+            model_fibers=model_fibers[ok]
+            model_metadata=model_metadata[:][ok]
+    
+    # automatically reject stars that ar chi2 outliers
+    if args.chi2cut_nsig > 0 :
+        mchi2=np.median(model_metadata["CHI2DOF"])
+        rmschi2=np.std(model_metadata["CHI2DOF"])
+        maxchi2=mchi2+args.chi2cut_nsig*rmschi2
+        ok=np.where(model_metadata["CHI2DOF"]<maxchi2)[0]
+        nstars=model_flux.shape[0]
+        nbad=nstars-ok.size
+        if nbad>0 :
+            log.warning("discarding %d star(s) out of %d because reduced chi2 outliers (at %d sigma, giving rchi2<%f )"%(nbad,nstars,args.chi2cut_nsig,maxchi2))
+            model_flux=model_flux[ok]
+            model_fibers=model_fibers[ok]
+            model_metadata=model_metadata[:][ok]
+    
     # check that the model_fibers are actually standard stars
     fibermap = frame.fibermap
 
     ## check whether star fibers from args.models are consistent with fibers from fibermap
     ## if not print the OBJTYPE from fibermap for the fibers numbers in args.models and exit
-
-    w = np.where(fibermap["OBJTYPE"][model_fibers] != 'STD')[0]
+    w = np.where(fibermap["OBJTYPE"][model_fibers%500] != 'STD')[0]
+    
     if len(w)>0:
-        for i in model_fibers:
+        for i in model_fibers%500:
             log.error("inconsistency with spectrum %d, OBJTYPE='%s' in fibermap"%(i,fibermap["OBJTYPE"][i]))
         sys.exit(12)
 
-    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux)
+    fluxcalib = compute_flux_calibration(frame, model_wave, model_flux, model_fibers%500)
 
     # QA
     if (args.qafile is not None):
