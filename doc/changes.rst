@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.13.3 (unreleased)
+0.14.1 (unreleased)
+-------------------
+
+* No changes yet
+
+0.14.0 (2017-04-13)
 -------------------
 
 * Replace all instances of :mod:`desispec.log` with ``desiutil.log``;
@@ -11,10 +16,14 @@ desispec Change Log
 * Working DTS delivery script and DTS simulator (PR `#367`_).
 * Preproc updates for crosstalk and teststand data (PR `#370`_).
 * Flux calibration algorithm updates (PR `#371`_).
+* Adds quicklook integration test (PR `#361`_).
+* Fixes brickname calculation (PR `#373`_).
 
 .. _`#367`: https://github.com/desihub/desispec/pull/367
 .. _`#370`: https://github.com/desihub/desispec/pull/370
 .. _`#371`: https://github.com/desihub/desispec/pull/371
+.. _`#361`: https://github.com/desihub/desispec/pull/361
+.. _`#373`: https://github.com/desihub/desispec/pull/361
 
 0.13.2 (2017-03-27)
 -------------------
