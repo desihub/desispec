@@ -97,7 +97,7 @@ def main(args) :
         mchi2=np.median(model_metadata["CHI2DOF"])
         rmschi2=np.std(model_metadata["CHI2DOF"])
         maxchi2=mchi2+args.chi2cut_nsig*rmschi2
-        ok=np.where(model_metadata["CHI2DOF"]<maxchi2)[0]
+        ok=np.where(model_metadata["CHI2DOF"]<=maxchi2)[0]
         nstars=model_flux.shape[0]
         nbad=nstars-ok.size
         if nbad>0 :
