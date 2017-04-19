@@ -14,7 +14,6 @@ from desiutil.depend import add_dependencies
 import desispec.io.util
 import desispec.preproc
 from desiutil.log import get_logger
-# log = get_logger()
 
 def read_raw(filename, camera, **kwargs):
     '''
@@ -30,6 +29,9 @@ def read_raw(filename, camera, **kwargs):
 
     Returns Image object with member variables pix, ivar, mask, readnoise
     '''
+    
+    log = get_logger()
+    
     fx = fits.open(filename, memmap=False)
     if camera.upper() not in fx:
         raise IOError('Camera {} not in {}'.format(camera, filename))
