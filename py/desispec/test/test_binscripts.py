@@ -14,6 +14,9 @@ from desispec.sky import SkyModel
 from desispec import io
 from desispec.util import runcmd
 import desispec.scripts
+import desispec.scripts.sky
+import desispec.scripts.fiberflat
+import desispec.scripts.fluxcalibration
 
 class TestBinScripts(unittest.TestCase):
 
@@ -134,14 +137,17 @@ class TestBinScripts(unittest.TestCase):
         """Write a fake StdStar model file"""
         # First generation is very simple
         wave = 5000+np.arange(self.nwave)
-        stdflux = np.ones((self.nspec, self.nwave))
+        stdflux = np.ones((2, self.nwave))
         fibers = np.array([1,4]).astype(int)
-        hdu1=fits.PrimaryHDU(stdflux)
-        hdu1.header['EXTNAME'] = 'FLUX'
-        hdu2=fits.ImageHDU(wave, name='WAVELENGTH')
-        hdu3=fits.ImageHDU(fibers, name='FIBERS')
-        hdulist=fits.HDUList([hdu1,hdu2,hdu3])
-        hdulist.writeto(self.stdfile,clobber=True)
+        data={}
+        data['LOGG']=4.*np.ones(fibers.size)
+        data['TEFF']=6000.*np.ones(fibers.size)
+        data['FEH']=np.zeros(fibers.size)
+        data['COEF']=np.zeros((fibers.size,12))
+        # cannot be exactly the same values 
+        data['CHI2DOF']=np.ones(fibers.size)+0.1*(fibers%2) 
+        data['REDSHIFT']=np.zeros(fibers.size)
+        io.write_stdstar_models(self.stdfile,stdflux,wave,fibers,data)
 
     def _remove_files(self, filenames):
         '''Utility to cleanup output files if they exist'''

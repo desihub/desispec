@@ -21,8 +21,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
         normalizedFlux : 2D array of flux[nstdstars, nwave]
         wave : 1D array of wavelengths[nwave] in Angstroms
         fibers : 1D array of fiberids for these spectra
-        data : meta data table about which templates best fit; should include
-            BESTMODEL, TEMPLATEID, CHI2DOF, REDSHIFT
+        data : meta data table about which templates best fit
     """
     hdr = fitsheader(header)
     add_dependencies(hdr)
@@ -37,19 +36,24 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
 
     hdu3 = fits.ImageHDU(fibers, name='FIBERS')
 
+    # metadata
     from astropy.io.fits import Column
-    BESTMODEL=Column(name='BESTMODEL',format='K',array=data['BESTMODEL'])
-    TEMPLATEID=Column(name='TEMPLATEID',format='K',array=data['TEMPLATEID'])
-    CHI2DOF=Column(name='CHI2DOF',format='D',array=data['CHI2DOF'])
-    REDSHIFT=Column(name='REDSHIFT',format='D',array=data['REDSHIFT'])
-    cols=fits.ColDefs([BESTMODEL,TEMPLATEID,CHI2DOF,REDSHIFT])
-    tbhdu=fits.BinTableHDU.from_columns(cols, name='METADATA')
+    cols=[]
+    for k in data.keys() :
+        if len(data[k].shape)==1 :
+            cols.append(Column(name=k,format='D',array=data[k]))
+    tbhdu=fits.BinTableHDU.from_columns(fits.ColDefs(cols), name='METADATA')
 
     hdulist=fits.HDUList([hdu1,hdu2,hdu3,tbhdu])
+
+    # add coefficients
+    if "COEFF" in data :
+        hdulist.append(fits.ImageHDU(data["COEFF"],name="COEFF"))
+    
     tmpfile = norm_modelfile+".tmp"
     hdulist.writeto(tmpfile, clobber=True, checksum=True)
     os.rename(tmpfile, norm_modelfile)
-    #fits.append(norm_modelfile,cols,header=tbhdu.header)
+    
 
 def read_stdstar_models(filename):
     """Read stdstar models from filename.
@@ -64,8 +68,10 @@ def read_stdstar_models(filename):
         flux = native_endian(fx['FLUX'].data.astype('f8'))
         wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
         fibers = native_endian(fx['FIBERS'].data)
-    
-    return flux, wave, fibers
+        metadata = fx['METADATA'].data
+        
+
+    return flux, wave, fibers , metadata
 
 
 def write_flux_calibration(outfile, fluxcalib, header=None):

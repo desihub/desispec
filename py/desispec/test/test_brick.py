@@ -23,7 +23,7 @@ class TestBrick(unittest.TestCase):
         self.ra = np.linspace(0, 3, n) - 1.5
         self.dec = np.linspace(0, 3, n) - 1.5
         self.names = np.array(
-            ['3587m015', '3592m010', '3597m010', '3597m005', '0002p000',
+            ['3587m015', '3587m010', '3592m010', '3597m005', '3597p000',
             '0002p000', '0007p005', '0007p010', '0012p010', '0017p015'])
 
     def test_brickname_scalar(self):
@@ -38,6 +38,26 @@ class TestBrick(unittest.TestCase):
         bricknames = brickname(self.ra, self.dec)
         self.assertEqual(len(bricknames), len(self.ra))
         self.assertTrue((bricknames == self.names).all())
+
+    def test_brickname_wrap(self):
+        """Test RA wrap and poles for bricknames"""
+        b1 = brickname(1, 0)
+        b2 = brickname(361, 0)
+        self.assertEqual(b1, b2)
+
+        b1 = brickname(-0.5, 0)
+        b2 = brickname(359.5, 0)
+        self.assertEqual(b1, b2)
+
+        b1 = brickname(0, 90)
+        b2 = brickname(90, 90)
+        self.assertEqual(b1, b2)
+        self.assertEqual(b1, '1800p900')
+
+        b1 = brickname(0, -90)
+        b2 = brickname(90, -90)
+        self.assertEqual(b1, b2)
+        self.assertEqual(b1, '1800m900')
 
     def test_brickname_list(self):
         """Test list to brick name conversion.

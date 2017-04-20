@@ -24,9 +24,6 @@ from desiutil.log import get_logger
 
 from . import pipehelpers as ph
 
-
-
-
 class TestPipelineRun(unittest.TestCase):
 
     def setUp(self):
@@ -39,10 +36,9 @@ class TestPipelineRun(unittest.TestCase):
         ph.fake_env(self.raw, self.redux, self.prod, self.model)
 
     def tearDown(self):
-        if os.path.exists(self.raw):
-            shutil.rmtree(self.raw)
-        if os.path.exists(self.redux):
-            shutil.rmtree(self.redux)
+        for dirname in [self.raw, self.redux, self.model]:
+            if os.path.exists(dirname):
+                shutil.rmtree(dirname)
         ph.fake_env_clean()
 
     def test_run(self):
@@ -82,6 +78,8 @@ class TestPipelineRun(unittest.TestCase):
         sp.call(com, shell=True, env=os.environ.copy())
 
 
-#- This runs all test* functions in any TestCase class in this file
-if __name__ == '__main__':
-    unittest.main()
+def test_suite():
+    """Allows testing of only this module with the command::
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
