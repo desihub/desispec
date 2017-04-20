@@ -5,8 +5,10 @@ desispec Change Log
 0.14.1 (unreleased)
 -------------------
 
-* Set default brick size to 0.25 sq. deg. in desispec.brick
-* Added function to calculate BRICKID at a given location
+* Set default brick size to 0.25 sq. deg. in desispec.brick (PR `#378`_).
+* Added function to calculate BRICKID at a given location (PR `#378`_).
+
+.. _`#378`: https://github.com/desihub/desispec/pull/378
 
 0.14.0 (2017-04-13)
 -------------------
