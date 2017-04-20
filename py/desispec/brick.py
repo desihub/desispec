@@ -21,7 +21,7 @@ import numpy as np
 class Bricks(object):
     """Bricks Object
     """
-    def __init__(self, bricksize=0.5):
+    def __init__(self, bricksize=0.25):
         """Create Bricks object such that all bricks have longest size < bricksize
         """
         #- Brick row centers and edges
@@ -104,6 +104,48 @@ class Bricks(object):
         else:
             return names
 
+    def brickid(self, ra, dec):
+        """Return the BRICKID for a given location
+
+        Parameters
+        ----------
+        ra : array_like.
+            The Right Ascensions of the locations of interest
+        dec : array_like.
+            The Declinations of the locations of interest
+        
+        Returns
+        -------
+        brickid : array_like.
+            The legacysurvey BRICKID at the locations of interest
+        """
+        #ADM record whether the user wanted non-array behavior
+        inscalar = np.isscalar(ra)
+
+        #ADM enforce array behavior and correct for wraparound
+        ra = np.atleast_1d(ra) % 360
+        dec = np.atleast_1d(dec)
+
+        #ADM the brickrow based on the declination
+        brickrow = ((dec+90.0+self._bricksize/2)/self._bricksize).astype(int)
+
+        #ADM the brickcolumn based on the RA
+        ncol = self._ncol_per_row[brickrow]
+        brickcol = (ra/360.0 * ncol).astype(int)
+
+        #ADM the total number of BRICKIDs at the START of a given row
+        ncolsum = np.cumsum(np.append(0,self._ncol_per_row))
+
+        #ADM the BRICKID is just the sum of the number of columns up until
+        #ADM the row of interest, and the number of columns along that row
+        #ADM accounting for the indexes of the columns starting at 0
+        brickid = ncolsum[brickrow] + brickcol + 1
+
+        #ADM returns the brickid as a scalar or array (depending on what was passed)
+        if inscalar:
+            return brickid[0]
+        return brickid
+
     def brick_radec(self, ra, dec):
         """Return center (ra,dec) of brick that contains input (ra, dec) [deg]
         """
@@ -123,7 +165,7 @@ class Bricks(object):
         return xra, xdec
 
 _bricks = None
-def brickname(ra, dec, bricksize=0.5):
+def brickname(ra, dec, bricksize=0.25):
     """Return brick name of brick covering (ra, dec) [degrees]
     """
     global _bricks
