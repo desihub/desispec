@@ -240,15 +240,18 @@ class TestIO(unittest.TestCase):
         """Test creating empty fibermap objects.
         """
         from ..io.fibermap import empty_fibermap
-        fibermap = empty_fibermap(10)
-        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)))
-        self.assertTrue(np.all(fibermap['SPECTROID'] == 0))
-        fibermap = empty_fibermap(10, specmin=20)
-        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)+20))
-        self.assertTrue(np.all(fibermap['SPECTROID'] == 0))
-        fibermap = empty_fibermap(10, specmin=495)
-        self.assertTrue(np.all(fibermap['FIBER'] == np.arange(10)+495))
-        self.assertTrue(np.all(fibermap['SPECTROID'] == [0,0,0,0,0,1,1,1,1,1]))
+        fm1 = empty_fibermap(20)
+        self.assertTrue(np.all(fm1['FIBER'] == np.arange(20)))
+        self.assertTrue(np.all(fm1['SPECTROID'] == 0))
+
+        fm2 = empty_fibermap(25, specmin=10)
+        self.assertTrue(np.all(fm2['FIBER'] == np.arange(25)+10))
+        self.assertTrue(np.all(fm2['SPECTROID'] == 0))
+        self.assertTrue(np.all(fm2['LOCATION'][0:10] == fm1['LOCATION'][10:20]))
+
+        fm3 = empty_fibermap(10, specmin=495)
+        self.assertTrue(np.all(fm3['FIBER'] == np.arange(10)+495))
+        self.assertTrue(np.all(fm3['SPECTROID'] == [0,0,0,0,0,1,1,1,1,1]))
 
     def test_fibermap_rw(self):
         """Test reading and writing fibermap files.
