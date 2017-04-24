@@ -6,40 +6,10 @@ import numpy as np
 import os,sys
 from desispec.quicklook import pas
 from desispec.quicklook import qlexceptions,qllogger
-from desispec.resolution import Resolution
 
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
-def get_resolution(wave,flux,ivar,psf,usepsfboot=True):
-    """
-    Calculates approximage resolution values in the format that can directly
-    feed resolution data of desispec.frame.Frame object. 
-    
-    To zeroth order, we use psfboot xsigma values (constant resolution per fiber). 
-    Note: This is not the resolution of boxcar extraction!
-     
-    TODO: Replace this resolution to account for variation in dispersion direction
-          using extraction of arc and propagating the coefficients of the fit 
-          to possibly a new psf file so that resolution data can be evaluated on the fly 
-          for science exposures. This work is in progress.
-
-    wave: wavelength array
-    flux: (nspec,nwave) array of fluxes
-    ivar: (nspec,nwave) array of inverse variances
-    psf: desispec.psf.PSF like object
-    """
-    nspec=flux.shape[0]
-    nwave=flux.shape[1]
-    resolution_data=np.zeros((nspec,21,nwave))
-    if usepsfboot:
-        if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot
-            log.info("Getting resolution matrix band diagonal elements from constant Gaussing Xsigma")
-            for ispec in range(nspec):
-                thissigma=psf.xsigma(ispec,wave) 
-                Rsig=Resolution(thissigma)
-                resolution_data[ispec]=Rsig.data
-    return resolution_data
 
 class Initialize(pas.PipelineAlg):
     """
