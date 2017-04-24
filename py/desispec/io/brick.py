@@ -77,7 +77,7 @@ class BrickBase(object):
                 self.channel = 'brz'  #- could be any spectrograph channel
 
             # Create the parent directory, if necessary.
-            head,tail = os.path.split(self.path)
+            head,tail = os.path.split(os.path.abspath(self.path))
             if not os.path.exists(head):
                 os.makedirs(head)
             # Create empty HDUs. It would be good to refactor io.frame to avoid any duplication here.
