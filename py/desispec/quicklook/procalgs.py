@@ -685,3 +685,57 @@ class SubtractSky_QL(pas.PipelineAlg):
 
         return (sframe,skymodel)
 
+class ResolutionFit(pas.PipelineAlg):
+
+    """
+    Fitting of Arc lines on extracted arc spectra, polynomial expansion of the fitted sigmas, and updating
+    the coefficients to the new PSF file
+    """ 
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Resolution Fitting"
+        from  desispec.frame import Frame as fr
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if "PSFbootfile" not in kwargs:
+            psfbootfile=kwargs["PSFbootfile"] 
+
+        if "PSFoutfile" not in kwargs:
+            psfoutfile=kwargs["PSFoutfile"]
+
+        input_frame=args[0]
+
+        if "Linelist" in kwargs:
+            linelist=kwargs["Linelist"]
+        if "NPOLY" in kwargs:
+            npoly=kwargs["NPOLY"]
+        if "NBINS" in kwargs:
+            nbins=kwargs["NBINS"]
+
+        return self.run_pa(input_frame, psfbootfile=psfbootfile, outfile=psfoutfile, linelist=linelist, npoly=npoly, nbins=nbins)
+    
+    def run_pa(self,input_frame,psfbootfile=None,outfile=None,linelist=None,npoly=5,nbins=2):
+        from desispec.quicklook.arcprocess import process_arc,write_psffile
+        wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins)
+        if psfbootfile is not None & outfile is not None: #- write if outfile is given
+            write_psffile(psfbootfile,wcoeffs,outfile)
+        #- update the arc frame resolution from new coeffs
+        from desiutil import funcfits as dufits
+        from desispec.resolution import Resolution
+        from np.polynomial.legendre import legval
+
+        nspec=input_frame.flux.shape[0]
+        for spec in range(len(nspec)):
+            ww=input_frame.wavelength
+            wv=2.-(ww-ww[0])/(ww[-1]-ww[0])-1.
+            wsigmas=legval(wv,wcoeffs[spec])  
+            Rsig=Resolution(wsigmas)
+            input_frame.resolution_data[ispec]=Rsig.data    
+ 
+        return input_frame
+
