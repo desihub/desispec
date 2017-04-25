@@ -129,7 +129,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usepsfboot=
         ivar[:,spec]*=dwave**2
         fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
-    #- Add zeroth order resolution from a constant Gaussian Xsigma from psfboot
+    #- Get resolution from the psf  
     from desispec.quicklook.palib import get_resolution
     resolution=get_resolution(wtarget,fflux,iivar,psf,usepsfboot=usepsfboot)
 

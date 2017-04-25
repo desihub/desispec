@@ -99,5 +99,14 @@ def get_resolution(wave,flux,ivar,psf,usepsfboot=True):
                 thissigma=psf.xsigma(ispec,wave) 
                 Rsig=Resolution(thissigma)
                 resolution_data[ispec]=Rsig.data
+
+    else:
+        if hasattr(psf,'wcoeff'): #- use if have wsigmas
+            log.info("Getting resolution from wsigmas of extracted arcs")
+            for ispec in range(nspec):
+                thissigma=psf.wdisp(ispec,wave)
+                Rsig=Resolution(thissigma)
+                resolution_data[ispec]=Rsig.data
+
     return resolution_data
 

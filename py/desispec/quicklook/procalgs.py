@@ -702,28 +702,42 @@ class ResolutionFit(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if "PSFbootfile" not in kwargs:
+
+        psfbootfile=None
+        if "PSFbootfile" in kwargs:
             psfbootfile=kwargs["PSFbootfile"] 
 
-        if "PSFoutfile" not in kwargs:
+        psfoutfile=None
+        if "PSFoutfile" in kwargs:
             psfoutfile=kwargs["PSFoutfile"]
 
         input_frame=args[0]
 
+        linelist=None
         if "Linelist" in kwargs:
             linelist=kwargs["Linelist"]
+
+        npoly=5
         if "NPOLY" in kwargs:
             npoly=kwargs["NPOLY"]
+
+        nbins=2
         if "NBINS" in kwargs:
             nbins=kwargs["NBINS"]
+        
+        domain=None
+        if "DOMAIN" in kwargs: #- domain for fitting polynomial
+            domain=kwargs["DOMAIN"]
 
-        return self.run_pa(input_frame, psfbootfile=psfbootfile, outfile=psfoutfile, linelist=linelist, npoly=npoly, nbins=nbins)
+        return self.run_pa(input_frame, psfbootfile=psfbootfile, outfile=psfoutfile, linelist=linelist, npoly=npoly, nbins=nbins,domain=domain)
     
-    def run_pa(self,input_frame,psfbootfile=None,outfile=None,linelist=None,npoly=5,nbins=2):
+    def run_pa(self,input_frame,psfbootfile=None,outfile=None,linelist=None,npoly=5,nbins=2,domain=None):
         from desispec.quicklook.arcprocess import process_arc,write_psffile
-        wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins)
+
+        wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
         if psfbootfile is not None & outfile is not None: #- write if outfile is given
             write_psffile(psfbootfile,wcoeffs,outfile)
+            log.info("Wrote psf file {}".format(outfile))
         #- update the arc frame resolution from new coeffs
         from desiutil import funcfits as dufits
         from desispec.resolution import Resolution
