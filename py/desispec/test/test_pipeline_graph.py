@@ -25,6 +25,7 @@ class TestPipelineGraph(unittest.TestCase):
         self.raw = ph.fake_raw()
         self.redux = ph.fake_redux(self.prod)
         ph.fake_env(self.raw, self.redux, self.prod, self.redux)
+        self.specs = [ x for x in range(10) ]
 
     def tearDown(self):
         if os.path.exists(self.raw):
@@ -159,7 +160,7 @@ class TestPipelineGraph(unittest.TestCase):
 
 
     def test_graph_path(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night())
+        grph, expcnt, bricks = graph_night(ph.fake_night(), self.specs, False)
         for key, val in grph.items():
             path = graph_path(key)
             self.assertTrue(path != "")
@@ -168,7 +169,7 @@ class TestPipelineGraph(unittest.TestCase):
 
 
     def test_graph_prune(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night())
+        grph, expcnt, bricks = graph_night(ph.fake_night(), self.specs, False)
         # prune one science exposure, check that everything from stdstars onward
         # is cut
         graph_prune(grph, "{}_pix-r0-00000002".format(ph.fake_night()), descend=True)
@@ -179,7 +180,7 @@ class TestPipelineGraph(unittest.TestCase):
 
 
     def test_graph_slice(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night())
+        grph, expcnt, bricks = graph_night(ph.fake_night(), self.specs, False)
         newgrph = graph_slice(grph, types=["frame"], deps=True)
         # the new graph should have frame objects and their immediate
         # dependencies.
@@ -189,7 +190,7 @@ class TestPipelineGraph(unittest.TestCase):
 
 
     def test_graph_set_recursive(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night())
+        grph, expcnt, bricks = graph_night(ph.fake_night(), self.specs, False)
         # change state of one science exposure
         graph_set_recursive(grph, "{}_pix-r0-00000002".format(ph.fake_night()), "fail")
         for key, val in grph.items():
