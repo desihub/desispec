@@ -54,6 +54,14 @@ class Worker(object):
         """
         return 1
 
+    def task_time(self):
+        """
+        An estimate in minutes for the time needed to complete one task
+        using the maximum number of supported processes.  A zero value
+        indicates no information.
+        """
+        return 0
+
     def default_options(self):
         """
         The default options dictionary for this worker.
@@ -87,6 +95,8 @@ class WorkerBootcalib(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 15
 
     def default_options(self):
         opts = {}
@@ -172,6 +182,9 @@ class WorkerSpecex(Worker):
 
 
     def max_nproc(self):
+        return 20
+
+    def task_time(self):
         return 20
 
 
@@ -285,6 +298,9 @@ class WorkerSpecexCombine(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 10
+
 
     def default_options(self):
         opts = {}
@@ -330,6 +346,9 @@ class WorkerSpecter(Worker):
 
 
     def max_nproc(self):
+        return 20
+
+    def task_time(self):
         return 20
 
 
@@ -437,6 +456,9 @@ class WorkerFiberflat(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 5
+
 
     def default_options(self):
         opts = {}
@@ -501,6 +523,8 @@ class WorkerSky(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 5
 
     def default_options(self):
         opts = {}
@@ -577,6 +601,9 @@ class WorkerStdstars(Worker):
 
     def max_nproc(self):
         return 1
+
+    def task_time(self):
+        return 5
 
 
     def default_options(self):
@@ -668,6 +695,8 @@ class WorkerFluxcal(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 5
 
     def default_options(self):
         opts = {}
@@ -756,6 +785,8 @@ class WorkerProcexp(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 5
 
     def default_options(self):
         opts = {}
@@ -834,7 +865,7 @@ class WorkerRedmonster(Worker):
     Use Redmonster to classify spectra and compute redshifts.
     """
     def __init__(self, opts):
-        self.nproc = 24
+        self.nproc = 192
         if "nproc" in opts:
             self.nproc = opts["nproc"]
         super(Worker, self).__init__()
@@ -842,6 +873,9 @@ class WorkerRedmonster(Worker):
 
     def max_nproc(self):
         return self.nproc
+
+    def task_time(self):
+        return 30
 
 
     def default_options(self):
@@ -902,6 +936,9 @@ class WorkerNoop(Worker):
 
     def max_nproc(self):
         return 1
+
+    def task_time(self):
+        return 5
 
     def default_options(self):
         return self.defaults

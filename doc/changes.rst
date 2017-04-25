@@ -5,6 +5,10 @@ desispec Change Log
 0.14.1 (unreleased)
 -------------------
 
+* Add scripts for submitting nightly job chains.
+* Production creation now correctly handles slicing by spectrograph.
+* Pipeline job concurrency now computed based on task run time and
+  efficient packing.
 * Set default brick size to 0.25 sq. deg. in desispec.brick (PR `#378`_).
 * Added function to calculate BRICKID at a given location (PR `#378`_).
 * Additional LOCATION, DEVICE_LOC, and PETAL_LOC columns for fibermap (PR `#379`_).
