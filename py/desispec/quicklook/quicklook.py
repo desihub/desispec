@@ -466,6 +466,5 @@ def setup_pipeline(config):
                 log.warning("QA {} can not be used for output of {}. Skipping expecting {} got {} {}".format(qa.name,pa.name,qa.__inpType__,pa.get_output_type(),qa.is_compatible(pa.get_output_type())))
             else:
                 qas.append(qa)
-            qas.append(qa)
         pipeline.append([pa,qas])
     return pipeline,convdict
