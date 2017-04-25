@@ -327,7 +327,6 @@ def build_config(config):
         for jj, QA in enumerate(config.qalist[PA]):
             pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'kwargs': config.qaargs[QA]}
             pipe['QAs'].append(pipe_qa)
-        pipe['StepName']=PA
         pipeline.append(pipe)
 
     outconfig['PipeLine']=pipeline

@@ -55,7 +55,6 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "kwargs":{'Width':3.}
                                }
                               ],
-                       "StepName":"Preprocessing-Bias Subtraction",
                        "OutputFile":"QA_biassubtraction.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -74,7 +73,6 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "kwargs":{'Width':3.},
                                }
                               ],
-                       "StepName":"Preprocessing-Dark Subtraction",
                        "OutputFile":"QA_darksubtraction.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -93,7 +91,6 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "kwargs":{'Width':3.},
                                }
                               ],
-                       "StepName":"Preprocessing-Pixel Flattening",
                        "OutputFile":"QA_pixelflattening.yaml"
                        },
                       #{'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -106,7 +103,6 @@ def testconfig(outfilename="qlconfig.yaml"):
                       #                 }
                       #       },
                       # 'QAs':[],
-                      # "StepName":"Boxcar Extration",
                       # "OutputFile":"QA_boxcarextraction.yaml"
                       # },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -128,7 +124,6 @@ def testconfig(outfilename="qlconfig.yaml"):
                                         }
                                }
                              ],
-                       "StepName":"2D Extraction",
                        "OutputFile":"qa-extract-r0-00000002.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -138,7 +133,6 @@ def testconfig(outfilename="qlconfig.yaml"):
                                       }
                              },
                        'QAs':[],
-                       "StepName":"Apply Fiberflat",
                        "Outputfile":"apply_fiberflat_QA.yaml"
                       },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -157,7 +151,6 @@ def testconfig(outfilename="qlconfig.yaml"):
                                         }
                                }
                              ],
-                       "StepName": "Sky Subtraction",
                        "OutputFile":"qa-r0-00000002.yaml"
                       }
                       ]
@@ -260,7 +253,7 @@ def runpipeline(pl,convdict,conf):
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
     for s,step in enumerate(pl):
-        log.info("Starting to run step {}".format(paconf[s]["StepName"]))
+        log.info("Starting to run step {}".format(step[0].name))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
         try:
@@ -297,10 +290,10 @@ def runpipeline(pl,convdict,conf):
             #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
             f = open(paconf[s]["OutputFile"],"w")
             yaml.dump(qaresult,f)
-            hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
+            hb.stop("Step {} finished. Output is in {} ".format(step[0].name,paconf[s]["OutputFile"]))
             f.close()
         else:
-            hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
+            hb.stop("Step {} finished.".format(step[0].name))
     hb.stop("Pipeline processing finished. Serializing result")
     if isinstance(inp,tuple):
        return inp[0]
@@ -473,5 +466,6 @@ def setup_pipeline(config):
                 log.warning("QA {} can not be used for output of {}. Skipping expecting {} got {} {}".format(qa.name,pa.name,qa.__inpType__,pa.get_output_type(),qa.is_compatible(pa.get_output_type())))
             else:
                 qas.append(qa)
+            qas.append(qa)
         pipeline.append([pa,qas])
     return pipeline,convdict
