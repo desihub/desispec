@@ -582,10 +582,14 @@ def nersc_job(path, logroot, desisetup, commands, nodes=1, \
         f.write("procs=$(( nodes * node_proc ))\n\n")
         if openmp:
             f.write("export OMP_NUM_THREADS=${node_thread}\n")
-            f.write("\n")
+        else:
+            f.write("export OMP_NUM_THREADS=1\n")
+        f.write("\n")
         runstr = "srun"
         if multiproc:
             runstr = "{} --cpu_bind=no".format(runstr)
+            f.write("export KMP_AFFINITY=disabled\n")
+            f.write("\n")
         f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}}\"\n\n".format(runstr))
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("echo \"job datestamp = ${now}\"\n")
@@ -666,10 +670,14 @@ def nersc_shifter_job(path, img, specdata, specredux, desiroot, logroot, desiset
         f.write("procs=$(( nodes * node_proc ))\n\n")
         if openmp:
             f.write("export OMP_NUM_THREADS=${node_thread}\n")
-            f.write("\n")
+        else:
+            f.write("export OMP_NUM_THREADS=1\n")
+        f.write("\n")
         runstr = "srun"
         if multiproc:
             runstr = "{} --cpu_bind=no".format(runstr)
+            f.write("export KMP_AFFINITY=disabled\n")
+            f.write("\n")
         f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}} shifter\"\n\n".format(runstr))
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("echo \"job datestamp = ${now}\"\n")

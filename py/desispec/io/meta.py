@@ -118,19 +118,21 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
 def get_raw_files(filetype, night, expid, rawdata_dir=None):
     """Get files for a specified exposure.
 
-    Uses :func:`findfile` to determine the valid file names for the specified type.
-    Any camera identifiers not matching the regular expression [brz][0-9] will be
-    silently ignored.
+    Uses :func:`findfile` to determine the valid file names for the specified 
+    type.  Any camera identifiers not matching the regular expression 
+    [brz][0-9] will be silently ignored.
 
     Args:
-        filetype(str): Type of files to get. Valid choices are 'frame','cframe','psf'.
-        night(str): Date string for the requested night in the format YYYYMMDD.
+        filetype(str): Type of files to get. Valid choices are 'raw', 'pix', 
+            'fibermap'.
+        night(str): Date string for the requested night in the format 
+            YYYYMMDD.
         expid(int): Exposure number to get files for.
         rawdata_dir(str): [optional] overrides $DESI_SPECTRO_DATA
 
     Returns:
-        dict: Dictionary of found file names using camera id strings as keys, which are
-            guaranteed to match the regular expression [brz][0-9].
+        dict: Dictionary of found file names using camera id strings as keys, 
+            which are guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', rawdata_dir=rawdata_dir)
     literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]
@@ -148,21 +150,22 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
 def get_files(filetype, night, expid, specprod_dir=None):
     """Get files for a specified exposure.
 
-    Uses :func:`findfile` to determine the valid file names for the specified type.
-    Any camera identifiers not matching the regular expression [brz][0-9] will be
-    silently ignored.
+    Uses :func:`findfile` to determine the valid file names for the specified 
+    type.  Any camera identifiers not matching the regular expression 
+    [brz][0-9] will be silently ignored.
 
     Args:
-        filetype(str): Type of files to get. Valid choices are 'frame','cframe','psf'.
+        filetype(str): Type of files to get. Valid choices are 'frame', 
+            'cframe', 'psf', etc.
         night(str): Date string for the requested night in the format YYYYMMDD.
         expid(int): Exposure number to get files for.
-        specprod_dir(str): Path containing the exposures/ directory to use. If the value
-            is None, then the value of :func:`specprod_root` is used instead. Ignored
-            when raw is True.
+        specprod_dir(str): Path containing the exposures/ directory to use. If 
+            the value is None, then the value of :func:`specprod_root` is used 
+            instead. Ignored when raw is True.
 
     Returns:
-        dict: Dictionary of found file names using camera id strings as keys, which are
-            guaranteed to match the regular expression [brz][0-9].
+        dict: Dictionary of found file names using camera id strings as keys, 
+            which are guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
     literals = [re.escape(tmp) for tmp in glob_pattern.split('*')]

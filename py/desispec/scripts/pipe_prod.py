@@ -205,7 +205,9 @@ def parse(options=None):
 
     parser.add_argument("--nights", required=False, default=None, help="comma separated (YYYYMMDD) or regex pattern")
     
-    parser.add_argument("--nersc_host", required=False, default="edison", help="NERSC slurm scripts host name (edison|cori)")
+    parser.add_argument("--nersc_host", required=False, default="edison", help="NERSC slurm scripts host name (edison|cori|coriknl)")
+
+    parser.add_argument("--nersc_queue", required=False, default="regular", help="NERSC queue to use.")
 
     parser.add_argument("--nersc_max_nodes", required=False, default=None, help="NERSC slurm scripts max nodes to use.  Default is size of debug queue max.")
 
@@ -215,6 +217,8 @@ def parse(options=None):
     parser.add_argument("--fakeboot", required=False, default=False, action="store_true", help="bypass bootcalib")
 
     parser.add_argument("--fakepsf", required=False, default=False, action="store_true", help="bypass specex")
+
+    parser.add_argument("--fakepix", required=False, default=False, action="store_true", help="bypass checks for pixel data.  Useful when skipping extraction step in simulations.")
 
     parser.add_argument("--spectrographs", required=False, default=None, help="process only this comma-separated list of spectrographs")
 
@@ -308,6 +312,13 @@ def main(args):
             maxnodes = int(args.nersc_max_nodes)
         else:
             maxnodes = 512
+    elif args.nerschost == "coriknl":
+        nodecores = 64
+        queuethresh = 512
+        if args.nersc_max_nodes is not None:
+            maxnodes = int(args.nersc_max_nodes)
+        else:
+            maxnodes = 4096
     else:
         raise RuntimeError("unknown nersc host")
 
@@ -316,12 +327,20 @@ def main(args):
     if shell_maxcores > 1:
         shell_mpi_run = "{}".format(args.shell_mpi_run)
 
+    # Select our spectrographs
+
+    specs = [ x for x in range(10) ]
+    if args.spectrographs is not None:
+        specs = [ int(x) for x in args.spectrographs.split(",") ]
+    nspect = len(specs)
+
     # Update output directories and plans
 
     print("Working with production {} :".format(proddir))
 
     print("  Updating plans ...")
-    expnightcount, allbricks = pipe.create_prod(nightstr=args.nights, extra=extra)
+    expnightcount, allbricks = pipe.create_prod(nightstr=args.nights, 
+        extra=extra, specs=specs, fakepix=args.fakepix)
     totcount = {}
     totcount["flat"] = 0
     totcount["arc"] = 0
@@ -347,14 +366,9 @@ def main(args):
         else:
             s.write("#export DESI_LOGLEVEL=\"DEBUG\"\n\n")
 
-    # which nights and spectrographs are we using?
+    # which nights and are we using?
 
     print("  Selecting nights ...")
-
-    specs = [ x for x in range(10) ]
-    if args.spectrographs is not None:
-        specs = [ int(x) for x in args.spectrographs.split(",") ]
-    nspect = len(specs)
 
     allnights = []
     nightpat = re.compile(r"\d{8}")
@@ -769,3 +783,31 @@ def main(args):
                 f.write("bash {}\n\n".format(scr))
         os.chmod(run_shell_nt, mode)
 
+    # Create some helper scripts which run all the data in chains for each night
+
+    scfile = os.path.join(scrdir, "run_shell.sh")
+    sc = open(scfile, "w")
+    sc.write("#!/bin/bash\n\n")
+    for nt in nights:
+        run_nt = os.path.join(scrdir, "run_shell_{}.sh".format(nt))
+        sc.write("{}\n\n".format(run_nt))
+    sc.close()
+    os.chmod(scfile, mode)
+
+    scfile = os.path.join(scrdir, "run_slurm.sh")
+    sc = open(scfile, "w")
+    sc.write("#!/bin/bash\n\n")
+    for nt in nights:
+        run_nt = os.path.join(scrdir, "run_slurm_{}.sh".format(nt))
+        sc.write("{}\n\n".format(run_nt))
+    sc.close()
+    os.chmod(scfile, mode)
+
+    scfile = os.path.join(scrdir, "run_shifter.sh")
+    sc = open(scfile, "w")
+    sc.write("#!/bin/bash\n\n")
+    for nt in nights:
+        run_nt = os.path.join(scrdir, "run_shifter_{}.sh".format(nt))
+        sc.write("{}\n\n".format(run_nt))
+    sc.close()
+    os.chmod(scfile, mode)
