@@ -84,15 +84,17 @@ def empty_fibermap(nspec, specmin=0):
 
     fiberpos = desimodel.io.load_fiberpos()
     ii = slice(specmin, specmin+nspec)
-    fibermap['X_TARGET'] = fiberpos['X'][ii]
-    fibermap['Y_TARGET'] = fiberpos['Y'][ii]
-    fibermap['X_FVCOBS'] = fiberpos['X'][ii]
-    fibermap['Y_FVCOBS'] = fiberpos['Y'][ii]
-    fibermap['POSITIONER'] = fiberpos['LOCATION'][ii]   #- deprecated
-    fibermap['LOCATION']   = fiberpos['LOCATION'][ii]
-    fibermap['PETAL_LOC'] = fiberpos['PETAL'][ii]
-    fibermap['DEVICE_LOC'] = fiberpos['DEVICE'][ii]
-    fibermap['LAMBDA_REF'] = 5400.0
+    fibermap['X_TARGET'][:]   = fiberpos['X'][ii]
+    fibermap['Y_TARGET'][:]   = fiberpos['Y'][ii]
+    fibermap['X_FVCOBS'][:]   = fiberpos['X'][ii]
+    fibermap['Y_FVCOBS'][:]   = fiberpos['Y'][ii]
+    fibermap['POSITIONER'][:] = fiberpos['LOCATION'][ii]   #- deprecated
+    fibermap['LOCATION'][:]   = fiberpos['LOCATION'][ii]
+    fibermap['PETAL_LOC'][:]  = fiberpos['PETAL'][ii]
+    fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]
+    fibermap['LAMBDAREF'][:]  = 5400.0
+
+    assert set(fibermap.keys()) == set([x[0] for x in fibermap_columns])
         
     return fibermap
 

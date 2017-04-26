@@ -7,9 +7,10 @@ desispec Change Log
 
 * Set default brick size to 0.25 sq. deg. in desispec.brick (PR `#378`_).
 * Added function to calculate BRICKID at a given location (PR `#378`_).
-* Additional LOCATION, DEVICE_LOC, and PETAL_LOC columns for fibermap.
+* Additional LOCATION, DEVICE_LOC, and PETAL_LOC columns for fibermap (PR `#379`_).
 
 .. _`#378`: https://github.com/desihub/desispec/pull/378
+.. _`#379`: https://github.com/desihub/desispec/pull/379
 
 0.14.0 (2017-04-13)
 -------------------
