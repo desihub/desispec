@@ -55,6 +55,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "kwargs":{'Width':3.}
                                }
                               ],
+                       "StepName":"Preprocessing-Bias Subtraction",
                        "OutputFile":"QA_biassubtraction.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -73,6 +74,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "kwargs":{'Width':3.},
                                }
                               ],
+                       "StepName":"Preprocessing-Dark Subtraction",
                        "OutputFile":"QA_darksubtraction.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -91,6 +93,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                "kwargs":{'Width':3.},
                                }
                               ],
+                       "StepName":"Preprocessing-Pixel Flattening",
                        "OutputFile":"QA_pixelflattening.yaml"
                        },
                       #{'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -103,6 +106,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                       #                 }
                       #       },
                       # 'QAs':[],
+                      # "StepName":"Boxcar Extration",
                       # "OutputFile":"QA_boxcarextraction.yaml"
                       # },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -124,6 +128,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                         }
                                }
                              ],
+                       "StepName":"2D Extraction",
                        "OutputFile":"qa-extract-r0-00000002.yaml"
                        },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -133,6 +138,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                       }
                              },
                        'QAs':[],
+                       "StepName":"Apply Fiberflat",
                        "Outputfile":"apply_fiberflat_QA.yaml"
                       },
                       {'PA':{"ModuleName":"desispec.quicklook.procalgs",
@@ -151,6 +157,7 @@ def testconfig(outfilename="qlconfig.yaml"):
                                         }
                                }
                              ],
+                       "StepName": "Sky Subtraction",
                        "OutputFile":"qa-r0-00000002.yaml"
                       }
                       ]
@@ -198,10 +205,7 @@ def getobject(conf,log):
     try:
         mod=__import__(conf["ModuleName"],fromlist=[conf["ClassName"]])
         klass=getattr(mod,conf["ClassName"])
-        if "Name" in conf.keys():            
-            return klass(conf["Name"],conf)
-        else:
-            return klass(conf["ClassName"],conf)
+        return klass(conf["Name"],conf)
     except Exception as e:
         log.error("Failed to import {} from {}. Error was '{}'".format(conf["ClassName"],conf["ModuleName"],e))
         return None
@@ -253,7 +257,7 @@ def runpipeline(pl,convdict,conf):
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
     for s,step in enumerate(pl):
-        log.info("Starting to run step {}".format(step[0].name))
+        log.info("Starting to run step {}".format(paconf[s]["StepName"]))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
         try:
@@ -290,10 +294,10 @@ def runpipeline(pl,convdict,conf):
             #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
             f = open(paconf[s]["OutputFile"],"w")
             yaml.dump(qaresult,f)
-            hb.stop("Step {} finished. Output is in {} ".format(step[0].name,paconf[s]["OutputFile"]))
+            hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
             f.close()
         else:
-            hb.stop("Step {} finished.".format(step[0].name))
+            hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
     hb.stop("Pipeline processing finished. Serializing result")
     if isinstance(inp,tuple):
        return inp[0]

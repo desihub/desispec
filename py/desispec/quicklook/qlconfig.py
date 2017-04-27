@@ -35,15 +35,11 @@ class Make_Config(object):
         self.amps=amps
 
         if rawdata_dir is None:
-            if 'QL_SPEC_DATA' not in os.environ:
-                log.critical("must set ${} environment variable".format('QL_SPEC_DATA'))
-            rawdata_dir=os.getenv('QL_SPEC_DATA')
+            rawdata_dir=os.getenv('DESI_SPECTRO_DATA')
         self.rawdata_dir=rawdata_dir 
 
         if specprod_dir is None:
-            if 'QL_SPEC_REDUX' not in os.environ:
-                log.critical("must set ${} environment variable".format('QL_SPEC_REDUX'))
-            specprod_dir=os.getenv('QL_SPEC_REDUX')
+            specprod_dir=os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'))
         self.specprod_dir=specprod_dir
 
         self.outdir=outdir
@@ -98,14 +94,13 @@ class Make_Config(object):
             elif self.camera[0] == 'z':
                 self.wavelength='7650,9830,0.8'
 
-        #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
         paopt_initialize={'camera': self.camera}
 
         paopt_preproc={'camera': self.camera, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("pix")} 
 
-        paopt_extract={'BoxWidth': 2.5, 'FiberMap': '%%FiberMap', 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': '%%PSFFile', 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("frame")}
+        paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psfboot, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("frame")}
 
-        paopt_apfflat={'FiberFlatFile': '%%FiberFlatFile', 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("fframe")}
+        paopt_apfflat={'FiberFlatFile': self.fiberflat, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("fframe")}
        
         paopt_skysub={'DumpIntermediates': self.dumpintermediates,'dumpfile': self.dump_pa("sframe")}
 
@@ -173,7 +168,7 @@ class Make_Config(object):
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': '%%PSFFile', 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': '%%FiberMap', 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
                 
         return qaopts 
    
@@ -322,11 +317,12 @@ def build_config(config):
     pipeline = []
     for ii,PA in enumerate(config.palist):
         pipe={'OutputFile': config.dump_qa()[1][0][PA]}
-        pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'kwargs': config.paargs[PA]}
+        pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'Name': PA, 'kwargs': config.paargs[PA]}
         pipe['QAs']=[]
         for jj, QA in enumerate(config.qalist[PA]):
-            pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'kwargs': config.qaargs[QA]}
+            pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'Name': QA, 'kwargs': config.qaargs[QA]}
             pipe['QAs'].append(pipe_qa)
+        pipe['StepName']=PA
         pipeline.append(pipe)
 
     outconfig['PipeLine']=pipeline
