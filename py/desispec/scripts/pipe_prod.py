@@ -15,7 +15,7 @@ import argparse
 import re
 
 from .. import io
-from ..parallel import dist_discrete
+from ..parallel import dist_discrete, dist_balanced
 
 from .. import pipeline as pipe
 
@@ -26,6 +26,7 @@ def job_size(ntask, taskprocs, tasktime, nodeproc, maxnodes):
     script to compute the size of batch jobs.
     """
     maxprocs = nodeproc * maxnodes
+    maxworkers = maxprocs // taskprocs
 
     fullprocs = ntask * taskprocs
 
@@ -40,18 +41,10 @@ def job_size(ntask, taskprocs, tasktime, nodeproc, maxnodes):
         procs = fullprocs
     else:
         # we want to repack as efficiently as possible
-        nworker = maxprocs // taskprocs
-
-        taskperworker = ntask // nworker
-        if ntask % nworker != 0:
-            taskperworker += 1
-
-        nworker = ntask // taskperworker
-        if ntask % nworker != 0:
-            nworker += 1
-
-        time = tasktime * taskperworker
+        workers = dist_balanced(ntask, maxworkers)
+        nworker = len(workers)
         procs = nworker * taskprocs
+        time = tasktime * workers[0][1]
     
     nodes = procs // nodeproc + 1
     return (nodes, procs, time)
