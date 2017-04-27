@@ -60,7 +60,7 @@ def select_nights(allnights, nightstr):
     return nights
 
 
-def create_prod(nightstr=None, extra={}):
+def create_prod(nightstr=None, extra={}, specs=None, fakepix=False):
     """
     Create or update a production.
 
@@ -76,6 +76,11 @@ def create_prod(nightstr=None, extra={}):
             file for the production.  The keys are the worker
             class names and the values are dictionaries that are
             passed to the constructor of each worker class.
+        specs (list): list of spectrographs to use.
+        fakepix (bool): if True, skip the checks for input pixel
+            data files.  Assume that all spectrographs / cameras
+            have data.  Useful for planning when simulating frame
+            files directly.
 
     Returns:
         tuple containing the number of exposures of each type
@@ -84,6 +89,9 @@ def create_prod(nightstr=None, extra={}):
 
     rawdir = os.path.abspath(io.rawdata_root())
     proddir = os.path.abspath(io.specprod_root())
+
+    if specs is None:
+        specs = [ x for x in range(10) ]
 
     expnightcount = {}
 
@@ -167,7 +175,7 @@ def create_prod(nightstr=None, extra={}):
         if not os.path.isdir(nlog):
             os.makedirs(nlog)
 
-        grph, expcount, nbricks = graph_night(nt)
+        grph, expcount, nbricks = graph_night(nt, specs, fakepix)
 
         for brk in nbricks:
             if brk in allbricks:
@@ -190,7 +198,7 @@ def create_prod(nightstr=None, extra={}):
     return expnightcount, allbricks
 
 
-def graph_night(rawnight):
+def graph_night(rawnight, specs, fakepix):
     """
     Generate the dependency graph for one night of data.
 
@@ -203,6 +211,10 @@ def graph_night(rawnight):
 
     Args:
         rawnight (str): The night to process.
+        specs (list): List of integer spectrographs to use.
+        fakepix (bool): If True, do not check for the existence of input
+            pixel files.  Assume that data for all spectrographs and cameras
+            exists.
 
     Returns:
         tuple containing
@@ -243,8 +255,10 @@ def graph_night(rawnight):
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", rawnight, ex)
 
-        # read the fibermap to get the exposure type, and while we are at it,
-        # also accumulate the total list of bricks
+        # Read the fibermap to get the exposure type, and while we are at it,
+        # also accumulate the total list of bricks.  We use the list of
+        # spectrographs to select ONLY the bricks that are actually hit by
+        # fibers from our chosen spectrographs.
 
         fmdata = io.read_fibermap(fibermap)
         flavor = fmdata.meta["FLAVOR"]
@@ -256,13 +270,14 @@ def graph_night(rawnight):
             expcount["flat"] += 1
         else:
             expcount["science"] += 1
-            for fmb in fmdata["BRICKNAME"]:
-                fmb = str(fmb)
-                if len(fmb) > 0:
-                    if fmb in fmbricks:
-                        fmbricks[fmb] += 1
-                    else:
-                        fmbricks[fmb] = 1
+            for fm in zip(fmdata["SPECTROID"], fmdata["BRICKNAME"]):
+                if fm[0] in specs:
+                    fmb = str(fm[1])
+                    if len(fmb) > 0:
+                        if fmb in fmbricks:
+                            fmbricks[fmb] += 1
+                        else:
+                            fmbricks[fmb] = 1
             for fmb in fmbricks:
                 if fmb in allbricks:
                     allbricks[fmb] += fmbricks[fmb]
@@ -282,7 +297,24 @@ def graph_night(rawnight):
         grph[rawnight]["out"].append(name)
 
         # get the raw exposures
-        raw = io.get_raw_files("pix", rawnight, ex)
+        raw = {}
+        if fakepix:
+            # build the dictionary manually
+            for band in ["b", "r", "z"]:
+                for spec in specs:
+                    cam = "{}{}".format(band, spec)
+                    filename = "pix-{}{}-{:08d}.fits".format(band, spec, ex)
+                    path = os.path.join(io.specprod_root(), rawnight, filename)
+                    raw[cam] = path
+        else:
+            # take the intersection of existing pix files and our
+            # selected spectrographs.
+            allraw = io.get_raw_files("pix", rawnight, ex)
+            for band in ["b", "r", "z"]:
+                for spec in specs:
+                    cam = "{}{}".format(band, spec)
+                    if cam in allraw:
+                        raw[cam] = allraw[cam]
 
         for cam in sorted(raw.keys()):
             cammat = campat.match(cam)

@@ -93,6 +93,58 @@ def dist_uniform(nwork, workers, id):
     return (firsttask, ntask)
 
 
+def dist_balanced(nwork, maxworkers):
+    """
+    Distribute items between a flexible number of workers.
+
+    This assumes that each item has equal weight, and that they
+    should be divided into contiguous blocks of items and
+    assigned to workers in rank order.
+
+    If the number of workers is less than roughly sqrt(nwork), then
+    we do not reduce the number of workers and the result is the same
+    as the dist_uniform function.  If there are more workers than this,
+    then the number of workers is reduced until all workers have close
+    to the same number of tasks.
+
+    Args:
+        nwork (int): The number of work items.
+        maxworkers (int): The maximum number of workers.  The actual
+            number may be less than this.
+
+    Returns:
+        A list of tuples, one for each worker.  The first element 
+        of the tuple is the first item assigned to the worker, 
+        and the second element is the number of items assigned to 
+        the worker.
+    """
+    workers = maxworkers
+
+    if nwork < workers:
+        workers = nwork
+    else:
+        ntask = nwork // workers
+        leftover = nwork % workers
+        while (leftover != 0) and (leftover + ntask < workers):
+            workers -= 1
+            ntask = nwork // workers
+            leftover = nwork % workers
+    
+    ret = []
+    for w in range(workers):
+        wfirst = None
+        wtasks = None
+        if w < leftover:
+            wtasks = ntask + 1
+            wfirst = w * ntask
+        else:
+            wtasks = ntask
+            wfirst = ((ntask + 1) * leftover) + (ntask * (w - leftover))
+        ret.append( (wfirst, wtasks) )
+
+    return ret
+
+
 def distribute_required_groups(A, max_per_group):
     ngroup = 1
     total = 0
