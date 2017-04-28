@@ -613,10 +613,10 @@ class WorkerStdstars(Worker):
             opts["starmodels"] = self.starmodels
         else:
             if "DESI_ROOT" in os.environ:
-                opts["starmodels"] = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+                opts["starmodels"] = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v2.1/star_templates_v2.1.fits"
             else:
                 log.warning("$DESI_ROOT not set; using NERSC default /project/projectdirs/desi")
-                opts["starmodels"] = "/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+                opts["starmodels"] = "/project/projectdirs/desi/spectro/templates/star_templates/v2.1/star_templates_v2.1.fits"
         return opts
 
 
