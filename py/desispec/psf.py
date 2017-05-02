@@ -208,8 +208,8 @@ class PSF(object):
                 return np.full(len(wave),self.xsigma_boot[ispec]) #- constant xsigma for a given fiber
 
     def wdisp(self,ispec,wave):
-        #- wave: vector, ispec: scalar integer TODO: make useful for other permutations
+        #- wave: scalar or vector, ispec: scalar integer TODO: make useful for other permutations
         if hasattr(self,'wcoeff'):
-            new_dict=dufits.mk_fit_dict(self.wcoeff[ispec],self.wcoeff.shape[1],'legendre',wave[0],wave[-1])
+            new_dict=dufits.mk_fit_dict(self.wcoeff[ispec],self.wcoeff.shape[1],'legendre',self.wmin,self.wmax)
             wsigma=dufits.func_val(wave,new_dict)
             return wsigma

@@ -49,15 +49,15 @@ def resample_spec(wave,flux,outwave,ivar=None):
     insignificant effect. Details,plots in the arc processing note.
     """
     #- convert flux to per bin before projecting to new bins
-    flux=flux*np.gradient(wave) 
-    ivar=ivar/(np.gradient(wave))**2
+    #flux=flux*np.gradient(wave) 
+    #ivar=ivar/(np.gradient(wave))**2
 
     Pr=project(wave,outwave)
     n=len(wave)
     
     newflux=Pr.T.dot(flux)
     #- convert back to df/dx (per angstrom) sampled at outwave
-    newflux/=np.gradient(outwave) #- per angstrom
+    #newflux/=np.gradient(outwave) #- per angstrom
     if ivar is None:
         return newflux
     else:
@@ -65,7 +65,7 @@ def resample_spec(wave,flux,outwave,ivar=None):
         newivar=1/newvar
 
         #- convert to per angstrom
-        newivar*=(np.gradient(outwave))**2
+        #newivar*=(np.gradient(outwave))**2
         return newflux, newivar
 
 

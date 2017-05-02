@@ -3,7 +3,7 @@ boxcar extraction for Spectra from Desi Image
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np
-from desispec.quicklook.palib import resample_spec
+from desispec.quicklook.palib import resample_spec,get_resolution
 
 def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usepsfboot=False):
     """Extracts spectra row by row, given the centroids
@@ -130,7 +130,6 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usepsfboot=
         fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
     #- Get resolution from the psf  
-    from desispec.quicklook.palib import get_resolution
     resolution=get_resolution(wtarget,fflux,iivar,psf,usepsfboot=usepsfboot)
 
     return fflux,iivar,resolution
