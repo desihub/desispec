@@ -3,6 +3,10 @@ desispec.quicklook.palib
 Low level functions to be from top level PAs
 """
 import numpy as np
+from desispec.quicklook import qlexceptions,qllogger
+qlog=qllogger.QLLogger("QuickLook",20)
+log=qlog.getlog()
+
 
 def project(x1,x2):
     """
@@ -49,15 +53,15 @@ def resample_spec(wave,flux,outwave,ivar=None):
     insignificant effect. Details,plots in the arc processing note.
     """
     #- convert flux to per bin before projecting to new bins
-    #flux=flux*np.gradient(wave) 
-    #ivar=ivar/(np.gradient(wave))**2
+    flux=flux*np.gradient(wave) 
+    ivar=ivar/(np.gradient(wave))**2
 
     Pr=project(wave,outwave)
     n=len(wave)
     
     newflux=Pr.T.dot(flux)
     #- convert back to df/dx (per angstrom) sampled at outwave
-    #newflux/=np.gradient(outwave) #- per angstrom
+    newflux/=np.gradient(outwave) #- per angstrom
     if ivar is None:
         return newflux
     else:
@@ -65,7 +69,7 @@ def resample_spec(wave,flux,outwave,ivar=None):
         newivar=1/newvar
 
         #- convert to per angstrom
-        #newivar*=(np.gradient(outwave))**2
+        newivar*=(np.gradient(outwave))**2
         return newflux, newivar
 
 
@@ -74,13 +78,7 @@ def get_resolution(wave,flux,ivar,psf,usepsfboot=True):
     Calculates approximate resolution values in the format that can directly
     feed resolution data of desispec.frame.Frame object. 
     
-    To zeroth order, we use psfboot xsigma values (constant resolution per fiber). 
-    Note: This is not the resolution of boxcar extraction!
-     
-    TODO: Replace this resolution to account for variation in dispersion direction
-          using extraction of arc and propagating the coefficients of the fit 
-          to possibly a new psf file so that resolution data can be evaluated on the fly 
-          for science exposures. This work is in progress.
+    uses wsigma from psf file, if usepsfboot xsigma values (constant resolution per fiber), otherwise resolation data of zeros 
 
     wave: wavelength array
     flux: (nspec,nwave) array of fluxes

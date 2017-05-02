@@ -1,6 +1,9 @@
 import numpy as np
 import scipy.optimize
 from numpy.polynomial.legendre import Legendre, legval, legfit
+from desispec.quicklook import qlexceptions,qllogger
+qlog=qllogger.QLLogger("QuickLook",20)
+log=qlog.getlog()
 
 def sigmas_from_arc(wave,flux,ivar,linelist,n=2):
     """
@@ -67,8 +70,14 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
     """
     nspec=frame.flux.shape[0]
     if linelist is None:
-        linelist=[5854.1101,6404.018,7034.352,7440.9469] #- not final 
-
+        camera=frame.meta["CAMERA"]
+        #- load arc lines
+        from desispec.bootcalib import load_arcline_list, load_gdarc_lines,find_arc_lines
+        llist=load_arcline_list(camera)
+        dlamb,gd_lines=load_gdarc_lines(camera,llist)
+        linelist=gd_lines
+        #linelist=[5854.1101,6404.018,7034.352,7440.9469] #- not final 
+        log.info("No line list configured. Fitting for lines {}".format(linelist))  
     coeffs=np.zeros((nspec,npoly+1)) #- coeffs array
     for spec in range(nspec):
         wave=frame.wave
