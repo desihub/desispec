@@ -38,6 +38,7 @@ def parse():
     parser.add_argument("--specprod_dir",type=str, required=False, help="specprod directory, overrides $QL_SPEC_REDUX in config")
     parser.add_argument("--save",type=str, required=False,help="save this config to a file")
     parser.add_argument("--qlf",type=str,required=False,help="setup for QLF run", default=False)
+    parser.add_argument("--mergeQA", default=False, action='store_true',help="output Merged QA file")
     
     args=parser.parse_args()
     return args
@@ -78,7 +79,7 @@ def ql_main(args=None):
                 log.info("Can save config to only yaml output. Put a yaml in the argument")
         
     pipeline, convdict = quicklook.setup_pipeline(configdict)
-    res=quicklook.runpipeline(pipeline,convdict,configdict)
+    res=quicklook.runpipeline(pipeline,convdict,configdict,mergeQA=args.mergeQA)
     inpname=configdict["RawImage"]
     camera=configdict["Camera"]
     expid=configdict["Expid"]

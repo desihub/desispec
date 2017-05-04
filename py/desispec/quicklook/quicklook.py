@@ -10,7 +10,6 @@ import yaml
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
 
-
 def testconfig(outfilename="qlconfig.yaml"):
     """
     Make a test Config file, should be provided by the QL framework
@@ -235,7 +234,7 @@ def mapkeywords(kw,kwmap):
             newmap[k]=v
     return newmap
 
-def runpipeline(pl,convdict,conf):
+def runpipeline(pl,convdict,conf,mergeQA=False):
     """
     Runs the quicklook pipeline as configured
 
@@ -247,6 +246,8 @@ def runpipeline(pl,convdict,conf):
             details in setup_pipeline method below for examples.
         conf: a configured dictionary, read from the configuration yaml file.
             e.g: conf=configdict=yaml.load(open('configfile.yaml','rb'))
+        mergedQA: if True, outputs the merged QA after the execution of pipeline. Perhaps, this 
+            should always be True, but leaving as option, until configuration and IO settles.
     """
 
 
@@ -259,6 +260,8 @@ def runpipeline(pl,convdict,conf):
     qlog=qllogger.QLLogger("QuickLook",0)
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
+
+    QAresults=[] #- merged QA list for the whole pipeline. This will be reorganized for databasing after the pipeline executes
     for s,step in enumerate(pl):
         log.info("Starting to run step {}".format(paconf[s]["StepName"]))
         pa=step[0]
@@ -301,7 +304,15 @@ def runpipeline(pl,convdict,conf):
             f.close()
         else:
             hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
+        QAresults.append([pa.name,qaresult])
     hb.stop("Pipeline processing finished. Serializing result")
+
+    #- merge QAs for this pipeline execution
+    if mergeQA is True:
+        from desispec.quicklook.util import merge_QAs
+        log.info("Merging all the QAs for this pipeline execution")
+        merge_QAs(QAresults)
+
     if isinstance(inp,tuple):
        return inp[0]
     else:
