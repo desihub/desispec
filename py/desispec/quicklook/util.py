@@ -20,24 +20,32 @@ def merge_QAs(qaresult):
 
     for s,result in enumerate(qaresult):
         pa=result[0]
-        mergedQA[pa]={}
-        mergedQA[pa]['QA']={}
-        for qa in result[1]:
-            if 'EXPID' not in mergedQA:
-                mergedQA['EXPID']=result[1][qa]['EXPID']
-            if 'CAMERA' not in mergedQA:
-                mergedQA['CAMERA']=result[1][qa]['CAMERA']
-            if 'FLAVOR' not in mergedQA:
-                mergedQA['FLAVOR']=result[1][qa]['FLAVOR']
+        night=result[1].values()[0]['NIGHT']
+        expid=int(result[1].values()[0]['EXPID'])
+        camera=result[1].values()[0]['CAMERA']
+        flavor=result[1].values()[0]['FLAVOR']
+            
+        if night not in mergedQA:
+            mergedQA[night]={} #- top level key
+        if expid not in mergedQA[night]:
+            mergedQA[night][expid]={}
+        if camera not in mergedQA[night][expid]:
+            mergedQA[night][expid][camera]={}
+        if 'flavor' not in mergedQA[night][expid]:
+            mergedQA[night][expid]['flavor']=flavor
+        mergedQA[night][expid][camera][pa]={}
+        mergedQA[night][expid][camera][pa]['PARAM']={}
+        mergedQA[night][expid][camera][pa]['QA']={}
 
-            mergedQA[pa]['QA'][qa]={}
+        #- now merge PARAM and QA metrics for all QAs
+        for qa in result[1]:
             if 'PARAMS' in result[1][qa]:
-                mergedQA[pa]['QA'][qa]['PARAMS']=result[1][qa]['PARAMS']
+                mergedQA[night][expid][camera][pa]['PARAM'].update(result[1][qa]['PARAMS'])
             if 'METRICS' in result[1][qa]:
-                mergedQA[pa]['QA'][qa]['METRICS']=result[1][qa]['METRICS']
+                mergedQA[night][expid][camera][pa]['QA'].update(result[1][qa]['METRICS'])
     from desiutil.io import yamlify
     qadict=yamlify(mergedQA)
-    f=open('mergedQA-{}-{}.yaml'.format(mergedQA['CAMERA'],mergedQA['EXPID']),'w') #- IO/file naming should move from here. 
+    f=open('mergedQA-{}-{:08d}.yaml'.format(camera,expid),'w') #- IO/file naming should move from here. 
     f.write(yaml.dump(qadict))
     f.close()
     return

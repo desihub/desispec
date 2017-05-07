@@ -745,7 +745,7 @@ class ResolutionFit(pas.PipelineAlg):
         nspec=input_frame.flux.shape[0]
         for spec in range(nspec):
             ww=input_frame.wave
-            wv=2.-(ww-ww[0])/(ww[-1]-ww[0])-1.
+            wv=2.-(ww-domain[0])/(domain[1]-domain[0])-1.
             wsigmas=legval(wv,wcoeffs[spec])  
             Rsig=Resolution(wsigmas)
             input_frame.resolution_data[spec]=Rsig.data    
