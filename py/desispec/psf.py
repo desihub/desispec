@@ -213,3 +213,12 @@ class PSF(object):
             new_dict=dufits.mk_fit_dict(self.wcoeff[ispec],self.wcoeff.shape[1],'legendre',self.wmin,self.wmax)
             wsigma=dufits.func_val(wave,new_dict)
             return wsigma
+
+    def angstroms_per_pixel(self, ispec, wavelength):
+        """
+        Return CCD pixel width in Angstroms for spectrum ispec at given
+        wavlength(s).  Wavelength may be scalar or array.
+        """
+        ww = self.wavelength(ispec, y=np.arange(self.npix_y))
+        dw = np.gradient( ww )
+        return np.interp(wavelength, ww, dw)

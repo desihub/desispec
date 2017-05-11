@@ -19,7 +19,7 @@ def merge_QAs(qaresult):
     mergedQA={}
 
     for s,result in enumerate(qaresult):
-        pa=result[0]
+        pa=result[0].upper()
         night=result[1].values()[0]['NIGHT']
         expid=int(result[1].values()[0]['EXPID'])
         camera=result[1].values()[0]['CAMERA']
@@ -34,15 +34,15 @@ def merge_QAs(qaresult):
         if 'flavor' not in mergedQA[night][expid]:
             mergedQA[night][expid]['flavor']=flavor
         mergedQA[night][expid][camera][pa]={}
-        mergedQA[night][expid][camera][pa]['PARAM']={}
-        mergedQA[night][expid][camera][pa]['QA']={}
+        mergedQA[night][expid][camera][pa]['PARAMS']={}
+        mergedQA[night][expid][camera][pa]['METRICS']={}
 
         #- now merge PARAM and QA metrics for all QAs
         for qa in result[1]:
             if 'PARAMS' in result[1][qa]:
-                mergedQA[night][expid][camera][pa]['PARAM'].update(result[1][qa]['PARAMS'])
+                mergedQA[night][expid][camera][pa]['PARAMS'].update(result[1][qa]['PARAMS'])
             if 'METRICS' in result[1][qa]:
-                mergedQA[night][expid][camera][pa]['QA'].update(result[1][qa]['METRICS'])
+                mergedQA[night][expid][camera][pa]['METRICS'].update(result[1][qa]['METRICS'])
     from desiutil.io import yamlify
     qadict=yamlify(mergedQA)
     f=open('mergedQA-{}-{:08d}.yaml'.format(camera,expid),'w') #- IO/file naming should move from here. 

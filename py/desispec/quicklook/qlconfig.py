@@ -115,11 +115,11 @@ class Make_Config(object):
                 paopts[PA]=paopt_initialize
             elif PA=='Preproc':
                 paopts[PA]=paopt_preproc
-            elif PA=='BoxcarExtraction':
+            elif PA=='BoxcarExtract':
                 paopts[PA]=paopt_extract
             elif PA=='ApplyFiberFlat_QL':
                 paopts[PA]=paopt_apfflat
-            elif PA=='SubtractSky_QL':
+            elif PA=='SkySub_QL':
                 paopts[PA]=paopt_skysub
             else:
                 paopts[PA]={}
@@ -207,9 +207,9 @@ class Make_Config(object):
         """
         outmap={'Initialize': 'initial',
                 'Preproc': 'preproc',
-                'BoxcarExtraction': 'boxextract',
+                'BoxcarExtract': 'boxextract',
                 'ApplyFiberFlat_QL': 'fiberflat',
-                'SubtractSky_QL': 'skysub'
+                'SkySub_QL': 'skysub'
                }
         if paname not in outmap:
             raise IOError("No output name map available for this PA:",paname)
@@ -262,11 +262,11 @@ class Palist(object):
     def _palist(self):
 
         if self.flavor == "arcs":
-            pa_list=['Initialize','Preproc','BoxcarExtraction'] #- class names for respective PAs (see desispec.quicklook.procalgs)
+            pa_list=['Initialize','Preproc','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
         elif self.flavor == "flat":
-            pa_list=['Initialize','Preproc','BoxcarExtraction', 'ComputeFiberFlat_QL']
+            pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
         elif self.flavor in ['dark','elg','lrg','qso','bright','grey','gray','bgs','mws']:
-            pa_list=['Initialize','Preproc','BoxcarExtraction', 'ApplyFiberFlat_QL','SubtractSky_QL']
+            pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
         else:
             log.warning("Not a valid flavor type. Use a valid flavor type. Exiting.")
             sys.exit(0)
@@ -279,7 +279,7 @@ class Palist(object):
         QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
         QAs_extract=['CountSpectralBins']
         QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
-        QAs_subtractsky=['Sky_Residual','Integrate_Spec','Calculate_SNR']
+        QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
         
         qalist={}
         for PA in self.palist:
@@ -287,12 +287,12 @@ class Palist(object):
                 qalist[PA] = QAs_initial
             elif PA == 'Preproc':
                 qalist[PA] = QAs_preproc
-            elif PA == 'BoxcarExtraction':
+            elif PA == 'BoxcarExtract':
                 qalist[PA] = QAs_extract
             elif PA == 'ApplyFiberFlat_QL':
                 qalist[PA] = QAs_apfiberflat
-            elif PA == 'SubtractSky_QL':
-                qalist[PA] = QAs_subtractsky
+            elif PA == 'SkySub_QL':
+                qalist[PA] = QAs_SkySub
             else:
                 qalist[PA] = None #- No QA for this PA
         self.qamodule='desispec.qa.qa_quicklook'

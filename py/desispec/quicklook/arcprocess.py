@@ -45,7 +45,7 @@ def sigmas_from_arc(wave,flux,ivar,linelist,n=2):
     esigmas=esigmas[k]
     return meanwaves,emeanwaves,sigmas,esigmas
 
-def fit_wsigmas(means,wsigmas,ewsigmas,npoly=5,domain=None):
+def fit_wsigmas(means,wsigmas,ewsigmas,npoly=2,domain=None):
     #- return callable legendre object
     wt=1/ewsigmas**2
     legfit = Legendre.fit(means, wsigmas, npoly, domain=domain,w=wt)
@@ -92,7 +92,7 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
     
     return coeffs
 
-def write_psffile(psfbootfile,wcoeffs,outfile):
+def write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=None):
     """ 
     extract psfbootfile, add wcoeffs, and make a new psf file preserving the traces etc. 
     psf module will load this 
@@ -100,10 +100,13 @@ def write_psffile(psfbootfile,wcoeffs,outfile):
     from astropy.io import fits
     psf=fits.open(psfbootfile)
     xcoeff=psf[0]
-    xcoeff.header["PSFTYPE"]='boxcar'
     ycoeff=psf[1]
     xsigma=psf[2]
     
     wsigma=fits.ImageHDU(wcoeffs,name='WSIGMA')
+    wsigma.header["PSFTYPE"]='boxcar'
+    if wavestepsize is None:
+        wavestepsize = 'NATIVE CCD GRID'
+    wsigma.header["WAVESTEP"]=(wavestepsize,'Wavelength step size [Angstroms]')
     hdulist=fits.HDUList([xcoeff,ycoeff,xsigma,wsigma])
     hdulist.writeto(outfile,clobber=True)
