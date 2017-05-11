@@ -130,6 +130,6 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usexsigma=F
         fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
     #- Get resolution from the psf  
-    resolution=get_resolution(wtarget,psf,usexsigma=usexsigma)
+    resolution=get_resolution(wtarget,nspec,psf,usexsigma=usexsigma)
 
     return fflux,iivar,resolution

@@ -73,7 +73,7 @@ def resample_spec(wave,flux,outwave,ivar=None):
         return newflux, newivar
 
 
-def get_resolution(wave,psf,usexsigma=False):
+def get_resolution(wave,nspec,psf,usexsigma=False):
     """
     Calculates approximate resolution values at given wavelengths in the format that can directly
     feed resolution data of desispec.frame.Frame object. 
@@ -81,11 +81,13 @@ def get_resolution(wave,psf,usexsigma=False):
     uses wsigma from psf file, if usexsigma is true, uses xsigma values (constant resolution per fiber), otherwise resolation data is zeros 
 
     wave: wavelength array
+    nsepc: no of spectra (int)
     psf: desispec.psf.PSF like object
+
+    returns : resolution data (nspec,21,nwave)
     """
     from desispec.resolution import Resolution
 
-    nspec=psf.nspec
     nwave=len(wave)
     resolution_data=np.zeros((nspec,21,nwave))
     if usexsigma:
