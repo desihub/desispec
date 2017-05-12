@@ -6,40 +6,10 @@ import numpy as np
 import os,sys
 from desispec.quicklook import pas
 from desispec.quicklook import qlexceptions,qllogger
-from desispec.resolution import Resolution
 
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
-def get_resolution(wave,flux,ivar,psf,usepsfboot=True):
-    """
-    Calculates approximage resolution values in the format that can directly
-    feed resolution data of desispec.frame.Frame object. 
-    
-    To zeroth order, we use psfboot xsigma values (constant resolution per fiber). 
-    Note: This is not the resolution of boxcar extraction!
-     
-    TODO: Replace this resolution to account for variation in dispersion direction
-          using extraction of arc and propagating the coefficients of the fit 
-          to possibly a new psf file so that resolution data can be evaluated on the fly 
-          for science exposures. This work is in progress.
-
-    wave: wavelength array
-    flux: (nspec,nwave) array of fluxes
-    ivar: (nspec,nwave) array of inverse variances
-    psf: desispec.psf.PSF like object
-    """
-    nspec=flux.shape[0]
-    nwave=flux.shape[1]
-    resolution_data=np.zeros((nspec,21,nwave))
-    if usepsfboot:
-        if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot
-            log.info("Getting resolution matrix band diagonal elements from constant Gaussing Xsigma")
-            for ispec in range(nspec):
-                thissigma=psf.xsigma(ispec,wave) 
-                Rsig=Resolution(thissigma)
-                resolution_data[ispec]=Rsig.data
-    return resolution_data
 
 class Initialize(pas.PipelineAlg):
     """
@@ -183,7 +153,7 @@ class BootCalibration(pas.PipelineAlg):
 
     
 
-class BoxcarExtraction(pas.PipelineAlg):
+class BoxcarExtract(pas.PipelineAlg):
     from desispec.image import Image as im
     from desispec.frame import Frame as fr
     from desispec.boxcar import do_boxcar
@@ -191,7 +161,7 @@ class BoxcarExtraction(pas.PipelineAlg):
     
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Boxcar Extraction"
+            name="BoxcarExtract"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
@@ -219,9 +189,9 @@ class BoxcarExtraction(pas.PipelineAlg):
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
-        if "Usepsfboot" in kwargs:
-             usepsfboot=kwargs["Usepsfboot"]
-        else: usepsfboot = False
+        if "usexsigma" in kwargs:
+             usexsigma=kwargs["usexsigma"]
+        else: usexsigma = False
 
         if "Wavelength" not in kwargs:
             wstart = np.ceil(psf.wmin)
@@ -270,22 +240,27 @@ class BoxcarExtraction(pas.PipelineAlg):
         if "MaskFile" in kwargs:
             maskFile=kwargs['MaskFile']
 
+        #- Add some header keys relevant for this extraction
+        input_image.meta['NSPEC']   = (nspec, 'Number of spectra')
+        input_image.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
+        input_image.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
+        input_image.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
+       
         return self.run_pa(input_image,psf
                            ,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,
-                           dump=dump,dumpfile=dumpfile,maskFile=maskFile,usepsfboot=usepsfboot)
+                           dump=dump,dumpfile=dumpfile,maskFile=maskFile,usexsigma=usexsigma)
 
 
     def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
                fibers=None, fibermap=None,dump=False,dumpfile=None,
-               maskFile=None,usepsfboot=False):
+               maskFile=None,usexsigma=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
-                                  nspec=nspec,maskFile=maskFile,usepsfboot=usepsfboot)
+                                  nspec=nspec,maskFile=maskFile,usexsigma=usexsigma)
 
         #- write to a frame object
-        
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
         
         if dump and dumpfile is not None:
@@ -430,7 +405,7 @@ class ComputeFiberflat(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Compute Fiberflat"
+            name="ComputeFiberflat"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -461,7 +436,7 @@ class ApplyFiberFlat(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Apply FiberFlat"
+            name="ApplyFiberFlat"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -540,7 +515,7 @@ class ComputeSky(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Compute Sky"
+            name="ComputeSky"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -581,7 +556,7 @@ class ComputeSky_QL(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Compute Sky"
+            name="ComputeSky_QL"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -615,11 +590,11 @@ class ComputeSky_QL(pas.PipelineAlg):
         log.info("Sky Model file wrtten. Exiting the pipeline for this configuration")
         sys.exit(0)
 
-class SubtractSky(pas.PipelineAlg):
+class SkySub(pas.PipelineAlg):
 
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Sky Subtraction"
+            name="SkySub"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -644,7 +619,7 @@ class SubtractSky(pas.PipelineAlg):
         subtract_sky(input_frame,skymodel)
         return (input_frame, skymodel)
 
-class SubtractSky_QL(pas.PipelineAlg):
+class SkySub_QL(pas.PipelineAlg):
     """
        This is for QL Sky subtraction. The input frame object should be fiber flat corrected.
        Unlike offline, if no skymodel file is given as input, a sky compute method is called
@@ -653,7 +628,7 @@ class SubtractSky_QL(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Sky Subtraction"
+            name="SkySub_QL"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,type(tuple),config,logger)
@@ -714,4 +689,67 @@ class SubtractSky_QL(pas.PipelineAlg):
             log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return (sframe,skymodel)
+
+class ResolutionFit(pas.PipelineAlg):
+
+    """
+    Fitting of Arc lines on extracted arc spectra, polynomial expansion of the fitted sigmas, and updating
+    the coefficients to the new PSF file
+    """ 
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="ResolutionFit"
+        from  desispec.frame import Frame as fr
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if not kwargs["PSFbootfile"]:
+             raise qlexceptions.ParameterException("Missing psfbootfile in the arguments")
+
+        if "PSFoutfile" not in kwargs:
+             raise qlexceptions.ParameterException("Missing psfoutfile in the arguments")
+
+        psfoutfile=kwargs["PSFoutfile"]
+        psfbootfile=kwargs["PSFbootfile"] 
+
+        from desispec.psf import PSF
+        psfboot=PSF(psfbootfile)
+        domain=(psfboot.wmin,psfboot.wmax)
+
+        input_frame=args[0]
+
+        linelist=None
+        if "Linelist" in kwargs:
+            linelist=kwargs["Linelist"]
+
+        npoly=2
+        if "NPOLY" in kwargs:
+            npoly=kwargs["NPOLY"]
+        nbins=2
+        if "NBINS" in kwargs:
+            nbins=kwargs["NBINS"]
+
+        return self.run_pa(input_frame, psfbootfile, psfoutfile, linelist=linelist, npoly=npoly, nbins=nbins,domain=domain)
+    
+    def run_pa(self,input_frame,psfbootfile,outfile,linelist=None,npoly=2,nbins=2,domain=None):
+        from desispec.quicklook.arcprocess import process_arc,write_psffile
+        from desispec.quicklook.palib import get_resolution
+        from desispec.psf import PSF
+
+        wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
+        
+        #- write out the psf outfile
+        wstep=input_frame.meta["WAVESTEP"]
+        write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=wstep)
+        log.info("Wrote psf file {}".format(outfile))
+
+        #- update the arc frame resolution from new coeffs
+        newpsf=PSF(outfile)
+        input_frame.resolution_data=get_resolution(input_frame.wave,newpsf)
+ 
+        return input_frame
 

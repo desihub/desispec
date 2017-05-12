@@ -267,7 +267,10 @@ def integration_test(args=None):
         fiberflatfile = os.path.join(calib_dir,'fiberflat-{}-{:08d}.fits'.format(camera,flat_expid))
 
         #- Verify that quicklook pipeline runs
-        com = "desi_quicklook -n {} -c {} -e {} -f {} --psfboot {} --fiberflat {} --rawdata_dir {} --specprod_dir {}".format(night,camera,expid,'dark',psffile,fiberflatfile,raw_dir,output_dir)
+        if args.ql_data and args.ql_redux:
+            com = "desi_quicklook -n {} -c {} -e {} -f {} --psfboot {} --fiberflat {}".format(night,camera,expid,'dark',psffile,fiberflatfile)
+        else:
+            com = "desi_quicklook -n {} -c {} -e {} -f {} --psfboot {} --fiberflat {} --rawdata_dir {} --specprod_dir {}".format(night,camera,expid,'dark',psffile,fiberflatfile,raw_dir,output_dir)
         if runcmd(com) != 0:
             raise RuntimeError('quicklook pipeline failed for camera {}'.format(camera))
 

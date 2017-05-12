@@ -35,11 +35,15 @@ class Make_Config(object):
         self.amps=amps
 
         if rawdata_dir is None:
-            rawdata_dir=os.getenv('DESI_SPECTRO_DATA')
+            if 'QL_SPEC_DATA' not in os.environ:
+                log.critical("must set ${} environment variable".format('QL_SPEC_DATA'))
+            rawdata_dir=os.getenv('QL_SPEC_DATA')
         self.rawdata_dir=rawdata_dir 
 
         if specprod_dir is None:
-            specprod_dir=os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'))
+            if 'QL_SPEC_REDUX' not in os.environ:
+                log.critical("must set ${} environment variable".format('QL_SPEC_REDUX'))
+            specprod_dir=os.getenv('QL_SPEC_REDUX')
         self.specprod_dir=specprod_dir
 
         self.outdir=outdir
@@ -94,13 +98,14 @@ class Make_Config(object):
             elif self.camera[0] == 'z':
                 self.wavelength='7650,9830,0.8'
 
+        #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
         paopt_initialize={'camera': self.camera}
 
         paopt_preproc={'camera': self.camera, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("pix")} 
 
-        paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psfboot, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("frame")}
+        paopt_extract={'BoxWidth': 2.5, 'FiberMap': '%%FiberMap', 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': '%%PSFFile', 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("frame")}
 
-        paopt_apfflat={'FiberFlatFile': self.fiberflat, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("fframe")}
+        paopt_apfflat={'FiberFlatFile': '%%FiberFlatFile', 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("fframe")}
        
         paopt_skysub={'DumpIntermediates': self.dumpintermediates,'dumpfile': self.dump_pa("sframe")}
 
@@ -110,11 +115,11 @@ class Make_Config(object):
                 paopts[PA]=paopt_initialize
             elif PA=='Preproc':
                 paopts[PA]=paopt_preproc
-            elif PA=='BoxcarExtraction':
+            elif PA=='BoxcarExtract':
                 paopts[PA]=paopt_extract
             elif PA=='ApplyFiberFlat_QL':
                 paopts[PA]=paopt_apfflat
-            elif PA=='SubtractSky_QL':
+            elif PA=='SkySub_QL':
                 paopts[PA]=paopt_skysub
             else:
                 paopts[PA]={}
@@ -168,7 +173,7 @@ class Make_Config(object):
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psfboot, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': '%%PSFFile', 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': '%%FiberMap', 'param': params, 'qlf': self.qlf}
                 
         return qaopts 
    
@@ -202,9 +207,9 @@ class Make_Config(object):
         """
         outmap={'Initialize': 'initial',
                 'Preproc': 'preproc',
-                'BoxcarExtraction': 'boxextract',
+                'BoxcarExtract': 'boxextract',
                 'ApplyFiberFlat_QL': 'fiberflat',
-                'SubtractSky_QL': 'skysub'
+                'SkySub_QL': 'skysub'
                }
         if paname not in outmap:
             raise IOError("No output name map available for this PA:",paname)
@@ -257,11 +262,11 @@ class Palist(object):
     def _palist(self):
 
         if self.flavor == "arcs":
-            pa_list=['Initialize','Preproc','BoxcarExtraction'] #- class names for respective PAs (see desispec.quicklook.procalgs)
+            pa_list=['Initialize','Preproc','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
         elif self.flavor == "flat":
-            pa_list=['Initialize','Preproc','BoxcarExtraction', 'ComputeFiberFlat_QL']
+            pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
         elif self.flavor in ['dark','elg','lrg','qso','bright','grey','gray','bgs','mws']:
-            pa_list=['Initialize','Preproc','BoxcarExtraction', 'ApplyFiberFlat_QL','SubtractSky_QL']
+            pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
         else:
             log.warning("Not a valid flavor type. Use a valid flavor type. Exiting.")
             sys.exit(0)
@@ -274,7 +279,7 @@ class Palist(object):
         QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
         QAs_extract=['CountSpectralBins']
         QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
-        QAs_subtractsky=['Sky_Residual','Integrate_Spec','Calculate_SNR']
+        QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
         
         qalist={}
         for PA in self.palist:
@@ -282,12 +287,12 @@ class Palist(object):
                 qalist[PA] = QAs_initial
             elif PA == 'Preproc':
                 qalist[PA] = QAs_preproc
-            elif PA == 'BoxcarExtraction':
+            elif PA == 'BoxcarExtract':
                 qalist[PA] = QAs_extract
             elif PA == 'ApplyFiberFlat_QL':
                 qalist[PA] = QAs_apfiberflat
-            elif PA == 'SubtractSky_QL':
-                qalist[PA] = QAs_subtractsky
+            elif PA == 'SkySub_QL':
+                qalist[PA] = QAs_SkySub
             else:
                 qalist[PA] = None #- No QA for this PA
         self.qamodule='desispec.qa.qa_quicklook'
@@ -317,10 +322,10 @@ def build_config(config):
     pipeline = []
     for ii,PA in enumerate(config.palist):
         pipe={'OutputFile': config.dump_qa()[1][0][PA]}
-        pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'Name': PA, 'kwargs': config.paargs[PA]}
+        pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'kwargs': config.paargs[PA]}
         pipe['QAs']=[]
         for jj, QA in enumerate(config.qalist[PA]):
-            pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'Name': QA, 'kwargs': config.qaargs[QA]}
+            pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'kwargs': config.qaargs[QA]}
             pipe['QAs'].append(pipe_qa)
         pipe['StepName']=PA
         pipeline.append(pipe)

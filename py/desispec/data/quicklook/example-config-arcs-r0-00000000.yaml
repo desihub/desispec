@@ -1,0 +1,73 @@
+Camera: r0
+DumpIntermediates: true
+Expid: 2
+FiberMap: ./fibermap-00000000.fits
+OutputFile: ./lastframe-r0-00000000.fits
+PSFFile: ../psfboot-r0.fits
+Period: 5.0
+PipeLine:
+- OutputFile: ./ql-initial-r0-00000000.yaml
+  PA:
+    ClassName: Initialize
+    ModuleName: desispec.quicklook.procalgs
+    kwargs: {camera: r0}
+  QAs:
+  - ClassName: Bias_From_Overscan
+    ModuleName: desispec.qa.qa_quicklook
+    kwargs: {FiberMap: '%%FiberMap', PSFFile: '%%PSFFile', amps: true, camera: r0,
+      paname: Initialize, param: null, qafig: ./ql-getbias-r0-00000000.png,
+      qafile: ./ql-getbias-r0-00000000.yaml, qlf: false}
+  StepName: Initialize
+- OutputFile: ./ql-preproc-r0-00000000.yaml
+  PA:
+    ClassName: Preproc
+    ModuleName: desispec.quicklook.procalgs
+    kwargs: {DumpIntermediates: true, camera: r0, dumpfile: ./pix-r0-00000000.fits}
+  QAs:
+  - ClassName: Get_RMS
+    ModuleName: desispec.qa.qa_quicklook
+    kwargs: {FiberMap: '%%FiberMap', PSFFile: '%%PSFFile', amps: true, camera: r0,
+      paname: Preproc, param: null, qafig: ./ql-getrms-r0-00000000.png,
+      qafile: ./ql-getrms-r0-00000000.yaml, qlf: false}
+  - ClassName: Count_Pixels
+    ModuleName: desispec.qa.qa_quicklook
+    kwargs:
+      FiberMap: '%%FiberMap'
+      PSFFile: '%%PSFFile'
+      amps: true
+      camera: r0
+      paname: Preproc
+      param: {CUTHI: 500, CUTLO: 100}
+      qafig: ./ql-countpix-r0-00000000.png
+      qafile: ./ql-countpix-r0-00000000.yaml
+      qlf: false
+  StepName: Preproc
+- OutputFile: ./ql-boxextract-r0-00000000.yaml
+  PA:
+    ClassName: BoxcarExtract
+    ModuleName: desispec.quicklook.procalgs
+    kwargs: {BoxWidth: 2.5, DumpIntermediates: true, FiberMap: '%%FiberMap', Nspec: 500,
+      PSFFile: '%%PSFFile', Wavelength: '5630,7740,0.8', dumpfile: ./frame-r0-00000000.fits}
+  QAs:
+  - ClassName: CountSpectralBins
+    ModuleName: desispec.qa.qa_quicklook
+    kwargs:
+      FiberMap: '%%FiberMap'
+      PSFFile: '%%PSFFile'
+      amps: true
+      camera: r0
+      paname: BoxcarExtraction
+      param: {CUTHI: 500, CUTLO: 100, CUTMED: 250}
+      qafig: ./ql-countbins-r0-00000000.png
+      qafile: ./ql-countbins-r0-00000000.yaml
+      qlf: false
+  StepName: BoxcarExtract
+- OutputFile:
+  PA:
+    ClassName: ResolutionFit
+    ModuleName: desispec.quicklook.procalgs
+    kwargs: {PSFbootfile: ../psfboot-r0.fits, PSFoutfile: ./psf-r0.fits, NBINS: 5, NPOLY: 2}
+  QAs: []
+  StepName: ResolutionFit
+RawImage: ./desi-00000000.fits.fz
+Timeout: 120.0

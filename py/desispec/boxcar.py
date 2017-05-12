@@ -3,8 +3,9 @@ boxcar extraction for Spectra from Desi Image
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np
+from desispec.quicklook.palib import resample_spec,get_resolution
 
-def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usepsfboot=False):
+def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usexsigma=False):
     """Extracts spectra row by row, given the centroids
 
     Args:
@@ -13,7 +14,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usepsfboot=
             Or do we just parse the traces here and write a separate wrapper to handle this? Leaving psf in the input argument now.
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels
-        usepsfboot: if True, use xsigma from psfboot file to calculate resolution data. 
+        usexsigma: if True, use xsigma from psfboot file to calculate resolution data. 
 
     Returns flux, ivar, resolution
     """
@@ -110,8 +111,6 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usepsfboot=
         vrow=np.add.reduceat(maskedvar[r],ranges[r])[:-1]
         ivar[r]=1/vrow
 
-    from desispec.interpolation import resample_flux
-
     wtarget=outwave
     #- limit nspec to psf.nspec max
     if nspec > psf.nspec:
@@ -128,10 +127,9 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usepsfboot=
         dwave=np.gradient(ww)
         flux[:,spec]/=dwave
         ivar[:,spec]*=dwave**2
-        fflux[spec,:],iivar[spec,:]=resample_flux(wtarget,ww,flux[:,spec],ivar[:,spec])
+        fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
-    #- Add zeroth order resolution from a constant Gaussian Xsigma from psfboot
-    from desispec.quicklook.procalgs import get_resolution
-    resolution=get_resolution(wtarget,fflux,iivar,psf,usepsfboot=usepsfboot)
+    #- Get resolution from the psf  
+    resolution=get_resolution(wtarget,nspec,psf,usexsigma=usexsigma)
 
     return fflux,iivar,resolution
