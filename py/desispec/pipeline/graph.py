@@ -150,13 +150,16 @@ def graph_name_split(name):
         mat = pat.match(propstr)
         if mat is not None:
             ret = (typestr, mat.group(1), mat.group(2), mat.group(3))
-    elif typestr == "brick":
-        pat = re.compile(r"([brz])-(.*)")
+    elif typestr == "spectra":
+        pat = re.compile(r"(.*)-(.*)")
         mat = pat.match(propstr)
         if mat is not None:
             ret = (typestr, mat.group(1), mat.group(2))
     elif typestr == "zbest":
-        ret = (typestr, propstr)
+        pat = re.compile(r"(.*)-(.*)")
+        mat = pat.match(propstr)
+        if mat is not None:
+            ret = (typestr, mat.group(1), mat.group(2))
     else:
         raise RuntimeError("object has unknown type {}".format(typestr))
 
@@ -192,7 +195,8 @@ def graph_path(name):
 
         expid = None
         camera = None
-        brickname = None
+        nside = None
+        pixel = None
         band = None
         spectrograph = None
 
@@ -235,18 +239,19 @@ def graph_path(name):
             band = tp[1]
             spectrograph = int(tp[2])
             expid = int(tp[3])
-        elif type == "brick":
-            band = tp[1]
-            brickname = tp[2]
+        elif type == "spectra":
+            nside = int(tp[1])
+            pixel = int(tp[2])
         elif type == "zbest":
-            brickname = tp[1]
+            nside = int(tp[1])
+            pixel = int(tp[2])
         else:
             raise RuntimeError("unknown type {}".format(type))
 
         if (band is not None) and (spectrograph is not None):
             camera = "{}{}".format(band, spectrograph)
 
-        path = io.findfile(type, night=night, expid=expid, camera=camera, brickname=brickname, band=band, spectrograph=spectrograph)
+        path = io.findfile(type, night=night, expid=expid, camera=camera, groupname=pixel, nside=nside, band=band, spectrograph=spectrograph)
     return path
 
 

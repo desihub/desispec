@@ -8,6 +8,9 @@ import os
 import astropy.io
 import numpy as np
 
+from ..util import healpix_degrade_fixed
+
+
 def iterfiles(root, prefix):
     '''
     Returns iterator over files starting with `prefix` found under `root` dir
@@ -198,3 +201,28 @@ def _dict2ndarray(data, columns=None):
         xdata[key] = data[key]
 
     return xdata
+
+
+def healpix_subdirectory(nside, pixel):
+    """
+    Return a fixed directory path for healpix grouped files.
+
+    Given an NSIDE and NESTED pixel index, return a directory
+    named after a degraded NSIDE and pixel followed by the 
+    original nside and pixel.  This function is just to ensure
+    that this subdirectory path is always created by the same
+    code.
+
+    Args:
+        nside (int): a valid NSIDE value.
+        pixel (int): the NESTED pixel index.
+
+    Returns (str):
+        a path containing the low and high resolution 
+        directories.
+
+    """
+    subnside, subpixel = healpix_degrade_fixed(nside, pixel)
+    return os.path.join("{}-{}".format(subnside, subpixel), 
+        "{}-{}".format(nside, pixel))
+

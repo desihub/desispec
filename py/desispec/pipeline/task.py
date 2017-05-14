@@ -885,7 +885,7 @@ class WorkerRedmonster(Worker):
 
     def run(self, grph, task, opts, comm=None):
         """
-        Run Redmonster on a brick.
+        Run Redmonster on a spectral group.
 
         Args:
             grph (dict): pruned graph with this task and dependencies.
@@ -903,11 +903,11 @@ class WorkerRedmonster(Worker):
 
         node = grph[task]
 
-        brick = node["brick"]
+        spectra = node["spectra"]
         outfile = graph_path(task)
         #qafile, qafig = qa_path(outfile)
         options = {}
-        options["brick"] = brick
+        options["brick"] = spectra
         options["outfile"] = outfile
         #- TODO: no QA for desi_zfind yet
         options.update(opts)
