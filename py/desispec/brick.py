@@ -54,10 +54,16 @@ class Bricks(object):
         edges_ra[0] = edges_ra[-1] = np.array([0, 360])
         center_ra[0] = center_ra[-1] = np.array([180,])
 
+        #ADM to calculate brick areas, we can't exceed the poles
+        edges_dec_pole_limit = edges_dec
+        edges_dec_pole_limit[0] = -90.
+        edges_dec_pole_limit[-1] = 90.
+
         #- Brick names [row, col]        
         brickname = list()
         #ADM brick areas [row, col]
         brickarea = list()
+
         for i in range(nrow):
             pm = 'p' if center_dec[i] >= 0 else 'm'
             dec = center_dec[i]
@@ -67,7 +73,7 @@ class Bricks(object):
                 names.append('{:04d}{}{:03d}'.format(int(ra*10), pm, int(abs(dec)*10)))
             brickname.append(names)
             #ADM integrate area factors between Dec edges and RA edges in degrees
-            decfac = np.diff(np.degrees(np.sin(np.radians(edges_dec[i:i+2]))))
+            decfac = np.diff(np.degrees(np.sin(np.radians(edges_dec_pole_limit[i:i+2]))))
             rafac = np.diff(edges_ra[i])
             brickarea.append(list(rafac*decfac))
 
