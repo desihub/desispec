@@ -32,15 +32,15 @@ class TestBrick(unittest.TestCase):
             '0002p000', '0007p005', '0007p010', '0012p010', '0017p015'])
         #ADM some brick areas
         self.areas = np.array(
-            [0.06247853,  0.06248508,  0.06249459,  0.06249757,  0.06249936,
-             0.06249936,  0.06249757,  0.06249459,  0.06248508,  0.06247853])
+            [0.062478535,  0.062485076,  0.062494595,  0.062497571,  0.062499356,
+             0.062499356,  0.062497571,  0.062494595,  0.062485076,  0.062478535], dtype='<f4')
 
     def test_brickarea_scalar(self):
         """Test scalar to brick area conversion.
         """
         b = brick.Bricks()
         barea = b.brickarea(0, 0)
-        self.assertEqual(barea, 0.062499952)
+        self.assertEqual(barea, np.array([0.0624999515],dtype='<f4')[0])
 
     def test_brickarea_array(self):
         """Test array to brick area conversion.
@@ -64,12 +64,12 @@ class TestBrick(unittest.TestCase):
         b1 = b.brickarea(0, 90)
         b2 = b.brickarea(90, 90)
         self.assertEqual(b1, b2)
-        self.assertEqual(b1, 662174)
+        self.assertEqual(b1, np.array([0.049087364],dtype='<f4')[0])
 
         b1 = b.brickarea(0, -90)
         b2 = b.brickarea(90, -90)
         self.assertEqual(b1, b2)
-        self.assertEqual(b1, 1)
+        self.assertEqual(b1, np.array([0.049087364],dtype='<f4')[0])
 
     def test_brickid_scalar(self):
         """Test scalar to BRICKID conversion.
