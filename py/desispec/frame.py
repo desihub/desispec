@@ -185,3 +185,11 @@ class Frame(object):
                     meta=self.meta, fibermap=fibermap, chi2pix=chi2pix)
 
         return result
+
+    def __repr__(self):
+        txt = '<{:s}: nspec={:d}, nwave={:d}'.format(
+            self.__class__.__name__, self.nspec, self.nwave)
+
+        # Finish
+        txt = txt + '>'
+        return (txt)

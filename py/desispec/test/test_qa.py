@@ -192,3 +192,33 @@ def test_suite():
         python setup.py test -m <modulename>
     """
     return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
+def qa_frame_plot_test():
+    from desispec.io import frame as io_frame
+    from desispec.io import fluxcalibration as io_flux
+    from desispec.qa import qa_plots
+    from desispec.qa import qa_frame
+    path = '/home/xavier/DESI/DESI_SCRATCH/dc17a-test/exposures/20190829/00000020/'
+    # Frame
+    frame = io_frame.read_frame(path+'frame-b1-00000020.fits')
+    # Load calib
+    fluxcalib = io_flux.read_flux_calibration(path+'calib-b1-00000020.fits')
+    # QA Frame
+    tdict = {}
+    tdict['20190829'] = {}
+    dint = 20
+    tdict['20190829'][dint] = {}
+    tdict['20190829'][dint]['flavor'] = 'dark'
+    tdict['20190829'][dint]['b'] = {}
+    tdict['20190829'][dint]['b']['FLUXCALIB'] = {}
+    tdict['20190829'][dint]['b']['FLUXCALIB']['METRICS'] = {}
+    tdict['20190829'][dint]['b']['FLUXCALIB']['METRICS']['BLAH'] = 1
+    qaframe = qa_frame.QA_Frame(tdict)
+    # Plot
+    qa_plots.frame_fluxcalib('tmp.pdf', qaframe, frame, fluxcalib)
+
+
+#- This runs all test* functions in any TestCase class in this file
+if __name__ == '__main__':
+    #unittest.main()
+    qa_frame_plot_test()
