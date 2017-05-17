@@ -530,7 +530,7 @@ class Sky_Peaks(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         # define sky peaks and wavelength region around peak flux to be integrated
-        dw=2.
+        dw=2
         b_peaks=np.array([3914.4,5199.3,5201.8])
         r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
         z_peaks=np.array([8401.5,8432.4,8467.5,9479.4,9505.6,9521.8])
