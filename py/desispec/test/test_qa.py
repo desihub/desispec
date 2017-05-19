@@ -8,7 +8,11 @@ import pdb
 import numpy as np
 import os
 from desispec.frame import Frame
-from desispec.qa import QA_Frame, QA_Exposure, QA_Brick, QA_Prod
+#from desispec.qa import QA_Frame, QA_Exposure, QA_Brick, QA_Prod
+from desispec.qa.qa_frame import QA_Frame
+from desispec.qa.qa_exposure import QA_Exposure
+from desispec.qa.qa_brick import QA_Brick
+from desispec.qa.qa_prod import QA_Prod
 from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure
 #from uuid import uuid4
 from shutil import rmtree
@@ -92,8 +96,8 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_frame(self):
         #- Simple Init call
-        qafrm1 = QA_Frame(self._make_frame(flavor='dark'))
-        assert qafrm1.flavor == 'dark'
+        qafrm1 = QA_Frame(self._make_frame(flavor='science'))
+        assert qafrm1.flavor == 'science'
 
     def test_init_qa_fiberflat(self):
         #- Init FiberFlat dict
@@ -107,7 +111,7 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_fluxcalib(self):
         #- Init FluxCalib dict
-        qafrm = QA_Frame(self._make_frame(flavor='dark'))
+        qafrm = QA_Frame(self._make_frame(flavor='science'))
         qafrm.init_fluxcalib()
         assert qafrm.qa_data['FLUXCALIB']['PARAMS']['MAX_ZP_OFF'] > 0.
 
@@ -117,7 +121,7 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_skysub(self):
         #- Init SkySub dict
-        qafrm = QA_Frame(self._make_frame(flavor='dark'))
+        qafrm = QA_Frame(self._make_frame(flavor='science'))
         qafrm.init_skysub()
         assert qafrm.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'] > 0.
 
@@ -195,7 +199,7 @@ class TestQA(unittest.TestCase):
         tdict['20190829'] = {}
         dint = 20
         tdict['20190829'][dint] = {}
-        tdict['20190829'][dint]['flavor'] = 'dark'
+        tdict['20190829'][dint]['flavor'] = 'science'
         tdict['20190829'][dint]['b'] = {}
         tdict['20190829'][dint]['b']['FLUXCALIB'] = {}
         tdict['20190829'][dint]['b']['FLUXCALIB']['METRICS'] = {}
