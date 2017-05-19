@@ -165,12 +165,19 @@ class Frame(object):
         if self.meta is None:
             bad_meta = True
         else:
-            for key in ['FLAVOR']:
-                if key not in self.meta.keys():
+            from desispec.io.params import read_obj_param
+            # Check flavor
+            if 'FLAVOR' not in self.meta.keys():
+                bad_meta = True
+            else:
+                obj_params = read_obj_param()
+                if self.meta['FLAVOR'] not in obj_params['frame_types']:
                     bad_meta = True
+
 
         # Generate the flag
         diagnosis = 0 + 2**0 * bad_shape + 2**1 * bad_meta
+        return diagnosis
 
     def __getitem__(self, index):
         """

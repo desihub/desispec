@@ -147,7 +147,7 @@ def read_frame(filename, nspec=None):
             mask = mask[0:nspec]
 
     # return flux,ivar,wave,resolution_data, hdr
-    frame =  Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix)
+    frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix)
 
     # Vette
     diagnosis = frame.vette()
