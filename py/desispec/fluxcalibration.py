@@ -1055,6 +1055,17 @@ class FluxCalib(object):
         self.mask = util.mask32(mask)
         self.meancalib = meancalib
 
+        self.meta = dict(units='photons/(erg/s/cm^2)')
+
+    def __repr__(self):
+        txt = '<{:s}: nspec={:d}, nwave={:d}, units={:s}'.format(
+            self.__class__.__name__, self.nspec, self.nwave, self.meta['units'])
+
+        # Finish
+        txt = txt + '>'
+        return (txt)
+
+
 def apply_flux_calibration(frame, fluxcalib):
     """
     Applies flux calibration to input flux and ivar
