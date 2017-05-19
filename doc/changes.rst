@@ -5,6 +5,7 @@ desispec Change Log
 0.14.1 (unreleased)
 -------------------
 
+* Added function to calculate brick areas at a given location (PR `#384`_).
 * Add scripts for submitting nightly job chains.
 * Production creation now correctly handles slicing by spectrograph.
 * Pipeline job concurrency now computed based on task run time and
@@ -14,6 +15,7 @@ desispec Change Log
 * Additional LOCATION, DEVICE_LOC, and PETAL_LOC columns for fibermap (PR `#379`_).
 * Create util.py in tests/ which is intended to contain methods to facilitate test runs
 
+.. _`#384`: https://github.com/desihub/desispec/pull/384
 .. _`#378`: https://github.com/desihub/desispec/pull/378
 .. _`#379`: https://github.com/desihub/desispec/pull/379
 

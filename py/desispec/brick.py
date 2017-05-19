@@ -54,8 +54,16 @@ class Bricks(object):
         edges_ra[0] = edges_ra[-1] = np.array([0, 360])
         center_ra[0] = center_ra[-1] = np.array([180,])
 
-        #- Brick names [row, col]
+        #ADM to calculate brick areas, we can't exceed the poles
+        edges_dec_pole_limit = edges_dec
+        edges_dec_pole_limit[0] = -90.
+        edges_dec_pole_limit[-1] = 90.
+
+        #- Brick names [row, col]        
         brickname = list()
+        #ADM brick areas [row, col]
+        brickarea = list()
+
         for i in range(nrow):
             pm = 'p' if center_dec[i] >= 0 else 'm'
             dec = center_dec[i]
@@ -64,10 +72,15 @@ class Bricks(object):
                 ra = center_ra[i][j]
                 names.append('{:04d}{}{:03d}'.format(int(ra*10), pm, int(abs(dec)*10)))
             brickname.append(names)
+            #ADM integrate area factors between Dec edges and RA edges in degrees
+            decfac = np.diff(np.degrees(np.sin(np.radians(edges_dec_pole_limit[i:i+2]))))
+            rafac = np.diff(edges_ra[i])
+            brickarea.append(list(rafac*decfac))
 
         self._bricksize = bricksize
         self._ncol_per_row = ncol_per_row
         self._brickname = brickname
+        self._brickarea = brickarea
         self._center_dec = center_dec
         self._edges_dec = edges_dec
         self._center_ra = center_ra
@@ -145,6 +158,48 @@ class Bricks(object):
         if inscalar:
             return brickid[0]
         return brickid
+
+    def brickarea(self, ra, dec):
+        """Return the area of the brick that given locations lie in
+
+        Parameters
+        ----------
+        ra : array_like.
+            The Right Ascensions of the locations of interest
+        dec : array_like.
+            The Declinations of the locations of interest
+        
+        Returns
+        -------
+        brickarea : array_like.
+            The areas of the brick in which the locations of interest lie
+        """
+        #ADM record whether the user wanted non-array behavior
+        inscalar = np.isscalar(ra)
+
+        #ADM enforce array behavior and correct for wraparound
+        ra = np.atleast_1d(ra) % 360
+        dec = np.atleast_1d(dec)
+
+        #ADM the brickrow based on the declination
+        brickrow = ((dec+90.0+self._bricksize/2)/self._bricksize).astype(int)
+
+        #ADM the brickcolumn based on the RA
+        ncol = self._ncol_per_row[brickrow]
+        brickcol = (ra/360.0 * ncol).astype(int)
+
+        #ADM the list of areas to return
+        areas = np.empty(len(ra), dtype='<f4')
+
+        #ADM grab the areas from the class
+        for row in set(brickrow):
+            cols = np.where(row == brickrow)
+            areas[cols] = np.array(self._brickarea[row])[brickcol[cols]]
+
+        #ADM returns the area as a scalar or array (depending on what was passed)
+        if inscalar:
+            return areas[0]
+        return areas
 
     def brick_radec(self, ra, dec):
         """Return center (ra,dec) of brick that contains input (ra, dec) [deg]
