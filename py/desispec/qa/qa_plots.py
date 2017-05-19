@@ -352,24 +352,21 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     """ QA plots for Flux calibration in a Frame
 
     Args:
-        outfil:
-        qaframe:
-        frame:
+        outfil: str, name of output file
+        qaframe: dict containing QA info
+        frame: frame object containing extraction of standard stars
+        fluxcalib: fluxcalib object containing flux calibration
 
     Returns:
-        Stuff?
     """
-    from desispec.fluxcalibration import resample_flux
     log = get_logger()
-    # Unpack star data
-    #sqrtwmodel, sqrtwflux, current_ivar, chi2 = indiv_stars
-
-    # Unpack model
 
     # Standard stars
-    stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    #stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
     stdstars = frame[stdfibers]
-    nstds = np.sum(stdfibers)
+    #nstds = np.sum(stdfibers)
+    nstds = len(stdfibers)
 
     # Median spectrum
     medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)

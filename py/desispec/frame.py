@@ -215,3 +215,17 @@ class Frame(object):
                     meta=self.meta, fibermap=fibermap, chi2pix=chi2pix)
 
         return result
+
+    def __repr__(self):
+        txt = '<{:s}: nspec={:d}, nwave={:d}'.format(
+            self.__class__.__name__, self.nspec, self.nwave)
+
+        # Optional items
+        if self.spectrograph is not None:
+            txt + ', spectrograph={}'.format(self.spectrograph)
+        if self.meta is not None:
+            txt + ', FIBERMIN={}'.format(self.meta['FIBERMIN'])
+
+        # Finish
+        txt = txt + '>'
+        return (txt)

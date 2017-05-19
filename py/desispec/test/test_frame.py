@@ -57,6 +57,9 @@ class TestFrame(unittest.TestCase):
         #- Check a fiber-assigning method is required
         self.assertRaises(ValueError, lambda x: Frame(*x), (wave, flux, ivar))
 
+        # Check repr
+        print(frame)
+
     def test_slice(self):
         nspec = 5
         nwave = 10
