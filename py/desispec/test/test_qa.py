@@ -41,7 +41,7 @@ class TestQA(unittest.TestCase):
         if os.path.exists(cls.testDir):
             rmtree(cls.testDir)
 
-    def _make_frame(self, camera='b0', flavor='dark', night=None, expid=None):
+    def _make_frame(self, camera='b0', flavor='science', night=None, expid=None):
         if night is None:
             night = self.night
         if expid is None:
