@@ -154,3 +154,5 @@ def read_frame(filename, nspec=None):
     if diagnosis != 0:
         warnings.warn("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
         log.error("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
+    # Return
+    return frame

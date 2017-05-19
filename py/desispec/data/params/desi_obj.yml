@@ -1,2 +1,1 @@
-frame_types: ['none', 'flat','arc','bias','dark','bright','bgs','mws','lrg','elg','qso','gray']
-sci_types:   ['dark','bright','bgs','mws','lrg','elg','qso','gray']
+frame_types: ['none', 'flat','arc','bias','science']

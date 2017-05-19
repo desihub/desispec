@@ -103,8 +103,7 @@ class QA_Frame(object):
         """
         log=get_logger()
         obj_params = read_obj_param()
-        assert self.flavor in obj_params['sci_types']
-        #assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso','gray']
+        assert self.flavor == 'science'
 
         # Standard FLUXCALIB input parameters
         flux_dict = dict(ZP_WAVE=0.,        # Wavelength for ZP evaluation (camera dependent)
@@ -133,8 +132,7 @@ class QA_Frame(object):
           Re-initialize SKYSUB parameter dict
         """
         obj_params = read_obj_param()
-        assert self.flavor in obj_params['sci_types']
-        #assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso','gray']
+        assert self.flavor == 'science'
 
         # Standard SKYSUB input parameters
         sky_dict = dict(

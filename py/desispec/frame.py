@@ -173,7 +173,8 @@ class Frame(object):
                 obj_params = read_obj_param()
                 if self.meta['FLAVOR'] not in obj_params['frame_types']:
                     bad_meta = True
-
+        #if bad_meta:
+        #    import pdb; pdb.set_trace()
 
         # Generate the flag
         diagnosis = 0 + 2**0 * bad_shape + 2**1 * bad_meta
