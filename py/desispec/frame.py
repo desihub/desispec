@@ -142,6 +142,36 @@ class Frame(object):
         if self.meta is not None:
             self.meta['FIBERMIN'] = np.min(self.fibers)
 
+    def vette(self):
+        """ Perform very basic checks on the frame
+        Generally run before writing to disk (or when read)
+        Args:
+            index:
+
+        Returns:
+            diagnosis: int  (bitwise flag)
+              0: Pass
+              2**0: Improper meta data
+              2**1: Improper data shapes
+
+        """
+        # Shapes
+        bad_shape = False
+        if (self.nspec,self.nwave) != self.flux.shape:
+            bad_shape = True
+
+        # Meta data
+        bad_meta = False
+        if self.meta is None:
+            bad_meta = True
+        else:
+            for key in ['FLAVOR']:
+                if key not in self.meta.keys():
+                    bad_meta = True
+
+        # Generate the flag
+        diagnosis = 0 + 2**0 * bad_shape + 2**1 * bad_meta
+
     def __getitem__(self, index):
         """
         Return a subset of the spectra on this frame

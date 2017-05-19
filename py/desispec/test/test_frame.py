@@ -95,6 +95,8 @@ class TestFrame(unittest.TestCase):
         self.assertEqual(len(x.fibermap), 2)
         self.assertEqual(x.chi2pix.shape, (2,nwave))
 
+#    def test_vette(self):
+
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
     unittest.main()           
