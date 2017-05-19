@@ -30,6 +30,46 @@ class TestBrick(unittest.TestCase):
         self.names = np.array(
             ['3587m015', '3587m010', '3592m010', '3597m005', '3597p000',
             '0002p000', '0007p005', '0007p010', '0012p010', '0017p015'])
+        #ADM some brick areas
+        self.areas = np.array(
+            [0.062478535,  0.062485076,  0.062494595,  0.062497571,  0.062499356,
+             0.062499356,  0.062497571,  0.062494595,  0.062485076,  0.062478535], dtype='<f4')
+
+    def test_brickarea_scalar(self):
+        """Test scalar to brick area conversion.
+        """
+        b = brick.Bricks()
+        barea = b.brickarea(0, 0)
+        self.assertEqual(barea, np.array([0.0624999515],dtype='<f4')[0])
+
+    def test_brickarea_array(self):
+        """Test array to brick area conversion.
+        """
+        b = brick.Bricks()
+        bareas = b.brickarea(self.ra, self.dec)
+        self.assertEqual(len(bareas), len(self.ra))
+        self.assertTrue((bareas == self.areas).all())
+
+    def test_brickarea_wrap(self):
+        """Test RA wrap and poles for brick areas"""
+        b = brick.Bricks()
+        b1 = b.brickarea(1, 0)
+        b2 = b.brickarea(361, 0)
+        self.assertEqual(b1, b2)
+
+        b1 = b.brickarea(-0.5, 0)
+        b2 = b.brickarea(359.5, 0)
+        self.assertEqual(b1, b2)
+
+        b1 = b.brickarea(0, 90)
+        b2 = b.brickarea(90, 90)
+        self.assertEqual(b1, b2)
+        self.assertEqual(b1, np.array([0.049087364],dtype='<f4')[0])
+
+        b1 = b.brickarea(0, -90)
+        b2 = b.brickarea(90, -90)
+        self.assertEqual(b1, b2)
+        self.assertEqual(b1, np.array([0.049087364],dtype='<f4')[0])
 
     def test_brickid_scalar(self):
         """Test scalar to BRICKID conversion.
@@ -45,6 +85,27 @@ class TestBrick(unittest.TestCase):
         bids = b.brickid(self.ra, self.dec)
         self.assertEqual(len(bids), len(self.ra))
         self.assertTrue((bids == self.brickids).all())
+
+    def test_brickid_wrap(self):
+        """Test RA wrap and poles for BRICKIDs"""
+        b = brick.Bricks()
+        b1 = b.brickid(1, 0)
+        b2 = b.brickid(361, 0)
+        self.assertEqual(b1, b2)
+
+        b1 = b.brickid(-0.5, 0)
+        b2 = b.brickid(359.5, 0)
+        self.assertEqual(b1, b2)
+
+        b1 = b.brickid(0, 90)
+        b2 = b.brickid(90, 90)
+        self.assertEqual(b1, b2)
+        self.assertEqual(b1, 662174)
+
+        b1 = b.brickid(0, -90)
+        b2 = b.brickid(90, -90)
+        self.assertEqual(b1, b2)
+        self.assertEqual(b1, 1)
 
     def test_brickid_wrap(self):
         """Test RA wrap and poles for BRICKIDs"""
