@@ -8,12 +8,13 @@ import os
 from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
 from pkg_resources import resource_filename
-import desispec
 import desispec.sky
 from desispec.preproc import _parse_sec_keyword
 from specter.psf import load_psf
 import astropy.io.fits as fits
 from desispec.quicklook import qllogger
+import desispec.io
+import desispec.image
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -125,6 +126,9 @@ class TestQL(unittest.TestCase):
         hdr['DOSVER'] = 'SIM'
         hdr['FEEVER'] = 'SIM'
         hdr['DETECTOR'] = 'SIM'
+
+        #if os.path.exists(self.rawfile):
+        #    import IPython; IPython.embed()
         desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
         
@@ -177,6 +181,7 @@ class TestQL(unittest.TestCase):
         self.map2pix["RIGHT_MIN_FIBER"] = 17
         self.map2pix["BOTTOM_MAX_WAVE_INDEX"] = 900
         self.map2pix["TOP_MIN_WAVE_INDEX"] = 1100
+
     #- test some qa utility functions:
     def test_ampregion(self):
         pixboundary=qalib.ampregion(self.image)
