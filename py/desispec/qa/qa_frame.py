@@ -8,7 +8,7 @@ import numpy as np
 import os
 
 from desiutil.log import get_logger
-from desispec.io.params import read_obj_param
+from desispec.io import read_obj_param
 
 
 # log=get_logger()

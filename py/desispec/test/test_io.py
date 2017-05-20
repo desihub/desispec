@@ -118,7 +118,7 @@ class TestIO(unittest.TestCase):
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        meta = dict(BLAT=0, FOO='abc', FIBERMIN=500)
+        meta = dict(BLAT=0, FOO='abc', FIBERMIN=500, FLAVOR='science')
         mask_int = np.zeros((nspec, nwave), dtype=int)
         mask_uint = np.zeros((nspec, nwave), dtype=np.uint32)
         wave = np.arange(nwave)
@@ -174,7 +174,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(frame.fibermap, None)
         fibermap = empty_fibermap(nspec)
         fibermap['TARGETID'] = np.arange(nspec)*2
-        frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap)
+        frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap, meta=dict(FLAVOR='science'))
         write_frame(self.testfile, frx)
         frame = read_frame(self.testfile)
         for name in fibermap.dtype.names:
@@ -494,7 +494,7 @@ class TestIO(unittest.TestCase):
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones(flux.shape)
         frame = Frame(wave, flux, ivar, spectrograph=0)
-        frame.meta = dict(CAMERA='b0', FLAVOR='dark', NIGHT='20160607', EXPID=1)
+        frame.meta = dict(CAMERA='b0', FLAVOR='science', NIGHT='20160607', EXPID=1)
         #- Init
         qaframe = QA_Frame(frame)
         qaframe.init_skysub()
