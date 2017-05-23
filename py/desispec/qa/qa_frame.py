@@ -155,7 +155,7 @@ class QA_Frame(object):
         from desispec.fluxcalibration import qa_fluxcalib
 
         # Check for previous QA if clobber==False
-        if not clobber:
+        if (not clobber) and (qatype in self.qa_data.keys()):
             # QA previously performed?
             if 'METRICS' in self.qa_data[qatype]:
                 return
