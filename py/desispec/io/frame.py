@@ -9,6 +9,7 @@ import os.path
 import numpy as np
 import scipy, scipy.sparse
 from astropy.io import fits
+import warnings
 
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
@@ -46,6 +47,11 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
         hdr = fitsheader(frame.meta)
 
     add_dependencies(hdr)
+
+    # Vette
+    diagnosis = frame.vette()
+    if diagnosis != 0:
+        raise IOError("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
 
     hdus = fits.HDUList()
     x = fits.PrimaryHDU(frame.flux.astype('f4'), header=hdr)
@@ -97,6 +103,8 @@ def read_frame(filename, nspec=None):
     Returns:
         desispec.Frame object with attributes wave, flux, ivar, etc.
     """
+    log = get_logger()
+
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, str):
         night, expid, camera = filename
@@ -139,4 +147,12 @@ def read_frame(filename, nspec=None):
             mask = mask[0:nspec]
 
     # return flux,ivar,wave,resolution_data, hdr
-    return Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix)
+    frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix)
+
+    # Vette
+    diagnosis = frame.vette()
+    if diagnosis != 0:
+        warnings.warn("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
+        log.error("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
+    # Return
+    return frame

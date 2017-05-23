@@ -335,7 +335,8 @@ class TestFiberFlat(unittest.TestCase):
         io.write_fibermap(self.testfibermap, fibermap)
 
         #- write out the frame
-        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0, fibermap=fibermap)
+        frame = Frame(wave, convflux, ivar, mask, Rdata, spectrograph=0, fibermap=fibermap,
+                      meta=dict(FLAVOR='flat'))
         write_frame(self.testframe, frame, fibermap=fibermap)
 
         # set program arguments

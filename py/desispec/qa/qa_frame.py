@@ -8,6 +8,8 @@ import numpy as np
 import os
 
 from desiutil.log import get_logger
+from desispec.io import read_obj_param
+
 
 # log=get_logger()
 
@@ -44,8 +46,9 @@ class QA_Frame(object):
             self.qa_data = {}
 
         # Final test
+        obj_params = read_obj_param()
         try:
-            assert self.flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso', 'gray']
+            assert self.flavor in obj_params['frame_types']
         except AssertionError:
             raise IOError("Bad flavor: {}".format(self.flavor))
 
@@ -102,7 +105,7 @@ class QA_Frame(object):
 
         """
         log=get_logger()
-        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso','gray']
+        assert self.flavor == 'science'
 
         # Standard FLUXCALIB input parameters
         flux_dict = dict(ZP_WAVE=0.,        # Wavelength for ZP evaluation (camera dependent)
@@ -130,8 +133,7 @@ class QA_Frame(object):
         re_init: bool, (optional)
           Re-initialize SKYSUB parameter dict
         """
-        #
-        assert self.flavor in ['dark','bright','bgs','mws','lrg','elg','qso','gray']
+        assert self.flavor == 'science'
 
         # Standard SKYSUB input parameters
         sky_dict = dict(

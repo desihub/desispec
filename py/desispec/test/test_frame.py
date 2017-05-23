@@ -4,6 +4,7 @@ import numpy as np
 import desispec.io
 from desispec.frame import Frame, Spectrum
 from desispec.resolution import Resolution
+from desispec.test.util import get_frame_data
 
 class TestFrame(unittest.TestCase):
 
@@ -97,6 +98,20 @@ class TestFrame(unittest.TestCase):
         x = frame[0:2]
         self.assertEqual(len(x.fibermap), 2)
         self.assertEqual(x.chi2pix.shape, (2,nwave))
+
+    def test_vette(self):
+        """ Vette method on Frame class
+        """
+        frame = get_frame_data()
+        # Missing meta data
+        self.assertEqual(frame.vette(), 2)
+        # Add meta data
+        frame.meta = {}
+        frame.meta['FLAVOR'] = 'flat'
+        self.assertEqual(frame.vette(), 0)
+        # Mess with shape
+        frame.nspec = 5
+        self.assertEqual(frame.vette(), 1)
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':
