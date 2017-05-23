@@ -181,8 +181,8 @@ class QA_Frame(object):
             # Run
             qadict = qa_fiberflat(self.qa_data[qatype]['PARAMS'], inputs[0], inputs[1])
         elif qatype == 'FLUXCALIB':
-            # Expecting: frame, fluxcalib
-            assert len(inputs) == 2
+            # Expecting: frame, fluxcalib, model_tuple
+            assert len(inputs) == 3
             # Init parameters (as necessary)
             self.init_fluxcalib()
             # Run
