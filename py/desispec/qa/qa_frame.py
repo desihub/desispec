@@ -44,7 +44,10 @@ class QA_Frame(object):
             self.qa_data = {}
 
         # Final test
-        assert self.flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso', 'gray']
+        try:
+            assert self.flavor in ['none', 'flat', 'arc', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso', 'gray']
+        except AssertionError:
+            raise IOError("Bad flavor: {}".format(self.flavor))
 
     def init_qatype(self, qatype, param, re_init=False):
         """Initialize parameters for a given qatype
