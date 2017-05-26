@@ -35,6 +35,23 @@ class TestBrick(unittest.TestCase):
             [0.062478535,  0.062485076,  0.062494595,  0.062497571,  0.062499356,
              0.062499356,  0.062497571,  0.062494595,  0.062485076,  0.062478535], dtype='<f4')
 
+    def test_brickvertices_scalar(self):
+        """Test scalar to brick area conversion.
+        """
+        b = brick.Bricks()
+        ra, dec = 0, 0
+        bverts = b.brickvertices(ra,dec)
+        self.assertTrue( (np.min(bverts[:,0]) <= ra) & (np.max(bverts[:,0]) >= ra) )
+        self.assertTrue( (np.max(bverts[:,1]) <= dec) & (np.max(bverts[:,1]) >= dec) )
+
+    def test_brickvertices_array(self):
+        """Test array to brick area conversion.
+        """
+        b = brick.Bricks()
+        bverts = b.brickvertices(self.ra, self.dec)
+        self.assertEqual(len(bareas), len(self.ra))
+        self.assertTrue((bareas == self.areas).all())
+
     def test_brickarea_scalar(self):
         """Test scalar to brick area conversion.
         """

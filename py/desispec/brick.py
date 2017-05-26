@@ -246,7 +246,7 @@ class Bricks(object):
             decmin, decmax = self._edges_dec[brickrow], self._edges_dec[brickrow+1]
             vertices = np.reshape(
                 np.vstack([ramin,decmin,ramax,decmin,ramax,decmax,ramin,decmax]).T
-                                 ,(3,4,2))
+                                 ,(len(ra),4,2))
 
         return vertices
 
