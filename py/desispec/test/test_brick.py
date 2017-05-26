@@ -36,8 +36,7 @@ class TestBrick(unittest.TestCase):
              0.062499356,  0.062497571,  0.062494595,  0.062485076,  0.062478535], dtype='<f4')
 
     def test_brickvertices_scalar(self):
-        """Test scalar to brick vertex conversion.
-        """
+        """Test scalar to brick vertex conversion"""
         b = brick.Bricks()
         ra, dec = 0, 0
         bverts = b.brickvertices(ra,dec)
@@ -45,14 +44,13 @@ class TestBrick(unittest.TestCase):
         self.assertTrue( (np.min(bverts[:,1]) <= dec) & (np.max(bverts[:,1]) >= dec) )
 
     def test_brickvertices_array(self):
-        """Test array to brick vertex conversion.
-        """
+        """Test array to brick vertex conversion"""
         b = brick.Bricks()
         bverts = b.brickvertices(self.ra, self.dec)
         #ADM have to wraparound the negative RAs for "between" tests in RA
         rawrap = self.ra % 360
-        self.assertTrue( np.all( (np.min(bverts[:,:,0]) <= rawrap) & (np.max(bverts[:,:,0]) >= rawrap) ) )
-        self.assertTrue( np.all( (np.min(bverts[:,:,1]) <= self.dec) & (np.max(bverts[:,:,1]) >= self.dec) ) )
+        self.assertTrue( np.all( (np.min(bverts[:,:,0],axis=1) <= rawrap) & (np.max(bverts[:,:,0],axis=1) >= rawrap) ) )
+        self.assertTrue( np.all( (np.min(bverts[:,:,1],axis=1) <= self.dec) & (np.max(bverts[:,:,1],axis=1) >= self.dec) ) )
 
     def test_brickvertices_wrap(self):
         """Test RA wrap and poles for brick vertices"""
