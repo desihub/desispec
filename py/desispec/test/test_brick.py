@@ -36,7 +36,7 @@ class TestBrick(unittest.TestCase):
              0.062499356,  0.062497571,  0.062494595,  0.062485076,  0.062478535], dtype='<f4')
 
     def test_brickvertices_scalar(self):
-        """Test scalar to brick area conversion.
+        """Test scalar to brick vertex conversion.
         """
         b = brick.Bricks()
         ra, dec = 0, 0
@@ -45,12 +45,37 @@ class TestBrick(unittest.TestCase):
         self.assertTrue( (np.max(bverts[:,1]) <= dec) & (np.max(bverts[:,1]) >= dec) )
 
     def test_brickvertices_array(self):
-        """Test array to brick area conversion.
+        """Test array to brick vertex conversion.
         """
         b = brick.Bricks()
         bverts = b.brickvertices(self.ra, self.dec)
-        self.assertEqual(len(bareas), len(self.ra))
-        self.assertTrue((bareas == self.areas).all())
+        #ADM have to wraparound the negative RAs for "between" tests in RA
+        rawrap = self.ra % 360
+        self.assertTrue( np.all( (np.min(bverts[:,:,0]) <= rawrap) & (np.max(bverts[:,:,0]) >= rawrap) ) )
+        self.assertTrue( np.all( (np.min(bverts[:,:,1]) <= self.dec) & (np.max(bverts[:,:,1]) >= self.dec) ) )
+
+    def test_brickvertices_wrap(self):
+        """Test RA wrap and poles for brick vertices"""
+        b = brick.Bricks()
+        b1 = b.brickvertices(1, 0)
+        b2 = b.brickvertices(361, 0)
+        self.assertTrue(np.all(b1 == b2))
+
+        b1 = b.brickvertices(-0.5, 0)
+        b2 = b.brickvertices(359.5, 0)
+        self.assertTrue(np.all(b1 == b2))
+
+        b1 = b.brickvertices(0, 90)
+        b2 = b.brickvertices(90, 90)
+        self.assertTrue(np.all(b1 == b2))
+        self.assertEqual(np.max(b1[:,0])-np.min(b1[:,0]), 360.)
+        self.assertTrue(np.all(b1[:,1] <= 90.))
+
+        b1 = b.brickvertices(0, -90)
+        b2 = b.brickvertices(90, -90)
+        self.assertTrue(np.all(b1 == b2))
+        self.assertEqual(np.max(b1[:,0])-np.min(b1[:,0]), 360.)
+        self.assertTrue(np.all(b1[:,1] >= -90.))
 
     def test_brickarea_scalar(self):
         """Test scalar to brick area conversion.

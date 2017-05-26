@@ -235,19 +235,16 @@ class Bricks(object):
         ncol = self._ncol_per_row[brickrow]
         brickcol = (ra/360.0 * ncol).astype(int)
 
-        #ADM grab the edges from the class depending on whether a scalar was input or not
-        if inscalar:
-            ramin, ramax = self._edges_ra[brickrow][brickcol:brickcol+2]
-            decmin, decmax = self._edges_dec[brickrow:brickrow+2]
-            #ADM the list of vertices to return
-            vertices = np.array([[ramin,decmin],[ramax,decmin],[ramax,decmax],[ramin,decmax]])
-        else:
-            ramin, ramax = np.array([self._edges_ra[row][col:col+2] for row,col in zip(brickrow, brickcol)]).T
-            decmin, decmax = self._edges_dec[brickrow], self._edges_dec[brickrow+1]
-            vertices = np.reshape(
-                np.vstack([ramin,decmin,ramax,decmin,ramax,decmax,ramin,decmax]).T
-                                 ,(len(ra),4,2))
+        #ADM grab the edges from the class
+        ramin, ramax = np.array([self._edges_ra[row][col:col+2] for row,col in zip(brickrow, brickcol)]).T
+        decmin, decmax = self._edges_dec[brickrow], self._edges_dec[brickrow+1]
+        vertices = np.reshape(
+            np.vstack([ramin,decmin,ramax,decmin,ramax,decmax,ramin,decmax]).T
+            ,(len(ra),4,2))
 
+        #ADM return the vertex array with one less dimension if a scalar was passed
+        if inscalar:
+            return vertices[0]
         return vertices
 
     def brick_radec(self, ra, dec):
