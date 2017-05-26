@@ -37,9 +37,10 @@ def parse():
     parser.add_argument("--rawdata_dir", type=str, required=False, help="rawdata directory. overrides $QL_SPEC_DATA in config")
     parser.add_argument("--specprod_dir",type=str, required=False, help="specprod directory, overrides $QL_SPEC_REDUX in config")
     parser.add_argument("--save",type=str, required=False,help="save this config to a file")
+    parser.add_argument("--save_full",type=str, required=False,help="save this config to a file including all inputs")
     parser.add_argument("--qlf",type=str,required=False,help="setup for QLF run", default=False)
     parser.add_argument("--mergeQA", default=False, action='store_true',help="output Merged QA file")
-    
+
     args=parser.parse_args()
     return args
 
@@ -57,7 +58,10 @@ def ql_main(args=None):
     if args.config is not None:
         if os.path.exists(args.config):
             if "yaml" in args.config:
-                configdict=yaml.load(open(args.config,'r'))
+                file=yaml.load(open(args.config,'r'))
+                PAs=qlconfig.Palist(file['Flavor'])
+                config=qlconfig.Make_Config(file['Night'],file['Flavor'],file['Expid'],file['Camera'],PAs,psfboot=file['PSFFile'],fiberflat=file['FiberFlatFile'])
+                configdict=qlconfig.build_config(config)
         else:
             log.critical("Can't open config file {}".format(args.config))
             sys.exit("Can't open config file")
@@ -67,13 +71,24 @@ def ql_main(args=None):
 
         config=qlconfig.Make_Config(args.night,args.flavor,args.expid,args.camera, PAs,psfboot=args.psfboot,rawdata_dir=args.rawdata_dir, specprod_dir=args.specprod_dir,fiberflat=args.fiberflat, qlf=args.qlf)
         configdict=qlconfig.build_config(config)
+        configfile=qlconfig.build_config_short(config)
 
         #- save this config to a file
         if args.save:
             if "yaml" in args.save:
                 f=open(args.save,"w")
-                yaml.dump(configdict,f)
+                yaml.dump(configfile,f)
                 log.info("Output saved for this configuration to {}".format(args.save))
+                f.close()
+            else:
+                log.info("Can save config to only yaml output. Put a yaml in the argument")
+
+        #- save this config to a file with all inputs
+        if args.save_full:
+            if "yaml" in args.save_full:
+                f=open(args.save_full,"w")
+                yaml.dump(configdict,f)
+                log.info("Output saved for this configuration to {}".format(args.save_full))
                 f.close()
             else:
                 log.info("Can save config to only yaml output. Put a yaml in the argument")

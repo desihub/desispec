@@ -200,24 +200,16 @@ def get_chan_spec_exp(inpname,camera=None):
 def getobject(conf,log):
      #qlog=qllogger("QuickLook",20)
      #log=qlog.getlog()
-    PAs = ['Initialize','Preproc','BoxcarExtract','ApplyFiberFlat_QL','SkySub_QL']
+    log.debug("Running for {} {} {}".format(conf["ModuleName"],conf["ClassName"],conf))
     try:
-        if conf["ClassName"] in PAs:
-            log.debug("Running for {} {} {}".format('desispec.quicklook.procalgs',conf["ClassName"],conf))
-            mod=__import__('desispec.quicklook.procalgs',fromlist=[conf["ClassName"]])
-        else:
-            log.debug("Running for {} {} {}".format('desispec.qa.qa_quicklook',conf["ClassName"],conf))
-            mod=__import__('desispec.qa.qa_quicklook',fromlist=[conf["ClassName"]])
+        mod=__import__(conf["ModuleName"],fromlist=[conf["ClassName"]])
         klass=getattr(mod,conf["ClassName"])
         if "Name" in conf.keys():            
             return klass(conf["Name"],conf)
         else:
             return klass(conf["ClassName"],conf)
     except Exception as e:
-        if conf["ClassName"] in PAs:
-            log.error("Failed to import {} from {}. Error was '{}'".format(conf["ClassName"],'desispec.quicklook.procalgs',e))
-        else:
-            log.error("Failed to import {} from {}. Error was '{}'".format(conf["ClassName"],'desispec.qa.qa_quicklook',e))
+        log.error("Failed to import {} from {}. Error was '{}'".format(conf["ClassName"],conf["ModuleName"],e))
         return None
 
 def mapkeywords(kw,kwmap):
@@ -271,7 +263,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
 
     QAresults=[] #- merged QA list for the whole pipeline. This will be reorganized for databasing after the pipeline executes
     for s,step in enumerate(pl):
-        log.info("Starting to run step {}".format(paconf[s]["PA"]["ClassName"]))
+        log.info("Starting to run step {}".format(paconf[s]["StepName"]))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
         try:
@@ -308,10 +300,10 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
             f = open(paconf[s]["OutputFile"],"w")
             yaml.dump(qaresult,f)
-            hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["PA"]["ClassName"],paconf[s]["OutputFile"]))
+            hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
             f.close()
         else:
-            hb.stop("Step {} finished.".format(paconf[s]["PA"]["ClassName"]))
+            hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
         QAresults.append([pa.name,qaresult])
     hb.stop("Pipeline processing finished. Serializing result")
 

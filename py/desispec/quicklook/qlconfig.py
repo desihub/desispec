@@ -307,6 +307,8 @@ def build_config(config):
 
     outconfig={}
 
+    outconfig['Night'] = config.night
+    outconfig['Flavor'] = config.flavor
     outconfig['Camera'] = config.camera
     outconfig['Expid'] = config.expid
     #DataType=config.datatype
@@ -322,11 +324,12 @@ def build_config(config):
     pipeline = []
     for ii,PA in enumerate(config.palist):
         pipe={'OutputFile': config.dump_qa()[1][0][PA]}
-        pipe['PA'] = {'ClassName': PA, 'kwargs': config.paargs[PA]}
+        pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'kwargs': config.paargs[PA]}
         pipe['QAs']=[]
         for jj, QA in enumerate(config.qalist[PA]):
-            pipe_qa={'ClassName': QA, 'kwargs': config.qaargs[QA]}
+            pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'kwargs': config.qaargs[QA]}
             pipe['QAs'].append(pipe_qa)
+        pipe['StepName']=PA
         pipeline.append(pipe)
 
     outconfig['PipeLine']=pipeline
@@ -334,4 +337,38 @@ def build_config(config):
     outconfig['Timeout']=config.timeout
     return outconfig        
         
-        
+def build_config_short(config):
+    """
+    config: desispec.quicklook.qlconfig.Config object
+    Returns simplified configuration file
+    """
+    log.info("Making Configuration File")
+
+    outconfig={}
+
+    outconfig['Night'] = config.night
+    outconfig['Flavor'] = config.flavor
+    outconfig['Camera'] = config.camera
+    outconfig['Expid'] = config.expid
+    outconfig['DumpIntermediates'] = config.dumpintermediates
+    outconfig['FiberMap']=config.fibermap
+    outconfig['FiberFlatFile'] = config.fiberflat
+    outconfig['PSFFile'] = config.psfboot
+    outconfig['Period'] = config.period
+
+    pipeline = []
+    for ii,PA in enumerate(config.palist):
+        pipe = {'PA':''}
+        pipe['PA'] = {'ClassName': PA}
+        pipe['QAs']=[]
+        for jj, QA in enumerate(config.qalist[PA]):
+            pipe_qa={'ClassName': QA, 'params': config.qaargs[QA]['param']}
+            pipe['QAs'].append(pipe_qa)
+        pipeline.append(pipe)
+
+    outconfig['PipeLine']=pipeline
+    outconfig['RawImage']=config.rawfile
+    outconfig['Timeout']=config.timeout
+    return outconfig
+
+
