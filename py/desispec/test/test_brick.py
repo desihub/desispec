@@ -42,7 +42,7 @@ class TestBrick(unittest.TestCase):
         ra, dec = 0, 0
         bverts = b.brickvertices(ra,dec)
         self.assertTrue( (np.min(bverts[:,0]) <= ra) & (np.max(bverts[:,0]) >= ra) )
-        self.assertTrue( (np.max(bverts[:,1]) <= dec) & (np.max(bverts[:,1]) >= dec) )
+        self.assertTrue( (np.min(bverts[:,1]) <= dec) & (np.max(bverts[:,1]) >= dec) )
 
     def test_brickvertices_array(self):
         """Test array to brick vertex conversion.
