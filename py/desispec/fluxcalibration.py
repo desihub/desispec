@@ -865,7 +865,8 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         
         try:
             pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
-        except:
+        except ValueError :
+            log.warning("polynomial fit for fiber %d failed"%fiber)
             current_ivar[fiber]=0.
         smooth_fiber_correction[fiber]=pol(dwave)
                 
