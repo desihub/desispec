@@ -850,23 +850,33 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         convolved_model_flux[fiber]=stdstars.R[fiber].dot(model_flux[fiber])
 
     # iterative fitting and clipping to get precise mean spectrum
-    current_ivar=stdstars.ivar.copy()
-
+    current_ivar=stdstars.ivar*(stdstars.mask==0)
+    
     #- Start with a first pass median rejection
     calib = (convolved_model_flux!=0)*(stdstars.flux/(convolved_model_flux + (convolved_model_flux==0)))
     median_calib = np.median(calib, axis=0)
-    chi2 = stdstars.ivar * (stdstars.flux - convolved_model_flux*median_calib)**2
+
+    # First fit of smooth correction per fiber, and 10% model error to variance,  and perform first outlier rejection
+    smooth_fiber_correction=np.ones((stdstars.flux.shape))
+    chi2=np.zeros((stdstars.flux.shape))  
+
+    for fiber in range(nstds) :
+        M = median_calib*stdstars.R[fiber].dot(model_flux[fiber])
+        
+        try:
+            pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
+        except ValueError :
+            log.warning("polynomial fit for fiber %d failed"%fiber)
+            current_ivar[fiber]=0.
+        smooth_fiber_correction[fiber]=pol(dwave)
+                
+        chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
+        
+    
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
-
-    smooth_fiber_correction=np.ones((stdstars.flux.shape))
-    chi2=np.zeros((stdstars.flux.shape))
-
-    # chi2 = sum w ( data_flux - R*(calib*model_flux))**2
-    # chi2 = sum (sqrtw*data_flux -diag(sqrtw)*R*diag(model_flux)*calib)
-
+    
     sqrtw=np.sqrt(current_ivar)
-    #sqrtwmodel=np.sqrt(current_ivar)*convolved_model_flux # used only for QA
     sqrtwflux=np.sqrt(current_ivar)*stdstars.flux
 
     # diagonal sparse matrices
@@ -1018,7 +1028,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
 
     # need to do better here
-    mask = (ccalibivar==0).astype(np.int32)
+    mask = frame.mask.copy()
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
     return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration))
