@@ -201,6 +201,52 @@ class Bricks(object):
             return areas[0]
         return areas
 
+    def brickvertices(self, ra, dec):
+        """Return the vertices in RA/Dec of the brick that given locations lie in
+
+        Parameters
+        ----------
+        ra : array_like.
+            The Right Ascensions of the locations of interest
+        dec : array_like.
+            The Declinations of the locations of interest
+        
+        Returns
+        -------
+        vertices : array_like.
+            The 4 vertices of the brick in which the locations of interest lie in (an
+            array with 4 columns of (RA, Dec) and len(ra) rows)
+
+        Notes
+        -----
+        The vertices are ordered counter-clockwise from the minimum (RA, Dec)            
+        """
+        #ADM record whether the user wanted non-array behavior
+        inscalar = np.isscalar(ra)
+
+        #ADM enforce array behavior and correct for wraparound
+        ra = np.atleast_1d(ra) % 360
+        dec = np.atleast_1d(dec)
+
+        #ADM the brickrow based on the declination
+        brickrow = ((dec+90.0+self._bricksize/2)/self._bricksize).astype(int)
+
+        #ADM the brickcolumn based on the RA
+        ncol = self._ncol_per_row[brickrow]
+        brickcol = (ra/360.0 * ncol).astype(int)
+
+        #ADM grab the edges from the class
+        ramin, ramax = np.array([self._edges_ra[row][col:col+2] for row,col in zip(brickrow, brickcol)]).T
+        decmin, decmax = self._edges_dec[brickrow], self._edges_dec[brickrow+1]
+        vertices = np.reshape(
+            np.vstack([ramin,decmin,ramax,decmin,ramax,decmax,ramin,decmax]).T
+            ,(len(ra),4,2))
+
+        #ADM return the vertex array with one less dimension if a scalar was passed
+        if inscalar:
+            return vertices[0]
+        return vertices
+
     def brick_radec(self, ra, dec):
         """Return center (ra,dec) of brick that contains input (ra, dec) [deg]
         """
