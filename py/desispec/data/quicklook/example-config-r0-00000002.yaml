@@ -1,92 +1,35 @@
 Camera: r0
-DataType: Exposure
-DebugLevel: 20
-DumpIntermediates: True
-FiberFlatFile: /scratch2/scratchdirs/govinda/Desi/quicklook/20160707/fiberflat-r0-00000001.fits
-FiberMap: /scratch2/scratchdirs/govinda/Desi/quicklook/20160707/fibermap-00000002.fits
-OutputFile: lastframe-r0-00000002.fits
-PSFFile: /scratch2/scratchdirs/govinda/Desi/quicklook/20160707/psfboot-r0.fits
+DumpIntermediates: true
+Expid: 2
+FiberFlatFile: /project/projectdirs/desi/spectro/redux/QL/rstaten/calib2d/20160728/fiberflat-r0-00000001.fits
+FiberMap: /project/projectdirs/desi/spectro/redux/QL/rstaten/exposures/20160728/000000002/fibermap-00000002.fits
+Flavor: dark
+Night: '20160728'
+PSFFile: /project/projectdirs/desi/spectro/redux/QL/rstaten/calib2d/20160728/psfboot-r0.fits
 Period: 5.0
 PipeLine:
-- OutputFile: qa-initial-online-r0-00000002.yaml
-  PA:
-    ClassName: Initialize
-    ModuleName: desispec.quicklook.procalgs
-    Name: Ready
-    kwargs: {}
+- PA: {ClassName: Initialize}
   QAs:
-  - ClassName: Bias_From_Overscan
-    ModuleName: desispec.qa.qa_quicklook
-    Name: BIAS_OVERSCAN
-    kwargs: {camera: r0, expid: '00000002', paname: INITIALIZE, amps: True, qafig: qafig-biasoverscan-r0-00000002.png}
-  StepName: Initializing
-- OutputFile: qa-preproc-r0-00000002.yaml
-  PA:
-    ClassName: Preproc
-    ModuleName: desispec.quicklook.procalgs
-    Name: Preproc
-    kwargs: {camera: r0, DumpIntermediates: '%%DumpIntermediates', dumpfile: "pix-r0-00000002.fits"}
+  - {ClassName: Bias_From_Overscan, params: null}
+- PA: {ClassName: Preproc}
   QAs:
-  - ClassName: Get_RMS
-    ModuleName: desispec.qa.qa_quicklook
-    Name: RMS
-    kwargs: {camera: r0, expid: '00000002', paname: PREPROC, amps: True, qafig: qafig-rms-r0-00000002.png}
+  - {ClassName: Get_RMS, params: null}
   - ClassName: Count_Pixels
-    ModuleName: desispec.qa.qa_quicklook
-    Name: COUNTPIX
-    kwargs: {camera: r0, expid: '00000002', paname: PREPROC, amps: True, qafig: qafig-countpix-r0-00000002.png}   
-  - ClassName: Calc_XWSigma
-    ModuleName: desispec.qa.qa_quicklook
-    Name: XWSIGMA
-    kwargs: {camera: r0, expid: '00000002', paname: PREPROC, PSFFile: '%%PSFFile', FiberMap: '%%FiberMap',amps: True, qafig: qafig-xwsigma-r0-00000002.png}
-  StepName: Preprocessing
-- OutputFile: qa-extract-r0-00000002.yaml
-  PA:
-    ClassName: BoxcarExtraction
-    ModuleName: desispec.quicklook.procalgs
-    Name: Boxcar Extraction
-    kwargs: {BoxWidth: 2.5, FiberMap: '%%FiberMap', Wavelength: '5635,7731,0.8', Nspec: 10, PSFFile: '%%PSFFile', DumpIntermediates: '%%DumpIntermediates', dumpfile: "frame-r0-00000002.fits"}
+    params: {CUTHI: 500, CUTLO: 100}
+  - {ClassName: Calc_XWSigma, params: null}
+- PA: {ClassName: BoxcarExtract}
   QAs:
   - ClassName: CountSpectralBins
-    ModuleName: desispec.qa.qa_quicklook
-    Name: COUNTBINS
-    kwargs: {camera: r0, expid: '00000002', paname: BOXCAR, PSFFile: '%%PSFFile', amps: True, qafig: qafig-countbins-r0-00000002.png}
-  StepName: Boxcar Extration
-- OutputFile: qa-apfiberflat-r0-00000002.yaml
-  PA:
-    ClassName: ApplyFiberFlat_QL
-    ModuleName: desispec.quicklook.procalgs
-    Name: Apply Fiberflat
-    kwargs: {FiberFlatFile: '%%FiberFlatFile', DumpIntermediates: '%%DumpIntermediates', dumpfile: "fframe-r0-00000002.fits"}
+    params: {CUTHI: 500, CUTLO: 100, CUTMED: 250}
+- PA: {ClassName: ApplyFiberFlat_QL}
   QAs:
-  - ClassName: Sky_Continuum
-    ModuleName: desispec.qa.qa_quicklook
-    Name: SKYCONT
-    kwargs: {camera: r0, expid: '00000002', paname: APPLY_FIBERFLAT, PSFFile: '%%PSFFile', amps: True, qafig: qafig-skycont-r0-00000002.png}
-  - ClassName: Sky_Peaks
-    ModuleName: desispec.qa.qa_quicklook
-    Name: SKYPEAK
-    kwargs: {camera: r0, expid: '00000002', paname: APPLY_FIBERFLAT, PSFFile: '%%PSFFile', amps: True, qafig: qafig-skypeak-r0-00000002.png}
-  StepName: Apply Fiberflat
-- OutputFile: qa-snr-r0-00000002.yaml
-  PA:
-    ClassName: SubtractSky_QL
-    ModuleName: desispec.quicklook.procalgs
-    Name: Sky Subtraction
-    kwargs: {DumpIntermediates: '%%DumpIntermediates', dumpfile: "sframe-r0-00000002.fits"}
+  - {ClassName: Sky_Continuum, params: null}
+  - {ClassName: Sky_Peaks, params: null}
+- PA: {ClassName: SkySub_QL}
   QAs:
   - ClassName: Sky_Residual
-    ModuleName: desispec.qa.qa_quicklook
-    Name: RESIDUAL
-    kwargs: {camera: r0, expid: '00000002', paname: SKYSUB, PSFFile: '%%PSFFile', amps: False, qafig: qafig-skyresidual-r0-00000002.png}
-  - ClassName: Integrate_Spec
-    ModuleName: desispec.qa.qa_quicklook
-    Name: INTEG
-    kwargs: {camera: r0, expid: '00000002', paname: SKYSUB, PSFFile: '%%PSFFile', amps: True, qafig: qafig-integral-r0-00000002.png}
-  - ClassName: Calculate_SNR
-    ModuleName: desispec.qa.qa_quicklook
-    Name: SNR
-    kwargs: {camera: r0, expid: '00000002', paname: SKYSUB, PSFFile: '%%PSFFile', amps: True , url: 'http://localhost:8000/dashboard/api/', qafig: qafig-snr-r0-00000002.png}
-  StepName: Sky Subtraction
-RawImage: /scratch2/scratchdirs/govinda/Desi/quicklook/20160707/desi-00000002.fits.fz
+    params: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0}
+  - {ClassName: Integrate_Spec, params: null}
+  - {ClassName: Calculate_SNR, params: null}
+RawImage: /project/projectdirs/desi/spectro/data/QL/rstaten/20160728/desi-00000002.fits.fz
 Timeout: 120.0
