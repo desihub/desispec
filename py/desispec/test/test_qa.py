@@ -182,6 +182,28 @@ class TestQA(unittest.TestCase):
     def test_init_qa_prod(self):
         qaprod = QA_Prod(self.testDir)
 
+    def test_qa_frame_plot(self):
+        from desispec.qa import qa_plots
+        from desispec.qa import qa_frame
+        from desispec.test.util import get_frame_data, get_calib_from_frame
+        # Frame
+        frame = get_frame_data(500)
+        # Load calib
+        fluxcalib = get_calib_from_frame(frame)
+        # QA Frame
+        tdict = {}
+        tdict['20190829'] = {}
+        dint = 20
+        tdict['20190829'][dint] = {}
+        tdict['20190829'][dint]['flavor'] = 'dark'
+        tdict['20190829'][dint]['b'] = {}
+        tdict['20190829'][dint]['b']['FLUXCALIB'] = {}
+        tdict['20190829'][dint]['b']['FLUXCALIB']['METRICS'] = {}
+        tdict['20190829'][dint]['b']['FLUXCALIB']['METRICS']['BLAH'] = 1
+        qaframe = qa_frame.QA_Frame(tdict)
+        # Plot
+        qa_plots.frame_fluxcalib('tmp.pdf', qaframe, frame, fluxcalib)
+
     def runTest(self):
         pass
 
@@ -192,3 +214,10 @@ def test_suite():
         python setup.py test -m <modulename>
     """
     return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
+
+
+#- This runs all test* functions in any TestCase class in this file
+if __name__ == '__main__':
+    unittest.main()
+    #qa_frame_plot_test()
