@@ -1,4 +1,4 @@
-desispec.database.metadata# Licensed under a 3-clause BSD style license - see LICENSE.rst
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
 desispec.database.metadata

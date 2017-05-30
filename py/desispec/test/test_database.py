@@ -5,12 +5,14 @@
 from __future__ import absolute_import, division
 import unittest, os
 from datetime import datetime, timedelta
+from shutil import rmtree
 
 try:
     import sqlalchemy
     sqlalchemy_available = True
 except ImportError:
     sqlalchemy_available = False
+
 
 class TestDatabase(unittest.TestCase):
     """Test desispec.database.
@@ -23,7 +25,7 @@ class TestDatabase(unittest.TestCase):
         # cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
         # cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
         # cls.testbrfile = 'test-{uuid}/test-br-{uuid}.fits'.format(uuid=uuid1())
-        # cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
+        cls.testDir = os.path.join(os.environ['HOME'], 'desi_test_database')
         cls.origEnv = {'SPECPROD':None,
             "DESI_SPECTRO_DATA":None,
             "DESI_SPECTRO_REDUX":None}
@@ -52,8 +54,8 @@ class TestDatabase(unittest.TestCase):
             else:
                 os.environ[e] = cls.origEnv[e]
 
-        # if os.path.exists(cls.testDir):
-        #     rmtree(cls.testDir)
+        if os.path.exists(cls.testDir):
+            rmtree(cls.testDir)
 
     @unittest.skipUnless(sqlalchemy_available, "sqlalchemy not installed; skipping DB tests")
     def test_database(self):
