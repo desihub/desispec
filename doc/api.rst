@@ -160,6 +160,12 @@ Full desispec API Reference
 .. automodule:: desispec.quicklook
     :members:
 
+.. automodule:: desispec.quicklook.arcprocess
+    :members:
+
+.. automodule:: desispec.quicklook.palib
+    :members:
+
 .. automodule:: desispec.quicklook.pas
     :members:
 
@@ -188,6 +194,9 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.quicklook.quicksky
+    :members:
+
+.. automodule:: desispec.quicklook.util
     :members:
 
 .. automodule:: desispec.resolution
