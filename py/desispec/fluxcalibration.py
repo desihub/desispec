@@ -871,9 +871,9 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     D1=scipy.sparse.lil_matrix((nwave,nwave))
     D2=scipy.sparse.lil_matrix((nwave,nwave))
 
-    # test
-    # nstds=20
+    
     nout_tot=0
+    previous_mean=0.
     for iteration in range(20) :
 
         # fit mean calibration
@@ -971,9 +971,10 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d mean=%f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,np.mean(mean)))
 
-        if nout_iter == 0 and np.max(np.abs(mean-1))<0.005 :
+        if nout_iter == 0 and np.max(np.abs(mean-previous_mean))<0.0001 :
             break
-
+        previous_mean = mean
+    
     # smooth_fiber_correction does not converge exactly to one on average, so we apply its mean to the calibration
     # (tested on sims)
     calibration /= mean
