@@ -20,30 +20,20 @@ import multiprocessing
 from pkg_resources import resource_exists, resource_filename
 
 
-def applySmoothingFilter(flux,width=200,margin_correction=True) :
+def applySmoothingFilter(flux,width=200) :
     """ Return a smoothed version of the input flux array using a median filter
 
     Args:
         flux  : 1D array of flux 
         width : size of the median filter box
-        margin_correction : returns original flux on margins because the median filter is biased
-    
+            
     Returns:
         smooth_flux : median filtered flux of same size as input
-        ivar : array of same size as input, 0 on the edges if margin_correction is True
     """
 
     # it was checked that the width of the median_filter has little impact on best fit stars
     # smoothing the ouput (with a spline for instance) does not improve the fit
-    tmp=scipy.ndimage.filters.median_filter(flux,width)
-    ivar=np.ones(flux.shape)
-
-    if margin_correction and flux.size > 3*width :
-        tmp[:width]=flux[:width]
-        tmp[-width:]=flux[-width:]
-        ivar[:width]=0.
-        ivar[-width:]=0.
-    return tmp,ivar
+    return scipy.ndimage.filters.median_filter(flux,width,mode='constant')
 #
 # Import some global constants.
 #
@@ -91,7 +81,7 @@ def resample_template(data_wave_per_camera,resolution_data_per_camera,template_w
     for cam in sorted_keys :
         flux1=resample_flux(data_wave_per_camera[cam],template_wave,template_flux) # this is slow
         flux2=Resolution(resolution_data_per_camera[cam]).dot(flux1) # this is slow
-        norme,norme_ivar=applySmoothingFilter(flux2) # this is fast
+        norme=applySmoothingFilter(flux2) # this is fast
         flux3=flux2/(norme+(norme==0))
         output_flux = np.append(output_flux,flux3)
         output_norm = np.append(output_norm,norme)
@@ -105,7 +95,7 @@ def _func(arg) :
 
 def _smooth_template(template_id,camera_index,template_flux) :
     """ Used for multiprocessing.Pool """
-    norme,ivar = applySmoothingFilter(template_flux)
+    norme = applySmoothingFilter(template_flux)
     return template_id,camera_index,norme
 
 def _func2(arg) :
@@ -186,17 +176,16 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
         resampled_model[cam]=resample_flux(resampled_wave,extended_cam_wave,tmp)
 
         # we now normalize both model and data
-        tmp,tmp_ivar=applySmoothingFilter(resampled_data[cam])
+        tmp=applySmoothingFilter(resampled_data[cam])
         resampled_data[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=tmp**2
-        resampled_ivar[cam]*=(tmp_ivar>0)
-        
+                
         if template_error>0 :
             ok=np.where(resampled_ivar[cam]>0)[0]
             if ok.size > 0 :
                 resampled_ivar[cam][ok] = 1./ ( 1/resampled_ivar[cam][ok] + template_error**2 )
                 
-        tmp,tmp_ivar=applySmoothingFilter(resampled_model[cam])        
+        tmp=applySmoothingFilter(resampled_model[cam])        
         resampled_model[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=(tmp!=0)
 
@@ -532,10 +521,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # fit continuum and save it
     continuum={}
     for cam in wave.keys() :
-        tmp,tmp_ivar=applySmoothingFilter(flux[cam]) # this is fast
+        tmp=applySmoothingFilter(flux[cam]) # this is fast
         continuum[cam] = tmp
-        ivar[cam]     *= (tmp_ivar>0)
-    
+            
     # mask out wavelength that could bias the fit
     
     log.debug("mask potential cosmics (3 sigma positive fluctuations)")
@@ -704,7 +692,7 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         log.debug("compute calib for cam index %d"%index)
         ii=np.where(data_index==index)[0]
         calib = (data_flux[ii]*data_continuum[ii])/(model[ii]+(model[ii]==0))
-        scalib,scalibivar = applySmoothingFilter(calib,width=400,margin_correction=False)
+        scalib = applySmoothingFilter(calib,width=400)
         log.debug("multiply templates by calib for cam index %d"%index)
         template_flux[:,ii] *= scalib
         
