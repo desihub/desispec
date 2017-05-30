@@ -13,14 +13,8 @@ from astropy.io import fits
 from astropy.table import Table
 from ..frame import Frame
 
-try:
-    import sqlalchemy
-    sqlalchemy_available = True
-except ImportError:
-    sqlalchemy_available = False
-
 class TestIO(unittest.TestCase):
-    """Test desiutil.io.
+    """Test desispec.io.
     """
 
     @classmethod
@@ -607,47 +601,6 @@ class TestIO(unittest.TestCase):
         paths = download(filename)
         self.assertIsNone(paths[0])
         # self.assertFalse(os.path.exists(paths[0]))
-
-    @unittest.skipUnless(sqlalchemy_available, "sqlalchemy not installed; skipping DB tests")
-    def test_database(self):
-        """Test desispec.io.database.
-        """
-        from ..io.database import (utc, Base, FrameStatus, BrickStatus, Status,
-                                   Night, ExposureFlavor)
-        # self.assertIsNotNone(Base.metadata.tables)
-        #
-        # Simple ForeignKey tables.
-        #
-        st = Status(status='succeeded')
-        self.assertEqual(str(st), "<Status(status='succeeded')>")
-        ef = ExposureFlavor(flavor='science')
-        self.assertEqual(str(ef), "<ExposureFlavor(flavor='science')>")
-        ni = Night(night='20170101')
-        self.assertEqual(str(ni), "<Night(night='20170101')>")
-        #
-        # Status tables.
-        #
-        fs = FrameStatus(id=1, frame_id=1, status='succeeded',
-                         stamp=datetime(2017, 1, 1, 0, 0, 0, tzinfo=utc))
-        self.assertEqual(str(fs), "<FrameStatus(id=1, frame_id=1, status='succeeded', stamp='2017-01-01 00:00:00+00:00')>")
-        bs = BrickStatus(id=1, brick_id=1, status='succeeded',
-                         stamp=datetime(2017, 1, 1, 0, 0, 0, tzinfo=utc))
-        self.assertEqual(str(bs), "<BrickStatus(id=1, brick_id=1, status='succeeded', stamp='2017-01-01 00:00:00+00:00')>")
-
-    # def test_quicksurvey(self):
-    #     """Test desispec.io.quicksurvey.
-    #     """
-    #     from ..io.quicksurvey import utc, convert_dateobs
-    #     ts = convert_dateobs('2019-01-03T01:11:33.247')
-    #     self.assertEqual(ts.year, 2019)
-    #     self.assertEqual(ts.month, 1)
-    #     self.assertEqual(ts.microsecond, 247000)
-    #     self.assertIsNone(ts.tzinfo)
-    #     ts = convert_dateobs('2019-01-03T01:11:33.247', tzinfo=utc)
-    #     self.assertEqual(ts.year, 2019)
-    #     self.assertEqual(ts.month, 1)
-    #     self.assertEqual(ts.microsecond, 247000)
-    #     self.assertIs(ts.tzinfo, utc)
 
 
 def test_suite():

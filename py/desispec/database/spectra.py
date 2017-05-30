@@ -1,10 +1,12 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
-desispec.io.quicksurvey
-=======================
+desispec.database.spectra
+=========================
 
-Code for loading quicksurvey outputs into a database.
+Code for loading spectra results into a database.
+
+Supports both simulated survey (quicksurvey) and pipeline data.
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np

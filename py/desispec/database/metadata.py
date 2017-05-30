@@ -1,8 +1,8 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
-desispec.io.database
-====================
+desispec.database.metadata
+==========================
 
 Code for interacting with the file metadatabase.
 """
