@@ -22,6 +22,9 @@ Full desispec API Reference
 .. automodule:: desispec.cosmics
     :members:
 
+.. automodule:: desispec.database
+    :members:
+
 .. automodule:: desispec.fiberflat
     :members:
 
@@ -71,6 +74,9 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.io.qa
+    :members:
+
+.. automodule:: desispec.io.quicksurvey
     :members:
 
 .. automodule:: desispec.io.raw
