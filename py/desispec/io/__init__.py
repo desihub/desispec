@@ -17,7 +17,7 @@ from .filters import load_filter
 from .fluxcalibration import (read_stdstar_templates, write_stdstar_models,
                               read_stdstar_models, read_flux_calibration,
                               write_flux_calibration)
-from .frame import read_frame, write_frame
+from .frame import read_meta_frame, read_frame, write_frame
 from .image import read_image, write_image
 from .meta import (findfile, get_exposures, get_files, get_raw_files,
                    rawdata_root, specprod_root, validate_night,

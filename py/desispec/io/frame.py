@@ -91,6 +91,19 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
 
     return outfile
 
+def read_meta_frame(filename):
+    """ 
+    Args:
+        filename: path to a file, or (night, expid, camera) tuple where
+
+    Returns:
+        meta: dict or astropy.fits.header
+
+    """
+    fx = fits.open(filename, uint=True, memmap=False)
+    hdr = fx[0].header
+    return hdr
+
 def read_frame(filename, nspec=None):
     """Reads a frame fits file and returns its data.
 
