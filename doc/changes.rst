@@ -16,6 +16,7 @@ desispec Change Log
 * Create util.py in tests/ which is intended to contain methods to facilitate test runs
 * Add vette() method for Frame class
 * Began a desispec parameter file:  data/params/desispec_param.yaml
+* Small fixes to desi_qa_prod and qa_prod
 
 .. _`#384`: https://github.com/desihub/desispec/pull/384
 .. _`#378`: https://github.com/desihub/desispec/pull/378
