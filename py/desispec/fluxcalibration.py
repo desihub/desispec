@@ -693,6 +693,12 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         ii=np.where(data_index==index)[0]
         calib = (data_flux[ii]*data_continuum[ii])/(model[ii]+(model[ii]==0))
         scalib = applySmoothingFilter(calib,width=400)
+        
+        min_scalib=0.
+        bad=scalib<=min_scalib
+        if np.sum(bad)>0 :
+            scalib[bad]=min_scalib
+            
         log.debug("multiply templates by calib for cam index %d"%index)
         template_flux[:,ii] *= scalib
         
@@ -853,11 +859,11 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         
         try:
             pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
+            smooth_fiber_correction[fiber]=pol(dwave)
         except ValueError :
             log.warning("polynomial fit for fiber %d failed"%fiber)
             current_ivar[fiber]=0.
-        smooth_fiber_correction[fiber]=pol(dwave)
-                
+
         chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
         
     
@@ -895,6 +901,10 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
             A = A+(sqrtwmodelR.T*sqrtwmodelR).tocsr()
             B += sqrtwmodelR.T*sqrtwflux[fiber]
 
+        if np.sum(current_ivar>0)==0 :
+            log.error("null ivar, cannot calibrate this frame")
+            raise ValueError("null ivar, cannot calibrate this frame")
+
         #- Add a weak prior that calibration = median_calib
         #- to keep A well conditioned
         minivar = np.min(current_ivar[current_ivar>0])
@@ -926,9 +936,10 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
             try:
                 pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
-            except:
+                smooth_fiber_correction[fiber]=pol(dwave)
+            except ValueError :
+                log.warning("polynomial fit for fiber %d failed"%fiber)
                 current_ivar[fiber]=0.
-            smooth_fiber_correction[fiber]=pol(dwave)
             chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
 
         log.info("iter {0:d} rejecting".format(iteration))
