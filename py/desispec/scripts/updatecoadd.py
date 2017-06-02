@@ -178,7 +178,7 @@ def main(args):
         coadd_all = desispec.coaddition.Spectrum(desispec.coaddition.global_wavelength_grid)
         for coadd_band in coadded_spectra[target_id].values():
             coadd_all += coadd_band
-        coadd_all.finalize()
+        coadd_all.finalize(fast=args.fast)
         flux_all[index] = coadd_all.flux
         ivar_all[index] = coadd_all.ivar
         resolution_all.append(coadd_all.resolution.to_fits_array())
