@@ -147,6 +147,8 @@ class TestBinScripts(unittest.TestCase):
         # cannot be exactly the same values 
         data['CHI2DOF']=np.ones(fibers.size)+0.1*(fibers%2) 
         data['REDSHIFT']=np.zeros(fibers.size)
+        data['DATA_G-R']=np.zeros(fibers.size)
+        data['MODEL_G-R']=np.zeros(fibers.size)        
         io.write_stdstar_models(self.stdfile,stdflux,wave,fibers,data)
 
     def _remove_files(self, filenames):
