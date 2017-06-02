@@ -30,6 +30,8 @@ def parse(options=None):
         help = 'String listing the bands to include.')
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
+    parser.add_argument('--fast', action="store_true", required=False,
+        help = 'coadd using inverse variance weighting instead of full spectro-perfectionism')
 
     args = None
     if options is None:
@@ -52,7 +54,8 @@ def main(args):
 
     # Open the combined coadd file for this brick, for updating.
     coadd_all_path = desispec.io.meta.findfile('coadd_all',brickname = args.brick,specprod_dir = args.specprod)
-    coadd_all_file = desispec.io.brick.CoAddedBrick(coadd_all_path,mode = 'update')
+    header={"BRICKNAM":args.brick}
+    coadd_all_file = desispec.io.brick.CoAddedBrick(coadd_all_path,mode = 'update',header=header)
 
     # Initialize dictionaries of co-added spectra for each object ID.
     coadded_spectra = { }
@@ -76,14 +79,16 @@ def main(args):
             brick_file.hdu_list[2].data,brick_file.hdu_list[3].data)
         log.debug('Processing %s with %d exposures of %d targets...' % (
                 brick_path,brick_file.get_num_spectra(),brick_file.get_num_targets()))
+        '''
         if resolution_in.shape[1] != desispec.resolution.num_diagonals:
             log.error('resolution has unexpected shape (ndiag=%d != %d). Skipping this file.' % (
                 resolution_in.shape[1],desispec.resolution.num_diagonals))
             brick_file.close()
             continue
+        '''
         # Open this band's coadd file for updating.
         coadd_path = desispec.io.meta.findfile('coadd',brickname = args.brick,band = band, specprod_dir = args.specprod)
-        coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'update')
+        coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'update',header=header)
         # Copy the input fibermap info for each exposure into memory.
         coadd_info = np.copy(brick_file.hdu_list[4].data)
         # Also copy the first band's info to initialize the global coadd info, but remember that this
@@ -95,7 +100,7 @@ def main(args):
         for index,info in enumerate(brick_file.hdu_list[4].data):
             assert index == info['INDEX'],'Index mismatch: %d != %d' % (index,info['INDEX'])
             resolution_matrix = desispec.resolution.Resolution(resolution_in[index])
-            spectrum = desispec.coaddition.Spectrum(wlen,flux_in[index],ivar_in[index],resolution_matrix)
+            spectrum = desispec.coaddition.Spectrum(wlen,flux_in[index],ivar_in[index],resolution=resolution_matrix)
             target_id = info['TARGETID']
             # Are we only processing specified targets?
             if len(args.target) > 0 and target_id not in args.target:
@@ -130,7 +135,7 @@ def main(args):
         nbins = len(wlen)
         flux_out = np.zeros((num_targets,nbins))
         ivar_out = np.zeros_like(flux_out)
-        resolution_out = np.zeros((num_targets,desispec.resolution.num_diagonals,nbins))
+        resolution_out = []
 
         # Save the coadded spectra for this band.
         for target_id in coadded_spectra:
@@ -141,11 +146,12 @@ def main(args):
             log.debug('Saving coadd of %d exposures for target ID %d to index %d.' % (
                     np.count_nonzero(exposures),target_id,index))
             coadd = coadded_spectra[target_id][band]
-            coadd.finalize()
+            coadd.finalize(fast=args.fast)
             flux_out[index] = coadd.flux
             ivar_out[index] = coadd.ivar
-            resolution_out[index] = coadd.resolution.to_fits_array()
+            resolution_out.append(coadd.resolution.to_fits_array())
 
+        resolution_out = np.array(resolution_out)
         # Save the coadds for this band.
         coadd_file.add_objects(flux_out,ivar_out,wlen,resolution_out)
         coadd_file.hdu_list[4].data = coadd_info
@@ -159,7 +165,7 @@ def main(args):
     nbins = len(desispec.coaddition.global_wavelength_grid)
     flux_all = np.empty((num_targets,nbins))
     ivar_all = np.empty_like(flux_all)
-    resolution_all = np.empty((num_targets,desispec.resolution.num_diagonals,nbins))
+    resolution_all = []
 
     # Coadd the bands for each target ID.
     all_bands = ','.join(sorted(args.bands))
@@ -175,8 +181,9 @@ def main(args):
         coadd_all.finalize()
         flux_all[index] = coadd_all.flux
         ivar_all[index] = coadd_all.ivar
-        resolution_all[index] = coadd_all.resolution.to_fits_array()
+        resolution_all.append(coadd_all.resolution.to_fits_array())
 
+    resolution_all = np.array(resolution_all)
     # Save the global coadds.
     coadd_all_file.add_objects(flux_all,ivar_all,desispec.coaddition.global_wavelength_grid,resolution_all)
     coadd_all_file.hdu_list[4].data = coadd_all_info

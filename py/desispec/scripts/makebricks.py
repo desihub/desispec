@@ -20,6 +20,8 @@ def parse(options=None):
         help = 'Night to process in the format YYYYMMDD')
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
+    parser.add_argument('--rawdata', type = str, default = None, metavar = 'PATH',
+        help = 'Override default path ($DESI_SPECTRO_DATA) to processed data.')
 
     args = None
     if options is None:
@@ -42,10 +44,11 @@ def main(args):
 
     try:
         # Loop over exposures available for this night.
-        for exposure in desispec.io.get_exposures(args.night, specprod_dir = args.specprod):
+        for exposure in desispec.io.get_exposures(args.night, specprod_dir = args.specprod,rawdata_dir=args.rawdata):
             # Ignore exposures with no fibermap, assuming they are calibration data.
             fibermap_path = desispec.io.findfile(filetype = 'fibermap',night = args.night,
-                expid = exposure, specprod_dir = args.specprod)
+                expid = exposure, specprod_dir = args.specprod,rawdata_dir=args.rawdata)
+            print fibermap_path
             if not os.path.exists(fibermap_path):
                 log.debug('Skipping exposure {:08d} with no fibermap.'.format(exposure))
                 continue
@@ -73,7 +76,7 @@ def main(args):
                     brick_key = '{}_{}'.format(band,brick_name)
                     # Open the brick file if this is the first time we are using it.
                     #if brick_key not in bricks:
-                    brick_path = desispec.io.findfile('brick',brickname = brick_name,band = band)
+                    brick_path = desispec.io.findfile('brick',brickname = brick_name,band = band,specprod_dir=args.specprod)
                     header = dict(BRICKNAM=(brick_name, 'Imaging brick name'),
                                       CHANNEL=(band, 'Spectrograph channel [b,r,z]'), )
                     brick = desispec.io.brick.Brick(brick_path,mode = 'update',header = header)

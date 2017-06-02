@@ -44,6 +44,8 @@ class Spectrum(object):
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
+        if mask is not None:
+            self.ivar *= (mask==0)
         self.mask = mask
         # if mask is None:
         #     self.mask = np.zeros(self.flux.shape, dtype=np.uint32)
@@ -58,13 +60,19 @@ class Spectrum(object):
             n = len(wave)
             self.Cinv = np.zeros((n,n))
             self.Cinv_f = np.zeros((n,))
+            self.sum_ivar = np.zeros(n)
+            self.ivar_f = np.zeros(n)
+            self.ivar_R = np.zeros((n,n))
         else:
             assert flux is not None and resolution is not None,'Missing flux and/or resolution.'
             diag_ivar = scipy.sparse.dia_matrix((ivar[np.newaxis,:],[0]),resolution.shape)
             self.Cinv = self.resolution.T.dot(diag_ivar.dot(self.resolution))
             self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
+            self.ivar_f = self.ivar*self.flux
+            self.ivar_R = self.resolution.toarray()*self.ivar[:,None]
+            self.sum_ivar = self.ivar*1.
 
-    def finalize(self):
+    def finalize(self,fast=False):
         """Calculates the flux, inverse variance and resolution for this spectrum.
 
         Uses the accumulated data from all += operations so far but does not prevent
@@ -88,12 +96,21 @@ class Spectrum(object):
         self.ivar = np.zeros_like(self.Cinv_f)
         R = np.zeros_like(self.Cinv)
         # Calculate the deconvolved flux,ivar and resolution for ivar > 0 pixels.
-        self.ivar[mask],R[keep_t,keep] = decorrelate(self.Cinv[keep_t,keep])
-        try:
-            R_it = scipy.linalg.inv(R[keep_t,keep].T)
-            self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
-        except np.linalg.linalg.LinAlgError:
-            self.log.warning('resolution matrix is singular so no coadded fluxes available.')
+        if not fast:
+            self.ivar[mask],R[keep_t,keep] = decorrelate(self.Cinv[keep_t,keep])
+            try:
+                R_it = scipy.linalg.inv(R[keep_t,keep].T)
+                self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
+            except np.linalg.linalg.LinAlgError:
+                self.log.warning('resolution matrix is singular so no coadded fluxes available.')
+        else:
+            self.ivar = self.sum_ivar
+            self.flux = self.ivar_f
+            R = self.ivar_R
+            w = self.ivar > 0
+            self.flux[w]/=self.ivar[w]
+            R[w,:]/=self.ivar[w,None]
+
         # Convert R from a dense matrix to a sparse one.
         self.resolution = desispec.resolution.Resolution(R)
 
@@ -114,12 +131,18 @@ class Spectrum(object):
         if np.array_equal(self.wave,other.wave):
             self.Cinv = self.Cinv + other.Cinv
             self.Cinv_f += other.Cinv_f
+            self.ivar_f += other.ivar_f
+            self.sum_ivar += other.ivar
+            self.ivar_R += other.ivar_R
             if (self.mask is not None) and (other.mask is not None):
                 self.mask |= other.mask
         else:
             resampler = get_resampling_matrix(self.wave,other.wave)
             self.Cinv = self.Cinv + resampler.T.dot(other.Cinv.dot(resampler))
             self.Cinv_f += resampler.T.dot(other.Cinv_f)
+            self.ivar_f += resampler.T.dot(other.ivar_f)
+            self.sum_ivar += resampler.T.dot(other.ivar)
+            self.ivar_R += resampler.T.dot(other.ivar_R).dot(resampler)
             if (self.mask is not None) and (other.mask is not None):
                 mask_resampler = (resampler != 0).T
                 self.mask |= mask_resampler.T.dot(other.mask)
@@ -139,7 +162,7 @@ so we add an extra bin to the end of the global wavelength grid to fully contain
 Note that we use a linear grid (rather than a log-lambda grid, for example) so that
 co-added spectra have a roughly constant FWHM/BINSIZE.
 """
-global_wavelength_grid = np.arange(3579.0,9826.0,1.0)
+global_wavelength_grid = np.arange(3579.0,10001.0,1.0)
 
 def get_resampling_matrix(global_grid,local_grid):
     """Build the rectangular matrix that linearly resamples from the global grid to a local grid.
