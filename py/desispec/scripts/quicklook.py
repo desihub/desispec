@@ -55,12 +55,26 @@ def ql_main(args=None):
     if args.dotest is not None:
         quicklook.testconfig(args.dotest)
 
+    if args.rawdata_dir:
+        rawdata_dir = args.rawdata_dir
+    else:
+        if 'QL_SPEC_DATA' not in os.environ:
+            sys.exit("must set ${} environment variable or provide data directory".format('QL_SPEC_DATA'))
+        rawdata_dir=os.getenv('QL_SPEC_DATA')
+
+    if args.specprod_dir:
+        specprod_dir = args.specprod_dir
+    else:
+        if 'QL_SPEC_REDUX' not in os.environ:
+            sys.exit("must set ${} environment variable or provide output directory".format('QL_SPEC_REDUX'))
+        specprod_dir=os.getenv('QL_SPEC_REDUX')
+
     if args.config is not None:
         if os.path.exists(args.config):
             if "yaml" in args.config:
                 file=yaml.load(open(args.config,'r'))
                 PAs=qlconfig.Palist(file['Flavor'])
-                config=qlconfig.Make_Config(args.night,file['Flavor'],args.expid,args.camera,PAs,psfboot=file['PSFFile'],fiberflat=file['FiberFlatFile'])
+                config=qlconfig.Make_Config(args.night,file['Flavor'],args.expid,args.camera,PAs,psfboot=file['PSFFile'],fiberflat=file['FiberFlatFile'],rawdata_dir=rawdata_dir,specprod_dir=specprod_dir)
                 configdict=qlconfig.build_config(config)
         else:
             log.critical("Can't open config file {}".format(args.config))
@@ -69,7 +83,7 @@ def ql_main(args=None):
         log.warning("No config file given. Trying to create config from other options")
         PAs=qlconfig.Palist(args.flavor)
 
-        config=qlconfig.Make_Config(args.night,args.flavor,args.expid,args.camera, PAs,psfboot=args.psfboot,rawdata_dir=args.rawdata_dir, specprod_dir=args.specprod_dir,fiberflat=args.fiberflat, qlf=args.qlf)
+        config=qlconfig.Make_Config(args.night,args.flavor,args.expid,args.camera, PAs,psfboot=args.psfboot,rawdata_dir=rawdata_dir, specprod_dir=specprod_dir,fiberflat=args.fiberflat, qlf=args.qlf)
         configdict=qlconfig.build_config(config)
         configfile=qlconfig.build_config_short(config)
 

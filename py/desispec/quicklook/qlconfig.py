@@ -33,17 +33,7 @@ class Make_Config(object):
         self.period=period
         self.dumpintermediates=dumpintermediates
         self.amps=amps
-
-        if rawdata_dir is None:
-            if 'QL_SPEC_DATA' not in os.environ:
-                log.critical("must set ${} environment variable".format('QL_SPEC_DATA'))
-            rawdata_dir=os.getenv('QL_SPEC_DATA')
         self.rawdata_dir=rawdata_dir 
-
-        if specprod_dir is None:
-            if 'QL_SPEC_REDUX' not in os.environ:
-                log.critical("must set ${} environment variable".format('QL_SPEC_REDUX'))
-            specprod_dir=os.getenv('QL_SPEC_REDUX')
         self.specprod_dir=specprod_dir
 
         self.outdir=outdir
