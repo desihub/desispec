@@ -60,7 +60,7 @@ def ql_main(args=None):
             if "yaml" in args.config:
                 file=yaml.load(open(args.config,'r'))
                 PAs=qlconfig.Palist(file['Flavor'])
-                config=qlconfig.Make_Config(file['Night'],file['Flavor'],file['Expid'],file['Camera'],PAs,psfboot=file['PSFFile'],fiberflat=file['FiberFlatFile'])
+                config=qlconfig.Make_Config(args.night,file['Flavor'],args.expid,args.camera,PAs,psfboot=file['PSFFile'],fiberflat=file['FiberFlatFile'])
                 configdict=qlconfig.build_config(config)
         else:
             log.critical("Can't open config file {}".format(args.config))

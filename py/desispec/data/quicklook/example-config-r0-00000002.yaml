@@ -1,35 +1,36 @@
-Camera: r0
-DumpIntermediates: true
-Expid: 2
-FiberFlatFile: /project/projectdirs/desi/spectro/redux/QL/rstaten/calib2d/20160728/fiberflat-r0-00000001.fits
-FiberMap: /project/projectdirs/desi/spectro/redux/QL/rstaten/exposures/20160728/000000002/fibermap-00000002.fits
 Flavor: dark
-Night: '20160728'
+FiberFlatFile: /project/projectdirs/desi/spectro/redux/QL/rstaten/calib2d/20160728/fiberflat-r0-00000001.fits
 PSFFile: /project/projectdirs/desi/spectro/redux/QL/rstaten/calib2d/20160728/psfboot-r0.fits
 Period: 5.0
-PipeLine:
-- PA: {ClassName: Initialize}
-  QAs:
-  - {ClassName: Bias_From_Overscan, params: null}
-- PA: {ClassName: Preproc}
-  QAs:
-  - {ClassName: Get_RMS, params: null}
-  - ClassName: Count_Pixels
-    params: {CUTHI: 500, CUTLO: 100}
-  - {ClassName: Calc_XWSigma, params: null}
-- PA: {ClassName: BoxcarExtract}
-  QAs:
-  - ClassName: CountSpectralBins
-    params: {CUTHI: 500, CUTLO: 100, CUTMED: 250}
-- PA: {ClassName: ApplyFiberFlat_QL}
-  QAs:
-  - {ClassName: Sky_Continuum, params: null}
-  - {ClassName: Sky_Peaks, params: null}
-- PA: {ClassName: SkySub_QL}
-  QAs:
-  - ClassName: Sky_Residual
-    params: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0}
-  - {ClassName: Integrate_Spec, params: null}
-  - {ClassName: Calculate_SNR, params: null}
-RawImage: /project/projectdirs/desi/spectro/data/QL/rstaten/20160728/desi-00000002.fits.fz
 Timeout: 120.0
+Pipeline:
+- Algorithm:
+  - Initialize
+  - QA: Bias_From_Overscan
+    params: {}
+- Algorithm:
+  - Preproc
+  - QA: Get_RMS
+    params: {}
+  - QA: Count_Pixels
+    params: {CUTHI: 500, CUTLO: 100}
+  - QA: Calc_XWSigma
+    params: {}
+- Algorithm:
+  - BoxcarExtract
+  - QA: CountSpectralBins
+    params: {CUTHI: 500, CUTLO: 100, CUTMED: 250}
+- Algorithm:
+  - ApplyFiberFlat_QL
+  - QA: Sky_Continuum
+    params: {}
+  - QA: Sky_Peaks
+    params: {}
+- Algorithm:
+  - SkySub_QL
+  - QA: Sky_Residual
+    params: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0}
+  - QA: Integrate_Spec
+    params: {}
+  - QA: Calculate_SNR
+    params: {}

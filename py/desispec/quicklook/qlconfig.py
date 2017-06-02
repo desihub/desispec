@@ -197,7 +197,7 @@ class Make_Config(object):
                              PER_RESID=95.,   # Percentile for residual distribution
                              BIN_SZ=0.1,) # Bin size for residual/sigma histogram
         else:
-            params[qa]= None
+            params[qa]= dict()
         
         return params[qa]
 
@@ -346,29 +346,22 @@ def build_config_short(config):
 
     outconfig={}
 
-    outconfig['Night'] = config.night
     outconfig['Flavor'] = config.flavor
-    outconfig['Camera'] = config.camera
-    outconfig['Expid'] = config.expid
-    outconfig['DumpIntermediates'] = config.dumpintermediates
-    outconfig['FiberMap']=config.fibermap
     outconfig['FiberFlatFile'] = config.fiberflat
     outconfig['PSFFile'] = config.psfboot
     outconfig['Period'] = config.period
+    outconfig['Timeout']=config.timeout
 
     pipeline = []
     for ii,PA in enumerate(config.palist):
-        pipe = {'PA':''}
-        pipe['PA'] = {'ClassName': PA}
-        pipe['QAs']=[]
+        pipe = {}
+        pipe['Algorithm'] = [PA]
         for jj, QA in enumerate(config.qalist[PA]):
-            pipe_qa={'ClassName': QA, 'params': config.qaargs[QA]['param']}
-            pipe['QAs'].append(pipe_qa)
+            pipe_qa={'QA': QA, 'params': config.qaargs[QA]['param']}
+            pipe['Algorithm'].append(pipe_qa)
         pipeline.append(pipe)
 
-    outconfig['PipeLine']=pipeline
-    outconfig['RawImage']=config.rawfile
-    outconfig['Timeout']=config.timeout
+    outconfig['Pipeline']=pipeline
     return outconfig
 
 
