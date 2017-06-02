@@ -48,7 +48,6 @@ def main(args):
             # Ignore exposures with no fibermap, assuming they are calibration data.
             fibermap_path = desispec.io.findfile(filetype = 'fibermap',night = args.night,
                 expid = exposure, specprod_dir = args.specprod,rawdata_dir=args.rawdata)
-            print fibermap_path
             if not os.path.exists(fibermap_path):
                 log.debug('Skipping exposure {:08d} with no fibermap.'.format(exposure))
                 continue
