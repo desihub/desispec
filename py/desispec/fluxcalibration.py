@@ -603,7 +603,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         ismlines=np.array([3934.77,3969.59])
         hw=6. # A
         for cam in wave.keys() :
-            tmp_ivar[cam]=np.array(ivar[cam]) # force copy
             for line in ismlines :
                 ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
     
