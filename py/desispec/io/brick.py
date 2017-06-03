@@ -233,8 +233,6 @@ class Brick(BrickBase):
         augmented_data = table.Table(object_data)
         augmented_data['NIGHT'] = int(night)
         augmented_data['EXPID'] = expid
-        nlines = len(self.hdu_list['FIBERMAP'].data)
-        augmented_data['INDEX'] = np.arange(nlines,nlines+flux.shape[0],dtype=int)
 
         fibermap_hdu = self.hdu_list['FIBERMAP']
         if len(fibermap_hdu.data) > 0:

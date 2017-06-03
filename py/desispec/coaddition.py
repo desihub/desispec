@@ -33,7 +33,7 @@ class Spectrum(object):
         ivar(numpy.ndarray): Array of shape (n,) inverse variances of flux at each wavelength.
         resolution(desimodel.resolution.Resolution): Sparse matrix of wavelength resolutions.
     """
-    def __init__(self,wave,flux=None,ivar=None,mask=None,resolution=None):
+    def __init__(self,wave,flux=None,ivar=None,mask=None,resolution=None,fast=False):
         assert wave.ndim == 1, "Input wavelength should be 1D"
         assert (flux is None) or (flux.shape == wave.shape), "wave and flux should have same shape"
         assert (ivar is None) or (ivar.shape == wave.shape), "wave and ivar should have same shape"
@@ -41,6 +41,7 @@ class Spectrum(object):
         assert (resolution is None) or (isinstance(resolution, desispec.resolution.Resolution))
         assert (resolution is None) or (resolution.shape[0] == len(wave)), "resolution size mismatch to wave"
 
+        self.fast = fast
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
@@ -58,21 +59,25 @@ class Spectrum(object):
         # internal Cinv is a dense matrix.
         if ivar is None:
             n = len(wave)
-            self.Cinv = np.zeros((n,n))
-            self.Cinv_f = np.zeros((n,))
-            self.sum_ivar = np.zeros(n)
-            self.ivar_f = np.zeros(n)
-            self.ivar_R = np.zeros((n,n))
+            if not fast:
+                self.Cinv = scipy.sparse.dia_matrix((n,n))
+                self.Cinv_f = np.zeros((n,))
+            else:
+                self.sum_ivar = np.zeros(n)
+                self.ivar_f = np.zeros(n)
+                self.ivar_R = scipy.sparse.dia_matrix((n,n))
         else:
             assert flux is not None and resolution is not None,'Missing flux and/or resolution.'
             diag_ivar = scipy.sparse.dia_matrix((ivar[np.newaxis,:],[0]),resolution.shape)
-            self.Cinv = self.resolution.T.dot(diag_ivar.dot(self.resolution))
-            self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
-            self.ivar_f = self.ivar*self.flux
-            self.ivar_R = self.resolution.toarray()*self.ivar[:,None]
-            self.sum_ivar = self.ivar*1.
+            if not fast:
+                self.Cinv = self.resolution.T.dot(diag_ivar.dot(self.resolution))
+                self.Cinv_f = self.resolution.T.dot(self.ivar*self.flux)
+            else:
+                self.ivar_f = self.ivar*self.flux
+                self.ivar_R = diag_ivar.dot(self.resolution)
+                self.sum_ivar = self.ivar*1.
 
-    def finalize(self,fast=False):
+    def finalize(self):
         """Calculates the flux, inverse variance and resolution for this spectrum.
 
         Uses the accumulated data from all += operations so far but does not prevent
@@ -84,19 +89,19 @@ class Spectrum(object):
         printed and the returned flux vector is zero (but ivar and resolution are
         still valid).
         """
-        # Convert to a dense matrix if necessary.
-        if scipy.sparse.issparse(self.Cinv):
-            self.Cinv = self.Cinv.todense()
-        # What pixels are we using?
-        mask = (np.diag(self.Cinv) > 0)
-        keep = np.arange(len(self.Cinv_f))[mask]
-        keep_t = keep[:,np.newaxis]
-        # Initialize the results to zero.
-        self.flux = np.zeros_like(self.Cinv_f)
-        self.ivar = np.zeros_like(self.Cinv_f)
-        R = np.zeros_like(self.Cinv)
-        # Calculate the deconvolved flux,ivar and resolution for ivar > 0 pixels.
-        if not fast:
+        if not self.fast:
+            # Calculate the deconvolved flux,ivar and resolution for ivar > 0 pixels.
+            # Convert to a dense matrix if necessary.
+            if scipy.sparse.issparse(self.Cinv):
+                self.Cinv = self.Cinv.todense()
+            mask = (np.diag(self.Cinv) > 0)
+            # What pixels are we using?
+            keep = np.arange(len(self.Cinv_f))[mask]
+            keep_t = keep[:,np.newaxis]
+            # Initialize the results to zero.
+            self.flux = np.zeros_like(self.Cinv_f)
+            self.ivar = np.zeros_like(self.Cinv_f)
+            R = np.zeros_like(self.Cinv)
             self.ivar[mask],R[keep_t,keep] = decorrelate(self.Cinv[keep_t,keep])
             try:
                 R_it = scipy.linalg.inv(R[keep_t,keep].T)
@@ -106,9 +111,12 @@ class Spectrum(object):
         else:
             self.ivar = self.sum_ivar
             self.flux = self.ivar_f
-            R = self.ivar_R
             w = self.ivar > 0
             self.flux[w]/=self.ivar[w]
+            if scipy.sparse.issparse(self.ivar_R):
+                R = self.ivar_R.toarray()
+            else:
+                R = self.ivar_R
             R[w,:]/=self.ivar[w,None]
 
         # Convert R from a dense matrix to a sparse one.
@@ -129,20 +137,25 @@ class Spectrum(object):
 
         # Accumulate weighted deconvolved fluxes.
         if np.array_equal(self.wave,other.wave):
-            self.Cinv = self.Cinv + other.Cinv
-            self.Cinv_f += other.Cinv_f
-            self.ivar_f += other.ivar_f
-            self.sum_ivar += other.ivar
-            self.ivar_R += other.ivar_R
+            if not self.fast:
+                self.Cinv = self.Cinv + other.Cinv
+                self.Cinv_f += other.Cinv_f
+            else:
+                self.ivar_f += other.ivar_f
+                self.sum_ivar += other.ivar
+                self.ivar_R += other.ivar_R
             if (self.mask is not None) and (other.mask is not None):
                 self.mask |= other.mask
         else:
             resampler = get_resampling_matrix(self.wave,other.wave)
-            self.Cinv = self.Cinv + resampler.T.dot(other.Cinv.dot(resampler))
-            self.Cinv_f += resampler.T.dot(other.Cinv_f)
-            self.ivar_f += resampler.T.dot(other.ivar_f)
-            self.sum_ivar += resampler.T.dot(other.ivar)
-            self.ivar_R += resampler.T.dot(other.ivar_R).dot(resampler)
+                
+            if not self.fast:
+                self.Cinv = self.Cinv + resampler.T.dot(other.Cinv.dot(resampler))
+                self.Cinv_f += resampler.T.dot(other.Cinv_f)
+            else:
+                self.ivar_f += resampler.T.dot(other.ivar)*resampler.T.dot(other.flux)
+                self.sum_ivar += resampler.T.dot(other.ivar)
+                self.ivar_R += resampler.T.dot(other.ivar_R.dot(resampler))
             if (self.mask is not None) and (other.mask is not None):
                 mask_resampler = (resampler != 0).T
                 self.mask |= mask_resampler.T.dot(other.mask)
@@ -162,7 +175,7 @@ so we add an extra bin to the end of the global wavelength grid to fully contain
 Note that we use a linear grid (rather than a log-lambda grid, for example) so that
 co-added spectra have a roughly constant FWHM/BINSIZE.
 """
-global_wavelength_grid = np.arange(3579.0,10001.0,1.0)
+global_wavelength_grid = 3579.*10**(np.arange(4500)*1e-4)
 
 def get_resampling_matrix(global_grid,local_grid):
     """Build the rectangular matrix that linearly resamples from the global grid to a local grid.
@@ -192,7 +205,7 @@ def get_resampling_matrix(global_grid,local_grid):
     local_index = np.arange(len(local_grid),dtype=int)
     matrix = np.zeros((len(local_grid),len(global_grid)))
     matrix[local_index,global_index] = alpha
-    matrix[local_index,global_index-1] = 1 - alpha
+    matrix[local_index,global_index-1] = 1-alpha
     return matrix
 
 def decorrelate(Cinv):
