@@ -63,10 +63,12 @@ def main(args):
 
     # Keep track of the index we assign to each target.
     next_coadd_index = 0
-    target_index = { }
 
     # The HDU4 table for the global coadd will go here.
     coadd_all_info = None
+
+    ## keep track of the num_targes in each band in case they are different
+    num_targets = {}
 
     # Loop over bands for this brick.
     for band in args.bands:
@@ -84,6 +86,7 @@ def main(args):
 
         ## get the unique target id list
         utid,iutid = np.unique(brick_file.hdu_list[4].data.TARGETID,return_index=True)
+        num_targets[band] = len(utid)
 
         # Open this band's coadd file for updating.
         coadd_path = desispec.io.meta.findfile('coadd',brickname = args.brick,\
@@ -91,62 +94,57 @@ def main(args):
         coadd_file = desispec.io.brick.CoAddedBrick(coadd_path,mode = 'update',header=header)
 
         # Copy the input fibermap info for each exposure into memory.
-        coadd_info = np.copy(brick_file.hdu_list[4].data[iutid])
+        coadd_info = brick_file.hdu_list[4].data[iutid]
         # Also copy the first band's info to initialize the global coadd info, but remember that this
         # band might not have all targets so we could see new targets in other bands.
         if coadd_all_info is None:
             coadd_all_info = brick_file.hdu_list[4].data[iutid]
 
         # Loop over objects in the input brick file.
-        data = brick_file.hdu_list[4].data
         if args.target is not None:
-            w = np.in1d(brick_file.hdu_list[4].data.TARGETID,args.target)
-            data = data[w]
+            w = np.in1d(coadd_info["TARGETID"],args.target)
+            coadd_info = coadd_info[w]
             ## also fix the info
-##            w = np.in1d(coadd_all_info["TARGETID"],args.target)
-##            coadd_all_info = coadd_all_info[w]
+            w = np.in1d(coadd_all_info["TARGETID"],args.target)
+            coadd_all_info = coadd_all_info[w]
 
-        for index,info in enumerate(data):
-            resolution_matrix = desispec.resolution.Resolution(resolution_in[index])
-            spectrum = desispec.coaddition.Spectrum(wlen,flux_in[index],ivar_in[index],resolution=resolution_matrix,fast=args.fast)
+
+        for info in coadd_info:
             target_id = info["TARGETID"]
+            w = brick_file.hdu_list[4].data.TARGETID == target_id
             # Have we seen this target before?
             if target_id not in coadded_spectra:
                 coadded_spectra[target_id] = { }
-                target_index[target_id] = next_coadd_index
-                next_coadd_index += 1
+            log.info("Reading {} {}".format(target_id,info["EXPID"]))
             # Initialize the coadd for this band and target if necessary.
             if band not in coadded_spectra[target_id]:
                 coadded_spectra[target_id][band] = desispec.coaddition.Spectrum(wlen,fast=args.fast)
-            # Do the coaddition.
-            coadded_spectra[target_id][band] += spectrum
+            for fl,iv,re in zip(flux_in[w],ivar_in[w],resolution_in[w]):
+                resolution_matrix = desispec.resolution.Resolution(re)
+                spectrum = desispec.coaddition.Spectrum(wlen,fl,iv,resolution=resolution_matrix,fast=args.fast)
+                # Do the coaddition.
+                coadded_spectra[target_id][band] += spectrum
 
-            # Is this exposure of this target already in our global coadd table?
-            exposure = info['EXPID']
-            log.info("Reading {} {}".format(target_id,exposure))
 
         # Allocate arrays for the coadded results for this band. Since we always use the same index
         # for the same target in each band, there might be some unused entries in these arrays if
         # some bands are missing for some targets.
-        num_targets = len(target_index)
         nbins = len(wlen)
-        flux_out = np.zeros((num_targets,nbins))
+        flux_out = np.zeros((num_targets[band],nbins))
         ivar_out = np.zeros_like(flux_out)
         resolution_out = []
 
         # Save the coadded spectra for this band.
-        for target_id in coadded_spectra:
+        for i,info in enumerate(coadd_info):
+            target_id = info["TARGETID"]
             log.info("Coadding band {} {}".format(band,target_id))
-            if band not in coadded_spectra[target_id]:
-                continue
             exposures = (coadd_info['TARGETID'] == target_id)
-            index = target_index[target_id]
             log.debug('Saving coadd of %d exposures for target ID %d to index %d.' % (
-                    np.count_nonzero(exposures),target_id,index))
+                    np.count_nonzero(exposures),target_id,i))
             coadd = coadded_spectra[target_id][band]
             coadd.finalize()
-            flux_out[index] = coadd.flux
-            ivar_out[index] = coadd.ivar
+            flux_out[i] = coadd.flux
+            ivar_out[i] = coadd.ivar
             resolution_out.append(coadd.resolution.to_fits_array())
 
         resolution_out = np.array(resolution_out)
@@ -159,26 +157,31 @@ def main(args):
         brick_file.close()
 
     # Allocate space for the global coadded results.
-    num_targets = next_coadd_index
+    global_num_targets = max(num_targets.values())
+
+    ## check whether some bands have fewer targets
+    for b in num_targets:
+        if num_targets[b] != global_num_targets:
+            log.warning("WARNING: band {} has fewer targets {}".format(b,global_num_targets))
     nbins = len(desispec.coaddition.global_wavelength_grid)
-    flux_all = np.empty((num_targets,nbins))
+    flux_all = np.empty((global_num_targets,nbins))
     ivar_all = np.empty_like(flux_all)
     resolution_all = []
 
     # Coadd the bands for each target ID.
     all_bands = ','.join(sorted(args.bands))
-    for target_id in coadded_spectra:
-        index = target_index[target_id]
+    for i,info in enumerate(coadd_all_info):
+        target_id = info["TARGETID"]
         bands = ','.join(sorted(coadded_spectra[target_id].keys()))
-        log.debug('Combining %s bands for target %d at index %d.' % (bands,target_id,index))
+        log.debug('Combining %s bands for target %d at index %d.' % (bands,target_id,i))
         if bands != all_bands:
             log.warning('WARNING: target %d has partial band coverage: %s' % (target_id,bands))
         coadd_all = desispec.coaddition.Spectrum(desispec.coaddition.global_wavelength_grid,fast=args.fast)
         for coadd_band in coadded_spectra[target_id].values():
             coadd_all += coadd_band
         coadd_all.finalize()
-        flux_all[index] = coadd_all.flux
-        ivar_all[index] = coadd_all.ivar
+        flux_all[i] = coadd_all.flux
+        ivar_all[i] = coadd_all.ivar
         resolution_all.append(coadd_all.resolution.to_fits_array())
 
     resolution_all = np.array(resolution_all)

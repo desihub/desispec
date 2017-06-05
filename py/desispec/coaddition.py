@@ -102,11 +102,11 @@ class Spectrum(object):
             self.flux = np.zeros_like(self.Cinv_f)
             self.ivar = np.zeros_like(self.Cinv_f)
             R = np.zeros_like(self.Cinv)
-            self.ivar[mask],R[keep_t,keep] = decorrelate(self.Cinv[keep_t,keep])
             try:
+                self.ivar[mask],R[keep_t,keep] = decorrelate(self.Cinv[keep_t,keep])
                 R_it = scipy.linalg.inv(R[keep_t,keep].T)
                 self.flux[mask] = R_it.dot(self.Cinv_f[mask])/self.ivar[mask]
-            except np.linalg.linalg.LinAlgError:
+            except:
                 self.log.warning('resolution matrix is singular so no coadded fluxes available.')
         else:
             self.ivar = self.sum_ivar
@@ -206,7 +206,9 @@ def get_resampling_matrix(global_grid,local_grid):
     matrix = np.zeros((len(local_grid),len(global_grid)))
     matrix[local_index,global_index] = alpha
     matrix[local_index,global_index-1] = 1-alpha
-    return matrix
+
+    ## turn into a sparse matrix to speed up calculations (about 3x faster)
+    return scipy.sparse.dia_matrix(matrix)
 
 def decorrelate(Cinv):
     """Decorrelate an inverse covariance using the matrix square root.
