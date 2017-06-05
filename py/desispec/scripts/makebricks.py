@@ -81,7 +81,7 @@ def main(args):
                     brick = desispec.io.brick.Brick(brick_path,mode = 'update',header = header)
                     # Add these fibers to the brick file. Note that the wavelength array is
                     # not per-fiber, so we do not slice it before passing it to add_objects().
-                    brick.add_objects(frame.flux[fibers], frame.ivar[fibers],
+                    brick.add_objects(frame.flux[fibers], frame.ivar[fibers]*(frame.mask[fibers]==0),
                         frame.wave, frame.resolution_data[fibers], brick_data,args.night,exposure)
                     log.debug('Brick {} now contains {} spectra for {} targets.'.format(brick.path, brick.get_num_spectra(), brick.get_num_targets()))
                     brick.close()
