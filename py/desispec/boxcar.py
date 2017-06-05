@@ -14,7 +14,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
             Or do we just parse the traces here and write a separate wrapper to handle this? Leaving psf in the input argument now.
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels
-        usexsigma: if True, use xsigma from psfboot file to calculate resolution data. 
+        usesigma: if True, use sigma from psfboot file(xsigma) or psf file (wsigma) to calculate resolution data. 
 
     Returns flux, ivar, resolution
     """
