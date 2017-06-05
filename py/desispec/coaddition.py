@@ -147,7 +147,7 @@ class Spectrum(object):
             if (self.mask is not None) and (other.mask is not None):
                 self.mask |= other.mask
         else:
-            resampler = get_resampling_matrix(self.wave,other.wave)
+            resampler = get_resampling_matrix(self.wave,other.wave,sparse=self.fast)
                 
             if not self.fast:
                 self.Cinv = self.Cinv + resampler.T.dot(other.Cinv.dot(resampler))
@@ -177,7 +177,7 @@ co-added spectra have a roughly constant FWHM/BINSIZE.
 """
 global_wavelength_grid = 3579.*10**(np.arange(4500)*1e-4)
 
-def get_resampling_matrix(global_grid,local_grid):
+def get_resampling_matrix(global_grid,local_grid,sparse=False):
     """Build the rectangular matrix that linearly resamples from the global grid to a local grid.
 
     The local grid range must be contained within the global grid range.
@@ -208,7 +208,9 @@ def get_resampling_matrix(global_grid,local_grid):
     matrix[local_index,global_index-1] = 1-alpha
 
     ## turn into a sparse matrix to speed up calculations (about 3x faster)
-    return scipy.sparse.dia_matrix(matrix)
+    if sparse:
+        resampling = scipy.sparse.dia_matrix(matrix)
+    return matrix
 
 def decorrelate(Cinv):
     """Decorrelate an inverse covariance using the matrix square root.

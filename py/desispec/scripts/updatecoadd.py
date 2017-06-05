@@ -26,7 +26,9 @@ def parse(options=None):
     parser.add_argument('--brick', type = str, default = None, metavar = 'NAME',
         help = 'Name of brick to process')
     parser.add_argument('--target', type = int, metavar = 'ID', default = None,nargs="*",
-        help = 'Only perform coaddition for the specified target ID (may be repeated).')
+        help = 'Only perform coaddition for the specified target ID(s).')
+    parser.add_argument('--objtype', type = str, default = None,nargs="*",
+        help = 'Only perform coaddition for the specified target type(s).')
     parser.add_argument('--bands', type = str, default = 'brz',
         help = 'String listing the bands to include.')
     parser.add_argument('--specprod', type = str, default = None, metavar = 'PATH',
@@ -108,6 +110,14 @@ def main(args):
             w = np.in1d(coadd_all_info["TARGETID"],args.target)
             coadd_all_info = coadd_all_info[w]
 
+        if args.objtype is not None:
+            w = np.in1d(coadd_info["OBJTYPE"],args.objtype)
+            coadd_info = coadd_info[w]
+            ## also fix the info
+            w = np.in1d(coadd_all_info["OBJTYPE"],args.objtype)
+            coadd_all_info = coadd_all_info[w]
+
+        assert len(coadd_info)>0,"no targets found with the specified target ids and object types"
 
         for info in coadd_info:
             target_id = info["TARGETID"]
