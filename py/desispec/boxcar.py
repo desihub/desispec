@@ -5,7 +5,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from desispec.quicklook.palib import resample_spec,get_resolution
 
-def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usexsigma=False):
+def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=False):
     """Extracts spectra row by row, given the centroids
 
     Args:
@@ -130,6 +130,6 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usexsigma=F
         fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
     #- Get resolution from the psf  
-    resolution=get_resolution(wtarget,nspec,psf,usexsigma=usexsigma)
+    resolution=get_resolution(wtarget,nspec,psf,usesigma=usesigma)
 
     return fflux,iivar,resolution
