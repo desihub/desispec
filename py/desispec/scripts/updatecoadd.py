@@ -162,6 +162,12 @@ def main(args):
         coadd_file.add_objects(flux_out,ivar_out,wlen,resolution_out)
         coadd_file.hdu_list[4].data = coadd_info
 
+        ## add coaddition info
+        coaddtyp="ivar"
+        if not args.fast:
+            coaddtyp="deconvolve"
+        coadd_file.hdu_list[4].header["COADDTYP"]=(coaddtyp,"coaddition method")
+
         # Close files for this band.
         coadd_file.close()
         brick_file.close()
@@ -198,6 +204,13 @@ def main(args):
     # Save the global coadds.
     coadd_all_file.add_objects(flux_all,ivar_all,desispec.coaddition.global_wavelength_grid,resolution_all)
     coadd_all_file.hdu_list[4].data = coadd_all_info
+
+    ## add coaddition info
+    coaddtyp="ivar"
+    if not args.fast:
+        coaddtyp="deconvolve"
+    coadd_all_file.hdu_list[4].header["COADDTYP"]=(coaddtyp,"coaddition method")
+
 
     # Close the combined coadd file.
     coadd_all_file.close()
