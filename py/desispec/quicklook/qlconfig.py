@@ -3,44 +3,53 @@ import yaml
 from desispec.io import findfile
 import os,sys
 from desispec.quicklook import qlexceptions,qllogger
-
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
 
-class Make_Config(object):
+class Config(object):
     """ 
     A class to generate Quicklook configurations for a given desi exposure. build_config will call this object to generate a configuration needed by quicklook
     """
 
-    def __init__(self, night,flavor,expid,camera,palist,debuglevel=20,period=5.,psfboot=None,wavelength=None, dumpintermediates=True,amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,timeout=120., fiberflat=None,outputfile=None,qlf=False):
+    def __init__(self, configfile, night, camera, expid, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False):
         """
-        psfboot- does not seem to have a desispec.io.findfile entry, so passing this in argument. 
-                 May be this will be useful even so.
+        configfile: a configuration file for QL eg: desispec/data/quicklook/quicklook_darktime.yaml
         palist: Palist object. See class Palist below
-        Note: fiberflat will have a different expid. Passing the file directly in the path
+        wavelengths: extraction wavelegth format in "5630,7740,0.5"
+        Note:
+        rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
         """  
   
-        self.night=night
-        self.expid=expid
-        self.flavor=flavor
-        self.camera=camera
-        self.psfboot=psfboot
-        self.fiberflat=fiberflat
-        self.outputfile=outputfile #- final outputfile.
-        self.wavelength=wavelength
-        self.debuglevel=debuglevel
-        self.period=period
-        self.dumpintermediates=dumpintermediates
-        self.amps=amps
-        self.rawdata_dir=rawdata_dir 
-        self.specprod_dir=specprod_dir
-
-        self.outdir=outdir
-        self.timeout=timeout
-        self._palist=palist
-        self.pamodule=palist.pamodule
-        self.qamodule=palist.qamodule
+        #- load the config file and extract
+        conf = yaml.load(open(configfile,"r"))
+        
+        self.night = night
+        self.expid = expid
+        self.camera = camera
+        self.amps = amps
+        self.rawdata_dir = rawdata_dir 
+        self.specprod_dir = specprod_dir
+        self.outdir = outdir
+        self.flavor = conf["flavor"]
+        self.psf = conf["psffile"]
+        self.fiberflat = conf["fiberflatfile"]
+        self.debuglevel = conf["Debuglevel"]
+        self.period = conf["Period"]
+        self.dumpintermediates = conf["WriteIntermediatefiles"]
+        self.writepixfile = conf["WritePixfile"]
+        self.writeskymodelfile = conf["WriteSkyModelfile"]
+        self.usesigma=conf["UseResolution"]
+        self.timeout = conf["Timeout"]
+        self.pipeline = conf["Pipeline"]
+        self.algorithms = conf["Algorithms"]
+        self._palist = Palist(self.pipeline,self.algorithms)
+        self.pamodule = self._palist.pamodule
+        self.qamodule = self._palist.qamodule
+        if "BoxcarExtract" in self.algorithms.keys():
+            if "wavelength" in self.algorithms["BoxcarExtract"].keys():
+                self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
+            else: self.wavelength = None
         self._qlf=qlf
 
         #- some global variables
@@ -91,13 +100,30 @@ class Make_Config(object):
         #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
         paopt_initialize={'camera': self.camera}
 
-        paopt_preproc={'camera': self.camera, 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("pix")} 
+        if self.writepixfile:
+            pixfile=self.dump_pa("Preproc")
+        else: 
+            pixfile = None
+        paopt_preproc={'camera': self.camera,'dumpfile': pixfile}
 
-        paopt_extract={'BoxWidth': 2.5, 'FiberMap': '%%FiberMap', 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': '%%PSFFile', 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("frame")}
+        if self.dumpintermediates:
+            framefile=self.dump_pa("BoxcarExtract")
+            fframefile=self.dump_pa("ApplyFiberflat_QL")
+            sframefile=self.dump_pa("SkySub_QL")
+        else:
+            framefile=None
+            fframefile=None
+            sframefile=None
 
-        paopt_apfflat={'FiberFlatFile': '%%FiberFlatFile', 'DumpIntermediates': self.dumpintermediates, 'dumpfile': self.dump_pa("fframe")}
-       
-        paopt_skysub={'DumpIntermediates': self.dumpintermediates,'dumpfile': self.dump_pa("sframe")}
+        paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf, 'dumpfile': framefile}
+
+        paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
+
+        if self.writeskymodelfile:
+            outskyfile = findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+        else:
+            outskyfile=None       
+        paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile}
 
         paopts={}
         for PA in self.palist:
@@ -113,17 +139,27 @@ class Make_Config(object):
                 paopts[PA]=paopt_skysub
             else:
                 paopts[PA]={}
+        #- Ignore intermediate dumping and write explicitly the outputfile for 
+        self.outputfile=self.dump_pa(self.palist[-1]) 
+
         return paopts 
         
-    def dump_pa(self,filetype):
+    def dump_pa(self,paname):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
+        pafilemap={'Preproc': 'pix', 'BoxcarExtract': 'frame', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        
+        if paname in pafilemap:
+            filetype=pafilemap[paname]
+        else:
+            raise IOError("PA name does not match any file type") 
+           
         if filetype in ["fframe","sframe"]: #- fiberflat fielded or sky subtracted intermediate files       
             pafile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"{}-{}-{:08d}.fits".format(filetype,self.camera,self.expid))
         else:
             pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
-            
+
         return pafile
 
     def dump_qa(self): 
@@ -140,9 +176,12 @@ class Make_Config(object):
         qa_outfig = {}
         for PA in self.palist:
             #- pa level outputs
-            qa_pa_outfile[PA] = self.io_qa_pa(PA)[0]
-            qa_pa_outfig[PA] = self.io_qa_pa(PA)[1]
-
+            if self.dumpintermediates:
+                qa_pa_outfile[PA] = self.io_qa_pa(PA)[0]
+                qa_pa_outfig[PA] = self.io_qa_pa(PA)[1]
+            else:
+                qa_pa_outfile[PA] = None
+                qa_pa_outfig[PA] = None
             #- qa_level output
             for QA in self.qalist[PA]:
                 qa_outfile[QA] = self.io_qa(QA)[0]
@@ -162,32 +201,39 @@ class Make_Config(object):
         
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
+                
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': '%%PSFFile', 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': '%%FiberMap', 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
                 
         return qaopts 
    
     def _qaparams(self,qa):
-     
+            
         params={}
-        if qa == 'Count_Pixels':
-            params[qa]= dict(
-                             CUTLO = 100,
-                             CUTHI = 500
-                             )
-        elif qa == 'CountSpectralBins':
-            params[qa]= dict(
-                             CUTLO = 100,   # low threshold for number of counts
-                             CUTMED = 250,
-                             CUTHI = 500
-                             )
-        elif qa == 'Sky_Residual':
-            params[qa]= dict(
-                             PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-                             PER_RESID=95.,   # Percentile for residual distribution
-                             BIN_SZ=0.1,) # Bin size for residual/sigma histogram
+        if self.algorithms is not None:
+            for PA in self.palist:
+                if qa in self.qalist[PA]:
+                    params[qa]=self.algorithms[PA]['QA'][qa]['PARAMS']
+
         else:
-            params[qa]= dict()
+            if qa == 'Count_Pixels':
+                params[qa]= dict(
+                                CUTLO = 100,
+                                 CUTHI = 500
+                                )
+            elif qa == 'CountSpectralBins':
+                params[qa]= dict(
+                                 CUTLO = 100,   # low threshold for number of counts
+                                 CUTMED = 250,
+                                 CUTHI = 500
+                                )
+            elif qa == 'Sky_Residual':
+                params[qa]= dict(
+                                 PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+                                 PER_RESID=95.,   # Percentile for residual distribution
+                                 BIN_SZ=0.1,) # Bin size for residual/sigma histogram
+            else:
+                params[qa]= dict()
         
         return params[qa]
 
@@ -234,124 +280,107 @@ class Make_Config(object):
 
         return (outfile,outfig)
 
+    def expand_config(self):
+        """
+        config: desispec.quicklook.qlconfig.Config object
+        """
+        log.info("Building Full Configuration")
+
+        outconfig={}
+
+        outconfig['Night'] = self.night
+        outconfig['Flavor'] = self.flavor
+        outconfig['Camera'] = self.camera
+        outconfig['Expid'] = self.expid
+        #DataType=config.datatype
+        outconfig['DumpIntermediates'] = self.dumpintermediates
+        outconfig['FiberMap']=self.fibermap
+        outconfig['FiberFlatFile'] = self.fiberflat
+        outconfig['PSFFile'] = self.psf
+        outconfig['Period'] = self.period
+
+        pipeline = []
+        for ii,PA in enumerate(self.palist):
+            pipe={'OutputFile': self.dump_qa()[1][0][PA]} #- integrated QAs for that PA. 
+            pipe['PA'] = {'ClassName': PA, 'ModuleName': self.pamodule, 'kwargs': self.paargs[PA]}
+            pipe['QAs']=[]
+            for jj, QA in enumerate(self.qalist[PA]):
+                pipe_qa={'ClassName': QA, 'ModuleName': self.qamodule, 'kwargs': self.qaargs[QA]}
+                pipe['QAs'].append(pipe_qa)
+            pipe['StepName']=PA
+            pipeline.append(pipe)
+
+        outconfig['PipeLine'] = pipeline
+        outconfig['RawImage'] = self.rawfile
+        outconfig["OutputFile"] = self.outputfile
+        outconfig['Timeout'] = self.timeout
+        return outconfig
+
 class Palist(object):
     
     """
     Generate PA list and QA list for the Quicklook Pipeline for the given exposure
     """
-    def __init__(self,flavor,mode="online"):
+    def __init__(self,thislist=None,algorithms=None,flavor=None,mode=None):
         """
-        flavor: flavor can be arc,flat, dark, lrg, elg etc....
-        mode: mode can be one in ["online", "offline"]
+        thislist: given list of PAs
+        algorithms: Algorithm list coming from config file: e.g desispec/data/quicklook/quicklook.darktime.yaml
+        flavor: only needed if new list is to be built.
+        mode: online offline?
         """
         self.flavor=flavor
         self.mode=mode
+        self.thislist=thislist
+        self.algorithms=algorithms
         self.palist=self._palist()
         self.qalist=self._qalist()
-
+        
     def _palist(self):
-
-        if self.flavor == "arcs":
-            pa_list=['Initialize','Preproc','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
-        elif self.flavor == "flat":
-            pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
-        elif self.flavor in ['dark','elg','lrg','qso','bright','grey','gray','bgs','mws']:
-            pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
-        else:
-            log.warning("Not a valid flavor type. Use a valid flavor type. Exiting.")
-            sys.exit(0)
+        
+        if self.thislist is not None:
+            pa_list=self.thislist
+        else: #- construct palist
+            if self.flavor == "arcs":
+                pa_list=['Initialize','Preproc','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
+            elif self.flavor == "flat":
+                pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
+            elif self.flavor in ['dark','elg','lrg','qso','bright','grey','gray','bgs','mws']:
+                pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
+            else:
+                log.warning("Not a valid flavor type. Use a valid flavor type to build a palist. Exiting.")
+                sys.exit(0)
         self.pamodule='desispec.quicklook.procalgs'
         return pa_list       
     
 
     def _qalist(self):
-        QAs_initial=['Bias_From_Overscan']
-        QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
-        QAs_extract=['CountSpectralBins']
-        QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
-        QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
+
+        if self.thislist is not None:
+            qalist={}
+            for PA in self.thislist:
+                qalist[PA]=self.algorithms[PA]['QA'].keys()
+        else:
+            QAs_initial=['Bias_From_Overscan']
+            QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
+            QAs_extract=['CountSpectralBins']
+            QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
+            QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
         
-        qalist={}
-        for PA in self.palist:
-            if PA == 'Initialize':
-                qalist[PA] = QAs_initial
-            elif PA == 'Preproc':
-                qalist[PA] = QAs_preproc
-            elif PA == 'BoxcarExtract':
-                qalist[PA] = QAs_extract
-            elif PA == 'ApplyFiberFlat_QL':
-                qalist[PA] = QAs_apfiberflat
-            elif PA == 'SkySub_QL':
-                qalist[PA] = QAs_SkySub
-            else:
-                qalist[PA] = None #- No QA for this PA
+            qalist={}
+            for PA in self.palist:
+                if PA == 'Initialize':
+                    qalist[PA] = QAs_initial
+                elif PA == 'Preproc':
+                    qalist[PA] = QAs_preproc
+                elif PA == 'BoxcarExtract':
+                    qalist[PA] = QAs_extract
+                elif PA == 'ApplyFiberFlat_QL':
+                    qalist[PA] = QAs_apfiberflat
+                elif PA == 'SkySub_QL':
+                    qalist[PA] = QAs_SkySub
+                else:
+                    qalist[PA] = None #- No QA for this PA
         self.qamodule='desispec.qa.qa_quicklook'
         return qalist
-                
-                         
-def build_config(config):
-    """
-    config: desispec.quicklook.qlconfig.Config object
-    """
-    log.info("Building Configuration")
-
-    outconfig={}
-
-    outconfig['Night'] = config.night
-    outconfig['Flavor'] = config.flavor
-    outconfig['Camera'] = config.camera
-    outconfig['Expid'] = config.expid
-    #DataType=config.datatype
-    outconfig['DumpIntermediates'] = config.dumpintermediates
-    outconfig['FiberMap']=config.fibermap
-    outconfig['FiberFlatFile'] = config.fiberflat
-    outconfig['PSFFile'] = config.psfboot
-    outconfig['Period'] = config.period
-    if config.outputfile is not None: #- Global final output file
-        outconfig["OutputFile"] = config.outputfile
-    else: outconfig["OutputFile"]="lastframe-{}-{:08d}.fits".format(config.camera,config.expid)
-
-    pipeline = []
-    for ii,PA in enumerate(config.palist):
-        pipe={'OutputFile': config.dump_qa()[1][0][PA]}
-        pipe['PA'] = {'ClassName': PA, 'ModuleName': config.pamodule, 'kwargs': config.paargs[PA]}
-        pipe['QAs']=[]
-        for jj, QA in enumerate(config.qalist[PA]):
-            pipe_qa={'ClassName': QA, 'ModuleName': config.qamodule, 'kwargs': config.qaargs[QA]}
-            pipe['QAs'].append(pipe_qa)
-        pipe['StepName']=PA
-        pipeline.append(pipe)
-
-    outconfig['PipeLine']=pipeline
-    outconfig['RawImage']=config.rawfile
-    outconfig['Timeout']=config.timeout
-    return outconfig        
-        
-def build_config_short(config):
-    """
-    config: desispec.quicklook.qlconfig.Config object
-    Returns simplified configuration file
-    """
-    log.info("Making Configuration File")
-
-    outconfig={}
-
-    outconfig['Flavor'] = config.flavor
-    outconfig['FiberFlatFile'] = config.fiberflat
-    outconfig['PSFFile'] = config.psfboot
-    outconfig['Period'] = config.period
-    outconfig['Timeout']=config.timeout
-
-    pipeline = []
-    for ii,PA in enumerate(config.palist):
-        pipe = {}
-        pipe['Algorithm'] = [PA]
-        for jj, QA in enumerate(config.qalist[PA]):
-            pipe_qa={'QA': QA, 'params': config.qaargs[QA]['param']}
-            pipe['Algorithm'].append(pipe_qa)
-        pipeline.append(pipe)
-
-    outconfig['Pipeline']=pipeline
-    return outconfig
 
 
