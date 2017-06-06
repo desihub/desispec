@@ -114,6 +114,16 @@ def main(args) :
         header=fits.getheader(filename, 0)
         frame_fibermap = frame.fibermap
         frame_starindices=np.where(frame_fibermap["OBJTYPE"]=="STD")[0]
+        
+        # check magnitude are well defined or discard stars
+        tmp=[]
+        for i in frame_starindices :
+            mags=frame_fibermap["MAG"][i]
+            ok=np.sum((mags>0)&(mags<30))
+            if np.sum((mags>0)&(mags<30)) == mags.size :
+                tmp.append(i)
+        frame_starindices=np.array(tmp).astype(int)
+        
         camera=safe_read_key(header,"CAMERA").strip().lower()
 
         if spectrograph is None :
@@ -336,8 +346,6 @@ def main(args) :
         
         
         log.info("star#%d fiber #%d, %s = %s-%s = %f, number of pre-selected models = %d/%d"%(star,starfibers[star],args.color,filter1,filter2,star_color,selection.size,stdflux.shape[0]))
-        
-        #index_in_selection,second_index_in_selection,frac,redshift[star],chi2dof[star]=match_templates(wave,flux,ivar,resolution_data,stdwave,stdflux[selection], teff[selection], logg[selection], feh[selection], ncpu=args.ncpu,z_max=args.z_max,z_res=args.z_res,template_error=args.template_error)
         
         # apply extinction to selected_models
         dust_transmission_of_this_star = dust_transmission(stdwave,ebv[star])
