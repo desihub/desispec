@@ -7,6 +7,7 @@ import threading,string
 import subprocess
 import importlib
 import yaml
+from desiutil.io import yamlify
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
 

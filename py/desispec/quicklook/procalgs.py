@@ -646,6 +646,7 @@ class SkySub_QL(pas.PipelineAlg):
             from desispec.quicklook.quicksky import compute_sky
             if "Apply_resolution" in kwargs:
                 apply_resolution=kwargs["Apply_resolution"]
+                log.info("Apply fiber to fiber resolution variation in computing sky")
             else: apply_resolution = False
             fibermap=input_frame.fibermap
             skymodel=compute_sky(input_frame,fibermap,apply_resolution=apply_resolution)

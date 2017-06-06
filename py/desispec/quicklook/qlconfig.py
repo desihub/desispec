@@ -108,7 +108,7 @@ class Config(object):
 
         if self.dumpintermediates:
             framefile=self.dump_pa("BoxcarExtract")
-            fframefile=self.dump_pa("ApplyFiberflat_QL")
+            fframefile=self.dump_pa("ApplyFiberFlat_QL")
             sframefile=self.dump_pa("SkySub_QL")
         else:
             framefile=None
@@ -120,10 +120,10 @@ class Config(object):
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
         if self.writeskymodelfile:
-            outskyfile = findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outskyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
         else:
             outskyfile=None       
-        paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile}
+        paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile,'Apply_resolution': self.usesigma}
 
         paopts={}
         for PA in self.palist:
@@ -153,7 +153,7 @@ class Config(object):
         if paname in pafilemap:
             filetype=pafilemap[paname]
         else:
-            raise IOError("PA name does not match any file type") 
+            raise IOError("PA name does not match any file type. Check PA name in config") 
            
         if filetype in ["fframe","sframe"]: #- fiberflat fielded or sky subtracted intermediate files       
             pafile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"{}-{}-{:08d}.fits".format(filetype,self.camera,self.expid))

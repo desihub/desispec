@@ -48,21 +48,22 @@ def ql_main(args=None):
     if args is None:
         args = parse()
 
-    if args.rawdata_dir:
-        rawdata_dir = args.rawdata_dir
-    else:
-        if 'QL_SPEC_DATA' not in os.environ:
-            sys.exit("must set ${} environment variable or provide rawdata_dir".format('QL_SPEC_DATA'))
-        rawdata_dir=os.getenv('QL_SPEC_DATA')
-
-    if args.specprod_dir:
-        specprod_dir = args.specprod_dir
-    else:
-        if 'QL_SPEC_REDUX' not in os.environ:
-            sys.exit("must set ${} environment variable or provide specprod_dir".format('QL_SPEC_REDUX'))
-        specprod_dir=os.getenv('QL_SPEC_REDUX')
-
     if args.config is not None:
+
+        if args.rawdata_dir:
+            rawdata_dir = args.rawdata_dir
+        else:
+            if 'QL_SPEC_DATA' not in os.environ:
+                sys.exit("must set ${} environment variable or provide rawdata_dir".format('QL_SPEC_DATA'))
+            rawdata_dir=os.getenv('QL_SPEC_DATA')
+
+        if args.specprod_dir:
+            specprod_dir = args.specprod_dir
+        else:
+            if 'QL_SPEC_REDUX' not in os.environ:
+                sys.exit("must set ${} environment variable or provide specprod_dir".format('QL_SPEC_REDUX'))
+            specprod_dir=os.getenv('QL_SPEC_REDUX')
+
         log.info("Running Quicklook using configuration file {}".format(args.config))
         if os.path.exists(args.config):
             if "yaml" in args.config:
@@ -91,7 +92,7 @@ def ql_main(args=None):
     if args.save:
         if "yaml" in args.save:
             f=open(args.save,"w")
-            yaml.dump(configfile,f)
+            yaml.dump(configdict,f)
             log.info("Output saved for this configuration to {}".format(args.save))
             f.close()
         else:
@@ -113,8 +114,9 @@ def ql_main(args=None):
     elif isinstance(res,frame.Frame):
         if configdict["OutputFile"]: 
             finalname=configdict["OutputFile"]
-            log.critical("No final outputname given. Writing to a frame file {}".format(finalname))
-        else: finalname="frame-{}-{:08d}.fits".format(camera,expid)
+        else:
+            finalname="frame-{}-{:08d}.fits".format(camera,expid)
+            log.critical("No final outputname given. Writing to a frame file {}".format(finalname)) 
         frIO.write_frame(finalname,res,header=None)
     else:
         log.error("Result of pipeline is in unkown type {}. Don't know how to write".format(type(res)))

@@ -96,18 +96,19 @@ def get_resolution(wave,nspec,psf,usesigma=False):
     resolution_data=np.zeros((nspec,nband,nwave))
 
     if usesigma: #- use sigmas for resolution based on psffile type
-        if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot
-            log.info("Getting resolution matrix band diagonal elements from constant Gaussing Xsigma")
+
+        if hasattr(psf,'wcoeff'): #- use if have wsigmas
+            log.info("Getting resolution from wsigmas from arc lines PSF")
             for ispec in range(nspec):
-                thissigma=psf.xsigma(ispec,wave) 
+                thissigma=psf.wdisp(ispec,wave)/psf.angstroms_per_pixel(ispec,wave) #- in pixel units
                 Rsig=Resolution(thissigma)
                 resolution_data[ispec]=Rsig.data
-
         else:
-            if hasattr(psf,'wcoeff'): #- use if have wsigmas
-                log.info("Getting resolution from wsigmas from arc lines PSF")
+
+            if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot
+                log.info("Getting resolution matrix band diagonal elements from constant Gaussing Xsigma")
                 for ispec in range(nspec):
-                    thissigma=psf.wdisp(ispec,wave)/psf.angstroms_per_pixel(ispec,wave) #- in pixel units
+                    thissigma=psf.xsigma(ispec,wave) 
                     Rsig=Resolution(thissigma)
                     resolution_data[ispec]=Rsig.data
 
