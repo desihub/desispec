@@ -5,7 +5,7 @@ flavor: dark
 psffile: /home/govinda/Desi/simulate/spectro/sim/exposures/20170428/psfboot-r0.fits
 fiberflatfile: /home/govinda/Desi/simulate/spectro/sim/exposures/20170428/fiberflat-r0-00000001.fits
 #- Writeout intermediate files
-WritePixfile: False
+WritePixfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 #-Debuglevel 

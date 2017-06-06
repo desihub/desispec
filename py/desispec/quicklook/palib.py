@@ -93,7 +93,7 @@ def get_resolution(wave,nspec,psf,usesigma=False):
         nband=21
     else:
         nband=1 # only for dimensionality purpose of data model.
-    resolution_data=np.zeros(nspec,nband,nwave)
+    resolution_data=np.zeros((nspec,nband,nwave))
 
     if usesigma: #- use sigmas for resolution based on psffile type
         if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot

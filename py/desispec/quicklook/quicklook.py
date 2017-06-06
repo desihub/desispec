@@ -297,11 +297,11 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             except Exception as e:
                 log.warning("Failed to run QA {} error was {}".format(qa.name,e))
         if len(qaresult):
-            #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
-            f = open(paconf[s]["OutputFile"],"w")
-            yaml.dump(qaresult,f)
-            hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
-            f.close()
+            if conf["DumpIntermediates"]:
+                f = open(paconf[s]["OutputFile"],"w")
+                yaml.dump(qaresult,f)
+                hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
+                f.close()
         else:
             hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
         QAresults.append([pa.name,qaresult])

@@ -173,15 +173,15 @@ class BoxcarExtract(pas.PipelineAlg):
         input_image=args[0]
 
         dumpfile=None
-        if "dumpfile" not in kwargs:
-            else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
-        if "usexsigma" in kwargs:
-             usexsigma=kwargs["usexsigma"]
-        else: usexsigma = False
+        if "usesigma" in kwargs:
+             usesigma=kwargs["usesigma"]
+        else: usesigma = False
 
         if "Wavelength" not in kwargs:
             wstart = np.ceil(psf.wmin)
@@ -239,16 +239,16 @@ class BoxcarExtract(pas.PipelineAlg):
         return self.run_pa(input_image,psf
                            ,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,
-                           dumpfile=dumpfile,maskFile=maskFile,usexsigma=usexsigma)
+                           dumpfile=dumpfile,maskFile=maskFile,usesigma=usesigma)
 
 
     def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
                fibers=None, fibermap=None,dumpfile=None,
-               maskFile=None,usexsigma=False):
+               maskFile=None,usesigma=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
-                                  nspec=nspec,maskFile=maskFile,usexsigma=usexsigma)
+                                  nspec=nspec,maskFile=maskFile,usesigma=usesigma)
 
         #- write to a frame object
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
