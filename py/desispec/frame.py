@@ -165,13 +165,13 @@ class Frame(object):
         if self.meta is None:
             bad_meta = True
         else:
-            from desispec.io.params import read_obj_param
+            from desispec.io.params import read_params
             # Check flavor
             if 'FLAVOR' not in self.meta.keys():
                 bad_meta = True
             else:
-                obj_params = read_obj_param()
-                if self.meta['FLAVOR'] not in obj_params['frame_types']:
+                desi_params = read_params()
+                if self.meta['FLAVOR'] not in desi_params['frame_types']:
                     bad_meta = True
         #if bad_meta:
         #    import pdb; pdb.set_trace()
