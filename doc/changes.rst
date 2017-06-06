@@ -17,7 +17,7 @@ desispec Change Log
 * Additional LOCATION, DEVICE_LOC, and PETAL_LOC columns for fibermap (PR `#379`_).
 * Create util.py in tests/ which is intended to contain methods to facilitate test runs
 * Add vette() method for Frame class (PR `#386`_)
-* Began a desispec parameter file:  data/params/desispec_param.yaml
+* Began a desispec parameter file:  data/params/desispec_param.yml
 * Flux calibration improvements (PR `#390`_).
 
 .. _`#386`: https://github.com/desihub/desispec/pull/386

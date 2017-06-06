@@ -8,7 +8,7 @@ import numpy as np
 import os
 
 from desiutil.log import get_logger
-from desispec.io import read_obj_param
+from desispec.io import read_params
 
 
 # log=get_logger()
@@ -46,8 +46,8 @@ class QA_Frame(object):
             self.qa_data = {}
 
         # Final test
-        obj_params = read_obj_param()
-        assert self.flavor in obj_params['frame_types']
+        desi_params = read_params()
+        assert self.flavor in desi_params['frame_types']
 
     def init_qatype(self, qatype, param, re_init=False):
         """Initialize parameters for a given qatype
@@ -102,7 +102,6 @@ class QA_Frame(object):
 
         """
         log=get_logger()
-        obj_params = read_obj_param()
         assert self.flavor == 'science'
 
         # Standard FLUXCALIB input parameters
@@ -131,7 +130,6 @@ class QA_Frame(object):
         re_init: bool, (optional)
           Re-initialize SKYSUB parameter dict
         """
-        obj_params = read_obj_param()
         assert self.flavor == 'science'
 
         # Standard SKYSUB input parameters
