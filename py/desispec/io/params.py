@@ -11,17 +11,19 @@ import yaml
 from pkg_resources import resource_filename
 
 
-def read_obj_param(filename=None):
-    """Read obj parameter data from file
+def read_params(filename=None):
+    """Read parameter data from file
     """
+    global params  # Caching
+
     # File
     if filename is None:
-        filename = resource_filename('desispec','/data/params/desi_obj.yml')
+        filename = resource_filename('desispec','/data/params/desispec_param.yml')
     # Read yaml
     with open(filename, 'r') as infile:
-        obj_params = yaml.load(infile)
+        params = yaml.load(infile)
     # Return
-    return obj_params
+    return params
 
 
 
