@@ -13,6 +13,7 @@ import os,sys
 import datetime
 from astropy.time import Time
 from desispec.qa import qalib
+from desiutil.io import yamlify
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -120,7 +121,7 @@ class Get_RMS(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -217,7 +218,7 @@ class Count_Pixels(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -328,7 +329,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -464,7 +465,7 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
 
@@ -640,7 +641,7 @@ class Sky_Peaks(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -940,7 +941,7 @@ class Calc_XWSigma(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -1040,7 +1041,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -1199,7 +1200,7 @@ class CountSpectralBins(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -1295,7 +1296,7 @@ class Sky_Residual(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -1380,7 +1381,7 @@ class Calculate_SNR(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:

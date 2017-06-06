@@ -299,7 +299,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
         if len(qaresult):
             if conf["DumpIntermediates"]:
                 f = open(paconf[s]["OutputFile"],"w")
-                yaml.dump(qaresult,f)
+                f.write(yaml.dump(yamlify(qaresult)))
                 hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
                 f.close()
         else:
