@@ -22,8 +22,7 @@ class Config(object):
         """  
   
         #- load the config file and extract
-        conf = yaml.load(open(configfile,"r"))
-        
+        self.conf = yaml.load(open(configfile,"r"))
         self.night = night
         self.expid = expid
         self.camera = camera
@@ -31,18 +30,12 @@ class Config(object):
         self.rawdata_dir = rawdata_dir 
         self.specprod_dir = specprod_dir
         self.outdir = outdir
-        self.flavor = conf["flavor"]
-        self.psf = conf["psffile"]
-        self.fiberflat = conf["fiberflatfile"]
-        self.debuglevel = conf["Debuglevel"]
-        self.period = conf["Period"]
-        self.dumpintermediates = conf["WriteIntermediatefiles"]
-        self.writepixfile = conf["WritePixfile"]
-        self.writeskymodelfile = conf["WriteSkyModelfile"]
-        self.usesigma=conf["UseResolution"]
-        self.timeout = conf["Timeout"]
-        self.pipeline = conf["Pipeline"]
-        self.algorithms = conf["Algorithms"]
+        self.dumpintermediates = self.conf["WriteIntermediatefiles"]
+        self.writepixfile = self.conf["WritePixfile"]
+        self.writeskymodelfile = self.conf["WriteSkyModelfile"]
+        self.usesigma = self.conf["UseResolution"]
+        self.pipeline = self.conf["Pipeline"]
+        self.algorithms = self.conf["Algorithms"]
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
         self.qamodule = self._palist.qamodule
@@ -51,11 +44,6 @@ class Config(object):
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
             else: self.wavelength = None
         self._qlf=qlf
-
-        #- some global variables
-        self.rawfile=findfile("raw",night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-
-        self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
 
     @property
@@ -286,13 +274,36 @@ class Config(object):
         """
         log.info("Building Full Configuration")
 
+        self.flavor = self.conf["flavor"]
+        self.debuglevel = self.conf["Debuglevel"]
+        self.period = self.conf["Period"]
+        self.timeout = self.conf["Timeout"]
+        self.fiberflatexpid = self.conf["FiberflatExpid"]
+
+        #- some global variables:
+        self.rawfile=findfile("raw",night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+
+        self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+ 
+        self.fiberflat=findfile("fiberflat",night=self.night,expid=self.fiberflatexpid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) #- TODO: Assuming same night for calibration files (here and psf)
+
+        psfnight=findfile('psfnight',night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) 
+
+        psfboot=findfile('psfboot',night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) 
+
+        
+        if os.path.exists(psfnight):
+            self.psf=psfnight
+            log.info("Using psfnight file: {}".format(self.psf))
+        else: 
+            self.psf=psfboot 
+        
         outconfig={}
 
         outconfig['Night'] = self.night
         outconfig['Flavor'] = self.flavor
         outconfig['Camera'] = self.camera
         outconfig['Expid'] = self.expid
-        #DataType=config.datatype
         outconfig['DumpIntermediates'] = self.dumpintermediates
         outconfig['FiberMap']=self.fibermap
         outconfig['FiberFlatFile'] = self.fiberflat
@@ -314,7 +325,24 @@ class Config(object):
         outconfig['RawImage'] = self.rawfile
         outconfig["OutputFile"] = self.outputfile
         outconfig['Timeout'] = self.timeout
+
+        #- Check if all the files exist for this QL configuraion
+        check_config(outconfig)
+        log.info("All necessary file exist for this configuration.")
         return outconfig
+
+def check_config(outconfig):
+    """
+    Given the expanded config, check for all possible file existence etc....
+    """
+
+    if outconfig["Flavor"]=="dark":
+        files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
+        for thisfile in files:
+            if not os.path.exists(thisfile):
+                sys.exit("File does not exist: {}".format(thisfile))
+    return 
+
 
 class Palist(object):
     
