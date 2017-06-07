@@ -279,6 +279,7 @@ class Config(object):
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
         self.fiberflatexpid = self.conf["FiberflatExpid"]
+        self.psftype = self.conf["PSFType"]
 
         #- some global variables:
         self.rawfile=findfile("raw",night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
@@ -286,17 +287,8 @@ class Config(object):
         self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
  
         self.fiberflat=findfile("fiberflat",night=self.night,expid=self.fiberflatexpid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) #- TODO: Assuming same night for calibration files (here and psf)
-
-        psfnight=findfile('psfnight',night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) 
-
-        psfboot=findfile('psfboot',night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) 
-
         
-        if os.path.exists(psfnight):
-            self.psf=psfnight
-            log.info("Using psfnight file: {}".format(self.psf))
-        else: 
-            self.psf=psfboot 
+        self.psf=findfile(self.psftype,night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)  
         
         outconfig={}
 
@@ -328,7 +320,7 @@ class Config(object):
 
         #- Check if all the files exist for this QL configuraion
         check_config(outconfig)
-        log.info("All necessary file exist for this configuration.")
+
         return outconfig
 
 def check_config(outconfig):
@@ -338,9 +330,13 @@ def check_config(outconfig):
 
     if outconfig["Flavor"]=="dark":
         files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
+        log.info("Checking if all the necessary files exist.")
         for thisfile in files:
             if not os.path.exists(thisfile):
                 sys.exit("File does not exist: {}".format(thisfile))
+            else:
+                log.info("File check: Okay: {}".format(thisfile))
+        log.info("All necessary file exist for this configuration.")
     return 
 
 

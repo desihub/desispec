@@ -5,7 +5,8 @@ flavor: dark
 #                     These files must be placed in their canonical location for production:
 #                     fiberflat- {specprod_dir}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits
 #                     psfnight- {specprod_dir}/calib2d/psf/{night}/psfnight-{camera}.fits (This will be used if available)
-#                     psfboot = {specprod_dir}/calib2d/psf/{night}/psfboot-{camera}.fits                    
+#                     psfboot = {specprod_dir}/calib2d/psf/{night}/psfboot-{camera}.fits
+PSFType: psfboot                    
 FiberflatExpid: 1
 #- Writeout intermediate files
 WritePixfile: False
