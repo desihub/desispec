@@ -196,7 +196,7 @@ class TestBinScripts(unittest.TestCase):
         """
         Tests desi_compute_sky --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
-        self._write_frame(flavor='dark', camera='b0')
+        self._write_frame(flavor='science', camera='b0')
         self._write_fiberflat()
         self._write_fibermap()
         self._write_skymodel()
@@ -221,7 +221,7 @@ class TestBinScripts(unittest.TestCase):
         """
         Tests desi_compute_sky --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
-        self._write_frame(flavor='dark', camera='b0')  # MUST MATCH FLUXCALIB ABOVE
+        self._write_frame(flavor='science', camera='b0')  # MUST MATCH FLUXCALIB ABOVE
         self._write_fiberflat()
         self._write_fibermap()
 

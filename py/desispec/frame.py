@@ -142,6 +142,44 @@ class Frame(object):
         if self.meta is not None:
             self.meta['FIBERMIN'] = np.min(self.fibers)
 
+    def vet(self):
+        """ Perform very basic checks on the frame
+        Generally run before writing to disk (or when read)
+        Args:
+            index:
+
+        Returns:
+            diagnosis: int  (bitwise flag)
+              0: Pass
+              2**0: Improper meta data
+              2**1: Improper data shapes
+
+        """
+        # Shapes
+        bad_shape = False
+        if (self.nspec,self.nwave) != self.flux.shape:
+            bad_shape = True
+
+        # Meta data
+        bad_meta = False
+        if self.meta is None:
+            bad_meta = True
+        else:
+            from desispec.io.params import read_params
+            # Check flavor
+            if 'FLAVOR' not in self.meta.keys():
+                bad_meta = True
+            else:
+                desi_params = read_params()
+                if self.meta['FLAVOR'] not in desi_params['frame_types']:
+                    bad_meta = True
+        #if bad_meta:
+        #    import pdb; pdb.set_trace()
+
+        # Generate the flag
+        diagnosis = 0 + 2**0 * bad_shape + 2**1 * bad_meta
+        return diagnosis
+
     def __getitem__(self, index):
         """
         Return a subset of the spectra on this frame
