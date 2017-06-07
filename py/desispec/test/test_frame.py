@@ -99,19 +99,19 @@ class TestFrame(unittest.TestCase):
         self.assertEqual(len(x.fibermap), 2)
         self.assertEqual(x.chi2pix.shape, (2,nwave))
 
-    def test_vette(self):
+    def test_vet(self):
         """ Vette method on Frame class
         """
         frame = get_frame_data()
         # Missing meta data
-        self.assertEqual(frame.vette(), 2)
+        self.assertEqual(frame.vet(), 2)
         # Add meta data
         frame.meta = {}
         frame.meta['FLAVOR'] = 'flat'
-        self.assertEqual(frame.vette(), 0)
+        self.assertEqual(frame.vet(), 0)
         # Mess with shape
         frame.nspec = 5
-        self.assertEqual(frame.vette(), 1)
+        self.assertEqual(frame.vet(), 1)
 
 #- This runs all test* functions in any TestCase class in this file
 if __name__ == '__main__':

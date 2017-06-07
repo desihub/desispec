@@ -142,7 +142,7 @@ class Frame(object):
         if self.meta is not None:
             self.meta['FIBERMIN'] = np.min(self.fibers)
 
-    def vette(self):
+    def vet(self):
         """ Perform very basic checks on the frame
         Generally run before writing to disk (or when read)
         Args:
