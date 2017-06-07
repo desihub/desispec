@@ -844,6 +844,7 @@ class Calc_XWSigma(MonitoringAlg):
 
                 xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4])
                 wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4])
+
                 xsigma_avg=np.mean(xsig)
                 wsigma_avg=np.mean(wsig)
                 xsigma.append(xsigma_avg)
@@ -870,6 +871,7 @@ class Calc_XWSigma(MonitoringAlg):
                         xsig_amp3=np.array([xsigma4])
                         wsig_amp1=np.array([wsigma1,wsigma2,wsigma3])
                         wsig_amp3=np.array([wsigma4])
+
                     xsigma_amp1.append(xsig_amp1)
                     wsigma_amp1.append(wsig_amp1)
                     xsigma_amp3.append(xsig_amp3)
@@ -890,6 +892,8 @@ class Calc_XWSigma(MonitoringAlg):
                         xsig_amp4=np.array([xsigma4])
                         wsig_amp2=np.array([wsigma1,wsigma2,wsigma3])
                         wsig_amp4=np.array([wsigma4])
+
+
                     xsigma_amp2.append(xsig_amp2)
                     wsigma_amp2.append(wsig_amp2)
                     xsigma_amp4.append(xsig_amp4)

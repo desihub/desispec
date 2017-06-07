@@ -147,6 +147,8 @@ class TestBinScripts(unittest.TestCase):
         # cannot be exactly the same values 
         data['CHI2DOF']=np.ones(fibers.size)+0.1*(fibers%2) 
         data['REDSHIFT']=np.zeros(fibers.size)
+        data['DATA_G-R']=np.zeros(fibers.size)
+        data['MODEL_G-R']=np.zeros(fibers.size)        
         io.write_stdstar_models(self.stdfile,stdflux,wave,fibers,data)
 
     def _remove_files(self, filenames):
@@ -194,7 +196,7 @@ class TestBinScripts(unittest.TestCase):
         """
         Tests desi_compute_sky --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
-        self._write_frame(flavor='dark', camera='b0')
+        self._write_frame(flavor='science', camera='b0')
         self._write_fiberflat()
         self._write_fibermap()
         self._write_skymodel()
@@ -219,7 +221,7 @@ class TestBinScripts(unittest.TestCase):
         """
         Tests desi_compute_sky --infile frame.fits --fiberflat fiberflat.fits --outfile skymodel.fits
         """
-        self._write_frame(flavor='dark', camera='b0')  # MUST MATCH FLUXCALIB ABOVE
+        self._write_frame(flavor='science', camera='b0')  # MUST MATCH FLUXCALIB ABOVE
         self._write_fiberflat()
         self._write_fibermap()
 

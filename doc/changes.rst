@@ -5,6 +5,7 @@ desispec Change Log
 0.14.1 (unreleased)
 -------------------
 
+* Removed ``desispec.brick`` as it's now in :mod:`desiutil.brick` (PR `#392`_).
 * Added function to calculate brick vertices at a given location (PR `#388`_).
 * Added function to calculate brick areas at a given location (PR `#384`_).
 * Add scripts for submitting nightly job chains.
@@ -15,11 +16,17 @@ desispec Change Log
 * Added function to calculate BRICKID at a given location (PR `#378`_).
 * Additional LOCATION, DEVICE_LOC, and PETAL_LOC columns for fibermap (PR `#379`_).
 * Create util.py in tests/ which is intended to contain methods to facilitate test runs
+* Add vette() method for Frame class (PR `#386`_)
+* Began a desispec parameter file:  data/params/desispec_param.yml
+* Flux calibration improvements (PR `#390`_).
 
+.. _`#386`: https://github.com/desihub/desispec/pull/386
 .. _`#388`: https://github.com/desihub/desispec/pull/388
 .. _`#384`: https://github.com/desihub/desispec/pull/384
 .. _`#378`: https://github.com/desihub/desispec/pull/378
 .. _`#379`: https://github.com/desihub/desispec/pull/379
+.. _`#390`: https://github.com/desihub/desispec/pull/390
+.. _`#392`: https://github.com/desihub/desispec/pull/392
 
 0.14.0 (2017-04-13)
 -------------------
