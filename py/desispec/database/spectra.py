@@ -10,16 +10,17 @@ Supports both simulated survey (quicksurvey) and pipeline data.
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np
-from sqlalchemy import (create_engine, ForeignKey, Column,
+from sqlalchemy import (create_engine, event, ForeignKey, Column,
                         Integer, String, Float, DateTime)
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
-
+from sqlalchemy.schema import CreateSchema
 
 Base = declarative_base()
 engine = None
 dbSession = scoped_session(sessionmaker())
-schemaname = 'quickex'
+schemaname = None
+
 
 class SchemaMixin(object):
     """Mixin class to allow schema name to be changed at runtime. Also
@@ -485,8 +486,9 @@ def main():
     #
     # Schema.
     #
-    # if options.schema:
-    #     schemaname = options.schema
+    if options.schema:
+        schemaname = options.schema
+        event.listen(Base.metadata, 'before_create', CreateSchema(schemaname))
     #
     # Create the file.
     #
