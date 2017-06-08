@@ -11,7 +11,7 @@ Supports both simulated survey (quicksurvey) and pipeline data.
 from __future__ import absolute_import, division, print_function
 import numpy as np
 from sqlalchemy import (create_engine, event, ForeignKey, Column,
-                        Integer, String, Float, DateTime)
+                        BigInteger, Integer, String, Float, DateTime)
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.schema import CreateSchema
@@ -40,7 +40,7 @@ class Truth(SchemaMixin, Base):
     """Representation of the truth table.
     """
 
-    targetid = Column(Integer, primary_key=True)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
     truez = Column(Float, nullable=False)
