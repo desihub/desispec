@@ -12,19 +12,32 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from sqlalchemy import (create_engine, ForeignKey, Column,
                         Integer, String, Float, DateTime)
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 
 
 Base = declarative_base()
 engine = None
 dbSession = scoped_session(sessionmaker())
+schemaname = None
+
+class SchemaMixin(object):
+    """Mixin class to allow schema name to be changed at runtime. Also
+    automatically sets the table name.
+    """
+
+    @declared_attr
+    def __tablename__(cls):
+        return cls.__name__.lower()
+
+    @declared_attr
+    def __table_args__(cls):
+        return {'schema': schemaname}
 
 
-class Truth(Base):
+class Truth(SchemaMixin, Base):
     """Representation of the truth table.
     """
-    __tablename__ = 'truth'
 
     targetid = Column(Integer, primary_key=True)
     ra = Column(Float, nullable=False)
@@ -46,10 +59,9 @@ class Truth(Base):
                 "oiiflux={0.oiiflux:f})>").format(self)
 
 
-class Target(Base):
+class Target(SchemaMixin, Base):
     """Representation of the target table.
     """
-    __tablename__ = 'target'
 
     targetid = Column(Integer, primary_key=True)
     ra = Column(Float, nullable=False)
@@ -90,10 +102,9 @@ class Target(Base):
                 "galdepth_r={0.galdepth_r:f})>").format(self)
 
 
-class ObsList(Base):
+class ObsList(SchemaMixin, Base):
     """Representation of the obslist table.
     """
-    __tablename__ = 'obslist'
 
     tileid = Column(Integer, primary_key=True)
     ra = Column(Float, nullable=False)
@@ -134,10 +145,9 @@ class ObsList(Base):
                 "mjd={0.mjd:f})>").format(self)
 
 
-class ZCat(Base):
+class ZCat(SchemaMixin, Base):
     """Representation of the zcat table.
     """
-    __tablename__ = 'zcat'
 
     targetid = Column(Integer, primary_key=True)
     brickname = Column(String, index=True, nullable=False)
@@ -155,10 +165,9 @@ class ZCat(Base):
                 "zwarn={0.zwarn:d}, numobs={0.numobs:d})>").format(self)
 
 
-class FiberAssign(Base):
+class FiberAssign(SchemaMixin, Base):
     """Representation of the fiberassign table.
     """
-    __tablename__ = 'fiberassign'
 
     tileid = Column(Integer, index=True, primary_key=True)
     fiber = Column(Integer, primary_key=True)
@@ -223,18 +232,18 @@ def load_file(filepath, tcls, expand=None, convert=None,
         data = hdulist[1].data
     if maxrows == 0:
         maxrows = len(data)
-    log.info("Read data from {0}.".format(filepath))
+    log.info("Read data from %s.", filepath)
     for col in data.names:
         if data[col].dtype.kind == 'f':
             bad = np.isnan(data[col][0:maxrows])
             if np.any(bad):
                 nbad = bad.sum()
-                log.warning(("{0:d} rows of bad data detected in column " +
-                             "{1} of {2}.").format(nbad, col, filepath))
-    log.info("Integrity check complete on {0}.".format(tn))
+                log.warning("%d rows of bad data detected in column " +
+                            "%s of %s.", nbad, col, filepath)
+    log.info("Integrity check complete on %s.", tn)
     data_list = [data[col][0:maxrows].tolist() for col in data.names]
     data_names = [col.lower() for col in data.names]
-    log.info("Initial column conversion complete on {0}.".format(tn))
+    log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
         for col in expand:
             if isinstance(expand[col], str):
@@ -253,30 +262,30 @@ def load_file(filepath, tcls, expand=None, convert=None,
                 for j, n in enumerate(expand[col]):
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
-    log.info("Column expansion complete on {0}.".format(tn))
+    log.info("Column expansion complete on %s.", tn)
     del data
     if convert is not None:
         for col in convert:
             i = data_names.index(col)
             data_list[i] = [convert[col](x) for x in data_list[i]]
-    log.info("Column conversion complete on {0}.".format(tn))
+    log.info("Column conversion complete on %s.", tn)
     data_rows = list(zip(*data_list))
     del data_list
-    log.info("Converted columns into rows on {0}.".format(tn))
+    log.info("Converted columns into rows on %s.", tn)
     for k in range(maxrows//chunksize + 1):
         data_chunk = [dict(zip(data_names, row))
                       for row in data_rows[k*chunksize:(k+1)*chunksize]]
         if len(data_chunk) > 0:
             engine.execute(tcls.__table__.insert(), data_chunk)
-            log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
-                                                              maxrows), tn))
+            log.info("Inserted %d rows in %s.",
+                     min((k+1)*chunksize, maxrows), tn)
     # for k in range(maxrows//chunksize + 1):
     #     data_insert = [dict([(col, data_list[i].pop(0))
     #                          for i, col in enumerate(data_names)])
     #                    for j in range(chunksize)]
     #     session.bulk_insert_mappings(tcls, data_insert)
-    #     log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
-    #                                                       maxrows), tn))
+    #     log.info("Inserted %d rows in %s..",
+    #              min((k+1)*chunksize, maxrows), tn)
     # session.commit()
     # dbSession.commit()
     return
@@ -309,12 +318,12 @@ def load_fiberassign(datapath, maxpass=4):
     fiberpath = join(datapath, 'output', 'dark',
                      '[0-{0:d}]'.format(maxpass),
                      'fiberassign', 'tile_*.fits')
-    log.info("Using tile file search path: {0}.".format(fiberpath))
+    log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob(fiberpath)
     if len(tile_files) == 0:
         log.error("No tile files found!")
         return
-    log.info("Found {0:d} tile files.".format(len(tile_files)))
+    log.info("Found %d tile files.", len(tile_files))
     tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
     #
     # Find the latest epoch for every tile file.
@@ -323,7 +332,7 @@ def load_fiberassign(datapath, maxpass=4):
     for f in tile_files:
         m = tileidre.search(f)
         if m is None:
-            log.error("Could not match {0}!".format(f))
+            log.error("Could not match %s!", f)
             continue
         epoch, tileid = map(int, m.groups())
         if tileid in latest_tiles:
@@ -331,7 +340,7 @@ def load_fiberassign(datapath, maxpass=4):
                 latest_tiles[tileid] = (epoch, f)
         else:
             latest_tiles[tileid] = (epoch, f)
-    log.info("Identified {0:d} tile files for loading.".format(len(latest_tiles)))
+    log.info("Identified %d tile files for loading.", len(latest_tiles))
     #
     # Read the identified tile files.
     #
@@ -339,7 +348,7 @@ def load_fiberassign(datapath, maxpass=4):
         epoch, f = latest_tiles[tileid]
         with fits.open(f) as hdulist:
             data = hdulist[1].data
-        log.info("Read data from {0}.".format(f))
+        log.info("Read data from %s.", f)
         for col in ('RA', 'DEC', 'XFOCAL_DESIGN', 'YFOCAL_DESIGN'):
             data[col][np.isnan(data[col])] = -9999.0
             assert not np.any(np.isnan(data[col]))
@@ -348,15 +357,13 @@ def load_fiberassign(datapath, maxpass=4):
         data_list = ([[tileid]*n_rows] +
                      [data[col].tolist() for col in data.names])
         data_names = ['tileid'] + [col.lower() for col in data.names]
-        log.info("Initial column conversion complete on tileid = {0:d}.".format(tileid))
+        log.info("Initial column conversion complete on tileid = %d.", tileid)
         data_rows = list(zip(*data_list))
-        log.info("Converted columns into rows on tileid = {0:d}.".format(tileid))
+        log.info("Converted columns into rows on tileid = %d.", tileid)
         dbSession.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
                                                      for row in data_rows])
-        log.info(("Inserted {0:d} rows in {1} " +
-                  "for tileid = {2:d}.").format(n_rows,
-                                                FiberAssign.__tablename__,
-                                                tileid))
+        log.info("Inserted %d rows in %s for tileid = %d.",
+                 n_rows, FiberAssign.__tablename__, tileid)
         dbSession.commit()
     return
 
@@ -383,6 +390,40 @@ def convert_dateobs(timestamp, tzinfo=None):
     return x
 
 
+def parse_pgpass(username, hostname='scidb2.nersc.gov'):
+    """Read a ``~/.pgpass`` file.
+
+    Parameters
+    ----------
+    username : :class:`str`
+        Database username.
+    hostname : :class:`str`, optional
+        Database hostname.
+
+    Returns
+    -------
+    :class:`str`
+        A string suitable for creating a SQLAlchemy database engine, or None
+        if no matching data was found.
+    """
+    from os.path import expanduser
+    try:
+        with open(expanduser('~/.pgpass')) as p:
+            lines = p.readlines()
+    except FileNotFoundError:
+        return None
+    data = dict(zip([l.strip().split(':')[3] for l in lines],
+                    ["postgresql://{3}:{4}@{0}:{1}/{2}".format(*(l.strip().split(':')))
+                     for l in lines]))
+    try:
+        pgpass = data[username]
+    except KeyError:
+        return None
+    if hostname not in pgpass:
+        return None
+    return pgpass
+
+
 def main():
     """Entry point for command-line script.
 
@@ -391,7 +432,7 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    global engine
+    global engine, schemaname
     from os import remove
     from os.path import basename, exists, join
     from sys import argv
@@ -416,6 +457,12 @@ def main():
     prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
                       type=int, default=50000, metavar='N',
                       help="Load N rows at a time (default %(default)s).")
+    prsr.add_argument('-s', '--schema', action='store', dest='schema',
+                      metavar='SCHEMA',
+                      help='Set the schema name in the PostgreSQL database.')
+    prsr.add_argument('-U', '--username', action='store', dest='username',
+                      metavar='USERNAME',
+                      help="If specified, connect to a PostgreSQL database with USERNAME.")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
     prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
@@ -428,19 +475,31 @@ def main():
     else:
         log = get_logger(INFO, timestamp=True)
     #
+    # Schema.
+    #
+    if options.schema:
+        schemaname = options.schema
+    #
     # Create the file.
     #
-    if basename(options.dbfile) == options.dbfile:
-        db_file = join(options.datapath, options.dbfile)
+    if options.username:
+        db_connection = parse_pgpass(options.username)
+        if db_connection is None:
+            log.critical("Could not load database information!")
+            return 1
     else:
-        db_file = options.dbfile
-    if options.clobber and exists(db_file):
-        log.info("Removing file: {0}.".format(db_file))
-        remove(db_file)
+        if basename(options.dbfile) == options.dbfile:
+            db_file = join(options.datapath, options.dbfile)
+        else:
+            db_file = options.dbfile
+        if options.clobber and exists(db_file):
+            log.info("Removing file: %s.", db_file)
+            remove(db_file)
+        db_connection = 'sqlite:///'+db_file
     #
     # SQLAlchemy stuff.
     #
-    engine = create_engine('sqlite:///'+db_file, echo=options.verbose)
+    engine = create_engine(db_connection, echo=options.verbose)
     dbSession.remove()
     dbSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
     log.info("Begin creating schema.")
@@ -478,19 +537,19 @@ def main():
         q = dbSession.query(l['tcls']).first()
         if q is None:
             filepath = join(options.datapath, *l['path'])
-            log.info("Loading {0} from {1}.".format(tn, filepath))
+            log.info("Loading %s from %s.", tn, filepath)
             load_file(filepath, l['tcls'], expand=l['expand'],
                       convert=l['convert'], chunksize=options.chunksize,
                       maxrows=options.maxrows)
-            log.info("Finished loading {0}.".format(tn))
+            log.info("Finished loading %s.", tn)
         else:
-            log.info("{0} table already loaded.".format(tn.title()))
+            log.info("%s table already loaded.", tn.title())
     #
     # Load fiber assignment files.
     #
     q = dbSession.query(FiberAssign).first()
     if q is None:
-        log.info("Loading FiberAssign from {0}.".format(options.datapath))
+        log.info("Loading FiberAssign from %s.", options.datapath)
         load_fiberassign(options.datapath)
         log.info("Finished loading FiberAssign.")
     else:
