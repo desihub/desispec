@@ -66,7 +66,7 @@ env:
         # These packages will only be installed if we really need them.
         - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage==3.7.1 pyyaml"
         # These packages will always be installed.
-        - PIP_DEPENDENCIES=""
+        - PIP_DEPENDENCIES="healpy"
         # These packages will only be installed if we really need them.
         - PIP_ALL_DEPENDENCIES="speclite==${SPECLITE_VERSION} coveralls"
         # These pip packages need to be installed in a certain order, so we

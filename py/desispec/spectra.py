@@ -416,7 +416,7 @@ class Spectra(object):
                 if not np.allclose(self.wave[b], other.wave[b]):
                     raise RuntimeError("band {} has an incompatible wavelength grid".format(b))
 
-        bands = self.bands.copy()
+        bands = list(self.bands)
         bands.extend(newbands)
 
         # Are we adding mask data in this update?
