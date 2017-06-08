@@ -64,12 +64,12 @@ class Target(SchemaMixin, Base):
     """Representation of the target table.
     """
 
-    targetid = Column(Integer, primary_key=True)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
-    desi_target = Column(Integer, nullable=False)
-    bgs_target = Column(Integer, nullable=False)
-    mws_target = Column(Integer, nullable=False)
+    desi_target = Column(BigInteger, nullable=False)
+    bgs_target = Column(BigInteger, nullable=False)
+    mws_target = Column(BigInteger, nullable=False)
     subpriority = Column(Float, nullable=False)
     obsconditions = Column(Integer, nullable=False)
     brickname = Column(String, nullable=False)
@@ -107,7 +107,7 @@ class ObsList(SchemaMixin, Base):
     """Representation of the obslist table.
     """
 
-    tileid = Column(Integer, primary_key=True)
+    tileid = Column(Integer, primary_key=True, autoincrement=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
     program = Column(String, nullable=False)
@@ -150,7 +150,7 @@ class ZCat(SchemaMixin, Base):
     """Representation of the zcat table.
     """
 
-    targetid = Column(Integer, primary_key=True)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     brickname = Column(String, index=True, nullable=False)
     spectype = Column(String, nullable=False)
     z = Column(Float, nullable=False)
