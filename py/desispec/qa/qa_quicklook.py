@@ -1373,6 +1373,14 @@ class Calculate_SNR(MonitoringAlg):
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
             fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
         qadict = qalib.SignalVsNoise(frame,params,fidboundary=fidboundary)
+
+        #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
+        for mag in [qadict["ELG_SNR_MAG"][1],qadict["LRG_SNR_MAG"][1],qadict["QSO_SNR_MAG"][1],qadict["STAR_SNR_MAG"][1]]:
+            k=np.where(~np.isfinite(mag))[0]
+            if len(k) > 0:
+                log.warning("{} objects have no or unphysical magnitudes".format(len(k)))
+            mag=np.array(mag)
+            mag[k]=26.  #- Putting 26, so as to make sure within reasonable range for plots.
         retval["METRICS"] = qadict
         retval["PARAMS"] = params
         #- http post if valid
