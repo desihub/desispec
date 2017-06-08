@@ -169,7 +169,8 @@ autodoc_mock_imports = ['astropy',
                         'speclite.filters',
                         'specter',
                         'specter.psf',
-                        'specter.extract']
+                        'specter.extract',
+                        'healpy']
 
 # -- Options for HTML output ----------------------------------------------
 
