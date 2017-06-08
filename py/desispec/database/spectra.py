@@ -19,7 +19,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 Base = declarative_base()
 engine = None
 dbSession = scoped_session(sessionmaker())
-schemaname = None
+schemaname = 'quickex'
 
 class SchemaMixin(object):
     """Mixin class to allow schema name to be changed at runtime. Also
@@ -485,8 +485,8 @@ def main():
     #
     # Schema.
     #
-    if options.schema:
-        schemaname = options.schema
+    # if options.schema:
+    #     schemaname = options.schema
     #
     # Create the file.
     #
