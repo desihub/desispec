@@ -513,9 +513,11 @@ def main():
     engine = create_engine(db_connection, echo=options.verbose)
     dbSession.remove()
     dbSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
-    log.info("Begin creating schema.")
+    log.info("Begin creating tables.")
+    for tab in Base.metadata.tables.values():
+        tab.schema = schemaname
     Base.metadata.create_all(engine)
-    log.info("Finished creating schema.")
+    log.info("Finished creating tables.")
     #
     # Load configuration
     #
