@@ -10,7 +10,7 @@ Supports both simulated survey (quicksurvey) and pipeline data.
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np
-from sqlalchemy import (create_engine, event, ForeignKey, Column,
+from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
                         BigInteger, Integer, String, Float, DateTime)
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
@@ -488,7 +488,9 @@ def main():
     #
     if options.schema:
         schemaname = options.schema
-        event.listen(Base.metadata, 'before_create', CreateSchema(schemaname))
+        # event.listen(Base.metadata, 'before_create', CreateSchema(schemaname))
+        event.listen(Base.metadata, 'before_create',
+                     DDL('CREATE SCHEMA IF NOT EXISTS {0}'.format(schemaname)))
     #
     # Create the file.
     #
