@@ -390,15 +390,15 @@ def convert_dateobs(timestamp, tzinfo=None):
     return x
 
 
-def parse_pgpass(username, hostname='scidb2.nersc.gov'):
+def parse_pgpass(hostname='scidb2.nersc.gov', username='desidev_admin'):
     """Read a ``~/.pgpass`` file.
 
     Parameters
     ----------
-    username : :class:`str`
-        Database username.
     hostname : :class:`str`, optional
         Database hostname.
+    username : :class:`str`, optional
+        Database username.
 
     Returns
     -------
@@ -407,19 +407,24 @@ def parse_pgpass(username, hostname='scidb2.nersc.gov'):
         if no matching data was found.
     """
     from os.path import expanduser
+    fmt = "postgresql://{3}:{4}@{0}:{1}/{2}"
     try:
         with open(expanduser('~/.pgpass')) as p:
             lines = p.readlines()
     except FileNotFoundError:
         return None
-    data = dict(zip([l.strip().split(':')[3] for l in lines],
-                    ["postgresql://{3}:{4}@{0}:{1}/{2}".format(*(l.strip().split(':')))
-                     for l in lines]))
-    try:
-        pgpass = data[username]
-    except KeyError:
+    data = dict()
+    for l in lines:
+        d = l.strip().split(':')
+        if d[0] in data:
+            data[d[0]][d[3]] = fmt.format(*d)
+        else:
+            data[d[0]] = {d[3]: fmt.format(*d)}
+    if hostname not in data:
         return None
-    if hostname not in pgpass:
+    try:
+        pgpass = data[hostname][username]
+    except KeyError:
         return None
     return pgpass
 
@@ -451,6 +456,9 @@ def main():
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
                       default='quicksurvey.db', metavar='FILE',
                       help="Store data in FILE.")
+    prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
+                      metavar='HOSTNAME',
+                      help='If specified, connect to a PostgreSQL database on HOSTNAME.')
     prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
                       type=int, default=0, metavar='M',
                       help="Load up to M rows in the tables (default is all rows).")
@@ -461,7 +469,7 @@ def main():
                       metavar='SCHEMA',
                       help='Set the schema name in the PostgreSQL database.')
     prsr.add_argument('-U', '--username', action='store', dest='username',
-                      metavar='USERNAME',
+                      metavar='USERNAME', default='desidev_admin'
                       help="If specified, connect to a PostgreSQL database with USERNAME.")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
@@ -482,8 +490,9 @@ def main():
     #
     # Create the file.
     #
-    if options.username:
-        db_connection = parse_pgpass(options.username)
+    if options.hostname:
+        db_connection = parse_pgpass(hostname=options.hostname,
+                                     username=options.username)
         if db_connection is None:
             log.critical("Could not load database information!")
             return 1
