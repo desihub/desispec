@@ -159,7 +159,7 @@ class TestQL(unittest.TestCase):
         xw_img_mask = np.zeros(xw_img_pix.shape,dtype=np.uint32)
 
         #- 2D gaussian function to model sky peaks
-        def gaussian2D((x,y),amp,xmu,ymu,xsigma,ysigma):
+        def gaussian2D(x,y,amp,xmu,ymu,xsigma,ysigma):
             x,y = np.meshgrid(x,y)
             gauss = amp*np.exp(-(x-xmu)**2/(2*xsigma**2)-(y-ymu)**2/(2*ysigma**2))
             return gauss
@@ -172,7 +172,7 @@ class TestQL(unittest.TestCase):
         ymu = np.mean(y)
         xsigma = 1.0
         ysigma = 1.0
-        peak_counts = np.rint(gaussian2D((x,y),a,xmu,ymu,xsigma,ysigma))
+        peak_counts = np.rint(gaussian2D(x,y,a,xmu,ymu,xsigma,ysigma))
         peak_counts = peak_counts.astype(np.int32)
         zpeaks = np.array([8401.5,8432.4,8467.5,9479.4])
         fibers = np.arange(30)
