@@ -469,7 +469,7 @@ def main():
                       metavar='SCHEMA',
                       help='Set the schema name in the PostgreSQL database.')
     prsr.add_argument('-U', '--username', action='store', dest='username',
-                      metavar='USERNAME', default='desidev_admin'
+                      metavar='USERNAME', default='desidev_admin',
                       help="If specified, connect to a PostgreSQL database with USERNAME.")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
