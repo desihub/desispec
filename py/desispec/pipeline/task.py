@@ -164,7 +164,7 @@ class WorkerBootcalib(Worker):
         # at debug level, log the equivalent commandline
         com = ["RUN", "desi_bootcalib"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = bootcalib.parse(optarray)
 
@@ -279,7 +279,7 @@ class WorkerSpecex(Worker):
         if rank == 0:
             com = ["RUN", "desi_compute_psf"]
             com.extend(optarray)
-            log.debug(" ".join(com))
+            log.info(" ".join(com))
 
         args = specex.parse(optarray)
         specex.main(args, comm=comm)
@@ -437,7 +437,7 @@ class WorkerSpecter(Worker):
         if rank == 0:
             com = ["RUN", "desi_extract_spectra"]
             com.extend(optarray)
-            log.debug(" ".join(com))
+            log.info(" ".join(com))
 
         args = extract.parse(optarray)
         extract.main_mpi(args, comm=comm)
@@ -504,7 +504,7 @@ class WorkerFiberflat(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_compute_fiberflat"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = fiberflat.parse(optarray)
         fiberflat.main(args)
@@ -580,7 +580,7 @@ class WorkerSky(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_compute_sky"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = skypkg.parse(optarray)
         skypkg.main(args)
@@ -676,7 +676,7 @@ class WorkerStdstars(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_fit_stdstars"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = stdstars.parse(optarray)
         stdstars.main(args)
@@ -766,7 +766,7 @@ class WorkerFluxcal(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_compute_fluxcalibration"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = fluxcal.parse(optarray)
         fluxcal.main(args)
@@ -852,7 +852,7 @@ class WorkerProcexp(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_process_exposure"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = procexp.parse(optarray)
         procexp.main(args)
@@ -913,11 +913,11 @@ class WorkerRedmonster(Worker):
         options.update(opts)
         optarray = option_list(options)
 
-        # at debug level, write out the equivalent commandline
+        # write out the equivalent commandline
         if rank == 0:
             com = ["RUN", "desi_zfind"]
             com.extend(optarray)
-            log.debug(" ".join(com))
+            log.info(" ".join(com))
 
         args = zfind.parse(optarray)
         zfind.main(args, comm=comm)
