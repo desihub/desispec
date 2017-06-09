@@ -27,8 +27,8 @@ class TestSpectra(unittest.TestCase):
         self.fileappend = "test_spectra_append.fits"
         self.filebuild = "test_spectra_build.fits"
         self.meta = {
-            "key1" : "val1",
-            "key2" : "val2"
+            "KEY1" : "VAL1",
+            "KEY2" : "VAL2"
         }
         self.nwave = 100
         self.nspec = 5

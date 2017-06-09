@@ -117,7 +117,10 @@ def write_spectra(outfile, spec, units=None):
                 hdu.data = ex[1].astype("f4")
                 all_hdus.append(hdu)
 
-    all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
+    try:
+        all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
+    except TypeError:
+        all_hdus.writeto("{}.tmp".format(outfile), clobber=True, checksum=True)
     os.rename("{}.tmp".format(outfile), outfile)
 
     return outfile
@@ -150,13 +153,9 @@ def read_spectra(infile, single=False):
     hdus = fits.open(infile, mode="readonly")
     nhdu = len(hdus)
 
-    # load the metadata.  FITS will capitalize all our metadata
-    # which is annoying.  Here we lower it all.
+    # load the metadata.
 
-    meta = {}
-    for k, v in hdus[0].header.items():
-        if k != "EXTNAME":
-            meta[k.lower()] = v
+    meta = dict(hdus[0].header)
 
     # initialize data objects
 
