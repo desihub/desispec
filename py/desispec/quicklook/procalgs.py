@@ -65,14 +65,9 @@ class Preproc(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_raw=args[0]
 
-        dump=False
         dumpfile=None
-        if "DumpIntermediates" in kwargs:
-            dump=kwargs["DumpIntermediates"]
-            if dump: #- need a file to write
-                if "dumpfile" not in kwargs:
-                    raise IOError("Need file to dump")
-                else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         if 'camera' not in kwargs: 
             raise qlexceptions.ParameterException("Need Camera to run preprocess on raw files")
@@ -92,9 +87,9 @@ class Preproc(pas.PipelineAlg):
             mask=kwargs["Mask"]
         else: mask=False
 
-        return self.run_pa(input_raw,camera,bias=bias,pixflat=pixflat,mask=mask,dump=dump,dumpfile=dumpfile)
+        return self.run_pa(input_raw,camera,bias=bias,pixflat=pixflat,mask=mask,dumpfile=dumpfile)
 
-    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=False,dump=False,dumpfile=None):
+    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=False,dumpfile=None):
         import desispec.preproc
 
         rawimage=input_raw[camera.upper()].data
@@ -106,7 +101,7 @@ class Preproc(pas.PipelineAlg):
                 if key not in header:
                     header[key] = h0[key]
         img = desispec.preproc.preproc(rawimage,header,primary_header,bias=bias,pixflat=pixflat,mask=mask)
-        if dump and dumpfile is not None:
+        if dumpfile is not None:
             from desispec import io
             night = img.meta['NIGHT']
             expid = img.meta['EXPID']
@@ -177,21 +172,16 @@ class BoxcarExtract(pas.PipelineAlg):
 
         input_image=args[0]
 
-        dump=False
         dumpfile=None
-        if "DumpIntermediates" in kwargs:
-            dump=kwargs["DumpIntermediates"]
-            if dump: #- need a file to write
-                if "dumpfile" not in kwargs:
-                    raise IOError("Need file to dump")
-                else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
-        if "usexsigma" in kwargs:
-             usexsigma=kwargs["usexsigma"]
-        else: usexsigma = False
+        if "usesigma" in kwargs:
+             usesigma=kwargs["usesigma"]
+        else: usesigma = False
 
         if "Wavelength" not in kwargs:
             wstart = np.ceil(psf.wmin)
@@ -249,21 +239,21 @@ class BoxcarExtract(pas.PipelineAlg):
         return self.run_pa(input_image,psf
                            ,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,
-                           dump=dump,dumpfile=dumpfile,maskFile=maskFile,usexsigma=usexsigma)
+                           dumpfile=dumpfile,maskFile=maskFile,usesigma=usesigma)
 
 
     def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
-               fibers=None, fibermap=None,dump=False,dumpfile=None,
-               maskFile=None,usexsigma=False):
+               fibers=None, fibermap=None,dumpfile=None,
+               maskFile=None,usesigma=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
-                                  nspec=nspec,maskFile=maskFile,usexsigma=usexsigma)
+                                  nspec=nspec,maskFile=maskFile,usesigma=usesigma)
 
         #- write to a frame object
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
         
-        if dump and dumpfile is not None:
+        if dumpfile is not None:
             from desispec import io
             night = frame.meta['NIGHT']
             expid = frame.meta['EXPID']
@@ -483,25 +473,20 @@ class ApplyFiberFlat_QL(pas.PipelineAlg):
         
         input_frame=args[0]
 
-        dump=False
         dumpfile=None
-        if "DumpIntermediates" in kwargs:
-            dump=kwargs["DumpIntermediates"]
-            if dump: #- need a file to write
-                if "dumpfile" not in kwargs:
-                    raise IOError("Need file to dump")
-                else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         fiberflat=kwargs["FiberFlatFile"]
         
-        return self.run_pa(input_frame,fiberflat,dump=dump,dumpfile=dumpfile)
+        return self.run_pa(input_frame,fiberflat,dumpfile=dumpfile)
 
-    def run_pa(self,input_frame,fiberflat,dump=False,dumpfile=None): 
+    def run_pa(self,input_frame,fiberflat,dumpfile=None): 
      
         from desispec.quicklook.quickfiberflat import apply_fiberflat 
         fframe=apply_fiberflat(input_frame,fiberflat)
 
-        if dump and dumpfile is not None:
+        if dumpfile is not None:
             from desispec import io
             night = fframe.meta['NIGHT']
             expid = fframe.meta['EXPID']
@@ -641,14 +626,9 @@ class SkySub_QL(pas.PipelineAlg):
 
         input_frame=args[0] #- this must be flat field applied before sky subtraction in the pipeline
 
-        dump=False
         dumpfile=None
-        if "DumpIntermediates" in kwargs:
-            dump=kwargs["DumpIntermediates"]
-            if dump: #- need a file to write
-                if "dumpfile" not in kwargs:
-                    raise IOError("Need file to dump")
-                else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
@@ -666,6 +646,7 @@ class SkySub_QL(pas.PipelineAlg):
             from desispec.quicklook.quicksky import compute_sky
             if "Apply_resolution" in kwargs:
                 apply_resolution=kwargs["Apply_resolution"]
+                log.info("Apply fiber to fiber resolution variation in computing sky")
             else: apply_resolution = False
             fibermap=input_frame.fibermap
             skymodel=compute_sky(input_frame,fibermap,apply_resolution=apply_resolution)
@@ -675,13 +656,13 @@ class SkySub_QL(pas.PipelineAlg):
                 write_sky(outskyfile,skymodel,input_frame.meta)
 
         #- now do the subtraction                   
-        return self.run_pa(input_frame,skymodel,dump=dump,dumpfile=dumpfile)
+        return self.run_pa(input_frame,skymodel,dumpfile=dumpfile)
     
-    def run_pa(self,input_frame,skymodel,dump=False,dumpfile=None):
+    def run_pa(self,input_frame,skymodel,dumpfile=None):
         from desispec.quicklook.quicksky import subtract_sky
         sframe=subtract_sky(input_frame,skymodel)
 
-        if dump and dumpfile is not None:
+        if dumpfile is not None:
             from desispec import io
             night = sframe.meta['NIGHT']
             expid = sframe.meta['EXPID']

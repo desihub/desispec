@@ -13,6 +13,7 @@ import os,sys
 import datetime
 from astropy.time import Time
 from desispec.qa import qalib
+from desiutil.io import yamlify
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -120,7 +121,7 @@ class Get_RMS(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -217,7 +218,7 @@ class Count_Pixels(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -328,7 +329,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -464,7 +465,7 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
 
@@ -530,7 +531,7 @@ class Sky_Peaks(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         # define sky peaks and wavelength region around peak flux to be integrated
-        dw=2.
+        dw=2
         b_peaks=np.array([3914.4,5199.3,5201.8])
         r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
         z_peaks=np.array([8401.5,8432.4,8467.5,9479.4,9505.6,9521.8])
@@ -640,7 +641,7 @@ class Sky_Peaks(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -940,7 +941,7 @@ class Calc_XWSigma(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -1040,7 +1041,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -1199,7 +1200,7 @@ class CountSpectralBins(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -1295,7 +1296,7 @@ class Sky_Residual(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
@@ -1372,6 +1373,14 @@ class Calculate_SNR(MonitoringAlg):
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
             fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
         qadict = qalib.SignalVsNoise(frame,params,fidboundary=fidboundary)
+
+        #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
+        for mag in [qadict["ELG_SNR_MAG"][1],qadict["LRG_SNR_MAG"][1],qadict["QSO_SNR_MAG"][1],qadict["STAR_SNR_MAG"][1]]:
+            k=np.where(~np.isfinite(mag))[0]
+            if len(k) > 0:
+                log.warning("{} objects have no or unphysical magnitudes".format(len(k)))
+            mag=np.array(mag)
+            mag[k]=26.  #- Putting 26, so as to make sure within reasonable range for plots.
         retval["METRICS"] = qadict
         retval["PARAMS"] = params
         #- http post if valid
@@ -1380,7 +1389,7 @@ class Calculate_SNR(MonitoringAlg):
 
         if qafile is not None:
             f=open(qafile,"w")
-            yaml.dump(retval,f)
+            f.write(yaml.dump(yamlify(retval)))
             log.info("Output QA data is in {}".format(qafile))
             f.close()
         if qafig is not None:
