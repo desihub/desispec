@@ -18,6 +18,7 @@ from .fluxcalibration import (read_stdstar_templates, write_stdstar_models,
                               read_stdstar_models, read_flux_calibration,
                               write_flux_calibration)
 from .frame import read_frame, write_frame
+from .spectra import read_spectra, write_spectra, read_frame_as_spectra
 from .image import read_image, write_image
 from .meta import (findfile, get_exposures, get_files, get_raw_files,
                    rawdata_root, specprod_root, validate_night,
@@ -29,7 +30,8 @@ from .qa import (read_qa_frame, read_qa_data, write_qa_frame, write_qa_brick,
 from .raw import read_raw, write_raw
 from .sky import read_sky, write_sky
 from .util import (header2wave, fitsheader, native_endian, makepath,
-                   write_bintable, iterfiles)
+                   write_bintable, iterfiles, healpix_degrade_fixed,
+                   healpix_subdirectory)
 from .zfind import read_zbest, write_zbest
 
 # Why is this even here?
