@@ -23,7 +23,7 @@ def merge_QAs(qaresult):
         night=result[1].values()[0]['NIGHT']
         expid=int(result[1].values()[0]['EXPID'])
         camera=result[1].values()[0]['CAMERA']
-        flavor=result[1].values()[0]['FLAVOR']
+        obstype=result[1].values()[0]['OBSTYPE']
             
         if night not in mergedQA:
             mergedQA[night]={} #- top level key
@@ -31,8 +31,8 @@ def merge_QAs(qaresult):
             mergedQA[night][expid]={}
         if camera not in mergedQA[night][expid]:
             mergedQA[night][expid][camera]={}
-        if 'flavor' not in mergedQA[night][expid]:
-            mergedQA[night][expid]['flavor']=flavor
+        if 'obstype' not in mergedQA[night][expid]:
+            mergedQA[night][expid]['obstype']=obstype
         mergedQA[night][expid][camera][pa]={}
         mergedQA[night][expid][camera][pa]['PARAMS']={}
         mergedQA[night][expid][camera][pa]['METRICS']={}

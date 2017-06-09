@@ -274,7 +274,7 @@ class Config(object):
         """
         log.info("Building Full Configuration")
 
-        self.flavor = self.conf["flavor"]
+        self.obstype = self.conf["obstype"]
         self.debuglevel = self.conf["Debuglevel"]
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
@@ -293,7 +293,7 @@ class Config(object):
         outconfig={}
 
         outconfig['Night'] = self.night
-        outconfig['Flavor'] = self.flavor
+        outconfig['Obstype'] = self.obstype
         outconfig['Camera'] = self.camera
         outconfig['Expid'] = self.expid
         outconfig['DumpIntermediates'] = self.dumpintermediates
@@ -345,14 +345,14 @@ class Palist(object):
     """
     Generate PA list and QA list for the Quicklook Pipeline for the given exposure
     """
-    def __init__(self,thislist=None,algorithms=None,flavor=None,mode=None):
+    def __init__(self,thislist=None,algorithms=None,obstype=None,mode=None):
         """
         thislist: given list of PAs
         algorithms: Algorithm list coming from config file: e.g desispec/data/quicklook/quicklook.darktime.yaml
-        flavor: only needed if new list is to be built.
+        obstype: only needed if new list is to be built.
         mode: online offline?
         """
-        self.flavor=flavor
+        self.obstype=obstype
         self.mode=mode
         self.thislist=thislist
         self.algorithms=algorithms
@@ -364,14 +364,14 @@ class Palist(object):
         if self.thislist is not None:
             pa_list=self.thislist
         else: #- construct palist
-            if self.flavor == "arcs":
+            if self.obstype == "arcs":
                 pa_list=['Initialize','Preproc','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
-            elif self.flavor == "flat":
+            elif self.obstype == "flat":
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
-            elif self.flavor in ['dark','elg','lrg','qso','bright','grey','gray','bgs','mws']:
+            elif self.obstype in ['dark','elg','lrg','qso','bright','grey','gray','bgs','mws']:
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
             else:
-                log.warning("Not a valid flavor type. Use a valid flavor type to build a palist. Exiting.")
+                log.warning("Not a valid obstype. Use a valid obstype type to build a palist. Exiting.")
                 sys.exit(0)
         self.pamodule='desispec.quicklook.procalgs'
         return pa_list       
