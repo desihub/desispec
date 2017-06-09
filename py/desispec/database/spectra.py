@@ -201,7 +201,7 @@ class FiberAssign(SchemaMixin, Base):
                 "brickname='{0.brickname}')>").format(self)
 
 
-def load_file(filepath, tcls, expand=None, convert=None,
+def load_file(filepath, tcls, expand=None, convert=None, q3c=False,
               chunksize=50000, maxrows=0):
     """Load a FITS file into the database, assuming that FITS column names map
     to database column names with no surprises.
@@ -219,6 +219,8 @@ def load_file(filepath, tcls, expand=None, convert=None,
     convert : :class:`dict`, optional
         If set, convert the data for a named (database) column using the
         supplied function.
+    q3c : :class:`bool`, optional
+        If set, create q3c index on the table.
     chunksize : :class:`int`, optional
         If set, load database `chunksize` rows at a time (default 50000).
     maxrows : :class:`int`, optional
@@ -289,10 +291,12 @@ def load_file(filepath, tcls, expand=None, convert=None,
     #              min((k+1)*chunksize, maxrows), tn)
     # session.commit()
     # dbSession.commit()
+    if q3c:
+        q3c_index(tn)
     return
 
 
-def load_fiberassign(datapath, maxpass=4):
+def load_fiberassign(datapath, maxpass=4, q3c=False):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -305,10 +309,10 @@ def load_fiberassign(datapath, maxpass=4):
     ----------
     datapath : :class:`str`
         Full path to the directory containing tile files.
-    session : :class:`sqlalchemy.orm.session.Session`
-        Database connection.
     maxpass : :class:`int`, optional
         Search for pass numbers up to this value (default 4).
+    q3c : :class:`bool`, optional
+        If set, create q3c index on the table.
     """
     from os.path import join
     from re import compile
@@ -366,6 +370,25 @@ def load_fiberassign(datapath, maxpass=4):
         log.info("Inserted %d rows in %s for tileid = %d.",
                  n_rows, FiberAssign.__tablename__, tileid)
         dbSession.commit()
+    if q3c:
+        q3c_index('fiberassign')
+    return
+
+
+def q3c_index(table):
+    """Create a q3c index on a table.
+
+    Parameters
+    ----------
+    table : :class:`str`
+        Name of the table to index.
+    """
+    q3c_sql = """CREATE INDEX ix_{table}_q3c_ang2ipix ON {schema}.{table} (q3c_ang2ipix(ra, dec));
+    CLUSTER ix_{table}_q3c_ang2ipix ON {schema}.{table};
+    ANALYZE {schema}.{table};
+    """.format(schema=schemaname, table=table)
+    dbSession.execute(q3c_sql)
+    dbSession.commit()
     return
 
 
@@ -494,7 +517,9 @@ def main():
     #
     # Create the file.
     #
+    postgresql = False
     if options.hostname:
+        postgresql = True
         db_connection = parse_pgpass(hostname=options.hostname,
                                      username=options.username)
         if db_connection is None:
@@ -526,21 +551,25 @@ def main():
     loader = [{'tcls': Truth,
                'path': ('input', 'dark', 'truth.fits'),
                'expand': None,
-               'convert': None},
+               'convert': None,
+               'q3c': postgresql},
               {'tcls': Target,
                'path': ('input', 'dark', 'targets.fits'),
                'expand': {'DECAM_FLUX': ('decam_flux_u', 'decam_flux_g',
                                          'decam_flux_r', 'decam_flux_i',
                                          'decam_flux_z', 'decam_flux_Y')},
-               'convert': None},
+               'convert': None,
+               'q3c': postgresql},
               {'tcls': ObsList,
                'path': ('input', 'obsconditions', 'Benchmark030_001', 'obslist_all.fits'),
                'expand': {'DATE-OBS': 'dateobs'},
-               'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)}},
+               'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
+               'q3c': postgresql},
               {'tcls': ZCat,
                'path': ('output', 'dark', '4', 'zcat.fits'),
                'expand': None,
-               'convert': None}]
+               'convert': None,
+               'q3c': False}]
     #
     # Load the tables that correspond to a single file.
     #
@@ -554,7 +583,8 @@ def main():
             filepath = join(options.datapath, *l['path'])
             log.info("Loading %s from %s.", tn, filepath)
             load_file(filepath, l['tcls'], expand=l['expand'],
-                      convert=l['convert'], chunksize=options.chunksize,
+                      convert=l['convert'], q3c=l['q3c'],
+                      chunksize=options.chunksize,
                       maxrows=options.maxrows)
             log.info("Finished loading %s.", tn)
         else:
@@ -565,7 +595,7 @@ def main():
     q = dbSession.query(FiberAssign).first()
     if q is None:
         log.info("Loading FiberAssign from %s.", options.datapath)
-        load_fiberassign(options.datapath)
+        load_fiberassign(options.datapath, q3c=postgresql)
         log.info("Finished loading FiberAssign.")
     else:
         log.info("FiberAssign table already loaded.")
