@@ -384,7 +384,7 @@ def q3c_index(table):
         Name of the table to index.
     """
     q3c_sql = """CREATE INDEX ix_{table}_q3c_ang2ipix ON {schema}.{table} (q3c_ang2ipix(ra, dec));
-    CLUSTER ix_{table}_q3c_ang2ipix ON {schema}.{table};
+    CLUSTER {schema}.{table} USING ix_{table}_q3c_ang2ipix;
     ANALYZE {schema}.{table};
     """.format(schema=schemaname, table=table)
     dbSession.execute(q3c_sql)
