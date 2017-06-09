@@ -383,11 +383,15 @@ def q3c_index(table):
     table : :class:`str`
         Name of the table to index.
     """
+    from desiutil.log import get_logger
+    log = get_logger()
     q3c_sql = """CREATE INDEX ix_{table}_q3c_ang2ipix ON {schema}.{table} (q3c_ang2ipix(ra, dec));
     CLUSTER {schema}.{table} USING ix_{table}_q3c_ang2ipix;
     ANALYZE {schema}.{table};
     """.format(schema=schemaname, table=table)
+    log.info("Creating q3c index on %s.%s.", schemaname, table)
     dbSession.execute(q3c_sql)
+    log.info("Finished q3c index on %s.%s.", schemaname, table)
     dbSession.commit()
     return
 
