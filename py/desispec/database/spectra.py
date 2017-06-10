@@ -152,10 +152,10 @@ class ZCat(SchemaMixin, Base):
 
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     brickname = Column(String, index=True, nullable=False)
-    spectype = Column(String, nullable=False)
-    z = Column(Float, nullable=False)
+    spectype = Column(String, index=True, nullable=False)
+    z = Column(Float, index=True, nullable=False)
     zerr = Column(Float, nullable=False)
-    zwarn = Column(Integer, nullable=False)
+    zwarn = Column(Integer, index=True, nullable=False)
     numobs = Column(Integer, nullable=False)
 
     def __repr__(self):
