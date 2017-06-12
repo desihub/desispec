@@ -33,6 +33,7 @@ class Config(object):
         self.dumpintermediates = self.conf["WriteIntermediatefiles"]
         self.writepixfile = self.conf["WritePixfile"]
         self.writeskymodelfile = self.conf["WriteSkyModelfile"]
+        self.writestaticplots = self.conf["WriteStaticPlots"]
         self.usesigma = self.conf["UseResolution"]
         self.pipeline = self.conf["Pipeline"]
         self.algorithms = self.conf["Algorithms"]
@@ -143,10 +144,7 @@ class Config(object):
         else:
             raise IOError("PA name does not match any file type. Check PA name in config") 
            
-        if filetype in ["fframe","sframe"]: #- fiberflat fielded or sky subtracted intermediate files       
-            pafile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"{}-{}-{:08d}.fits".format(filetype,self.camera,self.expid))
-        else:
-            pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+        pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return pafile
 
@@ -189,9 +187,13 @@ class Config(object):
         
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                
+                if self.writestaticplots:
+                    qaplot = self.dump_qa()[0][1][qa]
+                else:
+                    qaplot = None
+
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
                 
         return qaopts 
    
@@ -229,19 +231,34 @@ class Config(object):
         """
         Specify the filenames: yaml and png of the pa level qa files"
         """
-        outmap={'Initialize': 'initial',
-                'Preproc': 'preproc',
-                'BoxcarExtract': 'boxextract',
-                'ApplyFiberFlat_QL': 'fiberflat',
-                'SkySub_QL': 'skysub'
-               }
-        if paname not in outmap:
-            raise IOError("No output name map available for this PA:",paname)
+        filemap={'Initialize': 'ql_initial_file',
+                 'Preproc': 'ql_preproc_file',
+                 'BoxcarExtract': 'ql_boxextract_file',
+                 'ApplyFiberFlat_QL': 'ql_fiberflat_file',
+                 'SkySub_QL': 'ql_skysub_file'
+                 }
 
-        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.yaml".format(outmap[paname],self.camera,self.expid))
-    
-        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.png".format(outmap[paname],self.camera,self.expid))
-        
+        figmap={'Initialize': 'ql_initial_fig',
+                'Preproc': 'ql_preproc_fig',
+                'BoxcarExtract': 'ql_boxextract_fig',
+                'ApplyFiberFlat_QL': 'ql_fiberflat_fig',
+                'SkySub_QL': 'ql_skysub_fig'
+                }
+
+        if paname in filemap:
+            filetype=filemap[paname]
+        else:
+            raise IOError("PA name does not match any file type. Check PA name in config")
+
+        if paname in figmap:
+            figtype=figmap[paname]
+        else:
+            raise IOError("PA name does not match any figure type. Check PA name in config")
+
+        outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+
+        outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+
         return (outfile,outfig)
 
 
@@ -249,22 +266,43 @@ class Config(object):
         """
         Specify the filenames: yaml and png for the given qa output
         """
-        outmap={'Bias_From_Overscan': 'getbias',
-                'Get_RMS' : 'getrms',
-                'Count_Pixels': 'countpix',
-                'Calc_XWSigma': 'xwsigma',
-                'CountSpectralBins': 'countbins',
-                'Sky_Continuum': 'skycont',
-                'Sky_Peaks': 'skypeak',
-                'Sky_Residual': 'skyresid',
-                'Integrate_Spec': 'integ',
-                'Calculate_SNR': 'snr'
-               }
-        if qaname not in outmap:              
-            raise IOError("No output name map available for this QA:",qaname)
-        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.yaml".format(outmap[qaname],self.camera,self.expid))
+        filemap={'Bias_From_Overscan': 'ql_getbias_file',
+                 'Get_RMS' : 'ql_getrms_file',
+                 'Count_Pixels': 'ql_countpix_file',
+                 'Calc_XWSigma': 'ql_xwsigma_file',
+                 'CountSpectralBins': 'ql_countbins_file',
+                 'Sky_Continuum': 'ql_skycont_file',
+                 'Sky_Peaks': 'ql_skypeak_file',
+                 'Sky_Residual': 'ql_skyresid_file',
+                 'Integrate_Spec': 'ql_integ_file',
+                 'Calculate_SNR': 'ql_snr_file'
+                 }
 
-        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.png".format(outmap[qaname],self.camera,self.expid))
+        figmap={'Bias_From_Overscan': 'ql_getbias_fig',
+                'Get_RMS' : 'ql_getrms_fig',
+                'Count_Pixels': 'ql_countpix_fig',
+                'Calc_XWSigma': 'ql_xwsigma_fig',
+                'CountSpectralBins': 'ql_countbins_fig',
+                'Sky_Continuum': 'ql_skycont_fig',
+                'Sky_Peaks': 'ql_skypeak_fig',
+                'Sky_Residual': 'ql_skyresid_fig',
+                'Integrate_Spec': 'ql_integ_fig',
+                'Calculate_SNR': 'ql_snr_fig'
+                }
+
+        if qaname in filemap:
+            filetype=filemap[qaname]
+        else:
+            raise IOError("QA name does not match any file type. Check QA name in config")
+
+        if qaname in figmap:
+            figtype=figmap[qaname]
+        else:
+            raise IOError("QA name does not match any figure type. Check QA name in config")
+
+        outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+
+        outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return (outfile,outfig)
 
@@ -274,7 +312,7 @@ class Config(object):
         """
         log.info("Building Full Configuration")
 
-        self.obstype = self.conf["obstype"]
+        self.obstype = self.conf["Obstype"]
         self.debuglevel = self.conf["Debuglevel"]
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
@@ -328,7 +366,7 @@ def check_config(outconfig):
     Given the expanded config, check for all possible file existence etc....
     """
 
-    if outconfig["Flavor"]=="dark":
+    if outconfig["Obstype"]=="dark":
         files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
         log.info("Checking if all the necessary files exist.")
         for thisfile in files:
