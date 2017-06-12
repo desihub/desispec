@@ -225,3 +225,36 @@ def write_qa_prod(outroot, qaprod):
     log.info('Wrote QA_Prod file: {:s}'.format(outfile))
 
     return outfile
+
+
+def read_ql_conf(config):
+    """Read QL configuration file
+    """
+    # Read yaml in writable format
+    ql_input = open(config, 'w')
+    # Return
+    return ql_input
+
+
+def write_ql_file(input, qaresult):
+    """Write QL output files
+
+       Args:
+           input : str
+             filename with writable extension
+           qaresult : dict
+             QA inputs from configuration file
+
+       Returns:
+           outfile : str
+    """
+    import yaml
+    from desiutil.io import yamlify
+    # Take in QL input and output to yaml
+    qas = yamlify(qaresult)
+    qa_yaml = yaml.dump(qas)
+    outfile = input.write(qa_yaml)
+    # Simple yaml
+    return outfile
+
+

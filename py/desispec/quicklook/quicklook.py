@@ -7,9 +7,9 @@ import threading,string
 import subprocess
 import importlib
 import yaml
-from desiutil.io import yamlify
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
+from desiutil.io import yamlify
 
 def testconfig(outfilename="qlconfig.yaml"):
     """
@@ -239,7 +239,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     """
     Runs the quicklook pipeline as configured
 
-    Args:
+    Argse
         pl: is a list of [pa,qas] where pa is a pipeline step and qas the corresponding
             qas for that pa
         convdict: converted dictionary e.g : conf["IMAGE"] is the real psf file
@@ -250,7 +250,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
         mergedQA: if True, outputs the merged QA after the execution of pipeline. Perhaps, this 
             should always be True, but leaving as option, until configuration and IO settles.
     """
-
+    from desispec.io import qa
 
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
@@ -302,7 +302,6 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                 f = open(paconf[s]["OutputFile"],"w")
                 f.write(yaml.dump(yamlify(qaresult)))
                 hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
-                f.close()
         else:
             hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
         QAresults.append([pa.name,qaresult])
