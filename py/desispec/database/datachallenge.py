@@ -1,14 +1,13 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
-desispec.database.spectra
-=========================
+desispec.database.datachallenge
+===============================
 
-Code for loading spectra results into a database.
+Code for loading data challenge spectra results into a database.
 
-The *intention* of this module is to support both simulated survey
-(quicksurvey) and pipeline data.  However, as of Summer 2017, the
-data models are sufficiently different to require separate loaders.
+Once the data model for both quicksurvey and data challenge results has
+converged, this file will be deprecated.
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np
