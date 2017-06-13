@@ -6,15 +6,19 @@ desispec.io.meta
 
 IO metadata functions.
 """
+from __future__ import absolute_import, division, print_function
 
 import os
 import datetime
 import glob
 import re
+import numpy as np
+
+from .util import healpix_subdirectory
 
 
-def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
-    band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
+def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
+    nside=None, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
     download=False, outdir=None):
     """Returns location where file should be
 
@@ -25,7 +29,8 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
         night : YEARMMDD string
         expid : integer exposure id
         camera : 'b0' 'r1' .. 'z9'
-        brickname : brick name string
+        groupname : spectral grouping name (brick name or healpix pixel)
+        nside : healpix nside
         band : one of 'b','r','z' identifying the camera band
         spectrograph : spectrograph number, 0-9
 
@@ -38,7 +43,6 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
 
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
-
     location = dict(
         raw = '{rawdata_dir}/{night}/desi-{expid:08d}.fits.fz',
         pix = '{rawdata_dir}/{night}/pix-{camera}-{expid:08d}.fits',
@@ -94,14 +98,24 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
         psfnight = '{specprod_dir}/calib2d/psf/{night}/psfnight-{camera}.fits',
         psfboot = '{specprod_dir}/calib2d/psf/{night}/psfboot-{camera}.fits',
         fibermap = '{rawdata_dir}/{night}/fibermap-{expid:08d}.fits',
-        brick = '{specprod_dir}/bricks/{brickname}/brick-{band}-{brickname}.fits',
-        coadd = '{specprod_dir}/bricks/{brickname}/coadd-{band}-{brickname}.fits',
-        coadd_all = '{specprod_dir}/bricks/{brickname}/coadd-{brickname}.fits',
-        zbest = '{specprod_dir}/bricks/{brickname}/zbest-{brickname}.fits',
-        zspec = '{specprod_dir}/bricks/{brickname}/zspec-{brickname}.fits',
         zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
     )
     location['desi'] = location['raw']
+
+    hpixdir = None
+    if nside is not None:
+        hpix = int(groupname)
+        hpixdir = healpix_subdirectory(nside, hpix)
+        location["spectra"] = '{specprod_dir}/spectra/{hpixdir}/spectra-{nside}-{groupname}.fits'
+        location["coadd"] = '{specprod_dir}/spectra/{hpixdir}/coadd-{nside}-{groupname}.fits'
+        location["zbest"] = '{specprod_dir}/spectra/{hpixdir}/zbest-{nside}-{groupname}.fits'
+        #location["zspec"] = '{specprod_dir}/spectra/{hpixdir}/zspec-{nside}-{hpix}.fits'
+    else:
+        location["brick"] = '{specprod_dir}/bricks/{groupname}/brick-{band}-{groupname}.fits'
+        location["coadd"] = '{specprod_dir}/bricks/{groupname}/coadd-{band}-{groupname}.fits'
+        location["coadd_all"] = '{specprod_dir}/bricks/{groupname}/coadd-{groupname}.fits'
+        location["zbest"] = '{specprod_dir}/bricks/{groupname}/zbest-{groupname}.fits'
+        #location["zspec"] = '{specprod_dir}/bricks/{brickname}/zspec-{brickname}.fits'
 
     #- Do we know about this kind of file?
     if filetype not in location:
@@ -124,8 +138,9 @@ def findfile(filetype, night=None, expid=None, camera=None, brickname=None,
 
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod,
-        'night':night, 'expid':expid, 'camera':camera, 'brickname':brickname,
-        'band':band, 'spectrograph':spectrograph
+        'night':night, 'expid':expid, 'camera':camera, 'groupname':groupname,
+        'nside':nside, 'hpixdir':hpixdir, 'band':band, 
+        'spectrograph':spectrograph
         }
 
     if 'rawdata_dir' in required_inputs:

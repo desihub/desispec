@@ -61,6 +61,8 @@ class TestPipelineGraph(unittest.TestCase):
         spec = 6
         expid = 12345678
         brk = "3411p200"
+        nside = 64
+        pix = 123
 
         typ = "fibermap"
         obj = "{}-{}".format(typ, expid)
@@ -145,22 +147,23 @@ class TestPipelineGraph(unittest.TestCase):
         self.assertTrue(check[2], spec)
         self.assertTrue(check[3], expid)
 
-        typ = "brick"
-        obj = "{}-{}-{}".format(typ, band, brk)
+        typ = "spectra"
+        obj = "{}-{}-{}".format(typ, nside, pix)
         check = graph_name_split(obj)
         self.assertTrue(check[0], typ)
-        self.assertTrue(check[1], band)
-        self.assertTrue(check[2], brk)
+        self.assertTrue(int(check[1]), nside)
+        self.assertTrue(int(check[2]), pix)
 
         typ = "zbest"
-        obj = "{}-{}".format(typ, brk)
+        obj = "{}-{}-{}".format(typ, nside, pix)
         check = graph_name_split(obj)
         self.assertTrue(check[0], typ)
-        self.assertTrue(check[1], brk)
+        self.assertTrue(int(check[1]), nside)
+        self.assertTrue(int(check[2]), pix)
 
 
     def test_graph_path(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night(), self.specs, False)
+        grph, expcnt, allpix = graph_night(ph.fake_night(), self.specs, False)
         for key, val in grph.items():
             path = graph_path(key)
             self.assertTrue(path != "")
@@ -169,7 +172,7 @@ class TestPipelineGraph(unittest.TestCase):
 
 
     def test_graph_prune(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night(), self.specs, False)
+        grph, expcnt, allpix = graph_night(ph.fake_night(), self.specs, False)
         # prune one science exposure, check that everything from stdstars onward
         # is cut
         graph_prune(grph, "{}_pix-r0-00000002".format(ph.fake_night()), descend=True)
