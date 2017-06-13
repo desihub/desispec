@@ -239,7 +239,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     """
     Runs the quicklook pipeline as configured
 
-    Argse
+    Args:
         pl: is a list of [pa,qas] where pa is a pipeline step and qas the corresponding
             qas for that pa
         convdict: converted dictionary e.g : conf["IMAGE"] is the real psf file
@@ -250,7 +250,6 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
         mergedQA: if True, outputs the merged QA after the execution of pipeline. Perhaps, this 
             should always be True, but leaving as option, until configuration and IO settles.
     """
-    from desispec.io import qa
 
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
