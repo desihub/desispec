@@ -92,7 +92,7 @@ class Get_RMS(MonitoringAlg):
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["CAMERA"] = image.meta["CAMERA"]
-        retval["OBSTYPE"] = image.meta["FLAVOR"]
+        retval["OBSTYPE"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
         rmsccd=qalib.getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
@@ -177,7 +177,7 @@ class Count_Pixels(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = image.meta["CAMERA"]
-        retval["OBSTYPE"] = image.meta["FLAVOR"]
+        retval["OBSTYPE"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
         if param is None:
@@ -273,7 +273,7 @@ class Integrate_Spec(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["FLAVOR"]
+        retval["OBSTYPE"] = frame.meta["PROGRAM"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- get the integrals for all fibers
@@ -404,7 +404,7 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["FLAVOR"]
+        retval["OBSTYPE"] = frame.meta["PROGRAM"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- get the skyfibers first
@@ -523,7 +523,7 @@ class Sky_Peaks(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["FLAVOR"]
+        retval["OBSTYPE"] = frame.meta["PROGRAM"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         # define sky peaks and wavelength region around peak flux to be integrated
@@ -702,7 +702,7 @@ class Calc_XWSigma(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat() 
         retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera = image.meta["CAMERA"]
-        retval["OBSTYPE"] = image.meta["FLAVOR"]
+        retval["OBSTYPE"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
         dw=2.
@@ -984,7 +984,7 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["CAMERA"]=camera
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["OBSTYPE"] = header["FLAVOR"]
+        retval["OBSTYPE"] = header["PROGRAM"]
         retval["NIGHT"] = header["NIGHT"]
         
         rawimage=raw[camera.upper()].data
@@ -1086,7 +1086,7 @@ class CountSpectralBins(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["FLAVOR"]
+        retval["OBSTYPE"] = frame.meta["PROGRAM"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         grid=np.gradient(frame.wave)
@@ -1255,7 +1255,7 @@ class Sky_Residual(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["FLAVOR"]
+        retval["OBSTYPE"] = frame.meta["PROGRAM"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         
         if param is None:
@@ -1333,7 +1333,7 @@ class Calculate_SNR(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["FLAVOR"]
+        retval["OBSTYPE"] = frame.meta["PROGRAM"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- select band for mag, using DECAM_R if present
