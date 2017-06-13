@@ -1,6 +1,6 @@
 # Default Configurations for a Quicklook Pipeline setup for a science exposure
 name: DESI Quicklook Darktime
-flavor: dark
+Obstype: dark
 #- Calibration files: Assuming the same night for psf and fiberflat. (TODO: work out for arbitrary nights/expids)
 #                     These files must be placed in their canonical location for production:
 #                     fiberflat- {specprod_dir}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits
@@ -12,6 +12,7 @@ FiberflatExpid: 1
 WritePixfile: False
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
+WriteStaticPlots: False
 #-Debuglevel 
 Debuglevel: 20
 #- Use resolution in extraction  
