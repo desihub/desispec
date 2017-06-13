@@ -221,9 +221,8 @@ class ZCat(SchemaMixin, Base):
                 "z={0.z:f}, zerr={0.zerr:f}, zwarn={0.zwarn:d}, " +
                 "spectype='{0.spectype}', subtype='{0.subtype}'" +
                 "targetid={0.targetid:d}, " +
-                "brickname='{0.brickname}', " +
                 "deltachi2={0.deltachi2:f}, " +
-                "spectype='{0.spectype}', " +
+                "brickname='{0.brickname}', " +
                 "numobs={0.numobs:d})>").format(self)
 
 
@@ -395,10 +394,6 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
         with fits.open(f) as hdulist:
             data = hdulist[1].data
         log.info("Read data from %s.", f)
-        # for col in ('RA', 'DEC', 'XFOCAL_DESIGN', 'YFOCAL_DESIGN'):
-        #     data[col][np.isnan(data[col])] = -9999.0
-        #     assert not np.any(np.isnan(data[col]))
-        #     assert np.all(np.isfinite(data[col]))
         n_rows = len(data)
         data_list = ([data[col].tolist() for col in data.names if col != 'COEFF'])
         data_names = [col.lower() for col in data.names if col != 'COEFF']
