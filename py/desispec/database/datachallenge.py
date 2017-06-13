@@ -623,7 +623,7 @@ def main():
                           'WISE_FLUX': ('wise_flux_W1', 'wise_flux_W2')},
                'convert': None,
                'q3c': False,
-               'chunksize': options.chucksize,
+               'chunksize': options.chunksize,
                'maxrows': options.maxrows},
               {'filepath': join(options.datapath, 'targets', 'targets.fits'),
                'tcls': Target,
@@ -640,7 +640,7 @@ def main():
                                              'decam_galdepth_z', 'decam_galdepth_Y'),},
                'convert': None,
                'q3c': postgresql,
-               'chunksize': options.chucksize,
+               'chunksize': options.chunksize,
                'maxrows': options.maxrows},
               {'filepath': join(options.datapath, 'twopct.ecsv'),
                'tcls': ObsList,
@@ -649,7 +649,7 @@ def main():
                # 'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
                'convert': None,
                'q3c': postgresql,
-               'chunksize': options.chucksize,
+               'chunksize': options.chunksize,
                'maxrows': options.maxrows},]
             #   {'filepath': join(options.datapath, 'output', 'dark', '4', 'zcat.fits'),
             #    'tcls': ZCat,
@@ -657,7 +657,7 @@ def main():
             #    'expand': None,
             #    'convert': None,
             #    'q3c': False,
-            #    'chunksize': options.chucksize,
+            #    'chunksize': options.chunksize,
             #    'maxrows': options.maxrows}]
     #
     # Load the tables that correspond to a single file.

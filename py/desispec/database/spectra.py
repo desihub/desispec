@@ -504,7 +504,7 @@ def main():
                'expand': None,
                'convert': None,
                'q3c': postgresql,
-               'chunksize': options.chucksize,
+               'chunksize': options.chunksize,
                'maxrows': options.maxrows},
               {'filepath': join(options.datapath, 'input', 'dark', 'targets.fits'),
                'tcls': Target,
@@ -514,7 +514,7 @@ def main():
                                          'decam_flux_z', 'decam_flux_Y')},
                'convert': None,
                'q3c': postgresql,
-               'chunksize': options.chucksize,
+               'chunksize': options.chunksize,
                'maxrows': options.maxrows},
               {'filepath': join(options.datapath, 'input', 'obsconditions', 'Benchmark030_001', 'obslist_all.fits'),
                'tcls': ObsList,
@@ -522,7 +522,7 @@ def main():
                'expand': {'DATE-OBS': 'dateobs'},
                'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
                'q3c': postgresql,
-               'chunksize': options.chucksize,
+               'chunksize': options.chunksize,
                'maxrows': options.maxrows},
               {'filepath': join(options.datapath, 'output', 'dark', '4', 'zcat.fits'),
                'tcls': ZCat,
@@ -530,7 +530,7 @@ def main():
                'expand': None,
                'convert': None,
                'q3c': False,
-               'chunksize': options.chucksize,
+               'chunksize': options.chunksize,
                'maxrows': options.maxrows}]
     #
     # Load the tables that correspond to a single file.
