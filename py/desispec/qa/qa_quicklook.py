@@ -92,7 +92,8 @@ class Get_RMS(MonitoringAlg):
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["CAMERA"] = image.meta["CAMERA"]
-        retval["OBSTYPE"] = image.meta["PROGRAM"]
+        retval["PROGRAM"] = image.meta["PROGRAM"]
+        retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
         rmsccd=qalib.getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
@@ -120,9 +121,8 @@ class Get_RMS(MonitoringAlg):
             qlf_post(retval)  
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_RMS
             plot_RMS(retval,qafig)            
@@ -177,7 +177,8 @@ class Count_Pixels(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = image.meta["CAMERA"]
-        retval["OBSTYPE"] = image.meta["PROGRAM"]
+        retval["PROGRAM"] = image.meta["PROGRAM"]
+        retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
         if param is None:
@@ -216,9 +217,8 @@ class Count_Pixels(MonitoringAlg):
             qlf_post(retval)      
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countpix
             plot_countpix(retval,qafig)
@@ -273,7 +273,8 @@ class Integrate_Spec(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["PROGRAM"]
+        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- get the integrals for all fibers
@@ -326,9 +327,8 @@ class Integrate_Spec(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_integral
             plot_integral(retval,qafig)
@@ -404,7 +404,8 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["PROGRAM"]
+        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- get the skyfibers first
@@ -461,9 +462,8 @@ dict_countbins=None,qafile=None,qafig=None, qlf=False):
             qlf_post(retval)    
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_continuum
@@ -523,7 +523,8 @@ class Sky_Peaks(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["PROGRAM"]
+        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         # define sky peaks and wavelength region around peak flux to be integrated
@@ -636,9 +637,8 @@ class Sky_Peaks(MonitoringAlg):
             qlf_post(retval)
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_peaks
             plot_sky_peaks(retval,qafig)
@@ -702,7 +702,8 @@ class Calc_XWSigma(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat() 
         retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera = image.meta["CAMERA"]
-        retval["OBSTYPE"] = image.meta["PROGRAM"]
+        retval["PROGRAM"] = image.meta["PROGRAM"]
+        retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
         dw=2.
@@ -923,9 +924,8 @@ class Calc_XWSigma(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_XWSigma
             plot_XWSigma(retval,qafig)
@@ -984,7 +984,8 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["CAMERA"]=camera
         retval["PANAME"]=paname
         retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["OBSTYPE"] = header["PROGRAM"]
+        retval["PROGRAM"] = header["PROGRAM"]
+        retval["FLAVOR"] = header["FLAVOR"]
         retval["NIGHT"] = header["NIGHT"]
         
         rawimage=raw[camera.upper()].data
@@ -1022,9 +1023,8 @@ class Bias_From_Overscan(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_bias_overscan
             plot_bias_overscan(retval,qafig)
@@ -1086,7 +1086,8 @@ class CountSpectralBins(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["PROGRAM"]
+        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         grid=np.gradient(frame.wave)
@@ -1180,9 +1181,8 @@ class CountSpectralBins(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countspectralbins
             plot_countspectralbins(retval,qafig)
@@ -1255,7 +1255,8 @@ class Sky_Residual(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["PROGRAM"]
+        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         
         if param is None:
@@ -1275,9 +1276,8 @@ class Sky_Residual(MonitoringAlg):
             qlf_post(retval)    
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_residuals
             plot_residuals(retval,qafig)
@@ -1333,7 +1333,8 @@ class Calculate_SNR(MonitoringAlg):
         retval["QATIME"]=datetime.datetime.now().isoformat()
         retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
-        retval["OBSTYPE"] = frame.meta["PROGRAM"]
+        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
 
         #- select band for mag, using DECAM_R if present
@@ -1367,9 +1368,8 @@ class Calculate_SNR(MonitoringAlg):
             qlf_post(retval)            
 
         if qafile is not None:
-            input = qa.read_ql_conf(qafile)
-            output = qa.write_ql_file(input,retval)
-            log.info("Output QA data is in {}".format(qafile))
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.info("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
             plot_SNR(retval,qafig)         

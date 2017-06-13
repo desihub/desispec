@@ -100,6 +100,13 @@ class Preproc(pas.PipelineAlg):
             for key in h0:
                 if key not in header:
                     header[key] = h0[key]
+        #- WARNING!!!This is a hack for QL to run on old raw images for QLF to be working on old set of data
+        if "PROGRAM" not in header:
+            log.info("WARNING!!! Temporary hack for QL to add header key PROGRAM. Only to facilitate QLF to work on their dataset. Remove this after some time and run with new data set")
+            header["PROGRAM"]= 'dark'
+        if header["FLAVOR"] not in [None,'bias','arc','flat','science']:
+            header["FLAVOR"] = 'science'        
+
         img = desispec.preproc.preproc(rawimage,header,primary_header,bias=bias,pixflat=pixflat,mask=mask)
         if dumpfile is not None:
             from desispec import io
