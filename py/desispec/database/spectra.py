@@ -52,9 +52,6 @@ class Truth(SchemaMixin, Base):
     brickname = Column(String, nullable=False)
     oiiflux = Column(Float, nullable=False)
 
-    # frames = relationship('Frame', secondary=frame2brick,
-    #                       back_populates='bricks')
-
     def __repr__(self):
         return ("<Truth(targetid={0.targetid:d}, " +
                 "ra={0.ra:f}, dec={0.dec:f}, truez={0.truez:f}, " +
@@ -521,7 +518,7 @@ def main():
                'maxrows': options.maxrows},
               {'filepath': join(options.datapath, 'input', 'obsconditions', 'Benchmark030_001', 'obslist_all.fits'),
                'tcls': ObsList,
-               'hdu': 1
+               'hdu': 1,
                'expand': {'DATE-OBS': 'dateobs'},
                'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
                'q3c': postgresql,
@@ -545,11 +542,8 @@ def main():
         #
         q = dbSession.query(l['tcls']).first()
         if q is None:
-            log.info("Loading %s from %s.", tn, filepath)
-            load_file(l['filepath'], l['tcls'], hdu=l['hdu'], expand=l['expand'],
-                      convert=l['convert'], q3c=l['q3c'],
-                      chunksize=l['chunksize'],
-                      maxrows=l['maxrows'])
+            log.info("Loading %s from %s.", tn, l['filepath'])
+            load_file(**l)
             log.info("Finished loading %s.", tn)
         else:
             log.info("%s table already loaded.", tn.title())

@@ -57,9 +57,17 @@ class TestDatabase(unittest.TestCase):
         if os.path.exists(cls.testDir):
             rmtree(cls.testDir)
 
-    @unittest.skipUnless(sqlalchemy_available, "sqlalchemy not installed; skipping DB tests")
-    def test_database(self):
-        """Test desispec.database.
+    @unittest.skipUnless(sqlalchemy_available, "SQLAlchemy not installed; skipping datachallenge DB tests.")
+    def test_datachallenge_classes(self):
+        """Test SQLAlchemy classes in desispec.database.datachallenge.
+        """
+        from ..database.datachallenge import (Truth, Target, ObsList,
+                                              FiberAssign, ZCat)
+        pass
+
+    @unittest.skipUnless(sqlalchemy_available, "SQLAlchemy not installed; skipping metadata DB tests.")
+    def test_metadata_classes(self):
+        """Test SQLAlchemy classes in desispec.database.metadata.
         """
         from ..database.metadata import (utc, Base, FrameStatus, BrickStatus,
                                          Status, Night, ExposureFlavor)
@@ -82,6 +90,14 @@ class TestDatabase(unittest.TestCase):
         bs = BrickStatus(id=1, brick_id=1, status='succeeded',
                          stamp=datetime(2017, 1, 1, 0, 0, 0, tzinfo=utc))
         self.assertEqual(str(bs), "<BrickStatus(id=1, brick_id=1, status='succeeded', stamp='2017-01-01 00:00:00+00:00')>")
+
+    @unittest.skipUnless(sqlalchemy_available, "SQLAlchemy not installed; skipping spectra DB tests.")
+    def test_spectra_classes(self):
+        """Test SQLAlchemy classes in desispec.database.spectra.
+        """
+        from ..database.spectra import (Truth, Target, ObsList,
+                                              FiberAssign, ZCat)
+        pass
 
     def test_convert_dateobs(self):
         """Test desispec.database.util.convert_dateobs.

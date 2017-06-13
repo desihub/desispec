@@ -43,23 +43,51 @@ class Truth(SchemaMixin, Base):
     """
 
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
-    ra = Column(Float, nullable=False)
-    dec = Column(Float, nullable=False)
+    mockid = Column(BigInteger, nullable=False)
+    contam_target = Column(BigInteger, nullable=False)
     truez = Column(Float, nullable=False)
-    truetype = Column(String, nullable=False)
-    sourcetype = Column(String, nullable=False)
-    brickname = Column(String, nullable=False)
+    truespectype = Column(String, nullable=False)
+    templatetype = Column(String, nullable=False)
+    templatesubtype = Column(String, nullable=False)
+    templateid = Column(Integer, nullable=False)
+    seed = Column(BigInteger, nullable=False)
+    decam_flux_u = Column(Float, nullable=False)
+    decam_flux_g = Column(Float, nullable=False)
+    decam_flux_r = Column(Float, nullable=False)
+    decam_flux_i = Column(Float, nullable=False)
+    decam_flux_z = Column(Float, nullable=False)
+    decam_flux_Y = Column(Float, nullable=False)
+    wise_flux_W1 = Column(Float, nullable=False)
+    wise_flux_W2 = Column(Float, nullable=False)
     oiiflux = Column(Float, nullable=False)
-
-    # frames = relationship('Frame', secondary=frame2brick,
-    #                       back_populates='bricks')
+    hbetaflux = Column(Float, nullable=False)
+    teff = Column(Float, nullable=False)
+    logg = Column(Float, nullable=False)
+    feh = Column(Float, nullable=False)
 
     def __repr__(self):
         return ("<Truth(targetid={0.targetid:d}, " +
-                "ra={0.ra:f}, dec={0.dec:f}, truez={0.truez:f}, " +
-                "truetype='{0.truetype}', sourcetype='{0.sourcetype}', " +
-                "brickname='{0.brickname}', " +
-                "oiiflux={0.oiiflux:f})>").format(self)
+                "mockid={0.mockid:d}, " +
+                "contam_target={0.contam_target:d}, " +
+                "truez={0.truez:f}, " +
+                "truespectype='{0.truespectype}', " +
+                "templatetype='{0.templatetype}', " +
+                "templatesubtype='{0.templatesubtype}', " +
+                "templateid={0.templateid:d}, " +
+                "seed={0.seed:d}, " +
+                "decam_flux_u={0.decam_flux_u:f}, " +
+                "decam_flux_g={0.decam_flux_g:f}, " +
+                "decam_flux_r={0.decam_flux_r:f}, " +
+                "decam_flux_i={0.decam_flux_i:f}, " +
+                "decam_flux_z={0.decam_flux_z:f}, " +
+                "decam_flux_Y={0.decam_flux_Y:f}, " +
+                "wise_flux_W1={0.wise_flux_W1:f}, " +
+                "wise_flux_W2={0.wise_flux_W2:f}, " +
+                "oiiflux={0.oiiflux:f}, " +
+                "hbetaflux={0.hbetaflux:f}, " +
+                "teff={0.teff:f}, " +
+                "logg={0.logg:f}, " +
+                "feh={0.feh:f})>").format(self)
 
 
 class Target(SchemaMixin, Base):
@@ -81,10 +109,27 @@ class Target(SchemaMixin, Base):
     decam_flux_i = Column(Float, nullable=False)
     decam_flux_z = Column(Float, nullable=False)
     decam_flux_Y = Column(Float, nullable=False)
-    shapedev_r = Column(Float, nullable=False)
+    wise_flux_W1 = Column(Float, nullable=False)
+    wise_flux_W2 = Column(Float, nullable=False)
     shapeexp_r = Column(Float, nullable=False)
-    depth_r = Column(Float, nullable=False)
-    galdepth_r = Column(Float, nullable=False)
+    shapeexp_e1 = Column(Float, nullable=False)
+    shapeexp_e2 = Column(Float, nullable=False)
+    shapedev_r = Column(Float, nullable=False)
+    shapedev_e1 = Column(Float, nullable=False)
+    shapedev_e2 = Column(Float, nullable=False)
+    decam_depth_u = Column(Float, nullable=False)
+    decam_depth_g = Column(Float, nullable=False)
+    decam_depth_r = Column(Float, nullable=False)
+    decam_depth_i = Column(Float, nullable=False)
+    decam_depth_z = Column(Float, nullable=False)
+    decam_depth_Y = Column(Float, nullable=False)
+    decam_galdepth_u = Column(Float, nullable=False)
+    decam_galdepth_g = Column(Float, nullable=False)
+    decam_galdepth_r = Column(Float, nullable=False)
+    decam_galdepth_i = Column(Float, nullable=False)
+    decam_galdepth_z = Column(Float, nullable=False)
+    decam_galdepth_Y = Column(Float, nullable=False)
+    ebv = Column(Float, nullable=False)
 
     def __repr__(self):
         return ("<Target(targetid={0.targetid:d}, " +
@@ -100,72 +145,86 @@ class Target(SchemaMixin, Base):
                 "decam_flux_i={0.decam_flux_i:f}, " +
                 "decam_flux_z={0.decam_flux_z:f}, " +
                 "decam_flux_Y={0.decam_flux_Y:f}, " +
-                "shapedev_r={0.shapedev_r:f}, shapeexp_r={0.shapeexp_r:f}, "
-                "depth_r={0.depth_r:f}, " +
-                "galdepth_r={0.galdepth_r:f})>").format(self)
+                "wise_flux_W1={0.wise_flux_W1:f}, " +
+                "wise_flux_W2={0.wise_flux_W2:f}, " +
+                "shapeexp_r={0.shapeexp_r:f}," +
+                "shapeexp_e1={0.shapeexp_e1:f}," +
+                "shapeexp_e2={0.shapeexp_e2:f}," +
+                "shapedev_r={0.shapedev_r:f}, " +
+                "shapedev_e1={0.shapedev_e1:f}," +
+                "shapedev_e2={0.shapedev_e2:f}," +
+                "decam_depth_u={0.decam_depth_u:f}, " +
+                "decam_depth_g={0.decam_depth_g:f}, " +
+                "decam_depth_r={0.decam_depth_r:f}, " +
+                "decam_depth_i={0.decam_depth_i:f}, " +
+                "decam_depth_z={0.decam_depth_z:f}, " +
+                "decam_depth_Y={0.decam_depth_Y:f}, " +
+                "decam_galdepth_u={0.decam_galdepth_u:f}, " +
+                "decam_galdepth_g={0.decam_galdepth_g:f}, " +
+                "decam_galdepth_r={0.decam_galdepth_r:f}, " +
+                "decam_galdepth_i={0.decam_galdepth_i:f}, " +
+                "decam_galdepth_z={0.decam_galdepth_z:f}, " +
+                "decam_galdepth_Y={0.decam_galdepth_Y:f}, " +
+                "ebv={0.ebv:f})>").format(self)
 
 
 class ObsList(SchemaMixin, Base):
     """Representation of the obslist table.
     """
 
+    mjd = Column(Float, nullable=False)
+    exptime = Column(Float, nullable=False)
+    program = Column(String, nullable=False)
+    passnum = Column(Integer, nullable=False)
     tileid = Column(Integer, primary_key=True, autoincrement=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
-    program = Column(String, nullable=False)
-    ebmv = Column(Float, nullable=False)
-    maxlen = Column(Float, nullable=False)
     moonfrac = Column(Float, nullable=False)
     moondist = Column(Float, nullable=False)
     moonalt = Column(Float, nullable=False)
     seeing = Column(Float, nullable=False)
-    lintrans = Column(Float, nullable=False)
     airmass = Column(Float, nullable=False)
-    dessn2 = Column(Float, nullable=False)
-    status = Column(Integer, nullable=False)
-    exptime = Column(Float, nullable=False)
-    obssn2 = Column(Float, nullable=False)
-    dateobs = Column(DateTime(timezone=True), nullable=False)
-    mjd = Column(Float, nullable=False)
+    # dateobs = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self):
-        return ("<ObsList(tileid={0.tileid:d}, " +
-                "ra={0.ra:f}, dec={0.dec:f}, " +
+        return ("<ObsList(mjd={0.mjd:f}, " +
+                "exptime={0.exptime:f}, " +
                 "program='{0.program}', " +
+                "passnum={0.passnum:d}, " +
+                "tileid={0.tileid:d}, " +
+                "ra={0.ra:f}, dec={0.dec:f}, " +
                 "ebmv={0.ebmv:f}, " +
-                "maxlen={0.maxlen:f}, " +
                 "moonfrac={0.moonfrac:f}, " +
                 "moondist={0.moondist:f}, " +
                 "moonalt={0.moonalt:f}, " +
                 "seeing={0.seeing:f}, " +
-                "lintrans={0.lintrans:f}, " +
-                "airmass={0.airmass:f}, " +
-                "dessn2={0.dessn2:f}, " +
-                "status={0.status:d}, " +
-                "exptime={0.exptime:f}, " +
-                "obssn2={0.obssn2:f}, " +
-                "dateobs='{0.dateobs}', " +
-                "mjd={0.mjd:f})>").format(self)
+                "airmass={0.airmass:f})>").format(self)
 
 
 class ZCat(SchemaMixin, Base):
     """Representation of the zcat table.
     """
 
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
-    brickname = Column(String, index=True, nullable=False)
-    spectype = Column(String, index=True, nullable=False)
+    chi2 = Column(Float, nullable=False)
     z = Column(Float, index=True, nullable=False)
     zerr = Column(Float, nullable=False)
-    zwarn = Column(Integer, index=True, nullable=False)
-    numobs = Column(Integer, nullable=False)
+    zwarn = Column(BigInteger, index=True, nullable=False)
+    spectype = Column(String, index=True, nullable=False)
+    subtype = Column(String, index=True, nullable=False)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+    deltachi2 = Column(Float, nullable=False)
+    brickname = Column(String, index=True, nullable=False)
+    numobs = Column(Integer, nullable=False, default=-1)
 
     def __repr__(self):
-        return ("<ZCat(targetid={0.targetid:d}, " +
+        return ("<ZCat(chi2={0.chi2:f}, " +
+                "z={0.z:f}, zerr={0.zerr:f}, zwarn={0.zwarn:d}, " +
+                "spectype='{0.spectype}', subtype='{0.subtype}'" +
+                "targetid={0.targetid:d}, " +
                 "brickname='{0.brickname}', " +
+                "deltachi2={0.deltachi2:f}, " +
                 "spectype='{0.spectype}', " +
-                "z={0.z:f}, zerr={0.zerr:f}, " +
-                "zwarn={0.zwarn:d}, numobs={0.numobs:d})>").format(self)
+                "numobs={0.numobs:d})>").format(self)
 
 
 class FiberAssign(SchemaMixin, Base):
@@ -302,7 +361,61 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
     return
 
 
-def load_fiberassign(datapath, maxpass=4, q3c=False):
+def load_zcat(datapath, run1d='dc17a1', q3c=False):
+    """Load zbest files into the zcat table.
+
+    Parameters
+    ----------
+    datapath : :class:`str`
+        Full path to the directory containing zbest files.
+    run1d : :class:`str`, optional
+        Particular reduction directory to read.
+    q3c : :class:`bool`, optional
+        If set, create q3c index on the table.
+    """
+    from os.path import join
+    from re import compile
+    from glob import glob
+    from astropy.io import fits
+    from desiutil.log import get_logger
+    log = get_logger()
+    zbestpath = join(datapath, 'spectro', 'redux', run1d, 'bricks',
+                     '*', 'zbest-*.fits')
+    log.info("Using zbest file search path: %s.", zbestpath)
+    zbest_files = glob(zbestpath)
+    if len(zbest_files) == 0:
+        log.error("No zbest files found!")
+        return
+    log.info("Found %d zbest files.", len(zbest_files))
+    #
+    # Read the identified zbest files.
+    #
+    for f in zbest_files:
+        brickname = os.path.basename(os.path.dirname(f))
+        with fits.open(f) as hdulist:
+            data = hdulist[1].data
+        log.info("Read data from %s.", f)
+        # for col in ('RA', 'DEC', 'XFOCAL_DESIGN', 'YFOCAL_DESIGN'):
+        #     data[col][np.isnan(data[col])] = -9999.0
+        #     assert not np.any(np.isnan(data[col]))
+        #     assert np.all(np.isfinite(data[col]))
+        n_rows = len(data)
+        data_list = ([data[col].tolist() for col in data.names if col != 'COEFF'])
+        data_names = [col.lower() for col in data.names if col != 'COEFF']
+        log.info("Initial column conversion complete on brick = %s.", brickname)
+        data_rows = list(zip(*data_list))
+        log.info("Converted columns into rows on brick = %s.", brickname)
+        dbSession.bulk_insert_mappings(ZCat, [dict(zip(data_names, row))
+                                              for row in data_rows])
+        log.info("Inserted %d rows in %s for brick = %s.",
+                 n_rows, ZCat.__tablename__, brickname)
+        dbSession.commit()
+    if q3c:
+        q3c_index('zcat')
+    return
+
+
+def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -319,6 +432,8 @@ def load_fiberassign(datapath, maxpass=4, q3c=False):
         Search for pass numbers up to this value (default 4).
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
+    latest_epoch : :class:`bool`, optional
+        If set, search for the latest tile file among several epochs.
     """
     from os.path import join
     from re import compile
@@ -326,31 +441,35 @@ def load_fiberassign(datapath, maxpass=4, q3c=False):
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    fiberpath = join(datapath, 'output', 'dark',
-                     '[0-{0:d}]'.format(maxpass),
-                     'fiberassign', 'tile_*.fits')
+    fiberpath = join(datapath, 'fiberassign', 'output',
+                     'tile_*.fits')
     log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob(fiberpath)
     if len(tile_files) == 0:
         log.error("No tile files found!")
         return
     log.info("Found %d tile files.", len(tile_files))
-    tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
     #
     # Find the latest epoch for every tile file.
     #
     latest_tiles = dict()
-    for f in tile_files:
-        m = tileidre.search(f)
-        if m is None:
-            log.error("Could not match %s!", f)
-            continue
-        epoch, tileid = map(int, m.groups())
-        if tileid in latest_tiles:
-            if latest_tiles[tileid][0] < epoch:
+    if latest_epoch:
+        tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+        for f in tile_files:
+            m = tileidre.search(f)
+            if m is None:
+                log.error("Could not match %s!", f)
+                continue
+            epoch, tileid = map(int, m.groups())
+            if tileid in latest_tiles:
+                if latest_tiles[tileid][0] < epoch:
+                    latest_tiles[tileid] = (epoch, f)
+            else:
                 latest_tiles[tileid] = (epoch, f)
-        else:
-            latest_tiles[tileid] = (epoch, f)
+    else:
+        for f in tile_files:
+            tileid = int((os.path.basename(f).split('.')[0]).split('_')[1])
+            latest_tiles[tileid] = (0, f)
     log.info("Identified %d tile files for loading.", len(latest_tiles))
     #
     # Read the identified tile files.
@@ -500,40 +619,51 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepath': join(options.datapath, 'input', 'dark', 'truth.fits'),
+    loader = [{'filepath': join(options.datapath, 'targets', 'truth.fits'),
                'tcls': Truth,
                'hdu': 1,
-               'expand': None,
+               'expand': {'DECAM_FLUX': ('decam_flux_u', 'decam_flux_g',
+                                         'decam_flux_r', 'decam_flux_i',
+                                         'decam_flux_z', 'decam_flux_Y'),
+                          'WISE_FLUX': ('wise_flux_W1', 'wise_flux_W2')},
                'convert': None,
-               'q3c': postgresql,
+               'q3c': False,
                'chunksize': options.chucksize,
                'maxrows': options.maxrows},
-              {'filepath': join(options.datapath, 'input', 'dark', 'targets.fits'),
+              {'filepath': join(options.datapath, 'targets', 'targets.fits'),
                'tcls': Target,
                'hdu': 1,
                'expand': {'DECAM_FLUX': ('decam_flux_u', 'decam_flux_g',
                                          'decam_flux_r', 'decam_flux_i',
-                                         'decam_flux_z', 'decam_flux_Y')},
+                                         'decam_flux_z', 'decam_flux_Y'),
+                          'WISE_FLUX': ('wise_flux_W1', 'wise_flux_W2'),
+                          'DECAM_DEPTH': ('decam_depth_u', 'decam_depth_g',
+                                          'decam_depth_r', 'decam_depth_i',
+                                          'decam_depth_z', 'decam_depth_Y'),
+                          'DECAM_GALDEPTH': ('decam_galdepth_u', 'decam_galdepth_g',
+                                             'decam_galdepth_r', 'decam_galdepth_i',
+                                             'decam_galdepth_z', 'decam_galdepth_Y'),},
                'convert': None,
                'q3c': postgresql,
                'chunksize': options.chucksize,
                'maxrows': options.maxrows},
-              {'filepath': join(options.datapath, 'input', 'obsconditions', 'Benchmark030_001', 'obslist_all.fits'),
+              {'filepath': join(options.datapath, 'twopct.ecsv'),
                'tcls': ObsList,
-               'hdu': 1
-               'expand': {'DATE-OBS': 'dateobs'},
-               'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
+               'hdu': 1,
+               'expand': {'PASS': 'passnum'},
+               # 'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
+               'convert': None,
                'q3c': postgresql,
                'chunksize': options.chucksize,
-               'maxrows': options.maxrows},
-              {'filepath': join(options.datapath, 'output', 'dark', '4', 'zcat.fits'),
-               'tcls': ZCat,
-               'hdu': 1,
-               'expand': None,
-               'convert': None,
-               'q3c': False,
-               'chunksize': options.chucksize,
-               'maxrows': options.maxrows}]
+               'maxrows': options.maxrows},]
+            #   {'filepath': join(options.datapath, 'output', 'dark', '4', 'zcat.fits'),
+            #    'tcls': ZCat,
+            #    'hdu': 1,
+            #    'expand': None,
+            #    'convert': None,
+            #    'q3c': False,
+            #    'chunksize': options.chucksize,
+            #    'maxrows': options.maxrows}]
     #
     # Load the tables that correspond to a single file.
     #
@@ -544,14 +674,21 @@ def main():
         #
         q = dbSession.query(l['tcls']).first()
         if q is None:
-            log.info("Loading %s from %s.", tn, filepath)
-            load_file(l['filepath'], l['tcls'], hdu=l['hdu'], expand=l['expand'],
-                      convert=l['convert'], q3c=l['q3c'],
-                      chunksize=l['chunksize'],
-                      maxrows=l['maxrows'])
+            log.info("Loading %s from %s.", tn, l['filepath'])
+            load_file(**l)
             log.info("Finished loading %s.", tn)
         else:
             log.info("%s table already loaded.", tn.title())
+    #
+    # Load zbest files.
+    #
+    q = dbSession.query(ZCat).first()
+    if q is None:
+        log.info("Loading ZCat from %s.", options.datapath)
+        load_zcat(options.datapath, q3c=postgresql)
+        log.info("Finished loading ZCat.")
+    else:
+        log.info("ZCat table already loaded.")
     #
     # Load fiber assignment files.
     #
