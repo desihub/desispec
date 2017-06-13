@@ -172,7 +172,7 @@ class FiberAssign(SchemaMixin, Base):
 
     tileid = Column(Integer, index=True, primary_key=True)
     fiber = Column(Integer, primary_key=True)
-    positioner = Column(Integer, nullable=False)
+    location = Column(Integer, nullable=False)
     numtarget = Column(Integer, nullable=False)
     priority = Column(Integer, nullable=False)
     targetid = Column(BigInteger, index=True, nullable=False)
@@ -189,7 +189,7 @@ class FiberAssign(SchemaMixin, Base):
         return ("<FiberAssign(faid={0.faid:d}, " +
                 "tileid={0.tileid:d}, " +
                 "fiber={0.fiber:d}, " +
-                "positioner={0.positioner:d}, " +
+                "location={0.location:d}, " +
                 "numtarget={0.numtarget:d}, " +
                 "priority={0.priority:d}, " +
                 "targetid={0.targetid:d}, " +
