@@ -59,7 +59,7 @@ class TestDatabase(unittest.TestCase):
 
     @unittest.skipUnless(sqlalchemy_available, "sqlalchemy not installed; skipping DB tests")
     def test_database(self):
-        """Test desispec.io.database.
+        """Test desispec.database.
         """
         from ..database.metadata import (utc, Base, FrameStatus, BrickStatus,
                                          Status, Night, ExposureFlavor)
@@ -83,21 +83,22 @@ class TestDatabase(unittest.TestCase):
                          stamp=datetime(2017, 1, 1, 0, 0, 0, tzinfo=utc))
         self.assertEqual(str(bs), "<BrickStatus(id=1, brick_id=1, status='succeeded', stamp='2017-01-01 00:00:00+00:00')>")
 
+    def test_convert_dateobs(self):
+        """Test desispec.database.util.convert_dateobs.
+        """
+        from pytz import utc
+        from ..database.util import convert_dateobs
+        ts = convert_dateobs('2019-01-03T01:11:33.247')
+        self.assertEqual(ts.year, 2019)
+        self.assertEqual(ts.month, 1)
+        self.assertEqual(ts.microsecond, 247000)
+        self.assertIsNone(ts.tzinfo)
+        ts = convert_dateobs('2019-01-03T01:11:33.247', tzinfo=utc)
+        self.assertEqual(ts.year, 2019)
+        self.assertEqual(ts.month, 1)
+        self.assertEqual(ts.microsecond, 247000)
+        self.assertIs(ts.tzinfo, utc)
 
-    # def test_spectra(self):
-    #     """Test desispec.database.spectra.
-    #     """
-    #     from ..database.spectra import utc, convert_dateobs
-    #     ts = convert_dateobs('2019-01-03T01:11:33.247')
-    #     self.assertEqual(ts.year, 2019)
-    #     self.assertEqual(ts.month, 1)
-    #     self.assertEqual(ts.microsecond, 247000)
-    #     self.assertIsNone(ts.tzinfo)
-    #     ts = convert_dateobs('2019-01-03T01:11:33.247', tzinfo=utc)
-    #     self.assertEqual(ts.year, 2019)
-    #     self.assertEqual(ts.month, 1)
-    #     self.assertEqual(ts.microsecond, 247000)
-    #     self.assertIs(ts.tzinfo, utc)
 
 def test_suite():
     """Allows testing of only this module with the command::

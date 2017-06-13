@@ -25,10 +25,16 @@ Full desispec API Reference
 .. automodule:: desispec.database
     :members:
 
+.. automodule:: desispec.database.datachallenge
+    :members:
+
 .. automodule:: desispec.database.metadata
     :members:
 
 .. automodule:: desispec.database.spectra
+    :members:
+
+.. automodule:: desispec.database.util
     :members:
 
 .. automodule:: desispec.fiberflat
