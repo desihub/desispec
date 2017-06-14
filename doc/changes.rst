@@ -5,6 +5,11 @@ desispec Change Log
 0.14.1 (unreleased)
 -------------------
 
+* Clean up pipeline script naming to be grouped by night.
+* Modify pipeline to use Spectra objects grouped by HEALPix pixels instead
+  of bricks.  Add entry point to regroup cframe data by pixel (PR `#394`_).
+* Add a new class, Spectra, which encapsulates a grouping of 1D spectra
+  in one or more bands.  Includes selection, updating, and I/O.
 * Removed ``desispec.brick`` as it's now in :mod:`desiutil.brick` (PR `#392`_).
 * Added function to calculate brick vertices at a given location (PR `#388`_).
 * Added function to calculate brick areas at a given location (PR `#384`_).
@@ -27,6 +32,7 @@ desispec Change Log
 .. _`#379`: https://github.com/desihub/desispec/pull/379
 .. _`#390`: https://github.com/desihub/desispec/pull/390
 .. _`#392`: https://github.com/desihub/desispec/pull/392
+.. _`#394`: https://github.com/desihub/desispec/pull/394
 
 0.14.0 (2017-04-13)
 -------------------

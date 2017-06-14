@@ -83,20 +83,15 @@ class TestParallel(unittest.TestCase):
         comm = None
         nproc = 1
         rank = 0
-        try:
+        if use_mpi:
             import mpi4py.MPI as MPI
             comm = MPI.COMM_WORLD
             nproc = comm.size
             rank = comm.rank
-        except ImportError:
-            pass
 
         ret = take_turns(comm, 2, fake_func, "turns", rank)
 
         assert(ret == "turns_{}".format(rank))
-
-
-
 
 
 #- This runs all test* functions in any TestCase class in this file

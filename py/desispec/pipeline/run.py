@@ -27,7 +27,7 @@ import numpy as np
 from desiutil.log import get_logger
 from .. import io
 from ..parallel import (dist_uniform, dist_discrete,
-    stdouterr_redirected)
+    stdouterr_redirected, use_mpi)
 
 from .common import *
 from .graph import *
@@ -335,14 +335,14 @@ def retry_task(failpath, newopts=None):
     rank = 0
     nworld = 1
 
-    if nproc > 1:
+    if use_mpi and (nproc > 1):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         nworld = comm.size
         rank = comm.rank
-        if nworld != nproc:
-            if rank == 0:
-                log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
+    if nworld != nproc:
+        if rank == 0:
+            log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
 
     opts = origopts
     if newopts is not None:

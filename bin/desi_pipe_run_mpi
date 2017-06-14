@@ -8,11 +8,18 @@
 Run one or more steps of the DESI pipeline using MPI.
 """
 
-from mpi4py import MPI
+from desispec.parallel import use_mpi
+
+comm = None
+if use_mpi:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+else:
+    print("mpi4py not found, using only one process")
 
 import desispec.scripts.pipe_run as pipe_run
 
 if __name__ == '__main__':
     args = pipe_run.parse()
-    pipe_run.main(args, comm=MPI.COMM_WORLD)
+    pipe_run.main(args, comm=comm)
 
