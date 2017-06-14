@@ -13,6 +13,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
                         BigInteger, Integer, String, Float, DateTime)
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.schema import CreateSchema
@@ -410,11 +411,16 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
         log.info("Initial column conversion complete on brick = %s.", brickname)
         data_rows = list(zip(*data_list))
         log.info("Converted columns into rows on brick = %s.", brickname)
-        dbSession.bulk_insert_mappings(ZCat, [dict(zip(data_names, row))
-                                              for row in data_rows])
-        log.info("Inserted %d rows in %s for brick = %s.",
-                 n_rows, ZCat.__tablename__, brickname)
-        dbSession.commit()
+        try:
+            dbSession.bulk_insert_mappings(ZCat, [dict(zip(data_names, row))
+                                                  for row in data_rows])
+        except IntegrityError as e:
+            log.error("Integrity Error detected!")
+            log.error(e)
+        else:
+            log.info("Inserted %d rows in %s for brick = %s.",
+                     n_rows, ZCat.__tablename__, brickname)
+            dbSession.commit()
     if q3c:
         q3c_index('zcat')
     return
