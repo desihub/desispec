@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
                         BigInteger, Integer, String, Float, DateTime)
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.schema import CreateSchema
@@ -237,10 +238,17 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
             data = hdulist[1].data
     elif filepath.endswith('.ecsv'):
         data = Table.read(filepath, format='ascii.ecsv')
+    else:
+        log.error("Unrecognized data file, %s!", filepath)
+        return
     if maxrows == 0:
         maxrows = len(data)
     log.info("Read data from %s.", filepath)
-    for col in data.names:
+    try:
+        colnames = data.names
+    except AttributeError:
+        colnames = data.colnames
+    for col in colnames:
         if data[col].dtype.kind == 'f':
             bad = np.isnan(data[col][0:maxrows])
             if np.any(bad):
@@ -248,27 +256,30 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
                 log.warning("%d rows of bad data detected in column " +
                             "%s of %s.", nbad, col, filepath)
     log.info("Integrity check complete on %s.", tn)
-    data_list = [data[col][0:maxrows].tolist() for col in data.names]
-    data_names = [col.lower() for col in data.names]
+    data_list = [data[col][0:maxrows].tolist() for col in colnames]
+    data_names = [col.lower() for col in colnames]
     log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
         for col in expand:
+            i = data_names.index(col.lower())
             if isinstance(expand[col], str):
                 #
                 # Just rename a column.
                 #
-                data_names[data.names.index(col)] = expand[col]
+                log.debug("Renaming column %s (at index %d) to %s.", data_names[i], i, expand[col])
+                data_names[i] = expand[col]
             else:
                 #
                 # Assume this is an expansion of an array-valued column
                 # into individual columns.
                 #
-                i = data.names.index(col)
                 del data_names[i]
                 del data_list[i]
                 for j, n in enumerate(expand[col]):
+                    log.debug("Expanding column %d of %s (at index %d) to %s.", j, col, i, n)
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
+                log.debug(data_names)
     log.info("Column expansion complete on %s.", tn)
     del data
     if convert is not None:
@@ -300,7 +311,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
     return
 
 
-def load_fiberassign(datapath, maxpass=4, q3c=False):
+def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -317,8 +328,10 @@ def load_fiberassign(datapath, maxpass=4, q3c=False):
         Search for pass numbers up to this value (default 4).
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
+    latest_epoch : :class:`bool`, optional
+        If set, search for the latest tile file among several epochs.
     """
-    from os.path import join
+    from os.path import basename, join
     from re import compile
     from glob import glob
     from astropy.io import fits
@@ -333,22 +346,27 @@ def load_fiberassign(datapath, maxpass=4, q3c=False):
         log.error("No tile files found!")
         return
     log.info("Found %d tile files.", len(tile_files))
-    tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
     #
     # Find the latest epoch for every tile file.
     #
     latest_tiles = dict()
-    for f in tile_files:
-        m = tileidre.search(f)
-        if m is None:
-            log.error("Could not match %s!", f)
-            continue
-        epoch, tileid = map(int, m.groups())
-        if tileid in latest_tiles:
-            if latest_tiles[tileid][0] < epoch:
+    if latest_epoch:
+        tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+        for f in tile_files:
+            m = tileidre.search(f)
+            if m is None:
+                log.error("Could not match %s!", f)
+                continue
+            epoch, tileid = map(int, m.groups())
+            if tileid in latest_tiles:
+                if latest_tiles[tileid][0] < epoch:
+                    latest_tiles[tileid] = (epoch, f)
+            else:
                 latest_tiles[tileid] = (epoch, f)
-        else:
-            latest_tiles[tileid] = (epoch, f)
+    else:
+        for f in tile_files:
+            tileid = int((basename(f).split('.')[0]).split('_')[1])
+            latest_tiles[tileid] = (0, f)
     log.info("Identified %d tile files for loading.", len(latest_tiles))
     #
     # Read the identified tile files.
