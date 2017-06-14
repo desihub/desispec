@@ -382,7 +382,7 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     """
-    from os.path import join
+    from os.path import basename, dirname, join
     from re import compile
     from glob import glob
     from astropy.io import fits
@@ -400,7 +400,7 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
     # Read the identified zbest files.
     #
     for f in zbest_files:
-        brickname = os.path.basename(os.path.dirname(f))
+        brickname = basename(dirname(f))
         with fits.open(f) as hdulist:
             data = hdulist[1].data
         log.info("Read data from %s.", f)
