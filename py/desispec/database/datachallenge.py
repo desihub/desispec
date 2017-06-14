@@ -320,7 +320,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
     log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
         for col in expand:
-            i = colnames.index(col)
+            i = data_names.index(col.lower())
             if isinstance(expand[col], str):
                 #
                 # Just rename a column.
