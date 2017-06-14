@@ -447,7 +447,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     latest_epoch : :class:`bool`, optional
         If set, search for the latest tile file among several epochs.
     """
-    from os.path import join
+    from os.path import basename, join
     from re import compile
     from glob import glob
     from astropy.io import fits
