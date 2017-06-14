@@ -417,6 +417,7 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
         except IntegrityError as e:
             log.error("Integrity Error detected!")
             log.error(e)
+            dbSession.rollback()
         else:
             log.info("Inserted %d rows in %s for brick = %s.",
                      n_rows, ZCat.__tablename__, brickname)
