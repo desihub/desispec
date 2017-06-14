@@ -297,10 +297,17 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
             data = hdulist[1].data
     elif filepath.endswith('.ecsv'):
         data = Table.read(filepath, format='ascii.ecsv')
+    else:
+        log.error("Unrecognized data file, %s!", filepath)
+        return
     if maxrows == 0:
         maxrows = len(data)
     log.info("Read data from %s.", filepath)
-    for col in data.names:
+    try:
+        colnames = data.names
+    except AttributeError:
+        colnames = data.colnames
+    for col in colnames:
         if data[col].dtype.kind == 'f':
             bad = np.isnan(data[col][0:maxrows])
             if np.any(bad):
@@ -308,8 +315,8 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
                 log.warning("%d rows of bad data detected in column " +
                             "%s of %s.", nbad, col, filepath)
     log.info("Integrity check complete on %s.", tn)
-    data_list = [data[col][0:maxrows].tolist() for col in data.names]
-    data_names = [col.lower() for col in data.names]
+    data_list = [data[col][0:maxrows].tolist() for col in colnames]
+    data_names = [col.lower() for col in colnames]
     log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
         for col in expand:
@@ -317,16 +324,18 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
                 #
                 # Just rename a column.
                 #
-                data_names[data.names.index(col)] = expand[col]
+                log.debug("Renaming column %s to %s.", colnames.index(col), expan[col])
+                data_names[colnames.index(col)] = expand[col]
             else:
                 #
                 # Assume this is an expansion of an array-valued column
                 # into individual columns.
                 #
-                i = data.names.index(col)
+                i = colnames.index(col)
                 del data_names[i]
                 del data_list[i]
                 for j, n in enumerate(expand[col]):
+                    log.debug("Expanding column %d of %s to %s.", j, col, n)
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
     log.info("Column expansion complete on %s.", tn)
