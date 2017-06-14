@@ -1,5 +1,12 @@
 #!/usr/bin/env python
+#
 # See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Re-group spectral data from cframe files into healpix indexed groups.
+"""
 
 from desispec.parallel import use_mpi
 
@@ -10,10 +17,9 @@ if use_mpi:
 else:
     print("mpi4py not found, using only one process")
 
-import desispec.scripts.zfind as zfind
-
+import desispec.scripts.group_spectra as group_spectra
 
 if __name__ == '__main__':
-    args = zfind.parse()
-    zfind.main(args, comm=comm)
+    args = group_spectra.parse()
+    group_spectra.main(args, comm=comm)
 

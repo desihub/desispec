@@ -39,7 +39,7 @@ class TestExtract(unittest.TestCase):
         mask = np.zeros(pix.shape, dtype=np.uint32)
         mask[200] = 1
         img = desispec.image.Image(pix, ivar, mask, camera='z0')
-        desispec.io.write_image(cls.imgfile, img)
+        desispec.io.write_image(cls.imgfile, img, meta=dict(flavor='science'))
 
         fibermap = desispec.io.empty_fibermap(100)
         desispec.io.write_fibermap(cls.fibermapfile, fibermap)

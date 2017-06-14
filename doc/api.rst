@@ -13,9 +13,6 @@ Full desispec API Reference
 .. automodule:: desispec.boxcar
     :members:
 
-.. automodule:: desispec.brick
-    :members:
-
 .. automodule:: desispec.coaddition
     :members:
 

@@ -27,7 +27,7 @@ import numpy as np
 from desiutil.log import get_logger
 from .. import io
 from ..parallel import (dist_uniform, dist_discrete,
-    stdouterr_redirected)
+    stdouterr_redirected, use_mpi)
 
 from .common import *
 from .graph import *
@@ -151,16 +151,16 @@ def run_step(step, grph, opts, comm=None):
                 group_ntask = 0
         else:
             if step == "zfind":
-                # We load balance the bricks across process groups based
-                # on the number of targets per brick.  All bricks with
+                # We load balance the spectra across process groups based
+                # on the number of targets per group.  All groups with
                 # < taskproc targets are weighted the same.
 
                 if ntask <= ngroup:
                     # distribute uniform in this case
                     group_firsttask, group_ntask = dist_uniform(ntask, ngroup, group)
                 else:
-                    bricksizes = [ grph[x]["ntarget"] for x in tasks ]
-                    worksizes = [ taskproc if (x < taskproc) else x for x in bricksizes ]
+                    spectrasizes = [ grph[x]["ntarget"] for x in tasks ]
+                    worksizes = [ taskproc if (x < taskproc) else x for x in spectrasizes ]
 
                     if rank == 0:
                         log.debug("zfind {} groups".format(ngroup))
@@ -335,14 +335,14 @@ def retry_task(failpath, newopts=None):
     rank = 0
     nworld = 1
 
-    if nproc > 1:
+    if use_mpi and (nproc > 1):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         nworld = comm.size
         rank = comm.rank
-        if nworld != nproc:
-            if rank == 0:
-                log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
+    if nworld != nproc:
+        if rank == 0:
+            log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
 
     opts = origopts
     if newopts is not None:
@@ -417,9 +417,10 @@ def run_steps(first, last, spectrographs=None, nightstr=None, comm=None):
     will be propagated as a failed task to all processes.
 
     Args:
-        step (str): the pipeline step to process.
-        grph (dict): the dependency graph.
-        opts (dict): the global options.
+        first (str): the first pipeline step to run.
+        last (str): the last pipeline step to run.
+        spectrogrphs (str): comma-separated list of spectrographs to use.
+        nightstr (str): comma-separated list of regex patterns.
         comm (mpi4py.Comm): the full communicator to use for whole step.
 
     Returns:
