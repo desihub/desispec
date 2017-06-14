@@ -480,7 +480,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
                 latest_tiles[tileid] = (epoch, f)
     else:
         for f in tile_files:
-            tileid = int((os.path.basename(f).split('.')[0]).split('_')[1])
+            tileid = int((basename(f).split('.')[0]).split('_')[1])
             latest_tiles[tileid] = (0, f)
     log.info("Identified %d tile files for loading.", len(latest_tiles))
     #
