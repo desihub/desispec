@@ -74,33 +74,24 @@ class TestParallel(unittest.TestCase):
             assert(w[1] == self.taskcheck)
             off += self.taskcheck
 
-    # FIXME: this test attempts to load mpi4py, which is not
-    # possible on a NERSC login node.  Comment this test out
-    # until we have some way of separating tests that require
-    # MPI from those that do not.
 
-    # def test_turns(self):
+    def test_turns(self):
 
-    #     def fake_func(prefix, rank):
-    #         return "{}_{}".format(prefix, rank)
+        def fake_func(prefix, rank):
+            return "{}_{}".format(prefix, rank)
 
-    #     comm = None
-    #     nproc = 1
-    #     rank = 0
-    #     try:
-    #         import mpi4py.MPI as MPI
-    #         comm = MPI.COMM_WORLD
-    #         nproc = comm.size
-    #         rank = comm.rank
-    #     except ImportError:
-    #         pass
+        comm = None
+        nproc = 1
+        rank = 0
+        if use_mpi:
+            import mpi4py.MPI as MPI
+            comm = MPI.COMM_WORLD
+            nproc = comm.size
+            rank = comm.rank
 
-    #     ret = take_turns(comm, 2, fake_func, "turns", rank)
+        ret = take_turns(comm, 2, fake_func, "turns", rank)
 
-    #     assert(ret == "turns_{}".format(rank))
-
-
-
+        assert(ret == "turns_{}".format(rank))
 
 
 #- This runs all test* functions in any TestCase class in this file
