@@ -324,7 +324,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
                 #
                 # Just rename a column.
                 #
-                log.debug("Renaming column %s to %s.", colnames.index(col), expan[col])
+                log.debug("Renaming column %s to %s.", colnames.index(col), expand[col])
                 data_names[colnames.index(col)] = expand[col]
             else:
                 #
@@ -335,7 +335,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
                 del data_names[i]
                 del data_list[i]
                 for j, n in enumerate(expand[col]):
-                    log.debug("Expanding column %d of %s to %s.", j, col, n)
+                    log.debug("Expanding column %d of %s (at index %d) to %s.", j, col, i, n)
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
     log.info("Column expansion complete on %s.", tn)
