@@ -320,24 +320,25 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
     log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
         for col in expand:
+            i = colnames.index(col)
             if isinstance(expand[col], str):
                 #
                 # Just rename a column.
                 #
-                log.debug("Renaming column %s to %s.", colnames.index(col), expand[col])
-                data_names[colnames.index(col)] = expand[col]
+                log.debug("Renaming column %s (at index %d) to %s.", data_names[i], i, expand[col])
+                data_names[i] = expand[col]
             else:
                 #
                 # Assume this is an expansion of an array-valued column
                 # into individual columns.
                 #
-                i = colnames.index(col)
                 del data_names[i]
                 del data_list[i]
                 for j, n in enumerate(expand[col]):
                     log.debug("Expanding column %d of %s (at index %d) to %s.", j, col, i, n)
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
+                log.debug(data_names)
     log.info("Column expansion complete on %s.", tn)
     del data
     if convert is not None:
