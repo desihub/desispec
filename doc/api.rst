@@ -19,6 +19,21 @@ Full desispec API Reference
 .. automodule:: desispec.cosmics
     :members:
 
+.. automodule:: desispec.database
+    :members:
+
+.. automodule:: desispec.database.datachallenge
+    :members:
+
+.. automodule:: desispec.database.metadata
+    :members:
+
+.. automodule:: desispec.database.spectra
+    :members:
+
+.. automodule:: desispec.database.util
+    :members:
+
 .. automodule:: desispec.fiberflat
     :members:
 
@@ -38,9 +53,6 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.io.brick
-    :members:
-
-.. automodule:: desispec.io.database
     :members:
 
 .. automodule:: desispec.io.download
@@ -151,6 +163,12 @@ Full desispec API Reference
 .. automodule:: desispec.quicklook
     :members:
 
+.. automodule:: desispec.quicklook.arcprocess
+    :members:
+
+.. automodule:: desispec.quicklook.palib
+    :members:
+
 .. automodule:: desispec.quicklook.pas
     :members:
 
@@ -179,6 +197,9 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.quicklook.quicksky
+    :members:
+
+.. automodule:: desispec.quicklook.util
     :members:
 
 .. automodule:: desispec.resolution

@@ -5,6 +5,8 @@ desispec Change Log
 0.14.1 (unreleased)
 -------------------
 
+* Refactor database subpackage and enable loading of both quicksurvey and
+  pipeline outputs (PR `#400`_).
 * Clean up pipeline script naming to be grouped by night.
 * Modify pipeline to use Spectra objects grouped by HEALPix pixels instead
   of bricks.  Add entry point to regroup cframe data by pixel (PR `#394`_).
@@ -33,6 +35,7 @@ desispec Change Log
 .. _`#390`: https://github.com/desihub/desispec/pull/390
 .. _`#392`: https://github.com/desihub/desispec/pull/392
 .. _`#394`: https://github.com/desihub/desispec/pull/394
+.. _`#400`: https://github.com/desihub/desispec/pull/400
 
 0.14.0 (2017-04-13)
 -------------------
