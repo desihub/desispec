@@ -2,7 +2,7 @@
 desispec Change Log
 ===================
 
-0.14.1 (unreleased)
+0.15.0 (2017-06-15)
 -------------------
 
 * Refactor database subpackage and enable loading of both quicksurvey and
