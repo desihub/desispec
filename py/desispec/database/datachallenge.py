@@ -220,7 +220,7 @@ class ZCat(SchemaMixin, Base):
     def __repr__(self):
         return ("<ZCat(chi2={0.chi2:f}, " +
                 "z={0.z:f}, zerr={0.zerr:f}, zwarn={0.zwarn:d}, " +
-                "spectype='{0.spectype}', subtype='{0.subtype}'" +
+                "spectype='{0.spectype}', subtype='{0.subtype}', " +
                 "targetid={0.targetid:d}, " +
                 "deltachi2={0.deltachi2:f}, " +
                 "brickname='{0.brickname}', " +
@@ -371,7 +371,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
     return
 
 
-def load_zcat(datapath, run1d='dc17a1', q3c=False):
+def load_zcat(datapath, run1d='dc17a2', q3c=False):
     """Load zbest files into the zcat table.
 
     Parameters
@@ -406,7 +406,15 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
             data = hdulist[1].data
         log.info("Read data from %s.", f)
         n_rows = len(data)
-        data_list = ([data[col].tolist() for col in data.names if col != 'COEFF'])
+        good_targetids = data['TARGETID'] != 0
+        q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'])).all()
+        if len(q) != 0:
+            log.warning("Duplicate TARGETID found in %s.", f)
+            for z in q:
+                log.warning("Duplicate TARGETID = %d.", z.targetid)
+                good_targetids = good_targetids & (data['TARGETID'] != z.targetid)
+        data_list = [data[col][good_targetids].tolist()
+                     for col in data.names if col != 'COEFF']
         data_names = [col.lower() for col in data.names if col != 'COEFF']
         log.info("Initial column conversion complete on brick = %s.", brickname)
         data_rows = list(zip(*data_list))
