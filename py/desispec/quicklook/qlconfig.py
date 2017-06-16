@@ -15,8 +15,10 @@ class Config(object):
     def __init__(self, configfile, night, camera, expid, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False):
         """
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
-        palist: Palist object. See class Palist below
-        wavelengths: extraction wavelegth format in "5630,7740,0.5"
+        night: night for the data to process, eg.'20191015'
+        camera: which camera to process eg 'r0'
+        expid: exposure id for the image to be processed 
+        amps: for outputing amps level QA
         Note:
         rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
         """  
@@ -151,8 +153,7 @@ class Config(object):
     def dump_qa(self): 
         """ 
         yaml outputfile for the set of qas for a given pa
-
-        File naming set by pa names, we don't have a io for these. Where to write them? desispec.io.findfile?
+        Name and default locations of files are handled by desispec.io.meta.findfile
         """
 
         #- both PA level and QA level outputs
@@ -271,7 +272,7 @@ class Config(object):
             filetype=filemap[qaname]+'_file'
             figtype=filemap[qaname]+'_fig'
         else:
-            raise IOError("QA name does not match any file type. Check QA name in config")
+            raise IOError("QA name does not match any file type. Check QA name in config for {}".format(qaname))
 
         outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 

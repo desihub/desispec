@@ -77,14 +77,14 @@ def get_resolution(wave,nspec,psf,usesigma=False):
     """
     Calculates approximate resolution values at given wavelengths in the format that can directly
     feed resolution data of desispec.frame.Frame object. 
-    
-    uses wsigma from psf file, if usexsigma is true, uses xsigma values (constant resolution per fiber), otherwise resolation data is zeros 
 
     wave: wavelength array
     nsepc: no of spectra (int)
     psf: desispec.psf.PSF like object
+    usesigma: allows to use sigma from psf file for resolution computation. If psf file is psfboot, uses per fiber
+              xsigma. If psf file is from QL arcs processing, uses wsigma 
 
-    returns : resolution data (nspec,21,nwave)
+    returns : resolution data (nspec,nband,nwave); nband = 1 for usesigma = False, otherwise nband=21
     """
     from desispec.resolution import Resolution
 
