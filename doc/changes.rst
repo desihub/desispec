@@ -5,7 +5,9 @@ desispec Change Log
 0.15.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Load redshift catalog data from healpix-based zbest files (PR `#402`_).
+
+.. _`#402`: https://github.com/desihub/desispec/pull/402
 
 0.15.0 (2017-06-15)
 -------------------
