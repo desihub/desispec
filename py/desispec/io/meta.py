@@ -74,7 +74,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     if nside is not None:
         hpix = int(groupname)
         hpixdir = healpix_subdirectory(nside, hpix)
-        location["spectra"] = '{specprod_dir}/spectra/{hpixdir}/spectra-{nside}-{groupname}.fits'
+        location["spectra"] = '{specprod_dir}/spectra-{nside}/{hpixdir}/spectra-{nside}-{groupname}.fits'
         location["coadd"] = '{specprod_dir}/spectra/{hpixdir}/coadd-{nside}-{groupname}.fits'
         location["zbest"] = '{specprod_dir}/spectra/{hpixdir}/zbest-{nside}-{groupname}.fits'
         #location["zspec"] = '{specprod_dir}/spectra/{hpixdir}/zspec-{nside}-{hpix}.fits'

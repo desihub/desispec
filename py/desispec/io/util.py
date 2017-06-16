@@ -222,7 +222,14 @@ def healpix_subdirectory(nside, pixel):
         directories.
 
     """
-    subnside, subpixel = healpix_degrade_fixed(nside, pixel)
-    return os.path.join("{}-{}".format(subnside, subpixel), 
-        "{}-{}".format(nside, pixel))
+    subdir = str(pixel//100)
+    pixdir = str(pixel)
+    return os.path.join(subdir, pixdir)
+
+    #- Note: currently nside isn't used, but if we did want to do a strict
+    #- superpix grouping, we would need to know nside and do something like:
+
+    # subnside, subpixel = healpix_degrade_fixed(nside, pixel)
+    # return os.path.join("{}-{}".format(subnside, subpixel),
+    #     "{}-{}".format(nside, pixel))
 
