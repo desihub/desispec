@@ -94,7 +94,7 @@ def main(args, comm=None) :
         for channel in ('b', 'r', 'z'):
             filename = None
             if (comm is None) or (comm.rank == 0):
-                filename = io.findfile('brick', band=channel, brickname=args.brick,
+                filename = io.findfile('brick', band=channel, groupname=args.brick,
                                         specprod_dir=args.specprod_dir)
             if comm is not None:
                 filename = comm.bcast(filename, root=0)
@@ -367,7 +367,7 @@ def main(args, comm=None) :
 
         #- Write some output
         if args.outfile is None:
-            args.outfile = io.findfile('zbest', brickname=args.brick)
+            args.outfile = io.findfile('zbest', groupname=args.brick)
 
         log.info("Writing "+args.outfile)
         #io.write_zbest(args.outfile, args.brick, targetids, zfi, zspec=args.zspec)
