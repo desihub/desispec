@@ -407,7 +407,7 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
         log.info("Read data from %s.", f)
         n_rows = len(data)
         good_targetids = data['TARGETID'] != 0
-        q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'])).all()
+        q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'].tolist())).all()
         if len(q) != 0:
             log.warning("Duplicate TARGETID found in %s.", f)
             for z in q:
