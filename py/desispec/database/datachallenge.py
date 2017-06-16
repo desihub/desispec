@@ -220,7 +220,7 @@ class ZCat(SchemaMixin, Base):
     def __repr__(self):
         return ("<ZCat(chi2={0.chi2:f}, " +
                 "z={0.z:f}, zerr={0.zerr:f}, zwarn={0.zwarn:d}, " +
-                "spectype='{0.spectype}', subtype='{0.subtype}'" +
+                "spectype='{0.spectype}', subtype='{0.subtype}', " +
                 "targetid={0.targetid:d}, " +
                 "deltachi2={0.deltachi2:f}, " +
                 "brickname='{0.brickname}', " +
@@ -371,7 +371,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
     return
 
 
-def load_zcat(datapath, run1d='dc17a1', q3c=False):
+def load_zcat(datapath, run1d='dc17a2', q3c=False):
     """Load zbest files into the zcat table.
 
     Parameters
@@ -389,8 +389,8 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    zbestpath = join(datapath, 'spectro', 'redux', run1d, 'bricks',
-                     '*', 'zbest-*.fits')
+    zbestpath = join(datapath, 'spectro', 'redux', run1d, 'spectra-64',
+                     '*', '*', 'zbest-64-*.fits')
     log.info("Using zbest file search path: %s.", zbestpath)
     zbest_files = glob(zbestpath)
     if len(zbest_files) == 0:
@@ -405,8 +405,15 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
         with fits.open(f) as hdulist:
             data = hdulist[1].data
         log.info("Read data from %s.", f)
-        n_rows = len(data)
-        data_list = ([data[col].tolist() for col in data.names if col != 'COEFF'])
+        good_targetids = data['TARGETID'] != 0
+        q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'].tolist())).all()
+        if len(q) != 0:
+            log.warning("Duplicate TARGETID found in %s.", f)
+            for z in q:
+                log.warning("Duplicate TARGETID = %d.", z.targetid)
+                good_targetids = good_targetids & (data['TARGETID'] != z.targetid)
+        data_list = [data[col][good_targetids].tolist()
+                     for col in data.names if col != 'COEFF']
         data_names = [col.lower() for col in data.names if col != 'COEFF']
         log.info("Initial column conversion complete on brick = %s.", brickname)
         data_rows = list(zip(*data_list))
@@ -420,7 +427,7 @@ def load_zcat(datapath, run1d='dc17a1', q3c=False):
             dbSession.rollback()
         else:
             log.info("Inserted %d rows in %s for brick = %s.",
-                     n_rows, ZCat.__tablename__, brickname)
+                     len(data_rows), ZCat.__tablename__, brickname)
             dbSession.commit()
     if q3c:
         q3c_index('zcat')
@@ -697,7 +704,7 @@ def main():
     q = dbSession.query(ZCat).first()
     if q is None:
         log.info("Loading ZCat from %s.", options.datapath)
-        load_zcat(options.datapath, q3c=postgresql)
+        load_zcat(options.datapath)
         log.info("Finished loading ZCat.")
     else:
         log.info("ZCat table already loaded.")
