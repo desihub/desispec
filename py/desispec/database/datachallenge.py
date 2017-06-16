@@ -405,7 +405,6 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
         with fits.open(f) as hdulist:
             data = hdulist[1].data
         log.info("Read data from %s.", f)
-        n_rows = len(data)
         good_targetids = data['TARGETID'] != 0
         q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'].tolist())).all()
         if len(q) != 0:
@@ -428,7 +427,7 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
             dbSession.rollback()
         else:
             log.info("Inserted %d rows in %s for brick = %s.",
-                     n_rows, ZCat.__tablename__, brickname)
+                     len(data_rows), ZCat.__tablename__, brickname)
             dbSession.commit()
     if q3c:
         q3c_index('zcat')
