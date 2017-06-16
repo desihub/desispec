@@ -389,8 +389,8 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    zbestpath = join(datapath, 'spectro', 'redux', run1d, 'bricks',
-                     '*', 'zbest-*.fits')
+    zbestpath = join(datapath, 'spectro', 'redux', run1d, 'spectra-64',
+                     '*', '*', 'zbest-64-*.fits')
     log.info("Using zbest file search path: %s.", zbestpath)
     zbest_files = glob(zbestpath)
     if len(zbest_files) == 0:
@@ -705,7 +705,7 @@ def main():
     q = dbSession.query(ZCat).first()
     if q is None:
         log.info("Loading ZCat from %s.", options.datapath)
-        load_zcat(options.datapath, q3c=postgresql)
+        load_zcat(options.datapath)
         log.info("Finished loading ZCat.")
     else:
         log.info("ZCat table already loaded.")
