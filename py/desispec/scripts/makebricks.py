@@ -73,7 +73,7 @@ def main(args):
                     brick_key = '{}_{}'.format(band,brick_name)
                     # Open the brick file if this is the first time we are using it.
                     #if brick_key not in bricks:
-                    brick_path = desispec.io.findfile('brick',brickname = brick_name,band = band)
+                    brick_path = desispec.io.findfile('brick',groupname = brick_name,band = band)
                     header = dict(BRICKNAM=(brick_name, 'Imaging brick name'),
                                       CHANNEL=(band, 'Spectrograph channel [b,r,z]'), )
                     brick = desispec.io.brick.Brick(brick_path,mode = 'update',header = header)

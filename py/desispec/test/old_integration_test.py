@@ -267,7 +267,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     bricks = set(fibermap['BRICKNAME'])
     for b in bricks:
         for channel in ['b', 'r', 'z']:
-            outputs.append( io.findfile('brick', brickname=b, band=channel))
+            outputs.append( io.findfile('brick', groupname=b, band=channel))
 
     cmd = "desi_make_bricks --night "+night
     if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
@@ -276,8 +276,8 @@ def integration_test(night=None, nspec=5, clobber=False):
     #-----
     #- Redshifts!
     for b in bricks:
-        inputs = [io.findfile('brick', brickname=b, band=channel) for channel in ['b', 'r', 'z']]
-        zbestfile = io.findfile('zbest', brickname=b)
+        inputs = [io.findfile('brick', groupname=b, band=channel) for channel in ['b', 'r', 'z']]
+        zbestfile = io.findfile('zbest', groupname=b)
         outputs = [zbestfile, ]
         cmd = "desi_zfind --brick {} -o {}".format(b, zbestfile)
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
@@ -304,7 +304,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Brick     True  z        ->  Class  z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for b in bricks:
-        zbest = io.read_zbest(io.findfile('zbest', brickname=b))
+        zbest = io.read_zbest(io.findfile('zbest', groupname=b))
         for i in range(len(zbest.z)):
             if zbest.spectype[i] == 'ssp_em_galaxy':
                 objtype = 'GAL'
