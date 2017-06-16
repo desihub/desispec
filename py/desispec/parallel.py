@@ -50,6 +50,20 @@ else:
     import multiprocessing as _mp
     default_nproc = max(1, _mp.cpu_count() // 2)
 
+# MPI environment availability
+
+use_mpi = None
+"""Whether we should use MPI.  Set globally on first import."""
+
+if ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ):
+    use_mpi = False
+else:
+    use_mpi = True
+    try:
+        import mpi4py.MPI as MPI
+    except ImportError:
+        use_mpi = False
+
 
 # Functions for static distribution
 

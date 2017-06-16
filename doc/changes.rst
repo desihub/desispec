@@ -2,9 +2,21 @@
 desispec Change Log
 ===================
 
-0.14.1 (unreleased)
+0.15.1 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.15.0 (2017-06-15)
+-------------------
+
+* Refactor database subpackage and enable loading of both quicksurvey and
+  pipeline outputs (PR `#400`_).
+* Clean up pipeline script naming to be grouped by night.
+* Modify pipeline to use Spectra objects grouped by HEALPix pixels instead
+  of bricks.  Add entry point to regroup cframe data by pixel (PR `#394`_).
+* Add a new class, Spectra, which encapsulates a grouping of 1D spectra
+  in one or more bands.  Includes selection, updating, and I/O.
 * Removed ``desispec.brick`` as it's now in :mod:`desiutil.brick` (PR `#392`_).
 * Added function to calculate brick vertices at a given location (PR `#388`_).
 * Added function to calculate brick areas at a given location (PR `#384`_).
@@ -27,6 +39,8 @@ desispec Change Log
 .. _`#379`: https://github.com/desihub/desispec/pull/379
 .. _`#390`: https://github.com/desihub/desispec/pull/390
 .. _`#392`: https://github.com/desihub/desispec/pull/392
+.. _`#394`: https://github.com/desihub/desispec/pull/394
+.. _`#400`: https://github.com/desihub/desispec/pull/400
 
 0.14.0 (2017-04-13)
 -------------------

@@ -181,7 +181,7 @@ def read_spectra(infile, single=False):
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
             if mat is None:
-                raise RuntimeError("FITS extension name {} does not contain the band")
+                raise RuntimeError("FITS extension name {} does not contain the band".format(name))
             band = mat.group(1).lower()
             type = mat.group(2)
             if band not in bands:

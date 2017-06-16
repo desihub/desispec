@@ -170,19 +170,15 @@ def integration_test(night=None, nspec=5, clobber=False):
     # com = os.path.join(proddir, "run", "scripts", "psfcombine_all.sh")
     # sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "extract_all.sh")
-    print("Running extraction script "+com)
+    com = os.path.join(proddir, "run", "scripts", "run_shell.sh")
+    print("Running extraction through calibration: "+com)
     sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "fiberflat-calibrate_all.sh")
-    print("Running calibration script "+com)
+    com = os.path.join(proddir, "run", "scripts", "spectra.sh")
+    print("Running spectral regrouping: "+com)
     sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "bricks.sh")
-    print("Running makebricks script "+com)
-    sp.check_call(["bash", com])
-
-    com = os.path.join(proddir, "run", "scripts", "redshift_all.sh")
+    com = os.path.join(proddir, "run", "scripts", "redshift.sh")
     print("Running redshift script "+com)
     sp.check_call(["bash", com])
 
