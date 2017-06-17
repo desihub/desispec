@@ -225,3 +225,26 @@ def write_qa_prod(outroot, qaprod):
     log.info('Wrote QA_Prod file: {:s}'.format(outfile))
 
     return outfile
+
+
+def write_qa_ql(outfile, qaresult):
+    """Write QL output files
+
+       Args:
+           outfile : str
+             filename to be written (yaml)
+           qaresult : dict
+             QAresults from run_qa()
+
+       Returns:
+           outfile : str
+    """
+    import yaml
+    from desiutil.io import yamlify
+    # Take in QL input and output to yaml
+    qadict = yamlify(qaresult)
+    f=open(outfile,"w")
+    f.write(yaml.dump(qadict))
+    return outfile
+
+

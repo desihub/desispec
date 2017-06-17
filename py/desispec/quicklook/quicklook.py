@@ -9,6 +9,7 @@ import importlib
 import yaml
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
+from desiutil.io import yamlify
 
 def testconfig(outfilename="qlconfig.yaml"):
     """
@@ -250,7 +251,6 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             should always be True, but leaving as option, until configuration and IO settles.
     """
 
-
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
     hb=QLHB.QLHeartbeat(log,conf["Period"],conf["Timeout"])
@@ -297,11 +297,10 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             except Exception as e:
                 log.warning("Failed to run QA {} error was {}".format(qa.name,e))
         if len(qaresult):
-            #- TODO - This dump of QAs for each PA should be reorganised. Dumping everything now. 
-            f = open(paconf[s]["OutputFile"],"w")
-            yaml.dump(qaresult,f)
-            hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
-            f.close()
+            if conf["DumpIntermediates"]:
+                f = open(paconf[s]["OutputFile"],"w")
+                f.write(yaml.dump(yamlify(qaresult)))
+                hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
         else:
             hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
         QAresults.append([pa.name,qaresult])
