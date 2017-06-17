@@ -266,7 +266,7 @@ def main(args, comm=None):
                     fdata = Spectra()
             # Get the targets that hit this pixel.
             targets = []
-            fmap = fdata.fmap
+            fmap = fdata.fibermap
             ra = np.array(fmap["RA_TARGET"], dtype=np.float64)
             dec = np.array(fmap["DEC_TARGET"], dtype=np.float64)
             bad = np.where(fmap["TARGETID"] < 0)[0]

@@ -469,14 +469,14 @@ class Spectra(object):
 
         # Compute which targets / exposures are new
 
-        nother = len(other.fmap)
+        nother = len(other.fibermap)
         exists = np.zeros(nother, dtype=np.int)
 
         indx_original = []
 
         for r in range(nother):
-            expid = other.fmap[r]["EXPID"]
-            fiber = other.fmap[r]["FIBER"]
+            expid = other.fibermap[r]["EXPID"]
+            fiber = other.fibermap[r]["FIBER"]
             for i, row in enumerate(self.fibermap):
                 if (expid == row["EXPID"]) and (fiber == row["FIBER"]):
                     indx_original.append(i)
@@ -577,7 +577,7 @@ class Spectra(object):
         # Append new spectra
 
         if nnew > 0:
-            newfmap[nold:] = other.fmap[indx_new]
+            newfmap[nold:] = other.fibermap[indx_new]
 
             for b in other.bands:
                 newflux[b][nold:,:] = other.flux[b][indx_new].astype(self._ftype)
