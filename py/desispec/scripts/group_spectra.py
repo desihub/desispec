@@ -17,6 +17,7 @@ import numpy as np
 import healpy as hp
 
 from desiutil.log import get_logger
+import desimodel.footprint
 
 from .. import io as io
 
@@ -124,8 +125,10 @@ def main(args, comm=None):
                             bad = np.where(fmdata["TARGETID"] < 0)[0]
                             ra[bad] = 0.0
                             dec[bad] = 0.0
-                            pix = hp.ang2pix(args.hpxnside, ra, dec, nest=True,
-                                lonlat=True)
+                            # pix = hp.ang2pix(args.hpxnside, ra, dec, nest=True,
+                            #     lonlat=True)
+                            pix = desimodel.footprint.radec2pix(
+                                                args.hpxnside, ra, dec)
                             pix[bad] = -1
                             for p in pix:
                                 if p >= 0:
@@ -269,7 +272,8 @@ def main(args, comm=None):
             bad = np.where(fmap["TARGETID"] < 0)[0]
             ra[bad] = 0.0
             dec[bad] = 0.0
-            pix = hp.ang2pix(nside, ra, dec, nest=True, lonlat=True)
+            # pix = hp.ang2pix(nside, ra, dec, nest=True, lonlat=True)
+            pix = desimodel.footprint.radec2pix(nside, ra, dec)
             pix[bad] = -1
 
             for fm in zip(fmap["TARGETID"], pix):

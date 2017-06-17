@@ -24,6 +24,7 @@ import healpy as hp
 
 from .. import io
 from desiutil.log import get_logger
+import desimodel.footprint
 
 from .common import *
 from .graph import *
@@ -282,7 +283,8 @@ def graph_night(rawnight, specs, fakepix, hpxnside=64):
             bad = np.where(fmdata["TARGETID"] < 0)[0]
             ra[bad] = 0.0
             dec[bad] = 0.0
-            pix = hp.ang2pix(hpxnside, ra, dec, nest=True, lonlat=True)
+            # pix = hp.ang2pix(hpxnside, ra, dec, nest=True, lonlat=True)
+            pix = desimodel.footprint.radec2pix(hpxnside, ra, dec)
             pix[bad] = -1
             for fm in zip(fmdata["SPECTROID"], pix):
                 if fm[1] >= 0:
