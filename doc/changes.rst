@@ -5,7 +5,7 @@ desispec Change Log
 0.15.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Update desispec.io.findfile spectra path to match dc17a
 
 0.15.0 (2017-06-15)
 -------------------
