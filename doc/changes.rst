@@ -5,7 +5,11 @@ desispec Change Log
 0.15.1 (unreleased)
 -------------------
 
-* Update desispec.io.findfile spectra path to match dc17a
+* Update desispec.io.findfile spectra path to match dc17a (PR `#404`_).
+* Load redshift catalog data from healpix-based zbest files (PR `#402`_).
+
+.. _`#402`: https://github.com/desihub/desispec/pull/402
+.. _`#404`: https://github.com/desihub/desispec/pull/404
 
 0.15.0 (2017-06-15)
 -------------------
