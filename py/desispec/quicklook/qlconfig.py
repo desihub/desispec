@@ -9,7 +9,8 @@ log=qlog.getlog()
 
 class Config(object):
     """ 
-    A class to generate Quicklook configurations for a given desi exposure. expand_config will expand out to full format as needed by quicklook.setup
+    A class to generate Quicklook configurations for a given desi exposure. 
+    expand_config will expand out to full format as needed by quicklook.setup
     """
 
     def __init__(self, configfile, night, camera, expid, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False):
