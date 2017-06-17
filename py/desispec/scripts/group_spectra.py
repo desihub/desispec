@@ -10,12 +10,14 @@ import os
 import argparse
 import time
 import sys
+import re
 
 import numpy as np
 
 import healpy as hp
 
 from desiutil.log import get_logger
+import desimodel.footprint
 
 from .. import io as io
 
@@ -28,11 +30,22 @@ from ..spectra import Spectra
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Update or create spectral group files.")
+    parser = argparse.ArgumentParser(description="Update or create "
+        "spectral group files.")
 
-    parser.add_argument("--nights", required=False, default=None, help="comma separated (YYYYMMDD) or regex pattern")
+    parser.add_argument("--nights", required=False, default=None,
+        help="comma separated (YYYYMMDD) or regex pattern")
 
-    parser.add_argument("--cache", required=False, default=False, action="store_true", help="cache frame data for re-use")
+    parser.add_argument("--cache", required=False, default=False,
+        action="store_true", help="cache frame data for re-use")
+
+    parser.add_argument("--pipeline", required=False, default=False,
+        action="store_true", help="use pipeline planning and DB files "
+        "to obtain dependency information.")
+
+    parser.add_argument("--hpxnside", required=False, type=int, default=64,
+        help="In the case of not using the pipeline info, the HEALPix "
+        "NSIDE value to use.")
 
     args = None
     if options is None:
@@ -65,10 +78,75 @@ def main(args, comm=None):
     # get the full graph and prune out just the objects we need
 
     grph = None
+
     if rank == 0:
-        grph = pipe.load_prod(nightstr=args.nights)
-        sgrph = pipe.graph_slice(grph, types=["spectra"], deps=True)
-        pipe.graph_db_check(sgrph)
+        if not args.pipeline:
+            # We have to rescan all cframe files on the fly...
+            # Put these into a "fake" dependency graph so that we
+            # can treat it the same as a real one later in the code.
+
+            grph = {}
+            proddir = os.path.abspath(io.specprod_root())
+            expdir = os.path.join(proddir, "exposures")
+            specdir = os.path.join(proddir, "spectra")
+
+            allnights = []
+            nightpat = re.compile(r"\d{8}")
+            for root, dirs, files in os.walk(expdir, topdown=True):
+                for d in dirs:
+                    nightmat = nightpat.match(d)
+                    if nightmat is not None:
+                        allnights.append(d)
+                break
+
+            nights = pipe.select_nights(allnights, args.nights)
+
+            for nt in nights:
+                expids = io.get_exposures(nt)
+
+                for ex in expids:
+                    cfiles = io.get_files("cframe", nt, ex)
+
+                    for cam, cf in cfiles.items():
+                        cfname = pipe.graph_name(nt, "cframe-{}-{:08d}".format(cam, ex))
+                        node = {}
+                        node["type"] = "cframe"
+                        grph[cfname] = node
+
+                        cframe = io.read_frame(cf)
+                        fmdata = cframe.fibermap
+
+                        if (cframe.meta["FLAVOR"] != "arc") and \
+                            (cframe.meta["FLAVOR"] != "flat"):
+                            ra = np.array(fmdata["RA_TARGET"],
+                                dtype=np.float64)
+                            dec = np.array(fmdata["DEC_TARGET"],
+                                dtype=np.float64)
+                            bad = np.where(fmdata["TARGETID"] < 0)[0]
+                            ra[bad] = 0.0
+                            dec[bad] = 0.0
+                            # pix = hp.ang2pix(args.hpxnside, ra, dec, nest=True,
+                            #     lonlat=True)
+                            pix = desimodel.footprint.radec2pix(
+                                                args.hpxnside, ra, dec)
+                            pix[bad] = -1
+                            for p in pix:
+                                if p >= 0:
+                                    sname = "spectra-{}-{}".format(args.hpxnside, p)
+                                    if sname not in grph:
+                                        node = {}
+                                        node["type"] = "spectra"
+                                        node["nside"] = args.hpxnside
+                                        node["pixel"] = p
+                                        node["in"] = []
+                                        grph[sname] = node
+                                    grph[sname]["in"].append(cfname)
+
+        else:
+            grph = pipe.load_prod(nightstr=args.nights)
+            sgrph = pipe.graph_slice(grph, types=["spectra"], deps=True)
+            pipe.graph_db_check(sgrph)
+
     if comm is not None:
         grph = comm.bcast(grph, root=0)
 
@@ -194,7 +272,8 @@ def main(args, comm=None):
             bad = np.where(fmap["TARGETID"] < 0)[0]
             ra[bad] = 0.0
             dec[bad] = 0.0
-            pix = hp.ang2pix(nside, ra, dec, nest=True, lonlat=True)
+            # pix = hp.ang2pix(nside, ra, dec, nest=True, lonlat=True)
+            pix = desimodel.footprint.radec2pix(nside, ra, dec)
             pix[bad] = -1
 
             for fm in zip(fmap["TARGETID"], pix):

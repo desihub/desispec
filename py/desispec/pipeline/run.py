@@ -540,7 +540,7 @@ def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1, threads
     return
 
 
-def nersc_job(path, logroot, desisetup, commands, nodes=1, \
+def nersc_job(host, path, logroot, desisetup, commands, nodes=1, \
     nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
     queue="debug", jobname="desipipe"):
     hours = int(minutes/60)
@@ -561,6 +561,10 @@ def nersc_job(path, logroot, desisetup, commands, nodes=1, \
             f.write("#SBATCH --partition=debug\n")
         else:
             f.write("#SBATCH --partition=regular\n")
+        if host == "cori":
+            f.write("#SBATCH --constraint=haswell\n")
+        elif host == "coriknl":
+            f.write("#SBATCH --constraint=knl,quad,cache\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
@@ -624,7 +628,7 @@ def nersc_job(path, logroot, desisetup, commands, nodes=1, \
     return
 
 
-def nersc_shifter_job(path, img, specdata, specredux, desiroot, logroot, desisetup, commands, nodes=1, \
+def nersc_shifter_job(host, path, img, specdata, specredux, desiroot, logroot, desisetup, commands, nodes=1, \
     nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
     queue="debug", jobname="desipipe"):
 
@@ -647,6 +651,10 @@ def nersc_shifter_job(path, img, specdata, specredux, desiroot, logroot, desiset
             f.write("#SBATCH --partition=debug\n")
         else:
             f.write("#SBATCH --partition=regular\n")
+        if host == "cori":
+            f.write("#SBATCH --constraint=haswell\n")
+        elif host == "coriknl":
+            f.write("#SBATCH --constraint=knl,quad,cache\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))

@@ -24,6 +24,7 @@ import healpy as hp
 
 from .. import io
 from desiutil.log import get_logger
+import desimodel.footprint
 
 from .common import *
 from .graph import *
@@ -117,7 +118,7 @@ def create_prod(nightstr=None, extra={}, specs=None, fakepix=False, hpxnside=64)
     if not os.path.isdir(expdir):
         os.makedirs(expdir)
 
-    specdir = os.path.join(proddir, "spectra")
+    specdir = os.path.join(proddir, "spectra-{}".format(hpxnside))
     if not os.path.isdir(specdir):
         os.makedirs(specdir)
 
@@ -282,7 +283,8 @@ def graph_night(rawnight, specs, fakepix, hpxnside=64):
             bad = np.where(fmdata["TARGETID"] < 0)[0]
             ra[bad] = 0.0
             dec[bad] = 0.0
-            pix = hp.ang2pix(hpxnside, ra, dec, nest=True, lonlat=True)
+            # pix = hp.ang2pix(hpxnside, ra, dec, nest=True, lonlat=True)
+            pix = desimodel.footprint.radec2pix(hpxnside, ra, dec)
             pix[bad] = -1
             for fm in zip(fmdata["SPECTROID"], pix):
                 if fm[1] >= 0:
@@ -487,8 +489,29 @@ def graph_night(rawnight, specs, fakepix, hpxnside=64):
             flatexpid[cam] = []
         flatexpid[cam].append(id)
 
-    # To compute the sky file, we use the "most recent fiberflat" that came
-    # before the current exposure.
+    # This is a small helper function to return the "most recent fiberflat"
+    # that came before the current exposure.
+
+    def last_flat(cam, expid):
+        flatid = None
+        flatname = None
+        if cam in flatexpid:
+            for fid in sorted(flatexpid[cam]):
+                if (flatid is None):
+                    flatid = fid
+                elif (fid > flatid) and (fid < id):
+                    flatid = fid
+        if flatid is not None:
+            flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band,
+                spec, fid))
+        else:
+            # This means we don't have any flats for this night.
+            # Probably this is because we are going to inject
+            # already-calibrated simulation data into the production.
+            # If this was really a mistake, then it will be caught
+            # at runtime when the sky step fails.
+            pass
+        return flatid, flatname
 
     #- cache current graph items so we can update graph as we go
     current_items = list(grph.items())
@@ -501,24 +524,20 @@ def graph_night(rawnight, specs, fakepix, hpxnside=64):
         spec = nd["spec"]
         id = nd["id"]
         cam = "{}{}".format(band, spec)
-        flatid = None
-        for fid in sorted(flatexpid[cam]):
-            if (flatid is None):
-                flatid = fid
-            elif (fid > flatid) and (fid < id):
-                flatid = fid
+        flatid, flatname = last_flat(cam, id)
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         node = {}
         node["type"] = "sky"
         node["band"] = band
         node["spec"] = spec
         node["id"] = id
-        node["in"] = [name, flatname]
+        node["in"] = [name]
+        if flatname is not None:
+            node["in"].append(flatname)
+            grph[flatname]["out"].append(skyname)
         node["out"] = []
         grph[skyname] = node
         nd["out"].append(skyname)
-        grph[flatname]["out"].append(skyname)
 
     # Construct the standard star files.  These are one per spectrograph,
     # and depend on the frames and the corresponding flats and sky files.
@@ -550,20 +569,13 @@ def graph_night(rawnight, specs, fakepix, hpxnside=64):
             stdgrph[starname] = node
 
         cam = "{}{}".format(band, spec)
-        flatid = None
-        for fid in sorted(flatexpid[cam]):
-            if (flatid is None):
-                flatid = fid
-            elif (fid > flatid) and (fid < id):
-                flatid = fid
-
-        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        flatid, flatname = last_flat(cam, id)
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-
-        stdgrph[starname]["in"].extend([skyname, name, flatname])
-
+        stdgrph[starname]["in"].extend([skyname, name])
+        if flatname is not None:
+            stdgrph[starname]["in"].extend([flatname])
+            grph[flatname]["out"].append(starname)
         nd["out"].append(starname)
-        grph[flatname]["out"].append(starname)
         grph[skyname]["out"].append(starname)
 
     grph.update(stdgrph)
@@ -581,25 +593,21 @@ def graph_night(rawnight, specs, fakepix, hpxnside=64):
         spec = nd["spec"]
         id = nd["id"]
         cam = "{}{}".format(band, spec)
-        flatid = None
-        for fid in sorted(flatexpid[cam]):
-            if (flatid is None):
-                flatid = fid
-            elif (fid > flatid) and (fid < id):
-                flatid = fid
+        flatid, flatname = last_flat(cam, id)
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
         starname = graph_name(rawnight, "stdstars-{}-{:08d}".format(spec, id))
-        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         calname = graph_name(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
         node = {}
         node["type"] = "calib"
         node["band"] = band
         node["spec"] = spec
         node["id"] = id
-        node["in"] = [name, flatname, skyname, starname]
+        node["in"] = [name, skyname, starname]
+        if flatname is not None:
+            node["in"].extend([flatname])
+            grph[flatname]["out"].append(calname)
         node["out"] = []
         grph[calname] = node
-        grph[flatname]["out"].append(calname)
         grph[skyname]["out"].append(calname)
         grph[starname]["out"].append(calname)
         nd["out"].append(calname)
@@ -617,14 +625,8 @@ def graph_night(rawnight, specs, fakepix, hpxnside=64):
         spec = nd["spec"]
         id = nd["id"]
         cam = "{}{}".format(band, spec)
-        flatid = None
-        for fid in sorted(flatexpid[cam]):
-            if (flatid is None):
-                flatid = fid
-            elif (fid > flatid) and (fid < id):
-                flatid = fid
+        flatid, flatname = last_flat(cam, id)
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         calname = graph_name(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
         cfname = graph_name(rawnight, "cframe-{}{}-{:08d}".format(band, spec, id))
         node = {}
@@ -632,10 +634,12 @@ def graph_night(rawnight, specs, fakepix, hpxnside=64):
         node["band"] = band
         node["spec"] = spec
         node["id"] = id
-        node["in"] = [name, flatname, skyname, calname]
+        node["in"] = [name, skyname, calname]
+        if flatname is not None:
+            node["in"].extend([flatname])
+            grph[flatname]["out"].append(cfname)
         node["out"] = []
         grph[cfname] = node
-        grph[flatname]["out"].append(cfname)
         grph[skyname]["out"].append(cfname)
         grph[calname]["out"].append(cfname)
         nd["out"].append(cfname)
