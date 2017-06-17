@@ -13,9 +13,8 @@ import numpy as np
 from desispec import util
 from desispec.resolution import Resolution
 from desispec.coaddition import Spectrum
-# from desiutil.log import get_logger
+from desiutil.log import get_logger
 from desispec import util
-# log = get_logger()
 
 # class Spectrum(object):
 #     def __init__(self, wave, flux, ivar, mask=None, R=None):
@@ -141,6 +140,51 @@ class Frame(object):
 
         if self.meta is not None:
             self.meta['FIBERMIN'] = np.min(self.fibers)
+
+    def vet(self):
+        """ Perform very basic checks on the frame
+        Generally run before writing to disk (or when read)
+        Args:
+            index:
+
+        Returns:
+            diagnosis: int  (bitwise flag)
+              0: Pass
+              2**0: Improper meta data
+              2**1: Improper data shapes
+
+        """
+        # Shapes
+        log = get_logger()
+        bad_shape = False
+        if (self.nspec,self.nwave) != self.flux.shape:
+            log.error('Frame nspec {} nwave {} inconsistent with flux.shape {}'.format(
+                self.nspec, self.nwave, self.flux.shape))
+            bad_shape = True
+
+        # Meta data
+        bad_meta = False
+        if self.meta is None:
+            log.error('Frame.meta missing')
+            bad_meta = True
+        else:
+            from desispec.io.params import read_params
+            # Check flavor
+            if 'FLAVOR' not in self.meta.keys():
+                log.error('Frame.meta missing FLAVOR keyword')
+                bad_meta = True
+            else:
+                desi_params = read_params()
+                if self.meta['FLAVOR'] not in desi_params['frame_types']:
+                    log.error("Frame.meta['FLAVOR'] = '{}' not in {}".format(
+                        self.meta['FLAVOR'], desi_params['frame_types']))
+                    bad_meta = True
+        #if bad_meta:
+        #    import pdb; pdb.set_trace()
+
+        # Generate the flag
+        diagnosis = 0 + 2**0 * bad_shape + 2**1 * bad_meta
+        return diagnosis
 
     def __getitem__(self, index):
         """

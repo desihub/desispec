@@ -118,7 +118,7 @@ class TestIO(unittest.TestCase):
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.random.uniform(size=(nspec, nwave))
-        meta = dict(BLAT=0, FOO='abc', FIBERMIN=500)
+        meta = dict(BLAT=0, FOO='abc', FIBERMIN=500, FLAVOR='science')
         mask_int = np.zeros((nspec, nwave), dtype=int)
         mask_uint = np.zeros((nspec, nwave), dtype=np.uint32)
         wave = np.arange(nwave)
@@ -174,7 +174,7 @@ class TestIO(unittest.TestCase):
         self.assertEqual(frame.fibermap, None)
         fibermap = empty_fibermap(nspec)
         fibermap['TARGETID'] = np.arange(nspec)*2
-        frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap)
+        frx = Frame(wave, flux, ivar, mask, R, fibermap=fibermap, meta=dict(FLAVOR='science'))
         write_frame(self.testfile, frx)
         frame = read_frame(self.testfile)
         for name in fibermap.dtype.names:
@@ -494,7 +494,7 @@ class TestIO(unittest.TestCase):
         flux = np.random.uniform(size=(nspec, nwave))
         ivar = np.ones(flux.shape)
         frame = Frame(wave, flux, ivar, spectrograph=0)
-        frame.meta = dict(CAMERA='b0', FLAVOR='dark', NIGHT='20160607', EXPID=1)
+        frame.meta = dict(CAMERA='b0', FLAVOR='science', NIGHT='20160607', EXPID=1)
         #- Init
         qaframe = QA_Frame(frame)
         qaframe.init_skysub()
@@ -558,13 +558,13 @@ class TestIO(unittest.TestCase):
         the_exception = cm.exception
         self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
-            foo = findfile('brick',brickname='3338p190')
+            foo = findfile('brick',groupname='3338p190')
         the_exception = cm.exception
         self.assertEqual(str(the_exception), "Required input 'band' is not set for type 'brick'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']
-        x = findfile('brick', brickname='0000p123', band='r1')
+        x = findfile('brick', groupname='0000p123', band='r1')
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
             x = findfile('fibermap', night='20150101', expid=123)
@@ -575,7 +575,7 @@ class TestIO(unittest.TestCase):
         x = findfile('fibermap', night='20150101', expid=123)
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
-            x = findfile('brick', brickname='0000p123', band='r1')
+            x = findfile('brick', groupname='0000p123', band='r1')
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
     def test_findfile_outdir(self):

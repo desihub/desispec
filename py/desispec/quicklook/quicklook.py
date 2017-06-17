@@ -7,9 +7,9 @@ import threading,string
 import subprocess
 import importlib
 import yaml
-from desiutil.io import yamlify
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
+from desiutil.io import yamlify
 
 def testconfig(outfilename="qlconfig.yaml"):
     """
@@ -251,7 +251,6 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             should always be True, but leaving as option, until configuration and IO settles.
     """
 
-
     qlog=qllogger.QLLogger("QuickLook",20)
     log=qlog.getlog()
     hb=QLHB.QLHeartbeat(log,conf["Period"],conf["Timeout"])
@@ -302,7 +301,6 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                 f = open(paconf[s]["OutputFile"],"w")
                 f.write(yaml.dump(yamlify(qaresult)))
                 hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
-                f.close()
         else:
             hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
         QAresults.append([pa.name,qaresult])

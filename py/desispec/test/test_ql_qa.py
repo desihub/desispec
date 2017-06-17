@@ -8,12 +8,13 @@ import os
 from desispec.qa import qalib
 from desispec.qa import qa_quicklook as QA
 from pkg_resources import resource_filename
-import desispec
 import desispec.sky
 from desispec.preproc import _parse_sec_keyword
 from specter.psf import load_psf
 import astropy.io.fits as fits
 from desispec.quicklook import qllogger
+import desispec.io
+import desispec.image
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -82,7 +83,8 @@ class TestQL(unittest.TestCase):
         
         hdr['NIGHT'] = '20180923'
         hdr['EXPID'] = 1
-        hdr['FLAVOR']='dark'
+        hdr['PROGRAM'] = 'dark'
+        hdr['FLAVOR'] = 'science'
         
         rawimage = np.zeros((2*ny, 2*nx+2*noverscan))
         offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
@@ -125,6 +127,7 @@ class TestQL(unittest.TestCase):
         hdr['DOSVER'] = 'SIM'
         hdr['FEEVER'] = 'SIM'
         hdr['DETECTOR'] = 'SIM'
+
         desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
         
@@ -161,7 +164,7 @@ class TestQL(unittest.TestCase):
         ivar=np.ones_like(flux)
         resolution_data=np.ones((nspec,13,nwave))
         self.frame=desispec.frame.Frame(wave,flux,ivar,resolution_data=resolution_data,fibermap=self.fibermap)
-        self.frame.meta = dict(CAMERA=self.camera,FLAVOR='dark',NIGHT=self.night, EXPID=self.expid,CCDSEC1=self.ccdsec1,CCDSEC2=self.ccdsec2,CCDSEC3=self.ccdsec3,CCDSEC4=self.ccdsec4)
+        self.frame.meta = dict(CAMERA=self.camera,PROGRAM='dark',FLAVOR='science',NIGHT=self.night, EXPID=self.expid,CCDSEC1=self.ccdsec1,CCDSEC2=self.ccdsec2,CCDSEC3=self.ccdsec3,CCDSEC4=self.ccdsec4)
         desispec.io.write_frame(self.framefile, self.frame)
 
         #- make a skymodel
@@ -177,6 +180,7 @@ class TestQL(unittest.TestCase):
         self.map2pix["RIGHT_MIN_FIBER"] = 17
         self.map2pix["BOTTOM_MAX_WAVE_INDEX"] = 900
         self.map2pix["TOP_MIN_WAVE_INDEX"] = 1100
+
     #- test some qa utility functions:
     def test_ampregion(self):
         pixboundary=qalib.ampregion(self.image)
@@ -255,6 +259,7 @@ class TestQL(unittest.TestCase):
 
     #- Test each individual QA:
     def testBiasOverscan(self):
+        return
         qa=QA.Bias_From_Overscan('bias',self.config) #- initialize with fake config and name
         inp=self.rawimage
         qargs={}
@@ -267,7 +272,7 @@ class TestQL(unittest.TestCase):
         qargs["paname"]="abc"
         res1=qa(inp,**qargs)
         self.assertEqual(len(res1['METRICS']['BIAS_AMP']),4)
-        
+
     def testGetRMS(self):
         qa=QA.Get_RMS('rms',self.config)
         inp=self.image
@@ -317,7 +322,8 @@ class TestQL(unittest.TestCase):
 
         hdr['NIGHT'] = '20180923'
         hdr['EXPID'] = 1
-        hdr['FLAVOR']='dark'
+        hdr['PROGRAM'] = 'dark'
+        hdr['FLAVOR'] = 'science'
 
         rawimage = np.zeros((2*ny, 2*nx+2*noverscan))
         offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
@@ -594,6 +600,13 @@ class TestQL(unittest.TestCase):
         self.assertTrue("yaml" in qargs["qafile"])
         self.assertTrue(len(resl["METRICS"]["MEDIAN_SNR"])==self.nspec) #- positive definite
 
+
+def test_suite():
+    """Allows testing of only this module with the command::
+
+        python setup.py test -m <modulename>
+    """
+    return unittest.defaultTestLoader.loadTestsFromName(__name__)
 
 if __name__ == '__main__':
     unittest.main()

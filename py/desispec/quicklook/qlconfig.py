@@ -9,14 +9,16 @@ log=qlog.getlog()
 
 class Config(object):
     """ 
-    A class to generate Quicklook configurations for a given desi exposure. build_config will call this object to generate a configuration needed by quicklook
+    A class to generate Quicklook configurations for a given desi exposure. expand_config will expand out to full format as needed by quicklook.setup
     """
 
     def __init__(self, configfile, night, camera, expid, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False):
         """
-        configfile: a configuration file for QL eg: desispec/data/quicklook/quicklook_darktime.yaml
-        palist: Palist object. See class Palist below
-        wavelengths: extraction wavelegth format in "5630,7740,0.5"
+        configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
+        night: night for the data to process, eg.'20191015'
+        camera: which camera to process eg 'r0'
+        expid: exposure id for the image to be processed 
+        amps: for outputing amps level QA
         Note:
         rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
         """  
@@ -33,6 +35,7 @@ class Config(object):
         self.dumpintermediates = self.conf["WriteIntermediatefiles"]
         self.writepixfile = self.conf["WritePixfile"]
         self.writeskymodelfile = self.conf["WriteSkyModelfile"]
+        self.writestaticplots = self.conf["WriteStaticPlots"]
         self.usesigma = self.conf["UseResolution"]
         self.pipeline = self.conf["Pipeline"]
         self.algorithms = self.conf["Algorithms"]
@@ -143,18 +146,14 @@ class Config(object):
         else:
             raise IOError("PA name does not match any file type. Check PA name in config") 
            
-        if filetype in ["fframe","sframe"]: #- fiberflat fielded or sky subtracted intermediate files       
-            pafile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"{}-{}-{:08d}.fits".format(filetype,self.camera,self.expid))
-        else:
-            pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+        pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return pafile
 
     def dump_qa(self): 
         """ 
         yaml outputfile for the set of qas for a given pa
-
-        File naming set by pa names, we don't have a io for these. Where to write them? desispec.io.findfile?
+        Name and default locations of files are handled by desispec.io.meta.findfile
         """
 
         #- both PA level and QA level outputs
@@ -189,9 +188,13 @@ class Config(object):
         
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                
+                if self.writestaticplots:
+                    qaplot = self.dump_qa()[0][1][qa]
+                else:
+                    qaplot = None
+
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': self.dump_qa()[0][1][qa], 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
                 
         return qaopts 
    
@@ -229,19 +232,23 @@ class Config(object):
         """
         Specify the filenames: yaml and png of the pa level qa files"
         """
-        outmap={'Initialize': 'initial',
-                'Preproc': 'preproc',
-                'BoxcarExtract': 'boxextract',
-                'ApplyFiberFlat_QL': 'fiberflat',
-                'SkySub_QL': 'skysub'
-               }
-        if paname not in outmap:
-            raise IOError("No output name map available for this PA:",paname)
+        filemap={'Initialize': 'ql_initial',
+                 'Preproc': 'ql_preproc',
+                 'BoxcarExtract': 'ql_boxextract',
+                 'ApplyFiberFlat_QL': 'ql_fiberflat',
+                 'SkySub_QL': 'ql_skysub'
+                 }
 
-        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.yaml".format(outmap[paname],self.camera,self.expid))
-    
-        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.png".format(outmap[paname],self.camera,self.expid))
-        
+        if paname in filemap:
+            filetype=filemap[paname]+'_file'
+            figtype=filemap[paname]+'_fig'
+        else:
+            raise IOError("PA name does not match any file type. Check PA name in config for {}".format(paname))
+
+        outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+
+        outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+
         return (outfile,outfig)
 
 
@@ -249,22 +256,27 @@ class Config(object):
         """
         Specify the filenames: yaml and png for the given qa output
         """
-        outmap={'Bias_From_Overscan': 'getbias',
-                'Get_RMS' : 'getrms',
-                'Count_Pixels': 'countpix',
-                'Calc_XWSigma': 'xwsigma',
-                'CountSpectralBins': 'countbins',
-                'Sky_Continuum': 'skycont',
-                'Sky_Peaks': 'skypeak',
-                'Sky_Residual': 'skyresid',
-                'Integrate_Spec': 'integ',
-                'Calculate_SNR': 'snr'
-               }
-        if qaname not in outmap:              
-            raise IOError("No output name map available for this QA:",qaname)
-        outfile=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.yaml".format(outmap[qaname],self.camera,self.expid))
+        filemap={'Bias_From_Overscan': 'ql_getbias',
+                 'Get_RMS' : 'ql_getrms',
+                 'Count_Pixels': 'ql_countpix',
+                 'Calc_XWSigma': 'ql_xwsigma',
+                 'CountSpectralBins': 'ql_countbins',
+                 'Sky_Continuum': 'ql_skycont',
+                 'Sky_Peaks': 'ql_skypeak',
+                 'Sky_Residual': 'ql_skyresid',
+                 'Integrate_Spec': 'ql_integ',
+                 'Calculate_SNR': 'ql_snr'
+                 }
 
-        outfig=os.path.join(self.specprod_dir,'exposures',self.night,"{:08d}".format(self.expid),"ql-{}-{}-{:08d}.png".format(outmap[qaname],self.camera,self.expid))
+        if qaname in filemap:
+            filetype=filemap[qaname]+'_file'
+            figtype=filemap[qaname]+'_fig'
+        else:
+            raise IOError("QA name does not match any file type. Check QA name in config for {}".format(qaname))
+
+        outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+
+        outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return (outfile,outfig)
 
@@ -274,7 +286,8 @@ class Config(object):
         """
         log.info("Building Full Configuration")
 
-        self.flavor = self.conf["flavor"]
+        self.program = self.conf["Program"]
+        self.flavor = self.conf["Flavor"]
         self.debuglevel = self.conf["Debuglevel"]
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
@@ -293,6 +306,7 @@ class Config(object):
         outconfig={}
 
         outconfig['Night'] = self.night
+        outconfig['Program'] = self.program
         outconfig['Flavor'] = self.flavor
         outconfig['Camera'] = self.camera
         outconfig['Expid'] = self.expid
@@ -328,7 +342,7 @@ def check_config(outconfig):
     Given the expanded config, check for all possible file existence etc....
     """
 
-    if outconfig["Flavor"]=="dark":
+    if outconfig["Flavor"]=="science":
         files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
         log.info("Checking if all the necessary files exist.")
         for thisfile in files:
@@ -348,7 +362,7 @@ class Palist(object):
     def __init__(self,thislist=None,algorithms=None,flavor=None,mode=None):
         """
         thislist: given list of PAs
-        algorithms: Algorithm list coming from config file: e.g desispec/data/quicklook/quicklook.darktime.yaml
+        algorithms: Algorithm list coming from config file: e.g desispec/data/quicklook/qlconfig_dark.yaml
         flavor: only needed if new list is to be built.
         mode: online offline?
         """
@@ -368,10 +382,10 @@ class Palist(object):
                 pa_list=['Initialize','Preproc','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
             elif self.flavor == "flat":
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
-            elif self.flavor in ['dark','elg','lrg','qso','bright','grey','gray','bgs','mws']:
+            elif self.flavor == "science":
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
             else:
-                log.warning("Not a valid flavor type. Use a valid flavor type to build a palist. Exiting.")
+                log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
                 sys.exit(0)
         self.pamodule='desispec.quicklook.procalgs'
         return pa_list       
