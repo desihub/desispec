@@ -66,7 +66,7 @@ def write_spectra(outfile, spec, units=None):
     all_hdus.append(fits.PrimaryHDU(header=hdr))
 
     # Next is the fibermap
-    fmap = spec.fmap.copy()
+    fmap = spec.fibermap.copy()
     fmap.meta["EXTNAME"] = "FIBERMAP"
     hdu = fits.convenience.table_to_hdu(fmap)
 

@@ -87,7 +87,7 @@ class TestSpectra(unittest.TestCase):
         for key, val in self.meta.items():
             assert(key in spec.meta)
             assert(spec.meta[key] == val)
-        nt.assert_array_equal(spec.fmap, fmap)
+        nt.assert_array_equal(spec.fibermap, fmap)
         for band in self.bands:
             nt.assert_array_almost_equal(spec.wave[band], self.wave[band])
             nt.assert_array_almost_equal(spec.flux[band], self.flux[band])

@@ -181,7 +181,7 @@ class Spectra(object):
         # copy data
 
         if fibermap is not None:
-            self.fmap = fibermap.copy()
+            self.fibermap = fibermap.copy()
         else:
             # create bogus fibermap table.
             fmap = np.zeros(shape=(nspec,), dtype=spectra_columns())
@@ -191,7 +191,7 @@ class Spectra(object):
                 expid = np.floor_divide(fake, 5000).astype(np.int32)
                 fmap[:]["EXPID"] = expid
                 fmap[:]["FIBER"] = fiber
-            self.fmap = encode_table(fmap)   #- unicode -> bytes
+            self.fibermap = encode_table(fmap)   #- unicode -> bytes
 
         self.wave = {}
         self.flux = {}
@@ -269,7 +269,7 @@ class Spectra(object):
         Returns (array):
             an array of integer target IDs.
         """
-        uniq, indices = np.unique(self.fmap["TARGETID"], return_index=True)
+        uniq, indices = np.unique(self.fibermap["TARGETID"], return_index=True)
         return uniq[indices.argsort()]
 
 
@@ -280,7 +280,7 @@ class Spectra(object):
         Returns (int):
             Number of spectra contained in this group.
         """
-        return len(self.fmap)
+        return len(self.fibermap)
 
 
     def num_targets(self):
@@ -290,7 +290,7 @@ class Spectra(object):
         Returns (int):
             Number of unique targets with spectra in this object.
         """
-        return len(np.unique(self.fmap["TARGETID"]))
+        return len(np.unique(self.fibermap["TARGETID"]))
 
 
     def select(self, nights=None, bands=None, targets=None, fibers=None, invert=False):
@@ -320,25 +320,25 @@ class Spectra(object):
 
         keep_nights = None
         if nights is None:
-            keep_nights = [ True for x in self.fmap["NIGHT"] ]
+            keep_nights = [ True for x in self.fibermap["NIGHT"] ]
         else:
-            keep_nights = [ (x in nights) for x in self.fmap["NIGHT"] ]
+            keep_nights = [ (x in nights) for x in self.fibermap["NIGHT"] ]
         if sum(keep_nights) == 0:
             raise RuntimeError("no valid nights were selected!")
 
         keep_targets = None
         if targets is None:
-            keep_targets = [ True for x in self.fmap["TARGETID"] ]
+            keep_targets = [ True for x in self.fibermap["TARGETID"] ]
         else:
-            keep_targets = [ (x in targets) for x in self.fmap["TARGETID"] ]
+            keep_targets = [ (x in targets) for x in self.fibermap["TARGETID"] ]
         if sum(keep_targets) == 0:
             raise RuntimeError("no valid targets were selected!")
 
         keep_fibers = None
         if fibers is None:
-            keep_fibers = [ True for x in self.fmap["FIBER"] ]
+            keep_fibers = [ True for x in self.fibermap["FIBER"] ]
         else:
-            keep_fibers = [ (x in fibers) for x in self.fmap["FIBER"] ]
+            keep_fibers = [ (x in fibers) for x in self.fibermap["FIBER"] ]
         if sum(keep_fibers) == 0:
             raise RuntimeError("no valid fibers were selected!")
 
@@ -378,7 +378,7 @@ class Spectra(object):
 
         ret = Spectra(keep_bands, keep_wave, keep_flux, keep_ivar, 
             mask=keep_mask, resolution_data=keep_res, 
-            fibermap=self.fmap[keep], meta=self.meta, extra=keep_extra, 
+            fibermap=self.fibermap[keep], meta=self.meta, extra=keep_extra,
             single=self._single)
 
         return ret
@@ -469,15 +469,15 @@ class Spectra(object):
 
         # Compute which targets / exposures are new
 
-        nother = len(other.fmap)
+        nother = len(other.fibermap)
         exists = np.zeros(nother, dtype=np.int)
 
         indx_original = []
 
         for r in range(nother):
-            expid = other.fmap[r]["EXPID"]
-            fiber = other.fmap[r]["FIBER"]
-            for i, row in enumerate(self.fmap):
+            expid = other.fibermap[r]["EXPID"]
+            fiber = other.fibermap[r]["FIBER"]
+            for i, row in enumerate(self.fibermap):
                 if (expid == row["EXPID"]) and (fiber == row["FIBER"]):
                     indx_original.append(i)
                     exists[r] += 1
@@ -490,7 +490,7 @@ class Spectra(object):
 
         nupdate = len(indx_exists)
         nnew = len(indx_new)
-        nold = len(self.fmap)
+        nold = len(self.fibermap)
 
         # Make new data arrays of the correct size to hold both the old and 
         # new data
@@ -537,7 +537,7 @@ class Spectra(object):
 
         if nold > 0:
             # We have some data (i.e. we are not starting with an empty Spectra)
-            newfmap[:nold] = self.fmap
+            newfmap[:nold] = self.fibermap
 
             for b in self.bands:
                 newflux[b][:nold,:] = self.flux[b]
@@ -577,7 +577,7 @@ class Spectra(object):
         # Append new spectra
 
         if nnew > 0:
-            newfmap[nold:] = other.fmap[indx_new]
+            newfmap[nold:] = other.fibermap[indx_new]
 
             for b in other.bands:
                 newflux[b][nold:,:] = other.flux[b][indx_new].astype(self._ftype)
@@ -605,7 +605,7 @@ class Spectra(object):
 
         self._bands = bands
         self.wave = newwave
-        self.fmap = newfmap
+        self.fibermap = newfmap
         self.flux = newflux
         self.ivar = newivar
         self.mask = newmask
