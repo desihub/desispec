@@ -7,6 +7,7 @@ desispec Change Log
 
 * Update desispec.io.findfile spectra path to match dc17a (PR `#404`_).
 * Load redshift catalog data from healpix-based zbest files (PR `#402`_).
+* fixed desispec.io.findfile() path for zbest and coadd
 
 .. _`#402`: https://github.com/desihub/desispec/pull/402
 .. _`#404`: https://github.com/desihub/desispec/pull/404
