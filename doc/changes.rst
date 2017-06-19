@@ -2,7 +2,7 @@
 desispec Change Log
 ===================
 
-0.15.1 (unreleased)
+0.15.1 (2017-06-19)
 -------------------
 
 * Fixed :func:`desispec.io.findfile` path for zbest and coadd (PR `#411`_).
