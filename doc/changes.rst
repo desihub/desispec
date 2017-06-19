@@ -5,12 +5,22 @@ desispec Change Log
 0.15.1 (unreleased)
 -------------------
 
+* Fixed :func:`desispec.io.findfile` path for zbest and coadd (PR `#411`_).
+* Add Notebook tutorial: introduction to reading and manipulating DESI spectra (PR `#408`_, `#410`_).
+* Update quicklook configuration (PR `#395`_).
+* Rename ``Spectra.fmap`` attribute to ``Spectra.fibermap`` (PR `#407`_).
+* Enable ``desi_group_spectra`` to run without pipeline infrastructure (PR `#405`_).
 * Update desispec.io.findfile spectra path to match dc17a (PR `#404`_).
 * Load redshift catalog data from healpix-based zbest files (PR `#402`_).
-* fixed desispec.io.findfile() path for zbest and coadd
 
-.. _`#402`: https://github.com/desihub/desispec/pull/402
+.. _`#411`: https://github.com/desihub/desispec/pull/411
+.. _`#410`: https://github.com/desihub/desispec/pull/410
+.. _`#408`: https://github.com/desihub/desispec/pull/408
+.. _`#395`: https://github.com/desihub/desispec/pull/395
+.. _`#407`: https://github.com/desihub/desispec/pull/407
+.. _`#405`: https://github.com/desihub/desispec/pull/405
 .. _`#404`: https://github.com/desihub/desispec/pull/404
+.. _`#402`: https://github.com/desihub/desispec/pull/402
 
 0.15.0 (2017-06-15)
 -------------------
