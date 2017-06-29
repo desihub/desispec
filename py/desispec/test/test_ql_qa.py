@@ -182,7 +182,10 @@ class TestQL(unittest.TestCase):
             pix = np.rint(psf.xy(fibers,zpeaks[i]))
             for j in range(len(fibers)):
                 for k in range(len(peak_counts)):
-                    xw_img_pix[pix[0][j]-3+k][pix[1][j]-3:pix[1][j]+4] = peak_counts[k]
+                    ypix = int(pix[0][j]-3+k)
+                    xpix_start =int(pix[1][j]-3)
+                    xpix_stop = int(pix[1][j]+4)
+                    xw_img_pix[ypix][xpix_start:xpix_stop] = peak_counts[k]
 
         #- transpose pixel values to correct place in image
         xw_img_pix=np.ndarray.transpose(xw_img_pix)
