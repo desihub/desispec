@@ -140,6 +140,7 @@ autodoc_mock_imports = ['astropy',
                         'astropy.stats',
                         'astropy.table',
                         'astropy.time',
+                        'astropy.units',
                         'desiutil',
                         'desiutil.bitmask',
                         'desiutil.depend',
@@ -169,7 +170,8 @@ autodoc_mock_imports = ['astropy',
                         'speclite.filters',
                         'specter',
                         'specter.psf',
-                        'specter.extract']
+                        'specter.extract',
+                        'healpy']
 
 # -- Options for HTML output ----------------------------------------------
 

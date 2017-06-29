@@ -261,7 +261,7 @@ def integration_test(args=None):
    
     #- Get the configuration file from desispec/data/quicklook
     from pkg_resources import resource_filename
-    configfile=resource_filename('desispec','data/quicklook/quicklook_darktime.yaml')
+    configfile=resource_filename('desispec','data/quicklook/qlconfig_dark.yaml')
     for camera in ['r0','z0']:
         
         #- Verify that quicklook pipeline runs

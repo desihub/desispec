@@ -2,9 +2,41 @@
 desispec Change Log
 ===================
 
-0.14.1 (unreleased)
+0.15.2 (unreleased)
 -------------------
 
+* No changes yet.
+
+0.15.1 (2017-06-19)
+-------------------
+
+* Fixed :func:`desispec.io.findfile` path for zbest and coadd (PR `#411`_).
+* Add Notebook tutorial: introduction to reading and manipulating DESI spectra (PR `#408`_, `#410`_).
+* Update quicklook configuration (PR `#395`_).
+* Rename ``Spectra.fmap`` attribute to ``Spectra.fibermap`` (PR `#407`_).
+* Enable ``desi_group_spectra`` to run without pipeline infrastructure (PR `#405`_).
+* Update desispec.io.findfile spectra path to match dc17a (PR `#404`_).
+* Load redshift catalog data from healpix-based zbest files (PR `#402`_).
+
+.. _`#411`: https://github.com/desihub/desispec/pull/411
+.. _`#410`: https://github.com/desihub/desispec/pull/410
+.. _`#408`: https://github.com/desihub/desispec/pull/408
+.. _`#395`: https://github.com/desihub/desispec/pull/395
+.. _`#407`: https://github.com/desihub/desispec/pull/407
+.. _`#405`: https://github.com/desihub/desispec/pull/405
+.. _`#404`: https://github.com/desihub/desispec/pull/404
+.. _`#402`: https://github.com/desihub/desispec/pull/402
+
+0.15.0 (2017-06-15)
+-------------------
+
+* Refactor database subpackage and enable loading of both quicksurvey and
+  pipeline outputs (PR `#400`_).
+* Clean up pipeline script naming to be grouped by night.
+* Modify pipeline to use Spectra objects grouped by HEALPix pixels instead
+  of bricks.  Add entry point to regroup cframe data by pixel (PR `#394`_).
+* Add a new class, Spectra, which encapsulates a grouping of 1D spectra
+  in one or more bands.  Includes selection, updating, and I/O.
 * Removed ``desispec.brick`` as it's now in :mod:`desiutil.brick` (PR `#392`_).
 * Added function to calculate brick vertices at a given location (PR `#388`_).
 * Added function to calculate brick areas at a given location (PR `#384`_).
@@ -27,6 +59,8 @@ desispec Change Log
 .. _`#379`: https://github.com/desihub/desispec/pull/379
 .. _`#390`: https://github.com/desihub/desispec/pull/390
 .. _`#392`: https://github.com/desihub/desispec/pull/392
+.. _`#394`: https://github.com/desihub/desispec/pull/394
+.. _`#400`: https://github.com/desihub/desispec/pull/400
 
 0.14.0 (2017-04-13)
 -------------------

@@ -50,10 +50,24 @@ else:
     import multiprocessing as _mp
     default_nproc = max(1, _mp.cpu_count() // 2)
 
+# MPI environment availability
+
+use_mpi = None
+"""Whether we should use MPI.  Set globally on first import."""
+
+if ("NERSC_HOST" in os.environ) and ("SLURM_JOB_NAME" not in os.environ):
+    use_mpi = False
+else:
+    use_mpi = True
+    try:
+        import mpi4py.MPI as MPI
+    except ImportError:
+        use_mpi = False
+
 
 # Functions for static distribution
 
-def dist_uniform(nwork, workers, id):
+def dist_uniform(nwork, workers, id=None):
     """
     Statically distribute some number of items among workers.
 
@@ -62,35 +76,41 @@ def dist_uniform(nwork, workers, id):
     assigned to workers in rank order.
 
     This function returns the index of the first item and the
-    number of items for the specified worker ID.
+    number of items for the specified worker ID, or the information
+    for all workers.
 
     Args:
         nwork (int): the number of things to distribute.
         workers (int): the number of workers.
+        id (int): optionally return just the tuple associated with
+            this worker
 
     Returns (tuple):
         A tuple of ints, containing the first item and number
-        of items.
+        of items.  If id=None, then return a list containing the tuple
+        for all workers.
+
     """
+    dist = []
 
-    ntask = 0
-    firsttask = 0
-
-    # if ID is out of range, ignore it
-    if id < workers:
-        if nwork < workers:
-            if id < nwork:
-                ntask = 1
-                firsttask = id
+    for i in range(workers):
+        ntask = nwork // workers
+        firsttask = 0
+        leftover = nwork % workers
+        if i < leftover:
+            ntask += 1
+            firsttask = i * ntask
         else:
-            ntask = int(nwork / workers)
-            leftover = nwork % workers
-            if id < leftover:
-                ntask += 1
-                firsttask = id * ntask
-            else:
-                firsttask = ((ntask + 1) * leftover) + (ntask * (id - leftover))
-    return (firsttask, ntask)
+            firsttask = ((ntask + 1) * leftover) + (ntask * (i - leftover))
+        dist.append( (firsttask, ntask) )
+
+    if id is not None:
+        if id < len(dist):
+            return dist[id]
+        else:
+            raise RuntimeError("worker ID is out of range")
+    else:
+        return dist
 
 
 def dist_balanced(nwork, maxworkers):
@@ -344,3 +364,53 @@ def stdouterr_redirected(to=None, comm=None):
         sys.stderr.flush()
 
     return
+
+
+def take_turns(comm, at_a_time, func, *args, **kwargs):
+    """
+    Processes call a function in groups.
+
+    Any extra positional and keyword arguments are passed to the function.
+
+    Args:
+        comm:  mpi4py.MPI.Comm or None.
+        at_a_time (int): the maximum number of processes to run at a time.
+        func: the function to call.
+
+    Returns:
+        The return value on each process is the return value of the function.
+
+    """
+    if comm is None:
+        # just run the function
+        return func(*args, **kwargs)
+
+    nproc = comm.size
+    rank = comm.rank
+
+    if at_a_time >= nproc:
+        # every process just runs at once
+        return func(*args, **kwargs)
+
+    # we split the communicator to enforce a fixed number of processes
+    # running at once.
+
+    groupsize = nproc // at_a_time
+    if nproc % at_a_time != 0:
+        groupsize += 1
+
+    group = rank // groupsize
+    group_rank =  rank % groupsize
+
+    comm_group = comm.Split(color=group, key=group_rank)
+
+    # within each group, processes take turns
+
+    ret = None
+    for p in range(comm_group.size):
+        if p == comm_group.rank:
+            ret = func(*args, **kwargs)
+        comm_group.barrier()
+
+    return ret
+

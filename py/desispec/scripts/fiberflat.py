@@ -6,6 +6,7 @@ Utility functions to compute a fiber flat correction and apply it
 We try to keep all the (fits) io separated.
 """
 from __future__ import absolute_import, division
+import time
 
 import numpy as np
 
@@ -46,7 +47,7 @@ def parse(options=None):
 def main(args) :
 
     log=get_logger()
-    log.info("starting")
+    log.info("starting at {}".format(time.asctime()))
 
     # Process
     frame = read_frame(args.infile)
@@ -70,3 +71,4 @@ def main(args) :
     # Write
     write_fiberflat(args.outfile, fiberflat, frame.meta)
     log.info("successfully wrote %s"%args.outfile)
+    log.info("done at {}".format(time.asctime()))

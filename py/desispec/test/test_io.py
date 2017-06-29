@@ -13,14 +13,8 @@ from astropy.io import fits
 from astropy.table import Table
 from ..frame import Frame
 
-try:
-    import sqlalchemy
-    sqlalchemy_available = True
-except ImportError:
-    sqlalchemy_available = False
-
 class TestIO(unittest.TestCase):
-    """Test desiutil.io.
+    """Test desispec.io.
     """
 
     @classmethod
@@ -558,13 +552,13 @@ class TestIO(unittest.TestCase):
         the_exception = cm.exception
         self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
-            foo = findfile('brick',brickname='3338p190')
+            foo = findfile('brick',groupname='3338p190')
         the_exception = cm.exception
         self.assertEqual(str(the_exception), "Required input 'band' is not set for type 'brick'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']
-        x = findfile('brick', brickname='0000p123', band='r1')
+        x = findfile('brick', groupname='0000p123', band='r1')
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
             x = findfile('fibermap', night='20150101', expid=123)
@@ -575,7 +569,7 @@ class TestIO(unittest.TestCase):
         x = findfile('fibermap', night='20150101', expid=123)
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
-            x = findfile('brick', brickname='0000p123', band='r1')
+            x = findfile('brick', groupname='0000p123', band='r1')
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
     def test_findfile_outdir(self):
@@ -607,47 +601,6 @@ class TestIO(unittest.TestCase):
         paths = download(filename)
         self.assertIsNone(paths[0])
         # self.assertFalse(os.path.exists(paths[0]))
-
-    @unittest.skipUnless(sqlalchemy_available, "sqlalchemy not installed; skipping DB tests")
-    def test_database(self):
-        """Test desispec.io.database.
-        """
-        from ..io.database import (utc, Base, FrameStatus, BrickStatus, Status,
-                                   Night, ExposureFlavor)
-        # self.assertIsNotNone(Base.metadata.tables)
-        #
-        # Simple ForeignKey tables.
-        #
-        st = Status(status='succeeded')
-        self.assertEqual(str(st), "<Status(status='succeeded')>")
-        ef = ExposureFlavor(flavor='science')
-        self.assertEqual(str(ef), "<ExposureFlavor(flavor='science')>")
-        ni = Night(night='20170101')
-        self.assertEqual(str(ni), "<Night(night='20170101')>")
-        #
-        # Status tables.
-        #
-        fs = FrameStatus(id=1, frame_id=1, status='succeeded',
-                         stamp=datetime(2017, 1, 1, 0, 0, 0, tzinfo=utc))
-        self.assertEqual(str(fs), "<FrameStatus(id=1, frame_id=1, status='succeeded', stamp='2017-01-01 00:00:00+00:00')>")
-        bs = BrickStatus(id=1, brick_id=1, status='succeeded',
-                         stamp=datetime(2017, 1, 1, 0, 0, 0, tzinfo=utc))
-        self.assertEqual(str(bs), "<BrickStatus(id=1, brick_id=1, status='succeeded', stamp='2017-01-01 00:00:00+00:00')>")
-
-    # def test_quicksurvey(self):
-    #     """Test desispec.io.quicksurvey.
-    #     """
-    #     from ..io.quicksurvey import utc, convert_dateobs
-    #     ts = convert_dateobs('2019-01-03T01:11:33.247')
-    #     self.assertEqual(ts.year, 2019)
-    #     self.assertEqual(ts.month, 1)
-    #     self.assertEqual(ts.microsecond, 247000)
-    #     self.assertIsNone(ts.tzinfo)
-    #     ts = convert_dateobs('2019-01-03T01:11:33.247', tzinfo=utc)
-    #     self.assertEqual(ts.year, 2019)
-    #     self.assertEqual(ts.month, 1)
-    #     self.assertEqual(ts.microsecond, 247000)
-    #     self.assertIs(ts.tzinfo, utc)
 
 
 def test_suite():

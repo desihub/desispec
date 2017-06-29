@@ -59,8 +59,8 @@ class TestPipelinePlan(unittest.TestCase):
 
 
     def test_create_load_prod(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night(), self.specs, False)
-        expnightcnt, bricks = create_prod()
+        grph, expcnt, pix = graph_night(ph.fake_night(), self.specs, False)
+        expnightcnt, allpix = create_prod()
         fullgrph = load_prod()
         self.assertTrue(grph == fullgrph)
 
