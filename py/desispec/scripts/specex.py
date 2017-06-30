@@ -17,20 +17,22 @@ from astropy.io import fits
 
 from desiutil.log import get_logger
 
-modext = 'so'
-if sys.platform == 'darwin':
-    modext = 'bundle'
+modext = "so"
+if sys.platform == "darwin":
+    modext = "bundle"
 
-libspecexname = 'libspecex.{}'.format(modext)
+libspecexname = "libspecex.{}".format(modext)
+if "LIBSPECEX_DIR" in os.environ:
+    libspecexname = os.path.join(os.environ["LIBSPECEX_DIR"], 
+        "libspecex.{}".format(modext))
 
 libspecex = None
 try:
     libspecex = ct.CDLL(libspecexname)
 except:
-    path = find_library('specex')
+    path = find_library("specex")
     if path is not None:
         libspecex = ct.CDLL(path)
-
 
 if libspecex is not None:
     libspecex.cspecex_desi_psf_fit.restype = ct.c_int
