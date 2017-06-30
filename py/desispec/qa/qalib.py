@@ -260,8 +260,8 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
-    resid_rms = []
-    qadict['RESID_RMS'] = resid_rms
+    qadict['RESID_RMS'] = []
+    qadict['SKY_WARN'] = []
 
     #- Residuals in wave and fiber axes
     qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
