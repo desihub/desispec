@@ -17,10 +17,15 @@ from astropy.io import fits
 
 from desiutil.log import get_logger
 
+modext = 'so'
+if sys.platform == 'darwin':
+    modext = 'bundle'
+
+libspecexname = 'libspecex.{}'.format(modext)
 
 libspecex = None
 try:
-    libspecex = ct.CDLL('libspecex.so')
+    libspecex = ct.CDLL(libspecexname)
 except:
     path = find_library('specex')
     if path is not None:
