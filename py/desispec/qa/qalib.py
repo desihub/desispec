@@ -260,6 +260,9 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
+    resid_rms = []
+    qadict['RESID_RMS'] = resid_rms
+
     #- Residuals in wave and fiber axes
     qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
     qadict["SKY_FIBERID"]=skyfibers.tolist()
@@ -385,7 +388,11 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
         average_amp=np.array(averages)
 
-    qadict={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag}
+    elg_fidmag_snr = []
+    star_fidmag_snr = []
+    fidmag_warn = []
+
+    qadict={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag, "ELG_FIDMAG_SNR":elg_fidmag_snr, "STAR_FIDMAG_SNR":star_fidmag_snr, "FIDMAG_WARN":fidmag_warn}
 
     return qadict
 
