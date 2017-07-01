@@ -31,11 +31,13 @@ Algorithms:
             Get_RMS:
                 PARAMS: {RMS_RANGE: [-1.,1.]}
             Count_Pixels:
-                PARAMS: {CUTHI: 500, CUTLO: 100}
+                PARAMS: {CUTHI: 500, CUTLO: 100, NPIX_RANGE: [200.0, 500.0]}
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5201.8],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8]}
+                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8]
+                         XSHIFT_RANGE: [-2.0, 2.0],
+                         WSHIFT_RANGE: [-2.0, 2.0]}
     BootCalibration:
         QA: {}
     BoxcarExtract:
@@ -45,4 +47,4 @@ Algorithms:
             z: 7650,9830,0.8
         QA:
             CountSpectralBins:
-                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250}
+                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_RANGE: [490, 500]}
