@@ -9,28 +9,6 @@ import numpy as np
 import sys
 from desiutil.log import get_logger
 
-#import time # for debugging
-
-def bin_bounds(x):
-    """Calculates the bin boundaries of an array `x`.
-
-    Returns tuple of lower and upper bounds, each with same length as `x`.
-    """
-    if x.size<2 :
-        get_logger().error("bin_bounds, x.size={0:d}".format(x.size))
-        exit(12)
-    tx=np.sort(x)
-    x_minus=np.roll(tx,1)
-    x_minus[0]=x_minus[1]+tx[0]-tx[1]
-    x_plus=np.roll(tx,-1)
-    x_plus[-1]=x_plus[-2]+tx[-1]-tx[-2]
-    x_minus=0.5*(x+x_minus)
-    x_plus=0.5*(x+x_plus)
-
-    del tx
-    return x_minus,x_plus
-
-
 
 
 """
@@ -82,7 +60,7 @@ Another approach, which is also time consuming is the following :
 
 
 
-def resample_flux(xout, x, flux, ivar=None):
+def resample_flux(xout, x, flux, ivar=None, extrapolate=False):
     """Returns a flux conserving resampling of an input flux density.
     The total integrated flux is conserved.
 
@@ -95,9 +73,13 @@ def resample_flux(xout, x, flux, ivar=None):
 
     Options:
         ivar: weights for flux; default is unweighted resampling
-        left: value for expolation to the left, if None, use input_flux_density[0], default=0
-        right: value for expolation to the right, if None, use input_flux_density[-1], default=0
-
+        extrapolate: extrapolate using edge values of input array, default is False,
+                     in which case values outside of input array are set to zero.
+    
+    Setting both ivar and extrapolate raises a ValueError because one cannot
+    assign an ivar outside of the input data range. 
+    
+    
     Returns:
         if ivar is None, returns outflux
         if ivar is not None, returns outflux, outivar
@@ -126,21 +108,25 @@ def resample_flux(xout, x, flux, ivar=None):
 
     """
 
+    
+    
     if ivar is None:
-        return _unweighted_resample(xout, x, flux)
+        return _unweighted_resample(xout, x, flux, extrapolate=extrapolate)
     else:
-        a = _unweighted_resample(xout, x, flux*ivar)
-        b = _unweighted_resample(xout, x, ivar)
+        if extrapolate :
+            raise ValueError("Cannot extrapolate ivar. Either set ivar=None and extrapolate=True or the opposite")
+        a = _unweighted_resample(xout, x, flux*ivar, extrapolate=False)
+        b = _unweighted_resample(xout, x, ivar, extrapolate=False)
         mask = (b>0)
         outflux = np.zeros(a.shape)
         outflux[mask] = a[mask] / b[mask]
         dx = np.gradient(x)
         dxout = np.gradient(xout)
         outivar = _unweighted_resample(xout, x, ivar/dx)*dxout
-
+        
         return outflux, outivar
 
-def _unweighted_resample(output_x,input_x,input_flux_density) :
+def _unweighted_resample(output_x,input_x,input_flux_density, extrapolate=False) :
     """Returns a flux conserving resampling of an input flux density.
     The total integrated flux is conserved.
 
@@ -151,7 +137,10 @@ def _unweighted_resample(output_x,input_x,input_flux_density) :
 
     both must represent the same quantity with the same unit
     input_flux_density =  dflux/dx sampled at input_x
-
+    
+    Options:
+        extrapolate: extrapolate using edge values of input array, default is False,
+                     in which case values outside of input array are set to zero
     Returns:
         returns output_flux
 
@@ -183,50 +172,59 @@ def _unweighted_resample(output_x,input_x,input_flux_density) :
     ox=output_x
 
     # boundary of output bins
-    oxm,oxp=bin_bounds(ox)
+    bins=np.zeros(ox.size+1)
+    bins[1:-1]=(ox[:-1]+ox[1:])/2.
+    bins[0]=1.5*ox[0]-0.5*ox[1]     # = ox[0]-(ox[1]-ox[0])/2
+    bins[-1]=1.5*ox[-1]-0.5*ox[-2]  # = ox[-1]+(ox[-1]-ox[-2])/2
+    
     # make a temporary node array including input nodes and output bin bounds
     # first the boundaries of output bins
-    tx=np.append(oxm,oxp[-1])
-    # add the edges of the first and last input bins
-    # to the temporary node array
-    ixmin=1.5*ix[0]-0.5*ix[1]  # = ix[0]-(ix[1]-ix[0])/2
-    ixmax=1.5*ix[-1]-0.5*ix[-2] # = ix[-1]+(ix[-1]-ix[-2])/2
-    tx=np.append(tx,ixmin)
-    tx=np.append(tx,ixmax)
-    # interpolation of input on temporary nodes
-    ty=np.interp(tx,ix,iy)
-
-    # then add input nodes to array
+    tx=bins.copy()
+    ty=np.interp(tx,ix,iy) # this sets values left and right of input range to first and/or last input values
+    
+    #  add input nodes which are inside the node array
     k=np.where((ix>=tx[0])&(ix<=tx[-1]))[0]
     if k.size :
-        tx=np.append(tx,ix)
-        ty=np.append(ty,iy)
-    # sort this array
+        tx=np.append(tx,ix[k])
+        ty=np.append(ty,iy[k])
+    
+    # add the edges of the first and last input bins
+    # to the temporary node array if inside array
+    ixmin=1.5*ix[0]-0.5*ix[1]  # = ix[0]-(ix[1]-ix[0])/2
+    if ixmin>np.min(tx) :
+        y_ixmin=1.5*iy[0]-0.5*iy[1] # extrapolation using slope (and not constant) for this point to preserve integral in first input bin
+        tx=np.append(tx,ixmin)
+        ty=np.append(ty,y_ixmin)
+        
+    ixmax=1.5*ix[-1]-0.5*ix[-2]
+    if ixmax<np.max(tx) :
+        y_ixmax=1.5*iy[-1]-0.5*iy[-2] # extrapolation using slope (and not constant) for this point to preserve integral in last input bin
+        tx=np.append(tx,ixmax)
+        ty=np.append(ty,y_ixmax)
+    
+    
+    # sort this node array
     p = tx.argsort()
     tx=tx[p]
     ty=ty[p]
-
+    
     # now we do a simple integration in each bin of the piece-wise
     # linear function of the temporary nodes
 
     # integral of individual trapezes
-    # (last entry, which is not used, is wrong, because of the np.roll)
-    trapeze_integrals=(np.roll(ty,-1)+ty)*(np.roll(tx,-1)-tx)/2.
+    trapeze_integrals=(ty[1:]+ty[:-1])*(tx[1:]-tx[:-1])/2.
+    
+    # output flux
+    # for each bin, we sum the trapeze_integrals that belong to that bin
+    # and divide by the bin size
 
-    #- output flux
-    #- for each bin, we sum the trapeze_integrals that belong to that bin
-    #- IGNORING those that are outside of the range [ixmin,ixmax]
-    #- and we divide by the full output bin size (even if outside of [ixmin,ixmax])
-
-    # of=np.zeros((ox.size))
-    # for i in range(ox.size) :
-    #     of[i] = np.sum(trapeze_integrals[(tx>=max(oxm[i],ixmin))&(tx<min(oxp[i],ixmax))])/(oxp[i]-oxm[i])
-
-    #- A faster version of the above loop:
-    #- histogram while not including elements exactly on the rightmost edge;
-    #- np.histogram will include those by default so shift edge by 1e-12 binsize
-    binsize = oxp - oxm
-    edges = np.concatenate([oxm, oxp[-1:]]).clip(ixmin, ixmax-1e-12*binsize[-1])
-    of = np.histogram(tx, edges, weights=trapeze_integrals)[0] / binsize
-
+    trapeze_centers=(tx[1:]+tx[:-1])/2.
+    binsize = bins[1:]-bins[:-1]
+    
+    if extrapolate :
+        of = np.histogram(trapeze_centers, bins=bins, weights=trapeze_integrals)[0] / binsize
+    else : # only keep trapezes inside input array (including assumed input bin edges) to preserve flux and ivar       
+        ii=(tx[1:]<=ixmax)&(tx[:-1]>=ixmin)
+        of = np.histogram(trapeze_centers[ii], bins=bins, weights=trapeze_integrals[ii])[0] / binsize
+    
     return of
