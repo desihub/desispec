@@ -141,6 +141,7 @@ def _unweighted_resample(output_x,input_x,input_flux_density, extrapolate=False)
     Options:
         extrapolate: extrapolate using edge values of input array, default is False,
                      in which case values outside of input array are set to zero
+
     Returns:
         returns output_flux
 
