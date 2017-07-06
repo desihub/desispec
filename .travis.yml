@@ -19,6 +19,9 @@ os:
 # Setting sudo to false opts in to Travis-CI container-based builds.
 sudo: false
 
+# Use Ubuntu 14.04 LTS "trusty" instead of default 12.04
+dist: trusty
+
 # SPECEX and HARP.  Once we are building specex, we need C++11
 # features that require a newer OS and gcc.  These two lines
 # switch us to non-container, Ubuntu 14.04
