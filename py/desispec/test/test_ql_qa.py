@@ -86,6 +86,7 @@ class TestQL(unittest.TestCase):
         hdr['EXPID'] = 1
         hdr['PROGRAM'] = 'dark'
         hdr['FLAVOR'] = 'science'
+        hdr['EXPTIME'] = 100
         
         rawimage = np.zeros((2*ny, 2*nx+2*noverscan))
         offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
@@ -251,9 +252,6 @@ class TestQL(unittest.TestCase):
         counts1=qalib.countpix(pix,nsig=3) #- counts above 3 sigma
         counts2=qalib.countpix(pix,nsig=4) #- counts above 4 sigma
         self.assertLess(counts2,counts1)
-        counts3=qalib.countpix(pix,ncounts=200)
-        counts4=qalib.countpix(pix,ncounts=250)
-        self.assertLess(counts4,counts3)
 
     def test_sky_resid(self):
         import copy
@@ -367,7 +365,7 @@ class TestQL(unittest.TestCase):
         #- test if amp QAs exist
         qargs["amps"] = True
         resl2=qa(inp,**qargs)
-        self.assertTrue(len(resl2['METRICS']['NPIX3SIG_AMP'])==4)
+        self.assertTrue(len(resl2['METRICS']['NPIX_LOW_AMP'])==4)
 
     def testCountSpectralBins(self):
         qa=QA.CountSpectralBins('countbins',self.config)
