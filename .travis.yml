@@ -160,8 +160,8 @@ install:
     - export DESIMODEL=${HOME}/desimodel/${DESIMODEL_VERSION}
     - mkdir -p ${DESIMODEL}
     - if [[ $SETUP_CMD == test* ]]; then svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data ${DESIMODEL}/data ; fi
-    - if [[ $SETUP_CMD == test* ]]; conda list; fi
-    - if [[ $SETUP_CMD == test* ]]; python -c 'import numpy; import scipy; print(numpy.__version__); print(numpy.__path__); print(scipy.__version__); print(scipy.__path__)'; fi
+    - if [[ $SETUP_CMD == test* ]]; then conda list; fi
+    - if [[ $SETUP_CMD == test* ]]; then python -c 'import numpy; import scipy; print(numpy.__version__); print(numpy.__path__); print(scipy.__version__); print(scipy.__path__)'; fi
 
 before_install:
     # Show the Travis worker's IP address.
