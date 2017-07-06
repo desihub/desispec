@@ -78,7 +78,7 @@ env:
         # do that separately from the astropy/ci-helpers scripts.
         - DESIHUB_PIP_DEPENDENCIES="desiutil=${DESIUTIL_VERSION} specter=${SPECTER_VERSION} desimodel=${DESIMODEL_VERSION}"
         # Debug the Travis install process.
-        - DEBUG=True
+        - DEBUG=False
     matrix:
         - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
         - PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
@@ -98,8 +98,8 @@ matrix:
         # Check for sphinx doc build warnings.
         - os: linux
           env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
-        #        CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
-        #        PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # Coverage test.  Note that installing the coverage software can
         # change the set of packages installed by conda, so we do
