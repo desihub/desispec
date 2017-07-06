@@ -160,11 +160,9 @@ def plot_countpix(qa_dict,outfile):
         'EXPID': '00000006',
         'QATIME': '2016-08-02T14:39:59.157986',
         'PANAME': 'PREPROC',
-        'PARAMS': {'CUTLO': 100, 'CUTHI': 500},
+        'PARAMS': {'CUTLO': 3, 'CUTHI': 10},
         'METRICS': {'NPIX_LOW': 0,
                   'NPIX_LOW_AMP': [254549, 0, 242623, 0],
-                  'NPIX3SIG': 3713,
-                  'NPIX3SIG_AMP': [128158, 2949, 132594, 3713],
                   'NPIX_HIGH': 0,
                   'NPIX_HIGH_AMP': [1566, 0, 1017, 0]}}}
 
@@ -175,8 +173,6 @@ def plot_countpix(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    count3sig=qa_dict["METRICS"]["NPIX3SIG"]
-    count3sig_amp=np.array(qa_dict["METRICS"]["NPIX3SIG_AMP"])
     countlo=qa_dict["METRICS"]["NPIX_LOW"]
     countlo_amp=np.array(qa_dict["METRICS"]["NPIX_LOW_AMP"])
     counthi=qa_dict["METRICS"]["NPIX_HIGH"]
@@ -187,69 +183,47 @@ def plot_countpix(qa_dict,outfile):
 
     fig=plt.figure()
     plt.suptitle("Count pixels after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    ax1=fig.add_subplot(221)
-    heatmap1=ax1.pcolor(count3sig_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Total Pixels > 3 sigma = {:d}'.format(count3sig), fontsize=10)
-    ax1.set_xlabel("# pixels with counts > 3sig. (per Amp)",fontsize=10)
+    ax1=fig.add_subplot(211)
+    heatmap1=ax1.pcolor(countlo_amp.reshape(2,2),cmap=plt.cm.OrRd)
+    plt.title('Total Pixels per Second > {:d} sigma = {:f}'.format(cutlo,countlo), fontsize=10)
+    ax1.set_xlabel("# pixels per second > {:d} sigma (per Amp)".format(cutlo),fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax1.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax1.annotate("Amp 1\n{:d}".format(count3sig_amp[0]),
+    ax1.annotate("Amp 1\n{:f}".format(countlo_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 2\n{:d}".format(count3sig_amp[1]),
+    ax1.annotate("Amp 2\n{:f}".format(countlo_amp[1]),
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 3\n{:d}".format(count3sig_amp[2]),
+    ax1.annotate("Amp 3\n{:f}".format(countlo_amp[2]),
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 4\n{:d}".format(count3sig_amp[3]),
+    ax1.annotate("Amp 4\n{:f}".format(countlo_amp[3]),
                  xy=(1.4,1.4),
                  fontsize=10
                  )
-    ax2=fig.add_subplot(222)
-    heatmap2=ax2.pcolor(countlo_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Total Pixels > counts: {:d} = {:d}'.format(cutlo,countlo), fontsize=10)
-    ax2.set_xlabel("# pixels with counts > {:d} (per Amp)".format(cutlo),fontsize=10)
+    ax2=fig.add_subplot(212)
+    heatmap2=ax2.pcolor(counthi_amp.reshape(2,2),cmap=plt.cm.OrRd)
+    plt.title('Total Pixels per Second > {:d} sigma = {:f}'.format(cuthi,counthi), fontsize=10)
+    ax2.set_xlabel("# pixels per second > {:d} sigma (per Amp)".format(cuthi),fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax2.annotate("Amp 1\n{:d}".format(countlo_amp[0]),
+    ax2.annotate("Amp 1\n{:f}".format(counthi_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n{:d}".format(countlo_amp[1]),
+    ax2.annotate("Amp 2\n{:f}".format(counthi_amp[1]),
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n{:d}".format(countlo_amp[2]),
+    ax2.annotate("Amp 3\n{:f}".format(counthi_amp[2]),
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n{:d}".format(countlo_amp[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
-    ax3=fig.add_subplot(223)
-    heatmap3=ax3.pcolor(counthi_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Total Pixels > counts: {:d} = {:d}'.format(cuthi,counthi), fontsize=10)
-    ax3.set_xlabel("# pixels with counts > {:d} (per Amp)".format(cuthi),fontsize=10)
-    ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax3.tick_params(axis='y',labelsize=10,labelleft='off')
-    ax3.annotate("Amp 1\n{:d}".format(counthi_amp[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-    ax3.annotate("Amp 2\n{:d}".format(counthi_amp[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-    ax3.annotate("Amp 3\n{:d}".format(counthi_amp[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-    ax3.annotate("Amp 4\n{:d}".format(counthi_amp[3]),
+    ax2.annotate("Amp 4\n{:f}".format(counthi_amp[3]),
                  xy=(1.4,1.4),
                  fontsize=10
                  )

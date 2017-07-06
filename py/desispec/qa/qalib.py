@@ -141,24 +141,17 @@ def getrms(image):
     return rms
 
 
-def countpix(image,nsig=None,ncounts=None):
+def countpix(image,nsig=None):
     """
-    Count the pixels above a given threshold.
-
-    Threshold can be in n times sigma or counts.
+    Count the pixels above a given threshold in units of sigma.
 
     Args:
         image: 2d image array
         nsig: threshold in units of sigma, e.g 2 for 2 sigma
-        ncounts: threshold in units of count, e.g 100
     """
-    if nsig is not None:
-        sig=np.std(image.ravel())
-        counts_nsig=np.where(image.ravel() > nsig*sig)[0].shape[0]
-        return counts_nsig
-    if ncounts is not None:
-        counts_thresh=np.where(image.ravel() > ncounts)[0].shape[0]
-        return counts_thresh
+    sig=np.std(image.ravel())
+    counts_nsig=np.where(image.ravel() > nsig*sig)[0].shape[0]
+    return counts_nsig
 
 def countbins(flux,threshold=0):
     """

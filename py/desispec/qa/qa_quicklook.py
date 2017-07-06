@@ -200,8 +200,8 @@ class Count_Pixels(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
-                 CUTLO = 100,   # low threshold for number of counts
-                 CUTHI = 500,
+                 CUTLO = 3,   # low threshold for number of counts in sigmas
+                 CUTHI = 10, 
                  NPIX_RANGE = [200.0, 500.0]
                  )
 
@@ -209,28 +209,29 @@ class Count_Pixels(MonitoringAlg):
 
         npix_warn = []
 
-        #- get the counts over entire CCD
-        npix3sig=qalib.countpix(image.pix,nsig=3) #- above 3 sigma
-        npixlo=qalib.countpix(image.pix,ncounts=param['CUTLO']) #- above 100 pixel count
-        npixhi=qalib.countpix(image.pix,ncounts=param['CUTHI']) #- above 500 pixel count
+        #- get the counts over entire CCD in counts per second
+        npixlo_tot=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
+        npixhi_tot=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
+        npixlo=npixlo_tot/image.meta["EXPTIME"]
+        npixhi=npixhi_tot/image.meta["EXPTIME"]
+
         #- get the counts for each amp
         if amps:
-            npix3sig_amps=[]
             npixlo_amps=[]
             npixhi_amps=[]
             #- get amp boundary in pixels
             from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                npix3sig_thisamp=qalib.countpix(image.pix[ampboundary],nsig=3)
-                npix3sig_amps.append(npix3sig_thisamp)
-                npixlo_thisamp=qalib.countpix(image.pix[ampboundary],ncounts=param['CUTLO'])
+                npixlo_thisamp_tot=qalib.countpix(image.pix[ampboundary],nsig=param['CUTLO'])
+                npixlo_thisamp=npixlo_thisamp_tot/image.meta["EXPTIME"]
                 npixlo_amps.append(npixlo_thisamp)
-                npixhi_thisamp=qalib.countpix(image.pix[ampboundary],ncounts=param['CUTHI'])
+                npixhi_thisamp_tot=qalib.countpix(image.pix[ampboundary],nsig=param['CUTHI'])
+                npixhi_thisamp=npixhi_thisamp_tot/image.meta["EXPTIME"]
                 npixhi_amps.append(npixhi_thisamp)
-            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi, "NPIX3SIG_AMP": npix3sig_amps, "NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_WARN":npix_warn}
+            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_WARN":npix_warn}
         else:
-            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_WARN":npix_warn} 
+            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_WARN":npix_warn} 
 
         if qlf:
             qlf_post(retval)      
