@@ -81,7 +81,9 @@ env:
         - DEBUG=True
     matrix:
         - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
+        - PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
         - PYTHON_VERSION=3.5 SETUP_CMD='egg_info'
+        - PYTHON_VERSION=3.5 SETUP_CMD='bdist_egg'
 
 matrix:
     # Don't wait for allowed failures.
@@ -93,29 +95,28 @@ matrix:
 
     include:
 
-        # Check for sphinx doc build warnings - we do this first because it
-        # runs for a long time
+        # Check for sphinx doc build warnings.
         - os: linux
           env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
-                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
-                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
-          # OPTIONAL_DEPS needed because the plot_directive in sphinx needs them
-          # -w is an astropy extension
+        #        CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+        #        PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
-        # Do a bdist_egg compile.  This will catch things like syntax errors
-        # without needing to do a full python setup.py test
-        - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='bdist_egg'
-
-        # Default versions
+        # Coverage test.  Note that installing the coverage software can
+        # change the set of packages installed by conda, so we do
+        # separate 'test' and 'test --coverage'.
         - os: linux
           env: PYTHON_VERSION=3.5 SETUP_CMD='test --coverage'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
-        # Default versions
+        # Standard tests.
         - os: linux
           env: PYTHON_VERSION=2.7 SETUP_CMD='test'
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+
+        - os: linux
+          env: PYTHON_VERSION=3.5 SETUP_CMD='test'
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
