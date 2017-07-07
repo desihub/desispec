@@ -142,6 +142,7 @@ autodoc_mock_imports = ['astropy',
                         'astropy.time',
                         'astropy.units',
                         'desiutil',
+                        'desiutil.log',
                         'desiutil.bitmask',
                         'desiutil.depend',
                         'desiutil.io',
@@ -171,7 +172,16 @@ autodoc_mock_imports = ['astropy',
                         'specter',
                         'specter.psf',
                         'specter.extract',
-                        'healpy']
+                        'healpy',
+                        'sqlalchemy',
+                        'sqlalchemy.exc',
+                        'sqlalchemy.ext',
+                        'sqlalchemy.orm',
+                        'sqlalchemy.orm.exc',
+                        'sqlalchemy.schema',
+                        'sqlalchemy.ext.declarative',
+                        'sqlalchemy.ext.associationproxy',
+                    ]
 
 # -- Options for HTML output ----------------------------------------------
 

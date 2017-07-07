@@ -65,21 +65,20 @@ def resample_flux(xout, x, flux, ivar=None, extrapolate=False):
     The total integrated flux is conserved.
 
     Args:
-        xout: output SORTED vector, not necessarily linearly spaced
-        x: input SORTED vector, not necessarily linearly spaced
-        flux: input flux density dflux/dx sampled at x
+        - xout: output SORTED vector, not necessarily linearly spaced
+        - x: input SORTED vector, not necessarily linearly spaced
+        - flux: input flux density dflux/dx sampled at x
 
     both x and xout must represent the same quantity with the same unit
 
     Options:
-        ivar: weights for flux; default is unweighted resampling
-        extrapolate: extrapolate using edge values of input array, default is False,
-                     in which case values outside of input array are set to zero.
+        - ivar: weights for flux; default is unweighted resampling
+        - extrapolate: extrapolate using edge values of input array, default is False,
+          in which case values outside of input array are set to zero.
     
     Setting both ivar and extrapolate raises a ValueError because one cannot
     assign an ivar outside of the input data range. 
-    
-    
+
     Returns:
         if ivar is None, returns outflux
         if ivar is not None, returns outflux, outivar
