@@ -104,6 +104,8 @@ matrix:
         # Check for sphinx doc build warnings.
         - os: linux
           env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx'
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # Coverage test.  Note that installing the coverage software can
         # change the set of packages installed by conda, so we do
@@ -165,8 +167,8 @@ install:
     - export DESIMODEL=${HOME}/desimodel/${DESIMODEL_VERSION}
     - mkdir -p ${DESIMODEL}
     - if [[ $SETUP_CMD == test* ]]; then svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data ${DESIMODEL}/data ; fi
-    - if [[ $SETUP_CMD == test* ]]; then conda list; fi
-    - if [[ $SETUP_CMD == test* ]]; then python -c 'import numpy; import scipy; print(numpy.__version__); print(numpy.__path__); print(scipy.__version__); print(scipy.__path__)'; fi
+    - conda list
+    # - if [[ $SETUP_CMD == test* ]]; then python -c 'import numpy; import scipy; print(numpy.__version__); print(numpy.__path__); print(scipy.__version__); print(scipy.__path__)'; fi
 
 before_install:
     # Show the Travis worker's IP address.
