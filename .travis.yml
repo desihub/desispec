@@ -55,7 +55,7 @@ env:
         # - NUMPY_VERSION=1.10
         # - SCIPY_VERSION=0.16
         - ASTROPY_VERSION=1.2.1
-        - SPHINX_VERSION=1.6
+        # - SPHINX_VERSION=1.6
         - DESIUTIL_VERSION=1.9.5
         - SPECLITE_VERSION=0.5
         - SPECTER_VERSION=0.6.0
@@ -104,7 +104,6 @@ matrix:
         # Check for sphinx doc build warnings.
         - os: linux
           env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx'
-               CONDA_DEPENDENCIES="sphinx>${SPHINX_VERSION}"
 
         # Coverage test.  Note that installing the coverage software can
         # change the set of packages installed by conda, so we do
