@@ -14,10 +14,15 @@ import numpy as np
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
                         BigInteger, Integer, String, Float, DateTime)
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.declarative import declarative_base, declared_attr, DeclarativeMeta
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.schema import CreateSchema
 from .util import convert_dateobs, parse_pgpass
+
+Base = declarative_base()
+engine = None
+dbSession = scoped_session(sessionmaker())
+schemaname = None
 
 
 class SchemaMixin(object):
@@ -32,16 +37,6 @@ class SchemaMixin(object):
     @declared_attr
     def __table_args__(cls):
         return {'schema': schemaname}
-
-
-class DeclarativeMixinMeta(DeclarativeMeta, type(SchemaMixin)):
-    pass
-
-
-Base = declarative_base(metaclass=DeclarativeMixinMeta)
-engine = None
-dbSession = scoped_session(sessionmaker())
-schemaname = None
 
 
 class Truth(SchemaMixin, Base):
