@@ -96,11 +96,15 @@ matrix:
     include:
 
         # Check for sphinx doc build warnings.
+        # - os: linux
+        #   env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
+        #        CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+        #        PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+
+        # Check for sphinx doc build warnings.
         - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
+          env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx'
                CONDA_DEPENDENCIES="sphinx>${SPHINX_VERSION}"
-               # CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
-               # PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # Coverage test.  Note that installing the coverage software can
         # change the set of packages installed by conda, so we do
