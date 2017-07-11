@@ -55,7 +55,7 @@ env:
         # - NUMPY_VERSION=1.10
         # - SCIPY_VERSION=0.16
         - ASTROPY_VERSION=1.2.1
-        # - SPHINX_VERSION=1.3
+        # - SPHINX_VERSION=1.6
         - DESIUTIL_VERSION=1.9.5
         - SPECLITE_VERSION=0.5
         - SPECTER_VERSION=0.6.0
@@ -161,8 +161,8 @@ install:
     - export DESIMODEL=${HOME}/desimodel/${DESIMODEL_VERSION}
     - mkdir -p ${DESIMODEL}
     - if [[ $SETUP_CMD == test* ]]; then svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data ${DESIMODEL}/data ; fi
-    - if [[ $SETUP_CMD == test* ]]; then conda list; fi
-    - if [[ $SETUP_CMD == test* ]]; then python -c 'import numpy; import scipy; print(numpy.__version__); print(numpy.__path__); print(scipy.__version__); print(scipy.__path__)'; fi
+    - conda list
+    # - if [[ $SETUP_CMD == test* ]]; then python -c 'import numpy; import scipy; print(numpy.__version__); print(numpy.__path__); print(scipy.__version__); print(scipy.__path__)'; fi
 
 before_install:
     # Show the Travis worker's IP address.
