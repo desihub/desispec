@@ -372,6 +372,7 @@ class TestQL(unittest.TestCase):
         inp=self.frame
         qargs={}
         qargs["PSFFile"]=self.psf
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True
@@ -387,6 +388,7 @@ class TestQL(unittest.TestCase):
         qa=QA.Sky_Continuum('skycont',self.config)
         inp=self.frame
         qargs={}
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=False
@@ -404,6 +406,7 @@ class TestQL(unittest.TestCase):
         qa=QA.Sky_Peaks('skypeaks',self.config)
         inp=self.frame
         qargs={}
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True
@@ -418,6 +421,7 @@ class TestQL(unittest.TestCase):
         inp=self.frame
         qargs={}
         qargs["PSFFile"]=self.psf
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=False
@@ -438,6 +442,7 @@ class TestQL(unittest.TestCase):
         sky=self.skymodel
         qargs={}
         qargs["PSFFile"]=self.psf
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True
@@ -458,6 +463,7 @@ class TestQL(unittest.TestCase):
         inp=self.frame
         qargs={}
         qargs["PSFFile"]=self.psf
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True
