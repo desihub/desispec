@@ -107,6 +107,17 @@ class Config(object):
             fframefile=None
             sframefile=None
 
+        if self.conf["Flavor"] == 'arcs':
+            arcimg=findfile('pix',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir)
+            flatimg=findfile('pix',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,rawdata_dir=self.rawdata_dir)
+            bootfile=findfile('psfboot',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
+        else:
+            arcimg=None
+            flatimg=None
+            bootfile=None
+
+        paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
+
         paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
 
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
@@ -123,6 +134,8 @@ class Config(object):
                 paopts[PA]=paopt_initialize
             elif PA=='Preproc':
                 paopts[PA]=paopt_preproc
+            elif PA=='BootCalibration':
+                paopts[PA]=paopt_bootcalib
             elif PA=='BoxcarExtract':
                 paopts[PA]=paopt_extract
             elif PA=='ApplyFiberFlat_QL':

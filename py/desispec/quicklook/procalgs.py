@@ -128,17 +128,19 @@ class BootCalibration(pas.PipelineAlg):
         pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
         
     def run(self,*args,**kwargs):
-        if len(args) == 0 : #- args[0] should be the fiberflat image
-            raise qlexceptions.ParameterException("Missing input parameter")
         if 'ArcLampImage' not in kwargs: 
             raise qlexceptions.ParameterException("Need ArcLampImage")
+        if 'FlatImage' not in kwargs:
+            raise qlexceptions.ParameterException("Need FlatImage")
+        if 'outputFile' not in kwargs:
+            raise qlexceptions.ParameterException("Need outputFile")
 
         if "Deg" not in kwargs:
             deg=5 #- 5th order legendre polynomial
         else:
             deg=kwargs["Deg"]
 
-        flatimage=args[0]
+        flatimage=kwargs["FlatImage"]
         arcimage=kwargs["ArcLampImage"]
         outputfile=kwargs["outputFile"]
 
@@ -146,14 +148,15 @@ class BootCalibration(pas.PipelineAlg):
 
 
     def run_pa(self,deg,flatimage,arcimage,outputfile):
-        from desispec import bootcalib as desiboot
-        xfit,fdicts,gauss,all_wv_soln=desiboot.bootcalib(deg,flatimage,arcimage)
+        from desispec.util import runcmd
+        cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
+        runcmd(cmd)
+        if runcmd(cmd) !=0:
+            raise RuntimeError('desi_bootcalib failed, psfboot not written')
+        else:
+            log.info("PSF file wrtten. Exiting Quicklook for this configuration.") #- File written no need to go further
+        sys.exit(0)
 
-        desiboot.write_psf(outputfile, xfit, fdicts, gauss,all_wv_soln)
-        log.info("PSF file wrtten. Exiting Quicklook for this configuration.") #- File written no need to go further
-        sys.exit(0)   
-
-    
 
 class BoxcarExtract(pas.PipelineAlg):
     from desispec.image import Image as im
