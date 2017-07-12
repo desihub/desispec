@@ -102,7 +102,10 @@ class Get_RMS(MonitoringAlg):
         rmsccd=qalib.getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
 
         rms_row=[]
-        rmsdiff=[]
+        for i in range(image.pix.shape[0]):
+            rmsrow = qalib.getrms(image.pix[i])
+            rms_row.append(rmsrow)
+
         expnum=[]
 
         if param is None:
@@ -123,15 +126,22 @@ class Get_RMS(MonitoringAlg):
                 thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
                 rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary])
+                if rms_thisover_thisamp <= param['RMS_RANGE'][0] or rms_thisover_thisamp >= param['RMS_RANGE'][3]:
+                    rmsdiff = 2
+                elif rms_thisover_thisamp <= param['RMS_RANGE'][1] or rms_thisover_thisamp >= param['RMS_RANGE'][2]:
+                    rmsdiff = 1
+                else:
+                    rmsdiff = 0
                 thisoverscan_values=np.ravel(image.pix[thisoverscanboundary])
                 rms_thisamp=qalib.getrms(image.pix[thisampboundary])
                 rms_amps.append(rms_thisamp)
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_WARN":rmsdiff,"EXPNUM_WARN":expnum}
+
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff,"EXPNUM_WARN":expnum}
         else:
-            retval["METRICS"]={"RMS":rmsccd,"RMS_ROW":rms_row,"RMSDIFF_WARN":rmsdiff,"EXPNUM_WARN":expnum} 
+            retval["METRICS"]={"RMS":rmsccd,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum} 
 
         if qlf:
             qlf_post(retval)  
