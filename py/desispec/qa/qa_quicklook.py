@@ -108,7 +108,7 @@ class Get_RMS(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
-                RMS_RANGE=[-1.,1.]
+                RMS_RANGE=[-2.0, -1.0, 1.0, 2.0]
                 )
 
         retval["PARAMS"] = param
@@ -202,7 +202,7 @@ class Count_Pixels(MonitoringAlg):
             param = dict(
                  CUTLO = 3,   # low threshold for number of counts in sigmas
                  CUTHI = 10, 
-                 NPIX_RANGE = [200.0, 500.0]
+                 NPIX_RANGE = [50.0, 200.0, 500.0, 650.0]
                  )
 
         retval["PARAMS"] = param
@@ -323,7 +323,7 @@ class Integrate_Spec(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
-                MAGDIFF_RANGE = [-0.5, 0.5]
+                MAGDIFF_RANGE = [-1.0, -0.5, 0.5, 1.0]
                 )
 
         retval["PARAMS"] = param
@@ -482,7 +482,7 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
                 B_CONT=[(4000, 4500), (5250, 5550)],
                 R_CONT=[(5950, 6200), (6990, 7230)],
                 Z_CONT=[(8120, 8270), (9110, 9280)],
-                SKYCONT_RANGE=[100.0, 1000.0]
+                SKYCONT_RANGE=[0.0, 100.0, 1000.0, 1500.0]
                 )
 
         retval["PARAMS"] = param
@@ -689,7 +689,7 @@ class Sky_Peaks(MonitoringAlg):
                 B_PEAKS=[3914.4, 5199.3, 5201.8],
                 R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                 Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                SUMCOUNT_RANGE=[1000.0, 1000000.0]
+                SUMCOUNT_RANGE=[0.0, 1000.0, 1000000.0, 100000000.0]
                 )
 
         retval["PARAMS"] = param
@@ -1020,8 +1020,8 @@ class Calc_XWSigma(MonitoringAlg):
                 B_PEAKS=[3914.4, 5199.3, 5201.8],
                 R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                 Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                XSHIFT_RANGE = [-2.0, 2.0],
-                WSHIFT_RANGE = [-2.0, 2.0]
+                XSHIFT_RANGE = [-4.0, -2.0, 2.0, 4.0],
+                WSHIFT_RANGE = [-4.0, -2.0, 2.0, 4.0]
                 )
 
         retval["PARAMS"] = param
@@ -1140,7 +1140,7 @@ class Bias_From_Overscan(MonitoringAlg):
             log.info("Param is None. Using default param instead")
             param = dict(
                 PERCENTILES=[68.2,95.4,99.7],
-                DIFF_RANGE=[-1.,1.]
+                DIFF_RANGE=[-2.0, -1.0, 1.0, 2.0]
                 )
 
         retval["PARAMS"] = param
@@ -1238,7 +1238,7 @@ class CountSpectralBins(MonitoringAlg):
                          CUTLO = 100,   # low threshold for number of counts
                          CUTMED = 250,
                          CUTHI = 500,
-                         NGOOD_RANGE = [490, 500]
+                         NGOOD_RANGE = [480, 490, 500]
                          )
 
         retval["PARAMS"] = param
@@ -1411,7 +1411,7 @@ class Sky_Residual(MonitoringAlg):
             param = dict(BIN_SZ=0.1, #- Bin size for histograms
                          PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
                          PER_RESID=95.,   # Percentile for residual distribution
-                         SKY_RANGE = [0.0, 10.0]
+                         SKY_RANGE = [0.0, 10.0, 20.0]
                         )
 
         retval["PARAMS"] = param
@@ -1499,7 +1499,7 @@ class Calculate_SNR(MonitoringAlg):
             log.info("Param is None. Using default param instead")
             param = dict(
                 SNR_FLUXTHRESH=0.0, # Minimum value of flux to go into SNR calc. 
-                FIDSNR_RANGE=[6.5, 7.5],
+                FIDSNR_RANGE=[6.0, 6.5, 7.5, 8.0],
                 FIDMAG=22.
                 )
 
