@@ -47,4 +47,4 @@ Algorithms:
             z: 7650,9830,0.8
         QA:
             CountSpectralBins:
-                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_RANGE: [480, 490, 500]}
+                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_RANGE: [480, 490, 500, 500]}

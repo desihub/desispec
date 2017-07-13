@@ -99,11 +99,12 @@ class Get_RMS(MonitoringAlg):
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
-        rmsccd=qalib.getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
+        # return rms values in rms/sqrt(exptime)
+        rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
 
         rms_row=[]
         for i in range(image.pix.shape[0]):
-            rmsrow = qalib.getrms(image.pix[i])
+            rmsrow = qalib.getrms(image.pix[i]/np.sqrt(image.meta["EXPTIME"]))
             rms_row.append(rmsrow)
 
         expnum=[]
@@ -125,19 +126,23 @@ class Get_RMS(MonitoringAlg):
             for kk in ['1','2','3','4']:
                 thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
-                rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary])
-                if rms_thisover_thisamp <= param['RMS_RANGE'][0] or rms_thisover_thisamp >= param['RMS_RANGE'][3]:
-                    rmsdiff = 2
-                elif rms_thisover_thisamp <= param['RMS_RANGE'][1] or rms_thisover_thisamp >= param['RMS_RANGE'][2]:
-                    rmsdiff = 1
-                else:
-                    rmsdiff = 0
-                thisoverscan_values=np.ravel(image.pix[thisoverscanboundary])
-                rms_thisamp=qalib.getrms(image.pix[thisampboundary])
+                rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
+                thisoverscan_values=np.ravel(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
+                rms_thisamp=qalib.getrms(image.pix[thisampboundary]/np.sqrt(image.meta["EXPTIME"]))
                 rms_amps.append(rms_thisamp)
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
+
+            for i in range(len(rms_over_amps)):
+                if rms_thisover_thisamp <= param['RMS_RANGE'][0] or rms_thisover_thisamp >= param['RMS_RANGE'][3]:
+                    rmsdiff = 'ALARM'
+                    break
+                elif rms_thisover_thisamp <= param['RMS_RANGE'][1] or rms_thisover_thisamp >= param['RMS_RANGE'][2]:
+                    rmsdiff = 'WARN'
+                    break
+                else:
+                    rmsdiff = 'GOOD'
 
             retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff,"EXPNUM_WARN":expnum}
         else:
@@ -220,10 +225,8 @@ class Count_Pixels(MonitoringAlg):
         npix_warn = []
 
         #- get the counts over entire CCD in counts per second
-        npixlo_tot=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
-        npixhi_tot=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
-        npixlo=npixlo_tot/image.meta["EXPTIME"]
-        npixhi=npixhi_tot/image.meta["EXPTIME"]
+        npixlo=qalib.countpix(image.pix/image.meta["EXPTIME"],nsig=param['CUTLO']) #- above 3 sigma in counts
+        npixhi=qalib.countpix(image.pix/image.meta["EXPTIME"],nsig=param['CUTHI']) #- above 10 sigma in counts
 
         #- get the counts for each amp
         if amps:
@@ -233,11 +236,9 @@ class Count_Pixels(MonitoringAlg):
             from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                npixlo_thisamp_tot=qalib.countpix(image.pix[ampboundary],nsig=param['CUTLO'])
-                npixlo_thisamp=npixlo_thisamp_tot/image.meta["EXPTIME"]
+                npixlo_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTLO'])
                 npixlo_amps.append(npixlo_thisamp)
-                npixhi_thisamp_tot=qalib.countpix(image.pix[ampboundary],nsig=param['CUTHI'])
-                npixhi_thisamp=npixhi_thisamp_tot/image.meta["EXPTIME"]
+                npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
                 npixhi_amps.append(npixhi_thisamp)
             retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_WARN":npix_warn}
         else:
@@ -492,7 +493,7 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
                 B_CONT=[(4000, 4500), (5250, 5550)],
                 R_CONT=[(5950, 6200), (6990, 7230)],
                 Z_CONT=[(8120, 8270), (9110, 9280)],
-                SKYCONT_RANGE=[0.0, 100.0, 1000.0, 1500.0]
+                SKYCONT_RANGE=[50.0, 100.0, 400.0, 600.0]
                 )
 
         retval["PARAMS"] = param
@@ -612,11 +613,17 @@ class Sky_Peaks(MonitoringAlg):
 
         nspec_counts=[]
         sky_counts=[]
+        nspec_counts_rms=[]
+        sky_counts_rms=[]
         rms_skyspec_amp=[]
         amp1=[]
         amp2=[]
         amp3=[]
         amp4=[]
+        rmsamp1=[]
+        rmsamp2=[]
+        rmsamp3=[]
+        rmsamp4=[]
         for i in range(frame.flux.shape[0]):
             if camera[0]=="b":
                 iwave1=np.argmin(np.abs(frame.wave-b_peaks[0]))
@@ -625,8 +632,10 @@ class Sky_Peaks(MonitoringAlg):
                 peak1_flux=np.trapz(frame.flux[i,iwave1-dw:iwave1+dw+1])
                 peak2_flux=np.trapz(frame.flux[i,iwave2-dw:iwave2+dw+1])
                 peak3_flux=np.trapz(frame.flux[i,iwave3-dw:iwave3+dw+1])
-                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux)
+                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
                 nspec_counts.append(sum_counts)
+                nspec_counts_rms.append(sum_counts_rms)
             if camera[0]=="r":
                 iwave1=np.argmin(np.abs(frame.wave-r_peaks[0]))
                 iwave2=np.argmin(np.abs(frame.wave-r_peaks[1]))
@@ -638,8 +647,10 @@ class Sky_Peaks(MonitoringAlg):
                 peak3_flux=np.trapz(frame.flux[i,iwave3-dw:iwave3+dw+1])
                 peak4_flux=np.trapz(frame.flux[i,iwave4-dw:iwave4+dw+1])
                 peak5_flux=np.trapz(frame.flux[i,iwave5-dw:iwave5+dw+1])
-                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)
+                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
                 nspec_counts.append(sum_counts)
+                nspec_counts_rms.append(sum_counts_rms)
             if camera[0]=="z":
                 iwave1=np.argmin(np.abs(frame.wave-z_peaks[0]))
                 iwave2=np.argmin(np.abs(frame.wave-z_peaks[1]))
@@ -653,8 +664,10 @@ class Sky_Peaks(MonitoringAlg):
                 peak4_flux=np.trapz(frame.flux[i,iwave4-dw:iwave4+dw+1])
                 peak5_flux=np.trapz(frame.flux[i,iwave5-dw:iwave5+dw+1])
                 peak6_flux=np.trapz(frame.flux[i,iwave6-dw:iwave6+dw+1])
-                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)
+                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
                 nspec_counts.append(sum_counts)
+                nspec_counts_rms.append(sum_counts_rms)
 
             if frame.fibermap['OBJTYPE'][i]=='SKY':
                 sky_counts.append(sum_counts)
@@ -662,28 +675,44 @@ class Sky_Peaks(MonitoringAlg):
                 if amps:
                     if frame.fibermap['FIBER'][i]<240:
                         if camera[0]=="b":
-                            amp1_flux=peak1_flux
-                            amp3_flux=np.sum(peak2_flux+peak3_flux)
+                            amp1_flux=peak1_flux/frame.meta["EXPTIME"]
+                            amp3_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                            rmsamp1_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
+                            rmsamp3_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         if camera[0]=="r":
-                            amp1_flux=np.sum(peak1_flux+peak2_flux)
-                            amp3_flux=np.sum(peak3_flux+peak4_flux+peak5_flux)
+                            amp1_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
+                            amp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                            rmsamp1_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                            rmsamp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         if camera[0]=="z":
-                            amp1_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
-                            amp3_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
+                            amp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                            amp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                            rmsamp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                            rmsamp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         amp1.append(amp1_flux)
                         amp3.append(amp3_flux)
+                        rmsamp1.append(rmsamp1_flux)
+                        rmsamp3.append(rmsamp3_flux)
                     if frame.fibermap['FIBER'][i]>260:
                         if camera[0]=="b":
-                            amp2_flux=peak1_flux
-                            amp4_flux=np.sum(peak2_flux+peak3_flux)
+                            amp2_flux=peak1_flux/frame.meta["EXPTIME"]
+                            amp4_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                            rmsamp2_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
+                            rmsamp4_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         if camera[0]=="r":
-                            amp2_flux=np.sum(peak1_flux+peak2_flux)
-                            amp4_flux=np.sum(peak3_flux+peak4_flux+peak5_flux)
+                            amp2_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
+                            amp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                            rmsamp2_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                            rmsamp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         if camera[0]=="z":
-                            amp2_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
-                            amp4_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
+                            amp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                            amp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                            rmsamp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                            rmsamp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         amp2.append(amp2_flux)
                         amp4.append(amp4_flux)
+                        rmsamp2.append(rmsamp2_flux)
+                        rmsamp4.append(rmsamp4_flux)
 
         nspec_counts=np.array(nspec_counts)
         sky_counts=np.array(sky_counts)
@@ -699,7 +728,7 @@ class Sky_Peaks(MonitoringAlg):
                 B_PEAKS=[3914.4, 5199.3, 5201.8],
                 R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                 Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                SUMCOUNT_RANGE=[0.0, 1000.0, 1000000.0, 100000000.0]
+                SUMCOUNT_RANGE=[500.0, 1000.0, 20000.0, 40000.0]
                 )
 
         retval["PARAMS"] = param
@@ -710,10 +739,10 @@ class Sky_Peaks(MonitoringAlg):
                 amp2=np.zeros(len(sky_counts))
                 amp4=np.zeros(len(sky_counts))
             else:
-                amp2=np.array(amp2)
-                amp4=np.array(amp4)
-            amp1=np.array(amp1)
-            amp3=np.array(amp3)
+                amp2=np.array(rmsamp2)
+                amp4=np.array(rmsamp4)
+            amp1=np.array(rmsamp1)
+            amp3=np.array(rmsamp3)
             amp1_rms=qalib.getrms(amp1)
             amp2_rms=qalib.getrms(amp2)
             amp3_rms=qalib.getrms(amp3)
@@ -1132,7 +1161,7 @@ class Bias_From_Overscan(MonitoringAlg):
             #  the 0.5% of smallest and largest values. (from sdssproc) 
             isort=np.sort(pixdata.ravel())
             nn=isort.shape[0]
-            bias=np.mean(isort[int(0.005*nn) : int(0.995*nn)])
+            bias=np.mean(isort[int(0.005*nn) : int(0.995*nn)])/header["EXPTIME"]
             bias_overscan.append(bias)
 
         bias=np.mean(bias_overscan)
@@ -1248,7 +1277,7 @@ class CountSpectralBins(MonitoringAlg):
                          CUTLO = 100,   # low threshold for number of counts
                          CUTMED = 250,
                          CUTHI = 500,
-                         NGOOD_RANGE = [480, 490, 500]
+                         NGOOD_RANGE = [480, 490, 500, 500]
                          )
 
         retval["PARAMS"] = param
@@ -1421,7 +1450,7 @@ class Sky_Residual(MonitoringAlg):
             param = dict(BIN_SZ=0.1, #- Bin size for histograms
                          PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
                          PER_RESID=95.,   # Percentile for residual distribution
-                         SKY_RANGE = [0.0, 10.0, 20.0]
+                         SKY_RANGE = [-10.0, -5.0, 5.0, 10.0]
                         )
 
         retval["PARAMS"] = param

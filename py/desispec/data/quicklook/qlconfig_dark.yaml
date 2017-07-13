@@ -45,23 +45,23 @@ Algorithms:
             z: 7650,9830,0.8
         QA: 
             CountSpectralBins:
-                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_RANGE: [480, 490, 500]}
+                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_RANGE: [480, 490, 500, 500]}
     ApplyFiberFlat_QL:
         QA: 
             Sky_Continuum:
                 PARAMS: {B_CONT: [(4000, 4500), (5250, 5550)],
                          R_CONT: [(5950, 6200), (6990, 7230)],
                          Z_CONT: [(8120, 8270), (9110, 9280)],
-                         SKYCONT_RANGE: [0.0, 100.0, 1000.0, 1500.0]}
+                         SKYCONT_RANGE: [50.0, 100.0, 400.0, 600.0]}
             Sky_Peaks:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5201.8],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                          Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                         SUMCOUNT_RANGE: [0.0, 1000.0, 1000000.0, 10000000.0]}
+                         SUMCOUNT_RANGE: [500.0, 1000.0, 20000.0, 40000.0]}
     SkySub_QL:
         QA: 
             Sky_Residual:
-                PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, SKY_RANGE: [0.0, 10.0, 20.0]}
+                PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, SKY_RANGE: [-10.0, -5.0, 5.0, 10.0]}
             Integrate_Spec:
                 PARAMS: {MAGDIFF_RANGE: [-1.0, -0.5, 0.5, 1.0]}
             Calculate_SNR:
