@@ -135,10 +135,10 @@ class Get_RMS(MonitoringAlg):
             rmsover=np.std(overscan_values)
 
             for i in range(len(rms_over_amps)):
-                if rms_thisover_thisamp <= param['RMS_RANGE'][0] or rms_thisover_thisamp >= param['RMS_RANGE'][3]:
+                if rms_over_amps[i] <= param['RMS_RANGE'][0] or rms_over_amps[i] >= param['RMS_RANGE'][3]:
                     rmsdiff = 'ALARM'
                     break
-                elif rms_thisover_thisamp <= param['RMS_RANGE'][1] or rms_thisover_thisamp >= param['RMS_RANGE'][2]:
+                elif rms_over_amps[i] <= param['RMS_RANGE'][1] or rms_over_amps[i] >= param['RMS_RANGE'][2]:
                     rmsdiff = 'WARN'
                     break
                 else:
@@ -1151,29 +1151,58 @@ class Bias_From_Overscan(MonitoringAlg):
                 if key not in header:
                     header[key] = h0[key]
 
+        data=[]
+        row_data_amp1=[]
+        row_data_amp2=[]
+        row_data_amp3=[]
+        row_data_amp4=[]
         bias_overscan=[]        
         for kk in ['1','2','3','4']:
             from desispec.preproc import _parse_sec_keyword
             
             sel=_parse_sec_keyword(header['BIASSEC'+kk])
-            pixdata=rawimage[sel]
+            #- Obtain counts/second in bias region
+            pixdata=rawimage[sel]/header["EXPTIME"]
+            if kk == '1':
+                for i in range(pixdata.shape[0]):
+                    row_amp1=pixdata[i]
+                    row_data_amp1.append(row_amp1)
+            if kk == '2':
+                for i in range(pixdata.shape[0]):
+                    row_amp2=pixdata[i]
+                    row_data_amp2.append(row_amp2)
+            if kk == '3':
+                for i in range(pixdata.shape[0]):
+                    row_amp3=pixdata[i]
+                    row_data_amp3.append(row_amp3)
+            if kk == '4':
+                for i in range(pixdata.shape[0]):
+                    row_amp4=pixdata[i]
+                    row_data_amp4.append(row_amp4)
             #- Compute statistics of the bias region that only reject
             #  the 0.5% of smallest and largest values. (from sdssproc) 
             isort=np.sort(pixdata.ravel())
             nn=isort.shape[0]
-            bias=np.mean(isort[int(0.005*nn) : int(0.995*nn)])/header["EXPTIME"]
+            bias=np.mean(isort[int(0.005*nn) : int(0.995*nn)])
             bias_overscan.append(bias)
+            data.append(isort)
 
-        bias=np.mean(bias_overscan)
+        row_data_bottom=[]
+        row_data_top=[]
+        for i in range(len(row_data_amp1)):
+            row_data_lower=np.concatenate((row_data_amp1[i],row_data_amp2[i]))
+            row_data_upper=np.concatenate((row_data_amp3[i],row_data_amp4[i]))
+            row_data_bottom.append(row_data_lower)
+            row_data_top.append(row_data_upper)
+        row_data=np.concatenate((row_data_bottom,row_data_top))
 
-        diff1sig=[]
-        diff2sig=[]
-        diff3sig=[]
-        data5sig=[]
         mean_row=[]
-        biasdiff_warn=[]
-        data5sig_warn=[]
-        diff_warn=[]
+        for i in range(len(row_data)):
+            mean=np.mean(row_data[i])
+            mean_row.append(mean)
+
+        full_data=np.concatenate((data[0],data[1],data[2],data[3])).ravel()
+        bias=np.mean(bias_overscan)
 
         if param is None:
             log.info("Param is None. Using default param instead")
@@ -1182,13 +1211,37 @@ class Bias_From_Overscan(MonitoringAlg):
                 DIFF_RANGE=[-2.0, -1.0, 1.0, 2.0]
                 )
 
+        sig1_lo = np.percentile(full_data,(100.-param['PERCENTILES'][0])/2.)
+        sig1_hi = np.percentile(full_data,100.-sig1_lo)
+        sig2_lo = np.percentile(full_data,(100.-param['PERCENTILES'][1])/2.)
+        sig2_hi = np.percentile(full_data,100.-sig2_lo)
+        sig3_lo = np.percentile(full_data,(100.-param['PERCENTILES'][2])/2.)
+        sig3_hi = np.percentile(full_data,100.-sig3_lo)
+
+        diff1sig = sig1_hi - sig1_lo
+        diff2sig = sig2_hi - sig2_lo
+        diff3sig = sig3_hi - sig3_lo
+
+        sig5_value = np.percentile(full_data,100.-99.99994)
+        data5sig = len(np.where(full_data <= sig5_value)[0])
+
         retval["PARAMS"] = param
 
         if amps:
             bias_amps=np.array(bias_overscan)
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEAN_ROW":mean_row,"BIASDIFF_WARN":biasdiff_warn,"DATA5SIG_WARN":data5sig_warn,"DIFF_WARN":diff_warn}
+            for i in range(len(bias_amps)):
+                if bias_amps[i] <= param['DIFF_RANGE'][0] or bias_amps[i] >= param['DIFF_RANGE'][3]:
+                    biasdiff = 'ALARM'
+                    break
+                elif bias_amps[i] <= param['DIFF_RANGE'][1] or bias_amps[i] >= param['DIFF_RANGE'][2]:
+                    biasdiff = 'WARN'
+                    break
+                else:
+                    biasdiff = 'GOOD'
+
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff}
         else:
-            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEAN_ROW":mean_row,"BIASDIFF_WARN":biasdiff_warn,"DATA5SIG_WARN":data5sig_warn,"DIFF_WARN":diff_warn}
+            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
 
         #- http post if needed
         if qlf:
