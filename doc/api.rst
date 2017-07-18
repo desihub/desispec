@@ -13,13 +13,27 @@ Full desispec API Reference
 .. automodule:: desispec.boxcar
     :members:
 
-.. automodule:: desispec.brick
-    :members:
-
 .. automodule:: desispec.coaddition
     :members:
 
 .. automodule:: desispec.cosmics
+    :members:
+
+.. automodule:: desispec.database
+    :members:
+
+.. This module will eventually go away, so comment it out for now to avoid
+.. Documentation build errors.
+.. .. automodule:: desispec.database.datachallenge
+..     :members:
+
+.. automodule:: desispec.database.metadata
+    :members:
+
+.. automodule:: desispec.database.spectra
+    :members:
+
+.. automodule:: desispec.database.util
     :members:
 
 .. automodule:: desispec.fiberflat
@@ -41,9 +55,6 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.io.brick
-    :members:
-
-.. automodule:: desispec.io.database
     :members:
 
 .. automodule:: desispec.io.download
@@ -154,6 +165,12 @@ Full desispec API Reference
 .. automodule:: desispec.quicklook
     :members:
 
+.. automodule:: desispec.quicklook.arcprocess
+    :members:
+
+.. automodule:: desispec.quicklook.palib
+    :members:
+
 .. automodule:: desispec.quicklook.pas
     :members:
 
@@ -182,6 +199,9 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.quicklook.quicksky
+    :members:
+
+.. automodule:: desispec.quicklook.util
     :members:
 
 .. automodule:: desispec.resolution

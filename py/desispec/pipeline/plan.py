@@ -18,8 +18,13 @@ import glob
 import re
 import copy
 
+import numpy as np
+
+import healpy as hp
+
 from .. import io
 from desiutil.log import get_logger
+import desimodel.footprint
 
 from .common import *
 from .graph import *
@@ -60,7 +65,7 @@ def select_nights(allnights, nightstr):
     return nights
 
 
-def create_prod(nightstr=None, extra={}, specs=None, fakepix=False):
+def create_prod(nightstr=None, extra={}, specs=None, fakepix=False, hpxnside=64):
     """
     Create or update a production.
 
@@ -81,10 +86,11 @@ def create_prod(nightstr=None, extra={}, specs=None, fakepix=False):
             data files.  Assume that all spectrographs / cameras
             have data.  Useful for planning when simulating frame
             files directly.
+        hpxnside (int): The nside value to use for spectral grouping.
 
     Returns:
         tuple containing the number of exposures of each type
-        and the bricks.
+        and the spectral groups.
     """
 
     rawdir = os.path.abspath(io.rawdata_root())
@@ -112,9 +118,9 @@ def create_prod(nightstr=None, extra={}, specs=None, fakepix=False):
     if not os.path.isdir(expdir):
         os.makedirs(expdir)
 
-    brkdir = os.path.join(proddir, "bricks")
-    if not os.path.isdir(brkdir):
-        os.makedirs(brkdir)
+    specdir = os.path.join(proddir, "spectra-{}".format(hpxnside))
+    if not os.path.isdir(specdir):
+        os.makedirs(specdir)
 
     plandir = io.get_pipe_plandir()
     if not os.path.isdir(plandir):
@@ -156,7 +162,7 @@ def create_prod(nightstr=None, extra={}, specs=None, fakepix=False):
 
     # create per-night directories
 
-    allbricks = {}
+    allpix = {}
 
     for nt in nights:
         nexpdir = os.path.join(expdir, nt)
@@ -175,13 +181,13 @@ def create_prod(nightstr=None, extra={}, specs=None, fakepix=False):
         if not os.path.isdir(nlog):
             os.makedirs(nlog)
 
-        grph, expcount, nbricks = graph_night(nt, specs, fakepix)
+        grph, expcount, npix = graph_night(nt, specs, fakepix, hpxnside)
 
-        for brk in nbricks:
-            if brk in allbricks:
-                allbricks[brk] += nbricks[brk]
+        for pix in npix:
+            if pix in allpix:
+                allpix[pix] += npix[pix]
             else:
-                allbricks[brk] = nbricks[brk]
+                allpix[pix] = npix[pix]
 
         expnightcount[nt] = expcount
         with open(os.path.join(plandir, "{}.dot".format(nt)), "w") as f:
@@ -195,10 +201,10 @@ def create_prod(nightstr=None, extra={}, specs=None, fakepix=False):
                 if not os.path.isdir(fdir):
                     os.makedirs(fdir)
 
-    return expnightcount, allbricks
+    return expnightcount, allpix
 
 
-def graph_night(rawnight, specs, fakepix):
+def graph_night(rawnight, specs, fakepix, hpxnside=64):
     """
     Generate the dependency graph for one night of data.
 
@@ -215,6 +221,7 @@ def graph_night(rawnight, specs, fakepix):
         fakepix (bool): If True, do not check for the existence of input
             pixel files.  Assume that data for all spectrographs and cameras
             exists.
+        hpxnside (int): The nside value to use for spectral grouping.
 
     Returns:
         tuple containing
@@ -222,9 +229,10 @@ def graph_night(rawnight, specs, fakepix):
             - Dependency graph, as nested dictionaries.
             - exposure counts: dictionary of the number of exposures of
               each type.
-            - dictionary of bricks for each fibermap.
+            - dictionary of spectra groups for each fibermap.
 
     """
+    log = get_logger()
 
     grph = {}
 
@@ -234,7 +242,7 @@ def graph_night(rawnight, specs, fakepix):
     node["out"] = []
     grph[rawnight] = node
 
-    allbricks = {}
+    allpix = {}
 
     expcount = {}
     expcount["flat"] = 0
@@ -256,13 +264,13 @@ def graph_night(rawnight, specs, fakepix):
         fibermap = io.get_raw_files("fibermap", rawnight, ex)
 
         # Read the fibermap to get the exposure type, and while we are at it,
-        # also accumulate the total list of bricks.  We use the list of
-        # spectrographs to select ONLY the bricks that are actually hit by
+        # also accumulate the total list of spectra groups.  We use the list of
+        # spectrographs to select ONLY the groups that are actually hit by
         # fibers from our chosen spectrographs.
 
         fmdata = io.read_fibermap(fibermap)
         flavor = fmdata.meta["FLAVOR"]
-        fmbricks = {}
+        fmpix = {}
 
         if flavor == "arc":
             expcount["arc"] += 1
@@ -270,25 +278,33 @@ def graph_night(rawnight, specs, fakepix):
             expcount["flat"] += 1
         else:
             expcount["science"] += 1
-            for fm in zip(fmdata["SPECTROID"], fmdata["BRICKNAME"]):
-                if fm[0] in specs:
-                    fmb = str(fm[1])
-                    if len(fmb) > 0:
-                        if fmb in fmbricks:
-                            fmbricks[fmb] += 1
+            ra = np.array(fmdata["RA_TARGET"], dtype=np.float64)
+            dec = np.array(fmdata["DEC_TARGET"], dtype=np.float64)
+            bad = np.where(fmdata["TARGETID"] < 0)[0]
+            ra[bad] = 0.0
+            dec[bad] = 0.0
+            # pix = hp.ang2pix(hpxnside, ra, dec, nest=True, lonlat=True)
+            pix = desimodel.footprint.radec2pix(hpxnside, ra, dec)
+            pix[bad] = -1
+            for fm in zip(fmdata["SPECTROID"], pix):
+                if fm[1] >= 0:
+                    if fm[0] in specs:
+                        if fm[1] in fmpix:
+                            fmpix[fm[1]] += 1
                         else:
-                            fmbricks[fmb] = 1
-            for fmb in fmbricks:
-                if fmb in allbricks:
-                    allbricks[fmb] += fmbricks[fmb]
+                            fmpix[fm[1]] = 1
+            for fmp in fmpix:
+                if fmp in allpix:
+                    allpix[fmp] += fmpix[fmp]
                 else:
-                    allbricks[fmb] = fmbricks[fmb]
+                    allpix[fmp] = fmpix[fmp]
 
         node = {}
         node["type"] = "fibermap"
         node["id"] = ex
         node["flavor"] = flavor
-        node["bricks"] = fmbricks
+        node["nside"] = hpxnside
+        node["pixels"] = fmpix
         node["in"] = [rawnight]
         node["out"] = []
         name = graph_name(rawnight, "fibermap-{:08d}".format(ex))
@@ -473,8 +489,29 @@ def graph_night(rawnight, specs, fakepix):
             flatexpid[cam] = []
         flatexpid[cam].append(id)
 
-    # To compute the sky file, we use the "most recent fiberflat" that came
-    # before the current exposure.
+    # This is a small helper function to return the "most recent fiberflat"
+    # that came before the current exposure.
+
+    def last_flat(cam, expid):
+        flatid = None
+        flatname = None
+        if cam in flatexpid:
+            for fid in sorted(flatexpid[cam]):
+                if (flatid is None):
+                    flatid = fid
+                elif (fid > flatid) and (fid < id):
+                    flatid = fid
+        if flatid is not None:
+            flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band,
+                spec, fid))
+        else:
+            # This means we don't have any flats for this night.
+            # Probably this is because we are going to inject
+            # already-calibrated simulation data into the production.
+            # If this was really a mistake, then it will be caught
+            # at runtime when the sky step fails.
+            pass
+        return flatid, flatname
 
     #- cache current graph items so we can update graph as we go
     current_items = list(grph.items())
@@ -487,24 +524,20 @@ def graph_night(rawnight, specs, fakepix):
         spec = nd["spec"]
         id = nd["id"]
         cam = "{}{}".format(band, spec)
-        flatid = None
-        for fid in sorted(flatexpid[cam]):
-            if (flatid is None):
-                flatid = fid
-            elif (fid > flatid) and (fid < id):
-                flatid = fid
+        flatid, flatname = last_flat(cam, id)
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         node = {}
         node["type"] = "sky"
         node["band"] = band
         node["spec"] = spec
         node["id"] = id
-        node["in"] = [name, flatname]
+        node["in"] = [name]
+        if flatname is not None:
+            node["in"].append(flatname)
+            grph[flatname]["out"].append(skyname)
         node["out"] = []
         grph[skyname] = node
         nd["out"].append(skyname)
-        grph[flatname]["out"].append(skyname)
 
     # Construct the standard star files.  These are one per spectrograph,
     # and depend on the frames and the corresponding flats and sky files.
@@ -536,20 +569,13 @@ def graph_night(rawnight, specs, fakepix):
             stdgrph[starname] = node
 
         cam = "{}{}".format(band, spec)
-        flatid = None
-        for fid in sorted(flatexpid[cam]):
-            if (flatid is None):
-                flatid = fid
-            elif (fid > flatid) and (fid < id):
-                flatid = fid
-
-        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
+        flatid, flatname = last_flat(cam, id)
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-
-        stdgrph[starname]["in"].extend([skyname, name, flatname])
-
+        stdgrph[starname]["in"].extend([skyname, name])
+        if flatname is not None:
+            stdgrph[starname]["in"].extend([flatname])
+            grph[flatname]["out"].append(starname)
         nd["out"].append(starname)
-        grph[flatname]["out"].append(starname)
         grph[skyname]["out"].append(starname)
 
     grph.update(stdgrph)
@@ -567,25 +593,21 @@ def graph_night(rawnight, specs, fakepix):
         spec = nd["spec"]
         id = nd["id"]
         cam = "{}{}".format(band, spec)
-        flatid = None
-        for fid in sorted(flatexpid[cam]):
-            if (flatid is None):
-                flatid = fid
-            elif (fid > flatid) and (fid < id):
-                flatid = fid
+        flatid, flatname = last_flat(cam, id)
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
         starname = graph_name(rawnight, "stdstars-{}-{:08d}".format(spec, id))
-        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         calname = graph_name(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
         node = {}
         node["type"] = "calib"
         node["band"] = band
         node["spec"] = spec
         node["id"] = id
-        node["in"] = [name, flatname, skyname, starname]
+        node["in"] = [name, skyname, starname]
+        if flatname is not None:
+            node["in"].extend([flatname])
+            grph[flatname]["out"].append(calname)
         node["out"] = []
         grph[calname] = node
-        grph[flatname]["out"].append(calname)
         grph[skyname]["out"].append(calname)
         grph[starname]["out"].append(calname)
         nd["out"].append(calname)
@@ -603,14 +625,8 @@ def graph_night(rawnight, specs, fakepix):
         spec = nd["spec"]
         id = nd["id"]
         cam = "{}{}".format(band, spec)
-        flatid = None
-        for fid in sorted(flatexpid[cam]):
-            if (flatid is None):
-                flatid = fid
-            elif (fid > flatid) and (fid < id):
-                flatid = fid
+        flatid, flatname = last_flat(cam, id)
         skyname = graph_name(rawnight, "sky-{}{}-{:08d}".format(band, spec, id))
-        flatname = graph_name(rawnight, "fiberflat-{}{}-{:08d}".format(band, spec, fid))
         calname = graph_name(rawnight, "calib-{}{}-{:08d}".format(band, spec, id))
         cfname = graph_name(rawnight, "cframe-{}{}-{:08d}".format(band, spec, id))
         node = {}
@@ -618,36 +634,38 @@ def graph_night(rawnight, specs, fakepix):
         node["band"] = band
         node["spec"] = spec
         node["id"] = id
-        node["in"] = [name, flatname, skyname, calname]
+        node["in"] = [name, skyname, calname]
+        if flatname is not None:
+            node["in"].extend([flatname])
+            grph[flatname]["out"].append(cfname)
         node["out"] = []
         grph[cfname] = node
-        grph[flatname]["out"].append(cfname)
         grph[skyname]["out"].append(cfname)
         grph[calname]["out"].append(cfname)
         nd["out"].append(cfname)
 
-    # Brick / Zbest dependencies
+    # Spectra / Zbest dependencies
 
-    for b in allbricks:
-        zbname = "zbest-{}".format(b)
-        inb = []
-        for band in ["b", "r", "z"]:
-            node = {}
-            node["type"] = "brick"
-            node["brick"] = b
-            node["band"] = band
-            node["in"] = []
-            node["out"] = [zbname]
-            bname = "brick-{}-{}".format(band, b)
-            inb.append(bname)
-            grph[bname] = node
+    for p in allpix:
+        zname = "zbest-{}-{}".format(hpxnside, p)
+        sname = "spectra-{}-{}".format(hpxnside, p)
+
+        node = {}
+        node["type"] = "spectra"
+        node["nside"] = hpxnside
+        node["pixel"] = p
+        node["in"] = []
+        node["out"] = [zname]
+        grph[sname] = node
+            
         node = {}
         node["type"] = "zbest"
-        node["brick"] = b
-        node["ntarget"] = allbricks[b]
-        node["in"] = inb
+        node["nside"] = hpxnside
+        node["pixel"] = p
+        node["ntarget"] = allpix[p]
+        node["in"] = [sname]
         node["out"] = []
-        grph[zbname] = node
+        grph[zname] = node
 
     #- cache current graph items so we can update graph as we go
     current_items = list(grph.items())
@@ -659,16 +677,16 @@ def graph_night(rawnight, specs, fakepix):
         if nd["flavor"] == "flat":
             continue
         id = nd["id"]
-        bricks = nd["bricks"]
+        fmpix = nd["pixels"]
         for band in ["b", "r", "z"]:
             for spec in keep:
                 cfname = graph_name(rawnight, "cframe-{}{}-{:08d}".format(band, spec, id))
-                for b in bricks:
-                    bname = "brick-{}-{}".format(band, b)
-                    grph[bname]["in"].append(cfname)
-                    grph[cfname]["out"].append(bname)
+                for p in fmpix:
+                    sname = "spectra-{}-{}".format(hpxnside, p)
+                    grph[sname]["in"].append(cfname)
+                    grph[cfname]["out"].append(sname)
 
-    return (grph, expcount, allbricks)
+    return (grph, expcount, allpix)
 
 
 def load_prod(nightstr=None, spectrographs=None, progress=None):
@@ -720,13 +738,40 @@ def load_prod(nightstr=None, spectrographs=None, progress=None):
         for s in spc:
             spects.append(int(s))
 
-    # load the graphs from selected nights and merge
+    # load the graphs from selected nights and merge.  We must also merge
+    # the cframe dependencies from all spectra objects from all nights. 
+    # We don't use graph_slice / graph_prune here since we are purposely
+    # leaving "dangling" dependencies in the graph.
 
+    groups = {}
     grph = {}
+    import pprint
+
     for n in nights:
         nightfile = os.path.join(plandir, "{}.yaml".format(n))
         ngrph = yaml_read(nightfile)
+
+        # Slice out spectrographs that we want.
         sgrph = graph_slice_spec(ngrph, spectrographs=spects)
-        grph.update(sgrph)
+
+        # Split our graph into just the spectra nodes and everything
+        # else.
+        ngrph = {}
+        for name, nd in sgrph.items():
+            if nd["type"] == "spectra":
+                if name not in groups:
+                    groups[name] = copy.deepcopy(nd)
+                else:
+                    for cf in nd["in"]:
+                        if cf not in groups[name]["in"]:
+                            groups[name]["in"].append(cf)
+            else:
+                ngrph[name] = copy.deepcopy(nd)
+
+        # Update the main graph with everything except the spectral groups
+        grph.update(ngrph)
+
+    # Now update the combined graph with the merged spectra objects
+    grph.update(groups)
 
     return grph

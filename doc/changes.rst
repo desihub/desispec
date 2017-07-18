@@ -2,9 +2,54 @@
 desispec Change Log
 ===================
 
-0.14.1 (unreleased)
+0.15.3 (unreleased)
 -------------------
 
+* Small fixes to desi_qa_prod and qa_prod
+
+0.15.2 (2017-07-12)
+-------------------
+
+* Make the loading of libspecex through ctypes more robust and portable.
+* QL configuration cleanup (PR `#389`_).
+* Add extrapolate option to resample_flux (PR `#415`_).
+* Sphinx and travis tests fixes.
+
+.. _`#389`: https://github.com/desihub/desispec/pull/389
+.. _`#415`: https://github.com/desihub/desispec/pull/415
+
+0.15.1 (2017-06-19)
+-------------------
+
+* Fixed :func:`desispec.io.findfile` path for zbest and coadd (PR `#411`_).
+* Add Notebook tutorial: introduction to reading and manipulating DESI spectra (PR `#408`_, `#410`_).
+* Update quicklook configuration (PR `#395`_).
+* Rename ``Spectra.fmap`` attribute to ``Spectra.fibermap`` (PR `#407`_).
+* Enable ``desi_group_spectra`` to run without pipeline infrastructure (PR `#405`_).
+* Update desispec.io.findfile spectra path to match dc17a (PR `#404`_).
+* Load redshift catalog data from healpix-based zbest files (PR `#402`_).
+
+.. _`#411`: https://github.com/desihub/desispec/pull/411
+.. _`#410`: https://github.com/desihub/desispec/pull/410
+.. _`#408`: https://github.com/desihub/desispec/pull/408
+.. _`#395`: https://github.com/desihub/desispec/pull/395
+.. _`#407`: https://github.com/desihub/desispec/pull/407
+.. _`#405`: https://github.com/desihub/desispec/pull/405
+.. _`#404`: https://github.com/desihub/desispec/pull/404
+.. _`#402`: https://github.com/desihub/desispec/pull/402
+
+0.15.0 (2017-06-15)
+-------------------
+
+* Refactor database subpackage and enable loading of both quicksurvey and
+  pipeline outputs (PR `#400`_).
+* Clean up pipeline script naming to be grouped by night.
+* Modify pipeline to use Spectra objects grouped by HEALPix pixels instead
+  of bricks.  Add entry point to regroup cframe data by pixel (PR `#394`_).
+* Add a new class, Spectra, which encapsulates a grouping of 1D spectra
+  in one or more bands.  Includes selection, updating, and I/O.
+* Removed ``desispec.brick`` as it's now in :mod:`desiutil.brick` (PR `#392`_).
+* Added function to calculate brick vertices at a given location (PR `#388`_).
 * Added function to calculate brick areas at a given location (PR `#384`_).
 * Add scripts for submitting nightly job chains.
 * Production creation now correctly handles slicing by spectrograph.
@@ -14,13 +59,19 @@ desispec Change Log
 * Added function to calculate BRICKID at a given location (PR `#378`_).
 * Additional LOCATION, DEVICE_LOC, and PETAL_LOC columns for fibermap (PR `#379`_).
 * Create util.py in tests/ which is intended to contain methods to facilitate test runs
-* Add vette() method for Frame class
-* Began a desispec parameter file:  data/params/desispec_param.yaml
-* Small fixes to desi_qa_prod and qa_prod
+* Add vette() method for Frame class (PR `#386`_)
+* Began a desispec parameter file:  data/params/desispec_param.yml
+* Flux calibration improvements (PR `#390`_).
 
+.. _`#386`: https://github.com/desihub/desispec/pull/386
+.. _`#388`: https://github.com/desihub/desispec/pull/388
 .. _`#384`: https://github.com/desihub/desispec/pull/384
 .. _`#378`: https://github.com/desihub/desispec/pull/378
 .. _`#379`: https://github.com/desihub/desispec/pull/379
+.. _`#390`: https://github.com/desihub/desispec/pull/390
+.. _`#392`: https://github.com/desihub/desispec/pull/392
+.. _`#394`: https://github.com/desihub/desispec/pull/394
+.. _`#400`: https://github.com/desihub/desispec/pull/400
 
 0.14.0 (2017-04-13)
 -------------------

@@ -27,7 +27,7 @@ import numpy as np
 from desiutil.log import get_logger
 from .. import io
 from ..parallel import (dist_uniform, dist_discrete,
-    stdouterr_redirected)
+    stdouterr_redirected, use_mpi)
 
 from .common import *
 from .graph import *
@@ -151,16 +151,16 @@ def run_step(step, grph, opts, comm=None):
                 group_ntask = 0
         else:
             if step == "zfind":
-                # We load balance the bricks across process groups based
-                # on the number of targets per brick.  All bricks with
+                # We load balance the spectra across process groups based
+                # on the number of targets per group.  All groups with
                 # < taskproc targets are weighted the same.
 
                 if ntask <= ngroup:
                     # distribute uniform in this case
                     group_firsttask, group_ntask = dist_uniform(ntask, ngroup, group)
                 else:
-                    bricksizes = [ grph[x]["ntarget"] for x in tasks ]
-                    worksizes = [ taskproc if (x < taskproc) else x for x in bricksizes ]
+                    spectrasizes = [ grph[x]["ntarget"] for x in tasks ]
+                    worksizes = [ taskproc if (x < taskproc) else x for x in spectrasizes ]
 
                     if rank == 0:
                         log.debug("zfind {} groups".format(ngroup))
@@ -335,14 +335,14 @@ def retry_task(failpath, newopts=None):
     rank = 0
     nworld = 1
 
-    if nproc > 1:
+    if use_mpi and (nproc > 1):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         nworld = comm.size
         rank = comm.rank
-        if nworld != nproc:
-            if rank == 0:
-                log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
+    if nworld != nproc:
+        if rank == 0:
+            log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
 
     opts = origopts
     if newopts is not None:
@@ -417,9 +417,10 @@ def run_steps(first, last, spectrographs=None, nightstr=None, comm=None):
     will be propagated as a failed task to all processes.
 
     Args:
-        step (str): the pipeline step to process.
-        grph (dict): the dependency graph.
-        opts (dict): the global options.
+        first (str): the first pipeline step to run.
+        last (str): the last pipeline step to run.
+        spectrogrphs (str): comma-separated list of spectrographs to use.
+        nightstr (str): comma-separated list of regex patterns.
         comm (mpi4py.Comm): the full communicator to use for whole step.
 
     Returns:
@@ -539,7 +540,7 @@ def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1, threads
     return
 
 
-def nersc_job(path, logroot, desisetup, commands, nodes=1, \
+def nersc_job(host, path, logroot, desisetup, commands, nodes=1, \
     nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
     queue="debug", jobname="desipipe"):
     hours = int(minutes/60)
@@ -560,6 +561,10 @@ def nersc_job(path, logroot, desisetup, commands, nodes=1, \
             f.write("#SBATCH --partition=debug\n")
         else:
             f.write("#SBATCH --partition=regular\n")
+        if host == "cori":
+            f.write("#SBATCH --constraint=haswell\n")
+        elif host == "coriknl":
+            f.write("#SBATCH --constraint=knl,quad,cache\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
@@ -623,7 +628,7 @@ def nersc_job(path, logroot, desisetup, commands, nodes=1, \
     return
 
 
-def nersc_shifter_job(path, img, specdata, specredux, desiroot, logroot, desisetup, commands, nodes=1, \
+def nersc_shifter_job(host, path, img, specdata, specredux, desiroot, logroot, desisetup, commands, nodes=1, \
     nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
     queue="debug", jobname="desipipe"):
 
@@ -646,6 +651,10 @@ def nersc_shifter_job(path, img, specdata, specredux, desiroot, logroot, desiset
             f.write("#SBATCH --partition=debug\n")
         else:
             f.write("#SBATCH --partition=regular\n")
+        if host == "cori":
+            f.write("#SBATCH --constraint=haswell\n")
+        elif host == "coriknl":
+            f.write("#SBATCH --constraint=knl,quad,cache\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))

@@ -279,3 +279,28 @@ def set_backend(backend='agg'):
         import matplotlib
         matplotlib.use(_matplotlib_backend)
     return
+
+
+def healpix_degrade_fixed(nside, pixel):
+    """
+    Degrade a NEST ordered healpix pixel with a fixed ratio.
+
+    This degrades the pixel to a lower nside value that is
+    fixed to half the healpix "factor".
+
+    Args:
+        nside (int): a valid NSIDE value.
+        pixel (int): the NESTED pixel index.
+
+    Returns (tuple):
+        a tuple of ints, where the first value is the new
+        NSIDE and the second value is the degraded pixel
+        index.
+
+    """
+    factor = int(np.log2(nside))
+    subfactor = factor // 2
+    subnside = 2**subfactor
+    subpixel = pixel >> (factor - subfactor)
+    return (subnside, subpixel)
+

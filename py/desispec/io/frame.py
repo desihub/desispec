@@ -49,7 +49,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     add_dependencies(hdr)
 
     # Vette
-    diagnosis = frame.vette()
+    diagnosis = frame.vet()
     if diagnosis != 0:
         raise IOError("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
 
@@ -163,7 +163,7 @@ def read_frame(filename, nspec=None):
     frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix)
 
     # Vette
-    diagnosis = frame.vette()
+    diagnosis = frame.vet()
     if diagnosis != 0:
         warnings.warn("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
         log.error("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))

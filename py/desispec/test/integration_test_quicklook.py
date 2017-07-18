@@ -174,7 +174,7 @@ def sim(night, nspec, ql_data, ql_redux):
         output_dir = os.path.join(os.environ['DESI_SPECTRO_REDUX'],'QL',os.environ['SPECPROD'])
     exp_dir = os.path.join(output_dir,'exposures',night)
     calib_dir = os.path.join(output_dir,'calib2d',night)
-
+    psf_dir = os.path.join(output_dir,'calib2d','psf',night)
     for expid, flavor in zip([0,1,2], ['arc', 'flat', 'dark']):
 
         cmd = "newexp-desi --flavor {} --nspec {} --night {} --expid {}".format(flavor,nspec,night,expid)
@@ -214,7 +214,7 @@ def sim(night, nspec, ql_data, ql_redux):
         if runcmd(cmd) != 0:
             raise RuntimeError('desi_compute_fiberflat failed for camera {}'.format(camera))
 
-        cmd = "desi_bootcalib --fiberflat {}/pix-{}-00000001.fits --arcfile {}/pix-{}-00000000.fits --outfile {}/psfboot-{}.fits".format(data_dir,camera,data_dir,camera,calib_dir,camera)
+        cmd = "desi_bootcalib --fiberflat {}/pix-{}-00000001.fits --arcfile {}/pix-{}-00000000.fits --outfile {}/psfboot-{}.fits".format(data_dir,camera,data_dir,camera,psf_dir,camera)
         if runcmd(cmd) != 0:
             raise RuntimeError('desi_bootcalib failed for camera {}'.format(camera))
 
@@ -255,28 +255,22 @@ def integration_test(args=None):
     else:
         ql_redux = 'Use $DESI_SPECTRO_REDUX/QL/$SPECPROD'
         output_dir = os.path.join(os.environ['DESI_SPECTRO_REDUX'],'QL',os.environ['SPECPROD'])
-    calib_dir = os.path.join(output_dir,'calib2d',night)
-
+    
     #- Simulate inputs
     sim(night=night, nspec=nspec, ql_data=ql_data, ql_redux=ql_redux)
-
+   
+    #- Get the configuration file from desispec/data/quicklook
+    from pkg_resources import resource_filename
+    configfile=resource_filename('desispec','data/quicklook/qlconfig_dark.yaml')
     for camera in ['r0','z0']:
-
-        # find necessary input files
-        psffile = os.path.join(calib_dir,'psfboot-{}.fits'.format(camera))
-        fiberflatfile = os.path.join(calib_dir,'fiberflat-{}-{:08d}.fits'.format(camera,flat_expid))
-
+        
         #- Verify that quicklook pipeline runs
         if args.ql_data and args.ql_redux:
-            com = "desi_quicklook -n {} -c {} -e {} -f {} --psfboot {} --fiberflat {}".format(night,camera,expid,'dark',psffile,fiberflatfile)
+            com = "desi_quicklook -i {} -n {} -c {} -e {} -f {}".format(configfile,night,camera,expid)
         else:
-            com = "desi_quicklook -n {} -c {} -e {} -f {} --psfboot {} --fiberflat {} --rawdata_dir {} --specprod_dir {}".format(night,camera,expid,'dark',psffile,fiberflatfile,raw_dir,output_dir)
+            com = "desi_quicklook -i {} -n {} -c {} -e {} -f {} --psfboot {} --fiberflat {} --rawdata_dir {} --specprod_dir {}".format(configfile,night,camera,expid,raw_dir,output_dir)
         if runcmd(com) != 0:
             raise RuntimeError('quicklook pipeline failed for camera {}'.format(camera))
-
-        #- lastframe files are output to current working directory
-        #- should fix this, but will delete this file for now
-        os.remove('lastframe-{}-{:08d}.fits'.format(camera,expid))
 
     #- Remove all output if desired
     if args.delete:
@@ -309,12 +303,21 @@ def integration_test(args=None):
                     exp_file = os.path.join(exp_dir,exp_files[file])
                     os.remove(exp_file)
                 os.rmdir(exp_dir)
+            calib_dir=os.path.join(output_dir,'calib2d',night)
             if os.path.exists(calib_dir):
                 calib_files = os.listdir(calib_dir)
                 for file in range(len(calib_files)):
                     calib_file = os.path.join(calib_dir,calib_files[file])
                     os.remove(calib_file)
                 os.rmdir(calib_dir)
+            psf_dir=os.path.join(output_dir,'calib2d','psf',night)
+            if os.path.exists(psf_dir):
+                psf_files = os.listdir(psf_dir)
+                for ii in range(len(psf_files)):
+                    thisfile=os.path.join(psf_dir,psf_files[ii])
+                    os.remove(thisfile)
+                os.rmdir(psf_dir)
+
 
 if __name__ == '__main__':
     integration_test()

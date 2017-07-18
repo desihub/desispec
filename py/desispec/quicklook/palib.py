@@ -73,38 +73,45 @@ def resample_spec(wave,flux,outwave,ivar=None):
         return newflux, newivar
 
 
-def get_resolution(wave,nspec,psf,usexsigma=False):
+def get_resolution(wave,nspec,psf,usesigma=False):
     """
     Calculates approximate resolution values at given wavelengths in the format that can directly
     feed resolution data of desispec.frame.Frame object. 
-    
-    uses wsigma from psf file, if usexsigma is true, uses xsigma values (constant resolution per fiber), otherwise resolation data is zeros 
 
     wave: wavelength array
     nsepc: no of spectra (int)
     psf: desispec.psf.PSF like object
+    usesigma: allows to use sigma from psf file for resolution computation. 
+    If psf file is psfboot, uses per fiber xsigma. 
+    If psf file is from QL arcs processing, uses wsigma 
 
-    returns : resolution data (nspec,21,nwave)
+    returns : resolution data (nspec,nband,nwave); nband = 1 for usesigma = False, otherwise nband=21
     """
     from desispec.resolution import Resolution
 
     nwave=len(wave)
-    resolution_data=np.zeros((nspec,21,nwave))
-    if usexsigma:
-        if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot
-            log.info("Getting resolution matrix band diagonal elements from constant Gaussing Xsigma")
-            for ispec in range(nspec):
-                thissigma=psf.xsigma(ispec,wave) 
-                Rsig=Resolution(thissigma)
-                resolution_data[ispec]=Rsig.data
-
+    if usesigma:
+        nband=21
     else:
+        nband=1 # only for dimensionality purpose of data model.
+    resolution_data=np.zeros((nspec,nband,nwave))
+
+    if usesigma: #- use sigmas for resolution based on psffile type
+
         if hasattr(psf,'wcoeff'): #- use if have wsigmas
             log.info("Getting resolution from wsigmas from arc lines PSF")
             for ispec in range(nspec):
                 thissigma=psf.wdisp(ispec,wave)/psf.angstroms_per_pixel(ispec,wave) #- in pixel units
                 Rsig=Resolution(thissigma)
                 resolution_data[ispec]=Rsig.data
+        else:
+
+            if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot
+                log.info("Getting resolution matrix band diagonal elements from constant Gaussing Xsigma")
+                for ispec in range(nspec):
+                    thissigma=psf.xsigma(ispec,wave) 
+                    Rsig=Resolution(thissigma)
+                    resolution_data[ispec]=Rsig.data
 
     return resolution_data
 

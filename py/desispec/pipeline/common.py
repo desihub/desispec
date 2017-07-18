@@ -18,6 +18,8 @@ try:
 except ImportError:
     from yaml import Loader as YLoader
 
+import json
+
 
 graph_types = [
     "night",
@@ -32,7 +34,7 @@ graph_types = [
     "stdstars",
     "calib",
     "cframe",
-    "brick",
+    "spectra",
     "zbest"
 ]
 """Object types used in the graph."""
@@ -136,5 +138,37 @@ def yaml_read(path, progress=None):
     data = None
     with open(path, "r") as f:
         data = yload(f, Loader=YLoader)
+    return data
+
+
+def json_write(path, input):
+    """
+    Write a dictionary to a file.
+
+    Args:
+        path (str): the output file name.
+        input (dict): the data.
+
+    Returns:
+        nothing.
+    """
+    with open(path, "w") as f:
+        json.dump(input, f)
+    return
+
+
+def json_read(path):
+    """
+    Read a dictionary from a file.
+
+    Args:
+        path (str): the input file name.
+
+    Returns:
+        dict: the data.
+    """
+    data = None
+    with open(path, "r") as f:
+        data = json.load(f)
     return data
 
