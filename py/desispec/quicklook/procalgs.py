@@ -200,7 +200,7 @@ class BoxcarExtract(pas.PipelineAlg):
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
-                wstart, wstop, dw = [float(w) for w in wavelength.split(',')]
+                wstart, wstop, dw = [float(w) for w in wavelength]
             else: 
                 wstart = np.ceil(psf.wmin)
                 wstop = np.floor(psf.wmax)
@@ -317,7 +317,7 @@ class Extraction_2d(pas.PipelineAlg):
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
-                wstart, wstop, dw = [float(w) for w in wavelength.split(',')]
+                wstart, wstop, dw = [float(w) for w in wavelength]
             else: 
                 wstart = np.ceil(psf.wmin_all)
                 wstop = np.floor(psf.wmax_all)

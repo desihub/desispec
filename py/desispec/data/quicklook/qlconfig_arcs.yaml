@@ -41,10 +41,11 @@ Algorithms:
     BootCalibration:
         QA: {}
     BoxcarExtract:
-        wavelength:
-            b: 3550,5730,0.8
-            r: 5630,7740,0.8
-            z: 7650,9830,0.8
+        wavelength:{
+            b: [3550,5730,0.8],
+            r: [5630,7740,0.8],
+            z: [7650,9830,0.8]
+            }
         QA:
             CountSpectralBins:
                 PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_RANGE: [490, 500]}

@@ -1432,7 +1432,6 @@ class Calculate_SNR(MonitoringAlg):
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
-
         paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
@@ -1479,7 +1478,8 @@ class Calculate_SNR(MonitoringAlg):
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
             fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-        qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
+        #qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
+        qadict = qalib.SNRFit(frame,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
         for mag in [qadict["ELG_SNR_MAG"][1],qadict["LRG_SNR_MAG"][1],qadict["QSO_SNR_MAG"][1],qadict["STAR_SNR_MAG"][1]]:
