@@ -225,12 +225,11 @@ class Count_Pixels(MonitoringAlg):
         npix_warn = []
 
         #- get the counts over entire CCD in counts per second
-        npixlo=qalib.countpix(image.pix/image.meta["EXPTIME"],nsig=param['CUTLO']) #- above 3 sigma in counts
-        npixhi=qalib.countpix(image.pix/image.meta["EXPTIME"],nsig=param['CUTHI']) #- above 10 sigma in counts
-        print("NPIX_LOW:")
-        print(npixlo)
-        print("NPIX_HIGH:")
-        print(npixhi)
+        npixlo_tot=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
+        npixhi_tot=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
+        npixlo=npixlo_tot/image.meta["EXPTIME"]
+        npixhi=npixhi_tot/image.meta["EXPTIME"]
+
         #- get the counts for each amp
         if amps:
             npixlo_amps=[]

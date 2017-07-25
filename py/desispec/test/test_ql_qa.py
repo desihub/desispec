@@ -91,7 +91,7 @@ class TestQL(unittest.TestCase):
         hdr['EXPID'] = 1
         hdr['PROGRAM'] = 'dark'
         hdr['FLAVOR'] = 'science'
-        hdr['EXPTIME'] = 100.0
+        hdr['EXPTIME'] = 100
         
         rawimage = np.zeros((2*ny, 2*nx+2*noverscan))
         offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
