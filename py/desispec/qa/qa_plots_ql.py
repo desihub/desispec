@@ -185,8 +185,8 @@ def plot_countpix(qa_dict,outfile):
     plt.suptitle("Count pixels after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(211)
     heatmap1=ax1.pcolor(countlo_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Total Pixels per Second > {:d} sigma = {:f}'.format(cutlo,countlo), fontsize=10)
-    ax1.set_xlabel("# pixels per second > {:d} sigma (per Amp)".format(cutlo),fontsize=10)
+    plt.title('Total Pixels > {:d} sigma = {:f}'.format(cutlo,countlo), fontsize=10)
+    ax1.set_xlabel("# pixels > {:d} sigma (per Amp)".format(cutlo),fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax1.tick_params(axis='y',labelsize=10,labelleft='off')
     ax1.annotate("Amp 1\n{:f}".format(countlo_amp[0]),
@@ -207,8 +207,8 @@ def plot_countpix(qa_dict,outfile):
                  )
     ax2=fig.add_subplot(212)
     heatmap2=ax2.pcolor(counthi_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Total Pixels per Second > {:d} sigma = {:f}'.format(cuthi,counthi), fontsize=10)
-    ax2.set_xlabel("# pixels per second > {:d} sigma (per Amp)".format(cuthi),fontsize=10)
+    plt.title('Total Pixels > {:d} sigma = {:f}'.format(cuthi,counthi), fontsize=10)
+    ax2.set_xlabel("# pixels > {:d} sigma (per Amp)".format(cuthi),fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
     ax2.tick_params(axis='y',labelsize=10,labelleft='off')
     ax2.annotate("Amp 1\n{:f}".format(counthi_amp[0]),
