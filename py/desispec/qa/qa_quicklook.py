@@ -117,6 +117,8 @@ class Get_RMS(MonitoringAlg):
 
         retval["PARAMS"] = param
 
+        rms_over=[]
+
         if amps:
             rms_amps=[]
             rms_over_amps=[]
@@ -140,13 +142,12 @@ class Get_RMS(MonitoringAlg):
                     break
                 elif rms_over_amps[i] <= param['RMS_RANGE'][1] or rms_over_amps[i] >= param['RMS_RANGE'][2]:
                     rmsdiff = 'WARN'
-                    break
                 else:
                     rmsdiff = 'GOOD'
 
             retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff,"EXPNUM_WARN":expnum}
         else:
-            retval["METRICS"]={"RMS":rmsccd,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum} 
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rms_over,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum} 
 
         if qlf:
             qlf_post(retval)  
@@ -225,10 +226,8 @@ class Count_Pixels(MonitoringAlg):
         npix_warn = []
 
         #- get the counts over entire CCD in counts per second
-        npixlo_tot=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
-        npixhi_tot=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
-        npixlo=npixlo_tot/image.meta["EXPTIME"]
-        npixhi=npixhi_tot/image.meta["EXPTIME"]
+        npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
+        npixhi=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
 
         #- get the counts for each amp
         if amps:
@@ -1237,7 +1236,6 @@ class Bias_From_Overscan(MonitoringAlg):
                     break
                 elif bias_amps[i] <= param['DIFF_RANGE'][1] or bias_amps[i] >= param['DIFF_RANGE'][2]:
                     biasdiff = 'WARN'
-                    break
                 else:
                     biasdiff = 'GOOD'
 
