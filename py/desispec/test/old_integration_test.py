@@ -86,18 +86,26 @@ def integration_test(night=None, nspec=5, clobber=False):
     #-----
     #- Input fibermaps, spectra, and pixel-level raw data
     raw_dict = {0: 'flat', 1: 'arc', 2: 'dark'}
-    #for expid, flavor in zip([0,1,2], ['flat', 'arc', 'dark']):
-    for expid, flavor in raw_dict.items():
-        cmd = "newexp-desi --flavor {flavor} --nspec {nspec} --night {night} --expid {expid}".format(
-            expid=expid, flavor=flavor, **params)
+    #for expid, program in zip([0,1,2], ['flat', 'arc', 'dark']):
+    for expid, program in raw_dict.items():
+        if program == 'arc':
+            cmd = "newarc --night {night} --expid {expid} --nspec {nspec}".format(
+                expid=expid, **params)
+        elif program == 'flat':
+            cmd = "newflat --night {night} --expid {expid} --nspec {nspec}".format(
+                expid=expid, **params)
+        else:
+            cmd = "newexp-random --program {program} --nspec {nspec} --night {night} --expid {expid}".format(
+                expid=expid, program=program, **params)
+
         fibermap = io.findfile('fibermap', night, expid)
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(flavor, expid))
+            raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(program, expid))
 
-        cmd = "pixsim-desi --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, **params)
+        cmd = "pixsim --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, **params)
         inputs = [fibermap, simspec]
         outputs = list()
         outputs.append(fibermap.replace('fibermap-', 'simpix-'))
@@ -106,7 +114,7 @@ def integration_test(night=None, nspec=5, clobber=False):
             outputs.append(pixfile)
             # outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('pixsim failed for {} exposure {}'.format(flavor, expid))
+            raise RuntimeError('pixsim failed for {} exposure {}'.format(program, expid))
 
     #-----
     #- Extract
@@ -297,7 +305,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     #- (this combination of fibermap, simspec, and zbest is a pain)
     simdir = os.path.dirname(io.findfile('fibermap', night=night, expid=expid))
     simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
-    siminfo = fits.getdata(simspec, 'METADATA')
+    try:
+        siminfo = fits.getdata(simspec, 'TRUTH')
+    except KeyError:
+        siminfo = fits.getdata(simspec, 'METADATA')
 
     print()
     print("--------------------------------------------------")
