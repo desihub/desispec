@@ -112,13 +112,15 @@ class Get_RMS(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
-                RMS_RANGE=[-2.0, -1.0, 1.0, 2.0]
+                RMS_WARN_RANGE=[-1.0, 1.0],
+                RMS_ALARM_RANGE=[-2.0, 2.0]
                 )
 
         retval["PARAMS"] = param
 
         rms_over=[]
 
+        rmsdiff=[]
         if amps:
             rms_amps=[]
             rms_over_amps=[]
@@ -137,13 +139,16 @@ class Get_RMS(MonitoringAlg):
             rmsover=np.std(overscan_values)
 
             for i in range(len(rms_over_amps)):
-                if rms_over_amps[i] <= param['RMS_RANGE'][0] or rms_over_amps[i] >= param['RMS_RANGE'][3]:
+                if rms_over_amps[i] <= param['RMS_ALARM_RANGE'][0] or rms_over_amps[i] >= param['RMS_ALARM_RANGE'][1]:
                     rmsdiff = 'ALARM'
                     break
-                elif rms_over_amps[i] <= param['RMS_RANGE'][1] or rms_over_amps[i] >= param['RMS_RANGE'][2]:
+                elif rms_over_amps[i] <= param['RMS_WARN_RANGE'][0] or rms_over_amps[i] >= param['RMS_WARN_RANGE'][1]:
                     rmsdiff = 'WARN'
                 else:
-                    rmsdiff = 'GOOD'
+                    if rmsdiff == 'WARN':
+                        pass
+                    else:
+                        rmsdiff = 'NORMAL'
 
             retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff,"EXPNUM_WARN":expnum}
         else:
@@ -1209,7 +1214,8 @@ class Bias_From_Overscan(MonitoringAlg):
             log.info("Param is None. Using default param instead")
             param = dict(
                 PERCENTILES=[68.2,95.4,99.7],
-                DIFF_RANGE=[-2.0, -1.0, 1.0, 2.0]
+                DIFF_WARN_RANGE=[-1.0, 1.0],
+                DIFF_ALARM_RANGE=[-2.0, 2.0]
                 )
 
         sig1_lo = np.percentile(full_data,(100.-param['PERCENTILES'][0])/2.)
@@ -1228,16 +1234,20 @@ class Bias_From_Overscan(MonitoringAlg):
 
         retval["PARAMS"] = param
 
+        biasdiff=[]
         if amps:
             bias_amps=np.array(bias_overscan)
             for i in range(len(bias_amps)):
-                if bias_amps[i] <= param['DIFF_RANGE'][0] or bias_amps[i] >= param['DIFF_RANGE'][3]:
+                if bias_amps[i] <= param['DIFF_ALARM_RANGE'][0] or bias_amps[i] >= param['DIFF_ALARM_RANGE'][1]:
                     biasdiff = 'ALARM'
                     break
-                elif bias_amps[i] <= param['DIFF_RANGE'][1] or bias_amps[i] >= param['DIFF_RANGE'][2]:
+                elif bias_amps[i] <= param['DIFF_WARN_RANGE'][0] or bias_amps[i] >= param['DIFF_WARN_RANGE'][1]:
                     biasdiff = 'WARN'
                 else:
-                    biasdiff = 'GOOD'
+                    if biasdiff == 'WARN':
+                        pass
+                    else:
+                        biasdiff = 'NORMAL'
 
             retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff}
         else:

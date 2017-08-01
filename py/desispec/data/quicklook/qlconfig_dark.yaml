@@ -25,11 +25,11 @@ Algorithms:
     Initialize:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], DIFF_RANGE: [-2.0, -1.0, 1.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], DIFF_WARN_RANGE: [-1.0, 1.0], DIFF_ALARM_RANGE: [-2.0, 2.0]}
     Preproc:
         QA: 
             Get_RMS:
-                PARAMS: {RMS_RANGE: [-2.0, -1.0, 1.0, 2.0]}
+                PARAMS: {RMS_WARN_RANGE: [-1.0, 1.0], RMS_ALARM_RANGE: [-2.0, 2.0]}
             Count_Pixels:
                 PARAMS: {CUTHI: 10, CUTLO: 3, NPIX_RANGE: [50.0, 200.0, 500.0, 650.0]}
             Calc_XWSigma:
