@@ -110,7 +110,8 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         hpix = int(groupname)
         hpixdir = healpix_subdirectory(nside, hpix)
     else:
-        hpixdir = None
+        #- set to anything so later logic will trip on groupname not hpixdir
+        hpixdir = 'hpix'
 
     #- Do we know about this kind of file?
     if filetype not in location:
@@ -135,7 +136,8 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         'specprod_dir':specprod_dir, 'specprod':specprod,
         'night':night, 'expid':expid, 'camera':camera, 'groupname':groupname,
         'nside':nside, 'hpixdir':hpixdir, 'band':band, 
-        'spectrograph':spectrograph
+        'spectrograph':spectrograph,
+        'hpixdir':hpixdir,
         }
 
     if 'rawdata_dir' in required_inputs:
