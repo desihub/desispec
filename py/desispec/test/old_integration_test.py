@@ -88,15 +88,8 @@ def integration_test(night=None, nspec=5, clobber=False):
     raw_dict = {0: 'flat', 1: 'arc', 2: 'dark'}
     #for expid, program in zip([0,1,2], ['flat', 'arc', 'dark']):
     for expid, program in raw_dict.items():
-        if program == 'arc':
-            cmd = "newarc --night {night} --expid {expid} --nspec {nspec}".format(
-                expid=expid, **params)
-        elif program == 'flat':
-            cmd = "newflat --night {night} --expid {expid} --nspec {nspec}".format(
-                expid=expid, **params)
-        else:
-            cmd = "newexp-random --program {program} --nspec {nspec} --night {night} --expid {expid}".format(
-                expid=expid, program=program, **params)
+        cmd = "newexp-random --program {program} --nspec {nspec} --night {night} --expid {expid}".format(
+            expid=expid, program=program, **params)
 
         fibermap = io.findfile('fibermap', night, expid)
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
@@ -254,17 +247,23 @@ def integration_test(night=None, nspec=5, clobber=False):
     # Collate data QA
     expid = 2
     qafile = io.findfile('qa_data_exp', night, expid)
-    qaexp_data = QA_Exposure(expid, night, raw_dict[expid])  # Removes camera files
-    io.write_qa_exposure(qafile, qaexp_data)
+    if clobber or not os.path.exists(qafile):
+        qaexp_data = QA_Exposure(expid, night, raw_dict[expid])  # Removes camera files
+        io.write_qa_exposure(os.path.splitext(qafile)[0], qaexp_data)
+        if not os.path.exists(qafile):
+            raise RuntimeError('FAILED data QA_Exposure({},{}, ...) -> {}'.format(expid, night, qafile))
     # Collate calib QA
     calib_expid = [0,1]
     for expid in calib_expid:
         qafile = io.findfile('qa_calib_exp', night, expid)
-        qaexp_calib = QA_Exposure(expid, night, raw_dict[expid])
-        io.write_qa_exposure(qafile, qaexp_calib)
+        if clobber or not os.path.exists(qafile):
+            qaexp_calib = QA_Exposure(expid, night, raw_dict[expid])
+            io.write_qa_exposure(os.path.splitext(qafile)[0], qaexp_calib)
+            if not os.path.exists(qafile):
+                raise RuntimeError('FAILED calib QA_Exposure({},{}, ...) -> {}'.format(expid, night, qafile))
 
     #-----
-    #- Bricks
+    #- Regroup cframe -> spectra
     expid = 2
     inputs = list()
     for camera in ['b0', 'r0', 'z0']:
@@ -272,24 +271,27 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     outputs = list()
     fibermap = io.read_fibermap(io.findfile('fibermap', night, expid))
-    bricks = set(fibermap['BRICKNAME'])
-    for b in bricks:
-        for channel in ['b', 'r', 'z']:
-            outputs.append( io.findfile('brick', groupname=b, band=channel))
+    from desimodel.footprint import radec2pix
+    nside=64
+    pixels = np.unique(radec2pix(nside, fibermap['RA_TARGET'], fibermap['DEC_TARGET']))
+    for pix in pixels:
+        outputs.append( io.findfile('spectra', groupname=pix) )
 
-    cmd = "desi_make_bricks --night "+night
+    cmd = "desi_group_spectra"
     if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-        raise RuntimeError('brick generation failed')
+        raise RuntimeError('spectra regrouping failed')
 
     #-----
     #- Redshifts!
-    for b in bricks:
-        inputs = [io.findfile('brick', groupname=b, band=channel) for channel in ['b', 'r', 'z']]
-        zbestfile = io.findfile('zbest', groupname=b)
+    for pix in pixels:
+        specfile = io.findfile('spectra', groupname=pix)
+        zbestfile = io.findfile('zbest', groupname=pix)
+        inputs = [specfile, ]
         outputs = [zbestfile, ]
-        cmd = "desi_zfind --brick {} -o {}".format(b, zbestfile)
+        cmd = "rrdesi {} --zbest {}".format(specfile, zbestfile)
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('redshifts failed for brick '+b)
+            raise RuntimeError('rrdesi failed for healpixel {}'.format(pix))
+
     # ztruth QA
     # qafile = io.findfile('qa_ztruth', night)
     # qafig = io.findfile('qa_ztruth_fig', night)
@@ -312,18 +314,12 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     print()
     print("--------------------------------------------------")
-    print("Brick     True  z        ->  Class  z        zwarn")
+    print("Pixel     True  z        -> Class   z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
-    for b in bricks:
-        zbest = io.read_zbest(io.findfile('zbest', groupname=b))
+    for pix in pixels:
+        zbest = io.read_zbest(io.findfile('zbest', groupname=pix))
         for i in range(len(zbest.z)):
-            if zbest.spectype[i] == 'ssp_em_galaxy':
-                objtype = 'GAL'
-            elif zbest.spectype[i] == 'spEigenStar':
-                objtype = 'STAR'
-            else:
-                objtype = zbest.spectype[i]
-
+            objtype = zbest.spectype[i]
             z, zwarn = zbest.z[i], zbest.zwarn[i]
 
             j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
@@ -336,10 +332,12 @@ def integration_test(night=None, nspec=5, clobber=False):
             elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
                 status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
             elif zwarn == 0:
-                if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
+                if truetype == 'LRG' and objtype == 'GALAXY' and abs(dv) < 150:
                     status = 'ok'
-                elif truetype == 'ELG' and objtype == 'GAL':
-                    if abs(dv) < 150 or oiiflux < 8e-17:
+                elif truetype == 'ELG' and objtype == 'GALAXY':
+                    if abs(dv) < 150:
+                        status = 'ok'
+                    elif oiiflux < 8e-17:
                         status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
                     else:
                         status = 'OOPS ([OII] flux {:.2g})'.format(oiiflux)
@@ -351,8 +349,8 @@ def integration_test(night=None, nspec=5, clobber=False):
                     status = 'OOPS'
             else:
                 status = 'OOPS'
-            print('{0}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
-                b, truetype, truez, objtype, z, zwarn, status))
+            print('{0:<8d}  {1:4s} {2:8.5f}  -> {3:6s} {4:8.5f} {5:4d}  - {6}'.format(
+                pix, truetype, truez, objtype, z, zwarn, status))
 
     print("--------------------------------------------------")
 
