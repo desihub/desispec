@@ -142,24 +142,17 @@ def getrms(image):
     return rms
 
 
-def countpix(image,nsig=None,ncounts=None):
+def countpix(image,nsig=None):
     """
-    Count the pixels above a given threshold.
-
-    Threshold can be in n times sigma or counts.
+    Count the pixels above a given threshold in units of sigma.
 
     Args:
         image: 2d image array
         nsig: threshold in units of sigma, e.g 2 for 2 sigma
-        ncounts: threshold in units of count, e.g 100
     """
-    if nsig is not None:
-        sig=np.std(image.ravel())
-        counts_nsig=np.where(image.ravel() > nsig*sig)[0].shape[0]
-        return counts_nsig
-    if ncounts is not None:
-        counts_thresh=np.where(image.ravel() > ncounts)[0].shape[0]
-        return counts_thresh
+    sig=np.std(image.ravel())
+    counts_nsig=np.where(image.ravel() > nsig*sig)[0].shape[0]
+    return counts_nsig
 
 def countbins(flux,threshold=0):
     """
@@ -222,6 +215,9 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     # Output dict
     qadict = {}
     qadict['NREJ'] = int(skymodel.nrej)
+
+    qadict['RA'] = frame.fibermap['RA_TARGET']
+    qadict['DEC'] = frame.fibermap['DEC_TARGET']
 
     # Grab sky fibers on this frame
     skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
@@ -393,7 +389,10 @@ def SignalVsNoise(frame,params,fidboundary=None):
     star_fidmag_snr = []
     fidmag_warn = []
 
-    qadict={"MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag, "ELG_FIDMAG_SNR":elg_fidmag_snr, "STAR_FIDMAG_SNR":star_fidmag_snr, "FIDMAG_WARN":fidmag_warn}
+    ra = frame.fibermap['RA_TARGET']
+    dec = frame.fibermap['DEC_TARGET']
+
+    qadict={"RA":ra, "DEC":dec, "MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag, "ELG_FIDMAG_SNR":elg_fidmag_snr, "STAR_FIDMAG_SNR":star_fidmag_snr, "FIDMAG_WARN":fidmag_warn}
 
     return qadict
 

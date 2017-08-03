@@ -29,6 +29,11 @@ def xy2hdr(xyslice):
     value = '[{}:{},{}:{}]'.format(xx.start+1, xx.stop, yy.start+1, yy.stop)
     return value
 
+#- 2D gaussian function to model sky peaks
+def gaussian2D(x,y,amp,xmu,ymu,xsigma,ysigma):
+    x,y = np.meshgrid(x,y)
+    gauss = amp*np.exp(-(x-xmu)**2/(2*xsigma**2)-(y-ymu)**2/(2*ysigma**2))
+    return gauss
 
 class TestQL(unittest.TestCase):
 
@@ -86,6 +91,7 @@ class TestQL(unittest.TestCase):
         hdr['EXPID'] = 1
         hdr['PROGRAM'] = 'dark'
         hdr['FLAVOR'] = 'science'
+        hdr['EXPTIME'] = 100.0
         
         rawimage = np.zeros((2*ny, 2*nx+2*noverscan))
         offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
@@ -145,55 +151,6 @@ class TestQL(unittest.TestCase):
         self.image = desispec.image.Image(img_pix, img_ivar, img_mask, camera='z1',meta=hdr)
         desispec.io.write_image(self.pixfile, self.image)
 
-        #- Create another pix file for xwsigma test
-        xw_hdr = dict()
-        xw_hdr['CAMERA'] = hdr['CAMERA']
-        xw_hdr['NIGHT'] = hdr['NIGHT']
-        xw_hdr['EXPID'] = hdr['EXPID']
-        xw_hdr['PROGRAM'] = hdr['PROGRAM']
-        xw_hdr['FLAVOR'] = hdr['FLAVOR']
-
-        xw_ny = 2000
-        xw_nx = 2000
-        xw_rawimage = np.zeros((2*xw_ny,2*xw_nx))
-        xw_img_pix = xw_rawimage.astype(np.int32)
-        xw_img_ivar = np.ones_like(xw_img_pix)/3.0**2
-        xw_img_mask = np.zeros(xw_img_pix.shape,dtype=np.uint32)
-
-        #- 2D gaussian function to model sky peaks
-        def gaussian2D(x,y,amp,xmu,ymu,xsigma,ysigma):
-            x,y = np.meshgrid(x,y)
-            gauss = amp*np.exp(-(x-xmu)**2/(2*xsigma**2)-(y-ymu)**2/(2*ysigma**2))
-            return gauss
-
-        #- manually insert gaussian sky peaks
-        x = np.arange(7)
-        y = np.arange(7)
-        a = 10000.
-        xmu = np.mean(x)
-        ymu = np.mean(y)
-        xsigma = 1.0
-        ysigma = 1.0
-        peak_counts = np.rint(gaussian2D(x,y,a,xmu,ymu,xsigma,ysigma))
-        peak_counts = peak_counts.astype(np.int32)
-        zpeaks = np.array([8401.5,8432.4,8467.5,9479.4])
-        fibers = np.arange(30)
-        for i in range(len(zpeaks)):
-            pix = np.rint(psf.xy(fibers,zpeaks[i]))
-            for j in range(len(fibers)):
-                for k in range(len(peak_counts)):
-                    ypix = int(pix[0][j]-3+k)
-                    xpix_start =int(pix[1][j]-3)
-                    xpix_stop = int(pix[1][j]+4)
-                    xw_img_pix[ypix][xpix_start:xpix_stop] = peak_counts[k]
-
-        #- transpose pixel values to correct place in image
-        xw_img_pix=np.ndarray.transpose(xw_img_pix)
-
-        #- write the test pixfile, fibermap file
-        self.xwimage = desispec.image.Image(xw_img_pix, xw_img_ivar, xw_img_mask, camera='z1',meta=xw_hdr)
-        desispec.io.write_image(self.xwfile, self.xwimage)
-
         self.fibermap = desispec.io.empty_fibermap(30)
         self.fibermap['OBJTYPE'][::2]='ELG'
         self.fibermap['OBJTYPE'][::3]='STD'
@@ -214,7 +171,7 @@ class TestQL(unittest.TestCase):
         ivar=np.ones_like(flux)
         resolution_data=np.ones((nspec,13,nwave))
         self.frame=desispec.frame.Frame(wave,flux,ivar,resolution_data=resolution_data,fibermap=self.fibermap)
-        self.frame.meta = dict(CAMERA=self.camera,PROGRAM='dark',FLAVOR='science',NIGHT=self.night, EXPID=self.expid,CCDSEC1=self.ccdsec1,CCDSEC2=self.ccdsec2,CCDSEC3=self.ccdsec3,CCDSEC4=self.ccdsec4)
+        self.frame.meta = dict(CAMERA=self.camera,PROGRAM='dark',FLAVOR='science',NIGHT=self.night,EXPID=self.expid,EXPTIME=100,CCDSEC1=self.ccdsec1,CCDSEC2=self.ccdsec2,CCDSEC3=self.ccdsec3,CCDSEC4=self.ccdsec4)
         desispec.io.write_frame(self.framefile, self.frame)
 
         #- make a skymodel
@@ -251,9 +208,6 @@ class TestQL(unittest.TestCase):
         counts1=qalib.countpix(pix,nsig=3) #- counts above 3 sigma
         counts2=qalib.countpix(pix,nsig=4) #- counts above 4 sigma
         self.assertLess(counts2,counts1)
-        counts3=qalib.countpix(pix,ncounts=200)
-        counts4=qalib.countpix(pix,ncounts=250)
-        self.assertLess(counts4,counts3)
 
     def test_sky_resid(self):
         import copy
@@ -341,8 +295,53 @@ class TestQL(unittest.TestCase):
         self.assertTrue((np.all(resl['METRICS']['RMS_OVER_AMP'])>0))
 
     def testCalcXWSigma(self):
+
+        #- Create another pix file for xwsigma test
+        xw_hdr = dict()
+        xw_hdr['CAMERA'] = self.camera
+        xw_hdr['NIGHT'] = self.night
+        xw_hdr['EXPID'] = self.expid
+        xw_hdr['PROGRAM'] = 'dark'
+        xw_hdr['FLAVOR'] = 'science'
+
+        psf = self.psf
+        xw_ny = 2000
+        xw_nx = 2000
+        xw_rawimage = np.zeros((2*xw_ny,2*xw_nx))
+        xw_img_pix = xw_rawimage.astype(np.int32)
+        xw_img_ivar = np.ones_like(xw_img_pix)/3.0**2
+        xw_img_mask = np.zeros(xw_img_pix.shape,dtype=np.uint32)
+
+        #- manually insert gaussian sky peaks
+        x = np.arange(7)
+        y = np.arange(7)
+        a = 10000.
+        xmu = np.mean(x)
+        ymu = np.mean(y)
+        xsigma = 1.0
+        ysigma = 1.0
+        peak_counts = np.rint(gaussian2D(x,y,a,xmu,ymu,xsigma,ysigma))
+        peak_counts = peak_counts.astype(np.int32)
+        zpeaks = np.array([8401.5,8432.4,8467.5,9479.4])
+        fibers = np.arange(30)
+        for i in range(len(zpeaks)):
+            pix = np.rint(psf.xy(fibers,zpeaks[i]))
+            for j in range(len(fibers)):
+                for k in range(len(peak_counts)):
+                    ypix = int(pix[0][j]-3+k)
+                    xpix_start =int(pix[1][j]-3)
+                    xpix_stop = int(pix[1][j]+4)
+                    xw_img_pix[ypix][xpix_start:xpix_stop] = peak_counts[k]
+
+        #- transpose pixel values to correct place in image
+        xw_img_pix=np.ndarray.transpose(xw_img_pix)
+
+        #- write the test pixfile, fibermap file
+        xwimage = desispec.image.Image(xw_img_pix, xw_img_ivar, xw_img_mask, camera='z1',meta=xw_hdr)
+        desispec.io.write_image(self.xwfile, xwimage)
+
         qa=QA.Calc_XWSigma('xwsigma',self.config)
-        inp=self.xwimage
+        inp=xwimage
         qargs={}
         qargs["PSFFile"]=self.psf
         qargs["FiberMap"]=self.fibermap
@@ -367,13 +366,14 @@ class TestQL(unittest.TestCase):
         #- test if amp QAs exist
         qargs["amps"] = True
         resl2=qa(inp,**qargs)
-        self.assertTrue(len(resl2['METRICS']['NPIX3SIG_AMP'])==4)
+        self.assertTrue(len(resl2['METRICS']['NPIX_LOW_AMP'])==4)
 
     def testCountSpectralBins(self):
         qa=QA.CountSpectralBins('countbins',self.config)
         inp=self.frame
         qargs={}
         qargs["PSFFile"]=self.psf
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True
@@ -389,6 +389,7 @@ class TestQL(unittest.TestCase):
         qa=QA.Sky_Continuum('skycont',self.config)
         inp=self.frame
         qargs={}
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=False
@@ -406,6 +407,7 @@ class TestQL(unittest.TestCase):
         qa=QA.Sky_Peaks('skypeaks',self.config)
         inp=self.frame
         qargs={}
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True
@@ -420,6 +422,7 @@ class TestQL(unittest.TestCase):
         inp=self.frame
         qargs={}
         qargs["PSFFile"]=self.psf
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=False
@@ -440,6 +443,7 @@ class TestQL(unittest.TestCase):
         sky=self.skymodel
         qargs={}
         qargs["PSFFile"]=self.psf
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True
@@ -460,6 +464,7 @@ class TestQL(unittest.TestCase):
         inp=self.frame
         qargs={}
         qargs["PSFFile"]=self.psf
+        qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
         qargs["amps"]=True

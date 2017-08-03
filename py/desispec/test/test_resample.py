@@ -6,7 +6,7 @@ import unittest, os
 import numpy as np
 from math import log
 
-from desispec.interpolation import resample_flux, bin_bounds
+from desispec.interpolation import resample_flux
 
 class TestResample(unittest.TestCase):
     """
@@ -42,13 +42,14 @@ class TestResample(unittest.TestCase):
         xout[-2:] += offset # same edge of last bin
         
         yout = resample_flux(xout, x, y)
-        
-        self.assertTrue(np.all(yout == 1.0))                
+        zero = np.max(np.abs(yout-1))
+        self.assertAlmostEqual(zero,0.)
 
     def test_flux_conservation(self):
         n = 100
         x = np.arange(n)
-        y = 1+np.sin(x/20.0)
+        #y = 1+np.sin(x/20.0)
+        y = 0.4*x+10 # only exact for linear relation
         y[n//2+1] += 10
         # xout must have edges including bin half width equal
         # or larger than input to get the same integrated flux
@@ -79,19 +80,7 @@ class TestResample(unittest.TestCase):
             ivar_out = np.sum(ivout)
             self.assertAlmostEqual(ivar_in,ivar_out)
 
-    def test_bin_bounds(self):
-        """Super basic test of bin boundaries"""
-        x = np.arange(10)
-        lo, hi = bin_bounds(x)
-        self.assertEqual(len(lo), len(x))
-        self.assertEqual(len(hi), len(x))
-        self.assertTrue(np.all(lo[1:] == hi[0:-1]))
-        dx = x[1]-x[0]
-        self.assertAlmostEqual(lo[0], x[0]-0.5*dx)
-        self.assertAlmostEqual(lo[1], x[0]+0.5*dx)
-        self.assertAlmostEqual(hi[-1], x[-1]+0.5*dx)
 
-    #- maybe these shouldn't agree
     # def test_same_bin(self):
     #     '''test reproducibility if two input bins are the same'''
     #     x  = np.array([1, 2, 3, 3, 4, 5])

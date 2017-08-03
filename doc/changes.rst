@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.15.2 (unreleased)
+0.15.3 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.15.2 (2017-07-12)
+-------------------
+
+* Make the loading of libspecex through ctypes more robust and portable.
+* QL configuration cleanup (PR `#389`_).
+* Add extrapolate option to resample_flux (PR `#415`_).
+* Sphinx and travis tests fixes.
+
+.. _`#389`: https://github.com/desihub/desispec/pull/389
+.. _`#415`: https://github.com/desihub/desispec/pull/415
 
 0.15.1 (2017-06-19)
 -------------------

@@ -91,28 +91,36 @@ class Get_RMS(MonitoringAlg):
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False):
         retval={}
-        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["CAMERA"] = image.meta["CAMERA"]
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
 
-        rmsccd=qalib.getrms(image.pix) #- should we add dark current and/or readnoise to this as well?
+        # return rms values in rms/sqrt(exptime)
+        rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
 
         rms_row=[]
-        rmsdiff=[]
+        for i in range(image.pix.shape[0]):
+            rmsrow = qalib.getrms(image.pix[i]/np.sqrt(image.meta["EXPTIME"]))
+            rms_row.append(rmsrow)
+
         expnum=[]
 
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
-                RMS_RANGE=[-1.,1.]
+                RMS_WARN_RANGE=[-1.0, 1.0],
+                RMS_ALARM_RANGE=[-2.0, 2.0]
                 )
 
         retval["PARAMS"] = param
 
+        rms_over=[]
+
+        rmsdiff=[]
         if amps:
             rms_amps=[]
             rms_over_amps=[]
@@ -122,16 +130,29 @@ class Get_RMS(MonitoringAlg):
             for kk in ['1','2','3','4']:
                 thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
-                rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary])
-                thisoverscan_values=np.ravel(image.pix[thisoverscanboundary])
-                rms_thisamp=qalib.getrms(image.pix[thisampboundary])
+                rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
+                thisoverscan_values=np.ravel(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
+                rms_thisamp=qalib.getrms(image.pix[thisampboundary]/np.sqrt(image.meta["EXPTIME"]))
                 rms_amps.append(rms_thisamp)
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_WARN":rmsdiff,"EXPNUM_WARN":expnum}
+
+            for i in range(len(rms_over_amps)):
+                if rms_over_amps[i] <= param['RMS_ALARM_RANGE'][0] or rms_over_amps[i] >= param['RMS_ALARM_RANGE'][1]:
+                    rmsdiff = 'ALARM'
+                    break
+                elif rms_over_amps[i] <= param['RMS_WARN_RANGE'][0] or rms_over_amps[i] >= param['RMS_WARN_RANGE'][1]:
+                    rmsdiff = 'WARN'
+                else:
+                    if rmsdiff == 'WARN':
+                        pass
+                    else:
+                        rmsdiff = 'NORMAL'
+
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff,"EXPNUM_WARN":expnum}
         else:
-            retval["METRICS"]={"RMS":rmsccd,"RMS_ROW":rms_row,"RMSDIFF_WARN":rmsdiff,"EXPNUM_WARN":expnum} 
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rms_over,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum} 
 
         if qlf:
             qlf_post(retval)  
@@ -189,9 +210,9 @@ class Count_Pixels(MonitoringAlg):
 
     def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False):
         retval={}
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = image.meta["CAMERA"]
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
@@ -200,37 +221,34 @@ class Count_Pixels(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
-                 CUTLO = 100,   # low threshold for number of counts
-                 CUTHI = 500,
-                 NPIX_RANGE = [200.0, 500.0]
+                 CUTLO = 3,   # low threshold for number of counts in sigmas
+                 CUTHI = 10, 
+                 NPIX_RANGE = [50.0, 200.0, 500.0, 650.0]
                  )
 
         retval["PARAMS"] = param
 
         npix_warn = []
 
-        #- get the counts over entire CCD
-        npix3sig=qalib.countpix(image.pix,nsig=3) #- above 3 sigma
-        npixlo=qalib.countpix(image.pix,ncounts=param['CUTLO']) #- above 100 pixel count
-        npixhi=qalib.countpix(image.pix,ncounts=param['CUTHI']) #- above 500 pixel count
+        #- get the counts over entire CCD in counts per second
+        npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
+        npixhi=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
+
         #- get the counts for each amp
         if amps:
-            npix3sig_amps=[]
             npixlo_amps=[]
             npixhi_amps=[]
             #- get amp boundary in pixels
             from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                npix3sig_thisamp=qalib.countpix(image.pix[ampboundary],nsig=3)
-                npix3sig_amps.append(npix3sig_thisamp)
-                npixlo_thisamp=qalib.countpix(image.pix[ampboundary],ncounts=param['CUTLO'])
+                npixlo_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTLO'])
                 npixlo_amps.append(npixlo_thisamp)
-                npixhi_thisamp=qalib.countpix(image.pix[ampboundary],ncounts=param['CUTHI'])
+                npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
                 npixhi_amps.append(npixhi_thisamp)
-            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi, "NPIX3SIG_AMP": npix3sig_amps, "NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_WARN":npix_warn}
+            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_WARN":npix_warn}
         else:
-            retval["METRICS"]={"NPIX3SIG":npix3sig,"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_WARN":npix_warn} 
+            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_WARN":npix_warn} 
 
         if qlf:
             qlf_post(retval)      
@@ -260,6 +278,8 @@ class Integrate_Spec(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
+
+        fibermap=kwargs['FiberMap']
         input_frame=args[0]
 
         if "paname" not in kwargs:
@@ -287,17 +307,20 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(input_frame,paname=paname,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
+        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
-    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
+    def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
         retval={}
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["PANAME" ] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+
+        ra = fibermap["RA_TARGET"]
+        dec = fibermap["DEC_TARGET"]
 
         #- get the integrals for all fibers
         flux=frame.flux
@@ -317,7 +340,7 @@ class Integrate_Spec(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
-                MAGDIFF_RANGE = [-0.5, 0.5]
+                MAGDIFF_RANGE = [-1.0, -0.5, 0.5, 1.0]
                 )
 
         retval["PARAMS"] = param
@@ -353,9 +376,9 @@ class Integrate_Spec(MonitoringAlg):
                         integ_thisamp[ii]=qalib.integrate_spec(wave,stdflux_thisamp[ii])
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
-            retval["METRICS"]={"INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_WARN":magdiff_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_WARN":magdiff_warn}
         else:
-            retval["METRICS"]={"INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_WARN":magdiff_warn} 
+            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_WARN":magdiff_warn} 
 
         if qlf:
             qlf_post(retval) 
@@ -387,6 +410,7 @@ class Sky_Continuum(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
+        fibermap=kwargs['FiberMap']
         input_frame=args[0]
         camera=input_frame.meta["CAMERA"]
         
@@ -430,20 +454,23 @@ class Sky_Continuum(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, param=param, qlf=qlf)
+        return self.run_qa(fibermap,input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
-    def run_qa(self,frame,wrange1=None,wrange2=None,paname=None,amps=False,
+    def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,paname=None,amps=False,
 dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
 
         #- qa dictionary 
         retval={}
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["PANAME" ]= paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+
+        ra = fibermap["RA_TARGET"]
+        dec = fibermap["DEC_TARGET"]
 
         #- get the skyfibers first
         skyfiber=np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
@@ -472,7 +499,7 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
                 B_CONT=[(4000, 4500), (5250, 5550)],
                 R_CONT=[(5950, 6200), (6990, 7230)],
                 Z_CONT=[(8120, 8270), (9110, 9280)],
-                SKYCONT_RANGE=[100.0, 1000.0]
+                SKYCONT_RANGE=[50.0, 100.0, 400.0, 600.0]
                 )
 
         retval["PARAMS"] = param
@@ -503,10 +530,10 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
 
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
-            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_WARN":skycont_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_WARN":skycont_warn}
 
         else: 
-            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_WARN":skycont_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_WARN":skycont_warn}
 
         if qlf:
             qlf_post(retval)    
@@ -539,6 +566,7 @@ class Sky_Peaks(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image, got {}".format(type(args[0])))
 
+        fibermap=kwargs['FiberMap']
         input_frame=args[0]
 
         if "paname" not in kwargs:
@@ -568,17 +596,20 @@ class Sky_Peaks(MonitoringAlg):
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf)
+        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf)
 
-    def run_qa(self,frame,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False):
+    def run_qa(self,fibermap,frame,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False):
         retval={}
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+
+        ra = fibermap["RA_TARGET"]
+        dec = fibermap["DEC_TARGET"]
 
         # define sky peaks and wavelength region around peak flux to be integrated
         dw=2
@@ -588,11 +619,17 @@ class Sky_Peaks(MonitoringAlg):
 
         nspec_counts=[]
         sky_counts=[]
+        nspec_counts_rms=[]
+        sky_counts_rms=[]
         rms_skyspec_amp=[]
         amp1=[]
         amp2=[]
         amp3=[]
         amp4=[]
+        rmsamp1=[]
+        rmsamp2=[]
+        rmsamp3=[]
+        rmsamp4=[]
         for i in range(frame.flux.shape[0]):
             if camera[0]=="b":
                 iwave1=np.argmin(np.abs(frame.wave-b_peaks[0]))
@@ -601,8 +638,10 @@ class Sky_Peaks(MonitoringAlg):
                 peak1_flux=np.trapz(frame.flux[i,iwave1-dw:iwave1+dw+1])
                 peak2_flux=np.trapz(frame.flux[i,iwave2-dw:iwave2+dw+1])
                 peak3_flux=np.trapz(frame.flux[i,iwave3-dw:iwave3+dw+1])
-                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux)
+                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
                 nspec_counts.append(sum_counts)
+                nspec_counts_rms.append(sum_counts_rms)
             if camera[0]=="r":
                 iwave1=np.argmin(np.abs(frame.wave-r_peaks[0]))
                 iwave2=np.argmin(np.abs(frame.wave-r_peaks[1]))
@@ -614,8 +653,10 @@ class Sky_Peaks(MonitoringAlg):
                 peak3_flux=np.trapz(frame.flux[i,iwave3-dw:iwave3+dw+1])
                 peak4_flux=np.trapz(frame.flux[i,iwave4-dw:iwave4+dw+1])
                 peak5_flux=np.trapz(frame.flux[i,iwave5-dw:iwave5+dw+1])
-                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)
+                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
                 nspec_counts.append(sum_counts)
+                nspec_counts_rms.append(sum_counts_rms)
             if camera[0]=="z":
                 iwave1=np.argmin(np.abs(frame.wave-z_peaks[0]))
                 iwave2=np.argmin(np.abs(frame.wave-z_peaks[1]))
@@ -629,8 +670,10 @@ class Sky_Peaks(MonitoringAlg):
                 peak4_flux=np.trapz(frame.flux[i,iwave4-dw:iwave4+dw+1])
                 peak5_flux=np.trapz(frame.flux[i,iwave5-dw:iwave5+dw+1])
                 peak6_flux=np.trapz(frame.flux[i,iwave6-dw:iwave6+dw+1])
-                sum_counts=np.sum(peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)
+                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
                 nspec_counts.append(sum_counts)
+                nspec_counts_rms.append(sum_counts_rms)
 
             if frame.fibermap['OBJTYPE'][i]=='SKY':
                 sky_counts.append(sum_counts)
@@ -638,28 +681,44 @@ class Sky_Peaks(MonitoringAlg):
                 if amps:
                     if frame.fibermap['FIBER'][i]<240:
                         if camera[0]=="b":
-                            amp1_flux=peak1_flux
-                            amp3_flux=np.sum(peak2_flux+peak3_flux)
+                            amp1_flux=peak1_flux/frame.meta["EXPTIME"]
+                            amp3_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                            rmsamp1_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
+                            rmsamp3_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         if camera[0]=="r":
-                            amp1_flux=np.sum(peak1_flux+peak2_flux)
-                            amp3_flux=np.sum(peak3_flux+peak4_flux+peak5_flux)
+                            amp1_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
+                            amp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                            rmsamp1_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                            rmsamp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         if camera[0]=="z":
-                            amp1_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
-                            amp3_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
+                            amp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                            amp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                            rmsamp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                            rmsamp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         amp1.append(amp1_flux)
                         amp3.append(amp3_flux)
+                        rmsamp1.append(rmsamp1_flux)
+                        rmsamp3.append(rmsamp3_flux)
                     if frame.fibermap['FIBER'][i]>260:
                         if camera[0]=="b":
-                            amp2_flux=peak1_flux
-                            amp4_flux=np.sum(peak2_flux+peak3_flux)
+                            amp2_flux=peak1_flux/frame.meta["EXPTIME"]
+                            amp4_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                            rmsamp2_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
+                            rmsamp4_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         if camera[0]=="r":
-                            amp2_flux=np.sum(peak1_flux+peak2_flux)
-                            amp4_flux=np.sum(peak3_flux+peak4_flux+peak5_flux)
+                            amp2_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
+                            amp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                            rmsamp2_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                            rmsamp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         if camera[0]=="z":
-                            amp2_flux=np.sum(peak1_flux+peak2_flux+peak3_flux)
-                            amp4_flux=np.sum(peak4_flux+peak5_flux+peak6_flux)
+                            amp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                            amp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                            rmsamp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                            rmsamp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
                         amp2.append(amp2_flux)
                         amp4.append(amp4_flux)
+                        rmsamp2.append(rmsamp2_flux)
+                        rmsamp4.append(rmsamp4_flux)
 
         nspec_counts=np.array(nspec_counts)
         sky_counts=np.array(sky_counts)
@@ -675,7 +734,7 @@ class Sky_Peaks(MonitoringAlg):
                 B_PEAKS=[3914.4, 5199.3, 5201.8],
                 R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                 Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                SUMCOUNT_RANGE=[1000.0, 1000000.0]
+                SUMCOUNT_RANGE=[500.0, 1000.0, 20000.0, 40000.0]
                 )
 
         retval["PARAMS"] = param
@@ -686,19 +745,19 @@ class Sky_Peaks(MonitoringAlg):
                 amp2=np.zeros(len(sky_counts))
                 amp4=np.zeros(len(sky_counts))
             else:
-                amp2=np.array(amp2)
-                amp4=np.array(amp4)
-            amp1=np.array(amp1)
-            amp3=np.array(amp3)
+                amp2=np.array(rmsamp2)
+                amp4=np.array(rmsamp4)
+            amp1=np.array(rmsamp1)
+            amp3=np.array(rmsamp3)
             amp1_rms=qalib.getrms(amp1)
             amp2_rms=qalib.getrms(amp2)
             amp3_rms=qalib.getrms(amp3)
             amp4_rms=qalib.getrms(amp4)
             rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
 
-            retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp,"SUMCOUNT_WARN":sumcount_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp,"SUMCOUNT_WARN":sumcount_warn}
         else:
-            retval["METRICS"]={"SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_WARN":sumcount_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_WARN":sumcount_warn}
 
         if qlf:
             qlf_post(retval)
@@ -729,7 +788,8 @@ class Calc_XWSigma(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
- 
+
+        fibermap=kwargs['FiberMap'] 
         input_image=args[0]
  
         if "paname" not in kwargs:
@@ -762,19 +822,22 @@ class Calc_XWSigma(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
  
-        return self.run_qa(input_image,paname=paname,amps=amps,psf=psf,fibermap=fibermap, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
+        return self.run_qa(fibermap,input_image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
  
-    def run_qa(self,image,paname=None,amps=False,psf=None,fibermap=None, qafile=None,qafig=None, param=None, qlf=False):
+    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False):
         from scipy.optimize import curve_fit
  
         retval={}
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat() 
-        retval["EXPID"]= '{0:08d}'.format(image.meta["EXPID"])
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat() 
+        retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera = image.meta["CAMERA"]
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
+
+        ra = fibermap["RA_TARGET"]
+        dec = fibermap["DEC_TARGET"]
 
         dw=2.
         b_peaks=np.array([3914.4,5199.3,5201.8])
@@ -1002,16 +1065,16 @@ class Calc_XWSigma(MonitoringAlg):
                 B_PEAKS=[3914.4, 5199.3, 5201.8],
                 R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                 Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                XSHIFT_RANGE = [-2.0, 2.0],
-                WSHIFT_RANGE = [-2.0, 2.0]
+                XSHIFT_RANGE = [-4.0, -2.0, 2.0, 4.0],
+                WSHIFT_RANGE = [-4.0, -2.0, 2.0, 4.0]
                 )
 
         retval["PARAMS"] = param
 
         if amps:
-            retval["METRICS"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"SHIFT_WARN":shift_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"SHIFT_WARN":shift_warn}
         else:
-            retval["METRICS"]={"XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"SHIFT_WARN":shift_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"SHIFT_WARN":shift_warn}
 
         #- http post if needed
         if qlf:
@@ -1078,13 +1141,13 @@ class Bias_From_Overscan(MonitoringAlg):
 
         retval={}
         retval["EXPID"]= '{0:08d}'.format(header["EXPID"])
-        retval["CAMERA"]=camera
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
+        retval["CAMERA"] = camera
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["PROGRAM"] = header["PROGRAM"]
         retval["FLAVOR"] = header["FLAVOR"]
         retval["NIGHT"] = header["NIGHT"]
-        
+
         rawimage=raw[camera.upper()].data
         header=raw[camera.upper()].header
 
@@ -1094,44 +1157,101 @@ class Bias_From_Overscan(MonitoringAlg):
                 if key not in header:
                     header[key] = h0[key]
 
+        data=[]
+        row_data_amp1=[]
+        row_data_amp2=[]
+        row_data_amp3=[]
+        row_data_amp4=[]
         bias_overscan=[]        
         for kk in ['1','2','3','4']:
             from desispec.preproc import _parse_sec_keyword
             
             sel=_parse_sec_keyword(header['BIASSEC'+kk])
-            pixdata=rawimage[sel]
+            #- Obtain counts/second in bias region
+            pixdata=rawimage[sel]/header["EXPTIME"]
+            if kk == '1':
+                for i in range(pixdata.shape[0]):
+                    row_amp1=pixdata[i]
+                    row_data_amp1.append(row_amp1)
+            if kk == '2':
+                for i in range(pixdata.shape[0]):
+                    row_amp2=pixdata[i]
+                    row_data_amp2.append(row_amp2)
+            if kk == '3':
+                for i in range(pixdata.shape[0]):
+                    row_amp3=pixdata[i]
+                    row_data_amp3.append(row_amp3)
+            if kk == '4':
+                for i in range(pixdata.shape[0]):
+                    row_amp4=pixdata[i]
+                    row_data_amp4.append(row_amp4)
             #- Compute statistics of the bias region that only reject
             #  the 0.5% of smallest and largest values. (from sdssproc) 
             isort=np.sort(pixdata.ravel())
             nn=isort.shape[0]
             bias=np.mean(isort[int(0.005*nn) : int(0.995*nn)])
             bias_overscan.append(bias)
+            data.append(isort)
 
-        bias=np.mean(bias_overscan)
+        row_data_bottom=[]
+        row_data_top=[]
+        for i in range(len(row_data_amp1)):
+            row_data_lower=np.concatenate((row_data_amp1[i],row_data_amp2[i]))
+            row_data_upper=np.concatenate((row_data_amp3[i],row_data_amp4[i]))
+            row_data_bottom.append(row_data_lower)
+            row_data_top.append(row_data_upper)
+        row_data=np.concatenate((row_data_bottom,row_data_top))
 
-        diff1sig=[]
-        diff2sig=[]
-        diff3sig=[]
-        data5sig=[]
         mean_row=[]
-        biasdiff_warn=[]
-        data5sig_warn=[]
-        diff_warn=[]
+        for i in range(len(row_data)):
+            mean=np.mean(row_data[i])
+            mean_row.append(mean)
+
+        full_data=np.concatenate((data[0],data[1],data[2],data[3])).ravel()
+        bias=np.mean(bias_overscan)
 
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
                 PERCENTILES=[68.2,95.4,99.7],
-                DIFF_RANGE=[-1.,1.]
+                DIFF_WARN_RANGE=[-1.0, 1.0],
+                DIFF_ALARM_RANGE=[-2.0, 2.0]
                 )
+
+        sig1_lo = np.percentile(full_data,(100.-param['PERCENTILES'][0])/2.)
+        sig1_hi = np.percentile(full_data,100.-sig1_lo)
+        sig2_lo = np.percentile(full_data,(100.-param['PERCENTILES'][1])/2.)
+        sig2_hi = np.percentile(full_data,100.-sig2_lo)
+        sig3_lo = np.percentile(full_data,(100.-param['PERCENTILES'][2])/2.)
+        sig3_hi = np.percentile(full_data,100.-sig3_lo)
+
+        diff1sig = sig1_hi - sig1_lo
+        diff2sig = sig2_hi - sig2_lo
+        diff3sig = sig3_hi - sig3_lo
+
+        sig5_value = np.percentile(full_data,100.-99.99994)
+        data5sig = len(np.where(full_data <= sig5_value)[0])
 
         retval["PARAMS"] = param
 
+        biasdiff=[]
         if amps:
             bias_amps=np.array(bias_overscan)
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEAN_ROW":mean_row,"BIASDIFF_WARN":biasdiff_warn,"DATA5SIG_WARN":data5sig_warn,"DIFF_WARN":diff_warn}
+            for i in range(len(bias_amps)):
+                if bias_amps[i] <= param['DIFF_ALARM_RANGE'][0] or bias_amps[i] >= param['DIFF_ALARM_RANGE'][1]:
+                    biasdiff = 'ALARM'
+                    break
+                elif bias_amps[i] <= param['DIFF_WARN_RANGE'][0] or bias_amps[i] >= param['DIFF_WARN_RANGE'][1]:
+                    biasdiff = 'WARN'
+                else:
+                    if biasdiff == 'WARN':
+                        pass
+                    else:
+                        biasdiff = 'NORMAL'
+
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff}
         else:
-            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEAN_ROW":mean_row,"BIASDIFF_WARN":biasdiff_warn,"DATA5SIG_WARN":data5sig_warn,"DIFF_WARN":diff_warn}
+            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
 
         #- http post if needed
         if qlf:
@@ -1163,6 +1283,8 @@ class CountSpectralBins(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
+        fibermap=kwargs['FiberMap']
         input_frame=args[0]
 
         paname=None
@@ -1190,20 +1312,23 @@ class CountSpectralBins(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
+        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False):
+    def run_qa(self,fibermap,frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False):
 
         #- qa dictionary 
         retval={}
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+
+        ra = fibermap["RA_TARGET"]
+        dec = fibermap["DEC_TARGET"]
 
         grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
@@ -1215,7 +1340,7 @@ class CountSpectralBins(MonitoringAlg):
                          CUTLO = 100,   # low threshold for number of counts
                          CUTMED = 250,
                          CUTHI = 500,
-                         NGOOD_RANGE = [490, 500]
+                         NGOOD_RANGE = [480, 490, 500, 500]
                          )
 
         retval["PARAMS"] = param
@@ -1287,9 +1412,9 @@ class CountSpectralBins(MonitoringAlg):
             averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
             averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
 
-            retval["METRICS"]={"NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIBERS": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOOD_WARN":ngood_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIBERS": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOOD_WARN":ngood_warn}
         else:
-            retval["METRICS"]={"NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIBERS": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOOD_WARN":ngood_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIBERS": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOOD_WARN":ngood_warn}
 
         retval["LEFT_MAX_FIBER"]=int(leftmax)
         retval["RIGHT_MIN_FIBER"]=int(rightmin)
@@ -1327,6 +1452,7 @@ class Sky_Residual(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
+        fibermap=kwargs['FiberMap']
         input_frame=args[0] #- should be sky subtracted
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
@@ -1361,30 +1487,33 @@ class Sky_Residual(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(input_frame,paname=paname,skymodel=skymodel,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
+        return self.run_qa(fibermap,input_frame,paname=paname,skymodel=skymodel,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
+    def run_qa(self,fibermap,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False):
         from desispec.sky import qa_skysub
 
         if skymodel is None:
             raise IOError("Must have skymodel to find residual. It can't be None")
         #- return values
         retval={}
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
-        
+
+        ra = fibermap["RA_TARGET"]
+        dec = fibermap["DEC_TARGET"]
+
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(BIN_SZ=0.1, #- Bin size for histograms
                          PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
                          PER_RESID=95.,   # Percentile for residual distribution
-                         SKY_RANGE = [0.0, 10.0]
+                         SKY_RANGE = [-10.0, -5.0, 5.0, 10.0]
                         )
 
         retval["PARAMS"] = param
@@ -1420,6 +1549,8 @@ class Calculate_SNR(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
+        fibermap=kwargs['FiberMap']
         input_frame=args[0]
 
         amps=False
@@ -1446,27 +1577,30 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
+        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf)
 
 
-    def run_qa(self,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False, param=None):
+    def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False, param=None):
 
         #- return values
         retval={}
-        retval["PANAME"]=paname
-        retval["QATIME"]=datetime.datetime.now().isoformat()
-        retval["EXPID"]= '{0:08d}'.format(frame.meta["EXPID"])
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+
+        ra = fibermap["RA_TARGET"]
+        dec = fibermap["DEC_TARGET"]
 
         #- select band for mag, using DECAM_R if present
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
                 SNR_FLUXTHRESH=0.0, # Minimum value of flux to go into SNR calc. 
-                FIDSNR_RANGE=[6.5, 7.5],
+                FIDSNR_RANGE=[6.0, 6.5, 7.5, 8.0],
                 FIDMAG=22.
                 )
 
