@@ -488,7 +488,7 @@ def SNRFit(frame,params,fidboundary=None):
             cov.fill(np.nan)
             qadict["%s_FITRESULTS"%T]=[vs,cov]
             qadict["%s_FIDMAG_SNR"%T]=np.nan
-        except OptimizeWarning:
+        except scipy.optimize.OptimizeWarning:
             print("SAMI Optimize Warning")
             log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
             vs=out[0]
