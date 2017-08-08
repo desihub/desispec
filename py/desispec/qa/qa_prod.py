@@ -38,8 +38,8 @@ class QA_Prod(object):
         #
         self.data = {}
 
-    def get_qa_array(self, qatype, metric, nights='all', channels='all'):
-        """ Generate an array of QA values from .data
+    def get_qa_table(self, qatype, metric, nights='all', channels='all'):
+        """ Generate a table of QA values from .data
         Args:
             qatype: str
               FIBERFLAT, SKYSUB
@@ -49,13 +49,13 @@ class QA_Prod(object):
               'b', 'r', 'z'
 
         Returns:
-            array: ndarray
-            ne_dict: dict
-              dict of nights and exposures contributing to the array
+            qa_tbl: Table
         """
-        import pdb
+        from astropy.table import Table
         out_list = []
-        ne_dict = {}
+        out_nights = []
+        out_expid = []
+        out_dateobs = []
         # Nights
         for night in self.data:
             if (night not in nights) and (nights != 'all'):
@@ -74,19 +74,22 @@ class QA_Prod(object):
                     except KeyError:  # Each exposure has limited qatype
                         pass
                     except TypeError:
-                        pdb.set_trace()
+                        import pdb; pdb.set_trace()
                     else:
                         if isinstance(val, (list,tuple)):
                             out_list.append(val[0])
                         else:
                             out_list.append(val)
                         # dict
-                        if night not in ne_dict:
-                            ne_dict[night] = []
-                        if expid not in ne_dict[night]:
-                            ne_dict[night].append(expid)
-        # Return
-        return np.array(out_list), ne_dict
+                        out_nights.append(night)
+                        out_expid.append(expid)
+                        out_dateobs.append(self.data[night][expid]['DATE-OBS'])
+        # Return Table
+        qa_tbl = Table()
+        qa_tbl[metric] = out_list
+        qa_tbl['nights'] = out_nights
+        qa_tbl['DATE-OBS'] = out_dateobs
+        return qa_tbl
 
     def load_data(self):
         """ Load QA data from disk
@@ -225,7 +228,7 @@ class QA_Prod(object):
                 frame_fil = frames_dict[key]
                 frame = read_frame(frame_fil)
                 qa_exp = QA_Exposure(exposure, night, frame.meta['FLAVOR'],
-                                         specprod_dir=self.specprod_dir, remove=remove)
+                                     frame.meta['DATE-OBS'], specprod_dir=self.specprod_dir, remove=remove)
                 # Append
                 self.qa_exps.append(qa_exp)
         # Write

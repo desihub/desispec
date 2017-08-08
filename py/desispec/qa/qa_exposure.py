@@ -14,7 +14,7 @@ from desispec.io import read_params
 
 
 class QA_Exposure(object):
-    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None, **kwargs):
+    def __init__(self, expid, night, flavor, dateobs, specprod_dir=None, in_data=None, **kwargs):
         """
         Class to organize and execute QA for a DESI Exposure
 
@@ -25,6 +25,8 @@ class QA_Exposure(object):
             night: str -- YYYYMMDD
             flavor: str
               exposure type (e.g. flat, arc, science)
+            dateobs: str
+              Time of exposure, e.g. '2019-09-04T10:28:00.880'
             specprod_dir(str): Path containing the exposures/ directory to use. If the value
                 is None, then the value of :func:`specprod_root` is used instead.
             in_data: dict, optional -- Input data
@@ -46,6 +48,7 @@ class QA_Exposure(object):
         self.night = night
         self.specprod_dir = specprod_dir
         self.flavor = flavor
+        self.dateobs = dateobs
 
         if in_data is None:
             self.data = dict(flavor=self.flavor, expid=self.expid,

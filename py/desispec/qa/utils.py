@@ -14,6 +14,10 @@ def get_skyres(cframes, sub_sky=False):
         for cframe_file in cframes:
             wave, flux, res, ivar = get_skyres(cframe_file)
         # Concatenate and return
+        all_wave.append(wave)
+        all_flux.append(flux)
+        all_res.append(res)
+        all_ivar.append(ivar)
         return np.concatenate(all_wave), np.concatenate(all_flux), \
                np.concatenate(all_res), np.concatenate(all_ivar)
 

@@ -648,6 +648,7 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
         plt.show()
 
 def prod_time_series(qa_prod, qatype_metric, xlim=None, outfile=None, close=True, pp=None):
+    from astropy.time import Time
 
     log = get_logger()
     qatype, metric = qatype_metric.split('-')
@@ -658,27 +659,34 @@ def prod_time_series(qa_prod, qatype_metric, xlim=None, outfile=None, close=True
 
     # Loop on channel
     clrs = get_channel_clrs()
-    for qq, channel in enumerate(['b', 'r', 'z']):
-        ax = plt.subplot(gs[qq])
+    ax = plt.subplot(gs[0])
         #ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
 
-        # Grab QA
-        qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
-        pdb.set_trace()
-        # Check for nans
-        isnan = np.isnan(qa_arr)
-        if np.sum(isnan) > 0:
-            log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
-                qatype, metric, channel))
-            qa_arr[isnan] = -999.
-        # Histogram
-        ax.hist(qa_arr, color=clrs[channel])
-        #import pdb; pdb.set_trace()
-        # Label
-        ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
-        ax.set_xlabel('{:s} :: {:s}'.format(qatype,metric))
-        if xlim is not None:
-            ax.set_xlim(xlim)
+    # Grab QA
+    channel = 'b'
+    qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
+    '''
+    # Check for nans
+    isnan = np.isnan(qa_arr)
+    if np.sum(isnan) > 0:
+        log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
+            qatype, metric, channel))
+        qa_arr[isnan] = -999.
+    '''
+    # Convert Date to MJD
+    atime = Time(qa_tbl['DATE-OBS'], format='isot', scale='utc')
+    atime.format = 'mjd'
+    mjd = atime.value
+
+    # Scatter me
+    ax.scatter(mjd, qa_tbl[metric])
+
+    # Label
+    #ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
+    ax.set_ylabel('{:s} :: {:s}'.format(qatype,metric))
+    ax.set_xlabel('MJD')
+    if xlim is not None:
+        ax.set_xlim(xlim)
 
 
     # Finish
@@ -695,7 +703,8 @@ def prod_time_series(qa_prod, qatype_metric, xlim=None, outfile=None, close=True
     else:  # Show
         plt.show()
 
-def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True, nslices=20):
+def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None,
+                      close=True, nslices=20, dpi=700):
     """ Generate a plot of sky subtraction residuals
     Typically for a given channel
     Args:
@@ -732,7 +741,7 @@ def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     if outfile is not None:
-        plt.savefig(outfile)
+        plt.savefig(outfile, dpi=dpi)
         if close:
             plt.close()
     elif pp is not None:

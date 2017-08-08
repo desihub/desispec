@@ -79,4 +79,4 @@ def main(args) :
         from desispec.qa import qa_plots as dqqp
         qa_prod.load_data()
         # Default?
-        dqqp.prod_time_series(qa_prod, args.time_series)
+        dqqp.prod_time_series(qa_prod, args.time_series, outfile='QA_{:s}.png'.format(args.time_series))

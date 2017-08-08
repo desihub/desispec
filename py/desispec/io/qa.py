@@ -162,6 +162,7 @@ def write_qa_exposure(outroot, qaexp, ret_dict=False):
     # Generate the dict
     odict = {qaexp.night: {qaexp.expid: {}}}
     odict[qaexp.night][qaexp.expid]['flavor'] = qaexp.flavor
+    odict[qaexp.night][qaexp.expid]['DATE-OBS'] = qaexp.dateobs
     cameras = list(qaexp.data['frames'].keys())
     for camera in cameras:
         odict[qaexp.night][qaexp.expid][camera] = qaexp.data['frames'][camera]
