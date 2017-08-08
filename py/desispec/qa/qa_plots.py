@@ -575,7 +575,7 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     gs = gridspec.GridSpec(2,2)
 
     # Loop on channel
-    clrs = dict(b='blue', r='red', z='purple')
+    clrs = get_channel_clrs()
     for qq, channel in enumerate(['b', 'r', 'z']):
         ax = plt.subplot(gs[qq])
         #ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
@@ -631,6 +631,53 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     else:  # Show
         plt.show()
 
+def prod_time_series(qa_prod, qatype_metric, xlim=None, outfile=None, close=True, pp=None):
+
+    log = get_logger()
+    qatype, metric = qatype_metric.split('-')
+
+    # Setup
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(1,1)
+
+    # Loop on channel
+    clrs = get_channel_clrs()
+    for qq, channel in enumerate(['b', 'r', 'z']):
+        ax = plt.subplot(gs[qq])
+        #ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
+
+        # Grab QA
+        qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
+        pdb.set_trace()
+        # Check for nans
+        isnan = np.isnan(qa_arr)
+        if np.sum(isnan) > 0:
+            log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
+                qatype, metric, channel))
+            qa_arr[isnan] = -999.
+        # Histogram
+        ax.hist(qa_arr, color=clrs[channel])
+        #import pdb; pdb.set_trace()
+        # Label
+        ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
+        ax.set_xlabel('{:s} :: {:s}'.format(qatype,metric))
+        if xlim is not None:
+            ax.set_xlim(xlim)
+
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
 
 def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True, nslices=20):
     """ Generate a plot of sky subtraction residuals
@@ -735,3 +782,6 @@ def skysub_resid_series(sky_dict, xtype, outfile=None, pp=None,
             pp.close()
     else:  # Show
         plt.show()
+
+def get_channel_clrs():
+    return dict(b='blue', r='red', z='purple')

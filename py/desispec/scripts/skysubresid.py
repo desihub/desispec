@@ -12,8 +12,9 @@ def parse(options=None):
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--expid', type=int, help='Generate exposure plot on given exposure')
     parser.add_argument('--night', type=str, help='Generate night plot on given night')
+    parser.add_argument('--nights', type=str, help='List of nights to include for prod plot')
     #parser.add_argument('--prod', type=str, help='Generate night plot')
-    #parser.add_argument('--channels', type=str, help='List of channels to include')
+    parser.add_argument('--channels', type=str, help='List of channels to include')
     #parser.add_argument('--frame', type=str, help='List of exposure IDs')
 
     args = None
@@ -36,10 +37,11 @@ def get_skyres(cframe_fil, sky_file):
     # Resid
     skyfibers = np.where(cframe.fibermap['OBJTYPE'] == 'SKY')[0]
     res = cframe.flux[skyfibers]
+    ivar = cframe.ivar[skyfibers]
     flux = skymodel.flux[skyfibers] # Residuals
     wave = np.outer(np.ones(flux.shape[0]), cframe.wave).flatten()
     # Return
-    return wave, flux, res
+    return wave, flux, res, ivar
 
 
 def main(args) :
@@ -90,7 +92,7 @@ def main(args) :
                         if channel in camera:
                             sky_file = findfile(str('sky'), night=night, camera=camera,
                                 expid=args.expid, specprod_dir=specprod_dir)
-                            wave, flux, res = get_skyres(cframe_fil, sky_file)
+                            wave, flux, res, _ = get_skyres(cframe_fil, sky_file)
                             # Append
                             channel_dict[channel]['wave'].append(wave)
                             channel_dict[channel]['skyflux'].append(np.log10(np.maximum(flux.flatten(),1e-1)))
@@ -105,15 +107,14 @@ def main(args) :
         return
 
 
-
-
-    # Nights?
+    # Full Prod Plot
+    # Nights
     if args.nights is not None:
         gdnights = [iarg for iarg in args.nights.split(',')]
     else:
         gdnights = 'all'
 
-    # Channels?
+    # Channels
     if args.channels is not None:
         gdchannels = [iarg for iarg in args.channels.split(',')]
     else:
@@ -127,16 +128,10 @@ def main(args) :
             if night not in gdnights:
                 continue
                 # Get em
-        for exposure in get_exposures(night, specprod_dir = args.specprod_dir):
-            # Check against input expids
-            if expids == 'all':
-                pass
-            else:
-                if exposure not in expids:
-                    continue
+        for exposure in get_exposures(night, specprod_dir=specprod_dir):
             # Get em
             frames_dict = get_files(filetype=str('cframe'), night=night,
-                    expid=exposure, specprod_dir=args.specprod_dir)
+                    expid=exposure, specprod_dir=specprod_dir)
             for camera, cframe_fil in frames_dict.items():
                 channel = camera[0]
                 # Check against input
@@ -149,8 +144,9 @@ def main(args) :
                 log.info('Loading {:s}'.format(cframe_fil))
                 sky_file = findfile(str('sky'), night=night, camera=camera,
                                     expid=exposure, specprod_dir=specprod_dir)
+                wave, flux, res, _ = get_skyres(cframe_fil, sky_file)
                 # Append
-                channel_dict[channel]['wave'].append(tmp.flatten())
+                channel_dict[channel]['wave'].append(wave)
                 channel_dict[channel]['skyflux'].append(np.log10(np.maximum(flux.flatten(),1e-1)))
                 channel_dict[channel]['res'].append(res.flatten())
                 channel_dict[channel]['count'] += 1
@@ -162,4 +158,4 @@ def main(args) :
             sky_res = np.concatenate(channel_dict[channel]['res'])
             # Plot
             skysub_resid_dual(sky_wave, sky_flux, sky_res,
-                         outfile='tmp{:s}.png'.format(channel))
+                         outfile='skyresid_prod_dual_{:s}.png'.format(channel))

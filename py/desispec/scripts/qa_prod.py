@@ -22,6 +22,8 @@ def parse(options=None):
                         help='clobber existing QA files?')
     parser.add_argument('--channel_hist', type=str, default=None,
                         help='Generate channel histogram(s)')
+    parser.add_argument('--time_series', type=str, default=None,
+                        help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-MED_RESID')
 
     args = None
     if options is None:
@@ -70,3 +72,11 @@ def main(args) :
         # Finish
         print("Writing {:s}".format(outfile))
         pp.close()
+
+    # Time plots
+    if args.time_series is not None:
+        # QATYPE-METRIC
+        from desispec.qa import qa_plots as dqqp
+        qa_prod.load_data()
+        # Default?
+        dqqp.prod_time_series(qa_prod, args.time_series)
