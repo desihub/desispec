@@ -268,16 +268,17 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     qadict["WAVG_RES_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
 
     #- Histograms for residual/sigma #- inherited from qa_plots.frame_skyres()
-    binsz = param['BIN_SZ']
-    gd_res = res_ivar > 0.
-    devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
-    i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
-    rng = tuple( binsz*np.array([i0,i1]) )
-    nbin = i1-i0
-    hist, edges = np.histogram(devs, range=rng, bins=nbin)
+    if quick_look:
+        binsz = param['BIN_SZ']
+        gd_res = res_ivar > 0.
+        devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
+        i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
+        rng = tuple( binsz*np.array([i0,i1]) )
+        nbin = i1-i0
+        hist, edges = np.histogram(devs, range=rng, bins=nbin)
 
-    qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
-    qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
+        qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
+        qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
 
     #- Add additional metrics for quicklook
     if quick_look:

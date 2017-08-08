@@ -254,7 +254,8 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
 
     qadict = qalib.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
 
-    qadict_snr = qalib.SignalVsNoise(tempframe,param)
-    qadict.update(qadict_snr)
+    if quick_look:  # The following can be a *large* dict
+        qadict_snr = qalib.SignalVsNoise(tempframe,param)
+        qadict.update(qadict_snr)
 
     return qadict
