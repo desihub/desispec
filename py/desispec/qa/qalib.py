@@ -215,8 +215,9 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     qadict = {}
     qadict['NREJ'] = int(skymodel.nrej)
 
-    qadict['RA'] = frame.fibermap['RA_TARGET']
-    qadict['DEC'] = frame.fibermap['DEC_TARGET']
+    if quick_look:
+        qadict['RA'] = frame.fibermap['RA_TARGET']
+        qadict['DEC'] = frame.fibermap['DEC_TARGET']
 
     # Grab sky fibers on this frame
     skyfibers = np.where(frame.fibermap['OBJTYPE'] == 'SKY')[0]
@@ -259,13 +260,13 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     qadict['RESID_RMS'] = []
     qadict['SKY_WARN'] = []
 
-    #- Residuals in wave and fiber axes
-    qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
     qadict["SKY_FIBERID"]=skyfibers.tolist()
-    qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
-
-    #- Weighted average for each bin on all fibers
-    qadict["WAVG_RES_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
+    #- Residuals in wave and fiber axes
+    if quick_look:
+        qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
+        qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
+        #- Weighted average for each bin on all fibers
+        qadict["WAVG_RES_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
 
     #- Histograms for residual/sigma #- inherited from qa_plots.frame_skyres()
     if quick_look:

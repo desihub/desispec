@@ -139,7 +139,10 @@ class QA_Prod(object):
                     else:  # Now the full read
                         frame = read_frame(frame_fil)
                     # Load
-                    qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+                    try:
+                        qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+                    except AttributeError:
+                        import pdb; pdb.set_trace
                     # Flat QA
                     if frame.meta['FLAVOR'] in ['flat']:
                         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
