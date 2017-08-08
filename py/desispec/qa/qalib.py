@@ -420,8 +420,6 @@ def SNRFit(frame,params,fidboundary=None):
             and wavelength directions for each amp (output of slice_fidboundary function)
     Returns a dictionary similar to SignalVsNoise
     """
-    def linear_fit(x,a,b):
-        return a+b*x
     thisfilter='DECAM_R' #- should probably come from param. Hard coding for now
     if "Filter" in params:
         thisfilter=params["Filter"]
@@ -433,11 +431,11 @@ def SNRFit(frame,params,fidboundary=None):
 #            sum+=b*X
 #            X=X*x
 #        return sum
-#    funcMap={"linear":lambda x,a,b:a+b*x,
-#             "poly":lambda x,a,b,c:a+b*x+c*x**2
-#         }
-#    fitfunc=funcMap["linear"]
-#    initialParams=[20.0,-1.0]
+    funcMap={"linear":lambda x,a,b:a+b*x,
+             "poly":lambda x,a,b,c:a+b*x+c*x**2
+         }
+    fitfunc=funcMap["poly"]
+    initialParams=[20.0,-1.0,0.05]
 #    if "Func" in params:
 #        fitfunc=funcMap["Func"]
 #        initialParams=[20.0,-1.0,0.05]
@@ -465,9 +463,9 @@ def SNRFit(frame,params,fidboundary=None):
         xs=mags.argsort()
         x=mags[xs]
         y=np.log10(medsnr[xs])
-        out=optimize.curve_fit(linear_fit,x,y)#,p0=initialParams)
+        out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
         qadict["%s_FITRESULTS"%T]=out # values,covMatrix
-        qadict["%s_FIDMAG_SNR"%T]=10**linear_fit(fmag,out[0][0],out[0][1]) #10**fitfunc(fmag)
+        qadict["%s_FIDMAG_SNR"%T]=10**fitfunc(fmag,out[0][0],out[0][1],out[0][2])
 
 #        try:
 #            xs=mags.argsort()
