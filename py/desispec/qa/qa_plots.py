@@ -107,8 +107,15 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     chi2_med = np.sum(med_res**2 * wavg_ivar)
     pchi2_med = scipy.stats.chisqprob(chi2_med, dof_wavg)
     '''
-    med_res = qaframe.qa_data['SKYSUB']["METRICS"]["MED_RESID_WAVE"]
-    wavg_res = qaframe.qa_data['SKYSUB']["METRICS"]["WAVG_RES_WAVE"]
+    skyfibers = np.array(qaframe.qa_data['SKYSUB']["METRICS"]["SKY_FIBERID"])
+    res=frame.flux[skyfibers]
+    res_ivar=frame.ivar[skyfibers]
+    if quick_look:
+        med_res = qaframe.qa_data['SKYSUB']["METRICS"]["MED_RESID_WAVE"]
+        wavg_res = qaframe.qa_data['SKYSUB']["METRICS"]["WAVG_RES_WAVE"]
+    else:
+        med_res = np.median(res,axis=0)
+        wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
 
     # Plot
     fig = plt.figure(figsize=(8, 10.0))
@@ -149,9 +156,6 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         hist = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_1D"])
         edges = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_EDGES"])
     else: # Generate for offline
-        skyfibers = np.array(qaframe.qa_data['SKYSUB']["METRICS"]["SKY_FIBERID"])
-        res=frame.flux[skyfibers]
-        res_ivar=frame.ivar[skyfibers]
         gd_res = res_ivar > 0.
         devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
         i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
