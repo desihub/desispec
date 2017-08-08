@@ -139,7 +139,10 @@ class QA_Prod(object):
                     else:  # Now the full read
                         frame = read_frame(frame_fil)
                     # Load
-                    qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+                    try:
+                        qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+                    except AttributeError:
+                        import pdb; pdb.set_trace
                     # Flat QA
                     if frame.meta['FLAVOR'] in ['flat']:
                         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
@@ -166,21 +169,21 @@ class QA_Prod(object):
                         # Standard stars
                         stdstar_fil = meta.findfile('stdstars', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir,
                                                     spectrograph=spectro)
+                        #try:
+                        #    model_tuple=read_stdstar_models(stdstar_fil)
+                        #except FileNotFoundError:
+                        #    warnings.warn("Standard star file {:s} not found.  Skipping..".format(stdstar_fil))
+                        #else:
+                        flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
                         try:
-                            model_tuple=read_stdstar_models(stdstar_fil)
+                            fluxcalib = read_flux_calibration(flux_fil)
                         except FileNotFoundError:
-                            warnings.warn("Standard star file {:s} not found.  Skipping..".format(stdstar_fil))
+                            warnings.warn("Flux file {:s} not found.  Skipping..".format(flux_fil))
                         else:
-                            flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                            try:
-                                fluxcalib = read_flux_calibration(flux_fil)
-                            except FileNotFoundError:
-                                warnings.warn("Flux file {:s} not found.  Skipping..".format(flux_fil))
-                            else:
-                                qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, model_tuple))#, indiv_stars))
-                                if make_plots:
-                                    qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                                    qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib, model_tuple)
+                            qaframe.run_qa('FLUXCALIB', (frame, fluxcalib)) #, model_tuple))#, indiv_stars))
+                            if make_plots:
+                                qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                                qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)#, model_tuple)
                     # Write
                     write_qa_frame(qafile, qaframe)
 

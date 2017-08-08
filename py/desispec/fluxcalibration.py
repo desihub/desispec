@@ -1145,7 +1145,6 @@ def qa_fluxcalib(param, frame, fluxcalib):
         param: dict of QA parameters
         frame: Frame
         fluxcalib: FluxCalib
-        model_tuple : tuple of model data for standard stars (read from stdstars-...fits)
 
     Returns:
         qadict: dict of QA outputs
