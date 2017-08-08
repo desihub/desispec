@@ -122,8 +122,7 @@ class TestIO(unittest.TestCase):
             frx = Frame(wave, flux, ivar, mask, R, meta=meta)
             write_frame(self.testfile, frx)
             frame = read_frame(self.testfile)
-            meta = read_meta_frame(self.testfile)
-            import pdb; pdb.set_trace()
+            read_meta = read_meta_frame(self.testfile)
 
             flux2 = flux.astype('f4').astype('f8')
             ivar2 = ivar.astype('f4').astype('f8')
@@ -143,6 +142,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(frame.resolution_data.dtype.isnative)
             self.assertEqual(frame.meta['BLAT'], meta['BLAT'])
             self.assertEqual(frame.meta['FOO'], meta['FOO'])
+            self.assertEqual(frame.meta['BLAT'], read_meta['BLAT'])
+            self.assertEqual(frame.meta['FOO'], read_meta['FOO'])
 
         #- Test float32 on disk vs. float64 in memory
         for extname in ['FLUX', 'IVAR', 'WAVELENGTH', 'RESOLUTION']:
