@@ -632,13 +632,13 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
         plt.show()
 
 
-def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True):
+def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True, nslices=20):
     """ Generate a plot of sky subtraction residuals
     Typically for a given channel
     Args:
         wave:
         sky_flux:
-        sky_resid:
+        sky_res:
         outfile:
         pp:
         close:
@@ -653,14 +653,14 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
     # Wavelength
     ax_wave = plt.subplot(gs[0])
     du_pslices(sky_wave, sky_res, np.min(sky_wave), np.max(sky_wave),
-               0., num_slices=20, axis=ax_wave)
+               0., num_slices=nslices, axis=ax_wave)
     ax_wave.set_xlabel('Wavelength')
     ax_wave.set_ylabel('Residual Flux')
 
     # Wavelength
     ax_flux = plt.subplot(gs[1])
     du_pslices(sky_flux, sky_res, np.min(sky_flux), np.max(sky_flux),
-               0., num_slices=20, axis=ax_flux, set_ylim_from_stats=True)
+               0., num_slices=nslices, axis=ax_flux, set_ylim_from_stats=True)
     ax_flux.set_xlabel('log10(Sky Flux)')
     ax_flux.set_ylabel('Residual Flux')
     #ax_flux.set_ylim(-600, 100)
@@ -670,6 +670,62 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     if outfile is not None:
         plt.savefig(outfile)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+def skysub_resid_series(sky_dict, xtype, outfile=None, pp=None,
+                        close=True, nslices=20, dpi=1000):
+    """ Generate a plot of sky subtraction residuals for a series of inputs
+    Typically for a given channel
+    Args:
+        wave:
+        sky_flux:
+        sky_res:
+        outfile:
+        pp:
+        close:
+
+    Returns:
+
+    """
+    # Start the plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(sky_dict['count'],1)
+
+    for kk in range(sky_dict['count']):
+        sky_wave = sky_dict['wave'][kk]
+        sky_res = sky_dict['res'][kk]
+        sky_flux = sky_dict['skyflux'][kk]
+        ax = plt.subplot(gs[kk])
+        #ax.set_ylabel('Residual Flux')
+        if xtype == 'wave': # Wavelength
+            du_pslices(sky_wave, sky_res, np.min(sky_wave), np.max(sky_wave),
+               0., num_slices=nslices, axis=ax)
+            xlbl = 'Wavelength'
+        elif xtype == 'flux': # Flux
+            xlbl = 'log10(Sky Flux)'
+            du_pslices(sky_flux, sky_res, np.min(sky_flux), np.max(sky_flux),
+               0., num_slices=nslices, axis=ax, set_ylim_from_stats=True)
+            if kk == sky_dict['count']-1:
+                ax.set_xlabel('Wavelength')
+            else:
+                ax.get_xaxis().set_ticks([])
+        if kk == sky_dict['count']-1:
+            ax.set_xlabel(xlbl)
+        else:
+            ax.get_xaxis().set_ticks([])
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile, dpi=dpi)
         if close:
             plt.close()
     elif pp is not None:
