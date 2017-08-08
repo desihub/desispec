@@ -319,7 +319,13 @@ def get_reduced_frames(channels=['b','r','z'], nights=None):
         exposures = get_exposures(night)
         for exposure in exposures:
             frames_dict = get_files(filetype=str('cframe'), night=night, expid=exposure)
-            import pdb; pdb.set_trace()
+            # Restrict on channel
+            for key in frames_dict.keys():
+                for channel in channels:
+                    if channel in key:
+                        all_frames.append(frames_dict[key])
+    # Return
+    return all_frames
 
 
 def rawdata_root():

@@ -13,7 +13,6 @@ def parse(options=None):
     parser.add_argument('--expid', type=int, help='Generate exposure plot on given exposure')
     parser.add_argument('--night', type=str, help='Generate night plot on given night')
     parser.add_argument('--nights', type=str, help='List of nights to include for prod plot')
-    #parser.add_argument('--prod', type=str, help='Generate night plot')
     parser.add_argument('--channels', type=str, help='List of channels to include')
     #parser.add_argument('--frame', type=str, help='List of exposure IDs')
 
@@ -24,28 +23,6 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-def get_skyres(cframe_fil, sky_file, sub_sky=False):
-    from desispec.io import read_frame
-    from desispec.io.sky import read_sky
-    from desispec.sky import subtract_sky
-
-    cframe = read_frame(cframe_fil)
-    if cframe.meta['FLAVOR'] in ['flat','arc']:
-        raise ValueError("Bad flavor for exposure: {:s}".format(cframe_fil))
-
-    # Sky
-    skymodel = read_sky(sky_file)
-    if sub_sky:
-        subtract_sky(cframe, skymodel)
-    # Resid
-    skyfibers = np.where(cframe.fibermap['OBJTYPE'] == 'SKY')[0]
-    res = cframe.flux[skyfibers]
-    print("Median res: {}".format(np.median(res)))
-    ivar = cframe.ivar[skyfibers]
-    flux = skymodel.flux[skyfibers]  # Residuals
-    wave = np.outer(np.ones(flux.shape[0]), cframe.wave).flatten()
-    # Return
-    return wave, flux, res, ivar
 
 
 def main(args) :
@@ -58,7 +35,7 @@ def main(args) :
     from desispec.io import get_reduced_frames
     from desispec.io.sky import read_sky
     from desispec.io import specprod_root
-    from desispec.qa.qa_plots import skysub_resid_series, skysub_resid_dual
+    from desispec.qa import utils as qa_utils
     import copy
     import pdb
 
@@ -99,14 +76,15 @@ def main(args) :
                         if channel in camera:
                             sky_file = findfile(str('sky'), night=night, camera=camera,
                                 expid=args.expid, specprod_dir=specprod_dir)
-                            wave, flux, res, _ = get_skyres(cframe_fil, sky_file)#, sub_sky=True)
+                            wave, flux, res, _ = qa_utils.get_skyres(cframe_fil, sky_file)#, sub_sky=True)
                             # Append
                             channel_dict[channel]['wave'].append(wave)
-                            channel_dict[channel]['skyflux'].append(np.log10(np.maximum(flux.flatten(),1e-1)))
-                            channel_dict[channel]['res'].append(res.flatten())
+                            channel_dict[channel]['skyflux'].append(np.log10(np.maximum(flux,1e-1)))
+                            channel_dict[channel]['res'].append(res)
                             channel_dict[channel]['cameras'].append(camera)
                             channel_dict[channel]['count'] += 1
                     if channel_dict[channel]['count'] > 0:
+                        from desispec.qa.qa_plots import skysub_resid_series  # Hidden to help with debugging
                         skysub_resid_series(channel_dict[channel], 'wave',
                              outfile='QA_skyresid_wave_expid_{:d}{:s}.png'.format(args.expid, channel))
                         skysub_resid_series(channel_dict[channel], 'flux',
@@ -135,43 +113,13 @@ def main(args) :
                         z=copy.deepcopy(sky_dict),
                         )
     # Loop on channel
+    from desispec.qa.qa_plots import skysub_resid_dual
     for channel in channels:
-        cframes = get_reduced_frames(nights=nights)
-    for night in nights:
-        if gdnights == 'all':
-            pass
-        else:
-            if night not in gdnights:
-                continue
-                # Get em
-        for exposure in get_exposures(night, specprod_dir=specprod_dir):
-            # Get em
-            frames_dict = get_files(filetype=str('cframe'), night=night,
-                    expid=exposure, specprod_dir=specprod_dir)
-            for camera, cframe_fil in frames_dict.items():
-                channel = camera[0]
-                # Check against input
-                if gdchannels == 'all':
-                    pass
-                else:
-                    if channel not in gdchannels:
-                        continue
-                # Load frame
-                log.info('Loading {:s}'.format(cframe_fil))
-                sky_file = findfile(str('sky'), night=night, camera=camera,
-                                    expid=exposure, specprod_dir=specprod_dir)
-                wave, flux, res, _ = get_skyres(cframe_fil, sky_file)
-                # Append
-                channel_dict[channel]['wave'].append(wave)
-                channel_dict[channel]['skyflux'].append(np.log10(np.maximum(flux.flatten(),1e-1)))
-                channel_dict[channel]['res'].append(res.flatten())
-                channel_dict[channel]['count'] += 1
-    # Figure
-    for channel in ['b', 'r', 'z']:
-        if channel_dict[channel]['count'] > 0:
-            sky_wave = np.concatenate(channel_dict[channel]['wave'])
-            sky_flux = np.concatenate(channel_dict[channel]['skyflux'])
-            sky_res = np.concatenate(channel_dict[channel]['res'])
+        cframes = get_reduced_frames(nights=nights, channels=[channel])
+        if len(cframes) > 0:
+            log.info("Loading sky residuals for {:d} cframes".format(len(cframes)))
+            sky_wave, sky_flux, sky_res, _ = qa_utils.get_skyres(cframes)
             # Plot
+            log.info("Plotting..")
             skysub_resid_dual(sky_wave, sky_flux, sky_res,
                          outfile='skyresid_prod_dual_{:s}.png'.format(channel))
