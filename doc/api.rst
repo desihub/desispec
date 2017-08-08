@@ -225,9 +225,6 @@ Full desispec API Reference
 .. automodule:: desispec.scripts.fluxcalibration
     :members:
 
-.. automodule:: desispec.scripts.makebricks
-    :members:
-
 .. automodule:: desispec.scripts.mergebundles
     :members:
 
