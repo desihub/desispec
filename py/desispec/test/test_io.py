@@ -107,7 +107,7 @@ class TestIO(unittest.TestCase):
     def test_frame_rw(self):
         """Test reading and writing Frame objects.
         """
-        from ..io.frame import read_frame, write_frame
+        from ..io.frame import read_frame, write_frame, read_meta_frame
         from ..io.fibermap import empty_fibermap
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
@@ -122,6 +122,8 @@ class TestIO(unittest.TestCase):
             frx = Frame(wave, flux, ivar, mask, R, meta=meta)
             write_frame(self.testfile, frx)
             frame = read_frame(self.testfile)
+            meta = read_meta_frame(self.testfile)
+            import pdb; pdb.set_trace()
 
             flux2 = flux.astype('f4').astype('f8')
             ivar2 = ivar.astype('f4').astype('f8')
