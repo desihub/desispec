@@ -1600,7 +1600,8 @@ class Calculate_SNR(MonitoringAlg):
             log.info("Param is None. Using default param instead")
             param = dict(
                 SNR_FLUXTHRESH=0.0, # Minimum value of flux to go into SNR calc. 
-                FIDSNR_RANGE=[6.0, 6.5, 7.5, 8.0],
+                FIDSNR_WARN_RANGE=[6.5, 7.5],
+                FIDSNR_ALARM_RANGE=[6.0, 8.0],
                 FIDMAG=22.
                 )
 
@@ -1624,6 +1625,22 @@ class Calculate_SNR(MonitoringAlg):
             mag[k]=26.  #- Putting 26, so as to make sure within reasonable range for plots.
         retval["METRICS"] = qadict
         retval["PARAMS"] = param
+
+        snrwarn=[]
+        for T in ["ELG","QSO","LRG","STAR"]:
+            if qadict["%s_FIDMAG_SNR"%T] <= param['FIDSNR_ALARM_RANGE'][0] or qadict["%s_FIDMAG_SNR"%T] >= param['FIDSNR_ALARM_RANGE'][1]:
+                snrwarn == 'ALARM'
+                break
+            elif qadict["%s_FIDMAG_SNR"%T] <= param['FIDSNR_WARN_RANGE'][0] or qadict["%s_FIDMAG_SNR"%T] >= param['FIDSNR_WARN_RANGE'][1]:
+                snrwarn == 'WARN'
+            else:
+                if snrwarn =='WARN':
+                    pass
+                else:
+                    snrwarn =='NORMAL'
+
+        retval["METRICS"]["FIDSNR_WARN"] = snrwarn
+
         #- http post if valid
         if qlf:
             qlf_post(retval)            
