@@ -300,6 +300,28 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
     return sorted(exposures)
 
 
+def get_reduced_frames(channels=['b','r','z'], nights=None):
+    """ Loops through a production to find all reduced frames (default is cframes)
+    One can choose a subset by argument
+    Args:
+        channels:
+
+    Returns:
+        all_frames: list for frame filenames
+
+    """
+    all_frames = []
+    if nights is None:
+        paths_to_nights = glob.glob(specprod_root()+'/exposures/*')
+        nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in paths_to_nights]
+    # Loop on night
+    for night in nights:
+        exposures = get_exposures(night)
+        for exposure in exposures:
+            frames_dict = get_files(filetype=str('cframe'), night=night, expid=exposure)
+            import pdb; pdb.set_trace()
+
+
 def rawdata_root():
     """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
 

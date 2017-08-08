@@ -30,6 +30,7 @@ def main(args) :
     from desispec.io import get_exposures
     from desispec.io import get_files
     from desispec.io import read_frame
+    from desispec.io import get_reduced_frames
     from desispec.io.sky import read_sky
     from desispec.qa.qa_plots import skysub_resid
     import copy
@@ -47,15 +48,15 @@ def main(args) :
 
     # Nights?
     if args.nights is not None:
-        gdnights = [iarg for iarg in args.nights.split(',')]
+        nights = [iarg for iarg in args.nights.split(',')]
     else:
-        gdnights = 'all'
+        nights = None
 
     # Channels?
     if args.channels is not None:
-        gdchannels = [iarg for iarg in args.channels.split(',')]
+        channels = [iarg for iarg in args.channels.split(',')]
     else:
-        gdchannels = 'all'
+        channels = ['b','r','z']
 
     # Sky dict
     sky_dict = dict(wave=[], skyflux=[], res=[], count=0)
@@ -63,9 +64,9 @@ def main(args) :
                         r=copy.deepcopy(sky_dict),
                         z=copy.deepcopy(sky_dict),
                         )
-    # Loop on nights
-    path_nights = glob.glob(args.specprod_dir+'/exposures/*')
-    nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
+    # Loop on channel
+    for channel in channels:
+        cframes = get_reduced_frames(nights=nights)
     for night in nights:
         if gdnights == 'all':
             pass
