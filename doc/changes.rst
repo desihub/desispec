@@ -6,6 +6,7 @@ desispec Change Log
 -------------------
 
 * Small fixes to desi_qa_prod and qa_prod
+* Removes a number of QL metrics from offline qa
 * Fixes integration tests for desisim newexp refactor
 * Removes spectra grouping by brick; nside=64 healpix grouping default
 
