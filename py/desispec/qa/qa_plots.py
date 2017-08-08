@@ -744,7 +744,7 @@ def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=
         plt.show()
 
 def skysub_resid_series(sky_dict, xtype, outfile=None, pp=None,
-                        close=True, nslices=20, dpi=1000):
+                        close=True, nslices=20, dpi=700):
     """ Generate a plot of sky subtraction residuals for a series of inputs
     Typically for a given channel
     Args:

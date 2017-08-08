@@ -24,9 +24,10 @@ def parse(options=None):
         args = parser.parse_args(options)
     return args
 
-def get_skyres(cframe_fil, sky_file):
+def get_skyres(cframe_fil, sky_file, sub_sky=False):
     from desispec.io import read_frame
     from desispec.io.sky import read_sky
+    from desispec.sky import subtract_sky
 
     cframe = read_frame(cframe_fil)
     if cframe.meta['FLAVOR'] in ['flat','arc']:
@@ -34,11 +35,14 @@ def get_skyres(cframe_fil, sky_file):
 
     # Sky
     skymodel = read_sky(sky_file)
+    if sub_sky:
+        subtract_sky(cframe, skymodel)
     # Resid
     skyfibers = np.where(cframe.fibermap['OBJTYPE'] == 'SKY')[0]
     res = cframe.flux[skyfibers]
+    print("Median res: {}".format(np.median(res)))
     ivar = cframe.ivar[skyfibers]
-    flux = skymodel.flux[skyfibers] # Residuals
+    flux = skymodel.flux[skyfibers]  # Residuals
     wave = np.outer(np.ones(flux.shape[0]), cframe.wave).flatten()
     # Return
     return wave, flux, res, ivar
@@ -53,7 +57,6 @@ def main(args) :
     from desispec.io import read_frame
     from desispec.io import get_reduced_frames
     from desispec.io.sky import read_sky
-    from desispec.qa.qa_plots import skysub_resid
     from desispec.io import specprod_root
     from desispec.qa.qa_plots import skysub_resid_series, skysub_resid_dual
     import copy
@@ -90,13 +93,13 @@ def main(args) :
                                     expid=args.expid, specprod_dir=specprod_dir)
                 # Loop on channel
                 #for channel in ['b','r','z']:
-                for channel in ['b']:
+                for channel in ['z']:
                     channel_dict[channel]['cameras'] = []
                     for camera, cframe_fil in frames_dict.items():
                         if channel in camera:
                             sky_file = findfile(str('sky'), night=night, camera=camera,
                                 expid=args.expid, specprod_dir=specprod_dir)
-                            wave, flux, res, _ = get_skyres(cframe_fil, sky_file)
+                            wave, flux, res, _ = get_skyres(cframe_fil, sky_file)#, sub_sky=True)
                             # Append
                             channel_dict[channel]['wave'].append(wave)
                             channel_dict[channel]['skyflux'].append(np.log10(np.maximum(flux.flatten(),1e-1)))
