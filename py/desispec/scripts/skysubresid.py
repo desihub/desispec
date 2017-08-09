@@ -14,9 +14,9 @@ def parse(options=None):
     parser.add_argument('--night', type=str, help='Generate night plot on given night')
     parser.add_argument('--nights', type=str, help='List of nights to include for prod plot')
     parser.add_argument('--channels', type=str, help='List of channels to include')
-    #parser.add_argument('--frame', type=str, help='List of exposure IDs')
+    parser.add_argument('--prod', default=False, action="store_true", help="Results for full production run")
+    parser.add_argument('--gauss', default=False, action="store_true", help="Expore Gaussianity for full production run")
 
-    args = None
     if options is None:
         args = parser.parse_args()
     else:
@@ -39,6 +39,10 @@ def main(args) :
     import copy
     import pdb
 
+    # Log
+    log=get_logger()
+    log.info("starting")
+
     # Path
     if args.reduxdir is not None:
         specprod_dir = args.reduxdir
@@ -46,9 +50,16 @@ def main(args) :
         specprod_dir = specprod_root()
 
     # Nights
-    path_nights = glob.glob(specprod_dir+'/exposures/*')
-    nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
-    nights.sort()
+    if args.nights is not None:
+        nights = [iarg for iarg in args.nights.split(',')]
+    else:
+        nights = None
+
+    # Channels
+    if args.channels is not None:
+        channels = [iarg for iarg in args.channels.split(',')]
+    else:
+        channels = ['b','r','z']
 
     # Sky dict
     sky_dict = dict(wave=[], skyflux=[], res=[], count=0)
@@ -57,12 +68,13 @@ def main(args) :
                         z=copy.deepcopy(sky_dict),
                         )
 
-    # Log
-    log=get_logger()
-    log.info("starting")
-
     # Exposure plot?
     if args.expid is not None:
+        # Nights
+        path_nights = glob.glob(specprod_dir+'/exposures/*')
+        if nights is None:
+            nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
+        nights.sort()
         # Find the exposure
         for night in nights:
             if args.expid in get_exposures(night, specprod_dir=specprod_dir):
@@ -76,7 +88,7 @@ def main(args) :
                         if channel in camera:
                             sky_file = findfile(str('sky'), night=night, camera=camera,
                                 expid=args.expid, specprod_dir=specprod_dir)
-                            wave, flux, res, _ = qa_utils.get_skyres(cframe_fil, sky_file)#, sub_sky=True)
+                            wave, flux, res, _ = qa_utils.get_skyres(cframe_fil)
                             # Append
                             channel_dict[channel]['wave'].append(wave)
                             channel_dict[channel]['skyflux'].append(np.log10(np.maximum(flux,1e-1)))
@@ -92,34 +104,33 @@ def main(args) :
         return
 
 
-    # Full Prod Plot
-    # Nights
-    if args.nights is not None:
-        nights = [iarg for iarg in args.nights.split(',')]
-    else:
-        nights = None
+    # Full Prod Plot?
+    if args.prod:
+        from desispec.qa.qa_plots import skysub_resid_dual
+        # Loop on channel
+        for channel in channels:
+            cframes = get_reduced_frames(nights=nights, channels=[channel])
+            if len(cframes) > 0:
+                log.info("Loading sky residuals for {:d} cframes".format(len(cframes)))
+                sky_wave, sky_flux, sky_res, _ = qa_utils.get_skyres(cframes)
+                # Plot
+                log.info("Plotting..")
+                skysub_resid_dual(sky_wave, sky_flux, sky_res,
+                             outfile='skyresid_prod_dual_{:s}.png'.format(channel))
 
-    # Channels
-    if args.channels is not None:
-        channels = [iarg for iarg in args.channels.split(',')]
-    else:
-        channels = ['b','r','z']
-
-    # Loop on nights
-    # Sky dict
-    sky_dict = dict(wave=[], skyflux=[], res=[], count=0)
-    channel_dict = dict(b=copy.deepcopy(sky_dict),
-                        r=copy.deepcopy(sky_dict),
-                        z=copy.deepcopy(sky_dict),
-                        )
-    # Loop on channel
-    from desispec.qa.qa_plots import skysub_resid_dual
-    for channel in channels:
-        cframes = get_reduced_frames(nights=nights, channels=[channel])
-        if len(cframes) > 0:
-            log.info("Loading sky residuals for {:d} cframes".format(len(cframes)))
-            sky_wave, sky_flux, sky_res, _ = qa_utils.get_skyres(cframes)
-            # Plot
-            log.info("Plotting..")
-            skysub_resid_dual(sky_wave, sky_flux, sky_res,
-                         outfile='skyresid_prod_dual_{:s}.png'.format(channel))
+    # Full Prod Plot?
+    if args.gauss:
+        from desispec.qa.qa_plots import skysub_gauss
+        # Loop on channel
+        for channel in channels:
+            cframes = get_reduced_frames(nights=nights, channels=[channel])
+            if len(cframes) > 0:
+                # Cut down for debugging
+                #cframes = [cframes[ii] for ii in range(15)]
+                #
+                log.info("Loading sky residuals for {:d} cframes".format(len(cframes)))
+                sky_wave, sky_flux, sky_res, sky_ivar = qa_utils.get_skyres(cframes)
+                # Plot
+                log.info("Plotting..")
+                skysub_gauss(sky_wave, sky_flux, sky_res, sky_ivar,
+                                  outfile='skyresid_prod_gauss_{:s}.png'.format(channel))

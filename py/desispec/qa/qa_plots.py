@@ -715,6 +715,7 @@ def prod_time_series(qa_prod, qatype_metric, xlim=None, outfile=None, close=True
     else:  # Show
         plt.show()
 
+
 def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None,
                       close=True, nslices=20, dpi=700):
     """ Generate a plot of sky subtraction residuals
@@ -820,5 +821,107 @@ def skysub_resid_series(sky_dict, xtype, outfile=None, pp=None,
     else:  # Show
         plt.show()
 
+def skysub_gauss(sky_wave, sky_flux, sky_res, sky_ivar, outfile=None, pp=None,
+                      close=True, binsz=0.1, dpi=700, nfbin=4):
+    """ Generate a plot examining the Gaussianity of the residuals
+    Typically for a given channel
+    Args:
+        wave:
+        sky_flux:
+        sky_res:
+        sky_ivar:
+        outfile:
+        pp:
+        close:
+
+    Returns:
+
+    """
+    from scipy.stats import norm
+    # Deviates
+    gd_res = sky_ivar > 0.
+    devs = sky_res[gd_res] * np.sqrt(sky_ivar[gd_res])
+
+    # Start the plot
+    fig = plt.figure(figsize=(8, 4.0))
+    gs = gridspec.GridSpec(1,2)
+
+    # Histogram :: Same routine as in frame_skyresid
+    ax0 = plt.subplot(gs[0])
+    i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
+    rng = tuple(binsz*np.array([i0,i1]) )
+    nbin = i1-i0
+    hist, edges = np.histogram(devs, range=rng, bins=nbin)
+
+    xhist = (edges[1:] + edges[:-1])/2.
+    ax0.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
+    # PDF for Gaussian
+    area = binsz * np.sum(hist)
+
+    xppf = np.linspace(scipy.stats.norm.ppf(0.000001), scipy.stats.norm.ppf(0.999999), 10000)
+    ax0.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
+    ax0.set_xlabel(r'Res/$\sigma$')
+    ax0.set_ylabel('N')
+
+    # Deviates vs. flux
+    absdevs = np.abs(devs)
+    asrt = np.argsort(absdevs)
+    absdevs.sort()
+    ndev = devs.size
+    ax1 = plt.subplot(gs[1])
+
+    # All
+    xlim = (0., np.max(absdevs))
+    ylim = (0.000001, 1.)
+    ax1.plot(absdevs, 1-np.arange(ndev)/(ndev-1), 'k', label='All')
+
+    # Bin by sky flux
+    sflux = sky_flux[asrt]
+    sky_flux.sort()
+    fbins = [0.] + [sky_flux[int(ii*ndev/nfbin)] for ii in range(1,nfbin)]
+    fbins += [np.max(sky_flux)]
+    f_i = np.digitize(sflux, fbins) - 1
+
+    for kk in range(nfbin):
+        lbl = 'flux = [{:d},{:d}]'.format(int(fbins[kk]),int(fbins[kk+1]))
+        idx = f_i == kk
+        ncut = np.sum(idx)
+        ax1.plot(absdevs[idx], 1-np.arange(ncut)/(ncut-1), '--', label=lbl)
+
+    # Gauss lines
+    for kk in range(1,int(xlim[1])+1):
+        ax1.plot([kk]*2, ylim, ':', color='gray')
+        icl = norm.cdf(kk) - norm.cdf(-1*kk)  # Area under curve
+        ax1.plot(xlim, [1-icl]*2, ':', color='gray')
+        ax1.text(0.2, 1-icl, '{:d}'.format(kk)+r'$\sigma$', color='gray')
+
+    ax1.set_xlabel(r'Res/$\sigma$')
+    ax1.set_ylabel(r'Fraction greater than Res/$\sigma$')
+    ax1.set_yscale("log", nonposy='clip')
+    ax1.set_ylim(ylim)
+
+    legend = ax1.legend(loc='lower left', borderpad=0.3,
+                        handletextpad=0.3, fontsize='small')
+
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile, dpi=dpi)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+
 def get_channel_clrs():
+    """ Simple dict to organize styles for channels
+    Returns:
+        channel_dict: dict
+    """
     return dict(b='blue', r='red', z='purple')
