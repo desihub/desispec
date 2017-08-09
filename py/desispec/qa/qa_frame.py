@@ -195,7 +195,7 @@ class QA_Frame(object):
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
 
 
-def qaframe_from_frame(night, frame_fil, specprod_dir=None, make_plots=False):
+def qaframe_from_frame(night, frame_file, specprod_dir=None, make_plots=False):
     from desispec.io import read_frame
     from desispec.io import meta
     from desispec.io.qa import load_qa_frame, write_qa_frame
@@ -204,10 +204,10 @@ def qaframe_from_frame(night, frame_fil, specprod_dir=None, make_plots=False):
     from desispec.io.sky import read_sky
     from desispec.io.fluxcalibration import read_flux_calibration
     # Load frame
-    frame = read_frame(frame_fil)
+    frame = read_frame(frame_file)
     frame_meta = frame.meta
     camera = frame_meta['CAMERA'].strip()
-    expid = frame_meta['EXPID'].strip()
+    expid = frame_meta['EXPID']
     spectro = int(frame_meta['CAMERA'][-1])
     if frame_meta['FLAVOR'] in ['flat', 'arc']:
         qatype = 'qa_calib'

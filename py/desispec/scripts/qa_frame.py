@@ -9,8 +9,14 @@ import numpy as np
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate Production Level QA")
-    parser.add_argument('--specprod_dir', type = str, default = None, required=False,
-                        help = 'Path containing the exposures/directory to use.')
+    parser.add_argument('--frame_file', type = str, required=True,
+                        help='Frame filename including path as needed')
+    parser.add_argument('--night', type = str, required=True,
+                        help='Night of the exposure')
+    parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',
+                        help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
+    parser.add_argument('--make_plots', default=False, action="store_true",
+                        help = 'Generate QA figs too?')
 
 
     args = None
@@ -23,40 +29,19 @@ def parse(options=None):
 
 def main(args) :
 
+    from desispec.io import meta
+    from desispec.io import read_meta_frame
+    from desispec.qa.qa_frame import qaframe_from_frame
     log=get_logger()
 
     log.info("starting")
+    if args.reduxdir is None:
+        specprod_dir = meta.specprod_root()
+    else:
+        specprod_dir = args.reduxdir
 
-    qa_prod = QA_Prod(args.specprod_dir)
+    # Generate qaframe (and figures?)
+    qaframe_from_frame(args.night, args.frame_file,
+                       specprod_dir=specprod_dir, make_plots=args.make_plots)
 
-    # Remake Frame QA?
-    if args.make_frameqa > 0:
-        log.info("(re)generating QA related to frames")
-        if (args.make_frameqa % 4) >= 2:
-            make_frame_plots = True
-        else:
-            make_frame_plots = False
-        # Run
-        qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
 
-    # Slurp?
-    if args.slurp:
-        qa_prod.slurp(make=(args.make_frameqa > 0), remove=args.remove)
-
-    # Channel histograms
-    if args.channel_hist is not None:
-        # imports
-        from matplotlib.backends.backend_pdf import PdfPages
-        from desispec.qa import qa_plots as dqqp
-        #
-        qa_prod.load_data()
-        outfile = qa_prod.prod_name+'_chist.pdf'
-        pp = PdfPages(outfile)
-        # Default?
-        if args.channel_hist == 'default':
-            dqqp.prod_channel_hist(qa_prod, 'FIBERFLAT', 'MAX_RMS', pp=pp, close=False)
-            dqqp.prod_channel_hist(qa_prod, 'SKYSUB', 'MED_RESID', xlim=(-1,1), pp=pp, close=False)
-            dqqp.prod_channel_hist(qa_prod, 'FLUXCALIB', 'MAX_ZP_OFF', pp=pp, close=False)
-        # Finish
-        print("Writing {:s}".format(outfile))
-        pp.close()
