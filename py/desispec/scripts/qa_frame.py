@@ -41,7 +41,7 @@ def main(args) :
         specprod_dir = args.reduxdir
 
     # Generate qaframe (and figures?)
-    qaframe_from_frame(args.night, args.frame_file,
+    _ = qaframe_from_frame(args.night, args.frame_file,
                        specprod_dir=specprod_dir, make_plots=args.make_plots)
 
 
