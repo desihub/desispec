@@ -655,38 +655,50 @@ def prod_time_series(qa_prod, qatype_metric, xlim=None, outfile=None, close=True
 
     # Setup
     fig = plt.figure(figsize=(8, 5.0))
-    gs = gridspec.GridSpec(1,1)
+    gs = gridspec.GridSpec(3,1)
+
 
     # Loop on channel
     clrs = get_channel_clrs()
-    ax = plt.subplot(gs[0])
         #ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
 
     # Grab QA
-    channel = 'b'
-    qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
-    '''
-    # Check for nans
-    isnan = np.isnan(qa_arr)
-    if np.sum(isnan) > 0:
-        log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
-            qatype, metric, channel))
-        qa_arr[isnan] = -999.
-    '''
-    # Convert Date to MJD
-    atime = Time(qa_tbl['DATE-OBS'], format='isot', scale='utc')
-    atime.format = 'mjd'
-    mjd = atime.value
+    all_times = []
+    all_ax = []
+    for cc, channel in enumerate(['b','r','z']):
+        ax = plt.subplot(gs[cc])
+        qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
+        '''
+        # Check for nans
+        isnan = np.isnan(qa_arr)
+        if np.sum(isnan) > 0:
+            log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
+                qatype, metric, channel))
+            qa_arr[isnan] = -999.
+        '''
+        # Convert Date to MJD
+        atime = Time(qa_tbl['DATE-OBS'], format='isot', scale='utc')
+        atime.format = 'mjd'
+        mjd = atime.value
 
-    # Scatter me
-    ax.scatter(mjd, qa_tbl[metric])
+        # Scatter me
+        ax.scatter(mjd, qa_tbl[metric], color=clrs[channel], s=4.)
+        # Axes
+        ax.set_ylabel('Metric')
+        if cc < 2:
+            ax.get_xaxis().set_ticks([])
+        if cc ==0:
+            ax.set_title('{:s} :: {:s}'.format(qatype,metric))
+        all_times.append(mjd)
+        all_ax.append(ax)
 
     # Label
     #ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
-    ax.set_ylabel('{:s} :: {:s}'.format(qatype,metric))
     ax.set_xlabel('MJD')
-    if xlim is not None:
-        ax.set_xlim(xlim)
+    all_times = np.concatenate(all_times)
+    xmin, xmax = np.min(all_times), np.max(all_times)
+    for cc in range(3):
+        all_ax[cc].set_xlim(xmin,xmax)
 
 
     # Finish
