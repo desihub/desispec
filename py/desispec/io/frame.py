@@ -96,10 +96,11 @@ def read_meta_frame(filename, extname=0):
     """ Load the meta information of a Frame
     Args:
         filename: path to a file
-        extname: int, optional
-            Extension for grabbing header info
+        extname: int, optional;  Extension for grabbing header info
+
     Returns:
         meta: dict or astropy.fits.header
+
     """
     fx = fits.open(filename, uint=True, memmap=False)
     hdr = fx[extname].header
