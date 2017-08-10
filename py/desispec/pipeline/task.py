@@ -54,6 +54,14 @@ class Worker(object):
         """
         return 1
 
+    def task_time(self):
+        """
+        An estimate in minutes for the time needed to complete one task
+        using the maximum number of supported processes.  A zero value
+        indicates no information.
+        """
+        return 0
+
     def default_options(self):
         """
         The default options dictionary for this worker.
@@ -87,6 +95,8 @@ class WorkerBootcalib(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 15
 
     def default_options(self):
         opts = {}
@@ -154,7 +164,7 @@ class WorkerBootcalib(Worker):
         # at debug level, log the equivalent commandline
         com = ["RUN", "desi_bootcalib"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = bootcalib.parse(optarray)
 
@@ -172,6 +182,9 @@ class WorkerSpecex(Worker):
 
 
     def max_nproc(self):
+        return 20
+
+    def task_time(self):
         return 20
 
 
@@ -266,7 +279,7 @@ class WorkerSpecex(Worker):
         if rank == 0:
             com = ["RUN", "desi_compute_psf"]
             com.extend(optarray)
-            log.debug(" ".join(com))
+            log.info(" ".join(com))
 
         args = specex.parse(optarray)
         specex.main(args, comm=comm)
@@ -284,6 +297,9 @@ class WorkerSpecexCombine(Worker):
 
     def max_nproc(self):
         return 1
+
+    def task_time(self):
+        return 10
 
 
     def default_options(self):
@@ -330,6 +346,9 @@ class WorkerSpecter(Worker):
 
 
     def max_nproc(self):
+        return 20
+
+    def task_time(self):
         return 20
 
 
@@ -418,7 +437,7 @@ class WorkerSpecter(Worker):
         if rank == 0:
             com = ["RUN", "desi_extract_spectra"]
             com.extend(optarray)
-            log.debug(" ".join(com))
+            log.info(" ".join(com))
 
         args = extract.parse(optarray)
         extract.main_mpi(args, comm=comm)
@@ -436,6 +455,9 @@ class WorkerFiberflat(Worker):
 
     def max_nproc(self):
         return 1
+
+    def task_time(self):
+        return 5
 
 
     def default_options(self):
@@ -482,7 +504,7 @@ class WorkerFiberflat(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_compute_fiberflat"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = fiberflat.parse(optarray)
         fiberflat.main(args)
@@ -501,6 +523,8 @@ class WorkerSky(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 5
 
     def default_options(self):
         opts = {}
@@ -556,7 +580,7 @@ class WorkerSky(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_compute_sky"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = skypkg.parse(optarray)
         skypkg.main(args)
@@ -578,6 +602,9 @@ class WorkerStdstars(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 5
+
 
     def default_options(self):
         log = get_logger()
@@ -586,10 +613,10 @@ class WorkerStdstars(Worker):
             opts["starmodels"] = self.starmodels
         else:
             if "DESI_ROOT" in os.environ:
-                opts["starmodels"] = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+                opts["starmodels"] = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v2.1/star_templates_v2.1.fits"
             else:
                 log.warning("$DESI_ROOT not set; using NERSC default /project/projectdirs/desi")
-                opts["starmodels"] = "/project/projectdirs/desi/spectro/templates/star_templates/v1.1/star_templates_v1.1.fits"
+                opts["starmodels"] = "/project/projectdirs/desi/spectro/templates/star_templates/v2.1/star_templates_v2.1.fits"
         return opts
 
 
@@ -649,7 +676,7 @@ class WorkerStdstars(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_fit_stdstars"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = stdstars.parse(optarray)
         stdstars.main(args)
@@ -668,6 +695,8 @@ class WorkerFluxcal(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 5
 
     def default_options(self):
         opts = {}
@@ -737,7 +766,7 @@ class WorkerFluxcal(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_compute_fluxcalibration"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = fluxcal.parse(optarray)
         fluxcal.main(args)
@@ -756,6 +785,8 @@ class WorkerProcexp(Worker):
     def max_nproc(self):
         return 1
 
+    def task_time(self):
+        return 5
 
     def default_options(self):
         opts = {}
@@ -821,7 +852,7 @@ class WorkerProcexp(Worker):
         # at debug level, write out the equivalent commandline
         com = ["RUN", "desi_process_exposure"]
         com.extend(optarray)
-        log.debug(" ".join(com))
+        log.info(" ".join(com))
 
         args = procexp.parse(optarray)
         procexp.main(args)
@@ -834,7 +865,7 @@ class WorkerRedmonster(Worker):
     Use Redmonster to classify spectra and compute redshifts.
     """
     def __init__(self, opts):
-        self.nproc = 24
+        self.nproc = 192
         if "nproc" in opts:
             self.nproc = opts["nproc"]
         super(Worker, self).__init__()
@@ -842,6 +873,9 @@ class WorkerRedmonster(Worker):
 
     def max_nproc(self):
         return self.nproc
+
+    def task_time(self):
+        return 30
 
 
     def default_options(self):
@@ -851,7 +885,7 @@ class WorkerRedmonster(Worker):
 
     def run(self, grph, task, opts, comm=None):
         """
-        Run Redmonster on a brick.
+        Run Redmonster on a spectral group.
 
         Args:
             grph (dict): pruned graph with this task and dependencies.
@@ -869,21 +903,21 @@ class WorkerRedmonster(Worker):
 
         node = grph[task]
 
-        brick = node["brick"]
+        spectra = node["spectra"]
         outfile = graph_path(task)
         #qafile, qafig = qa_path(outfile)
         options = {}
-        options["brick"] = brick
+        options["brick"] = spectra
         options["outfile"] = outfile
         #- TODO: no QA for desi_zfind yet
         options.update(opts)
         optarray = option_list(options)
 
-        # at debug level, write out the equivalent commandline
+        # write out the equivalent commandline
         if rank == 0:
             com = ["RUN", "desi_zfind"]
             com.extend(optarray)
-            log.debug(" ".join(com))
+            log.info(" ".join(com))
 
         args = zfind.parse(optarray)
         zfind.main(args, comm=comm)
@@ -902,6 +936,9 @@ class WorkerNoop(Worker):
 
     def max_nproc(self):
         return 1
+
+    def task_time(self):
+        return 5
 
     def default_options(self):
         return self.defaults

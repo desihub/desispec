@@ -1,0 +1,25 @@
+#!/usr/bin/env python
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+"""
+Re-group spectral data from cframe files into healpix indexed groups.
+"""
+
+from desispec.parallel import use_mpi
+
+comm = None
+if use_mpi:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+else:
+    print("mpi4py not found, using only one process")
+
+import desispec.scripts.group_spectra as group_spectra
+
+if __name__ == '__main__':
+    args = group_spectra.parse()
+    group_spectra.main(args, comm=comm)
+

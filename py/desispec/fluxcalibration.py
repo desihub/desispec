@@ -20,30 +20,20 @@ import multiprocessing
 from pkg_resources import resource_exists, resource_filename
 
 
-def applySmoothingFilter(flux,width=200,margin_correction=True) :
+def applySmoothingFilter(flux,width=200) :
     """ Return a smoothed version of the input flux array using a median filter
 
     Args:
         flux  : 1D array of flux 
         width : size of the median filter box
-        margin_correction : returns original flux on margins because the median filter is biased
-    
+            
     Returns:
         smooth_flux : median filtered flux of same size as input
-        ivar : array of same size as input, 0 on the edges if margin_correction is True
     """
 
     # it was checked that the width of the median_filter has little impact on best fit stars
     # smoothing the ouput (with a spline for instance) does not improve the fit
-    tmp=scipy.ndimage.filters.median_filter(flux,width)
-    ivar=np.ones(flux.shape)
-
-    if margin_correction and flux.size > 3*width :
-        tmp[:width]=flux[:width]
-        tmp[-width:]=flux[-width:]
-        ivar[:width]=0.
-        ivar[-width:]=0.
-    return tmp,ivar
+    return scipy.ndimage.filters.median_filter(flux,width,mode='constant')
 #
 # Import some global constants.
 #
@@ -91,7 +81,7 @@ def resample_template(data_wave_per_camera,resolution_data_per_camera,template_w
     for cam in sorted_keys :
         flux1=resample_flux(data_wave_per_camera[cam],template_wave,template_flux) # this is slow
         flux2=Resolution(resolution_data_per_camera[cam]).dot(flux1) # this is slow
-        norme,norme_ivar=applySmoothingFilter(flux2) # this is fast
+        norme=applySmoothingFilter(flux2) # this is fast
         flux3=flux2/(norme+(norme==0))
         output_flux = np.append(output_flux,flux3)
         output_norm = np.append(output_norm,norme)
@@ -105,7 +95,7 @@ def _func(arg) :
 
 def _smooth_template(template_id,camera_index,template_flux) :
     """ Used for multiprocessing.Pool """
-    norme,ivar = applySmoothingFilter(template_flux)
+    norme = applySmoothingFilter(template_flux)
     return template_id,camera_index,norme
 
 def _func2(arg) :
@@ -186,17 +176,16 @@ def redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux, z_max=0.00
         resampled_model[cam]=resample_flux(resampled_wave,extended_cam_wave,tmp)
 
         # we now normalize both model and data
-        tmp,tmp_ivar=applySmoothingFilter(resampled_data[cam])
+        tmp=applySmoothingFilter(resampled_data[cam])
         resampled_data[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=tmp**2
-        resampled_ivar[cam]*=(tmp_ivar>0)
-        
+                
         if template_error>0 :
             ok=np.where(resampled_ivar[cam]>0)[0]
             if ok.size > 0 :
                 resampled_ivar[cam][ok] = 1./ ( 1/resampled_ivar[cam][ok] + template_error**2 )
                 
-        tmp,tmp_ivar=applySmoothingFilter(resampled_model[cam])        
+        tmp=applySmoothingFilter(resampled_model[cam])        
         resampled_model[cam]/=(tmp+(tmp==0))
         resampled_ivar[cam]*=(tmp!=0)
 
@@ -532,10 +521,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # fit continuum and save it
     continuum={}
     for cam in wave.keys() :
-        tmp,tmp_ivar=applySmoothingFilter(flux[cam]) # this is fast
+        tmp=applySmoothingFilter(flux[cam]) # this is fast
         continuum[cam] = tmp
-        ivar[cam]     *= (tmp_ivar>0)
-    
+            
     # mask out wavelength that could bias the fit
     
     log.debug("mask potential cosmics (3 sigma positive fluctuations)")
@@ -609,7 +597,6 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
     # fit redshift on canonical model
     # we use the original data to do this
     # because we resample both the data and model on a logarithmic grid in the routine
-    tmp_ivar = ivar.copy()
     
     if True : # mask Ca H&K lines. Present in ISM, can bias the stellar redshift fit
         log.debug("Mask ISM lines for redshift")
@@ -617,9 +604,9 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         hw=6. # A
         for cam in wave.keys() :
             for line in ismlines :
-                tmp_ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
+                ivar[cam][(wave[cam]>=(line-hw))&(wave[cam]<=(line+hw))]=0.
     
-    z = redshift_fit(wave, flux, tmp_ivar, resolution_data, stdwave, stdflux[canonical_model], z_max, z_res)
+    z = redshift_fit(wave, flux, ivar, resolution_data, stdwave, stdflux[canonical_model], z_max, z_res)
             
     # now we go back to the model spectra , redshift them, resample, apply resolution, normalize and chi2 match
     
@@ -704,7 +691,13 @@ def match_templates(wave, flux, ivar, resolution_data, stdwave, stdflux, teff, l
         log.debug("compute calib for cam index %d"%index)
         ii=np.where(data_index==index)[0]
         calib = (data_flux[ii]*data_continuum[ii])/(model[ii]+(model[ii]==0))
-        scalib,scalibivar = applySmoothingFilter(calib,width=400,margin_correction=False)
+        scalib = applySmoothingFilter(calib,width=400)
+        
+        min_scalib=0.
+        bad=scalib<=min_scalib
+        if np.sum(bad)>0 :
+            scalib[bad]=min_scalib
+            
         log.debug("multiply templates by calib for cam index %d"%index)
         template_flux[:,ii] *= scalib
         
@@ -850,32 +843,42 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
         convolved_model_flux[fiber]=stdstars.R[fiber].dot(model_flux[fiber])
 
     # iterative fitting and clipping to get precise mean spectrum
-    current_ivar=stdstars.ivar.copy()
-
+    current_ivar=stdstars.ivar*(stdstars.mask==0)
+    
     #- Start with a first pass median rejection
     calib = (convolved_model_flux!=0)*(stdstars.flux/(convolved_model_flux + (convolved_model_flux==0)))
     median_calib = np.median(calib, axis=0)
-    chi2 = stdstars.ivar * (stdstars.flux - convolved_model_flux*median_calib)**2
+
+    # First fit of smooth correction per fiber, and 10% model error to variance,  and perform first outlier rejection
+    smooth_fiber_correction=np.ones((stdstars.flux.shape))
+    chi2=np.zeros((stdstars.flux.shape))  
+
+    for fiber in range(nstds) :
+        M = median_calib*stdstars.R[fiber].dot(model_flux[fiber])
+        
+        try:
+            pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
+            smooth_fiber_correction[fiber]=pol(dwave)
+        except ValueError :
+            log.warning("polynomial fit for fiber %d failed"%fiber)
+            current_ivar[fiber]=0.
+
+        chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
+        
+    
     bad=(chi2>nsig_clipping**2)
     current_ivar[bad] = 0
-
-    smooth_fiber_correction=np.ones((stdstars.flux.shape))
-    chi2=np.zeros((stdstars.flux.shape))
-
-    # chi2 = sum w ( data_flux - R*(calib*model_flux))**2
-    # chi2 = sum (sqrtw*data_flux -diag(sqrtw)*R*diag(model_flux)*calib)
-
+    
     sqrtw=np.sqrt(current_ivar)
-    #sqrtwmodel=np.sqrt(current_ivar)*convolved_model_flux # used only for QA
     sqrtwflux=np.sqrt(current_ivar)*stdstars.flux
 
     # diagonal sparse matrices
     D1=scipy.sparse.lil_matrix((nwave,nwave))
     D2=scipy.sparse.lil_matrix((nwave,nwave))
 
-    # test
-    # nstds=20
+    
     nout_tot=0
+    previous_mean=0.
     for iteration in range(20) :
 
         # fit mean calibration
@@ -896,6 +899,10 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
             A = A+(sqrtwmodelR.T*sqrtwmodelR).tocsr()
             B += sqrtwmodelR.T*sqrtwflux[fiber]
+
+        if np.sum(current_ivar>0)==0 :
+            log.error("null ivar, cannot calibrate this frame")
+            raise ValueError("null ivar, cannot calibrate this frame")
 
         #- Add a weak prior that calibration = median_calib
         #- to keep A well conditioned
@@ -928,9 +935,10 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
             try:
                 pol=np.poly1d(np.polyfit(dwave,stdstars.flux[fiber]/(M+(M==0)),deg=deg,w=current_ivar[fiber]*M**2))
-            except:
+                smooth_fiber_correction[fiber]=pol(dwave)
+            except ValueError :
+                log.warning("polynomial fit for fiber %d failed"%fiber)
                 current_ivar[fiber]=0.
-            smooth_fiber_correction[fiber]=pol(dwave)
             chi2[fiber]=current_ivar[fiber]*(stdstars.flux[fiber]-smooth_fiber_correction[fiber]*M)**2
 
         log.info("iter {0:d} rejecting".format(iteration))
@@ -973,9 +981,10 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
 
         log.info("iter #%d chi2=%f ndf=%d chi2pdf=%f nout=%d mean=%f"%(iteration,sum_chi2,ndf,chi2pdf,nout_iter,np.mean(mean)))
 
-        if nout_iter == 0 and np.max(np.abs(mean-1))<0.005 :
+        if nout_iter == 0 and np.max(np.abs(mean-previous_mean))<0.0001 :
             break
-
+        previous_mean = mean
+    
     # smooth_fiber_correction does not converge exactly to one on average, so we apply its mean to the calibration
     # (tested on sims)
     calibration /= mean
@@ -1018,7 +1027,7 @@ def compute_flux_calibration(frame, input_model_wave,input_model_flux,input_mode
     ccalibivar = np.tile(ccalibivar, frame.nspec).reshape(frame.nspec, frame.nwave)
 
     # need to do better here
-    mask = (ccalibivar==0).astype(np.int32)
+    mask = frame.mask.copy()
 
     # return calibration, calibivar, mask, ccalibration, ccalibivar
     return FluxCalib(stdstars.wave, ccalibration, ccalibivar, mask, R.dot(calibration))
@@ -1054,6 +1063,17 @@ class FluxCalib(object):
         self.ivar = ivar
         self.mask = util.mask32(mask)
         self.meancalib = meancalib
+
+        self.meta = dict(units='photons/(erg/s/cm^2)')
+
+    def __repr__(self):
+        txt = '<{:s}: nspec={:d}, nwave={:d}, units={:s}'.format(
+            self.__class__.__name__, self.nspec, self.nwave, self.meta['units'])
+
+        # Finish
+        txt = txt + '>'
+        return (txt)
+
 
 def apply_flux_calibration(frame, fluxcalib):
     """

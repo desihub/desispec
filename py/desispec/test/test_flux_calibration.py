@@ -6,82 +6,20 @@ from __future__ import division
 
 import unittest
 import copy
-import os
 
 import numpy as np
 #import scipy.sparse
 
 #from desispec.maskbits import specmask
-from desispec.resolution import Resolution
 from desispec.frame import Frame
 from desispec.fluxcalibration import normalize_templates
 from desispec.fluxcalibration import FluxCalib
 from desispec.fluxcalibration import compute_flux_calibration, apply_flux_calibration
 from desiutil.log import get_logger
 import desispec.io
+from desispec.test.util import get_frame_data, get_models
 
 import speclite.filters
-
-import desispec.scripts.fluxcalibration as fluxcalscript
-
-
-# set up a resolution matrix
-
-def set_resolmatrix(nspec,nwave):
-    sigma = np.linspace(2,10,nwave*nspec)
-    ndiag = 21
-    xx = np.linspace(-ndiag/2.0, +ndiag/2.0, ndiag)
-    Rdata = np.zeros( (nspec, len(xx), nwave) )
-
-    for i in range(nspec):
-        for j in range(nwave):
-            kernel = np.exp(-xx**2/(2*sigma[i*nwave+j]**2))
-            kernel /= sum(kernel)
-            Rdata[i,:,j] = kernel
-    return Rdata
-
-# make test data
-
-def get_frame_data(nspec=10):
-
-    """
-    Return basic test data for desispec.frame object:
-
-    """
-    nwave = 100
-
-    wavemin, wavemax = 4000, 4100
-    wave, model_flux = get_models(nspec, nwave, wavemin=wavemin, wavemax=wavemax)
-    resol_data=set_resolmatrix(nspec,nwave)
-
-    calib = np.sin((wave-wavemin) * np.pi / np.max(wave))
-    flux = np.zeros((nspec, nwave))
-    for i in range(nspec):
-        flux[i] = Resolution(resol_data[i]).dot(model_flux[i] * calib)
-
-    sigma = 0.01
-    # flux += np.random.normal(scale=sigma, size=flux.shape)
-
-    ivar = np.ones(flux.shape) / sigma**2
-    mask = np.zeros(flux.shape, dtype=int)
-    fibermap = desispec.io.empty_fibermap(nspec, 1500)
-    fibermap['OBJTYPE'] = 'QSO'
-
-    frame=Frame(wave, flux, ivar,mask,resol_data,fibermap=fibermap)
-    return frame
-
-def get_models(nspec=10, nwave=1000, wavemin=4000, wavemax=5000):
-    """
-    Returns basic model data:
-    - [1D] modelwave [nmodelwave]
-    - [2D] modelflux [nmodel,nmodelwave]
-    """
-    #make 20 models
-
-    model_wave=np.linspace(wavemin, wavemax, nwave)
-    y=np.sin(10*(model_wave-wavemin)/(wavemax-wavemin))+5.0
-    model_flux=np.tile(y,nspec).reshape(nspec,len(model_wave))
-    return model_wave,model_flux
 
 
 class TestFluxCalibration(unittest.TestCase):

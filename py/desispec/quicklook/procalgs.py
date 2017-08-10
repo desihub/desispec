@@ -6,40 +6,10 @@ import numpy as np
 import os,sys
 from desispec.quicklook import pas
 from desispec.quicklook import qlexceptions,qllogger
-from desispec.resolution import Resolution
 
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
-def get_resolution(wave,flux,ivar,psf,usepsfboot=True):
-    """
-    Calculates approximage resolution values in the format that can directly
-    feed resolution data of desispec.frame.Frame object. 
-    
-    To zeroth order, we use psfboot xsigma values (constant resolution per fiber). 
-    Note: This is not the resolution of boxcar extraction!
-     
-    TODO: Replace this resolution to account for variation in dispersion direction
-          using extraction of arc and propagating the coefficients of the fit 
-          to possibly a new psf file so that resolution data can be evaluated on the fly 
-          for science exposures. This work is in progress.
-
-    wave: wavelength array
-    flux: (nspec,nwave) array of fluxes
-    ivar: (nspec,nwave) array of inverse variances
-    psf: desispec.psf.PSF like object
-    """
-    nspec=flux.shape[0]
-    nwave=flux.shape[1]
-    resolution_data=np.zeros((nspec,21,nwave))
-    if usepsfboot:
-        if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot
-            log.info("Getting resolution matrix band diagonal elements from constant Gaussing Xsigma")
-            for ispec in range(nspec):
-                thissigma=psf.xsigma(ispec,wave) 
-                Rsig=Resolution(thissigma)
-                resolution_data[ispec]=Rsig.data
-    return resolution_data
 
 class Initialize(pas.PipelineAlg):
     """
@@ -95,14 +65,9 @@ class Preproc(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
         input_raw=args[0]
 
-        dump=False
         dumpfile=None
-        if "DumpIntermediates" in kwargs:
-            dump=kwargs["DumpIntermediates"]
-            if dump: #- need a file to write
-                if "dumpfile" not in kwargs:
-                    raise IOError("Need file to dump")
-                else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         if 'camera' not in kwargs: 
             raise qlexceptions.ParameterException("Need Camera to run preprocess on raw files")
@@ -122,9 +87,9 @@ class Preproc(pas.PipelineAlg):
             mask=kwargs["Mask"]
         else: mask=False
 
-        return self.run_pa(input_raw,camera,bias=bias,pixflat=pixflat,mask=mask,dump=dump,dumpfile=dumpfile)
+        return self.run_pa(input_raw,camera,bias=bias,pixflat=pixflat,mask=mask,dumpfile=dumpfile)
 
-    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=False,dump=False,dumpfile=None):
+    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=False,dumpfile=None):
         import desispec.preproc
 
         rawimage=input_raw[camera.upper()].data
@@ -135,8 +100,15 @@ class Preproc(pas.PipelineAlg):
             for key in h0:
                 if key not in header:
                     header[key] = h0[key]
+        #- WARNING!!!This is a hack for QL to run on old raw images for QLF to be working on old set of data
+        if "PROGRAM" not in header:
+            log.info("WARNING!!! Temporary hack for QL to add header key PROGRAM. Only to facilitate QLF to work on their dataset. Remove this after some time and run with new data set")
+            header["PROGRAM"]= 'dark'
+        if header["FLAVOR"] not in [None,'bias','arc','flat','science']:
+            header["FLAVOR"] = 'science'        
+
         img = desispec.preproc.preproc(rawimage,header,primary_header,bias=bias,pixflat=pixflat,mask=mask)
-        if dump and dumpfile is not None:
+        if dumpfile is not None:
             from desispec import io
             night = img.meta['NIGHT']
             expid = img.meta['EXPID']
@@ -156,17 +128,19 @@ class BootCalibration(pas.PipelineAlg):
         pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
         
     def run(self,*args,**kwargs):
-        if len(args) == 0 : #- args[0] should be the fiberflat image
-            raise qlexceptions.ParameterException("Missing input parameter")
         if 'ArcLampImage' not in kwargs: 
             raise qlexceptions.ParameterException("Need ArcLampImage")
+        if 'FlatImage' not in kwargs:
+            raise qlexceptions.ParameterException("Need FlatImage")
+        if 'outputFile' not in kwargs:
+            raise qlexceptions.ParameterException("Need outputFile")
 
         if "Deg" not in kwargs:
             deg=5 #- 5th order legendre polynomial
         else:
             deg=kwargs["Deg"]
 
-        flatimage=args[0]
+        flatimage=kwargs["FlatImage"]
         arcimage=kwargs["ArcLampImage"]
         outputfile=kwargs["outputFile"]
 
@@ -174,16 +148,17 @@ class BootCalibration(pas.PipelineAlg):
 
 
     def run_pa(self,deg,flatimage,arcimage,outputfile):
-        from desispec import bootcalib as desiboot
-        xfit,fdicts,gauss,all_wv_soln=desiboot.bootcalib(deg,flatimage,arcimage)
+        from desispec.util import runcmd
+        cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
+        runcmd(cmd)
+        if runcmd(cmd) !=0:
+            raise RuntimeError('desi_bootcalib failed, psfboot not written')
+        else:
+            log.info("PSF file wrtten. Exiting Quicklook for this configuration.") #- File written no need to go further
+        sys.exit(0)
 
-        desiboot.write_psf(outputfile, xfit, fdicts, gauss,all_wv_soln)
-        log.info("PSF file wrtten. Exiting Quicklook for this configuration.") #- File written no need to go further
-        sys.exit(0)   
 
-    
-
-class BoxcarExtraction(pas.PipelineAlg):
+class BoxcarExtract(pas.PipelineAlg):
     from desispec.image import Image as im
     from desispec.frame import Frame as fr
     from desispec.boxcar import do_boxcar
@@ -191,7 +166,7 @@ class BoxcarExtraction(pas.PipelineAlg):
     
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Boxcar Extraction"
+            name="BoxcarExtract"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
@@ -207,21 +182,16 @@ class BoxcarExtraction(pas.PipelineAlg):
 
         input_image=args[0]
 
-        dump=False
         dumpfile=None
-        if "DumpIntermediates" in kwargs:
-            dump=kwargs["DumpIntermediates"]
-            if dump: #- need a file to write
-                if "dumpfile" not in kwargs:
-                    raise IOError("Need file to dump")
-                else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
-        if "Usepsfboot" in kwargs:
-             usepsfboot=kwargs["Usepsfboot"]
-        else: usepsfboot = False
+        if "usesigma" in kwargs:
+             usesigma=kwargs["usesigma"]
+        else: usesigma = False
 
         if "Wavelength" not in kwargs:
             wstart = np.ceil(psf.wmin)
@@ -270,25 +240,30 @@ class BoxcarExtraction(pas.PipelineAlg):
         if "MaskFile" in kwargs:
             maskFile=kwargs['MaskFile']
 
+        #- Add some header keys relevant for this extraction
+        input_image.meta['NSPEC']   = (nspec, 'Number of spectra')
+        input_image.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
+        input_image.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
+        input_image.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
+       
         return self.run_pa(input_image,psf
                            ,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,
-                           dump=dump,dumpfile=dumpfile,maskFile=maskFile,usepsfboot=usepsfboot)
+                           dumpfile=dumpfile,maskFile=maskFile,usesigma=usesigma)
 
 
     def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
-               fibers=None, fibermap=None,dump=False,dumpfile=None,
-               maskFile=None,usepsfboot=False):
+               fibers=None, fibermap=None,dumpfile=None,
+               maskFile=None,usesigma=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
-                                  nspec=nspec,maskFile=maskFile,usepsfboot=usepsfboot)
+                                  nspec=nspec,maskFile=maskFile,usesigma=usesigma)
 
         #- write to a frame object
-        
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
         
-        if dump and dumpfile is not None:
+        if dumpfile is not None:
             from desispec import io
             night = frame.meta['NIGHT']
             expid = frame.meta['EXPID']
@@ -430,7 +405,7 @@ class ComputeFiberflat(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Compute Fiberflat"
+            name="ComputeFiberflat"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -461,7 +436,7 @@ class ApplyFiberFlat(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Apply FiberFlat"
+            name="ApplyFiberFlat"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -508,25 +483,20 @@ class ApplyFiberFlat_QL(pas.PipelineAlg):
         
         input_frame=args[0]
 
-        dump=False
         dumpfile=None
-        if "DumpIntermediates" in kwargs:
-            dump=kwargs["DumpIntermediates"]
-            if dump: #- need a file to write
-                if "dumpfile" not in kwargs:
-                    raise IOError("Need file to dump")
-                else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         fiberflat=kwargs["FiberFlatFile"]
         
-        return self.run_pa(input_frame,fiberflat,dump=dump,dumpfile=dumpfile)
+        return self.run_pa(input_frame,fiberflat,dumpfile=dumpfile)
 
-    def run_pa(self,input_frame,fiberflat,dump=False,dumpfile=None): 
+    def run_pa(self,input_frame,fiberflat,dumpfile=None): 
      
         from desispec.quicklook.quickfiberflat import apply_fiberflat 
         fframe=apply_fiberflat(input_frame,fiberflat)
 
-        if dump and dumpfile is not None:
+        if dumpfile is not None:
             from desispec import io
             night = fframe.meta['NIGHT']
             expid = fframe.meta['EXPID']
@@ -540,7 +510,7 @@ class ComputeSky(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Compute Sky"
+            name="ComputeSky"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -581,7 +551,7 @@ class ComputeSky_QL(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Compute Sky"
+            name="ComputeSky_QL"
         from desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -615,11 +585,11 @@ class ComputeSky_QL(pas.PipelineAlg):
         log.info("Sky Model file wrtten. Exiting the pipeline for this configuration")
         sys.exit(0)
 
-class SubtractSky(pas.PipelineAlg):
+class SkySub(pas.PipelineAlg):
 
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Sky Subtraction"
+            name="SkySub"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
@@ -644,7 +614,7 @@ class SubtractSky(pas.PipelineAlg):
         subtract_sky(input_frame,skymodel)
         return (input_frame, skymodel)
 
-class SubtractSky_QL(pas.PipelineAlg):
+class SkySub_QL(pas.PipelineAlg):
     """
        This is for QL Sky subtraction. The input frame object should be fiber flat corrected.
        Unlike offline, if no skymodel file is given as input, a sky compute method is called
@@ -653,7 +623,7 @@ class SubtractSky_QL(pas.PipelineAlg):
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="Sky Subtraction"
+            name="SkySub_QL"
         from  desispec.frame import Frame as fr
         from desispec.image import Image as im
         pas.PipelineAlg.__init__(self,name,fr,type(tuple),config,logger)
@@ -666,14 +636,9 @@ class SubtractSky_QL(pas.PipelineAlg):
 
         input_frame=args[0] #- this must be flat field applied before sky subtraction in the pipeline
 
-        dump=False
         dumpfile=None
-        if "DumpIntermediates" in kwargs:
-            dump=kwargs["DumpIntermediates"]
-            if dump: #- need a file to write
-                if "dumpfile" not in kwargs:
-                    raise IOError("Need file to dump")
-                else: dumpfile=kwargs["dumpfile"]
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
 
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
@@ -691,6 +656,7 @@ class SubtractSky_QL(pas.PipelineAlg):
             from desispec.quicklook.quicksky import compute_sky
             if "Apply_resolution" in kwargs:
                 apply_resolution=kwargs["Apply_resolution"]
+                log.info("Apply fiber to fiber resolution variation in computing sky")
             else: apply_resolution = False
             fibermap=input_frame.fibermap
             skymodel=compute_sky(input_frame,fibermap,apply_resolution=apply_resolution)
@@ -700,13 +666,13 @@ class SubtractSky_QL(pas.PipelineAlg):
                 write_sky(outskyfile,skymodel,input_frame.meta)
 
         #- now do the subtraction                   
-        return self.run_pa(input_frame,skymodel,dump=dump,dumpfile=dumpfile)
+        return self.run_pa(input_frame,skymodel,dumpfile=dumpfile)
     
-    def run_pa(self,input_frame,skymodel,dump=False,dumpfile=None):
+    def run_pa(self,input_frame,skymodel,dumpfile=None):
         from desispec.quicklook.quicksky import subtract_sky
         sframe=subtract_sky(input_frame,skymodel)
 
-        if dump and dumpfile is not None:
+        if dumpfile is not None:
             from desispec import io
             night = sframe.meta['NIGHT']
             expid = sframe.meta['EXPID']
@@ -714,4 +680,67 @@ class SubtractSky_QL(pas.PipelineAlg):
             log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return (sframe,skymodel)
+
+class ResolutionFit(pas.PipelineAlg):
+
+    """
+    Fitting of Arc lines on extracted arc spectra, polynomial expansion of the fitted sigmas, and updating
+    the coefficients to the new PSF file
+    """ 
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="ResolutionFit"
+        from  desispec.frame import Frame as fr
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if not kwargs["PSFbootfile"]:
+             raise qlexceptions.ParameterException("Missing psfbootfile in the arguments")
+
+        if "PSFoutfile" not in kwargs:
+             raise qlexceptions.ParameterException("Missing psfoutfile in the arguments")
+
+        psfoutfile=kwargs["PSFoutfile"]
+        psfbootfile=kwargs["PSFbootfile"] 
+
+        from desispec.psf import PSF
+        psfboot=PSF(psfbootfile)
+        domain=(psfboot.wmin,psfboot.wmax)
+
+        input_frame=args[0]
+
+        linelist=None
+        if "Linelist" in kwargs:
+            linelist=kwargs["Linelist"]
+
+        npoly=2
+        if "NPOLY" in kwargs:
+            npoly=kwargs["NPOLY"]
+        nbins=2
+        if "NBINS" in kwargs:
+            nbins=kwargs["NBINS"]
+
+        return self.run_pa(input_frame, psfbootfile, psfoutfile, linelist=linelist, npoly=npoly, nbins=nbins,domain=domain)
+    
+    def run_pa(self,input_frame,psfbootfile,outfile,linelist=None,npoly=2,nbins=2,domain=None):
+        from desispec.quicklook.arcprocess import process_arc,write_psffile
+        from desispec.quicklook.palib import get_resolution
+        from desispec.psf import PSF
+
+        wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
+        
+        #- write out the psf outfile
+        wstep=input_frame.meta["WAVESTEP"]
+        write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=wstep)
+        log.info("Wrote psf file {}".format(outfile))
+
+        #- update the arc frame resolution from new coeffs
+        newpsf=PSF(outfile)
+        input_frame.resolution_data=get_resolution(input_frame.wave,newpsf)
+ 
+        return input_frame
 

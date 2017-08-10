@@ -39,6 +39,8 @@ class PSF(object):
 
             if 'XSIGMA' in psfdata:
                 self.xsigma_boot=psfdata['XSIGMA'].data
+            if 'WSIGMA' in psfdata: #- w sigma legendre expansion coefficients
+                self.wcoeff=psfdata['WSIGMA'].data
         
             if arm not in ['b','r','z']:
                 raise ValueError("arm not in b, r, or z. File should be of the form psfboot-r0.fits.")  
@@ -205,4 +207,18 @@ class PSF(object):
             else:
                 return np.full(len(wave),self.xsigma_boot[ispec]) #- constant xsigma for a given fiber
 
-    
+    def wdisp(self,ispec,wave):
+        #- wave: scalar or vector, ispec: scalar integer TODO: make useful for other permutations
+        if hasattr(self,'wcoeff'):
+            new_dict=dufits.mk_fit_dict(self.wcoeff[ispec],self.wcoeff.shape[1],'legendre',self.wmin,self.wmax)
+            wsigma=dufits.func_val(wave,new_dict)
+            return wsigma
+
+    def angstroms_per_pixel(self, ispec, wavelength):
+        """
+        Return CCD pixel width in Angstroms for spectrum ispec at given
+        wavlength(s).  Wavelength may be scalar or array.
+        """
+        ww = self.wavelength(ispec, y=np.arange(self.npix_y))
+        dw = np.gradient( ww )
+        return np.interp(wavelength, ww, dw)

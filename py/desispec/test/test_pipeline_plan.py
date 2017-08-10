@@ -23,6 +23,7 @@ class TestPipelinePlan(unittest.TestCase):
         self.raw = ph.fake_raw()
         self.redux = ph.fake_redux(self.prod)
         ph.fake_env(self.raw, self.redux, self.prod, self.prod)
+        self.specs = [ x for x in range(10) ]
 
     def tearDown(self):
         if os.path.exists(self.raw):
@@ -54,12 +55,12 @@ class TestPipelinePlan(unittest.TestCase):
 
 
     def test_graph_night(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night())
+        grph, expcnt, bricks = graph_night(ph.fake_night(), self.specs, False)
 
 
     def test_create_load_prod(self):
-        grph, expcnt, bricks = graph_night(ph.fake_night())
-        expnightcnt, bricks = create_prod()
+        grph, expcnt, pix = graph_night(ph.fake_night(), self.specs, False)
+        expnightcnt, allpix = create_prod()
         fullgrph = load_prod()
         self.assertTrue(grph == fullgrph)
 

@@ -36,32 +36,19 @@ if opts.indir is None:
 if opts.outfile is None:
     opts.outfile = io.findfile('zcatalog')
 
-#- Collect individual zbest tables into a list
+import fitsio
+zbestfiles = sorted(io.iterfiles(opts.indir, 'zbest'))
 data = list()
-for zbestfile in io.iterfiles(opts.indir, 'zbest'):
-    zbest = Table.read(zbestfile, format='fits')
+for zbestfile in zbestfiles:
+    zbest = fitsio.read(zbestfile, 'ZBEST')
+    data.append(zbest)
     if opts.verbose:
         print(zbestfile, len(zbest))
 
-    #- Remove metadata keys that don't make sense for merging
-    for key in ['CHECKSUM', 'DATASUM']:
-        if key in zbest.meta.keys():
-            del zbest.meta[key]
+zcat = np.hstack(data)
+header = fitsio.read_header(zbestfiles[0], 0)
 
-    data.append(zbest)
-
-#- Combine those into a single table and write it out
-zcat = vstack(data)
-zcat.meta['EXTNAME'] = 'ZCATALOG'
-
-if os.path.exists(opts.outfile):
-    os.remove(opts.outfile)
-
-if opts.verbose:
-    print("Writing", opts.outfile)
-    
-zcat.write(opts.outfile, format='fits')
-    
+fitsio.write(opts.outfile, zcat, header=header, extname='ZCATALOG', clobber=True)
 
 
 

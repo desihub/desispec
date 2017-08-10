@@ -8,7 +8,11 @@ import pdb
 import numpy as np
 import os
 from desispec.frame import Frame
-from desispec.qa import QA_Frame, QA_Exposure, QA_Brick, QA_Prod
+#from desispec.qa import QA_Frame, QA_Exposure, QA_Brick, QA_Prod
+from desispec.qa.qa_frame import QA_Frame
+from desispec.qa.qa_exposure import QA_Exposure
+from desispec.qa.qa_brick import QA_Brick
+from desispec.qa.qa_prod import QA_Prod
 from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure
 #from uuid import uuid4
 from shutil import rmtree
@@ -41,7 +45,7 @@ class TestQA(unittest.TestCase):
         if os.path.exists(cls.testDir):
             rmtree(cls.testDir)
 
-    def _make_frame(self, camera='b0', flavor='dark', night=None, expid=None):
+    def _make_frame(self, camera='b0', flavor='science', night=None, expid=None):
         if night is None:
             night = self.night
         if expid is None:
@@ -92,8 +96,8 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_frame(self):
         #- Simple Init call
-        qafrm1 = QA_Frame(self._make_frame(flavor='dark'))
-        assert qafrm1.flavor == 'dark'
+        qafrm1 = QA_Frame(self._make_frame(flavor='science'))
+        assert qafrm1.flavor == 'science'
 
     def test_init_qa_fiberflat(self):
         #- Init FiberFlat dict
@@ -107,7 +111,7 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_fluxcalib(self):
         #- Init FluxCalib dict
-        qafrm = QA_Frame(self._make_frame(flavor='dark'))
+        qafrm = QA_Frame(self._make_frame(flavor='science'))
         qafrm.init_fluxcalib()
         assert qafrm.qa_data['FLUXCALIB']['PARAMS']['MAX_ZP_OFF'] > 0.
 
@@ -117,7 +121,7 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_skysub(self):
         #- Init SkySub dict
-        qafrm = QA_Frame(self._make_frame(flavor='dark'))
+        qafrm = QA_Frame(self._make_frame(flavor='science'))
         qafrm.init_skysub()
         assert qafrm.qa_data['SKYSUB']['PARAMS']['PCHI_RESID'] > 0.
 
@@ -182,6 +186,28 @@ class TestQA(unittest.TestCase):
     def test_init_qa_prod(self):
         qaprod = QA_Prod(self.testDir)
 
+    def test_qa_frame_plot(self):
+        from desispec.qa import qa_plots
+        from desispec.qa import qa_frame
+        from desispec.test.util import get_frame_data, get_calib_from_frame
+        # Frame
+        frame = get_frame_data(500)
+        # Load calib
+        fluxcalib = get_calib_from_frame(frame)
+        # QA Frame
+        tdict = {}
+        tdict['20190829'] = {}
+        dint = 20
+        tdict['20190829'][dint] = {}
+        tdict['20190829'][dint]['flavor'] = 'science'
+        tdict['20190829'][dint]['b'] = {}
+        tdict['20190829'][dint]['b']['FLUXCALIB'] = {}
+        tdict['20190829'][dint]['b']['FLUXCALIB']['METRICS'] = {}
+        tdict['20190829'][dint]['b']['FLUXCALIB']['METRICS']['BLAH'] = 1
+        qaframe = qa_frame.QA_Frame(tdict)
+        # Plot
+        qa_plots.frame_fluxcalib('tmp.pdf', qaframe, frame, fluxcalib)
+
     def runTest(self):
         pass
 
@@ -192,3 +218,10 @@ def test_suite():
         python setup.py test -m <modulename>
     """
     return unittest.defaultTestLoader.loadTestsFromName(__name__)
+
+
+
+#- This runs all test* functions in any TestCase class in this file
+if __name__ == '__main__':
+    unittest.main()
+    #qa_frame_plot_test()

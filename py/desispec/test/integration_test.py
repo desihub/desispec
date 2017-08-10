@@ -19,9 +19,6 @@ import desispec.pipeline as pipe
 import desispec.io as io
 import desiutil.log as logging
 
-import desispec.scripts.makebricks as makebricks
-
-
 #- prevent nose from trying to run this test since it takes too long
 __test__ = False
 
@@ -83,17 +80,17 @@ def sim(night, nspec=5, clobber=False):
 
     # Create input fibermaps, spectra, and pixel-level raw data
 
-    for expid, flavor in zip([0,1,2], ['flat', 'arc', 'dark']):
-        cmd = "newexp-desi --flavor {flavor} --nspec {nspec} --night {night} --expid {expid}".format(
-            expid=expid, flavor=flavor, nspec=nspec, night=night)
+    for expid, program in zip([0,1,2], ['flat', 'arc', 'dark']):
+        cmd = "newexp-random --program {program} --nspec {nspec} --night {night} --expid {expid}".format(
+            expid=expid, program=program, nspec=nspec, night=night)
         fibermap = io.findfile('fibermap', night, expid)
         simspec = '{}/simspec-{:08d}.fits'.format(os.path.dirname(fibermap), expid)
         inputs = []
         outputs = [fibermap, simspec]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(flavor, expid))
+            raise RuntimeError('newexp-random failed for {} exposure {}'.format(program, expid))
 
-        cmd = "pixsim-desi --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
+        cmd = "pixsim --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
         inputs = [fibermap, simspec]
         outputs = list()
         outputs.append(fibermap.replace('fibermap-', 'simpix-'))
@@ -102,7 +99,7 @@ def sim(night, nspec=5, clobber=False):
             outputs.append(pixfile)
             #outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('pixsim failed for {} exposure {}'.format(flavor, expid))
+            raise RuntimeError('pixsim failed for {} exposure {}'.format(program, expid))
 
     return
 
@@ -170,19 +167,15 @@ def integration_test(night=None, nspec=5, clobber=False):
     # com = os.path.join(proddir, "run", "scripts", "psfcombine_all.sh")
     # sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "extract_all.sh")
-    print("Running extraction script "+com)
+    com = os.path.join(proddir, "run", "scripts", "run_shell.sh")
+    print("Running extraction through calibration: "+com)
     sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "fiberflat-calibrate_all.sh")
-    print("Running calibration script "+com)
+    com = os.path.join(proddir, "run", "scripts", "spectra.sh")
+    print("Running spectral regrouping: "+com)
     sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "bricks.sh")
-    print("Running makebricks script "+com)
-    sp.check_call(["bash", com])
-
-    com = os.path.join(proddir, "run", "scripts", "redshift_all.sh")
+    com = os.path.join(proddir, "run", "scripts", "redshift.sh")
     print("Running redshift script "+com)
     sp.check_call(["bash", com])
 
@@ -196,23 +189,18 @@ def integration_test(night=None, nspec=5, clobber=False):
     simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
     siminfo = fits.getdata(simspec, 'METADATA')
 
-    brickdirs = glob.glob(os.path.join(proddir, "bricks", "*"))
-    bricks = [ os.path.basename(x) for x in brickdirs ]
+    from desimodel.footprint import radec2pix
+    nside=64
+    pixels = np.unique(radec2pix(nside, fibermap['RA_TARGET'], fibermap['DEC_TARGET']))
 
     print()
     print("--------------------------------------------------")
-    print("Brick     True  z        ->  Class  z        zwarn")
+    print("Pixel     True  z        ->  Class  z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
-    for b in bricks:
-        zbest = io.read_zbest(io.findfile('zbest', brickname=b))
+    for p in pixels:
+        zbest = io.read_zbest(io.findfile('zbest', groupname=pix))
         for i in range(len(zbest.z)):
-            if zbest.spectype[i] == 'ssp_em_galaxy':
-                objtype = 'GAL'
-            elif zbest.spectype[i] == 'spEigenStar':
-                objtype = 'STAR'
-            else:
-                objtype = zbest.spectype[i]
-
+            objtype = zbest.spectype[i]
             z, zwarn = zbest.z[i], zbest.zwarn[i]
 
             j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
@@ -225,10 +213,12 @@ def integration_test(night=None, nspec=5, clobber=False):
             elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
                 status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
             elif zwarn == 0:
-                if truetype == 'LRG' and objtype == 'GAL' and abs(dv) < 150:
+                if truetype == 'LRG' and objtype == 'GALAXY' and abs(dv) < 150:
                     status = 'ok'
-                elif truetype == 'ELG' and objtype == 'GAL':
-                    if abs(dv) < 150 or oiiflux < 8e-17:
+                elif truetype == 'ELG' and objtype == 'GALAXY':
+                    if abs(dv) < 150:
+                        status = ok
+                    elif oiiflux < 8e-17:
                         status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
                     else:
                         status = 'OOPS ([OII] flux {:.2g})'.format(oiiflux)
@@ -240,8 +230,8 @@ def integration_test(night=None, nspec=5, clobber=False):
                     status = 'OOPS'
             else:
                 status = 'OOPS'
-            print('{0}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
-                b, truetype, truez, objtype, z, zwarn, status))
+            print('{0:<8d}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
+                pix, truetype, truez, objtype, z, zwarn, status))
 
     print("--------------------------------------------------")
 

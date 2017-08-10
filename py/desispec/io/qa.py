@@ -10,8 +10,6 @@ import os, yaml
 
 from desiutil.io import yamlify
 
-from desispec.qa import QA_Frame
-from desispec.qa import QA_Brick
 from desispec.io import findfile
 from desispec.io.util import makepath
 from desiutil.log import get_logger
@@ -31,6 +29,7 @@ def read_qa_data(filename):
 def read_qa_brick(filename):
     """Generate a QA_Brick object from a data file
     """
+    from desispec.qa.qa_brick import QA_Brick
     # Read
     qa_data = read_qa_data(filename)
 
@@ -43,6 +42,7 @@ def read_qa_brick(filename):
 def read_qa_frame(filename):
     """Generate a QA_Frame object from a data file
     """
+    from desispec.qa.qa_frame import QA_Frame
     #- check if filename is (night, expid, camera) tuple instead
     if not isinstance(filename, str):
         night, expid, camera = filename
@@ -69,6 +69,7 @@ def load_qa_frame(filename, frame=None, flavor=None):
     Returns:
         qa_frame: QA_Frame object
     """
+    from desispec.qa.qa_frame import QA_Frame
     log=get_logger()
     if os.path.isfile(filename): # Read from file, if it exists
         qaframe = read_qa_frame(filename)
@@ -96,6 +97,7 @@ def load_qa_brick(filename):
     Returns:
     qa_brick: QA_Brick object
     """
+    from desispec.qa.qa_brick import QA_Brick
     log=get_logger()
     if os.path.isfile(filename): # Read from file, if it exists
         qabrick = read_qa_brick(filename)
@@ -223,3 +225,26 @@ def write_qa_prod(outroot, qaprod):
     log.info('Wrote QA_Prod file: {:s}'.format(outfile))
 
     return outfile
+
+
+def write_qa_ql(outfile, qaresult):
+    """Write QL output files
+
+       Args:
+           outfile : str
+             filename to be written (yaml)
+           qaresult : dict
+             QAresults from run_qa()
+
+       Returns:
+           outfile : str
+    """
+    import yaml
+    from desiutil.io import yamlify
+    # Take in QL input and output to yaml
+    qadict = yamlify(qaresult)
+    f=open(outfile,"w")
+    f.write(yaml.dump(qadict))
+    return outfile
+
+

@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 # See top-level LICENSE.rst file for Copyright information
 
-import desispec.scripts.zfind as zfind
+from desispec.parallel import use_mpi
 
 comm = None
-rank = 0
-nproc = 1
-
-try:
+if use_mpi:
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
-    rank = comm.rank
-    nproc = comm.size
-except ImportError:
+else:
     print("mpi4py not found, using only one process")
+
+import desispec.scripts.zfind as zfind
+
 
 if __name__ == '__main__':
     args = zfind.parse()

@@ -1,30 +1,50 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
-desispec.io.quicksurvey
-=======================
+desispec.database.spectra
+=========================
 
-Code for loading quicksurvey outputs into a database.
+Code for loading spectra results into a database.
+
+The *intention* of this module is to support both simulated survey
+(quicksurvey) and pipeline data.  However, as of Summer 2017, the
+data models are sufficiently different to require separate loaders.
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np
-from sqlalchemy import (create_engine, ForeignKey, Column,
-                        Integer, String, Float, DateTime)
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
+                        BigInteger, Integer, String, Float, DateTime)
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
-
+from sqlalchemy.schema import CreateSchema
+from .util import convert_dateobs, parse_pgpass
 
 Base = declarative_base()
 engine = None
 dbSession = scoped_session(sessionmaker())
+schemaname = None
 
 
-class Truth(Base):
+class SchemaMixin(object):
+    """Mixin class to allow schema name to be changed at runtime. Also
+    automatically sets the table name.
+    """
+
+    @declared_attr
+    def __tablename__(cls):
+        return cls.__name__.lower()
+
+    @declared_attr
+    def __table_args__(cls):
+        return {'schema': schemaname}
+
+
+class Truth(SchemaMixin, Base):
     """Representation of the truth table.
     """
-    __tablename__ = 'truth'
 
-    targetid = Column(Integer, primary_key=True)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
     truez = Column(Float, nullable=False)
@@ -32,9 +52,6 @@ class Truth(Base):
     sourcetype = Column(String, nullable=False)
     brickname = Column(String, nullable=False)
     oiiflux = Column(Float, nullable=False)
-
-    # frames = relationship('Frame', secondary=frame2brick,
-    #                       back_populates='bricks')
 
     def __repr__(self):
         return ("<Truth(targetid={0.targetid:d}, " +
@@ -44,17 +61,16 @@ class Truth(Base):
                 "oiiflux={0.oiiflux:f})>").format(self)
 
 
-class Target(Base):
+class Target(SchemaMixin, Base):
     """Representation of the target table.
     """
-    __tablename__ = 'target'
 
-    targetid = Column(Integer, primary_key=True)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
-    desi_target = Column(Integer, nullable=False)
-    bgs_target = Column(Integer, nullable=False)
-    mws_target = Column(Integer, nullable=False)
+    desi_target = Column(BigInteger, nullable=False)
+    bgs_target = Column(BigInteger, nullable=False)
+    mws_target = Column(BigInteger, nullable=False)
     subpriority = Column(Float, nullable=False)
     obsconditions = Column(Integer, nullable=False)
     brickname = Column(String, nullable=False)
@@ -88,12 +104,11 @@ class Target(Base):
                 "galdepth_r={0.galdepth_r:f})>").format(self)
 
 
-class ObsList(Base):
+class ObsList(SchemaMixin, Base):
     """Representation of the obslist table.
     """
-    __tablename__ = 'obslist'
 
-    tileid = Column(Integer, primary_key=True)
+    tileid = Column(Integer, primary_key=True, autoincrement=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
     program = Column(String, nullable=False)
@@ -132,17 +147,16 @@ class ObsList(Base):
                 "mjd={0.mjd:f})>").format(self)
 
 
-class ZCat(Base):
+class ZCat(SchemaMixin, Base):
     """Representation of the zcat table.
     """
-    __tablename__ = 'zcat'
 
-    targetid = Column(Integer, primary_key=True)
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     brickname = Column(String, index=True, nullable=False)
-    spectype = Column(String, nullable=False)
-    z = Column(Float, nullable=False)
+    spectype = Column(String, index=True, nullable=False)
+    z = Column(Float, index=True, nullable=False)
     zerr = Column(Float, nullable=False)
-    zwarn = Column(Integer, nullable=False)
+    zwarn = Column(Integer, index=True, nullable=False)
     numobs = Column(Integer, nullable=False)
 
     def __repr__(self):
@@ -153,20 +167,19 @@ class ZCat(Base):
                 "zwarn={0.zwarn:d}, numobs={0.numobs:d})>").format(self)
 
 
-class FiberAssign(Base):
+class FiberAssign(SchemaMixin, Base):
     """Representation of the fiberassign table.
     """
-    __tablename__ = 'fiberassign'
 
     tileid = Column(Integer, index=True, primary_key=True)
     fiber = Column(Integer, primary_key=True)
-    positioner = Column(Integer, nullable=False)
+    location = Column(Integer, nullable=False)
     numtarget = Column(Integer, nullable=False)
     priority = Column(Integer, nullable=False)
-    targetid = Column(Integer, index=True, nullable=False)
-    desi_target = Column(Integer, nullable=False)
-    bgs_target = Column(Integer, nullable=False)
-    mws_target = Column(Integer, nullable=False)
+    targetid = Column(BigInteger, index=True, nullable=False)
+    desi_target = Column(BigInteger, nullable=False)
+    bgs_target = Column(BigInteger, nullable=False)
+    mws_target = Column(BigInteger, nullable=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
     xfocal_design = Column(Float, nullable=False)
@@ -177,7 +190,7 @@ class FiberAssign(Base):
         return ("<FiberAssign(faid={0.faid:d}, " +
                 "tileid={0.tileid:d}, " +
                 "fiber={0.fiber:d}, " +
-                "positioner={0.positioner:d}, " +
+                "location={0.location:d}, " +
                 "numtarget={0.numtarget:d}, " +
                 "priority={0.priority:d}, " +
                 "targetid={0.targetid:d}, " +
@@ -189,24 +202,26 @@ class FiberAssign(Base):
                 "brickname='{0.brickname}')>").format(self)
 
 
-def load_file(filepath, tcls, expand=None, convert=None,
+def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
               chunksize=50000, maxrows=0):
-    """Load a FITS file into the database, assuming that FITS column names map
+    """Load a data file into the database, assuming that column names map
     to database column names with no surprises.
 
     Parameters
     ----------
     filepath : :class:`str`
-        Full path to the FITS file.
-    session : :class:`sqlalchemy.orm.session.Session`
-        Database connection.
+        Full path to the data file.
     tcls : :class:`sqlalchemy.ext.declarative.api.DeclarativeMeta`
         The table to load, represented by its class.
+    hdu : :class:`int`, optional
+        Read a data table from this HDU (default 1).
     expand : :class:`dict`, optional
         If set, map FITS column names to one or more alternative column names.
     convert : :class:`dict`, optional
         If set, convert the data for a named (database) column using the
         supplied function.
+    q3c : :class:`bool`, optional
+        If set, create q3c index on the table.
     chunksize : :class:`int`, optional
         If set, load database `chunksize` rows at a time (default 50000).
     maxrows : :class:`int`, optional
@@ -214,73 +229,89 @@ def load_file(filepath, tcls, expand=None, convert=None,
         set `maxrows` to zero (0) to load all rows.
     """
     from astropy.io import fits
+    from astropy.table import Table
     from desiutil.log import get_logger
     log = get_logger()
     tn = tcls.__tablename__
-    with fits.open(filepath) as hdulist:
-        data = hdulist[1].data
+    if filepath.endswith('.fits'):
+        with fits.open(filepath) as hdulist:
+            data = hdulist[1].data
+    elif filepath.endswith('.ecsv'):
+        data = Table.read(filepath, format='ascii.ecsv')
+    else:
+        log.error("Unrecognized data file, %s!", filepath)
+        return
     if maxrows == 0:
         maxrows = len(data)
-    log.info("Read data from {0}.".format(filepath))
-    for col in data.names:
+    log.info("Read data from %s.", filepath)
+    try:
+        colnames = data.names
+    except AttributeError:
+        colnames = data.colnames
+    for col in colnames:
         if data[col].dtype.kind == 'f':
             bad = np.isnan(data[col][0:maxrows])
             if np.any(bad):
                 nbad = bad.sum()
-                log.warning(("{0:d} rows of bad data detected in column " +
-                             "{1} of {2}.").format(nbad, col, filepath))
-    log.info("Integrity check complete on {0}.".format(tn))
-    data_list = [data[col][0:maxrows].tolist() for col in data.names]
-    data_names = [col.lower() for col in data.names]
-    log.info("Initial column conversion complete on {0}.".format(tn))
+                log.warning("%d rows of bad data detected in column " +
+                            "%s of %s.", nbad, col, filepath)
+    log.info("Integrity check complete on %s.", tn)
+    data_list = [data[col][0:maxrows].tolist() for col in colnames]
+    data_names = [col.lower() for col in colnames]
+    log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
         for col in expand:
+            i = data_names.index(col.lower())
             if isinstance(expand[col], str):
                 #
                 # Just rename a column.
                 #
-                data_names[data.names.index(col)] = expand[col]
+                log.debug("Renaming column %s (at index %d) to %s.", data_names[i], i, expand[col])
+                data_names[i] = expand[col]
             else:
                 #
                 # Assume this is an expansion of an array-valued column
                 # into individual columns.
                 #
-                i = data.names.index(col)
                 del data_names[i]
                 del data_list[i]
                 for j, n in enumerate(expand[col]):
+                    log.debug("Expanding column %d of %s (at index %d) to %s.", j, col, i, n)
                     data_names.insert(i + j, n)
                     data_list.insert(i + j, data[col][:, j].tolist())
-    log.info("Column expansion complete on {0}.".format(tn))
+                log.debug(data_names)
+    log.info("Column expansion complete on %s.", tn)
     del data
     if convert is not None:
         for col in convert:
             i = data_names.index(col)
             data_list[i] = [convert[col](x) for x in data_list[i]]
-    log.info("Column conversion complete on {0}.".format(tn))
+    log.info("Column conversion complete on %s.", tn)
     data_rows = list(zip(*data_list))
     del data_list
-    log.info("Converted columns into rows on {0}.".format(tn))
+    log.info("Converted columns into rows on %s.", tn)
     for k in range(maxrows//chunksize + 1):
         data_chunk = [dict(zip(data_names, row))
                       for row in data_rows[k*chunksize:(k+1)*chunksize]]
         if len(data_chunk) > 0:
             engine.execute(tcls.__table__.insert(), data_chunk)
-            log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
-                                                              maxrows), tn))
+            log.info("Inserted %d rows in %s.",
+                     min((k+1)*chunksize, maxrows), tn)
     # for k in range(maxrows//chunksize + 1):
     #     data_insert = [dict([(col, data_list[i].pop(0))
     #                          for i, col in enumerate(data_names)])
     #                    for j in range(chunksize)]
     #     session.bulk_insert_mappings(tcls, data_insert)
-    #     log.info("Inserted {0:d} rows in {1}.".format(min((k+1)*chunksize,
-    #                                                       maxrows), tn))
+    #     log.info("Inserted %d rows in %s..",
+    #              min((k+1)*chunksize, maxrows), tn)
     # session.commit()
     # dbSession.commit()
+    if q3c:
+        q3c_index(tn)
     return
 
 
-def load_fiberassign(datapath, maxpass=4):
+def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -293,12 +324,14 @@ def load_fiberassign(datapath, maxpass=4):
     ----------
     datapath : :class:`str`
         Full path to the directory containing tile files.
-    session : :class:`sqlalchemy.orm.session.Session`
-        Database connection.
     maxpass : :class:`int`, optional
         Search for pass numbers up to this value (default 4).
+    q3c : :class:`bool`, optional
+        If set, create q3c index on the table.
+    latest_epoch : :class:`bool`, optional
+        If set, search for the latest tile file among several epochs.
     """
-    from os.path import join
+    from os.path import basename, join
     from re import compile
     from glob import glob
     from astropy.io import fits
@@ -307,29 +340,34 @@ def load_fiberassign(datapath, maxpass=4):
     fiberpath = join(datapath, 'output', 'dark',
                      '[0-{0:d}]'.format(maxpass),
                      'fiberassign', 'tile_*.fits')
-    log.info("Using tile file search path: {0}.".format(fiberpath))
+    log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob(fiberpath)
     if len(tile_files) == 0:
         log.error("No tile files found!")
         return
-    log.info("Found {0:d} tile files.".format(len(tile_files)))
-    tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+    log.info("Found %d tile files.", len(tile_files))
     #
     # Find the latest epoch for every tile file.
     #
     latest_tiles = dict()
-    for f in tile_files:
-        m = tileidre.search(f)
-        if m is None:
-            log.error("Could not match {0}!".format(f))
-            continue
-        epoch, tileid = map(int, m.groups())
-        if tileid in latest_tiles:
-            if latest_tiles[tileid][0] < epoch:
+    if latest_epoch:
+        tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+        for f in tile_files:
+            m = tileidre.search(f)
+            if m is None:
+                log.error("Could not match %s!", f)
+                continue
+            epoch, tileid = map(int, m.groups())
+            if tileid in latest_tiles:
+                if latest_tiles[tileid][0] < epoch:
+                    latest_tiles[tileid] = (epoch, f)
+            else:
                 latest_tiles[tileid] = (epoch, f)
-        else:
-            latest_tiles[tileid] = (epoch, f)
-    log.info("Identified {0:d} tile files for loading.".format(len(latest_tiles)))
+    else:
+        for f in tile_files:
+            tileid = int((basename(f).split('.')[0]).split('_')[1])
+            latest_tiles[tileid] = (0, f)
+    log.info("Identified %d tile files for loading.", len(latest_tiles))
     #
     # Read the identified tile files.
     #
@@ -337,7 +375,7 @@ def load_fiberassign(datapath, maxpass=4):
         epoch, f = latest_tiles[tileid]
         with fits.open(f) as hdulist:
             data = hdulist[1].data
-        log.info("Read data from {0}.".format(f))
+        log.info("Read data from %s.", f)
         for col in ('RA', 'DEC', 'XFOCAL_DESIGN', 'YFOCAL_DESIGN'):
             data[col][np.isnan(data[col])] = -9999.0
             assert not np.any(np.isnan(data[col]))
@@ -346,39 +384,38 @@ def load_fiberassign(datapath, maxpass=4):
         data_list = ([[tileid]*n_rows] +
                      [data[col].tolist() for col in data.names])
         data_names = ['tileid'] + [col.lower() for col in data.names]
-        log.info("Initial column conversion complete on tileid = {0:d}.".format(tileid))
+        log.info("Initial column conversion complete on tileid = %d.", tileid)
         data_rows = list(zip(*data_list))
-        log.info("Converted columns into rows on tileid = {0:d}.".format(tileid))
+        log.info("Converted columns into rows on tileid = %d.", tileid)
         dbSession.bulk_insert_mappings(FiberAssign, [dict(zip(data_names, row))
                                                      for row in data_rows])
-        log.info(("Inserted {0:d} rows in {1} " +
-                  "for tileid = {2:d}.").format(n_rows,
-                                                FiberAssign.__tablename__,
-                                                tileid))
+        log.info("Inserted %d rows in %s for tileid = %d.",
+                 n_rows, FiberAssign.__tablename__, tileid)
         dbSession.commit()
+    if q3c:
+        q3c_index('fiberassign')
     return
 
 
-def convert_dateobs(timestamp, tzinfo=None):
-    """Convert a string `timestamp` into a :class:`datetime.datetime` object.
+def q3c_index(table):
+    """Create a q3c index on a table.
 
     Parameters
     ----------
-    timestamp : :class:`str`
-        Timestamp in string format.
-    tzinfo : :class:`datetime.tzinfo`, optional
-        If set, add time zone to the timestamp.
-
-    Returns
-    -------
-    :class:`datetime.datetime`
-        The converted `timestamp`.
+    table : :class:`str`
+        Name of the table to index.
     """
-    from datetime import datetime
-    x = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
-    if tzinfo is not None:
-        x = x.replace(tzinfo=tzinfo)
-    return x
+    from desiutil.log import get_logger
+    log = get_logger()
+    q3c_sql = """CREATE INDEX ix_{table}_q3c_ang2ipix ON {schema}.{table} (q3c_ang2ipix(ra, dec));
+    CLUSTER {schema}.{table} USING ix_{table}_q3c_ang2ipix;
+    ANALYZE {schema}.{table};
+    """.format(schema=schemaname, table=table)
+    log.info("Creating q3c index on %s.%s.", schemaname, table)
+    dbSession.execute(q3c_sql)
+    log.info("Finished q3c index on %s.%s.", schemaname, table)
+    dbSession.commit()
+    return
 
 
 def main():
@@ -389,7 +426,7 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    global engine
+    global engine, schemaname
     from os import remove
     from os.path import basename, exists, join
     from sys import argv
@@ -408,12 +445,21 @@ def main():
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
                       default='quicksurvey.db', metavar='FILE',
                       help="Store data in FILE.")
+    prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
+                      metavar='HOSTNAME',
+                      help='If specified, connect to a PostgreSQL database on HOSTNAME.')
     prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
                       type=int, default=0, metavar='M',
                       help="Load up to M rows in the tables (default is all rows).")
     prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
                       type=int, default=50000, metavar='N',
                       help="Load N rows at a time (default %(default)s).")
+    prsr.add_argument('-s', '--schema', action='store', dest='schema',
+                      metavar='SCHEMA',
+                      help='Set the schema name in the PostgreSQL database.')
+    prsr.add_argument('-U', '--username', action='store', dest='username',
+                      metavar='USERNAME', default='desidev_admin',
+                      help="If specified, connect to a PostgreSQL database with USERNAME.")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
     prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
@@ -426,45 +472,84 @@ def main():
     else:
         log = get_logger(INFO, timestamp=True)
     #
+    # Schema.
+    #
+    if options.schema:
+        schemaname = options.schema
+        # event.listen(Base.metadata, 'before_create', CreateSchema(schemaname))
+        if options.clobber:
+            event.listen(Base.metadata, 'before_create',
+                         DDL('DROP SCHEMA IF EXISTS {0} CASCADE'.format(schemaname)))
+        event.listen(Base.metadata, 'before_create',
+                     DDL('CREATE SCHEMA IF NOT EXISTS {0}'.format(schemaname)))
+    #
     # Create the file.
     #
-    if basename(options.dbfile) == options.dbfile:
-        db_file = join(options.datapath, options.dbfile)
+    postgresql = False
+    if options.hostname:
+        postgresql = True
+        db_connection = parse_pgpass(hostname=options.hostname,
+                                     username=options.username)
+        if db_connection is None:
+            log.critical("Could not load database information!")
+            return 1
     else:
-        db_file = options.dbfile
-    if options.clobber and exists(db_file):
-        log.info("Removing file: {0}.".format(db_file))
-        remove(db_file)
+        if basename(options.dbfile) == options.dbfile:
+            db_file = join(options.datapath, options.dbfile)
+        else:
+            db_file = options.dbfile
+        if options.clobber and exists(db_file):
+            log.info("Removing file: %s.", db_file)
+            remove(db_file)
+        db_connection = 'sqlite:///'+db_file
     #
     # SQLAlchemy stuff.
     #
-    engine = create_engine('sqlite:///'+db_file, echo=options.verbose)
+    engine = create_engine(db_connection, echo=options.verbose)
     dbSession.remove()
     dbSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
-    log.info("Begin creating schema.")
+    log.info("Begin creating tables.")
+    for tab in Base.metadata.tables.values():
+        tab.schema = schemaname
     Base.metadata.create_all(engine)
-    log.info("Finished creating schema.")
+    log.info("Finished creating tables.")
     #
     # Load configuration
     #
-    loader = [{'tcls': Truth,
-               'path': ('input', 'dark', 'truth.fits'),
+    loader = [{'filepath': join(options.datapath, 'input', 'dark', 'truth.fits'),
+               'tcls': Truth,
+               'hdu': 1,
                'expand': None,
-               'convert': None},
-              {'tcls': Target,
-               'path': ('input', 'dark', 'targets.fits'),
+               'convert': None,
+               'q3c': postgresql,
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows},
+              {'filepath': join(options.datapath, 'input', 'dark', 'targets.fits'),
+               'tcls': Target,
+               'hdu': 1,
                'expand': {'DECAM_FLUX': ('decam_flux_u', 'decam_flux_g',
                                          'decam_flux_r', 'decam_flux_i',
                                          'decam_flux_z', 'decam_flux_Y')},
-               'convert': None},
-              {'tcls': ObsList,
-               'path': ('input', 'obsconditions', 'Benchmark030_001', 'obslist_all.fits'),
+               'convert': None,
+               'q3c': postgresql,
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows},
+              {'filepath': join(options.datapath, 'input', 'obsconditions', 'Benchmark030_001', 'obslist_all.fits'),
+               'tcls': ObsList,
+               'hdu': 1,
                'expand': {'DATE-OBS': 'dateobs'},
-               'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)}},
-              {'tcls': ZCat,
-               'path': ('output', 'dark', '4', 'zcat.fits'),
+               'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
+               'q3c': postgresql,
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows},
+              {'filepath': join(options.datapath, 'output', 'dark', '4', 'zcat.fits'),
+               'tcls': ZCat,
+               'hdu': 1,
                'expand': None,
-               'convert': None}]
+               'convert': None,
+               'q3c': False,
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows}]
     #
     # Load the tables that correspond to a single file.
     #
@@ -475,21 +560,18 @@ def main():
         #
         q = dbSession.query(l['tcls']).first()
         if q is None:
-            filepath = join(options.datapath, *l['path'])
-            log.info("Loading {0} from {1}.".format(tn, filepath))
-            load_file(filepath, l['tcls'], expand=l['expand'],
-                      convert=l['convert'], chunksize=options.chunksize,
-                      maxrows=options.maxrows)
-            log.info("Finished loading {0}.".format(tn))
+            log.info("Loading %s from %s.", tn, l['filepath'])
+            load_file(**l)
+            log.info("Finished loading %s.", tn)
         else:
-            log.info("{0} table already loaded.".format(tn.title()))
+            log.info("%s table already loaded.", tn.title())
     #
     # Load fiber assignment files.
     #
     q = dbSession.query(FiberAssign).first()
     if q is None:
-        log.info("Loading FiberAssign from {0}.".format(options.datapath))
-        load_fiberassign(options.datapath)
+        log.info("Loading FiberAssign from %s.", options.datapath)
+        load_fiberassign(options.datapath, q3c=postgresql)
         log.info("Finished loading FiberAssign.")
     else:
         log.info("FiberAssign table already loaded.")

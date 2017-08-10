@@ -1,8 +1,8 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
-desispec.io.database
-====================
+desispec.database.metadata
+==========================
 
 Code for interacting with the file metadatabase.
 """
@@ -170,7 +170,7 @@ class Tile(Base):
 
         Parameters
         ----------
-        brick : :class:`~desispec.io.database.Brick`
+        brick : :class:`~desispec.database.metadata.Brick`
             A brick.
 
         Returns
@@ -201,7 +201,7 @@ class Tile(Base):
         Returns
         -------
         :class:`list`
-            A list of :class:`~desispec.io.database.Brick` objects.
+            A list of :class:`~desispec.database.metadata.Brick` objects.
         """
         candidate_bricks = session.query(Brick).filter(text("(:dec + :radius > brick.dec1) AND (:dec - :radius < brick.dec2)")).params(dec=self.dec, radius=self._radius).all()
         bricks = list()
@@ -249,7 +249,7 @@ class Tile(Base):
             If `map_petals` is ``False``, a list of
             :class:`~matplotlib.patches.Polygon` objects. Otherwise, a
             :class:`dict` mapping petal number to the
-            :class:`~desispec.io.database.Brick` objects that overlap that
+            :class:`~desispec.database.metadata.Brick` objects that overlap that
             petal.
         """
         if self._brick_polygons is None and self._petal2brick is None:
@@ -296,7 +296,7 @@ class Tile(Base):
         Returns
         -------
         :class:`tuple`
-            A tuple containing a :class:`~desispec.io.database.Frame` object
+            A tuple containing a :class:`~desispec.database.metadata.Frame` object
             ready for loading, and a list of bricks that overlap.
         """
         dateobs = (datetime(2017+self.desi_pass, 1, 1, 0, 0, 0, tzinfo=utc) +
@@ -393,7 +393,7 @@ class Status(Base):
 
 class FrameStatus(Base):
     """Representation of the status of a particular
-    :class:`~desispec.io.database.Frame`.
+    :class:`~desispec.database.metadata.Frame`.
     """
     __tablename__ = 'framestatus'
 
@@ -408,7 +408,7 @@ class FrameStatus(Base):
 
 class BrickStatus(Base):
     """Representation of the status of a particular
-    :class:`~desispec.io.database.Brick`.
+    :class:`~desispec.database.metadata.Brick`.
     """
     __tablename__ = 'brickstatus'
 

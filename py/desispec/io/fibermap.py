@@ -23,7 +23,10 @@ fibermap_columns = [
     ('MAG', 'f4', (5,)),
     ('FILTER', (str, 10), (5,)),
     ('SPECTROID', 'i4'),
-    ('POSITIONER', 'i4'),
+    ('POSITIONER', 'i4'),   #- deprecated; use LOCATION
+    ('LOCATION',   'i4'),
+    ('DEVICE_LOC', 'i4'),
+    ('PETAL_LOC',  'i4'),
     ('FIBER', 'i4'),
     ('LAMBDAREF', 'f4'),
     ('RA_TARGET', 'f8'),
@@ -36,7 +39,10 @@ fibermap_columns = [
 
 fibermap_comments = dict(
     FIBER        = "Fiber ID [0-4999]",
-    POSITIONER   = "Positioner ID [0-4999]",
+    POSITIONER   = "Positioner ID [0-4999] (deprecated)",
+    LOCATION     = "Positioner location ID 1000*PETAL + DEVICE",
+    PETAL_LOC    = "Petal location on focal plane [0-9]",
+    DEVICE_LOC   = "Device location on petal [0-542]",
     SPECTROID    = "Spectrograph ID [0-9]",
     TARGETID     = "Unique target ID",
     TARGETCAT    = "Name/version of the target catalog",
@@ -62,11 +68,33 @@ fibermap_comments = dict(
 
 def empty_fibermap(nspec, specmin=0):
     """Return an empty fibermap ndarray to be filled in.
+
+    Args:
+        nspec: (int) number of fibers(spectra) to include
+
+    Options:
+        specmin: (int) starting spectrum index
     """
+    import desimodel.io
+
     fibermap = Table(np.zeros(nspec, dtype=fibermap_columns))
     fibermap['FIBER'] = np.arange(specmin, specmin+nspec)
     fibers_per_spectrograph = 500
     fibermap['SPECTROID'] = fibermap['FIBER'] // fibers_per_spectrograph
+
+    fiberpos = desimodel.io.load_fiberpos()
+    ii = slice(specmin, specmin+nspec)
+    fibermap['X_TARGET'][:]   = fiberpos['X'][ii]
+    fibermap['Y_TARGET'][:]   = fiberpos['Y'][ii]
+    fibermap['X_FVCOBS'][:]   = fiberpos['X'][ii]
+    fibermap['Y_FVCOBS'][:]   = fiberpos['Y'][ii]
+    fibermap['POSITIONER'][:] = fiberpos['LOCATION'][ii]   #- deprecated
+    fibermap['LOCATION'][:]   = fiberpos['LOCATION'][ii]
+    fibermap['PETAL_LOC'][:]  = fiberpos['PETAL'][ii]
+    fibermap['DEVICE_LOC'][:] = fiberpos['DEVICE'][ii]
+    fibermap['LAMBDAREF'][:]  = 5400.0
+
+    assert set(fibermap.keys()) == set([x[0] for x in fibermap_columns])
         
     return fibermap
 

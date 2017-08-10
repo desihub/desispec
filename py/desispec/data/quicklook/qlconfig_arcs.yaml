@@ -1,0 +1,50 @@
+# Default Configurations for a Quicklook Pipeline setup for a science exposure
+name: DESI Quicklook Darktime
+Program: dark
+Flavor: arcs
+#- Calibration files: Assuming the same night for psf and fiberflat
+PSFType: psfboot
+#- FiberflatExpid used as expid for flat image files when running calibration
+FiberflatExpid: 1
+#- Writeout intermediate files
+WritePixfile: False
+WriteSkyModelfile: False
+WriteIntermediatefiles: False
+WriteStaticPlots: False
+#-Debuglevel 
+Debuglevel: 20
+#- Use resolution in extraction  
+UseResolution: False
+#- Heartbeat Period in seconds
+Period: 5.0
+#- Time out in seconds
+Timeout: 120.0
+# Pipeline algorithm: PAs and QAs for each PA
+Pipeline: [Initialize, Preproc, BootCalibration, BoxcarExtract]
+Algorithms:
+    Initialize:
+        QA: 
+            Bias_From_Overscan:
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], DIFF_RANGE: [-2.0, -1.0, 1.0, 2.0]}
+    Preproc:
+        QA: 
+            Get_RMS:
+                PARAMS: {RMS_RANGE: [-2.0, -1.0, 1.0, 2.0]}
+            Count_Pixels:
+                PARAMS: {CUTHI: 500, CUTLO: 100, NPIX_RANGE: [50.0, 200.0, 500.0, 650.0]}
+            Calc_XWSigma:
+                PARAMS: {B_PEAKS: [3914.4, 5199.3, 5201.8],
+                         R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8]
+                         XSHIFT_RANGE: [-4.0, -2.0, 2.0, 4.0],
+                         WSHIFT_RANGE: [-4.0, -2.0, 2.0, 4.0]}
+    BootCalibration:
+        QA: {}
+    BoxcarExtract:
+        wavelength:
+            b: 3550,5730,0.8
+            r: 5630,7740,0.8
+            z: 7650,9830,0.8
+        QA:
+            CountSpectralBins:
+                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_RANGE: [480, 490, 500, 500]}
