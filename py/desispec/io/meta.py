@@ -328,6 +328,29 @@ def get_reduced_frames(channels=['b','r','z'], nights=None):
     return all_frames
 
 
+def get_nights(strip_path=True, rawdata_dir=None, specprod_dir=None):
+    """
+    Args:
+        strip_path:  bool, optional; Strip the path to the nights folders
+        rawdata_dir:
+        specprod_dir:
+
+    Returns:
+        nights: list of nights (without or with paths)
+    """
+    # Init
+    if specprod_dir is None:
+        specprod_dir = specprod_root()
+    # Glob for nights
+    exp_path = os.path.join(specprod_dir,'exposures')
+    nights_path = glob.glob(exp_path+'/*')
+    # Strip off path?
+    if strip_path:
+        return [night_path.split('/')[-1] for night_path in nights_path]
+    else:
+        return nights_path
+
+
 def rawdata_root():
     """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
 

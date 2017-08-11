@@ -125,7 +125,7 @@ def write_qa_brick(outfile, qabrick):
     return outfile
 
 
-def write_qa_frame(outfile, qaframe):
+def write_qa_frame(outfile, qaframe, verbose=False):
     """Write QA for a given frame
 
     Args:
@@ -134,6 +134,7 @@ def write_qa_frame(outfile, qaframe):
         qa_exp : QA_Frame object, with the following attributes
             qa_data: dict of QA info
     """
+    log=get_logger()
     outfile = makepath(outfile, 'qa')
 
     # Generate the dict
@@ -143,6 +144,8 @@ def write_qa_frame(outfile, qaframe):
     # Simple yaml
     with open(outfile, 'w') as yamlf:
         yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+    if verbose:
+        log.info("Wrote QA frame file: {:s}".format(outfile))
 
     return outfile
 

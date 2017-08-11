@@ -9,6 +9,11 @@ desispec Change Log
 * Removes a number of QL metrics from offline qa
 * Fixes integration tests for desisim newexp refactor
 * Removes spectra grouping by brick; nside=64 healpix grouping default
+* Add get_nights method to io.meta
+* Add search_for_framefile method to io.frame
+* Add desi_qa_frame script to generate frame QA
+
+.. _`#422`: https://github.com/desihub/desispec/pull/422
 
 0.15.2 (2017-07-12)
 -------------------
