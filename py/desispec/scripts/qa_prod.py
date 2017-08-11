@@ -10,7 +10,7 @@ import numpy as np
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate Production Level QA")
 
-    parser.add_argument('--specprod_dir', type = str, default = None, required=True,
+    parser.add_argument('--specprod_dir', type = str, default = None, required=False,
                         help = 'Path containing the exposures/directory to use')
     parser.add_argument('--make_frameqa', type = int, default = 0,
                         help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')

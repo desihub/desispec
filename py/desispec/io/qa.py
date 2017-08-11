@@ -188,11 +188,14 @@ def load_qa_prod(inroot):
     Returns:
         odict : dict
     """
+    from linetools import utils as ltu
     log=get_logger()
-    infile = inroot+'.yaml'
+    #infile = inroot+'.yaml'
+    infile = inroot+'.json'
     log.info("Loading QA prod file: {:s}".format(infile))
     # Read
-    odict = read_qa_data(infile)
+    #odict = read_qa_data(infile)
+    odict = ltu.loadjson(infile)
     # Return
     return odict
 
