@@ -14,7 +14,7 @@ from desispec.io import read_params
 
 
 class QA_Exposure(object):
-    def __init__(self, expid, night, flavor, dateobs, specprod_dir=None, in_data=None, **kwargs):
+    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None, **kwargs):
         """
         Class to organize and execute QA for a DESI Exposure
 
@@ -48,7 +48,7 @@ class QA_Exposure(object):
         self.night = night
         self.specprod_dir = specprod_dir
         self.flavor = flavor
-        self.dateobs = dateobs
+        self.meta = {}
 
         if in_data is None:
             self.data = dict(flavor=self.flavor, expid=self.expid,
@@ -87,6 +87,17 @@ class QA_Exposure(object):
 
         # Figure
         qa_plots.exposure_fluxcalib(outfil, self.data)
+
+    def load_meta(self, frame_meta):
+        """ Load meta info from input Frame meta
+        Args:
+            frame_meta:
+        """
+        desi_params = read_params()
+        for key in desi_params['frame_meta']:
+            if key in ['CAMERA']:  # Frame specific
+                continue
+            self.meta[key] = frame_meta[key]
 
     def load_qa_data(self, remove=False):
         """ Load the QA data files for a given exposure (currently yaml)

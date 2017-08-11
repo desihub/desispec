@@ -55,7 +55,7 @@ class QA_Prod(object):
         out_list = []
         out_nights = []
         out_expid = []
-        out_dateobs = []
+        out_expmeta = []
         # Nights
         for night in self.data:
             if (night not in nights) and (nights != 'all'):
@@ -63,8 +63,9 @@ class QA_Prod(object):
             # Exposures
             for expid in self.data[night]:
                 # Cameras
+                exp_meta = self.data[night][expid]['meta']
                 for camera in self.data[night][expid]:
-                    if camera == 'flavor':
+                    if camera in ['flavor', 'meta']:
                         continue
                     if (camera[0] not in channels) and (channels != 'all'):
                         continue
@@ -80,15 +81,18 @@ class QA_Prod(object):
                             out_list.append(val[0])
                         else:
                             out_list.append(val)
-                        # dict
-                        out_nights.append(night)
+                        # Meta data
                         out_expid.append(expid)
-                        out_dateobs.append(self.data[night][expid]['DATE-OBS'])
+                        out_expmeta.append(exp_meta)
         # Return Table
         qa_tbl = Table()
         qa_tbl[metric] = out_list
-        qa_tbl['nights'] = out_nights
-        qa_tbl['DATE-OBS'] = out_dateobs
+        # Add expmeta
+        for key in out_expmeta[0].keys():
+            tmp_list = []
+            for exp_meta in out_expmeta:
+                tmp_list.append(exp_meta[key])
+            qa_tbl[key] = tmp_list
         return qa_tbl
 
     def load_data(self):
@@ -201,10 +205,8 @@ class QA_Prod(object):
         Returns:
 
         """
-        from desispec.io import meta
         from desispec.qa import QA_Exposure
         from desispec.io import write_qa_prod
-        import pdb
         log = get_logger()
         # Remake?
         if make_frameqa:
@@ -223,12 +225,13 @@ class QA_Prod(object):
                                         expid = exposure, specprod_dir = self.specprod_dir)
                 if len(frames_dict) == 0:
                     continue
-                # Load any frame (for the type)
+                # Load any frame (for the type and meta info)
                 key = list(frames_dict.keys())[0]
                 frame_fil = frames_dict[key]
-                frame = read_frame(frame_fil)
-                qa_exp = QA_Exposure(exposure, night, frame.meta['FLAVOR'],
-                                     frame.meta['DATE-OBS'], specprod_dir=self.specprod_dir, remove=remove)
+                frame_meta = read_meta_frame(frame_fil)
+                qa_exp = QA_Exposure(exposure, night, frame_meta['FLAVOR'],
+                                     specprod_dir=self.specprod_dir, remove=remove)
+                qa_exp.load_meta(frame_meta)
                 # Append
                 self.qa_exps.append(qa_exp)
         # Write

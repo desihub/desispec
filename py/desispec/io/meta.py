@@ -328,7 +328,7 @@ def get_reduced_frames(channels=['b','r','z'], nights=None):
     return all_frames
 
 
-def get_nights(strip_path=True, rawdata_dir=None, specprod_dir=None):
+def get_nights(strip_path=True, specprod_dir=None):
     """
     Args:
         strip_path:  bool, optional; Strip the path to the nights folders

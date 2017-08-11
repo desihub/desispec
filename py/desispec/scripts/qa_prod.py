@@ -1,17 +1,15 @@
 # Script for generating QA from a Production run
 from __future__ import absolute_import, division
 
-from desispec.qa import QA_Prod
-from desiutil.log import get_logger
 import argparse
 import numpy as np
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.2]")
+    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.3]")
 
-    parser.add_argument('--specprod_dir', type = str, default = None, required=False,
-                        help = 'Path containing the exposures/directory to use')
+    parser.add_argument('--reduxdir', type = str, default = None, required=False,
+                        help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--make_frameqa', type = int, default = 0,
                         help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')
     parser.add_argument('--slurp', default = False, action='store_true',
@@ -35,11 +33,20 @@ def parse(options=None):
 
 def main(args) :
 
+    from desispec.qa import QA_Prod
+    from desiutil.log import get_logger
+    from desispec.io import meta
+
     log=get_logger()
 
     log.info("starting")
+    # Initialize
+    if args.reduxdir is None:
+        specprod_dir = meta.specprod_root()
+    else:
+        specprod_dir = args.reduxdir
 
-    qa_prod = QA_Prod(args.specprod_dir)
+    qa_prod = QA_Prod(specprod_dir)
 
     # Remake Frame QA?
     if args.make_frameqa > 0:

@@ -707,6 +707,7 @@ def prod_time_series(qa_prod, qatype_metric, xlim=None, outfile=None, close=True
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     if outfile is not None:
         plt.savefig(outfile)
+        print("Wrote QA file: {:s}".format(outfile))
         if close:
             plt.close()
     elif pp is not None:
