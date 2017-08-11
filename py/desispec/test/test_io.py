@@ -583,6 +583,45 @@ class TestIO(unittest.TestCase):
         x = findfile('fibermap', night='20150101', expid=123, outdir=outdir)
         self.assertEqual(x, os.path.join(outdir, os.path.basename(x)))
 
+    def test_get_nights(self):
+        """ Test desispec.io.meta.get_nights
+        """
+        from ..io.meta import get_nights
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # Generate dummy path
+        for night in ['20150101', '20150102']:
+            x = findfile('frame', camera='b0', night=night, expid=123)
+            makepath(x)
+        # Search for nights
+        nights = get_nights()
+        self.assertEqual(len(nights), 2)
+        self.assertTrue(isinstance(nights, list))
+        self.assertTrue('20150102' in nights)
+        # Keep path
+        nights = get_nights(strip_path=False)
+        self.assertTrue('/' in nights[0])
+
+    def test_search_framefile(self):
+        """ Test desispec.io.frame.search_for_framefile
+        """
+        from ..io.frame import search_for_framefile
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        # Setup paths
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # Generate a dummy frame file
+        x = findfile('frame', camera='b0', night='20150101', expid=123)
+        makepath(x)
+        with open(x,'a') as f:
+            pass
+        # Find it
+        mfile = search_for_framefile('frame-b0-000123.fits')
+        self.assertEqual(x, mfile)
+
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
     def test_download(self):
         """Test desiutil.io.download.
