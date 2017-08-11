@@ -11,6 +11,7 @@ from desispec.io import get_exposures
 from desispec.io import get_files
 from desispec.io import read_frame
 from desispec.io import read_meta_frame
+from desispec.io import specprod_root
 
 from desiutil.log import get_logger
 
@@ -18,7 +19,7 @@ from desiutil.log import get_logger
 
 
 class QA_Prod(object):
-    def __init__(self, specprod_dir):
+    def __init__(self, specprod_dir=None):
         """ Class to organize and execute QA for a DESI production
 
         Args:
@@ -31,6 +32,8 @@ class QA_Prod(object):
               List of QA_Exposure classes, one per exposure in production
             data : dict
         """
+        if specprod_dir is None:
+            specprod_dir = specprod_root()
         self.specprod_dir = specprod_dir
         tmp = specprod_dir.split('/')
         self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
@@ -87,6 +90,7 @@ class QA_Prod(object):
         # Return Table
         qa_tbl = Table()
         qa_tbl[metric] = out_list
+        qa_tbl['EXPID'] = out_expid
         # Add expmeta
         for key in out_expmeta[0].keys():
             tmp_list = []

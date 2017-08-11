@@ -74,7 +74,7 @@ def main(args) :
         # Default?
         if args.channel_hist == 'default':
             dqqp.prod_channel_hist(qa_prod, 'FIBERFLAT', 'MAX_RMS', pp=pp, close=False)
-            dqqp.prod_channel_hist(qa_prod, 'SKYSUB', 'MED_RESID', xlim=(-1,1), pp=pp, close=False)
+            dqqp.prod_channel_hist(qa_prod, 'SKYSUB', 'MED_RESID', xlim=(-15,15), pp=pp, close=False)
             dqqp.prod_channel_hist(qa_prod, 'FLUXCALIB', 'MAX_ZP_OFF', pp=pp, close=False)
         # Finish
         print("Writing {:s}".format(outfile))
@@ -85,5 +85,6 @@ def main(args) :
         # QATYPE-METRIC
         from desispec.qa import qa_plots as dqqp
         qa_prod.load_data()
-        # Default?
-        dqqp.prod_time_series(qa_prod, args.time_series, outfile='QA_{:s}.png'.format(args.time_series))
+        # Run
+        qatype, metric = args.time_series.split('-')
+        dqqp.prod_time_series(qa_prod, qatype, metric, outfile='QA_{:s}.png'.format(args.time_series))
