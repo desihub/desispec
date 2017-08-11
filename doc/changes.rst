@@ -5,6 +5,7 @@ desispec Change Log
 0.15.3 (unreleased)
 -------------------
 
+* Small fixes to desi_qa_prod and qa_prod
 * Fixes integration tests for desisim newexp refactor
 * Removes spectra grouping by brick; nside=64 healpix grouping default
 

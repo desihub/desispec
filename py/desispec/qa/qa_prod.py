@@ -5,10 +5,12 @@ from __future__ import print_function, absolute_import, division
 
 import numpy as np
 import glob, os
+import warnings
 
 from desispec.io import get_exposures
 from desispec.io import get_files
 from desispec.io import read_frame
+from desispec.io import read_meta_frame
 
 from desiutil.log import get_logger
 
@@ -124,9 +126,9 @@ class QA_Prod(object):
                         expid = exposure, specprod_dir = self.specprod_dir)
                 for camera,frame_fil in frames_dict.items():
                     # Load frame
-                    frame = read_frame(frame_fil)
-                    spectro = int(frame.meta['CAMERA'][-1])
-                    if frame.meta['FLAVOR'] in ['flat','arc']:
+                    frame_meta = read_meta_frame(frame_fil)  # Only meta to speed it up
+                    spectro = int(frame_meta['CAMERA'][-1])
+                    if frame_meta['FLAVOR'] in ['flat','arc']:
                         qatype = 'qa_calib'
                     else:
                         qatype = 'qa_data'
@@ -134,8 +136,13 @@ class QA_Prod(object):
                     if (not clobber) & os.path.isfile(qafile):
                         log.info("qafile={:s} exists.  Not over-writing.  Consider clobber=True".format(qafile))
                         continue
+                    else:  # Now the full read
+                        frame = read_frame(frame_fil)
                     # Load
-                    qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+                    try:
+                        qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+                    except AttributeError:
+                        import pdb; pdb.set_trace
                     # Flat QA
                     if frame.meta['FLAVOR'] in ['flat']:
                         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
@@ -148,23 +155,35 @@ class QA_Prod(object):
                     # SkySub QA
                     if qatype == 'qa_data':
                         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                        skymodel = read_sky(sky_fil)
-                        qaframe.run_qa('SKYSUB', (frame, skymodel))
-                        if make_plots:
-                            qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                            qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
+                        try:
+                            skymodel = read_sky(sky_fil)
+                        except FileNotFoundError:
+                            warnings.warn("Sky file {:s} not found.  Skipping..".format(sky_fil))
+                        else:
+                            qaframe.run_qa('SKYSUB', (frame, skymodel))
+                            if make_plots:
+                                qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                                qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
                     # FluxCalib QA
                     if qatype == 'qa_data':
                         # Standard stars
                         stdstar_fil = meta.findfile('stdstars', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir,
                                                     spectrograph=spectro)
-                        model_tuple=read_stdstar_models(stdstar_fil)
+                        #try:
+                        #    model_tuple=read_stdstar_models(stdstar_fil)
+                        #except FileNotFoundError:
+                        #    warnings.warn("Standard star file {:s} not found.  Skipping..".format(stdstar_fil))
+                        #else:
                         flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                        fluxcalib = read_flux_calibration(flux_fil)
-                        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, model_tuple))#, indiv_stars))
-                        if make_plots:
-                            qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                            qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib, model_tuple)
+                        try:
+                            fluxcalib = read_flux_calibration(flux_fil)
+                        except FileNotFoundError:
+                            warnings.warn("Flux file {:s} not found.  Skipping..".format(flux_fil))
+                        else:
+                            qaframe.run_qa('FLUXCALIB', (frame, fluxcalib)) #, model_tuple))#, indiv_stars))
+                            if make_plots:
+                                qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                                qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)#, model_tuple)
                     # Write
                     write_qa_frame(qafile, qaframe)
 

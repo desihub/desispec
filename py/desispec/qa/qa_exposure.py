@@ -8,6 +8,7 @@ import numpy as np
 import os
 
 from desiutil.log import get_logger
+from desispec.io import read_params
 
 # log=get_logger()
 
@@ -34,9 +35,9 @@ class QA_Exposure(object):
         Attributes:
             All input args become object attributes.
         """
-        flavors = ['none', 'flat', 'arc', 'gray', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
-        assert flavor in flavors
-        if flavor in ['dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']:
+        desi_params = read_params()
+        assert flavor in desi_params['frame_types']
+        if flavor in ['science']:
             self.type = 'data'
         else:
             self.type = 'calib'

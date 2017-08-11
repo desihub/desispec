@@ -91,6 +91,22 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
 
     return outfile
 
+
+def read_meta_frame(filename, extname=0):
+    """ Load the meta information of a Frame
+    Args:
+        filename: path to a file
+        extname: int, optional;  Extension for grabbing header info
+
+    Returns:
+        meta: dict or astropy.fits.header
+
+    """
+    fx = fits.open(filename, uint=True, memmap=False)
+    hdr = fx[extname].header
+    return hdr
+
+
 def read_frame(filename, nspec=None):
     """Reads a frame fits file and returns its data.
 
