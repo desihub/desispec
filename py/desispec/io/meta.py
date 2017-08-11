@@ -300,6 +300,20 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
     return sorted(exposures)
 
 
+def get_nights(strip_path=True, rawdata_dir=None, specprod_dir=None):
+    # Init
+    if specprod_dir is None:
+        specprod_dir = specprod_root()
+    # Glob for nights
+    exp_path = os.path.join(specprod_dir,'exposures')
+    nights_path = glob.glob(exp_path+'/*')
+    # Strip off path?
+    if strip_path:
+        return [night_path.split('/')[-1] for night_path in nights_path]
+    else:
+        return nights_path
+
+
 def rawdata_root():
     """Returns directory root for raw data, i.e. ``$DESI_SPECTRO_DATA``
 

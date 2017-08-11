@@ -195,11 +195,11 @@ class QA_Frame(object):
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
 
 
-def qaframe_from_frame(night, frame_file, specprod_dir=None, make_plots=False):
+def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
     """  Generate a qaframe object from an input frame_file name (and night)
+    Write QA to disk
     Will also make plots if directed
     Args:
-        night: str
         frame_file: str
         specprod_dir: str, optional
         make_plots: bool, optional
@@ -210,13 +210,20 @@ def qaframe_from_frame(night, frame_file, specprod_dir=None, make_plots=False):
     from desispec.io import read_frame
     from desispec.io import meta
     from desispec.io.qa import load_qa_frame, write_qa_frame
+    from desispec.io.frame import search_for_framefile
     from desispec.io.fiberflat import read_fiberflat
     from desispec.qa import qa_plots
     from desispec.io.sky import read_sky
     from desispec.io.fluxcalibration import read_flux_calibration
+
+    if '/' in frame_file:  # If present, assume full path is used here
+        pass
+    else: # Find the frame file in the desispec hierarchy?
+        frame_file = search_for_framefile(frame_file)
     # Load frame
     frame = read_frame(frame_file)
     frame_meta = frame.meta
+    night = frame_meta['NIGHT'].strip()
     camera = frame_meta['CAMERA'].strip()
     expid = frame_meta['EXPID']
     spectro = int(frame_meta['CAMERA'][-1])
@@ -272,5 +279,5 @@ def qaframe_from_frame(night, frame_file, specprod_dir=None, make_plots=False):
                                       specprod_dir=specprod_dir)
                 qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)  # , model_tuple)
     # Write
-    write_qa_frame(qafile, qaframe)
+    write_qa_frame(qafile, qaframe, verbose=True)
     return qaframe

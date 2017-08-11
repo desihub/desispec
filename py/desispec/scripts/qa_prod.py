@@ -8,7 +8,7 @@ import numpy as np
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate Production Level QA")
+    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.2]")
 
     parser.add_argument('--specprod_dir', type = str, default = None, required=True,
                         help = 'Path containing the exposures/directory to use')

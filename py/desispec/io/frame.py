@@ -15,10 +15,9 @@ from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 
 from ..frame import Frame
-from .meta import findfile
+from .meta import findfile, get_nights, get_exposures
 from .util import fitsheader, native_endian, makepath
 from desiutil.log import get_logger
-
 
 def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     """Write a frame fits file and returns path to file written.
@@ -169,3 +168,24 @@ def read_frame(filename, nspec=None):
         log.error("Frame did not pass simple vetting test. diagnosis={:d}".format(diagnosis))
     # Return
     return frame
+
+
+def search_for_framefile(frame_file):
+    log=get_logger()
+    # Parse frame file
+    ifile = frame_file.split('/')[-1]
+    splits = ifile.split('-')
+    root = splits[0]
+    camera = splits[1]
+    fexposure = int(splits[2].split('.')[0])
+
+    # Loop on nights
+    nights = get_nights()
+    for night in nights:
+        for exposure in get_exposures(night):
+            if exposure == fexposure:
+                mfile = findfile(root, camera=camera, night=night, expid=exposure)
+                if os.path.isfile(mfile):
+                    return mfile
+                else:
+                    log.error("Expected file {:s} not found..".format(mfile))
