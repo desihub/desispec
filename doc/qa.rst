@@ -19,6 +19,37 @@ Scripts
 desi_qa_frame
 +++++++++++++
 
+Generate the QA for an input frame file.
+The code can be written anywhere and the
+output is written to its `proper' location.
+
+usage
+-----
+
+Here is the usage::
+
+    usage: desi_qa_frame [-h] --frame_file FRAME_FILE [--reduxdir PATH]
+                         [--make_plots]
+
+    Generate Frame Level QA [v1.0]
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      --frame_file FRAME_FILE
+                            Frame filename. Full path is not required nor desired.
+      --reduxdir PATH       Override default path ($DESI_SPECTRO_REDUX/$SPECPROD)
+                            to processed data.
+      --make_plots          Generate QA figs too?
+
+
+examples
+--------
+
+Generate the QA YAML file::
+
+    desi_qa_frame --frame_file=frame-r7-00000077.fits
+    desi_qa_frame --frame_file=frame-r7-00000077.fits --make_plots
+
 desi_qa_prod
 ++++++++++++
 
