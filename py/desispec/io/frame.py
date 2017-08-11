@@ -171,8 +171,16 @@ def read_frame(filename, nspec=None):
 
 
 def search_for_framefile(frame_file):
+    """ Search for an input frame_file in the desispec redux hierarchy
+    Args:
+        frame_file:  str
+
+    Returns:
+        mfile: str,  full path to frame_file if found else raise error
+
+    """
     log=get_logger()
-    # Parse frame file
+    # Parse frame file name
     ifile = frame_file.split('/')[-1]
     splits = ifile.split('-')
     root = splits[0]

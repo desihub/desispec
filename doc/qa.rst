@@ -5,7 +5,7 @@ Quality Assurance
 *****************
 
 Overview
-=================
+========
 
 The DESI spectroscopic pipeline includes a series of
 routines that monitor the quality of the pipeline products
@@ -21,7 +21,7 @@ desi_qa_frame
 
 Generate the QA for an input frame file.
 The code can be written anywhere and the
-output is written to its `proper' location.
+output is written to its "proper" location.
 
 usage
 -----
@@ -48,6 +48,9 @@ examples
 Generate the QA YAML file::
 
     desi_qa_frame --frame_file=frame-r7-00000077.fits
+
+Generate the QA YAML file and figures::
+
     desi_qa_frame --frame_file=frame-r7-00000077.fits --make_plots
 
 desi_qa_prod
