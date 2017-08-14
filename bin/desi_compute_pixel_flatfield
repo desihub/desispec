@@ -1,0 +1,188 @@
+#!/usr/bin/env python
+
+
+import sys,string
+import astropy.io.fits as pyfits
+import argparse
+import numpy as np
+import scipy.signal
+
+
+from desiutil.log import get_logger
+
+def median_image(image_filenames) :
+    """ Return a median of input images after rescaling each image
+    
+    Args:
+        image_filenames : list of preprocessed image path
+
+    Returns:
+        mimage : median image (2D np.array)
+    """
+    
+    log.debug("first median")
+    images=[]
+    for filename in image_filenames  :
+        h=pyfits.open(filename)
+        images.append(h[0].data)
+    mimage=np.median(images,axis=0)
+    log.debug("compute a scale per image")
+    smimage2=np.sum(mimage**2)
+    for i in range(len(images)) :
+        a=np.sum(images[i]*mimage)/smimage2
+        log.debug("scale %d = %f"%(i,a))
+        if a<=0 :
+            raise ValueError("scale = %f for image %s"%(a,image_filenames[i]))
+        images[i] /= a
+    mimage=np.median(images,axis=0)
+    return mimage
+
+def add_margins_to_image(image,margin) :
+    """ Adds a margin to the image with extrapolated values.
+    This is needed for Gaussian smoothing using FFTs
+
+    Args:
+        image : 2D array input image of shape (n0,n1)
+        margin : integer number >0
+    
+    Returns:
+        larger : larger image of shape (n0+2*margin,n1*2*margin)
+    """
+    
+    if margin<=0 :
+        raise ValueError("margin must be >0")
+    larger=np.zeros((image.shape[0]+2*margin,image.shape[1]+2*margin))
+    larger[margin:-margin,margin:-margin]=image
+    eps=10
+    larger[:margin+1,margin:-margin]=np.tile(np.median(image[:eps,:],axis=0),(margin+1,1))
+    larger[-margin-1:,margin:-margin]=np.tile(np.median(image[-eps:,:],axis=0),(margin+1,1))
+    larger[margin:-margin,:margin+1]=np.tile(np.median(image[:,:eps],axis=1),(margin+1,1)).T
+    larger[margin:-margin,-margin-1:]=np.tile(np.median(image[:,-eps:],axis=1),(margin+1,1)).T
+    larger[:margin,:margin]=np.median(larger[:margin,margin])
+    larger[-margin:,:margin]=np.median(larger[-margin:,margin])
+    larger[-margin:,-margin:]=np.median(larger[-margin:,-margin-1])
+    larger[:margin,-margin:]=np.median(larger[:margin,-margin-1])
+    return larger
+
+def gaussian_smoothing_1d_per_axis(image,sigma,npass=2) :
+    """Computes a smooth model of the input image using two
+    1D convolution with a Gaussian kernel of parameter sigma. 
+    Can do several passes.
+    
+    Args:
+        image : 2D array input image
+        sigma : float number (>0)
+        npass : integer number (>=1) 
+    
+    Returns:
+        model : 2D array image of same shape as image
+    """
+    log=get_logger()
+    hw=int(3*sigma)
+    tmp = add_margins_to_image(image,hw)
+    model = np.ones(tmp.shape)
+    x=(np.arange(2*hw+1)-hw)/sigma
+    kernel=np.zeros((2*hw+1,3))
+    kernel[:,1]=np.exp(-x**2/2)
+    kernel/=np.sum(kernel)
+    for p in range(npass) : # possibly do several passes
+        for a in range(2) : # convolve in 1d on each axis
+            log.debug("p=%d a=%d"%(p,a))
+            res=scipy.signal.fftconvolve(tmp,kernel,"same")
+            model *= res
+            tmp /= (res+(res==0))
+            kernel=kernel.T
+    return model[hw:-hw,hw:-hw]
+    
+
+def gaussian_smoothing_2d(image,sigma) :
+    """Computes a smooth model of the input image using one
+    2D convolution with a 2D Gaussian kernel of parameter sigma. 
+    
+    Args:
+        image : 2D array input image
+        sigma : float number (>0)
+    
+    Returns:
+        model : 2D array image of same shape as image
+    """
+    hw=int(3*sigma)
+    tmp = add_margins_to_image(image,hw)
+    model = np.ones(tmp.shape)
+    
+    x=np.tile((np.arange(2*hw+1)-hw)/sigma,(2*hw+1,1))
+    r2=x**2+x.T**2    
+    kernel=np.exp(-r2/2.)
+    kernel/=np.sum(kernel)
+    return scipy.signal.fftconvolve(tmp,kernel,"same")[hw:-hw,hw:-hw]
+
+    
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+description="Compute a pixel level flat field image from a set of preprocessed images obtained with the pixel flatfield slit."
+)
+
+parser.add_argument('-i','--images', type = str, nargs='*', default = None, required = True,
+                    help = 'path to input preprocessed image fits files, or a single median image')
+parser.add_argument('-o','--outfile', type = str, default = None, required = True,
+                    help = 'output flatfield image filename')
+parser.add_argument('--sigma', type = int, default = 60 , required = False, 
+                    help = "gaussian smoothing sigma (default is tuned on teststand data")
+parser.add_argument('--out-median', type = str, default = None , required = False, help = "save output median image (for development)")
+args        = parser.parse_args()
+log = get_logger()
+
+if len(args.images) == 1 :
+    log.info("read a single image")
+    image=pyfits.open(args.images[0])[0].data
+else :
+    log.info("compute a median of the input images")
+    image=median_image(args.images)
+
+log.info("first gaussian smoothing")
+model=gaussian_smoothing_1d_per_axis(image,args.sigma)
+
+nsloop=2
+for sloop in range(nsloop) :
+    log.info("compute mask using a temporary flat %d/%d"%(sloop,nsloop))
+    flat=(model>0)*image/(model+(model==0))
+    flat+=(model<=0)
+    flaterr=np.sqrt(1.+model*(model>0))/(model+(model==0))
+    rms=np.abs(flat-1)/flaterr
+    srms=gaussian_smoothing_2d(rms,10.)
+    mask=(srms>1.)|(rms>3.)
+    log.info("number of masked pixels=%d"%np.sum(mask.astype(int)))
+    if 1 :
+        log.info("replace masked pixels by model %d/%d"%(sloop,nsloop))
+        nloop=6
+        for loop in range(nloop) :
+            log.debug("pass %d/%d"%(loop,nloop))
+            tmp_image=image*(mask==0)+model*(mask>0)
+            model=gaussian_smoothing_1d_per_axis(tmp_image,args.sigma,npass=1)
+
+        
+log.info("last gaussian smoothing, per quadrant, to remove residual gain difference")
+n0=tmp_image.shape[0]//2
+n1=tmp_image.shape[1]//2
+model=np.zeros(tmp_image.shape)
+model[:n0,:n1]=gaussian_smoothing_1d_per_axis(tmp_image[:n0,:n1],args.sigma)
+model[n0:,:n1]=gaussian_smoothing_1d_per_axis(tmp_image[n0:,:n1],args.sigma)
+model[n0:,n1:]=gaussian_smoothing_1d_per_axis(tmp_image[n0:,n1:],args.sigma)
+model[:n0,n1:]=gaussian_smoothing_1d_per_axis(tmp_image[:n0,n1:],args.sigma)
+    
+
+flat=(model>0)*image/(model+(model==0))
+flat+=(model<=0)
+
+
+log.info("writing %s ..."%args.outfile)
+h=pyfits.HDUList([pyfits.PrimaryHDU(flat),pyfits.ImageHDU(model,name="MODEL"),pyfits.ImageHDU(mask.astype(int),name="MODMASK")])
+h[0].header["EXTNAME"]="FLAT"
+h[0].header["KERNSIG"]=args.sigma
+h.writeto(args.outfile,clobber=True)
+
+if args.out_median is not None :
+    log.info("writing median image %s ..."%args.out_median)
+    pyfits.writeto(args.out_median,image,clobber=True)
+
+log.info("done")
+
