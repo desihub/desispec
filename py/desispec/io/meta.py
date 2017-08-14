@@ -304,7 +304,8 @@ def get_reduced_frames(channels=['b','r','z'], nights=None):
     """ Loops through a production to find all reduced frames (default is cframes)
     One can choose a subset by argument
     Args:
-        channels:
+        channels: list, optional
+        nights: list, optional
 
     Returns:
         all_frames: list for frame filenames

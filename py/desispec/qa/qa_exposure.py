@@ -25,8 +25,6 @@ class QA_Exposure(object):
             night: str -- YYYYMMDD
             flavor: str
               exposure type (e.g. flat, arc, science)
-            dateobs: str
-              Time of exposure, e.g. '2019-09-04T10:28:00.880'
             specprod_dir(str): Path containing the exposures/ directory to use. If the value
                 is None, then the value of :func:`specprod_root` is used instead.
             in_data: dict, optional -- Input data
