@@ -121,7 +121,10 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
 
     # Plot
     fig = plt.figure(figsize=(8, 10.0))
-    gs = gridspec.GridSpec(4,2)
+    if quick_look:
+        gs = gridspec.GridSpec(4,2)
+    else:
+        gs = gridspec.GridSpec(2,2)
     xmin,xmax = np.min(frame.wave), np.max(frame.wave)
 
     # Simple residual plot

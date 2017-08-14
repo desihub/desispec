@@ -183,8 +183,8 @@ def search_for_framefile(frame_file):
 
     """
     log=get_logger()
-    # Parse frame file name
-    ifile = frame_file.split('/')[-1]
+    # Parse frame file
+    path, ifile = os.path.split(frame_file)
     splits = ifile.split('-')
     root = splits[0]
     camera = splits[1]
