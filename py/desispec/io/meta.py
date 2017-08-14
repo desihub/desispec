@@ -300,7 +300,37 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
     return sorted(exposures)
 
 
-def get_nights(strip_path=True, rawdata_dir=None, specprod_dir=None):
+def get_reduced_frames(channels=['b','r','z'], nights=None, ftype='cframe'):
+    """ Loops through a production to find all reduced frames (default is cframes)
+    One can choose a subset of reduced frames by argument
+    Args:
+        channels: list, optional
+        nights: list, optional
+        ftype: str, optional
+
+    Returns:
+        all_frames: list for frame filenames
+
+    """
+    all_frames = []
+    # Nights
+    if nights is None:
+        nights = get_nights()
+    # Loop on night
+    for night in nights:
+        exposures = get_exposures(night)
+        for exposure in exposures:
+            frames_dict = get_files(filetype=ftype, night=night, expid=exposure)
+            # Restrict on channel
+            for key in frames_dict.keys():
+                for channel in channels:
+                    if channel in key:
+                        all_frames.append(frames_dict[key])
+    # Return
+    return all_frames
+
+
+def get_nights(strip_path=True, specprod_dir=None):
     """
     Args:
         strip_path:  bool, optional; Strip the path to the nights folders

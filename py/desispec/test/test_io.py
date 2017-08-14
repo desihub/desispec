@@ -622,6 +622,25 @@ class TestIO(unittest.TestCase):
         mfile = search_for_framefile('frame-b0-000123.fits')
         self.assertEqual(x, mfile)
 
+    def test_get_reduced_frames(self):
+        """ Test desispec.io.get_reduced_frames
+        """
+        from ..io import get_reduced_frames
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        # Setup paths
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # Generate a dummy frame file
+        for expid, night in zip((123,150), ['20150101', '20150102']):
+            x = findfile('cframe', camera='b0', night=night, expid=expid)
+            makepath(x)
+            with open(x,'a') as f:
+                pass
+        # Find it
+        mfile = get_reduced_frames()
+        self.assertEqual(2, len(mfile))
+
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
     def test_download(self):
         """Test desiutil.io.download.

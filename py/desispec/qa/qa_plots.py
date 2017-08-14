@@ -596,14 +596,15 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     gs = gridspec.GridSpec(2,2)
 
     # Loop on channel
-    clrs = dict(b='blue', r='red', z='purple')
+    clrs = get_channel_clrs()
     for qq, channel in enumerate(['b', 'r', 'z']):
         ax = plt.subplot(gs[qq])
         #ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
 
         # Grab QA
-        qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
+        qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
         # Check for nans
+        qa_arr = qa_tbl[metric]
         isnan = np.isnan(qa_arr)
         if np.sum(isnan) > 0:
             log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
@@ -619,24 +620,24 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
             ax.set_xlim(xlim)
 
     # Meta
+    '''
     ax = plt.subplot(gs[3])
     ax.set_axis_off()
     xlbl = 0.05
     ylbl = 0.85
     yoff = 0.1
     ax.text(xlbl, ylbl, qa_prod.prod_name, color='black', transform=ax.transAxes, ha='left')
-    nights = list(ne_dict.keys())
+    nights = list(qa_tbl['NIGHT'])
     #
     ylbl -= yoff
     ax.text(xlbl+0.1, ylbl, 'Nights: {}'.format(nights),
             transform=ax.transAxes, ha='left', fontsize='x-small')
     #
     ylbl -= yoff
-    expids = []
-    for night in nights:
-        expids += ne_dict[night]
+    expids = list(qa_tbl['EXPID'])
     ax.text(xlbl+0.1, ylbl, 'Exposures: {}'.format(expids),
             transform=ax.transAxes, ha='left', fontsize='x-small')
+    '''
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
@@ -652,14 +653,82 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     else:  # Show
         plt.show()
 
+def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=True, pp=None):
+    from astropy.time import Time
 
-def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True):
+    log = get_logger()
+
+    # Setup
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(3,1)
+
+
+    # Loop on channel
+    clrs = get_channel_clrs()
+
+    # Grab QA
+    all_times = []
+    all_ax = []
+    for cc, channel in enumerate(['b','r','z']):
+        ax = plt.subplot(gs[cc])
+        qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
+        '''
+        # Check for nans
+        isnan = np.isnan(qa_arr)
+        if np.sum(isnan) > 0:
+            log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
+                qatype, metric, channel))
+            qa_arr[isnan] = -999.
+        '''
+        # Convert Date to MJD
+        atime = Time(qa_tbl['DATE-OBS'], format='isot', scale='utc')
+        atime.format = 'mjd'
+        mjd = atime.value
+
+        # Scatter me
+        ax.scatter(mjd, qa_tbl[metric], color=clrs[channel], s=4.)
+        # Axes
+        ax.set_ylabel('Metric')
+        if cc < 2:
+            ax.get_xaxis().set_ticks([])
+        if cc ==0:
+            ax.set_title('{:s} :: {:s}'.format(qatype,metric))
+        all_times.append(mjd)
+        all_ax.append(ax)
+
+    # Label
+    #ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
+    ax.set_xlabel('MJD')
+    all_times = np.concatenate(all_times)
+    xmin, xmax = np.min(all_times), np.max(all_times)
+    for cc in range(3):
+        all_ax[cc].set_xlim(xmin,xmax)
+
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile)
+        print("Wrote QA file: {:s}".format(outfile))
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+
+def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None,
+                      close=True, nslices=20, dpi=700):
     """ Generate a plot of sky subtraction residuals
     Typically for a given channel
     Args:
         wave:
         sky_flux:
-        sky_resid:
+        sky_res:
         outfile:
         pp:
         close:
@@ -674,14 +743,14 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
     # Wavelength
     ax_wave = plt.subplot(gs[0])
     du_pslices(sky_wave, sky_res, np.min(sky_wave), np.max(sky_wave),
-               0., num_slices=20, axis=ax_wave)
+               0., num_slices=nslices, axis=ax_wave)
     ax_wave.set_xlabel('Wavelength')
     ax_wave.set_ylabel('Residual Flux')
 
     # Wavelength
     ax_flux = plt.subplot(gs[1])
     du_pslices(sky_flux, sky_res, np.min(sky_flux), np.max(sky_flux),
-               0., num_slices=20, axis=ax_flux, set_ylim_from_stats=True)
+               0., num_slices=nslices, axis=ax_flux, set_ylim_from_stats=True)
     ax_flux.set_xlabel('log10(Sky Flux)')
     ax_flux.set_ylabel('Residual Flux')
     #ax_flux.set_ylim(-600, 100)
@@ -690,7 +759,7 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     if outfile is not None:
-        plt.savefig(outfile)
+        plt.savefig(outfile, dpi=dpi)
         if close:
             plt.close()
     elif pp is not None:
@@ -700,3 +769,164 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
             pp.close()
     else:  # Show
         plt.show()
+
+def skysub_resid_series(sky_dict, xtype, outfile=None, pp=None,
+                        close=True, nslices=20, dpi=700):
+    """ Generate a plot of sky subtraction residuals for a series of inputs
+    Typically for a given channel
+    Args:
+        wave:
+        sky_flux:
+        sky_res:
+        outfile:
+        pp:
+        close:
+
+    Returns:
+
+    """
+    # Start the plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(sky_dict['count'],1)
+
+    for kk in range(sky_dict['count']):
+        sky_wave = sky_dict['wave'][kk]
+        sky_res = sky_dict['res'][kk]
+        sky_flux = sky_dict['skyflux'][kk]
+        ax = plt.subplot(gs[kk])
+        #ax.set_ylabel('Residual Flux')
+        if xtype == 'wave': # Wavelength
+            du_pslices(sky_wave, sky_res, np.min(sky_wave), np.max(sky_wave),
+               0., num_slices=nslices, axis=ax)
+            xlbl = 'Wavelength'
+        elif xtype == 'flux': # Flux
+            xlbl = 'log10(Sky Flux)'
+            du_pslices(sky_flux, sky_res, np.min(sky_flux), np.max(sky_flux),
+               0., num_slices=nslices, axis=ax, set_ylim_from_stats=True)
+            if kk == sky_dict['count']-1:
+                ax.set_xlabel('Wavelength')
+            else:
+                ax.get_xaxis().set_ticks([])
+        if kk == sky_dict['count']-1:
+            ax.set_xlabel(xlbl)
+        else:
+            ax.get_xaxis().set_ticks([])
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile, dpi=dpi)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+def skysub_gauss(sky_wave, sky_flux, sky_res, sky_ivar, outfile=None, pp=None,
+                      close=True, binsz=0.1, dpi=700, nfbin=4):
+    """ Generate a plot examining the Gaussianity of the residuals
+    Typically for a given channel
+    Args:
+        wave:
+        sky_flux:
+        sky_res:
+        sky_ivar:
+        outfile:
+        pp:
+        close:
+
+    Returns:
+
+    """
+    from scipy.stats import norm
+    # Deviates
+    gd_res = sky_ivar > 0.
+    devs = sky_res[gd_res] * np.sqrt(sky_ivar[gd_res])
+
+    # Start the plot
+    fig = plt.figure(figsize=(8, 4.0))
+    gs = gridspec.GridSpec(1,2)
+
+    # Histogram :: Same routine as in frame_skyresid
+    ax0 = plt.subplot(gs[0])
+    i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
+    rng = tuple(binsz*np.array([i0,i1]) )
+    nbin = i1-i0
+    hist, edges = np.histogram(devs, range=rng, bins=nbin)
+
+    xhist = (edges[1:] + edges[:-1])/2.
+    ax0.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
+    # PDF for Gaussian
+    area = binsz * np.sum(hist)
+
+    xppf = np.linspace(scipy.stats.norm.ppf(0.000001), scipy.stats.norm.ppf(0.999999), 10000)
+    ax0.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
+    ax0.set_xlabel(r'Res/$\sigma$')
+    ax0.set_ylabel('N')
+
+    # Deviates vs. flux
+    absdevs = np.abs(devs)
+    asrt = np.argsort(absdevs)
+    absdevs.sort()
+    ndev = devs.size
+    ax1 = plt.subplot(gs[1])
+
+    # All
+    xlim = (0., np.max(absdevs))
+    ylim = (0.000001, 1.)
+    ax1.plot(absdevs, 1-np.arange(ndev)/(ndev-1), 'k', label='All')
+
+    # Bin by sky flux
+    sflux = sky_flux[asrt]
+    sky_flux.sort()
+    fbins = [0.] + [sky_flux[int(ii*ndev/nfbin)] for ii in range(1,nfbin)]
+    fbins += [np.max(sky_flux)]
+    f_i = np.digitize(sflux, fbins) - 1
+
+    for kk in range(nfbin):
+        lbl = 'flux = [{:d},{:d}]'.format(int(fbins[kk]),int(fbins[kk+1]))
+        idx = f_i == kk
+        ncut = np.sum(idx)
+        ax1.plot(absdevs[idx], 1-np.arange(ncut)/(ncut-1), '--', label=lbl)
+
+    # Gauss lines
+    for kk in range(1,int(xlim[1])+1):
+        ax1.plot([kk]*2, ylim, ':', color='gray')
+        icl = norm.cdf(kk) - norm.cdf(-1*kk)  # Area under curve
+        ax1.plot(xlim, [1-icl]*2, ':', color='gray')
+        ax1.text(0.2, 1-icl, '{:d}'.format(kk)+r'$\sigma$', color='gray')
+
+    ax1.set_xlabel(r'Res/$\sigma$')
+    ax1.set_ylabel(r'Fraction greater than Res/$\sigma$')
+    ax1.set_yscale("log", nonposy='clip')
+    ax1.set_ylim(ylim)
+
+    legend = ax1.legend(loc='lower left', borderpad=0.3,
+                        handletextpad=0.3, fontsize='small')
+
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile, dpi=dpi)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+
+def get_channel_clrs():
+    """ Simple dict to organize styles for channels
+    Returns:
+        channel_dict: dict
+    """
+    return dict(b='blue', r='red', z='purple')

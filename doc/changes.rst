@@ -6,13 +6,23 @@ desispec Change Log
 -------------------
 
 * Small fixes to desi_qa_prod and qa_prod
+* Removes a number of QL metrics from offline qa
 * Fixes integration tests for desisim newexp refactor
 * Removes spectra grouping by brick; nside=64 healpix grouping default
-* Add get_nights method to io.meta
-* Add search_for_framefile method to io.frame
-* Add desi_qa_frame script to generate frame QA
+* Add get_nights method to io.meta (#422)
+* Add search_for_framefile method to io.frame (#422)
+* Add desi_qa_frame script to generate frame QA (#424)
+* Add frame_meta to parameters (for slurping the Frame headers)
+* Add get_reduced_frames() method to io.meta
+* Modifies QA_Prod meta file output to be JSON
+* Add load_meta() method to QA_Exposure
+* Add time_series ploting to desi_qa_prod
+* Add several new plots for skysub residuals
+* Adds method to generate QA Table for Prod
+* Refactor of skysubresid script
 
 .. _`#422`: https://github.com/desihub/desispec/pull/422
+.. _`#424`: https://github.com/desihub/desispec/pull/424
 
 0.15.2 (2017-07-12)
 -------------------
