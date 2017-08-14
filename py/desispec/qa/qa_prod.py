@@ -56,9 +56,9 @@ class QA_Prod(object):
         """
         from astropy.table import Table
         out_list = []
-        out_nights = []
         out_expid = []
         out_expmeta = []
+        out_cameras = []
         # Nights
         for night in self.data:
             if (night not in nights) and (nights != 'all'):
@@ -86,11 +86,13 @@ class QA_Prod(object):
                             out_list.append(val)
                         # Meta data
                         out_expid.append(expid)
+                        out_cameras.append(camera)
                         out_expmeta.append(exp_meta)
         # Return Table
         qa_tbl = Table()
         qa_tbl[metric] = out_list
         qa_tbl['EXPID'] = out_expid
+        qa_tbl['CAMERA'] = out_cameras
         # Add expmeta
         for key in out_expmeta[0].keys():
             tmp_list = []
@@ -99,12 +101,13 @@ class QA_Prod(object):
             qa_tbl[key] = tmp_list
         return qa_tbl
 
-    def load_data(self):
+    def load_data(self, inroot=None):
         """ Load QA data from disk
         """
         from desispec.io.qa import load_qa_prod
         #
-        inroot = self.specprod_dir+'/'+self.prod_name+'_qa'
+        if inroot is None:
+            inroot = self.specprod_dir+'/'+self.prod_name+'_qa'
         self.data = load_qa_prod(inroot)
 
     def make_frameqa(self, make_plots=False, clobber=True):
