@@ -875,14 +875,11 @@ class Calc_XWSigma(MonitoringAlg):
                 ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
  
                 xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1
-,int(np.mean(xpix_peak1))])
+                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
                 xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2
-,int(np.mean(xpix_peak2))])
+                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
                 xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3
-,int(np.mean(xpix_peak3))])
+                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
 
                 xsigma1=np.abs(xpopt1[2])
                 wsigma1=np.abs(wpopt1[2])
@@ -895,8 +892,8 @@ class Calc_XWSigma(MonitoringAlg):
                 wsig=np.array([wsigma1,wsigma2,wsigma3])
                 xsigma_avg=np.mean(xsig)
                 wsigma_avg=np.mean(wsig)
-                xsigma.append(xsig)
-                wsigma.append(wsig)
+                xsigma.append(xsigma_avg)
+                wsigma.append(wsigma_avg)
  
             if camera[0]=="r":
                 peak_wave=np.array([r_peaks[0]-dw,r_peaks[0]+dw,r_peaks[1]-dw,r_peaks[1]+dw,r_peaks[2]-dw,r_peaks[2]+dw,r_peaks[3]-dw,r_peaks[3]+dw,r_peaks[4]-dw,r_peaks[4]+dw])
@@ -977,7 +974,6 @@ class Calc_XWSigma(MonitoringAlg):
 
                 xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4])
                 wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4])
-
                 xsigma_avg=np.mean(xsig)
                 wsigma_avg=np.mean(wsig)
                 xsigma.append(xsigma_avg)
