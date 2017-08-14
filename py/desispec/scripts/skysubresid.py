@@ -7,15 +7,15 @@ import numpy as np
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate QA on Sky Subtraction residuals")
+    parser = argparse.ArgumentParser(description="Generate QA on Sky Subtraction residuals [v1.2]")
     parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--expid', type=int, help='Generate exposure plot on given exposure')
     parser.add_argument('--night', type=str, help='Generate night plot on given night')
-    parser.add_argument('--nights', type=str, help='List of nights to include for prod plot')
     parser.add_argument('--channels', type=str, help='List of channels to include')
     parser.add_argument('--prod', default=False, action="store_true", help="Results for full production run")
     parser.add_argument('--gauss', default=False, action="store_true", help="Expore Gaussianity for full production run")
+    parser.add_argument('--nights', type=str, help='List of nights to limit prod plots')
 
     if options is None:
         args = parser.parse_args()
@@ -30,7 +30,7 @@ def main(args) :
     import glob
     from desispec.io import findfile
     from desispec.io import get_exposures
-    from desispec.io import get_files
+    from desispec.io import get_files, get_nights
     from desispec.io import read_frame
     from desispec.io import get_reduced_frames
     from desispec.io.sky import read_sky
@@ -49,11 +49,6 @@ def main(args) :
     else:
         specprod_dir = specprod_root()
 
-    # Nights
-    if args.nights is not None:
-        nights = [iarg for iarg in args.nights.split(',')]
-    else:
-        nights = None
 
     # Channels
     if args.channels is not None:
@@ -73,7 +68,7 @@ def main(args) :
         # Nights
         path_nights = glob.glob(specprod_dir+'/exposures/*')
         if nights is None:
-            nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
+            nights = get_nights()
         nights.sort()
         # Find the exposure
         for night in nights:
@@ -104,6 +99,11 @@ def main(args) :
         return
 
 
+    # Nights
+    if args.nights is not None:
+        nights = [iarg for iarg in args.nights.split(',')]
+    else:
+        nights = None
     # Full Prod Plot?
     if args.prod:
         from desispec.qa.qa_plots import skysub_resid_dual
@@ -117,6 +117,7 @@ def main(args) :
                 log.info("Plotting..")
                 skysub_resid_dual(sky_wave, sky_flux, sky_res,
                              outfile='skyresid_prod_dual_{:s}.png'.format(channel))
+        return
 
     # Full Prod Plot?
     if args.gauss:
@@ -134,3 +135,4 @@ def main(args) :
                 log.info("Plotting..")
                 skysub_gauss(sky_wave, sky_flux, sky_res, sky_ivar,
                                   outfile='skyresid_prod_gauss_{:s}.png'.format(channel))
+        return
