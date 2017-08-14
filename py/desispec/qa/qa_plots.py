@@ -97,6 +97,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     skymodel: SkyModel object
     qaframe: QAFrame object
     """
+    from desispec.sky import subtract_sky
 
     # Access metrics
     '''
@@ -108,6 +109,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     pchi2_med = scipy.stats.chisqprob(chi2_med, dof_wavg)
     '''
     skyfibers = np.array(qaframe.qa_data['SKYSUB']["METRICS"]["SKY_FIBERID"])
+    subtract_sky(frame, skymodel)
     res=frame.flux[skyfibers]
     res_ivar=frame.ivar[skyfibers]
     if quick_look:
@@ -119,7 +121,10 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
 
     # Plot
     fig = plt.figure(figsize=(8, 10.0))
-    gs = gridspec.GridSpec(4,2)
+    if quick_look:
+        gs = gridspec.GridSpec(4,2)
+    else:
+        gs = gridspec.GridSpec(2,2)
     xmin,xmax = np.min(frame.wave), np.max(frame.wave)
 
     # Simple residual plot
