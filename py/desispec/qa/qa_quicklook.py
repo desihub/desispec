@@ -857,7 +857,11 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_amp3=[]
         xsigma_amp4=[]
         wsigma_amp4=[]
-        for i in range(fibermap['FIBER'].shape[0]):
+        if fibermap['FIBER'].shape[0] >= 500:
+            fibers = 500
+        else:
+            fibers = fibermap['FIBER'].shape[0]
+        for i in range(fibers):
             if camera[0]=="b":
                 peak_wave=np.array([b_peaks[0]-dw,b_peaks[0]+dw,b_peaks[1]-dw,b_peaks[1]+dw,b_peaks[2]-dw,b_peaks[2]+dw])
  
