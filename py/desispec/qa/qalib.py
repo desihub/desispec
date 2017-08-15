@@ -459,52 +459,45 @@ def SNRFit(frame,params,fidboundary=None):
             else:
                 mags[ii]=magnitudes[fib][filters[fib]==thisfilter]
 
-        xs=mags.argsort()
-        x=mags[xs]
-        y=np.log10(medsnr[xs])
-        out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
-        qadict["%s_FITRESULTS"%T]=out # values,covMatrix
-        qadict["%s_FIDMAG_SNR"%T]=10**fitfunc(fmag,out[0][0],out[0][1],out[0][2])
-
-#        try:
-#            xs=mags.argsort()
-#            x=mags[xs]
-#            y=np.log10(medsnr[xs])
-#            out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
-#            #out=optimize.curve_fit(polyFun,x,y,p0=initialParams)
+        try:
+            xs=mags.argsort()
+            x=mags[xs]
+            y=np.log10(medsnr[xs])
+            out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
+            #out=optimize.curve_fit(polyFun,x,y,p0=initialParams)
 #            qadict["%s_FITRESULTS"%T]=np.array((out[0],out[1]))# values,covMatrix
-#            fmag.extend(out[0])
-#            qadict["%s_FIDMAG_SNR"%T]=10**fitfunc(fmag)
-#            #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
-#        except ValueError:
-#            print("SAMI ValueErr")
-#            log.warning("In fit of {}, data contain NANs! can't fit".format(T))
-#            vs=np.array(initialParams)
-#            vs.fill(np.nan)
-#            cov=np.empty((len(initialParams),len(initialParams)))
-#            cov.fill(np.nan)
-#            qadict["%s_FITRESULTS"%T]=[vs,cov]
-#            qadict["%s_FIDMAG_SNR"%T]=np.nan
-#        except RuntimeError:
-#            print("SAMI Runtime Err")
-#            log.warning("In fit of {}, Fit minimization failed!".format(T))
-#            vs=np.array(initialParams)
-#            vs.fill(np.nan)
-#            cov=np.empty((len(initialParams),len(initialParams)))
-#            cov.fill(np.nan)
-#            qadict["%s_FITRESULTS"%T]=[vs,cov]
-#            qadict["%s_FIDMAG_SNR"%T]=np.nan
-#        except scipy.optimize.OptimizeWarning:
-#            print("SAMI Optimize Warning")
-#            log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
-#            vs=out[0]
-#            cov=np.empty((len(initialParams),len(initialParams)))
-#            cov.fill(np.nan)
-#            qadict["%s_FITRESULTS"%T]=[vs,cov]
-#            qadict["%s_FIDMAG_SNR"%T]=np.nan
+            qadict["%s_FITRESULTS"%T]=out
+            qadict["%s_FIDMAG_SNR"%T]=10**fitfunc(fmag,*out[0])
+            #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
+        except ValueError:
+            log.warning("In fit of {}, data contain NANs! can't fit".format(T))
+            vs=np.array(initialParams)
+            vs.fill(np.nan)
+            cov=np.empty((len(initialParams),len(initialParams)))
+            cov.fill(np.nan)
+            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            qadict["%s_FIDMAG_SNR"%T]=np.nan
+        except RuntimeError:
+            log.warning("In fit of {}, Fit minimization failed!".format(T))
+            vs=np.array(initialParams)
+            vs.fill(np.nan)
+            cov=np.empty((len(initialParams),len(initialParams)))
+            cov.fill(np.nan)
+            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            qadict["%s_FIDMAG_SNR"%T]=np.nan
+        except scipy.optimize.OptimizeWarning:
+            log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
+            vs=out[0]
+            cov=np.empty((len(initialParams),len(initialParams)))
+            cov.fill(np.nan)
+            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            qadict["%s_FIDMAG_SNR"%T]=np.nan
             
         qadict["%s_FIBERID"%T]=fibers.tolist()
         qadict["%s_SNR_MAG"%T]=np.array((medsnr,mags))
+
+        qadict["RA"]=frame.fibermap['RA_TARGET']
+        qadict["DEC"]=frame.fibermap['DEC_TARGET']
 
     return qadict
 
