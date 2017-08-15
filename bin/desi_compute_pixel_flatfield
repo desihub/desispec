@@ -94,34 +94,30 @@ def median_image(image_filenames) :
     mimage=np.median(images,axis=0)
     return mimage
 
-def add_margins_to_image(image,margin) :
-    """ Adds a margin to the image with extrapolated values.
-    This is needed for Gaussian smoothing using FFTs
-
-    Args:
-        image : 2D array input image of shape (n0,n1)
-        margin : integer number >0
+def convolve2d(image,k) :
     
-    Returns:
-        larger : larger image of shape (n0+2*margin,n1*2*margin)
-    """
-    
-    if margin<=0 :
-        raise ValueError("margin must be >0")
-    larger=np.zeros((image.shape[0]+2*margin,image.shape[1]+2*margin))
-    larger[margin:-margin,margin:-margin]=image
-    eps=10
-    larger[:margin+1,margin:-margin]=np.tile(np.median(image[:eps,:],axis=0),(margin+1,1))
-    larger[-margin-1:,margin:-margin]=np.tile(np.median(image[-eps:,:],axis=0),(margin+1,1))
-    larger[margin:-margin,:margin+1]=np.tile(np.median(image[:,:eps],axis=1),(margin+1,1)).T
-    larger[margin:-margin,-margin-1:]=np.tile(np.median(image[:,-eps:],axis=1),(margin+1,1)).T
-    larger[:margin,:margin]=np.median(larger[:margin,margin])
-    larger[-margin:,:margin]=np.median(larger[-margin:,margin])
-    larger[-margin:,-margin:]=np.median(larger[-margin:,-margin-1])
-    larger[:margin,-margin:]=np.median(larger[:margin,-margin-1])
-    return larger
+    if len(k.shape) != 2 or len(image.shape) != 2:
+        raise ValueError("kernel and image should have 2 dimensions")
+    for d in range(2) :
+        if k.shape[d]<=1 or k.shape[d]-(k.shape[d]//2)*2 != 1 :
+            raise ValueError("kernel dimensions should both be odd and >1, and input as shape %s"%str(k.shape))
+    m0=k.shape[0]//2
+    m1=k.shape[1]//2
+    eps0=m0
+    eps1=m1
+    tmp=np.zeros((image.shape[0]+2*m0,image.shape[1]+2*m1))
+    tmp[m0:-m0,m1:-m1]=image
+    tmp[:m0+1,m1:-m1]=np.tile(np.median(image[:eps0,:],axis=0),(m0+1,1))
+    tmp[-m0-1:,m1:-m1]=np.tile(np.median(image[-eps0:,:],axis=0),(m0+1,1))
+    tmp[m0:-m0,:m1+1]=np.tile(np.median(image[:,:eps1],axis=1),(m1+1,1)).T
+    tmp[m0:-m0,-m1-1:]=np.tile(np.median(image[:,-eps1:],axis=1),(m1+1,1)).T
+    tmp[:m0,:m1]=np.median(tmp[:m0,m1])
+    tmp[-m0:,:m1]=np.median(tmp[-m0:,m1])
+    tmp[-m0:,-m1:]=np.median(tmp[-m0:,-m1-1])
+    tmp[:m0,-m1:]=np.median(tmp[:m0,-m1-1])
+    return scipy.signal.fftconvolve(tmp,k,"valid")
 
-def gaussian_smoothing_1d_per_axis(image,sigma,npass=2,dxdy=0,dydx=0) :
+def gaussian_smoothing_1d_per_axis(image,sigma,npass=2,dxdy=0.,dydx=0.) :
     """Computes a smooth model of the input image using two
     1D convolution with a Gaussian kernel of parameter sigma. 
     Can do several passes.
@@ -137,8 +133,8 @@ def gaussian_smoothing_1d_per_axis(image,sigma,npass=2,dxdy=0,dydx=0) :
     
     log=get_logger()
     hw=int(3*sigma)
-    tmp = add_margins_to_image(image,hw)
-    model = np.ones(tmp.shape)
+    tmp = image.copy()
+    model = np.ones(tmp.shape).astype(float)
 
     # single Gaussian profile
     u=(np.arange(2*hw+1)-hw)
@@ -155,20 +151,13 @@ def gaussian_smoothing_1d_per_axis(image,sigma,npass=2,dxdy=0,dydx=0) :
         kernel[:,1]=prof
         kernels.append(kernel)
     else :
-        # non trivial because of axis orientations
-        dxmax=int(hw*np.abs(dxdy))+1
-        n0=2*hw+1
-        n1=2*dxmax+1
-    
         x=u*dxdy
-        x2d=np.tile(x,(n1,1)).T
-        prof2d=np.tile(prof,(n1,1)).T
-        v2d=np.tile(np.arange(n1)-dxmax,(n0,1))
-        weight=1.-np.abs(x2d-v2d)
-        weight*=(weight>0)
-        kernel=prof2d*weight
+        i=(x+0.5*(x>0)-0.5*(x<0)).astype(int)
+        j=np.arange(2*hw+1)
+        hwb=max(1,np.max(np.abs(i)))
+        kernel=np.zeros((2*hw+1,2*hwb+1))
+        kernel[j,i+hwb]=prof
         kernels.append(kernel)
-    
     
     # axis 1
     if dydx==0 :
@@ -176,27 +165,31 @@ def gaussian_smoothing_1d_per_axis(image,sigma,npass=2,dxdy=0,dydx=0) :
         kernel[1,:]=prof
         kernels.append(kernel)
     else :
-        dymax=int(hw*np.abs(dydx))+1
-        n0=2*dymax+1
-        n1=2*hw+1
-    
         y=u*dydx
-        y2d=np.tile(y,(n0,1))
-        prof2d=np.tile(prof,(n0,1))
-        v2d=np.tile(np.arange(n0)-dymax,(n1,1)).T
-        weight=1.-np.abs(y2d-v2d)
-        weight*=(weight>0)
-        kernel=prof2d*weight
+        j=(y+0.5*(y>0)-0.5*(y<0)).astype(int)
+        i=np.arange(2*hw+1)
+        hwb=max(1,np.max(np.abs(j)))
+        kernel=np.zeros((2*hwb+1,2*hw+1))
+        kernel[j+hwb,i]=prof
         kernels.append(kernel)
-    
     
     for p in range(npass) : # possibly do several passes
         for a in range(2) : # convolve in 1d on each axis
-            log.debug("p=%d a=%d"%(p,a))
-            res=scipy.signal.fftconvolve(tmp,kernels[a],"same")
+            #log.debug("p=%d a=%d"%(p,a))
+            res=convolve2d(tmp,kernels[a])
             model *= res
             tmp /= (res+(res==0))
-    return model[hw:-hw,hw:-hw]
+
+    if 1 : # add 2D smoothing (does not help)
+        x=np.tile((np.arange(2*hw+1)-hw)/sigma,(2*hw+1,1))
+        r2=x**2+x.T**2    
+        kernel2d=np.exp(-r2/2.)
+        kernel2d/=np.sum(kernel2d)
+        res = convolve2d(tmp,kernel2d)
+        model *= res
+    
+    return model
+
     
 def gaussian_smoothing_1d_with_tilted_axes(image,sigma,npass,x,y,dxdy,dydx,nblocks=5) :
     """Computes a smooth model of the input image using two
@@ -214,16 +207,30 @@ def gaussian_smoothing_1d_with_tilted_axes(image,sigma,npass,x,y,dxdy,dydx,nbloc
     if x is None or nblocks==1 :
         return gaussian_smoothing_1d_per_axis(image,sigma,npass=npass,dxdy=0,dydx=0)
     
+    
     # defining blocks where trace directions are averaged
     b0size=image.shape[0]//nblocks
     b1size=image.shape[1]//nblocks
     
+    # blocks begin and end coordinates
     b0=b0size*np.arange(nblocks)
     e0=b0+b0size
     e0[-1]=image.shape[0]
     b1=b1size*np.arange(nblocks)
     e1=b1+b1size
     e1[-1]=image.shape[1]
+    
+    # blocks begin and end coordinates with margins
+    hw=int(3*sigma)
+    b0m = b0-hw    
+    e0m = e0+hw
+    b1m = b1-hw
+    e1m = e1+hw
+    b0m[b0m<0]=0
+    e0m[e0m>image.shape[0]]=image.shape[0]
+    b1m[b1m<0]=0
+    e1m[e1m>image.shape[1]]=image.shape[1]
+    
     
     # average trace direction per block
     bdxdy=np.zeros((nblocks,nblocks))
@@ -236,16 +243,20 @@ def gaussian_smoothing_1d_with_tilted_axes(image,sigma,npass,x,y,dxdy,dydx,nbloc
                 bdxdy[i,j]=np.mean(dxdy[mask])
                 bdydx[i,j]=np.mean(dydx[mask])
             
-            log.debug("Block %d,%d n psf points=%d dxdy=%f dydx=%f"%(i,j,np.sum(mask),bdxdy[i,j],bdydx[i,j]))
+            #log.debug("Block %d,%d n psf points=%d dxdy=%f dydx=%f"%(i,j,np.sum(mask),bdxdy[i,j],bdydx[i,j]))
     
     model=np.zeros(image.shape)
     for i in range(nblocks) :
-        for j in range(nblocks) : 
-            # fast, but with edge issues
-            #model[b0[i]:e0[i],b1[j]:e1[j]] = gaussian_smoothing_1d_per_axis(image[b0[i]:e0[i],b1[j]:e1[j]],sigma,npass=npass,dxdy=bdxdy[i,j],dydx=bdydx[i,j])
-            # slower, but without edge issues
-            model = gaussian_smoothing_1d_per_axis(image,sigma,npass=npass,dxdy=bdxdy[i,j],dydx=bdydx[i,j])[b0[i]:e0[i],b1[j]:e1[j]]
+        for j in range(nblocks) :
+            log.info("calling gaussian_smoothing_1d_per_axis for block (%d,%d)"%(i,j))
+            block_sigma = sigma
+            if False :
+                if (i==0 and j==0) or (i==0 and j==(nblocks-1)) or  (i==(nblocks-1) and j==(nblocks-1)) or (i==(nblocks-1) and j==0) :
+                    block_sigma = sigma/2.
+                    log.info("Using lower sigma for edge blocks (%d,%d) = %f"%(i,j,block_sigma))
             
+            model[b0[i]:e0[i],b1[j]:e1[j]] = gaussian_smoothing_1d_per_axis(image[b0m[i]:e0m[i],b1m[j]:e1m[j]],sigma=block_sigma,npass=npass,dxdy=bdxdy[i,j],dydx=bdydx[i,j])[b0[i]-b0m[i]:,b1[j]-b1m[j]:][:e0[i]-b0[i],:e1[j]-b1[j]]
+    
     return model
     
 
@@ -261,14 +272,11 @@ def gaussian_smoothing_2d(image,sigma) :
         model : 2D array image of same shape as image
     """
     hw=int(3*sigma)
-    tmp = add_margins_to_image(image,hw)
-    model = np.ones(tmp.shape)
-    
     x=np.tile((np.arange(2*hw+1)-hw)/sigma,(2*hw+1,1))
     r2=x**2+x.T**2    
     kernel=np.exp(-r2/2.)
     kernel/=np.sum(kernel)
-    return scipy.signal.fftconvolve(tmp,kernel,"same")[hw:-hw,hw:-hw]
+    return convolve2d(image,kernel)
 
     
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -280,7 +288,13 @@ parser.add_argument('-i','--images', type = str, nargs='*', default = None, requ
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'output flatfield image filename')
 parser.add_argument('--sigma', type = int, default = 60 , required = False, 
-                    help = "gaussian smoothing sigma (default is tuned on teststand data")
+                    help = "gaussian smoothing sigma (default is tuned on teststand data)")
+parser.add_argument('--npass1', type = int, default = 2 , required = False, 
+                    help = "number of iterations in gaussian smoothing 1")
+parser.add_argument('--npass2', type = int, default = 6 , required = False, 
+                    help = "number of iterations in gaussian smoothing 2")
+parser.add_argument('--nblocks', type = int, default = 4 , required = False, 
+                    help = "number of blocks along one axis (total number of blocks is the square) where the trace orientations are averaged (to use in combination with --psf option otherwise ignored)")
 parser.add_argument('--out-median', type = str, default = None , required = False, help = "save output median image (for development)")
 parser.add_argument('--psf', type = str, default = None , required = False, help = "use traces in this PSF to orient 1D convolutions")
 
@@ -303,40 +317,81 @@ else :
     dxdy=None
     dydx=None
 
+
+
 log.info("first gaussian smoothing")
-model=gaussian_smoothing_1d_with_tilted_axes(image,args.sigma,2,x,y,dxdy,dydx)
+model=gaussian_smoothing_1d_with_tilted_axes(image,sigma=args.sigma,npass=args.npass1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
 
 nsloop=2
 for sloop in range(nsloop) :
-    log.info("compute mask using a temporary flat %d/%d"%(sloop,nsloop))
+    log.info("compute mask using a temporary flat %d/%d"%(sloop+1,nsloop))
+    
+    log.info("estimate variance")
+    r_model=model.ravel()
+    ok=(r_model>-100)&(r_model<5000)
+    h0,bins=np.histogram(r_model[ok],bins=15)
+    hx,junk=np.histogram(r_model[ok],weights=r_model[ok],bins=bins)
+    valid=np.where(h0>50)[0]# cut on min number of pixels per flux bin
+    if valid.size < 4 :
+        log.warning("cannot measure variance, use guess")
+        var = 1.+model*(model>0)
+    else :
+        flux=hx[valid]/h0[valid]
+        var_of_flux=np.zeros(valid.size)
+        r_res=image.ravel()-r_model
+        for i,j in enumerate(valid) :
+            var_of_flux[i] = (1.48*np.median(np.abs(r_res[(r_model>=bins[j])&(r_model<bins[j+1])])))**2
+        c=np.polyfit(flux,var_of_flux,1)
+        var = c[0]*model+c[1]
+        log.info("var = %f + %f*flux"%(c[1],c[0]))
+        if c[1]<1. :
+            c[1]=1
+            log.warning("forcing var(flux=0)=%f"%c[1])
+        #import matplotlib.pyplot as plt
+        #pol=np.poly1d(c)
+        #err = var_of_flux*np.sqrt(2./h0[valid])
+        #plt.errorbar(flux,var_of_flux,err,fmt="o")
+        #plt.plot(flux,pol(flux),"-")
+        #plt.show()
+    
     flat=(model>0)*image/(model+(model==0))
     flat+=(model<=0)
-    flaterr=np.sqrt(1.+model*(model>0))/(model+(model==0))
+    flaterr=np.sqrt(var)/(model+(model==0))
     rms=np.abs(flat-1)/flaterr
     srms=gaussian_smoothing_2d(rms,10.)
     mask=(srms>1.)|(rms>3.)
+    
+    # DEBUG
+    pyfits.writeto("mask-%d.fits"%sloop,mask.astype(int),clobber=True)
+    pyfits.writeto("tmp-flat-%d.fits"%sloop,flat,clobber=True)
+    
     log.info("number of masked pixels=%d"%np.sum(mask.astype(int)))
     if 1 :
-        log.info("replace masked pixels by model %d/%d"%(sloop,nsloop))
-        nloop=6
-        for loop in range(nloop) :
-            log.debug("pass %d/%d"%(loop,nloop))
+        log.info("replace masked pixels by model %d/%d"%(sloop+1,nsloop))
+        for loop in range(args.npass2) :
+            log.debug("pass %d/%d"%(loop+1,args.npass2))
             tmp_image=image*(mask==0)+model*(mask>0)
-            model=gaussian_smoothing_1d_with_tilted_axes(tmp_image,args.sigma,1,x,y,dxdy,dydx)
+            model=gaussian_smoothing_1d_with_tilted_axes(tmp_image,sigma=args.sigma,npass=1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
 
-if 0 :        
+if True :        
     log.info("last gaussian smoothing, per quadrant, to remove residual gain difference")
     n0=tmp_image.shape[0]//2
     n1=tmp_image.shape[1]//2
     model=np.zeros(tmp_image.shape)
-    model[:n0,:n1]=gaussian_smoothing_1d_with_tilted_axes(tmp_image[:n0,:n1],args.sigma,2,x,y,dxdy,dydx)
-    model[n0:,:n1]=gaussian_smoothing_1d_with_tilted_axes(tmp_image[n0:,:n1],args.sigma,2,x,y,dxdy,dydx)
-    model[n0:,n1:]=gaussian_smoothing_1d_with_tilted_axes(tmp_image[n0:,n1:],args.sigma,2,x,y,dxdy,dydx)
-    model[:n0,n1:]=gaussian_smoothing_1d_with_tilted_axes(tmp_image[:n0,n1:],args.sigma,2,x,y,dxdy,dydx)
+    if args.nblocks == 1 :
+        nblocks=1
+    else :
+        nblocks=args.nblocks//2
+    model[:n0,:n1]=gaussian_smoothing_1d_with_tilted_axes(tmp_image[:n0,:n1],sigma=args.sigma,npass=args.npass1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=nblocks)
+    model[n0:,:n1]=gaussian_smoothing_1d_with_tilted_axes(tmp_image[n0:,:n1],sigma=args.sigma,npass=args.npass1,x=x,y=y-n0,dxdy=dxdy,dydx=dydx,nblocks=nblocks)
+    model[n0:,n1:]=gaussian_smoothing_1d_with_tilted_axes(tmp_image[n0:,n1:],sigma=args.sigma,npass=args.npass1,x=x-n1,y=y-n0,dxdy=dxdy,dydx=dydx,nblocks=nblocks)
+    model[:n0,n1:]=gaussian_smoothing_1d_with_tilted_axes(tmp_image[:n0,n1:],sigma=args.sigma,npass=args.npass1,x=x-n1,y=y,dxdy=dxdy,dydx=dydx,nblocks=nblocks)
 else :
-    log.info("last gaussian smoothing")
-    model=gaussian_smoothing_1d_with_tilted_axes(tmp_image,args.sigma,2,x,y,dxdy,dydx)
+    log.info("last gaussian smoothing (not per quadrant)")
+    model=gaussian_smoothing_1d_with_tilted_axes(tmp_image,sigma=args.sigma,npass=args.npass1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
     
+
+
 
 flat=(model>0)*image/(model+(model==0))
 flat+=(model<=0)
