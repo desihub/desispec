@@ -6,12 +6,12 @@ import numpy as np
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.3]")
+    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.4]")
 
     parser.add_argument('--reduxdir', type = str, default = None, required=False,
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--make_frameqa', type = int, default = 0,
-                        help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')
+                        help = 'Bitwise flag to control remaking the QA files (1) figures (2) and html (4) for each frame in the production')
     parser.add_argument('--slurp', default = False, action='store_true',
                         help = 'slurp production QA files into one?')
     parser.add_argument('--remove', default = False, action='store_true',
@@ -34,6 +34,7 @@ def parse(options=None):
 def main(args) :
 
     from desispec.qa import QA_Prod
+    from desispec.qa import html
     from desiutil.log import get_logger
     from desispec.io import meta
 
@@ -56,7 +57,12 @@ def main(args) :
         else:
             make_frame_plots = False
         # Run
-        qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
+        if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
+            qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
+        # HTML?
+        if (args.make_frameqa & 2**2):
+            html.calib()
+            html.make_exposures()
 
     # Slurp?
     if args.slurp:
