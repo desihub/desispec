@@ -18,6 +18,7 @@ from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 
 from desispec import util
+from desispec.io import makepath
 
 from desiutil.plots import plot_slices as du_pslices
 
@@ -311,6 +312,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    outfile = makepath(outfil)
     plt.savefig(outfil)
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
@@ -364,6 +366,7 @@ def exposure_fluxcalib(outfil, qa_data):
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    _ = makepath(outfil)
     plt.savefig(outfil)
     plt.close()
     print('Wrote QA FluxCalib Exposure file: {:s}'.format(outfil))
@@ -446,6 +449,7 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    _ = makepath(outfil)
     plt.savefig(outfil)
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
@@ -534,6 +538,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    _ = makepath(outfil)
     plt.savefig(outfil)
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))

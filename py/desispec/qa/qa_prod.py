@@ -242,7 +242,7 @@ class QA_Prod(object):
                 # Append
                 self.qa_exps.append(qa_exp)
         # Write
-        outroot = self.specprod_dir+'/'+self.prod_name+'_qa'
+        outroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
         write_qa_prod(outroot, self)
 
     def __repr__(self):
