@@ -270,3 +270,41 @@ def make_exposure(night, expid):
 
     # Return
     return links, body
+
+
+
+def toplevel():
+    """ Generate HTML to top level QA
+
+    Parameters
+    ----------
+    setup : str
+    cbset : str
+    det : int
+
+    Returns
+    -------
+    links : str
+    body : str
+
+    """
+    # Organized HTML
+    html_file = meta.findfile('qa_toplevel_html')
+    html_path,_ = os.path.split(html_file)
+    f = open(html_file, 'w')
+    init(f, 'Top Level QA')
+
+    # Calib?
+    calib2d_file = meta.findfile('qa_calib_html')
+    if os.path.exists(calib2d_file):
+        f.write('<h2><a href="{:s}">Calibration QA</a></h2>\n'.format(calib2d_file))
+    # Exposures?
+    exposures_file = meta.findfile('qa_exposures_html')
+    if os.path.exists(exposures_file):
+        f.write('<h2><a href="{:s}">Exposures QA</a></h2>\n'.format(exposures_file))
+
+    # Finish
+    finish(f,'')
+
+    # Return
+    return

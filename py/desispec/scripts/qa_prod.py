@@ -59,10 +59,11 @@ def main(args) :
         # Run
         if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
             qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
-        # HTML?
-        if (args.make_frameqa & 2**2):
+        # HTML
+        if args.make_frameqa & 2**2:
             html.calib()
             html.make_exposures()
+            html.toplevel()
 
     # Slurp?
     if args.slurp:
