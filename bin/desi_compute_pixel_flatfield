@@ -280,7 +280,11 @@ def gaussian_smoothing_2d(image,sigma) :
 
     
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-description="Compute a pixel level flat field image from a set of preprocessed images obtained with the pixel flatfield slit."
+description="""Computes a pixel level flat field image from a set of preprocessed images obtained with the flatfield slit.
+A median image is computed if several preprocessed images are given. 
+The method consists in iteratively dividing the median or input image by a smoothed version of the same image, flat(n+1) = flat(n)/smoothing(flat(n)).
+The smoothing consists in 1D FFT Gaussian convolution along the wavelength dispersion axis or the fiber axis alternatively. A masking of outliers is performed to avoid tails around CCD defects. The trace orientations is obtained from an input PSF file, and the orientations are averaged in blocks (the number of blocks is a parameter). Optionally the modeling can be performed per CCD amplifier to correct for gain mismatch (possibly due to non-linearities). The method fails in areas where the illumination pattern varies in both directions at a scale smaller than the sigma value, but the sigma value is also limited by the maximum size of the CCD defects to be captured in the flat.
+"""
 )
 
 parser.add_argument('-i','--images', type = str, nargs='*', default = None, required = True,
@@ -297,6 +301,7 @@ parser.add_argument('--nblocks', type = int, default = 4 , required = False,
                     help = "number of blocks along one axis (total number of blocks is the square) where the trace orientations are averaged (to use in combination with --psf option otherwise ignored)")
 parser.add_argument('--out-median', type = str, default = None , required = False, help = "save output median image (for development)")
 parser.add_argument('--psf', type = str, default = None , required = False, help = "use traces in this PSF to orient 1D convolutions")
+parser.add_argument('--per-amplifier', action = 'store_true', default = None , required = False, help = "solve model per amplifier if gains are uncertain or non-linarities")
 
 args        = parser.parse_args()
 log = get_logger()
@@ -361,6 +366,23 @@ for sloop in range(nsloop) :
     srms=gaussian_smoothing_2d(rms,10.)
     mask=(srms>1.)|(rms>3.)
     
+    # remove from mask regions with important model gradient
+    grad=np.zeros(model.shape)
+    grad[1:-1]=np.abs(model[2:]-model[:-2])
+    grad[:,1:-1]+=np.abs(model[:,2:]-model[:,:-2])
+    grad/=(model+(model==0))
+    mask[grad>0.2]=0
+    
+    # do not mask edges
+    mask[0,:]=0 ; mask[:,0]=1 ; mask[-1,:]=1 ; mask[:,-1]=1
+    if args.per_amplifier :
+        log.info("do not mask amp. boundaries")
+        mask[image.shape[0]//2-2:image.shape[0]//2+3]=0
+        mask[:,image.shape[1]//2-2:image.shape[1]//2+3]=0
+    
+    
+    
+
     # DEBUG
     pyfits.writeto("mask-%d.fits"%sloop,mask.astype(int),clobber=True)
     pyfits.writeto("tmp-flat-%d.fits"%sloop,flat,clobber=True)
@@ -373,7 +395,7 @@ for sloop in range(nsloop) :
             tmp_image=image*(mask==0)+model*(mask>0)
             model=gaussian_smoothing_1d_with_tilted_axes(tmp_image,sigma=args.sigma,npass=1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
 
-if True :        
+if args.per_amplifier :        
     log.info("last gaussian smoothing, per quadrant, to remove residual gain difference")
     n0=tmp_image.shape[0]//2
     n1=tmp_image.shape[1]//2
