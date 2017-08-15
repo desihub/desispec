@@ -7,6 +7,7 @@ IO routines for QA
 from __future__ import print_function, absolute_import, division
 
 import os, yaml
+import json
 
 from desiutil.io import yamlify
 
@@ -125,7 +126,7 @@ def write_qa_brick(outfile, qabrick):
     return outfile
 
 
-def write_qa_frame(outfile, qaframe):
+def write_qa_frame(outfile, qaframe, verbose=False):
     """Write QA for a given frame
 
     Args:
@@ -134,6 +135,7 @@ def write_qa_frame(outfile, qaframe):
         qa_exp : QA_Frame object, with the following attributes
             qa_data: dict of QA info
     """
+    log=get_logger()
     outfile = makepath(outfile, 'qa')
 
     # Generate the dict
@@ -143,6 +145,8 @@ def write_qa_frame(outfile, qaframe):
     # Simple yaml
     with open(outfile, 'w') as yamlf:
         yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+    if verbose:
+        log.info("Wrote QA frame file: {:s}".format(outfile))
 
     return outfile
 
@@ -162,6 +166,7 @@ def write_qa_exposure(outroot, qaexp, ret_dict=False):
     # Generate the dict
     odict = {qaexp.night: {qaexp.expid: {}}}
     odict[qaexp.night][qaexp.expid]['flavor'] = qaexp.flavor
+    odict[qaexp.night][qaexp.expid]['meta'] = qaexp.meta
     cameras = list(qaexp.data['frames'].keys())
     for camera in cameras:
         odict[qaexp.night][qaexp.expid][camera] = qaexp.data['frames'][camera]
@@ -188,15 +193,16 @@ def load_qa_prod(inroot):
         odict : dict
     """
     log=get_logger()
-    infile = inroot+'.yaml'
+    infile = inroot+'.json'
     log.info("Loading QA prod file: {:s}".format(infile))
     # Read
-    odict = read_qa_data(infile)
+    with open(infile, 'rt') as fh:
+        odict = json.load(fh)
     # Return
     return odict
 
 
-def write_qa_prod(outroot, qaprod):
+def write_qa_prod(outroot, qaprod, indent=True):
     """Write QA for a given production
 
     Args:
@@ -205,11 +211,12 @@ def write_qa_prod(outroot, qaprod):
         qa_prod : QA_Prod object
 
     Returns:
-        outfile or odict : str or dict
+        outfile: str
+          output filename
     """
     from desiutil.io import combine_dicts
     log=get_logger()
-    outfile = outroot+'.yaml'
+    outfile = outroot+'.json'
     outfile = makepath(outfile, 'qa')
 
     # Loop on exposures
@@ -218,10 +225,10 @@ def write_qa_prod(outroot, qaprod):
         # Get the exposure dict
         idict = write_qa_exposure('foo', qaexp, ret_dict=True)
         odict = combine_dicts(odict, idict)
-    ydict = yamlify(odict)
-    # Simple yaml
-    with open(outfile, 'w') as yamlf:
-        yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+    ydict = yamlify(odict)  # This works well for JSON too
+    # Simple json
+    with open(outfile, 'wt') as fh:
+        json.dump(ydict, fh, indent=indent)
     log.info('Wrote QA_Prod file: {:s}'.format(outfile))
 
     return outfile

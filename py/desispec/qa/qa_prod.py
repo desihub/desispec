@@ -5,10 +5,13 @@ from __future__ import print_function, absolute_import, division
 
 import numpy as np
 import glob, os
+import warnings
 
 from desispec.io import get_exposures
 from desispec.io import get_files
 from desispec.io import read_frame
+from desispec.io import read_meta_frame
+from desispec.io import specprod_root
 
 from desiutil.log import get_logger
 
@@ -16,7 +19,7 @@ from desiutil.log import get_logger
 
 
 class QA_Prod(object):
-    def __init__(self, specprod_dir):
+    def __init__(self, specprod_dir=None):
         """ Class to organize and execute QA for a DESI production
 
         Args:
@@ -29,6 +32,8 @@ class QA_Prod(object):
               List of QA_Exposure classes, one per exposure in production
             data : dict
         """
+        if specprod_dir is None:
+            specprod_dir = specprod_root()
         self.specprod_dir = specprod_dir
         tmp = specprod_dir.split('/')
         self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
@@ -36,8 +41,8 @@ class QA_Prod(object):
         #
         self.data = {}
 
-    def get_qa_array(self, qatype, metric, nights='all', channels='all'):
-        """ Generate an array of QA values from .data
+    def get_qa_table(self, qatype, metric, nights='all', channels='all'):
+        """ Generate a table of QA values from .data
         Args:
             qatype: str
               FIBERFLAT, SKYSUB
@@ -47,13 +52,13 @@ class QA_Prod(object):
               'b', 'r', 'z'
 
         Returns:
-            array: ndarray
-            ne_dict: dict
-              dict of nights and exposures contributing to the array
+            qa_tbl: Table
         """
-        import pdb
+        from astropy.table import Table
         out_list = []
-        ne_dict = {}
+        out_expid = []
+        out_expmeta = []
+        out_cameras = []
         # Nights
         for night in self.data:
             if (night not in nights) and (nights != 'all'):
@@ -61,8 +66,9 @@ class QA_Prod(object):
             # Exposures
             for expid in self.data[night]:
                 # Cameras
+                exp_meta = self.data[night][expid]['meta']
                 for camera in self.data[night][expid]:
-                    if camera == 'flavor':
+                    if camera in ['flavor', 'meta']:
                         continue
                     if (camera[0] not in channels) and (channels != 'all'):
                         continue
@@ -72,26 +78,36 @@ class QA_Prod(object):
                     except KeyError:  # Each exposure has limited qatype
                         pass
                     except TypeError:
-                        pdb.set_trace()
+                        import pdb; pdb.set_trace()
                     else:
                         if isinstance(val, (list,tuple)):
                             out_list.append(val[0])
                         else:
                             out_list.append(val)
-                        # dict
-                        if night not in ne_dict:
-                            ne_dict[night] = []
-                        if expid not in ne_dict[night]:
-                            ne_dict[night].append(expid)
-        # Return
-        return np.array(out_list), ne_dict
+                        # Meta data
+                        out_expid.append(expid)
+                        out_cameras.append(camera)
+                        out_expmeta.append(exp_meta)
+        # Return Table
+        qa_tbl = Table()
+        qa_tbl[metric] = out_list
+        qa_tbl['EXPID'] = out_expid
+        qa_tbl['CAMERA'] = out_cameras
+        # Add expmeta
+        for key in out_expmeta[0].keys():
+            tmp_list = []
+            for exp_meta in out_expmeta:
+                tmp_list.append(exp_meta[key])
+            qa_tbl[key] = tmp_list
+        return qa_tbl
 
-    def load_data(self):
+    def load_data(self, inroot=None):
         """ Load QA data from disk
         """
         from desispec.io.qa import load_qa_prod
         #
-        inroot = self.specprod_dir+'/'+self.prod_name+'_qa'
+        if inroot is None:
+            inroot = self.specprod_dir+'/'+self.prod_name+'_qa'
         self.data = load_qa_prod(inroot)
 
     def make_frameqa(self, make_plots=False, clobber=True):
@@ -124,9 +140,9 @@ class QA_Prod(object):
                         expid = exposure, specprod_dir = self.specprod_dir)
                 for camera,frame_fil in frames_dict.items():
                     # Load frame
-                    frame = read_frame(frame_fil)
-                    spectro = int(frame.meta['CAMERA'][-1])
-                    if frame.meta['FLAVOR'] in ['flat','arc']:
+                    frame_meta = read_meta_frame(frame_fil)  # Only meta to speed it up
+                    spectro = int(frame_meta['CAMERA'][-1])
+                    if frame_meta['FLAVOR'] in ['flat','arc']:
                         qatype = 'qa_calib'
                     else:
                         qatype = 'qa_data'
@@ -134,8 +150,13 @@ class QA_Prod(object):
                     if (not clobber) & os.path.isfile(qafile):
                         log.info("qafile={:s} exists.  Not over-writing.  Consider clobber=True".format(qafile))
                         continue
+                    else:  # Now the full read
+                        frame = read_frame(frame_fil)
                     # Load
-                    qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+                    try:
+                        qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
+                    except AttributeError:
+                        import pdb; pdb.set_trace
                     # Flat QA
                     if frame.meta['FLAVOR'] in ['flat']:
                         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
@@ -148,23 +169,35 @@ class QA_Prod(object):
                     # SkySub QA
                     if qatype == 'qa_data':
                         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                        skymodel = read_sky(sky_fil)
-                        qaframe.run_qa('SKYSUB', (frame, skymodel))
-                        if make_plots:
-                            qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                            qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
+                        try:
+                            skymodel = read_sky(sky_fil)
+                        except FileNotFoundError:
+                            warnings.warn("Sky file {:s} not found.  Skipping..".format(sky_fil))
+                        else:
+                            qaframe.run_qa('SKYSUB', (frame, skymodel))
+                            if make_plots:
+                                qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                                qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
                     # FluxCalib QA
                     if qatype == 'qa_data':
                         # Standard stars
                         stdstar_fil = meta.findfile('stdstars', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir,
                                                     spectrograph=spectro)
-                        model_tuple=read_stdstar_models(stdstar_fil)
+                        #try:
+                        #    model_tuple=read_stdstar_models(stdstar_fil)
+                        #except FileNotFoundError:
+                        #    warnings.warn("Standard star file {:s} not found.  Skipping..".format(stdstar_fil))
+                        #else:
                         flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                        fluxcalib = read_flux_calibration(flux_fil)
-                        qaframe.run_qa('FLUXCALIB', (frame, fluxcalib, model_tuple))#, indiv_stars))
-                        if make_plots:
-                            qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                            qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib, model_tuple)
+                        try:
+                            fluxcalib = read_flux_calibration(flux_fil)
+                        except FileNotFoundError:
+                            warnings.warn("Flux file {:s} not found.  Skipping..".format(flux_fil))
+                        else:
+                            qaframe.run_qa('FLUXCALIB', (frame, fluxcalib)) #, model_tuple))#, indiv_stars))
+                            if make_plots:
+                                qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
+                                qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)#, model_tuple)
                     # Write
                     write_qa_frame(qafile, qaframe)
 
@@ -179,10 +212,8 @@ class QA_Prod(object):
         Returns:
 
         """
-        from desispec.io import meta
         from desispec.qa import QA_Exposure
         from desispec.io import write_qa_prod
-        import pdb
         log = get_logger()
         # Remake?
         if make_frameqa:
@@ -201,12 +232,13 @@ class QA_Prod(object):
                                         expid = exposure, specprod_dir = self.specprod_dir)
                 if len(frames_dict) == 0:
                     continue
-                # Load any frame (for the type)
+                # Load any frame (for the type and meta info)
                 key = list(frames_dict.keys())[0]
                 frame_fil = frames_dict[key]
-                frame = read_frame(frame_fil)
-                qa_exp = QA_Exposure(exposure, night, frame.meta['FLAVOR'],
-                                         specprod_dir=self.specprod_dir, remove=remove)
+                frame_meta = read_meta_frame(frame_fil)
+                qa_exp = QA_Exposure(exposure, night, frame_meta['FLAVOR'],
+                                     specprod_dir=self.specprod_dir, remove=remove)
+                qa_exp.load_meta(frame_meta)
                 # Append
                 self.qa_exps.append(qa_exp)
         # Write

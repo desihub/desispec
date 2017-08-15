@@ -248,8 +248,8 @@ def read_ccd_calibration(header, primary_header, filename) :
             continue
         if "DATE-OBS-END" in data[version] and data[version]["DATE-OBS-END"].lower() != "none" :
             dateend=int(data[version]["DATE-OBS-END"])
-            if dateobs >= dateend :
-                log.info("Skip version %s with DATE-OBS-END=%d <= DATE-OBS=%d"%(version,datebegin,dateobs))
+            if dateobs > dateend :
+                log.info("Skip version %s with DATE-OBS-END=%d < DATE-OBS=%d"%(version,datebegin,dateobs))
                 continue
         if detector != data[version]["DETECTOR"].strip() :
             log.info("Skip version %s with DETECTOR=%s != %s"%(version,data[version]["DETECTOR"],detector))

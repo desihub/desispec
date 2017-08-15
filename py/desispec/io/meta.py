@@ -18,7 +18,7 @@ from .util import healpix_subdirectory
 
 
 def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
-    nside=None, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
+    nside=64, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
     download=False, outdir=None):
     """Returns location where file should be
 
@@ -99,23 +99,19 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         psfboot = '{specprod_dir}/calib2d/psf/{night}/psfboot-{camera}.fits',
         fibermap = '{rawdata_dir}/{night}/fibermap-{expid:08d}.fits',
         zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
+        spectra = '{specprod_dir}/spectra-{nside}/{hpixdir}/spectra-{nside}-{groupname}.fits',
+        coadd = '{specprod_dir}/spectra-{nside}/{hpixdir}/coadd-{nside}-{groupname}.fits',
+        zbest = '{specprod_dir}/spectra-{nside}/{hpixdir}/zbest-{nside}-{groupname}.fits',
+        # location["zspec"] = '{specprod_dir}/spectra/{hpixdir}/zspec-{nside}-{hpix}.fits',
     )
     location['desi'] = location['raw']
 
-    hpixdir = None
-    if nside is not None:
+    if groupname is not None:
         hpix = int(groupname)
         hpixdir = healpix_subdirectory(nside, hpix)
-        location["spectra"] = '{specprod_dir}/spectra-{nside}/{hpixdir}/spectra-{nside}-{groupname}.fits'
-        location["coadd"] = '{specprod_dir}/spectra-{nside}/{hpixdir}/coadd-{nside}-{groupname}.fits'
-        location["zbest"] = '{specprod_dir}/spectra-{nside}/{hpixdir}/zbest-{nside}-{groupname}.fits'
-        #location["zspec"] = '{specprod_dir}/spectra/{hpixdir}/zspec-{nside}-{hpix}.fits'
     else:
-        location["brick"] = '{specprod_dir}/bricks/{groupname}/brick-{band}-{groupname}.fits'
-        location["coadd"] = '{specprod_dir}/bricks/{groupname}/coadd-{band}-{groupname}.fits'
-        location["coadd_all"] = '{specprod_dir}/bricks/{groupname}/coadd-{groupname}.fits'
-        location["zbest"] = '{specprod_dir}/bricks/{groupname}/zbest-{groupname}.fits'
-        #location["zspec"] = '{specprod_dir}/bricks/{brickname}/zspec-{brickname}.fits'
+        #- set to anything so later logic will trip on groupname not hpixdir
+        hpixdir = 'hpix'
 
     #- Do we know about this kind of file?
     if filetype not in location:
@@ -140,7 +136,8 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         'specprod_dir':specprod_dir, 'specprod':specprod,
         'night':night, 'expid':expid, 'camera':camera, 'groupname':groupname,
         'nside':nside, 'hpixdir':hpixdir, 'band':band, 
-        'spectrograph':spectrograph
+        'spectrograph':spectrograph,
+        'hpixdir':hpixdir,
         }
 
     if 'rawdata_dir' in required_inputs:
@@ -301,6 +298,59 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
                 pass
 
     return sorted(exposures)
+
+
+def get_reduced_frames(channels=['b','r','z'], nights=None, ftype='cframe'):
+    """ Loops through a production to find all reduced frames (default is cframes)
+    One can choose a subset of reduced frames by argument
+    Args:
+        channels: list, optional
+        nights: list, optional
+        ftype: str, optional
+
+    Returns:
+        all_frames: list for frame filenames
+
+    """
+    all_frames = []
+    # Nights
+    if nights is None:
+        nights = get_nights()
+    # Loop on night
+    for night in nights:
+        exposures = get_exposures(night)
+        for exposure in exposures:
+            frames_dict = get_files(filetype=ftype, night=night, expid=exposure)
+            # Restrict on channel
+            for key in frames_dict.keys():
+                for channel in channels:
+                    if channel in key:
+                        all_frames.append(frames_dict[key])
+    # Return
+    return all_frames
+
+
+def get_nights(strip_path=True, specprod_dir=None):
+    """
+    Args:
+        strip_path:  bool, optional; Strip the path to the nights folders
+        rawdata_dir:
+        specprod_dir:
+
+    Returns:
+        nights: list of nights (without or with paths)
+    """
+    # Init
+    if specprod_dir is None:
+        specprod_dir = specprod_root()
+    # Glob for nights
+    exp_path = os.path.join(specprod_dir,'exposures')
+    nights_path = glob.glob(exp_path+'/*')
+    # Strip off path?
+    if strip_path:
+        return [night_path.split('/')[-1] for night_path in nights_path]
+    else:
+        return nights_path
 
 
 def rawdata_root():

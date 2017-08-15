@@ -8,6 +8,7 @@ import numpy as np
 import os
 
 from desiutil.log import get_logger
+from desispec.io import read_params
 
 # log=get_logger()
 
@@ -34,9 +35,9 @@ class QA_Exposure(object):
         Attributes:
             All input args become object attributes.
         """
-        flavors = ['none', 'flat', 'arc', 'gray', 'dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']
-        assert flavor in flavors
-        if flavor in ['dark', 'bright', 'bgs', 'mws', 'lrg', 'elg', 'qso']:
+        desi_params = read_params()
+        assert flavor in desi_params['frame_types']
+        if flavor in ['science']:
             self.type = 'data'
         else:
             self.type = 'calib'
@@ -45,6 +46,7 @@ class QA_Exposure(object):
         self.night = night
         self.specprod_dir = specprod_dir
         self.flavor = flavor
+        self.meta = {}
 
         if in_data is None:
             self.data = dict(flavor=self.flavor, expid=self.expid,
@@ -83,6 +85,17 @@ class QA_Exposure(object):
 
         # Figure
         qa_plots.exposure_fluxcalib(outfil, self.data)
+
+    def load_meta(self, frame_meta):
+        """ Load meta info from input Frame meta
+        Args:
+            frame_meta:
+        """
+        desi_params = read_params()
+        for key in desi_params['frame_meta']:
+            if key in ['CAMERA']:  # Frame specific
+                continue
+            self.meta[key] = frame_meta[key]
 
     def load_qa_data(self, remove=False):
         """ Load the QA data files for a given exposure (currently yaml)

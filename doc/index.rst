@@ -13,6 +13,7 @@ Contents
     pipeline.rst
     dev.rst
     coadd.rst
+    qa.rst
     changes.rst
     api.rst
 

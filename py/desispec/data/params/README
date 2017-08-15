@@ -1,0 +1,3 @@
+desispec_param.yml
+  frame_types: List of allowed flavors
+  frame_meta: List of keywords that may be parsed from Header (e.g. for QA)

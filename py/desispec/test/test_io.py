@@ -107,7 +107,7 @@ class TestIO(unittest.TestCase):
     def test_frame_rw(self):
         """Test reading and writing Frame objects.
         """
-        from ..io.frame import read_frame, write_frame
+        from ..io.frame import read_frame, write_frame, read_meta_frame
         from ..io.fibermap import empty_fibermap
         nspec, nwave, ndiag = 5, 10, 3
         flux = np.random.uniform(size=(nspec, nwave))
@@ -122,6 +122,7 @@ class TestIO(unittest.TestCase):
             frx = Frame(wave, flux, ivar, mask, R, meta=meta)
             write_frame(self.testfile, frx)
             frame = read_frame(self.testfile)
+            read_meta = read_meta_frame(self.testfile)
 
             flux2 = flux.astype('f4').astype('f8')
             ivar2 = ivar.astype('f4').astype('f8')
@@ -141,6 +142,8 @@ class TestIO(unittest.TestCase):
             self.assertTrue(frame.resolution_data.dtype.isnative)
             self.assertEqual(frame.meta['BLAT'], meta['BLAT'])
             self.assertEqual(frame.meta['FOO'], meta['FOO'])
+            self.assertEqual(frame.meta['BLAT'], read_meta['BLAT'])
+            self.assertEqual(frame.meta['FOO'], read_meta['FOO'])
 
         #- Test float32 on disk vs. float64 in memory
         for extname in ['FLUX', 'IVAR', 'WAVELENGTH', 'RESOLUTION']:
@@ -552,13 +555,13 @@ class TestIO(unittest.TestCase):
         the_exception = cm.exception
         self.assertEqual(str(the_exception), "Required input 'night' is not set for type 'stdstars'!")
         with self.assertRaises(ValueError) as cm:
-            foo = findfile('brick',groupname='3338p190')
+            foo = findfile('spectra')
         the_exception = cm.exception
-        self.assertEqual(str(the_exception), "Required input 'band' is not set for type 'brick'!")
+        self.assertEqual(str(the_exception), "Required input 'groupname' is not set for type 'spectra'!")
 
         #- Some findfile calls require $DESI_SPECTRO_DATA; others do not
         del os.environ['DESI_SPECTRO_DATA']
-        x = findfile('brick', groupname='0000p123', band='r1')
+        x = findfile('spectra', groupname=123)
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
             x = findfile('fibermap', night='20150101', expid=123)
@@ -569,7 +572,7 @@ class TestIO(unittest.TestCase):
         x = findfile('fibermap', night='20150101', expid=123)
         self.assertTrue(x is not None)
         with self.assertRaises(AssertionError):
-            x = findfile('brick', groupname='0000p123', band='r1')
+            x = findfile('spectra', groupname=123)
         os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
 
     def test_findfile_outdir(self):
@@ -579,6 +582,64 @@ class TestIO(unittest.TestCase):
         outdir = '/blat/foo/bar'
         x = findfile('fibermap', night='20150101', expid=123, outdir=outdir)
         self.assertEqual(x, os.path.join(outdir, os.path.basename(x)))
+
+    def test_get_nights(self):
+        """ Test desispec.io.meta.get_nights
+        """
+        from ..io.meta import get_nights
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # Generate dummy path
+        for night in ['20150101', '20150102']:
+            x = findfile('frame', camera='b0', night=night, expid=123)
+            makepath(x)
+        # Search for nights
+        nights = get_nights()
+        self.assertEqual(len(nights), 2)
+        self.assertTrue(isinstance(nights, list))
+        self.assertTrue('20150102' in nights)
+        # Keep path
+        nights = get_nights(strip_path=False)
+        self.assertTrue('/' in nights[0])
+
+    def test_search_framefile(self):
+        """ Test desispec.io.frame.search_for_framefile
+        """
+        from ..io.frame import search_for_framefile
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        # Setup paths
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # Generate a dummy frame file
+        x = findfile('frame', camera='b0', night='20150101', expid=123)
+        makepath(x)
+        with open(x,'a') as f:
+            pass
+        # Find it
+        mfile = search_for_framefile('frame-b0-000123.fits')
+        self.assertEqual(x, mfile)
+
+    def test_get_reduced_frames(self):
+        """ Test desispec.io.get_reduced_frames
+        """
+        from ..io import get_reduced_frames
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        # Setup paths
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # Generate a dummy frame file
+        for expid, night in zip((123,150), ['20150101', '20150102']):
+            x = findfile('cframe', camera='b0', night=night, expid=expid)
+            makepath(x)
+            with open(x,'a') as f:
+                pass
+        # Find it
+        mfile = get_reduced_frames()
+        self.assertEqual(2, len(mfile))
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
     def test_download(self):

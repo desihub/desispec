@@ -1,17 +1,15 @@
 # Script for generating QA from a Production run
 from __future__ import absolute_import, division
 
-from desispec.qa import QA_Prod
-from desiutil.log import get_logger
 import argparse
 import numpy as np
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate Production Level QA")
+    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.3]")
 
-    parser.add_argument('--specprod_dir', type = str, default = None, required=True,
-                        help = 'Path containing the exposures/directory to use')
+    parser.add_argument('--reduxdir', type = str, default = None, required=False,
+                        help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--make_frameqa', type = int, default = 0,
                         help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')
     parser.add_argument('--slurp', default = False, action='store_true',
@@ -22,6 +20,8 @@ def parse(options=None):
                         help='clobber existing QA files?')
     parser.add_argument('--channel_hist', type=str, default=None,
                         help='Generate channel histogram(s)')
+    parser.add_argument('--time_series', type=str, default=None,
+                        help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-MED_RESID')
 
     args = None
     if options is None:
@@ -33,11 +33,20 @@ def parse(options=None):
 
 def main(args) :
 
+    from desispec.qa import QA_Prod
+    from desiutil.log import get_logger
+    from desispec.io import meta
+
     log=get_logger()
 
     log.info("starting")
+    # Initialize
+    if args.reduxdir is None:
+        specprod_dir = meta.specprod_root()
+    else:
+        specprod_dir = args.reduxdir
 
-    qa_prod = QA_Prod(args.specprod_dir)
+    qa_prod = QA_Prod(specprod_dir)
 
     # Remake Frame QA?
     if args.make_frameqa > 0:
@@ -65,8 +74,17 @@ def main(args) :
         # Default?
         if args.channel_hist == 'default':
             dqqp.prod_channel_hist(qa_prod, 'FIBERFLAT', 'MAX_RMS', pp=pp, close=False)
-            dqqp.prod_channel_hist(qa_prod, 'SKYSUB', 'MED_RESID', xlim=(-1,1), pp=pp, close=False)
+            dqqp.prod_channel_hist(qa_prod, 'SKYSUB', 'MED_RESID', xlim=(-15,15), pp=pp, close=False)
             dqqp.prod_channel_hist(qa_prod, 'FLUXCALIB', 'MAX_ZP_OFF', pp=pp, close=False)
         # Finish
         print("Writing {:s}".format(outfile))
         pp.close()
+
+    # Time plots
+    if args.time_series is not None:
+        # QATYPE-METRIC
+        from desispec.qa import qa_plots as dqqp
+        qa_prod.load_data()
+        # Run
+        qatype, metric = args.time_series.split('-')
+        dqqp.prod_time_series(qa_prod, qatype, metric, outfile='QA_{:s}.png'.format(args.time_series))

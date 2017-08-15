@@ -85,7 +85,7 @@ def brick_zbest(outfil, zf, qabrick):
 
 
 
-def frame_skyres(outfil, frame, skymodel, qaframe):
+def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     """
     Generate QA plots and files for sky residuals of a given frame
 
@@ -97,6 +97,7 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     skymodel: SkyModel object
     qaframe: QAFrame object
     """
+    from desispec.sky import subtract_sky
 
     # Access metrics
     '''
@@ -107,12 +108,23 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     chi2_med = np.sum(med_res**2 * wavg_ivar)
     pchi2_med = scipy.stats.chisqprob(chi2_med, dof_wavg)
     '''
-    med_res = qaframe.qa_data['SKYSUB']["METRICS"]["MED_RESID_WAVE"]
-    wavg_res = qaframe.qa_data['SKYSUB']["METRICS"]["WAVG_RES_WAVE"]
+    skyfibers = np.array(qaframe.qa_data['SKYSUB']["METRICS"]["SKY_FIBERID"])
+    subtract_sky(frame, skymodel)
+    res=frame.flux[skyfibers]
+    res_ivar=frame.ivar[skyfibers]
+    if quick_look:
+        med_res = qaframe.qa_data['SKYSUB']["METRICS"]["MED_RESID_WAVE"]
+        wavg_res = qaframe.qa_data['SKYSUB']["METRICS"]["WAVG_RES_WAVE"]
+    else:
+        med_res = np.median(res,axis=0)
+        wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
 
     # Plot
     fig = plt.figure(figsize=(8, 10.0))
-    gs = gridspec.GridSpec(4,2)
+    if quick_look:
+        gs = gridspec.GridSpec(4,2)
+    else:
+        gs = gridspec.GridSpec(2,2)
     xmin,xmax = np.min(frame.wave), np.max(frame.wave)
 
     # Simple residual plot
@@ -145,8 +157,16 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
 
     # Histogram
     binsz = qaframe.qa_data['SKYSUB']["PARAMS"]["BIN_SZ"]
-    hist = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_1D"])
-    edges = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_EDGES"])
+    if 'DEVS_1D' in qaframe.qa_data['SKYSUB']["METRICS"].keys(): # Online
+        hist = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_1D"])
+        edges = np.asarray(qaframe.qa_data['SKYSUB']["METRICS"]["DEVS_EDGES"])
+    else: # Generate for offline
+        gd_res = res_ivar > 0.
+        devs = res[gd_res] * np.sqrt(res_ivar[gd_res])
+        i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
+        rng = tuple( binsz*np.array([i0,i1]) )
+        nbin = i1-i0
+        hist, edges = np.histogram(devs, range=rng, bins=nbin)
 
     xhist = (edges[1:] + edges[:-1])/2.
     ax1.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
@@ -171,78 +191,79 @@ def frame_skyres(outfil, frame, skymodel, qaframe):
     ax2.set_axis_off()
     show_meta(ax2, qaresid, 'SKYSUB', outfil)
 
-    #- SNR Plot
-    elg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["ELG_SNR_MAG"]
-    lrg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["LRG_SNR_MAG"]
-    qso_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["QSO_SNR_MAG"]
-    star_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["STAR_SNR_MAG"]
+    if quick_look:
+        #- SNR Plot
+        elg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["ELG_SNR_MAG"]
+        lrg_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["LRG_SNR_MAG"]
+        qso_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["QSO_SNR_MAG"]
+        star_snr_mag = qaframe.qa_data['SKYSUB']["METRICS"]["STAR_SNR_MAG"]
 
-    ax3 = plt.subplot(gs[2,0])
-    ax4 = plt.subplot(gs[2,1])
-    ax5 = plt.subplot(gs[3,0])
-    ax6 = plt.subplot(gs[3,1])
+        ax3 = plt.subplot(gs[2,0])
+        ax4 = plt.subplot(gs[2,1])
+        ax5 = plt.subplot(gs[3,0])
+        ax6 = plt.subplot(gs[3,1])
 
-    ax3.set_ylabel(r'Median S/N')
-    ax3.set_xlabel('')
-    ax3.set_title(r'ELG')
-    if len(elg_snr_mag[1]) > 0:  #- at least 1 elg fiber?
-        select=np.where((elg_snr_mag[1] != np.array(None)) & (~np.isnan(elg_snr_mag[1])) & (np.abs(elg_snr_mag[1])!=np.inf))[0] #- Remove None, nan and inf values in mag
-        if select.shape[0]>0:
+        ax3.set_ylabel(r'Median S/N')
+        ax3.set_xlabel('')
+        ax3.set_title(r'ELG')
+        if len(elg_snr_mag[1]) > 0:  #- at least 1 elg fiber?
+            select=np.where((elg_snr_mag[1] != np.array(None)) & (~np.isnan(elg_snr_mag[1])) & (np.abs(elg_snr_mag[1])!=np.inf))[0] #- Remove None, nan and inf values in mag
+            if select.shape[0]>0:
 
-            xmin=np.min(elg_snr_mag[1][select])-0.1
-            xmax=np.max(elg_snr_mag[1][select])+0.1
-            ax3.set_xlim(xmin,xmax)
-            ax3.set_ylim(np.min(elg_snr_mag[0][select])-0.1,np.max(elg_snr_mag[0][select])+0.1)
-            ax3.xaxis.set_ticks(np.arange(int(np.min(elg_snr_mag[1][select])),int(np.max(elg_snr_mag[1][select]))+1,0.5))
-            ax3.tick_params(axis='x',labelsize=10,labelbottom='on')
-            ax3.tick_params(axis='y',labelsize=10,labelleft='on')
-            ax3.plot(elg_snr_mag[1][select],elg_snr_mag[0][select],'b.')
+                xmin=np.min(elg_snr_mag[1][select])-0.1
+                xmax=np.max(elg_snr_mag[1][select])+0.1
+                ax3.set_xlim(xmin,xmax)
+                ax3.set_ylim(np.min(elg_snr_mag[0][select])-0.1,np.max(elg_snr_mag[0][select])+0.1)
+                ax3.xaxis.set_ticks(np.arange(int(np.min(elg_snr_mag[1][select])),int(np.max(elg_snr_mag[1][select]))+1,0.5))
+                ax3.tick_params(axis='x',labelsize=10,labelbottom='on')
+                ax3.tick_params(axis='y',labelsize=10,labelleft='on')
+                ax3.plot(elg_snr_mag[1][select],elg_snr_mag[0][select],'b.')
 
-    ax4.set_ylabel('')
-    ax4.set_xlabel('')
-    ax4.set_title(r'LRG')
-    if len(lrg_snr_mag[1]) > 0:  #- at least 1 lrg fiber?
-        select=np.where((lrg_snr_mag[1] != np.array(None)) & (~np.isnan(lrg_snr_mag[1])) & (np.abs(lrg_snr_mag[1])!=np.inf))[0]
-        if select.shape[0]>0:
-            xmin=np.min(lrg_snr_mag[1][select])-0.1
-            xmax=np.max(lrg_snr_mag[1][select])+0.1
-            ax4.set_xlim(xmin,xmax)
-            ax4.set_ylim(np.min(lrg_snr_mag[0][select])-0.1,np.max(lrg_snr_mag[0][select])+0.1)
-            ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_snr_mag[1][select])),int(np.max(lrg_snr_mag[1][select]))+1,0.5))
-            ax4.tick_params(axis='x',labelsize=10,labelbottom='on')
-            ax4.tick_params(axis='y',labelsize=10,labelleft='on')
-            ax4.plot(lrg_snr_mag[1][select],lrg_snr_mag[0][select],'r.')
+        ax4.set_ylabel('')
+        ax4.set_xlabel('')
+        ax4.set_title(r'LRG')
+        if len(lrg_snr_mag[1]) > 0:  #- at least 1 lrg fiber?
+            select=np.where((lrg_snr_mag[1] != np.array(None)) & (~np.isnan(lrg_snr_mag[1])) & (np.abs(lrg_snr_mag[1])!=np.inf))[0]
+            if select.shape[0]>0:
+                xmin=np.min(lrg_snr_mag[1][select])-0.1
+                xmax=np.max(lrg_snr_mag[1][select])+0.1
+                ax4.set_xlim(xmin,xmax)
+                ax4.set_ylim(np.min(lrg_snr_mag[0][select])-0.1,np.max(lrg_snr_mag[0][select])+0.1)
+                ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_snr_mag[1][select])),int(np.max(lrg_snr_mag[1][select]))+1,0.5))
+                ax4.tick_params(axis='x',labelsize=10,labelbottom='on')
+                ax4.tick_params(axis='y',labelsize=10,labelleft='on')
+                ax4.plot(lrg_snr_mag[1][select],lrg_snr_mag[0][select],'r.')
 
-    ax5.set_ylabel(r'Median S/N')
-    ax5.set_xlabel(r'Mag. (DECAM_R)')
-    ax5.set_title(r'QSO')
-    if len(qso_snr_mag[1]) > 0:  #- at least 1 qso fiber?
-        select=np.where((qso_snr_mag[1] != np.array(None)) & (~np.isnan(qso_snr_mag[1])) & (np.abs(qso_snr_mag[1])!=np.inf))[0] #- Remove None, nan and inf values
-        if select.shape[0]>0:
+        ax5.set_ylabel(r'Median S/N')
+        ax5.set_xlabel(r'Mag. (DECAM_R)')
+        ax5.set_title(r'QSO')
+        if len(qso_snr_mag[1]) > 0:  #- at least 1 qso fiber?
+            select=np.where((qso_snr_mag[1] != np.array(None)) & (~np.isnan(qso_snr_mag[1])) & (np.abs(qso_snr_mag[1])!=np.inf))[0] #- Remove None, nan and inf values
+            if select.shape[0]>0:
 
-            xmin=np.min(qso_snr_mag[1][select])-0.1
-            xmax=np.max(qso_snr_mag[1][select])+0.1
-            ax5.set_xlim(xmin,xmax)
-            ax5.set_ylim(np.min(qso_snr_mag[0][select])-0.1,np.max(qso_snr_mag[0][select])+0.1)
-            ax5.xaxis.set_ticks(np.arange(int(np.min(qso_snr_mag[1][select])),int(np.max(qso_snr_mag[1][select]))+1,1.0))
-            ax5.tick_params(axis='x',labelsize=10,labelbottom='on')
-            ax5.tick_params(axis='y',labelsize=10,labelleft='on')
-            ax5.plot(qso_snr_mag[1][select],qso_snr_mag[0][select],'g.')
+                xmin=np.min(qso_snr_mag[1][select])-0.1
+                xmax=np.max(qso_snr_mag[1][select])+0.1
+                ax5.set_xlim(xmin,xmax)
+                ax5.set_ylim(np.min(qso_snr_mag[0][select])-0.1,np.max(qso_snr_mag[0][select])+0.1)
+                ax5.xaxis.set_ticks(np.arange(int(np.min(qso_snr_mag[1][select])),int(np.max(qso_snr_mag[1][select]))+1,1.0))
+                ax5.tick_params(axis='x',labelsize=10,labelbottom='on')
+                ax5.tick_params(axis='y',labelsize=10,labelleft='on')
+                ax5.plot(qso_snr_mag[1][select],qso_snr_mag[0][select],'g.')
 
-    ax6.set_ylabel('')
-    ax6.set_xlabel('Mag. (DECAM_R)')
-    ax6.set_title(r'STD')
-    if len(star_snr_mag[1]) > 0:  #- at least 1 std fiber?
-        select=np.where((star_snr_mag[1] != np.array(None)) & (~np.isnan(star_snr_mag[1])) & (np.abs(star_snr_mag[1])!=np.inf))[0]
-        if select.shape[0]>0:
-            xmin=np.min(star_snr_mag[1][select])-0.1
-            xmax=np.max(star_snr_mag[1][select])+0.1
-            ax6.set_xlim(xmin,xmax)
-            ax6.set_ylim(np.min(star_snr_mag[0][select])-0.1,np.max(star_snr_mag[0][select])+0.1)
-            ax6.xaxis.set_ticks(np.arange(int(np.min(star_snr_mag[1][select])),int(np.max(star_snr_mag[1][select]))+1,0.5))
-            ax6.tick_params(axis='x',labelsize=10,labelbottom='on')
-            ax6.tick_params(axis='y',labelsize=10,labelleft='on')
-            ax6.plot(star_snr_mag[1][select],star_snr_mag[0][select],'k.')
+        ax6.set_ylabel('')
+        ax6.set_xlabel('Mag. (DECAM_R)')
+        ax6.set_title(r'STD')
+        if len(star_snr_mag[1]) > 0:  #- at least 1 std fiber?
+            select=np.where((star_snr_mag[1] != np.array(None)) & (~np.isnan(star_snr_mag[1])) & (np.abs(star_snr_mag[1])!=np.inf))[0]
+            if select.shape[0]>0:
+                xmin=np.min(star_snr_mag[1][select])-0.1
+                xmax=np.max(star_snr_mag[1][select])+0.1
+                ax6.set_xlim(xmin,xmax)
+                ax6.set_ylim(np.min(star_snr_mag[0][select])-0.1,np.max(star_snr_mag[0][select])+0.1)
+                ax6.xaxis.set_ticks(np.arange(int(np.min(star_snr_mag[1][select])),int(np.max(star_snr_mag[1][select]))+1,0.5))
+                ax6.tick_params(axis='x',labelsize=10,labelbottom='on')
+                ax6.tick_params(axis='y',labelsize=10,labelleft='on')
+                ax6.plot(star_snr_mag[1][select],star_snr_mag[0][select],'k.')
 
     """
     # Meta
@@ -575,14 +596,15 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     gs = gridspec.GridSpec(2,2)
 
     # Loop on channel
-    clrs = dict(b='blue', r='red', z='purple')
+    clrs = get_channel_clrs()
     for qq, channel in enumerate(['b', 'r', 'z']):
         ax = plt.subplot(gs[qq])
         #ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
 
         # Grab QA
-        qa_arr, ne_dict = qa_prod.get_qa_array(qatype, metric, channels=channel)
+        qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
         # Check for nans
+        qa_arr = qa_tbl[metric]
         isnan = np.isnan(qa_arr)
         if np.sum(isnan) > 0:
             log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
@@ -598,24 +620,24 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
             ax.set_xlim(xlim)
 
     # Meta
+    '''
     ax = plt.subplot(gs[3])
     ax.set_axis_off()
     xlbl = 0.05
     ylbl = 0.85
     yoff = 0.1
     ax.text(xlbl, ylbl, qa_prod.prod_name, color='black', transform=ax.transAxes, ha='left')
-    nights = list(ne_dict.keys())
+    nights = list(qa_tbl['NIGHT'])
     #
     ylbl -= yoff
     ax.text(xlbl+0.1, ylbl, 'Nights: {}'.format(nights),
             transform=ax.transAxes, ha='left', fontsize='x-small')
     #
     ylbl -= yoff
-    expids = []
-    for night in nights:
-        expids += ne_dict[night]
+    expids = list(qa_tbl['EXPID'])
     ax.text(xlbl+0.1, ylbl, 'Exposures: {}'.format(expids),
             transform=ax.transAxes, ha='left', fontsize='x-small')
+    '''
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
@@ -631,14 +653,82 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     else:  # Show
         plt.show()
 
+def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=True, pp=None):
+    from astropy.time import Time
 
-def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True):
+    log = get_logger()
+
+    # Setup
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(3,1)
+
+
+    # Loop on channel
+    clrs = get_channel_clrs()
+
+    # Grab QA
+    all_times = []
+    all_ax = []
+    for cc, channel in enumerate(['b','r','z']):
+        ax = plt.subplot(gs[cc])
+        qa_tbl = qa_prod.get_qa_table(qatype, metric, channels=channel)
+        '''
+        # Check for nans
+        isnan = np.isnan(qa_arr)
+        if np.sum(isnan) > 0:
+            log.error("NAN in qatype={:s}, metric={:s} for channel={:s}".format(
+                qatype, metric, channel))
+            qa_arr[isnan] = -999.
+        '''
+        # Convert Date to MJD
+        atime = Time(qa_tbl['DATE-OBS'], format='isot', scale='utc')
+        atime.format = 'mjd'
+        mjd = atime.value
+
+        # Scatter me
+        ax.scatter(mjd, qa_tbl[metric], color=clrs[channel], s=4.)
+        # Axes
+        ax.set_ylabel('Metric')
+        if cc < 2:
+            ax.get_xaxis().set_ticks([])
+        if cc ==0:
+            ax.set_title('{:s} :: {:s}'.format(qatype,metric))
+        all_times.append(mjd)
+        all_ax.append(ax)
+
+    # Label
+    #ax.text(0.05, 0.85, channel, color='black', transform=ax.transAxes, ha='left')
+    ax.set_xlabel('MJD')
+    all_times = np.concatenate(all_times)
+    xmin, xmax = np.min(all_times), np.max(all_times)
+    for cc in range(3):
+        all_ax[cc].set_xlim(xmin,xmax)
+
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile)
+        print("Wrote QA file: {:s}".format(outfile))
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+
+def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None,
+                      close=True, nslices=20, dpi=700):
     """ Generate a plot of sky subtraction residuals
     Typically for a given channel
     Args:
         wave:
         sky_flux:
-        sky_resid:
+        sky_res:
         outfile:
         pp:
         close:
@@ -653,14 +743,14 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
     # Wavelength
     ax_wave = plt.subplot(gs[0])
     du_pslices(sky_wave, sky_res, np.min(sky_wave), np.max(sky_wave),
-               0., num_slices=20, axis=ax_wave)
+               0., num_slices=nslices, axis=ax_wave)
     ax_wave.set_xlabel('Wavelength')
     ax_wave.set_ylabel('Residual Flux')
 
     # Wavelength
     ax_flux = plt.subplot(gs[1])
     du_pslices(sky_flux, sky_res, np.min(sky_flux), np.max(sky_flux),
-               0., num_slices=20, axis=ax_flux, set_ylim_from_stats=True)
+               0., num_slices=nslices, axis=ax_flux, set_ylim_from_stats=True)
     ax_flux.set_xlabel('log10(Sky Flux)')
     ax_flux.set_ylabel('Residual Flux')
     #ax_flux.set_ylim(-600, 100)
@@ -669,7 +759,7 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     if outfile is not None:
-        plt.savefig(outfile)
+        plt.savefig(outfile, dpi=dpi)
         if close:
             plt.close()
     elif pp is not None:
@@ -679,3 +769,164 @@ def skysub_resid(sky_wave, sky_flux, sky_res, outfile=None, pp=None, close=True)
             pp.close()
     else:  # Show
         plt.show()
+
+def skysub_resid_series(sky_dict, xtype, outfile=None, pp=None,
+                        close=True, nslices=20, dpi=700):
+    """ Generate a plot of sky subtraction residuals for a series of inputs
+    Typically for a given channel
+    Args:
+        wave:
+        sky_flux:
+        sky_res:
+        outfile:
+        pp:
+        close:
+
+    Returns:
+
+    """
+    # Start the plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(sky_dict['count'],1)
+
+    for kk in range(sky_dict['count']):
+        sky_wave = sky_dict['wave'][kk]
+        sky_res = sky_dict['res'][kk]
+        sky_flux = sky_dict['skyflux'][kk]
+        ax = plt.subplot(gs[kk])
+        #ax.set_ylabel('Residual Flux')
+        if xtype == 'wave': # Wavelength
+            du_pslices(sky_wave, sky_res, np.min(sky_wave), np.max(sky_wave),
+               0., num_slices=nslices, axis=ax)
+            xlbl = 'Wavelength'
+        elif xtype == 'flux': # Flux
+            xlbl = 'log10(Sky Flux)'
+            du_pslices(sky_flux, sky_res, np.min(sky_flux), np.max(sky_flux),
+               0., num_slices=nslices, axis=ax, set_ylim_from_stats=True)
+            if kk == sky_dict['count']-1:
+                ax.set_xlabel('Wavelength')
+            else:
+                ax.get_xaxis().set_ticks([])
+        if kk == sky_dict['count']-1:
+            ax.set_xlabel(xlbl)
+        else:
+            ax.get_xaxis().set_ticks([])
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile, dpi=dpi)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+def skysub_gauss(sky_wave, sky_flux, sky_res, sky_ivar, outfile=None, pp=None,
+                      close=True, binsz=0.1, dpi=700, nfbin=4):
+    """ Generate a plot examining the Gaussianity of the residuals
+    Typically for a given channel
+    Args:
+        wave:
+        sky_flux:
+        sky_res:
+        sky_ivar:
+        outfile:
+        pp:
+        close:
+
+    Returns:
+
+    """
+    from scipy.stats import norm
+    # Deviates
+    gd_res = sky_ivar > 0.
+    devs = sky_res[gd_res] * np.sqrt(sky_ivar[gd_res])
+
+    # Start the plot
+    fig = plt.figure(figsize=(8, 4.0))
+    gs = gridspec.GridSpec(1,2)
+
+    # Histogram :: Same routine as in frame_skyresid
+    ax0 = plt.subplot(gs[0])
+    i0, i1 = int( np.min(devs) / binsz) - 1, int( np.max(devs) / binsz) + 1
+    rng = tuple(binsz*np.array([i0,i1]) )
+    nbin = i1-i0
+    hist, edges = np.histogram(devs, range=rng, bins=nbin)
+
+    xhist = (edges[1:] + edges[:-1])/2.
+    ax0.hist(xhist, color='blue', bins=edges, weights=hist)#, histtype='step')
+    # PDF for Gaussian
+    area = binsz * np.sum(hist)
+
+    xppf = np.linspace(scipy.stats.norm.ppf(0.000001), scipy.stats.norm.ppf(0.999999), 10000)
+    ax0.plot(xppf, area*scipy.stats.norm.pdf(xppf), 'r-', alpha=1.0)
+    ax0.set_xlabel(r'Res/$\sigma$')
+    ax0.set_ylabel('N')
+
+    # Deviates vs. flux
+    absdevs = np.abs(devs)
+    asrt = np.argsort(absdevs)
+    absdevs.sort()
+    ndev = devs.size
+    ax1 = plt.subplot(gs[1])
+
+    # All
+    xlim = (0., np.max(absdevs))
+    ylim = (0.000001, 1.)
+    ax1.plot(absdevs, 1-np.arange(ndev)/(ndev-1), 'k', label='All')
+
+    # Bin by sky flux
+    sflux = sky_flux[asrt]
+    sky_flux.sort()
+    fbins = [0.] + [sky_flux[int(ii*ndev/nfbin)] for ii in range(1,nfbin)]
+    fbins += [np.max(sky_flux)]
+    f_i = np.digitize(sflux, fbins) - 1
+
+    for kk in range(nfbin):
+        lbl = 'flux = [{:d},{:d}]'.format(int(fbins[kk]),int(fbins[kk+1]))
+        idx = f_i == kk
+        ncut = np.sum(idx)
+        ax1.plot(absdevs[idx], 1-np.arange(ncut)/(ncut-1), '--', label=lbl)
+
+    # Gauss lines
+    for kk in range(1,int(xlim[1])+1):
+        ax1.plot([kk]*2, ylim, ':', color='gray')
+        icl = norm.cdf(kk) - norm.cdf(-1*kk)  # Area under curve
+        ax1.plot(xlim, [1-icl]*2, ':', color='gray')
+        ax1.text(0.2, 1-icl, '{:d}'.format(kk)+r'$\sigma$', color='gray')
+
+    ax1.set_xlabel(r'Res/$\sigma$')
+    ax1.set_ylabel(r'Fraction greater than Res/$\sigma$')
+    ax1.set_yscale("log", nonposy='clip')
+    ax1.set_ylim(ylim)
+
+    legend = ax1.legend(loc='lower left', borderpad=0.3,
+                        handletextpad=0.3, fontsize='small')
+
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile, dpi=dpi)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
+
+
+def get_channel_clrs():
+    """ Simple dict to organize styles for channels
+    Returns:
+        channel_dict: dict
+    """
+    return dict(b='blue', r='red', z='purple')
