@@ -303,6 +303,25 @@ def toplevel():
     if os.path.exists(exposures_file):
         f.write('<h2><a href="{:s}">Exposures QA</a></h2>\n'.format(exposures_file))
 
+    # Existing PNGs
+    f.write('<hr>\n')
+    f.write('<h2>PNGs</h2>\n')
+    all_png = glob.glob(html_path+'/*.png')
+    # Type
+    links = ''
+    body = ''
+    for png in all_png:
+        _, png_file = os.path.split(png)
+        # Image
+        href="{:s}".format(png_file[:-4])
+        links += '<li><a class="reference internal" href="#{:s}">{:s}</a></li>\n'.format(href, href)
+        body += '<div class="section" id="{:s}">\n'.format(href)
+        body += '<img class ="research" src="{:s}" width="100%" height="auto"/>\n'.format(png_file)
+    f.write('<h3><ul>\n')
+    f.write(links)
+    f.write('</ul></h3>\n')
+    f.write(body)
+
     # Finish
     finish(f,'')
 

@@ -94,4 +94,4 @@ def main(args) :
         qa_prod.load_data()
         # Run
         qatype, metric = args.time_series.split('-')
-        dqqp.prod_time_series(qa_prod, qatype, metric, outfile='QA_{:s}.png'.format(args.time_series))
+        dqqp.prod_time_series(qa_prod, qatype, metric, outfile='QA_time_{:s}.png'.format(args.time_series))
