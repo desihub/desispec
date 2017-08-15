@@ -557,10 +557,14 @@ def show_meta(ax, qaframe, qaflavor, outfil):
     # Meta
     xlbl = 0.05
     ylbl = 0.85
+    yoff=0.10
     i0 = outfil.rfind('/')
     ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
     # Night
-    yoff=0.10
+    ax.text(xlbl+0.1, ylbl, 'Night: '+qaframe.night,
+            transform=ax.transAxes, ha='left', fontsize='x-small')
+    ylbl -= yoff
+    # Rest
     for key in sorted(qaframe.qa_data[qaflavor]['METRICS'].keys()):
         if key in ['QA_FIG']:
             continue
