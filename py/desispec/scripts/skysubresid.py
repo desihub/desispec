@@ -104,6 +104,7 @@ def main(args) :
         nights = [iarg for iarg in args.nights.split(',')]
     else:
         nights = None
+
     # Full Prod Plot?
     if args.prod:
         from desispec.qa.qa_plots import skysub_resid_dual

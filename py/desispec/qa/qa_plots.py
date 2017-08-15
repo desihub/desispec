@@ -559,6 +559,7 @@ def show_meta(ax, qaframe, qaflavor, outfil):
     ylbl = 0.85
     i0 = outfil.rfind('/')
     ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
+    # Night
     yoff=0.10
     for key in sorted(qaframe.qa_data[qaflavor]['METRICS'].keys()):
         if key in ['QA_FIG']:
@@ -890,6 +891,10 @@ def skysub_gauss(sky_wave, sky_flux, sky_res, sky_ivar, outfile=None, pp=None,
     sky_flux.sort()
     fbins = [0.] + [sky_flux[int(ii*ndev/nfbin)] for ii in range(1,nfbin)]
     fbins += [np.max(sky_flux)]
+    # Adjust last bin to be likely on sky lines
+    if np.max(sky_flux) > 2000.:  # Am assuming 2000 counts is a skyline
+        fbins[-2] = max(2000., fbins[-2])
+    # Digitize
     f_i = np.digitize(sflux, fbins) - 1
 
     for kk in range(nfbin):
