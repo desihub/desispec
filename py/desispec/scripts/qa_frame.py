@@ -6,7 +6,7 @@ import argparse
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate Frame Level QA [v1.0]")
+    parser = argparse.ArgumentParser(description="Generate Frame Level QA [v1.1]")
     parser.add_argument('--frame_file', type = str, required=True,
                         help='Frame filename.  Full path is not required nor desired. ')
     parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',
