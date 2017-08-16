@@ -295,7 +295,7 @@ parser.add_argument('--sigma', type = int, default = 60 , required = False,
                     help = "gaussian smoothing sigma (default is tuned on teststand data)")
 parser.add_argument('--npass1', type = int, default = 2 , required = False, 
                     help = "number of iterations in gaussian smoothing 1")
-parser.add_argument('--npass2', type = int, default = 6 , required = False, 
+parser.add_argument('--npass2', type = int, default = 3 , required = False, 
                     help = "number of iterations in gaussian smoothing 2")
 parser.add_argument('--nblocks', type = int, default = 4 , required = False, 
                     help = "number of blocks along one axis (total number of blocks is the square) where the trace orientations are averaged (to use in combination with --psf option otherwise ignored)")
@@ -327,7 +327,7 @@ else :
 log.info("first gaussian smoothing")
 model=gaussian_smoothing_1d_with_tilted_axes(image,sigma=args.sigma,npass=args.npass1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
 
-nsloop=2
+nsloop=3 # we have to do twice the masking to remove from mask the tails around CCD defects
 for sloop in range(nsloop) :
     log.info("compute mask using a temporary flat %d/%d"%(sloop+1,nsloop))
     
@@ -362,9 +362,9 @@ for sloop in range(nsloop) :
     flat=(model>0)*image/(model+(model==0))
     flat+=(model<=0)
     flaterr=np.sqrt(var)/(model+(model==0))
-    rms=np.abs(flat-1)/flaterr
+    rms=(flat-1)/flaterr
     srms=gaussian_smoothing_2d(rms,10.)
-    mask=(srms>1.)|(rms>3.)
+    mask=(np.abs(srms)>1.)|(np.abs(rms)>4.)
     
     # remove from mask regions with important model gradient
     grad=np.zeros(model.shape)
@@ -388,13 +388,17 @@ for sloop in range(nsloop) :
     pyfits.writeto("tmp-flat-%d.fits"%sloop,flat,clobber=True)
     
     log.info("number of masked pixels=%d"%np.sum(mask.astype(int)))
-    if 1 :
-        log.info("replace masked pixels by model %d/%d"%(sloop+1,nsloop))
-        for loop in range(args.npass2) :
-            log.debug("pass %d/%d"%(loop+1,args.npass2))
-            tmp_image=image*(mask==0)+model*(mask>0)
-            model=gaussian_smoothing_1d_with_tilted_axes(tmp_image,sigma=args.sigma,npass=1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
-
+    log.info("replace masked pixels by model %d/%d"%(sloop+1,nsloop))
+    tmp_image=image.copy()
+    
+    for loop in range(args.npass2) :
+        log.info("iteration to fill mask %d/%d"%(loop+1,args.npass2))
+        a=0.5 # a=0 is a slow iterative solution, a>0 is faster but needs tuning
+        tmp_image = image*(mask==0)+(model+a*(model-tmp_image))*(mask>0)
+        model=gaussian_smoothing_1d_with_tilted_axes(tmp_image,sigma=args.sigma,npass=1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
+        if loop == args.npass2-1 :
+            tmp_image=image*(mask==0)+(model+a*(model-tmp_image))*(mask>0)
+    
 if args.per_amplifier :        
     log.info("last gaussian smoothing, per quadrant, to remove residual gain difference")
     n0=tmp_image.shape[0]//2
