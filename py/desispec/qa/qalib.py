@@ -447,6 +447,7 @@ def SNRFit(frame,params,fidboundary=None):
     filters=frame.fibermap['FILTER']
     mediansnr=SN_ratio(frame.flux,frame.ivar)
     qadict={"MEDIAN_SNR":mediansnr}
+    neg_snr_tot=[]
     for T in ["ELG","QSO","LRG","STD"]:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
@@ -465,7 +466,7 @@ def SNRFit(frame,params,fidboundary=None):
             x=mags[xs]
             med_snr=medsnr[xs]
             neg_snr=len(np.where(med_snr<=0.0)[0])
-            qadict["NUM_NEGATIVE_SNR"]=neg_snr
+            neg_snr_tot.append(neg_snr)
             if neg_snr > 0:
                 x=mags[xs][:-neg_snr]
                 y=np.log10(med_snr[:-neg_snr])
@@ -505,6 +506,7 @@ def SNRFit(frame,params,fidboundary=None):
             
         qadict["%s_FIBERID"%T]=fibers.tolist()
         qadict["%s_SNR_MAG"%T]=np.array((medsnr,mags))
+        qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
 
         qadict["RA"]=frame.fibermap['RA_TARGET']
         qadict["DEC"]=frame.fibermap['DEC_TARGET']
