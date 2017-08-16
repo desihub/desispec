@@ -42,7 +42,7 @@ def grid_from_psf(filename) :
     y=[]
     f=[]
     w=[]
-    wstep=200.
+    wstep=50.
     waves=np.linspace(psf.wmin,psf.wmax,int((psf.wmax-psf.wmin)/wstep))
     fibers=np.arange(psf.nspec)
     for fiber in fibers :
@@ -112,7 +112,7 @@ def median_image(image_filenames) :
     return mimage,ivar
 
 def convolve2d(image,k,weight=None) :
-""" Return a 2D convolution of image with kernel k, optionally with a weight image
+    """ Return a 2D convolution of image with kernel k, optionally with a weight image
     
     Args:
         image : 2D np.array image
@@ -345,6 +345,7 @@ parser.add_argument('--nblocks', type = int, default = 4 , required = False,
 parser.add_argument('--out-median', type = str, default = None , required = False, help = "save output median image (for development)")
 parser.add_argument('--psf', type = str, default = None , required = False, help = "use traces in this PSF to orient 1D convolutions")
 parser.add_argument('--per-amplifier', action = 'store_true', default = None , required = False, help = "solve model per amplifier if gains are uncertain or non-linarities")
+parser.add_argument('--no-trim', action = 'store_true', default = None , required = False, help = "do not compute flat only in CCD area covered by traces (to use in combination with --psf option otherwise ignored)")
 
 args        = parser.parse_args()
 log = get_logger()
@@ -367,9 +368,28 @@ else :
     dxdy=None
     dydx=None
 
-log.warning("need to add trim option")
+xmin=0
+xmax=image.shape[1]
+ymin=0
+ymax=image.shape[0]
 
-
+original_image_shape=image.shape
+if args.psf and ( not args.no_trim ) :
+    xmin=int(np.min(x))
+    xmax=int(np.max(x))+1
+    xmin-=10
+    xmax+=10
+    xmin=max(0,xmin)
+    xmax=min(xmax,image.shape[1])
+    ymin=int(np.min(y))
+    ymax=int(np.max(y))+1
+    ymin-=10
+    ymax+=10
+    ymin=max(0,ymin)
+    ymax=min(ymax,image.shape[0])
+    image=image[ymin:ymax,xmin:xmax]
+    ivar=ivar[ymin:ymax,xmin:xmax]
+    log.info("trimed image %s -> %s"%(str(original_image_shape),str(image.shape)))
 
 log.info("first gaussian smoothing")
 model=gaussian_smoothing_1d_with_tilted_axes(image,ivar,sigma=args.sigma,npass=args.niter_filter,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
@@ -414,8 +434,22 @@ else :
 
 flat=(model>0)*image/(model+(model==0))
 flat+=(model<=0)
-
-
+if args.psf and (not args.no_trim ):
+    log.info("restore image size after triming")
+    
+    tmp_flat=np.ones(original_image_shape)
+    tmp_flat[ymin:ymax,xmin:xmax]=flat    
+    flat=tmp_flat
+    
+    tmp_model=np.zeros(original_image_shape)
+    tmp_model[ymin:ymax,xmin:xmax]=model    
+    model=tmp_model
+    
+    mask += (ivar==0)*(mask==0)
+    tmp_mask=np.ones(original_image_shape)
+    tmp_mask[ymin:ymax,xmin:xmax]=mask
+    mask=tmp_mask
+    
 log.info("writing %s ..."%args.outfile)
 h=pyfits.HDUList([pyfits.PrimaryHDU(flat),pyfits.ImageHDU(model,name="MODEL"),pyfits.ImageHDU(mask.astype(int),name="MODMASK")])
 h[0].header["EXTNAME"]="FLAT"
