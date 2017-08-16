@@ -451,7 +451,6 @@ def SNRFit(frame,params,fidboundary=None):
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
         mags=np.zeros(medsnr.shape)
-        # do this more pythonically!
         if T=="STD":# this should be fixed "STAR" or "STD" should be used consistently everywhere!
             T="STAR"
         for ii,fib in enumerate(fibers):
@@ -464,11 +463,19 @@ def SNRFit(frame,params,fidboundary=None):
         try:
             xs=mags.argsort()
             x=mags[xs]
-            y=np.log10(medsnr[xs])
+            med_snr=medsnr[xs]
+            neg_snr=len(np.where(med_snr<=0.0)[0])
+            if neg_snr > 0:
+                x=mags[xs][:-neg_snr]
+                y=np.log10(med_snr[:-neg_snr])
+            else:
+                x=mags[xs]
+                y=np.log10(med_snr)
             out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
             #out=optimize.curve_fit(polyFun,x,y,p0=initialParams)
-#            qadict["%s_FITRESULTS"%T]=np.array((out[0],out[1]))# values,covMatrix
-            qadict["%s_FITRESULTS"%T]=out
+            vs=out[0]
+            cov=out[1]
+            qadict["%s_FITRESULTS"%T]=[vs,cov]
             qadict["%s_FIDMAG_SNR"%T]=10**fitfunc(fmag,*out[0])
             #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
         except ValueError:

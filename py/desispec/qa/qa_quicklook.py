@@ -1627,17 +1627,15 @@ class Calculate_SNR(MonitoringAlg):
         retval["PARAMS"] = param
 
         snrwarn=[]
-        for T in ["ELG","QSO","LRG","STAR"]:
-            if qadict["%s_FIDMAG_SNR"%T] <= param['FIDSNR_ALARM_RANGE'][0] or qadict["%s_FIDMAG_SNR"%T] >= param['FIDSNR_ALARM_RANGE'][1]:
-                snrwarn == 'ALARM'
-                break
-            elif qadict["%s_FIDMAG_SNR"%T] <= param['FIDSNR_WARN_RANGE'][0] or qadict["%s_FIDMAG_SNR"%T] >= param['FIDSNR_WARN_RANGE'][1]:
-                snrwarn == 'WARN'
+        if qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_ALARM_RANGE'][0] or qadict["ELG_FIDMAG_SNR"%T] >= param['FIDSNR_ALARM_RANGE'][1]:
+            snrwarn = 'ALARM'
+        if snrwarn == 'ALARM':
+            pass
+        else:
+            if qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_WARN_RANGE'][0] or qadict["ELG_FIDMAG_SNR"%T] >= param['FIDSNR_WARN_RANGE'][1]:
+                snrwarn = 'WARN'
             else:
-                if snrwarn =='WARN':
-                    pass
-                else:
-                    snrwarn =='NORMAL'
+                snrwarn = 'NORMAL'
 
         retval["METRICS"]["FIDSNR_WARN"] = snrwarn
 
