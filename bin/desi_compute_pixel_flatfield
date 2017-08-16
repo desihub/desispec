@@ -11,6 +11,17 @@ import specter.psf
 from desiutil.log import get_logger
 
 def grid_from_psf(filename) :
+    """ Return a list of spots coordinates along traces and trace orientations
+    
+    Args:
+        filename : a fits file withe a specter PSF 
+
+    Returns:
+        x     : 1D array, x_ccd coordinate of spots (fiber axis, axis=1 in np.array)
+        y     : 1D array, y_ccd coordinate of spots (wavelength axis, axis=0 in np.array)
+        dx/dy : 1D array, dx/dy for curves of constant fiber coordinate
+        dy/dx : 1D array, dy/dx for curves of constant wavelength        
+    """
     try :
         psftype=pyfits.open(filename)[0].header["PSFTYPE"]
     except KeyError :
@@ -75,6 +86,7 @@ def median_image(image_filenames) :
 
     Returns:
         mimage : median image (2D np.array)
+        ivar   : ivar of median
     """
     
     log.debug("first median")
@@ -100,7 +112,16 @@ def median_image(image_filenames) :
     return mimage,ivar
 
 def convolve2d(image,k,weight=None) :
-
+""" Return a 2D convolution of image with kernel k, optionally with a weight image
+    
+    Args:
+        image : 2D np.array image
+        k : 2D np.array kernel, each dimension must be odd and greater than 1
+    Options:
+        weight : 2D np.array of same shape as image
+    Returns:
+        cimage : 2D np.array convolved image of same shape as input image
+    """
     if weight is not None :
         if weight.shape != image.shape :
             raise ValueError("weight and image should have same shape")
