@@ -531,6 +531,7 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None):
         print('Wrote QA SkyRes file: {:s}'.format(outfile))
     plt.close()
 
+
 def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     """ QA plots for fiber flat
 
@@ -543,6 +544,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     Returns:
         Stuff?
     """
+    from desimodel.focalplane import fiber_area_arcsec2
     # Setup
     fibermap = frame.fibermap
     gdp = fiberflat.mask == 0
@@ -564,7 +566,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     ax = plt.subplot(gs[0,0])
     ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
 
-    mean_flux = np.mean(frame.flux*gdp, axis=1)
+    mean_flux = np.mean(frame.flux*gdp, axis=1) / fiber_area_arcsec2(xfiber,yfiber)
     rms_mean = np.std(mean_flux)
     med_mean = np.median(mean_flux)
     #from xastropy.xutils import xdebug as xdb
@@ -577,7 +579,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     # Mean
     ax = plt.subplot(gs[0,1])
     ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
-    mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1)
+    mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1) / fiber_area_arcsec2(xfiber,yfiber)
     m2plt = ax.scatter(xfiber, yfiber, marker='o', s=9., c=mean_norm, cmap=jet)
     #m2plt.set_clim(vmin=0.98, vmax=1.02)
     cb = fig.colorbar(m2plt)
