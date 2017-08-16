@@ -463,6 +463,7 @@ def exposure_fibermap(channel, expid, metric):
     from desispec.io.meta import find_exposure_night, findfile
     from desispec.io.frame import read_meta_frame, read_frame
     from desispec.io.fiberflat import read_fiberflat
+    from desimodel.focalplane import fiber_area_arcsec2
     log = get_logger()
     # Find exposure
     night = find_exposure_night(expid)
@@ -486,9 +487,10 @@ def exposure_fibermap(channel, expid, metric):
         # X,Y
         x.append([fibermap['X_TARGET']])
         y.append([fibermap['Y_TARGET']])
+        area = fiber_area_arcsec2(x[-1], y[-1])
         # Metric
         if metric == 'meanflux':
-            mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1)
+            mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1) / area
             metrics.append([mean_norm])
     # Cocatenate
     x = np.concatenate(x)
@@ -496,8 +498,10 @@ def exposure_fibermap(channel, expid, metric):
     metrics = np.concatenate(metrics)
     # Plot
     outfile='qa_{:08d}_{:s}_fibermap.png'.format(expid, channel)
-    exposure_map(x,y,metrics, mlbl='Mean Flux', title='Mean Flux for Exposure {:08d}, Channel {:s}'.format(expid, channel),
+    exposure_map(x,y,metrics, mlbl='Mean Flux',
+                 title='Mean Flux for Exposure {:08d}, Channel {:s}'.format(expid, channel),
                  outfile=outfile)
+
 
 def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None):
 
