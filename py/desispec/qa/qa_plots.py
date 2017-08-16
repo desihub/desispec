@@ -458,8 +458,16 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
 
-
 def exposure_fibermap(channel, expid, metric):
+    """ Generate an Exposure level plot of a FiberFlat metric
+    Args:
+        channel: str, e.g. 'b', 'r', 'z'
+        expid: int
+        metric: str,  allowed entires are: ['meanflux']
+
+    Returns:
+
+    """
     from desispec.io.meta import find_exposure_night, findfile
     from desispec.io.frame import read_meta_frame, read_frame
     from desispec.io.fiberflat import read_fiberflat
@@ -505,7 +513,17 @@ def exposure_fibermap(channel, expid, metric):
 
 
 def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None):
+    """ Generic method used to generated Exposure level QA
+    One channel at a time
 
+    Args:
+        x: list or ndarray
+        y: list or ndarray
+        metric: list or ndarray
+        mlbl: str, optional
+        outfile: str, optional
+        title: str, optional
+    """
     # Tile plot(s)
     fig = plt.figure(figsize=(8, 5.0))
     gs = gridspec.GridSpec(1,1)

@@ -245,7 +245,15 @@ def validate_night(night):
 
 
 def find_exposure_night(expid):
-    # Search for the exposure folder under exposures
+    """ Find the night that has the exposure
+    Args:
+        expid: int
+
+    Returns:
+        night: str
+
+    """
+    # Search for the exposure folder
     nights = get_nights()
     for night in nights:
         for exposure in get_exposures(night):

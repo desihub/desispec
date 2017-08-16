@@ -11,7 +11,7 @@ def parse(options=None):
     parser.add_argument('--reduxdir', type = str, default = None, required=False,
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--make_frameqa', type = int, default = 0,
-                        help = 'Bitwise flag to control remaking the QA files (1) figures (2) and html (4) for each frame in the production')
+                        help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')
     parser.add_argument('--slurp', default = False, action='store_true',
                         help = 'slurp production QA files into one?')
     parser.add_argument('--remove', default = False, action='store_true',
@@ -22,6 +22,7 @@ def parse(options=None):
                         help='Generate channel histogram(s)')
     parser.add_argument('--time_series', type=str, default=None,
                         help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-MED_RESID')
+    parser.add_argument('--html', type=bool, default=False, help='Generate HTML files')
 
     args = None
     if options is None:
@@ -59,11 +60,6 @@ def main(args) :
         # Run
         if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
             qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
-        # HTML
-        if args.make_frameqa & 2**2:
-            html.calib()
-            html.make_exposures()
-            html.toplevel()
 
     # Slurp?
     if args.slurp:
@@ -96,3 +92,9 @@ def main(args) :
         qatype, metric = args.time_series.split('-')
         outfile= specprod_dir+'/QA/QA_time_{:s}.png'.format(args.time_series)
         dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile)
+
+    # HTML
+    if args.html:
+        html.calib()
+        html.make_exposures()
+        html.toplevel()

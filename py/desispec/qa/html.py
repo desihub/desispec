@@ -78,18 +78,6 @@ def init(f, title):
 
 def calib():
     """ Generate HTML to orgainze calib HTML
-
-    Parameters
-    ----------
-    setup : str
-    cbset : str
-    det : int
-
-    Returns
-    -------
-    links : str
-    body : str
-
     """
     # Organized HTML
     html_file = meta.findfile('qa_calib_html')
@@ -130,17 +118,11 @@ def calib():
 
 def calib_exp(night, expid):
     """ Geneate HTML for calib exposure PNGs
+    Args:
+        night:
+        expid:
 
-    Parameters
-    ----------
-    setup : str
-    cbset : str
-    det : int
-
-    Returns
-    -------
-    links : str
-    body : str
+    Returns:
 
     """
     # File name
@@ -221,7 +203,7 @@ def make_exposures():
     finish(f,body)
 
 def make_exposure(night, expid):
-    """ Geneate HTML for calib exposure PNGs
+    """ Generate HTML for calib exposure PNGs
 
     Parameters
     ----------
