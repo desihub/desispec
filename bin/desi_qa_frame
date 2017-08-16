@@ -5,7 +5,7 @@
 # -*- coding: utf-8 -*-
 
 """
-This script generates QA related to a production
+This script generates QA related to a Frame
 """
 
 import desispec.scripts.qa_frame as qa_frame

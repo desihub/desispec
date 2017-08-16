@@ -2,6 +2,7 @@
 """
 from __future__ import print_function, absolute_import, division
 
+import os
 import numpy as np
 from scipy import signal
 import scipy
@@ -121,10 +122,11 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
         wavg_res = np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
 
     # Plot
-    fig = plt.figure(figsize=(8, 10.0))
     if quick_look:
+        fig = plt.figure(figsize=(8, 10.0))
         gs = gridspec.GridSpec(4,2)
     else:
+        fig = plt.figure(figsize=(8, 6.0))
         gs = gridspec.GridSpec(2,2)
     xmin,xmax = np.min(frame.wave), np.max(frame.wave)
 
@@ -387,6 +389,7 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
 
     # Standard stars
     #stdfibers = (frame.fibermap['OBJTYPE'] == 'STD')
+    exptime = frame.meta['EXPTIME']
     stdfibers = np.where(frame.fibermap['OBJTYPE'] == 'STD')[0]
     stdstars = frame[stdfibers]
     #nstds = np.sum(stdfibers)
@@ -394,7 +397,7 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
 
     # Median spectrum
     medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)
-    ZP_AB = dsflux.ZP_from_calib(fluxcalib.wave, medcalib)
+    ZP_AB = dsflux.ZP_from_calib(exptime, fluxcalib.wave, medcalib)
 
 
     # Plot
@@ -428,7 +431,7 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
         gdp = stdstars.ivar[ii, :] > 0.
         icalib = fluxcalib.calib[stdfibers[ii]][gdp]
         i_wave = fluxcalib.wave[gdp]
-        ZP_star = dsflux.ZP_from_calib(i_wave, icalib)
+        ZP_star = dsflux.ZP_from_calib(exptime, i_wave, icalib)
         # Plot
         if ii == 0:
             lbl ='Individual stars'
@@ -454,6 +457,75 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     plt.close()
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
+
+
+def exposure_fibermap(channel, expid, metric):
+    from desispec.io.meta import find_exposure_night, findfile
+    from desispec.io.frame import read_meta_frame, read_frame
+    from desispec.io.fiberflat import read_fiberflat
+    log = get_logger()
+    # Find exposure
+    night = find_exposure_night(expid)
+    # Search for frames with the input channel
+    frame0 = findfile('frame', camera=channel+'0', night=night, expid=expid)
+    if not os.path.exists(frame0):
+        log.fatal("No Frame 0 for channel={:s} and expid={:d}".format(channel, expid))
+    # Confirm frame is a Flat
+    fmeta = read_meta_frame(frame0)
+    assert fmeta['FLAVOR'].strip() == 'flat'
+    # Load up all the frames
+    x,y,metrics = [],[],[]
+    for wedge in range(10):
+        # Load
+        frame_file = findfile('frame', camera=channel+'{:d}'.format(wedge), night=night, expid=expid)
+        fiber_file = findfile('fiberflat', camera=channel+'{:d}'.format(wedge), night=night, expid=expid)
+        frame = read_frame(frame_file)
+        fiberflat = read_fiberflat(fiber_file)
+        fibermap = frame.fibermap
+        gdp = fiberflat.mask == 0
+        # X,Y
+        x.append([fibermap['X_TARGET']])
+        y.append([fibermap['Y_TARGET']])
+        # Metric
+        if metric == 'meanflux':
+            mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1)
+            metrics.append([mean_norm])
+    # Cocatenate
+    x = np.concatenate(x)
+    y = np.concatenate(y)
+    metrics = np.concatenate(metrics)
+    # Plot
+    outfile='qa_{:08d}_{:s}_fibermap.png'.format(expid, channel)
+    exposure_map(x,y,metrics, mlbl='Mean Flux', title='Mean Flux for Exposure {:08d}, Channel {:s}'.format(expid, channel),
+                 outfile=outfile)
+
+def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None):
+
+    # Tile plot(s)
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(1,1)
+    jet = cm = plt.get_cmap('jet')
+    if mlbl is None:
+        mlbl = 'Metric'
+
+    # Mean Flatfield flux in each fiber
+    ax = plt.subplot(gs[0])
+    ax.set_aspect('equal', 'datalim')
+    if title is not None:
+        ax.set_title(title)
+
+    mplt = ax.scatter(x, y, marker='o', s=9., c=metric, cmap=jet)
+    #mplt.set_clim(vmin=med_mean-2*rms_mean, vmax=med_mean+2*rms_mean)
+    cb = fig.colorbar(mplt)
+    cb.set_label('Mean Flux')
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    if outfile is not None:
+        _ = makepath(outfile)
+        plt.savefig(outfile)
+        print('Wrote QA SkyRes file: {:s}'.format(outfile))
+    plt.close()
 
 def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     """ QA plots for fiber flat
@@ -503,7 +575,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
     mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1)
     m2plt = ax.scatter(xfiber, yfiber, marker='o', s=9., c=mean_norm, cmap=jet)
-    m2plt.set_clim(vmin=0.98, vmax=1.02)
+    #m2plt.set_clim(vmin=0.98, vmax=1.02)
     cb = fig.colorbar(m2plt)
     cb.set_label('Mean of Fiberflat')
 
@@ -561,9 +633,9 @@ def show_meta(ax, qaframe, qaflavor, outfil):
     i0 = outfil.rfind('/')
     ax.text(xlbl, ylbl, outfil[i0+1:], color='black', transform=ax.transAxes, ha='left')
     # Night
+    ylbl -= yoff
     ax.text(xlbl+0.1, ylbl, 'Night: '+qaframe.night,
             transform=ax.transAxes, ha='left', fontsize='x-small')
-    ylbl -= yoff
     # Rest
     for key in sorted(qaframe.qa_data[qaflavor]['METRICS'].keys()):
         if key in ['QA_FIG']:
