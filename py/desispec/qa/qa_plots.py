@@ -488,9 +488,10 @@ def exposure_fibermap(channel, expid, metric):
         x.append([fibermap['X_TARGET']])
         y.append([fibermap['Y_TARGET']])
         area = fiber_area_arcsec2(x[-1], y[-1])
+        mean_area = np.mean(area)
         # Metric
         if metric == 'meanflux':
-            mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1) / area
+            mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1) / (area / mean_area)
             metrics.append([mean_norm])
     # Cocatenate
     x = np.concatenate(x)
@@ -555,6 +556,8 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
         mt = np.where(fiber == fibermap['FIBER'])[0]
         xfiber[ii] = fibermap['X_TARGET'][mt]
         yfiber[ii] = fibermap['Y_TARGET'][mt]
+    area = fiber_area_arcsec2(xfiber,yfiber)
+    mean_area = np.mean(area)
 
     jet = cm = plt.get_cmap('jet')
 
@@ -579,7 +582,7 @@ def frame_fiberflat(outfil, qaframe, frame, fiberflat):
     # Mean
     ax = plt.subplot(gs[0,1])
     ax.xaxis.set_major_locator(plt.MultipleLocator(100.))
-    mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1) / fiber_area_arcsec2(xfiber,yfiber)
+    mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1) / (area/mean_area)
     m2plt = ax.scatter(xfiber, yfiber, marker='o', s=9., c=mean_norm, cmap=jet)
     #m2plt.set_clim(vmin=0.98, vmax=1.02)
     cb = fig.colorbar(m2plt)
