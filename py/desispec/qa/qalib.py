@@ -259,7 +259,6 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
     qadict['RESID_RMS'] = []
-    qadict['SKY_WARN'] = []
 
     qadict["SKY_FIBERID"]=skyfibers.tolist()
     #- Residuals in wave and fiber axes
