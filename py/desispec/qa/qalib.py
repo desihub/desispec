@@ -465,6 +465,7 @@ def SNRFit(frame,params,fidboundary=None):
             x=mags[xs]
             med_snr=medsnr[xs]
             neg_snr=len(np.where(med_snr<=0.0)[0])
+            qadict["NUM_NEGATIVE_SNR"]=neg_snr
             if neg_snr > 0:
                 x=mags[xs][:-neg_snr]
                 y=np.log10(med_snr[:-neg_snr])
