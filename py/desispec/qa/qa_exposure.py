@@ -36,7 +36,7 @@ class QA_Exposure(object):
             All input args become object attributes.
         """
         desi_params = read_params()
-        assert flavor in desi_params['frame_types']
+        assert flavor in desi_params['frame_types'], "Unknown flavor {} for night {} expid {}".format(flavor, night, expid)
         if flavor in ['science']:
             self.type = 'data'
         else:
