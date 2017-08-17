@@ -50,6 +50,7 @@ def fiducialregion(frame,psf):
     bottommax=frame.wave.shape[0] #- for amp 1 and 2
     topmin=0 #- for amp 3 and 4
 
+    #- Loop over each amp
     for kk in ['1','2','3','4']: #- 4 amps
         #- get the amp region in pix
         ampboundary=_parse_sec_keyword(frame.meta["CCDSEC"+kk])
@@ -326,10 +327,11 @@ def SignalVsNoise(frame,params,fidboundary=None):
     filters=frame.fibermap['FILTER']
 
     medsnr=SN_ratio(frame.flux,frame.ivar)
+
+    #- Calculate median SNR per bin and associate with imaging Mag. for ELG fibers
     elgfibers=np.where(frame.fibermap['OBJTYPE']=='ELG')[0]
     elg_medsnr=medsnr[elgfibers]
     elg_mag=np.zeros(len(elgfibers))
-
     for ii,fib in enumerate(elgfibers):
         if thisfilter not in filters[fib]:
             #- raise ValueError("{} is not available filter for fiber {}".format(thisfilter,fib))
@@ -339,10 +341,10 @@ def SignalVsNoise(frame,params,fidboundary=None):
             elg_mag[ii]=mags[fib][filters[fib]==thisfilter]
     elg_snr_mag=np.array((elg_medsnr,elg_mag)) #- not storing fiber number
 
+    #- Calculate median SNR, associate with imaging Mag for LRGs
     lrgfibers=np.where(frame.fibermap['OBJTYPE']=='LRG')[0]
     lrg_medsnr=medsnr[lrgfibers]
     lrg_mag=np.zeros(len(lrgfibers))
-
     for ii,fib in enumerate(lrgfibers):
         if thisfilter not in filters[fib]:
             print("WARNING!!! {} is not available filter for fiber {}".format(thisfilter,fib))
@@ -351,6 +353,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
             lrg_mag[ii]=mags[fib][filters[fib]==thisfilter]
     lrg_snr_mag=np.array((lrg_medsnr,lrg_mag))
 
+    #- Calculate median SNR, associate with imaging Mag. for QSOs
     qsofibers=np.where(frame.fibermap['OBJTYPE']=='QSO')[0]
     qso_medsnr=medsnr[qsofibers]
     qso_mag=np.zeros(len(qsofibers))
@@ -362,6 +365,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
             qso_mag[ii]=mags[fib][filters[fib]==thisfilter]
     qso_snr_mag=np.array((qso_medsnr,qso_mag))
 
+    #- Calculate median SNR, associate with Mag. for STD stars
     stdfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
     std_medsnr=medsnr[stdfibers]
     std_mag=np.zeros(len(stdfibers))
@@ -392,6 +396,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
     ra = frame.fibermap['RA_TARGET']
     dec = frame.fibermap['DEC_TARGET']
 
+    #- fill QA dict with metrics:
     qadict={"RA":ra, "DEC":dec, "MEDIAN_SNR":medsnr,"MEDIAN_AMP_SNR":average_amp, "ELG_FIBERID":elgfibers.tolist(), "ELG_SNR_MAG": elg_snr_mag, "LRG_FIBERID":lrgfibers.tolist(), "LRG_SNR_MAG": lrg_snr_mag, "QSO_FIBERID": qsofibers.tolist(), "QSO_SNR_MAG": qso_snr_mag, "STAR_FIBERID": stdfibers.tolist(), "STAR_SNR_MAG":std_snr_mag, "ELG_FIDMAG_SNR":elg_fidmag_snr, "STAR_FIDMAG_SNR":star_fidmag_snr}
 
     return qadict
@@ -434,6 +439,8 @@ def SNRFit(frame,params,fidboundary=None):
     funcMap={"linear":lambda x,a,b:a+b*x,
              "poly":lambda x,a,b,c:a+b*x+c*x**2
          }
+
+    #- Set up polynomial fit of SNR vs. Mag.
     fitfunc=funcMap["poly"]
     initialParams=[20.0,-1.0,0.05]
 #    if "Func" in params:
@@ -447,6 +454,12 @@ def SNRFit(frame,params,fidboundary=None):
     mediansnr=SN_ratio(frame.flux,frame.ivar)
     qadict={"MEDIAN_SNR":mediansnr}
     neg_snr_tot=[]
+    #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 
+    #- not happen for non-sky fibers with actual flux in them.  However, it does happen rarely 
+    #- in sims.  To avoid this, we omit such fibers in the fit, but keep count for diagnostic 
+    #- purposes.
+
+    #- Loop over each target type, and associate SNR and image magnitudes for each type.
     for T in ["ELG","QSO","LRG","STD"]:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
@@ -461,6 +474,7 @@ def SNRFit(frame,params,fidboundary=None):
                 mags[ii]=magnitudes[fib][filters[fib]==thisfilter]
 
         try:
+	    #- Determine negative SNR fibers and remove
             xs=mags.argsort()
             x=mags[xs]
             med_snr=medsnr[xs]
@@ -472,6 +486,8 @@ def SNRFit(frame,params,fidboundary=None):
             else:
                 x=mags[xs]
                 y=np.log10(med_snr)
+	    #- Fit SNR vs. Mag. to fit function, evaluate at fiducial magnitude, 
+            #- and store results in METRICS
             out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
             #out=optimize.curve_fit(polyFun,x,y,p0=initialParams)
             vs=out[0]
