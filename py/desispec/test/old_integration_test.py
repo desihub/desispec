@@ -86,7 +86,6 @@ def integration_test(night=None, nspec=5, clobber=False):
     #-----
     #- Input fibermaps, spectra, and pixel-level raw data
     raw_dict = {0: 'flat', 1: 'arc', 2: 'dark'}
-    #for expid, program in zip([0,1,2], ['flat', 'arc', 'dark']):
     for expid, program in raw_dict.items():
         cmd = "newexp-random --program {program} --nspec {nspec} --night {night} --expid {expid}".format(
             expid=expid, program=program, **params)
@@ -245,10 +244,15 @@ def integration_test(night=None, nspec=5, clobber=False):
     #-----
     #- Collate QA
     # Collate data QA
+    program2flavor = dict(arc='arc', flat='flat')
+    for program in ('dark', 'gray', 'bright', 'elg', 'lrg', 'qso', 'bgs', 'mws'):
+        program2flavor[program] = 'science'
+
     expid = 2
     qafile = io.findfile('qa_data_exp', night, expid)
     if clobber or not os.path.exists(qafile):
-        qaexp_data = QA_Exposure(expid, night, raw_dict[expid])  # Removes camera files
+        flavor = program2flavor[raw_dict[expid]]
+        qaexp_data = QA_Exposure(expid, night, flavor)  # Removes camera files
         io.write_qa_exposure(os.path.splitext(qafile)[0], qaexp_data)
         if not os.path.exists(qafile):
             raise RuntimeError('FAILED data QA_Exposure({},{}, ...) -> {}'.format(expid, night, qafile))
