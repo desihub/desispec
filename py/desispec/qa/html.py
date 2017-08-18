@@ -203,7 +203,7 @@ def make_exposures():
     finish(f,body)
 
 def make_exposure(night, expid):
-    """ Generate HTML for calib exposure PNGs
+    """ Generate HTML for exposure PNGs
 
     Parameters
     ----------
@@ -279,11 +279,21 @@ def toplevel():
     # Calib?
     calib2d_file = meta.findfile('qa_calib_html')
     if os.path.exists(calib2d_file):
-        f.write('<h2><a href="{:s}">Calibration QA</a></h2>\n'.format(calib2d_file))
+        # Truncate the path
+        c2d_path, fname = os.path.split(calib2d_file)
+        last_slash = c2d_path.rfind('/')
+        f.write('<h2><a href="{:s}">Calibration QA</a></h2>\n'.format(c2d_path[last_slash+1:]+'/'+fname))
+        # Full path
+        #f.write('<h2><a href="{:s}">Calibration QA</a></h2>\n'.format(calib2d_file))
     # Exposures?
     exposures_file = meta.findfile('qa_exposures_html')
     if os.path.exists(exposures_file):
-        f.write('<h2><a href="{:s}">Exposures QA</a></h2>\n'.format(exposures_file))
+        # Truncated path
+        exp_path, fname = os.path.split(exposures_file)
+        last_slash = exp_path.rfind('/')
+        f.write('<h2><a href="{:s}">Exposures QA</a></h2>\n'.format(exp_path[last_slash+1:]+'/'+fname))
+        # Full path
+        #f.write('<h2><a href="{:s}">Exposures QA</a></h2>\n'.format(exposures_file))
 
     # Existing PNGs
     f.write('<hr>\n')
