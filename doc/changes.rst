@@ -24,8 +24,8 @@ desispec Change Log
 * Generate HTML files with links to QA figures
 * Enable generation of Exposure level QA
 * Normalize fiberflat QA by fiber area
-* Fix exptime in fluxcalib ZP calculation
-* Add find_exposure_night() method
+* Fixed exptime in fluxcalib ZP calculation
+* Added find_exposure_night() method
 
 .. _`#422`: https://github.com/desihub/desispec/pull/422
 .. _`#424`: https://github.com/desihub/desispec/pull/424
