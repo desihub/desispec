@@ -9,20 +9,27 @@ desispec Change Log
 * Removes a number of QL metrics from offline qa
 * Fixes integration tests for desisim newexp refactor
 * Removes spectra grouping by brick; nside=64 healpix grouping default
-* Add get_nights method to io.meta (#422)
-* Add search_for_framefile method to io.frame (#422)
-* Add desi_qa_frame script to generate frame QA (#424)
-* Add frame_meta to parameters (for slurping the Frame headers)
-* Add get_reduced_frames() method to io.meta
-* Modifies QA_Prod meta file output to be JSON
-* Add load_meta() method to QA_Exposure
-* Add time_series ploting to desi_qa_prod
-* Add several new plots for skysub residuals
-* Adds method to generate QA Table for Prod
-* Refactor of skysubresid script
+* Add get_nights method to io.meta (PR `#422`_)
+* Add search_for_framefile method to io.frame (PR `#422`_)
+* Add desi_qa_frame script to generate frame QA (PR `#424`_)
+* Add frame_meta to parameters (for slurping the Frame headers) (PR `#425`_)
+* Add get_reduced_frames() method to io.meta (PR `#425`_)
+* Modifies QA_Prod meta file output to be JSON (PR `#425`_)
+* Add load_meta() method to QA_Exposure (PR `#425`_)
+* Add time_series ploting to desi_qa_prod (PR `#425`_)
+* Add several new plots for skysub residuals (PR `#425`_)
+* Adds method to generate QA Table for Prod (PR `#425`_)
+* Refactor of skysubresid script (PR `#425`_)
+* Refactor QA files to sit in their own folder tree
+* Generate HTML files with links to QA figures
+* Enable generation of Exposure level QA
+* Normalize fiberflat QA by fiber area
+* Fix exptime in fluxcalib ZP calculation
+* Add find_exposure_night() method
 
 .. _`#422`: https://github.com/desihub/desispec/pull/422
 .. _`#424`: https://github.com/desihub/desispec/pull/424
+.. _`#425`: https://github.com/desihub/desispec/pull/425
 
 0.15.2 (2017-07-12)
 -------------------
