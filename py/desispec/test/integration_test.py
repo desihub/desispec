@@ -187,7 +187,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     fibermap = io.read_fibermap(fmfile)
     simdir = os.path.dirname(fmfile)
     simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
-    siminfo = fits.getdata(simspec, 'METADATA')
+    siminfo = fits.getdata(simspec, 'TRUTH')
 
     from desimodel.footprint import radec2pix
     nside=64
@@ -197,7 +197,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("--------------------------------------------------")
     print("Pixel     True  z        ->  Class  z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
-    for p in pixels:
+    for pix in pixels:
         zbest = io.read_zbest(io.findfile('zbest', groupname=pix))
         for i in range(len(zbest.z)):
             objtype = zbest.spectype[i]
