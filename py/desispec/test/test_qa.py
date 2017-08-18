@@ -13,7 +13,9 @@ from desispec.qa.qa_frame import QA_Frame
 from desispec.qa.qa_exposure import QA_Exposure
 from desispec.qa.qa_brick import QA_Brick
 from desispec.qa.qa_prod import QA_Prod
-from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure
+from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure, findfile, write_frame
+from desispec.io import write_fiberflat, specprod_root
+from desispec.test.util import get_frame_data, get_calib_from_frame, get_fiberflat_from_frame
 #from uuid import uuid4
 from shutil import rmtree
 
@@ -26,17 +28,28 @@ class TestQA(unittest.TestCase):
         id = 1
         cls.night = '20160101'
         cls.expid = 1
-        cls.testDir = os.path.join(os.environ['HOME'],'desi_test_qa')
-        cls.qafile_b0 = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-b0-{:08d}.yaml'.format(id,id)
-        cls.qafile_b1 = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-b1-{:08d}.yaml'.format(id,id)
+        # Paths
+        os.environ['DESI_SPECTRO_REDUX'] = os.environ['HOME']
+        os.environ['SPECPROD'] = 'desi_test_qa'
+        # Files
+        cls.testDir = specprod_root()
+        cls.qafile_b0 = findfile('qa_data', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b0')
+        cls.qafile_b1 = findfile('qa_data', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b1')
         cls.qafile_exp = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-{:08d}'.format(id,id)
         cls.qafile_brick = cls.testDir+'/brick/3582m005/qa-3582m005.yaml'
         cls.flux_pdf = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-flux-{:08d}.pdf'.format(id,id)
+        # Files for exposure fibermap QA figure
+        cls.frame_b0 = findfile('frame', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b0')
+        cls.frame_b1 = findfile('frame', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b1')
+        cls.fflat_b0 = findfile('fiberflat', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b0')
+        cls.fflat_b1 = findfile('fiberflat', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b1')
+        cls.exp_fmap_plot = cls.testDir+'/test_exp_fibermap_plot.png'
 
     @classmethod
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
-        for filename in [cls.qafile_b0, cls.qafile_b1, cls.flux_pdf]:
+        for filename in [cls.qafile_b0, cls.qafile_b1, cls.flux_pdf, cls.frame_b0, cls.frame_b1,
+                         cls.fflat_b0, cls.fflat_b1, cls.exp_fmap_plot]:
             if os.path.exists(filename):
                 os.remove(filename)
                 #testpath = os.path.normpath(os.path.dirname(filename))
@@ -45,23 +58,31 @@ class TestQA(unittest.TestCase):
         if os.path.exists(cls.testDir):
             rmtree(cls.testDir)
 
-    def _make_frame(self, camera='b0', flavor='science', night=None, expid=None):
+    def _make_frame(self, camera='b0', flavor='science', night=None, expid=None, nspec=3, objtype=None):
         if night is None:
             night = self.night
         if expid is None:
             expid = self.expid
-        nspec = 3
-        nwave = 10
-        wave = np.arange(nwave)
-        flux = np.random.uniform(size=(nspec, nwave))
-        ivar = np.ones(flux.shape)
-        frame = Frame(wave, flux, ivar, spectrograph=0)
+        # Generate
+        frame = get_frame_data(nspec=nspec, objtype=objtype)
         frame.meta = dict(CAMERA=camera, FLAVOR=flavor, NIGHT=night, EXPID=expid)
         return frame
 
+    def _write_flat_files(self):
+        # Frames
+        fb0 = self._make_frame(camera='b0', flavor='flat', nspec=10, objtype='FLAT')
+        _ = write_frame(self.frame_b0, fb0)
+        fb1 = self._make_frame(camera='b1', flavor='flat', nspec=10, objtype='FLAT')
+        _ = write_frame(self.frame_b1, fb1)
+        # Fiberflats
+        ff0 = get_fiberflat_from_frame(fb0)
+        write_fiberflat(self.fflat_b0, ff0)
+        ff1 = get_fiberflat_from_frame(fb1)
+        write_fiberflat(self.fflat_b1, ff1)
+
     def _write_qaframes(self):
         """Write QA data frame files"""
-        frm0 = self._make_frame()
+        frm0 = self._make_frame(camera='b0')
         frm1 = self._make_frame(camera='b1')
         qafrm0 = QA_Frame(frm0)
         qafrm1 = QA_Frame(frm1)
@@ -165,6 +186,11 @@ class TestQA(unittest.TestCase):
         # Write
         write_qa_exposure(self.qafile_exp, qaexp)
 
+    def test_exposure_fibermap_plot(self):
+        from desispec.qa.qa_plots import exposure_fibermap
+        self._write_flat_files()
+        exposure_fibermap('b', self.expid, 'meanflux', outfile=self.exp_fmap_plot)
+
     """
     # This needs to run as a script for the figure generation to pass Travis..
     def test_qa_exposure_fluxcalib(self):
@@ -189,7 +215,6 @@ class TestQA(unittest.TestCase):
     def test_qa_frame_plot(self):
         from desispec.qa import qa_plots
         from desispec.qa import qa_frame
-        from desispec.test.util import get_frame_data, get_calib_from_frame
         # Frame
         frame = get_frame_data(500)
         # Load calib
