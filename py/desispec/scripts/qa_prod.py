@@ -6,7 +6,7 @@ import numpy as np
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.4]")
+    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.4.1]")
 
     parser.add_argument('--reduxdir', type = str, default = None, required=False,
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
@@ -22,7 +22,8 @@ def parse(options=None):
                         help='Generate channel histogram(s)')
     parser.add_argument('--time_series', type=str, default=None,
                         help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-MED_RESID')
-    parser.add_argument('--html', type=bool, default=False, help='Generate HTML files')
+    parser.add_argument('--html', default = False, action='store_true',
+                        help = 'Generate HTML files?')
 
     args = None
     if options is None:
