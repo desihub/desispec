@@ -35,7 +35,7 @@ Algorithms:
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5201.8],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8]
+                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
                          XSHIFT_WARN_RANGE: [-2.0, 2.0],
                          XSHIFT_ALARM_RANGE: [-4.0, 4.0],
                          WSHIFT_WARN_RANGE: [-2.0, 2.0],
@@ -43,7 +43,7 @@ Algorithms:
     BootCalibration:
         QA: {}
     BoxcarExtract:
-        wavelength:{
+        wavelength: {
             b: [3550,5730,0.8],
             r: [5630,7740,0.8],
             z: [7650,9830,0.8]
