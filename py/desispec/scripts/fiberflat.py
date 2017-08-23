@@ -34,6 +34,8 @@ def parse(options=None):
                         help = 'nsigma clipping')
     parser.add_argument('--acc', type = float, default = 5.e-4, required=False,
                         help = 'required accuracy (iterative loop)')
+    parser.add_argument('--smoothing-resolution', type = float, default = 20., required=False,
+                        help = 'resolution for spline fit to reject outliers')
 
 
     args = None
@@ -51,7 +53,7 @@ def main(args) :
 
     # Process
     frame = read_frame(args.infile)
-    fiberflat = compute_fiberflat(frame,nsig_clipping=args.nsig,accuracy=args.acc)
+    fiberflat = compute_fiberflat(frame,nsig_clipping=args.nsig,accuracy=args.acc,smoothing_res=args.smoothing_resolution)
 
     # QA
     if (args.qafile is not None):
