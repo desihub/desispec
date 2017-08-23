@@ -20,7 +20,7 @@ from desiutil.log import get_logger
 import math
 
 
-def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=10.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
+def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxval=10.,max_iterations=100,smoothing_res=5.,max_bad=100,max_rej_it=5,min_sn=0,diag_epsilon=1e-3) :
     """Compute fiber flat by deriving an average spectrum and dividing all fiber data by this average.
     Input data are expected to be on the same wavelength grid, with uncorrelated noise.
     They however do not have exactly the same resolution.
@@ -289,9 +289,12 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
         log.info("2nd pass, iter %d, max diff. = %g > requirement = %g, continue iterating"%(iteration,max_diff,accuracy))
 
+
+
+    
     log.info("Total number of masked pixels=%d"%nout_tot)
     log.info("3rd pass, final computation of fiber flat")
-
+    
     # now use mean spectrum to compute flat field correction without any smoothing
     # because sharp feature can arise if dead columns
 
@@ -326,10 +329,11 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             chi2=fiberflat_ivar[fiber]*(fiberflat[fiber]-smooth_fiberflat)**2
             bad=np.where(chi2>nsig_for_mask**2)[0]
             if bad.size>0 :
-
-                if bad.size>5 : # not more than 5 pixels at a time
+                
+                nbadmax=1
+                if bad.size>nbadmax : # not more than nbadmax pixels at a time
                     ii=np.argsort(chi2[bad])
-                    bad=bad[ii[-5:]]
+                    bad=bad[ii[-nbadmax:]]
 
                 mask[fiber,bad] += fiberflat_mask
                 fiberflat_ivar[fiber,bad] = 0.
@@ -337,8 +341,33 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             else :
                 break
             iteration += 1
+
+        
+        log.info("3rd pass : fiber #%d , number of iterations %d"%(fiber,iteration))
+    
+    
+    # set median flat to 1
+    log.info("3rd pass : set median fiberflat to 1")
+
+    mean=np.ones((flux.shape[1]))
+    for i in range(flux.shape[1]) :
+        ok=np.where((mask[:,i]==0)&(ivar[:,i]>0))[0]
+        if ok.size > 0 :
+            mean[i] = np.median(fiberflat[ok,i])
+    ok=np.where(mean!=0)[0]
+    for fiber in range(nfibers) :
+        fiberflat[fiber,ok] /= mean[ok]  
+
+    log.info("3rd pass : interpolating over masked pixels")
+
+
+    for fiber in range(nfibers) :
+
+        if np.sum(ivar[fiber]>0)==0 :
+            continue
         # replace bad by smooth fiber flat
         bad=np.where((mask[fiber]>0)|(fiberflat_ivar[fiber]==0)|(fiberflat[fiber]<minval)|(fiberflat[fiber]>maxval))[0]
+        
         if bad.size>0 :
 
             fiberflat_ivar[fiber,bad] = 0
@@ -358,7 +387,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
                 length=max(length,ilength)
             if length>10 :
                 log.info("3rd pass : fiber #%d has a max length of bad pixels=%d"%(fiber,length))
-            smoothing_res=float(max(100,2*length))
+            smoothing_res=float(max(100,length))
             x=np.arange(wave.size)
 
             ok=fiberflat_ivar[fiber]>0
