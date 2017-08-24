@@ -100,7 +100,7 @@ def main(args):
     else:
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
-        dw = 0.5
+        dw = 0.7
 
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)
