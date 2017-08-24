@@ -99,7 +99,7 @@ class TestBinScripts(unittest.TestCase):
         Rdata = np.ones((self.nspec, 1, self.nwave))
         fibermap = self._get_fibermap()
         frame = Frame(wave, flux, ivar, mask, Rdata, fibermap=fibermap,
-                      meta=dict(FLAVOR=flavor, CAMERA=camera, EXPID=expid, NIGHT=night))
+                      meta=dict(FLAVOR=flavor, CAMERA=camera, EXPID=expid, NIGHT=night, EXPTIME=1000.))
         io.write_frame(self.framefile, frame)
 
     def _write_fiberflat(self):

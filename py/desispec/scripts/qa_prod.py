@@ -4,9 +4,10 @@ from __future__ import absolute_import, division
 import argparse
 import numpy as np
 
+from  desispec import _version as desis_v
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v1.3]")
+    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v{:s}]".format(desis_v.__offline_qa_version__))
 
     parser.add_argument('--reduxdir', type = str, default = None, required=False,
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
@@ -22,6 +23,8 @@ def parse(options=None):
                         help='Generate channel histogram(s)')
     parser.add_argument('--time_series', type=str, default=None,
                         help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-MED_RESID')
+    parser.add_argument('--html', default = False, action='store_true',
+                        help = 'Generate HTML files?')
 
     args = None
     if options is None:
@@ -34,6 +37,7 @@ def parse(options=None):
 def main(args) :
 
     from desispec.qa import QA_Prod
+    from desispec.qa import html
     from desiutil.log import get_logger
     from desispec.io import meta
 
@@ -56,7 +60,8 @@ def main(args) :
         else:
             make_frame_plots = False
         # Run
-        qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
+        if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
+            qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
 
     # Slurp?
     if args.slurp:
@@ -87,4 +92,11 @@ def main(args) :
         qa_prod.load_data()
         # Run
         qatype, metric = args.time_series.split('-')
-        dqqp.prod_time_series(qa_prod, qatype, metric, outfile='QA_{:s}.png'.format(args.time_series))
+        outfile= specprod_dir+'/QA/QA_time_{:s}.png'.format(args.time_series)
+        dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile)
+
+    # HTML
+    if args.html:
+        html.calib()
+        html.make_exposures()
+        html.toplevel()

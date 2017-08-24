@@ -1119,9 +1119,10 @@ def apply_flux_calibration(frame, fluxcalib):
             frame.ivar[i,ok] = 1./( 1./(frame.ivar[i,ok]*C[i,ok]**2)+frame.flux[i,ok]**2/(fluxcalib.ivar[i,ok]*C[i,ok]**4)  )
 
 
-def ZP_from_calib(wave, calib):
+def ZP_from_calib(exptime, wave, calib):
     """ Calculate the ZP in AB magnitudes given the calibration and the wavelength arrays
     Args:
+        exptime:  float;  exposure time in seconds
         wave:  1D array (A)
         calib:  1D array (converts erg/s/A to photons/s/A)
 
@@ -1129,7 +1130,7 @@ def ZP_from_calib(wave, calib):
       ZP_AB: 1D array of ZP values in AB magnitudes
 
     """
-    ZP_flambda = 1e-17 / calib  # erg/s/cm^2/A
+    ZP_flambda = 1e-17 / (calib/exptime)  # erg/s/cm^2/A
     ZP_fnu = ZP_flambda * wave**2 / (2.9979e18)  # c in A/s
     # Avoid 0 values
     ZP_AB = np.zeros_like(ZP_fnu)
@@ -1155,6 +1156,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     qadict = {}
 
     # Unpack model
+    exptime = frame.meta['EXPTIME']
 
     # Standard stars
     stdfibers = np.where((frame.fibermap['OBJTYPE'] == 'STD'))[0]
@@ -1168,7 +1170,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
     # Calculate ZP for mean spectrum
     #medcalib = np.median(fluxcalib.calib,axis=0)
     medcalib = np.median(fluxcalib.calib[stdfibers],axis=0)
-    ZP_AB = ZP_from_calib(fluxcalib.wave, medcalib)  # erg/s/cm^2/A
+    ZP_AB = ZP_from_calib(exptime, fluxcalib.wave, medcalib)  # erg/s/cm^2/A
 
     # ZP at fiducial wavelength (AB mag for 1 photon/s/A)
     iZP = np.argmin(np.abs(fluxcalib.wave-param['ZP_WAVE']))
@@ -1187,7 +1189,7 @@ def qa_fluxcalib(param, frame, fluxcalib):
         icalib = fluxcalib.calib[stdfibers[ii]][gdp]
         i_wave = fluxcalib.wave[gdp]
         # ZP
-        ZP_stars = ZP_from_calib(i_wave, icalib)
+        ZP_stars = ZP_from_calib(exptime, i_wave, icalib)
         iZP = np.argmin(np.abs(i_wave-param['ZP_WAVE']))
         ZP_fiducial[ii] = float(np.median(ZP_stars[iZP-10:iZP+10]))
     #import pdb; pdb.set_trace()

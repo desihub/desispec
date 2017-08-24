@@ -108,7 +108,6 @@ class QA_Exposure(object):
         qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
                                   expid=self.expid,
                                   specprod_dir=self.specprod_dir)
-        #import pdb; pdb.set_trace()
         # Load into frames
         for camera,qadata_path in qafiles.items():
             qa_frame = desiio.load_qa_frame(qadata_path)

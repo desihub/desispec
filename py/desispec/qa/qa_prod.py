@@ -107,7 +107,7 @@ class QA_Prod(object):
         from desispec.io.qa import load_qa_prod
         #
         if inroot is None:
-            inroot = self.specprod_dir+'/'+self.prod_name+'_qa'
+            inroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
         self.data = load_qa_prod(inroot)
 
     def make_frameqa(self, make_plots=False, clobber=True):
@@ -242,7 +242,7 @@ class QA_Prod(object):
                 # Append
                 self.qa_exps.append(qa_exp)
         # Write
-        outroot = self.specprod_dir+'/'+self.prod_name+'_qa'
+        outroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
         write_qa_prod(outroot, self)
 
     def __repr__(self):

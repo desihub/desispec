@@ -54,16 +54,21 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
         calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits',
-        qa_data = '{specprod_dir}/exposures/{night}/{expid:08d}/qa-{camera}-{expid:08d}.yaml',
-        qa_data_exp = '{specprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
-        qa_bootcalib = '{specprod_dir}/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
-        qa_sky_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/qa-sky-{camera}-{expid:08d}.png',
-        qa_flux_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/qa-flux-{camera}-{expid:08d}.png',
-        qa_calib = '{specprod_dir}/calib2d/{night}/qa-{camera}-{expid:08d}.yaml',
-        qa_calib_exp = '{specprod_dir}/calib2d/{night}/qa-{expid:08d}.yaml',
-        qa_flat_fig = '{specprod_dir}/calib2d/{night}/qa-flat-{camera}-{expid:08d}.png',
-        qa_ztruth = '{specprod_dir}/exposures/{night}/qa-ztruth-{night}.yaml',
-        qa_ztruth_fig = '{specprod_dir}/exposures/{night}/qa-ztruth-{night}.png',
+        qa_data = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-{camera}-{expid:08d}.yaml',
+        qa_data_exp = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
+        qa_bootcalib = '{specprod_dir}/QA/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
+        qa_sky_fig = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-sky-{camera}-{expid:08d}.png',
+        qa_flux_fig = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-flux-{camera}-{expid:08d}.png',
+        qa_toplevel_html = '{specprod_dir}/QA/qa-toplevel.html',
+        qa_calib = '{specprod_dir}/QA/calib2d/{night}/qa-{camera}-{expid:08d}.yaml',
+        qa_calib_html = '{specprod_dir}/QA/calib2d/qa-calib2d.html',
+        qa_calib_exp = '{specprod_dir}/QA/calib2d/{night}/qa-{expid:08d}.yaml',
+        qa_calib_exp_html = '{specprod_dir}/QA/calib2d/{night}/qa-{expid:08d}.html',
+        qa_exposures_html = '{specprod_dir}/QA/exposures/qa-exposures.html',
+        qa_exposure_html = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-{expid:08d}.html',
+        qa_flat_fig = '{specprod_dir}/QA/calib2d/{night}/qa-flat-{camera}-{expid:08d}.png',
+        qa_ztruth = '{specprod_dir}/QA/exposures/{night}/qa-ztruth-{night}.yaml',
+        qa_ztruth_fig = '{specprod_dir}/QA/exposures/{night}/qa-ztruth-{night}.png',
         ql_boxextract_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-boxextract-{camera}-{expid:08d}.png',
         ql_boxextract_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-boxextract-{camera}-{expid:08d}.yaml',
         ql_countbins_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-countbins-{camera}-{expid:08d}.png',
@@ -239,7 +244,24 @@ def validate_night(night):
         raise RuntimeError('Badly formatted night %s' % night)
 
 
-def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
+def find_exposure_night(expid):
+    """ Find the night that has the exposure
+    Args:
+        expid: int
+
+    Returns:
+        night: str
+
+    """
+    # Search for the exposure folder
+    nights = get_nights()
+    for night in nights:
+        for exposure in get_exposures(night):
+            if exposure == expid:
+                return night
+
+
+def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None, ):
     """Get a list of available exposures for the specified night.
 
     Exposures are identified as correctly formatted subdirectory names within the
@@ -330,12 +352,13 @@ def get_reduced_frames(channels=['b','r','z'], nights=None, ftype='cframe'):
     return all_frames
 
 
-def get_nights(strip_path=True, specprod_dir=None):
+def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
     """
     Args:
         strip_path:  bool, optional; Strip the path to the nights folders
         rawdata_dir:
         specprod_dir:
+        sub_root: str, optional;  'exposures', 'calib2d'
 
     Returns:
         nights: list of nights (without or with paths)
@@ -344,8 +367,8 @@ def get_nights(strip_path=True, specprod_dir=None):
     if specprod_dir is None:
         specprod_dir = specprod_root()
     # Glob for nights
-    exp_path = os.path.join(specprod_dir,'exposures')
-    nights_path = glob.glob(exp_path+'/*')
+    sub_path = os.path.join(specprod_dir, sub_folder)
+    nights_path = glob.glob(sub_path+'/*')
     # Strip off path?
     if strip_path:
         return [night_path.split('/')[-1] for night_path in nights_path]

@@ -595,6 +595,8 @@ class TestIO(unittest.TestCase):
         for night in ['20150101', '20150102']:
             x = findfile('frame', camera='b0', night=night, expid=123)
             makepath(x)
+            x = findfile('fiberflat', camera='b0', night=night, expid=123)
+            makepath(x)
         # Search for nights
         nights = get_nights()
         self.assertEqual(len(nights), 2)
@@ -603,6 +605,9 @@ class TestIO(unittest.TestCase):
         # Keep path
         nights = get_nights(strip_path=False)
         self.assertTrue('/' in nights[0])
+        # Calib
+        nights = get_nights(sub_folder='calib2d')
+        self.assertTrue('20150102' in nights)
 
     def test_search_framefile(self):
         """ Test desispec.io.frame.search_for_framefile
@@ -640,6 +645,27 @@ class TestIO(unittest.TestCase):
         # Find it
         mfile = get_reduced_frames()
         self.assertEqual(2, len(mfile))
+
+    def test_find_exposure_night(self):
+        """ Test desispec.io.find_exposure_night
+        """
+        from ..io import find_exposure_night
+        from ..io.meta import findfile
+        from ..io.util import makepath
+        # Setup paths
+        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # Generate a dummy frame file
+        for expid, night in zip((123, 150), ['20150101', '20150102']):
+            x = findfile('cframe', camera='b0', night=night, expid=expid)
+            makepath(x)
+            with open(x, 'a') as f:
+                pass
+        # Find it
+        night1 = find_exposure_night(123)
+        self.assertEqual(night1, '20150101')
+        night1 = find_exposure_night(150)
+        self.assertEqual(night1, '20150102')
 
     @unittest.skipUnless(os.path.exists(os.path.join(os.environ['HOME'],'.netrc')),"No ~/.netrc file detected.")
     def test_download(self):

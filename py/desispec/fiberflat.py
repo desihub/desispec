@@ -554,7 +554,20 @@ def qa_fiberflat(param, frame, fiberflat):
         qadict: dict of QA outputs
           Need to record simple Python objects for yaml (str, float, int)
     """
+    from desimodel.focalplane import fiber_area_arcsec2
     log = get_logger()
+
+    # x, y, area
+    fibermap = frame.fibermap
+    x = fibermap['X_TARGET']
+    y = fibermap['Y_TARGET']
+    area = fiber_area_arcsec2(x, y)
+    mean_area = np.mean(area)
+    norm_area = area / mean_area
+    npix = fiberflat.fiberflat.shape[1]
+
+    # Normalize
+    norm_flat = fiberflat.fiberflat / np.outer(norm_area, np.ones(npix))
 
     # Output dict
     qadict = {}
@@ -577,7 +590,7 @@ def qa_fiberflat(param, frame, fiberflat):
 
     # Scale (search for low/high throughput)
     gdp = fiberflat.mask == 0
-    rtio = frame.flux / np.outer(np.ones(fiberflat.nspec),fiberflat.meanspec)
+    rtio = (frame.flux / np.outer(norm_area, np.ones(npix))) / np.outer(np.ones(fiberflat.nspec),fiberflat.meanspec)
     scale = np.median(rtio*gdp,axis=1)
     MAX_SCALE_OFF = float(np.max(np.abs(scale-1.)))
     fiber = int(np.argmax(np.abs(scale-1.)))
@@ -587,12 +600,13 @@ def qa_fiberflat(param, frame, fiberflat):
                 qadict['MAX_SCALE_OFF'][0], qadict['MAX_SCALE_OFF'][1]))
 
     # Offset in fiberflat
-    qadict['MAX_OFF'] = float(np.max(np.abs(fiberflat.fiberflat-1.)))
+    qadict['MAX_OFF'] = float(np.max(np.abs(norm_flat-1.)))
     if qadict['MAX_OFF'] > param['MAX_OFF']:
         log.warning("Large offset in fiberflat: {:g}".format(qadict['MAX_OFF']))
 
     # Offset in mean of fiberflat
-    mean = np.mean(fiberflat.fiberflat*gdp,axis=1)
+    #mean = np.mean(fiberflat.fiberflat*gdp,axis=1)
+    mean = np.mean(norm_flat*gdp,axis=1)
     fiber = int(np.argmax(np.abs(mean-1.)))
     qadict['MAX_MEAN_OFF'] = [float(np.max(np.abs(mean-1.))), fiber]
     if qadict['MAX_MEAN_OFF'][0] > param['MAX_MEAN_OFF']:
@@ -600,8 +614,9 @@ def qa_fiberflat(param, frame, fiberflat):
                 qadict['MAX_MEAN_OFF'][0], qadict['MAX_MEAN_OFF'][1]))
 
     # RMS in individual fibers
-    rms = np.std(gdp*(fiberflat.fiberflat-
-                      np.outer(mean, np.ones(fiberflat.nwave))),axis=1)
+    rms = np.std(gdp*(norm_flat - np.outer(mean, np.ones(fiberflat.nwave))),axis=1)
+    #rms = np.std(gdp*(fiberflat.fiberflat-
+    #                  np.outer(mean, np.ones(fiberflat.nwave))),axis=1)
     fiber = int(np.argmax(rms))
     qadict['MAX_RMS'] = [float(np.max(rms)), fiber]
     if qadict['MAX_RMS'][0] > param['MAX_RMS']:
