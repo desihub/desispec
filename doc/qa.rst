@@ -31,7 +31,7 @@ Here is the usage::
     usage: desi_qa_frame [-h] --frame_file FRAME_FILE [--reduxdir PATH]
                          [--make_plots]
 
-    Generate Frame Level QA [v1.0]
+    Generate Frame Level QA [v0.4.1]
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -66,7 +66,7 @@ Here is the usage::
     usage: desi_qa_exposure [-h] --expid EXPID --qatype QATYPE
                             [--channels CHANNELS] [--reduxdir PATH]
 
-    Generate Exposure Level QA [v1.0]
+    Generate Exposure Level QA [v0.4.1]
 
     optional arguments:
       -h, --help           show this help message and exit
@@ -100,7 +100,7 @@ Here is the usage::
                         [--channels CHANNELS] [--prod] [--gauss]
                         [--nights NIGHTS]
 
-    Generate QA on Sky Subtraction residuals [v1.2]
+    Generate QA on Sky Subtraction residuals [v0.4.1]
 
     optional arguments:
       -h, --help           show this help message and exit

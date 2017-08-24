@@ -4,9 +4,10 @@ from __future__ import absolute_import, division
 from desiutil.log import get_logger
 import argparse
 
+from  desispec import _version as desis_v
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate Exposure Level QA [v1.0]")
+    parser = argparse.ArgumentParser(description="Generate Exposure Level QA [v{:s}]".format(desis_v.__offline_qa_version__))
     parser.add_argument('--expid', type = int, required=True, help='Exposure ID')
     parser.add_argument('--qatype', type = str, required=True,
                         help="Type of QA to generate [fibermap]")
