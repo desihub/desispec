@@ -556,6 +556,7 @@ def setup_db(options):
         ``True`` if the configured database is a PostgreSQL database.
     """
     global engine, schemaname
+    from os import remove
     from os.path import basename, exists, join
     from desiutil.log import get_logger
     log = get_logger()
@@ -661,7 +662,6 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    from os import remove
     from os.path import join
     # from pkg_resources import resource_filename
     from pytz import utc
