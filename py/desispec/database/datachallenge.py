@@ -389,7 +389,9 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    zbestpath = join(datapath, 'spectro', 'redux', run1d, 'spectra-64',
+    # zbestpath = join(datapath, 'spectro', 'redux', run1d, 'spectra-64',
+    #                  '*', '*', 'zbest-64-*.fits')
+    zbestpath = join(datapath, 'spectra-64',
                      '*', '*', 'zbest-64-*.fits')
     log.info("Using zbest file search path: %s.", zbestpath)
     zbest_files = glob(zbestpath)
