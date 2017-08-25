@@ -540,61 +540,25 @@ def q3c_index(table):
     return
 
 
-def main():
-    """Entry point for command-line script.
+def setup_db(options):
+    """Initialize the database connection.
+
+    Parameters
+    ----------
+    options : :class:`argpare.Namespace`
+        Parsed command-line options.
 
     Returns
     -------
-    :class:`int`
-        An integer suitable for passing to :func:`sys.exit`.
+    :class:`bool`
+        ``True`` if the configured database is a PostgreSQL database.
     """
     global engine, schemaname
-    from os import remove
     from os.path import basename, exists, join
-    from sys import argv
-    from argparse import ArgumentParser
-    from pkg_resources import resource_filename
-    from pytz import utc
-    from desiutil.log import get_logger, DEBUG, INFO
+    from desiutil.log import get_logger
+    log = get_logger()
     #
-    # command-line arguments
-    #
-    prsr = ArgumentParser(description=("Load a data challenge simulation into a " +
-                                       "database."),
-                          prog=basename(argv[0]))
-    prsr.add_argument('-c', '--clobber', action='store_true', dest='clobber',
-                      help='Delete any existing file(s) before loading.')
-    prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
-                      default='quicksurvey.db', metavar='FILE',
-                      help="Store data in FILE.")
-    prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
-                      metavar='HOSTNAME',
-                      help='If specified, connect to a PostgreSQL database on HOSTNAME.')
-    prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
-                      type=int, default=0, metavar='M',
-                      help="Load up to M rows in the tables (default is all rows).")
-    prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
-                      type=int, default=50000, metavar='N',
-                      help="Load N rows at a time (default %(default)s).")
-    prsr.add_argument('-s', '--schema', action='store', dest='schema',
-                      metavar='SCHEMA',
-                      help='Set the schema name in the PostgreSQL database.')
-    prsr.add_argument('-U', '--username', action='store', dest='username',
-                      metavar='USERNAME', default='desidev_admin',
-                      help="If specified, connect to a PostgreSQL database with USERNAME.")
-    prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
-                      help='Print extra information.')
-    prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
-    options = prsr.parse_args()
-    #
-    # Logging
-    #
-    if options.verbose:
-        log = get_logger(DEBUG, timestamp=True)
-    else:
-        log = get_logger(INFO, timestamp=True)
-    #
-    # Schema.
+    # Schema creation
     #
     if options.schema:
         schemaname = options.schema
@@ -635,6 +599,86 @@ def main():
         tab.schema = schemaname
     Base.metadata.create_all(engine)
     log.info("Finished creating tables.")
+    return postgresql
+
+
+def get_options(*args):
+    """Parse command-line options.
+
+    Parameters
+    ----------
+    args : iterable
+        If arguments are passed, use them instead of ``sys.argv``.
+
+    Returns
+    -------
+    :class:`argparse.Namespace`
+        The parsed options.
+    """
+    from sys import argv
+    from os.path import basename
+    from argparse import ArgumentParser
+    prsr = ArgumentParser(description=("Load a data challenge simulation into a " +
+                                       "database."),
+                          prog=basename(argv[0]))
+    prsr.add_argument('-c', '--clobber', action='store_true', dest='clobber',
+                      help='Delete any existing file(s) before loading.')
+    prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
+                      default='quicksurvey.db', metavar='FILE',
+                      help="Store data in FILE.")
+    prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
+                      metavar='HOSTNAME',
+                      help='If specified, connect to a PostgreSQL database on HOSTNAME.')
+    prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
+                      type=int, default=0, metavar='M',
+                      help="Load up to M rows in the tables (default is all rows).")
+    prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
+                      type=int, default=50000, metavar='N',
+                      help="Load N rows at a time (default %(default)s).")
+    prsr.add_argument('-s', '--schema', action='store', dest='schema',
+                      metavar='SCHEMA',
+                      help='Set the schema name in the PostgreSQL database.')
+    prsr.add_argument('-U', '--username', action='store', dest='username',
+                      metavar='USERNAME', default='desidev_admin',
+                      help="If specified, connect to a PostgreSQL database with USERNAME.")
+    prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
+                      help='Print extra information.')
+    prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
+    if len(args) > 0:
+        options = prsr.parse_args(args)
+    else:
+        options = prsr.parse_args()
+    return options
+
+
+def main():
+    """Entry point for command-line script.
+
+    Returns
+    -------
+    :class:`int`
+        An integer suitable for passing to :func:`sys.exit`.
+    """
+    from os import remove
+    from os.path import join
+    # from pkg_resources import resource_filename
+    from pytz import utc
+    from desiutil.log import get_logger, DEBUG, INFO
+    #
+    # command-line arguments
+    #
+    options = get_options()
+    #
+    # Logging
+    #
+    if options.verbose:
+        log = get_logger(DEBUG, timestamp=True)
+    else:
+        log = get_logger(INFO, timestamp=True)
+    #
+    # Initialize DB
+    #
+    postgresql = setup_db(options)
     #
     # Load configuration
     #

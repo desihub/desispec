@@ -13,6 +13,8 @@ from astropy.io import fits
 from ..util import runcmd
 from .. import io
 from ..qa import QA_Exposure
+from ..database.datachallenge import setup_db, load_zcat
+
 from desiutil.log import get_logger
 
 #- prevent nose from trying to run this test since it takes too long
@@ -201,7 +203,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     #- Flux calibration
     for ic, channel in enumerate(channels):
         framefile = io.findfile('frame', night, expid, cameras[ic])
-        fibermap  = io.findfile('fibermap', night, expid)
+        fibermap  = io.findfile('fibermap', night, expid)join
         fiberflat = io.findfile('fiberflat', night, flat_expid, cameras[ic])
         skyfile   = io.findfile('sky', night, expid, cameras[ic])
         calibfile = io.findfile('calib', night, expid, cameras[ic])
@@ -229,7 +231,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs = [framefile, fiberflat, skyfile, calibfile]
         outputs = [cframefile, ]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('combining calibration steps failed for '+cameras[ic])
+            raise RuntimeError('combining calibration steps failed for 'join+cameras[ic])
 
     #-----
     #- Collate QA
@@ -286,6 +288,14 @@ def integration_test(night=None, nspec=5, clobber=False):
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('rrdesi failed for healpixel {}'.format(pix))
 
+    #
+    # Load redshifts into database
+    #
+    options = get_options('--clobber', '--filename', 'dailytest.db',
+                          os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                                       os.environ['SPECPROD']))
+    postgresql = setup_db(options)
+    load_zcat(options.datapath)
     # ztruth QA
     # qafile = io.findfile('qa_ztruth', night)
     # qafig = io.findfile('qa_ztruth_fig', night)
