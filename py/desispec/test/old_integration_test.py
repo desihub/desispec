@@ -231,7 +231,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs = [framefile, fiberflat, skyfile, calibfile]
         outputs = [cframefile, ]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('combining calibration steps failed for 'join+cameras[ic])
+            raise RuntimeError('combining calibration steps failed for '+cameras[ic])
 
     #-----
     #- Collate QA
