@@ -13,9 +13,7 @@ from desispec.io import read_image
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 
-# DEBUG
-import matplotlib.pyplot as plt
-import sys
+
 
 def read_psf(psf_filename) :
     try :
@@ -133,6 +131,12 @@ def compute_fiber_bundle_offsets(fibers,line,psf,image,maxshift=2.) :
         A=np.zeros((nfibers,nfibers))
         B=np.zeros((nfibers))
         mods=np.zeros(np.zeros(nfibers).shape+stamp.shape)
+        
+        debugging=False
+
+        if debugging : # FOR DEBUGGING KEEP MODELS            
+            models=[]
+
 
         # loop on possible shifts
         # refit fluxes and compute chi2
@@ -146,16 +150,16 @@ def compute_fiber_bundle_offsets(fibers,line,psf,image,maxshift=2.) :
 
                 # apply the PSF shift
                 psf._cache={} # reset cache !!
-                psf.coeff['X']._coeff[fiber][0] -= dx[d]
-                psf.coeff['Y']._coeff[fiber][0] -= dy[d]
+                psf.coeff['X']._coeff[fiber][0] += dx[d]
+                psf.coeff['Y']._coeff[fiber][0] += dy[d]
 
                 # compute pix and paste on stamp frame
                 xx, yy, pix = psf.xypix(fiber,line)
                 mods[i][margin-ystart+yy.start:margin-ystart+yy.stop,margin-xstart+xx.start:margin-xstart+xx.stop]=pix
 
                 # undo the PSF shift
-                psf.coeff['X']._coeff[fiber][0] += dx[d]
-                psf.coeff['Y']._coeff[fiber][0] += dy[d]
+                psf.coeff['X']._coeff[fiber][0] -= dx[d]
+                psf.coeff['Y']._coeff[fiber][0] -= dy[d]
 
                 B[i] = np.sum(stampivar*stamp*mods[i])
                 for j in range(i+1) :
@@ -168,10 +172,19 @@ def compute_fiber_bundle_offsets(fibers,line,psf,image,maxshift=2.) :
             for i in range(nfibers) :
                 model += flux[i]*mods[i]
             chi2[d]=np.sum(stampivar*(stamp-model)**2)
-
+            if debugging :
+                models.append(model)
+            
+        if debugging :
+            schi2=chi2.reshape(original_shape).copy() # FOR DEBUGGING
+            sdx=dx.copy()
+            sdy=dy.copy()
+        
         # find minimum chi2 grid point
-        j,i = np.unravel_index(chi2.argmin(), ((2*nshift+1),(2*nshift+1)))
+        k   = chi2.argmin()
+        j,i = np.unravel_index(k, ((2*nshift+1),(2*nshift+1)))
         #print("node dx,dy=",dx.reshape(original_shape)[j,i],dy.reshape(original_shape)[j,i])
+        
         # cut a region around minimum
         delta=1
         istart=max(0,i-delta)
@@ -196,6 +209,27 @@ def compute_fiber_bundle_offsets(fibers,line,psf,image,maxshift=2.) :
             sx=1./np.sqrt(c[3])
             sy=1./np.sqrt(c[4])
             #print("interp dx,dy=",dx,dy)
+            
+            if debugging : # FOR DEBUGGING
+                import matplotlib.pyplot as plt
+                plt.figure()
+                plt.subplot(2,2,1,title="chi2")
+                plt.imshow(schi2,extent=(-nshift*res,nshift*res,-nshift*res,nshift*res),origin=0,interpolation="nearest")            
+                plt.plot(dx,dy,"+",color="white",ms=20)
+                plt.xlabel("x")
+                plt.ylabel("y")
+                plt.subplot(2,2,2,title="data")
+                plt.imshow(stamp*footprint,origin=0,interpolation="nearest")
+                plt.grid()
+                k0=np.argmin(sdx**2+sdy**2)
+                plt.subplot(2,2,3,title="original psf")
+                plt.imshow(models[k0],origin=0,interpolation="nearest")            
+                plt.grid()
+                plt.subplot(2,2,4,title="shifted psf")
+                plt.imshow(models[k],origin=0,interpolation="nearest")
+                plt.grid()
+                plt.show()
+                
         else :
             log.warning("fit failed (bad chi2 surf.) for fibers [%d:%d] line=%dA"%(fibers[0],fibers[-1]+1,int(line)))
             dx=0.
