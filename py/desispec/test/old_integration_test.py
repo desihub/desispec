@@ -13,7 +13,7 @@ from astropy.io import fits
 from ..util import runcmd
 from .. import io
 from ..qa import QA_Exposure
-from ..database.datachallenge import setup_db, load_zcat
+from ..database.datachallenge import get_options, setup_db, load_zcat
 
 from desiutil.log import get_logger
 
