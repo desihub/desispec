@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
+from numpy.polynomial.legendre import legval,legfit
 
 import specter.psf
 from desispec.io import read_image
@@ -62,7 +63,7 @@ def read_traces_in_psf(psf_filename) :
     return xtrace,ytrace,wavemin,wavemax
     
 def _u(wave,wavemin,wavemax) :
-    return 2.*(wavewavemin)/(wavemax-wavemin)-1.
+    return 2.*(wave-wavemin)/(wavemax-wavemin)-1.
 
 def compute_fiber_bundle_offsets(fibers,line,psf,image,maxshift=2.) :
     
@@ -293,9 +294,8 @@ def main(args) :
     wavemin = psf.wmin
     wavemax = psf.wmax
     nfibers = psf.nspec
-
     
-    # nfibers = 3 # HACK
+    # nfibers = 3 # FOR DEBUGGING
 
     log.info("read PSF with {} fibers and wavelength range {}:{}".format(nfibers,int(wavemin),int(wavemax)))
     
@@ -443,3 +443,81 @@ def main(args) :
 
     log.info("for each fiber, apply offsets and recompute legendre polynomial")
     
+    
+    # find legendre degree wavemin wavemax in PSF file 
+    # that depends on the PSF type ...
+    x_legendre_wavemin  = None
+    x_legendre_wavemax  = None
+    x_legendre_ncoeff   = None
+    y_legendre_wavemin  = None
+    y_legendre_wavemax  = None
+    y_legendre_ncoeff   = None
+    
+    # for GAUSS-HERMITE
+    x_table_index = None
+    y_table_index = None
+    
+    psf_fits=pyfits.open(args.psf)
+    psftype=psf_fits[0].header["PSFTYPE"]
+    if psftype=="GAUSS-HERMITE" :
+        table=psf_fits[1].data
+        i=np.where(table["PARAM"]=="X")[0]
+        if i.size != 1 :
+            raise RuntimeError("Cannot understand the %s PSF format in file %s"%(psftype,args))
+        x_table_index=i[0]
+        x_legendre_wavemin = table["WAVEMIN"][x_table_index]
+        x_legendre_wavemax = table["WAVEMAX"][x_table_index]
+        x_legendre_ncoeff = table["COEFF"][x_table_index].shape[1]
+        i=np.where(table["PARAM"]=="Y")[0]
+        if i.size != 1 :
+            raise RuntimeError("Cannot understand the %s PSF format in file %s"%(psftype,args))
+        y_table_index=i[0]
+        y_legendre_wavemin = table["WAVEMIN"][y_table_index]
+        y_legendre_wavemax = table["WAVEMAX"][y_table_index]
+        y_legendre_ncoeff = table["COEFF"][y_table_index].shape[1]
+    else :
+        raise RuntimeError("Sorry, modifications of trace shifts for PSF type %s is not yet implemented"%psftype)
+    
+    
+
+    xcoeff=np.zeros((nfibers,x_legendre_ncoeff))
+    ycoeff=np.zeros((nfibers,y_legendre_ncoeff))
+    
+    
+    for fiber in range(nfibers) :
+        wave=np.linspace(psf.wmin,psf.wmax,100)
+        x,y=psf.xy(fiber,wave)
+        
+        m=monomials(x,y,degxx,degxy)
+        dx=m.T.dot(dx_coeff)
+        rwave=_u(wave,x_legendre_wavemin,x_legendre_wavemax)
+        xcoeff[fiber]=legfit(rwave,x+dx,deg=x_legendre_ncoeff-1)
+        
+        m=monomials(x,y,degyx,degyy)
+        dy=m.T.dot(dy_coeff)
+        rwave=_u(wave,y_legendre_wavemin,y_legendre_wavemax)
+        ycoeff[fiber]=legfit(rwave,y+dy,deg=y_legendre_ncoeff-1)
+    
+    # now we have to save this
+    if psftype=="GAUSS-HERMITE" :
+        psf_fits[1].data["COEFF"][x_table_index][:nfibers]=xcoeff
+        psf_fits[1].data["COEFF"][y_table_index][:nfibers]=ycoeff
+        # also save this in XTRACE and YTRACE HDUs if exist
+        if "XTRACE" in psf_fits :
+            psf_fits["XTRACE"].data = xcoeff
+            psf_fits["XTRACE"].header["WAVEMIN"] = x_legendre_wavemin
+            psf_fits["XTRACE"].header["WAVEMAX"] = x_legendre_wavemax
+        if "YTRACE" in psf_fits :
+            psf_fits["YTRACE"].data = ycoeff
+            psf_fits["YTRACE"].header["WAVEMIN"] = y_legendre_wavemin
+            psf_fits["YTRACE"].header["WAVEMAX"] = y_legendre_wavemax
+    else :
+        raise RuntimeError("Sorry, modifications of trace shifts for PSF type %s is not yet implemented"%psftype)
+
+    # write the modified PSF    
+    psf_fits.writeto(args.outpsf,clobber=True)
+    log.info("wrote modified PSF in %s"%args.outpsf)
+    
+        
+        
+        
