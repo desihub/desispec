@@ -203,7 +203,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     #- Flux calibration
     for ic, channel in enumerate(channels):
         framefile = io.findfile('frame', night, expid, cameras[ic])
-        fibermap  = io.findfile('fibermap', night, expid)join
+        fibermap  = io.findfile('fibermap', night, expid)
         fiberflat = io.findfile('fiberflat', night, flat_expid, cameras[ic])
         skyfile   = io.findfile('sky', night, expid, cameras[ic])
         calibfile = io.findfile('calib', night, expid, cameras[ic])
