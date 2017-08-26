@@ -448,7 +448,7 @@ def main(args) :
                     merr=max(merr,sx)
                     merr=max(merr,sy)
                     #log.info("fiber=%d wave=%dA x=%d y=%d dx=%4.3f+-%4.3f dy=%4.3f+-%4.3f"%(fiber,int(wave),int(x),int(y),dx,sx,dy,sy))
-            log.info("max shift error = %4.3f pixels"%merr)
+            log.info("max edge shift error = %4.3f pixels"%merr)
             if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
                 break
         
@@ -461,7 +461,7 @@ def main(args) :
         
         if merr > 0.05 :
             if merr != 100000. :
-                log.warning("max shift error = %4.3f pixels is too large, reducing degrees"%merr)
+                log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
             
             if degxy>0 and degyy>0 and degxy>degxx and degyy>degyx : # first along wavelength
                 degxy-=1
@@ -473,8 +473,8 @@ def main(args) :
             # error is ok, so we quit the loop
             break
     
-        
-
+    log.info("central shifts dx = %4.3f +- %4.3f dy = %4.3f +- %4.3f "%(dx_coeff[0],np.sqrt(dx_coeff_covariance[0,0]),dy_coeff[0],np.sqrt(dy_coeff_covariance[0,0])))
+    
     log.info("for each fiber, apply offsets and recompute legendre polynomial")
     
     
