@@ -128,6 +128,26 @@ def _global_background(image,patch_width=200) :
     spline=scipy.interpolate.RectBivariateSpline(nodes0,nodes1,bkg_grid,kx=2, ky=2, s=0)
     return spline(np.arange(0,image.shape[0]),np.arange(0,image.shape[1]))
 
+def masked_median(images,masks=None) :
+    '''
+    Perfomes a median of an list of input images. If a list of mask is provided,
+    the median is performed only on unmasked pixels.
+    
+    Args:
+       images : list of images of same shape
+    Options:
+       masks : list of mask images of same shape as the images. Only pixels with mask==0 are considered in the median.
+    
+    Returns : median image
+    '''
+    log = get_logger()
+
+    if masks is None :
+        log.info("simple median of %d images"%len(images))
+        return np.median(images,axis=0)
+    else :
+        log.info("masked array median of %d images"%len(images))        
+        return np.ma.median(np.ma.masked_array(data=images,mask=(masks!=0)),axis=0).data
 
 def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     '''
