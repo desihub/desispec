@@ -919,12 +919,35 @@ class Calc_XWSigma(MonitoringAlg):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
 
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            if image.meta["FLAVOR"] == 'arc':
+                param = dict(
+                    B_PEAKS[4047.7,4359.6,5087.2],
+                    R_PEAKS=[6144.8,6508.3,6600.8,6718.9,6931.4,7034.4,],
+                    Z_PEAKS=[8379.9,8497.7,8656.8,8783.0],
+                    XSHIFT_WARN_RANGE=[-2.0, 2.0],
+                    XSHIFT_ALARM_RANGE=[-4.0, 4.0],
+                    WSHIFT_WARN_RANGE=[-2.0, 2.0],
+                    WSHIFT_ALARM_RANGE=[-4.0, 4.0]
+                    )
+            else:
+                param = dict(
+                    B_PEAKS=[3914.4, 5199.3, 5578.9],
+                    R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                    Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
+                    XSHIFT_WARN_RANGE=[-2.0, 2.0],
+                    XSHIFT_ALARM_RANGE=[-4.0, 4.0], 
+                    WSHIFT_WARN_RANGE=[-2.0, 2.0],
+                    WSHIFT_ALARM_RANGE=[-4.0, 4.0]
+                    )
+
         dw=2.
-        b_peaks=np.array([3914.4,5199.3,5201.8])
-        r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
-        z_peaks=np.array([8401.5,8432.4,8467.5,9479.4])
- 
         dp=3
+        b_peaks=param['B_PEAKS']
+        r_peaks=param['R_PEAKS']
+        z_peaks=param['Z_PEAKS']
+ 
         xsigma=[]
         wsigma=[]
         xsigma_sky=[]
@@ -1137,18 +1160,6 @@ class Calc_XWSigma(MonitoringAlg):
         wshift_fib=[]
         xshift_amp=[0.0]
         wshift_amp=[0.0]
-
-        if param is None:
-            log.info("Param is None. Using default param instead")
-            param = dict(
-                B_PEAKS=[3914.4, 5199.3, 5201.8],
-                R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                XSHIFT_WARN_RANGE=[-2.0, 2.0],
-                XSHIFT_ALARM_RANGE=[-4.0, 4.0], 
-                WSHIFT_WARN_RANGE=[-2.0, 2.0],
-                WSHIFT_ALARM_RANGE=[-4.0, 4.0]
-                )
 
         retval["PARAMS"] = param
 
