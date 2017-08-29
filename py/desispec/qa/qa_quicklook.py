@@ -923,9 +923,9 @@ class Calc_XWSigma(MonitoringAlg):
             log.info("Param is None. Using default param instead")
             if image.meta["FLAVOR"] == 'arc':
                 param = dict(
-                    B_PEAKS[4047.7,4359.6,5087.2],
-                    R_PEAKS=[6144.8,6508.3,6600.8,6718.9,6931.4,7034.4,],
-                    Z_PEAKS=[8379.9,8497.7,8656.8,8783.0],
+                    B_PEAKS=[4047.7, 4359.6, 5087.2],
+                    R_PEAKS=[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
+                    Z_PEAKS=[8379.9, 8497.7, 8656.8, 8783.0],
                     XSHIFT_WARN_RANGE=[-2.0, 2.0],
                     XSHIFT_ALARM_RANGE=[-4.0, 4.0],
                     WSHIFT_WARN_RANGE=[-2.0, 2.0],
