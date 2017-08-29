@@ -36,7 +36,7 @@ class QA_Exposure(object):
             All input args become object attributes.
         """
         desi_params = read_params()
-        assert flavor in desi_params['frame_types']
+        assert flavor in desi_params['frame_types'], "Unknown flavor {} for night {} expid {}".format(flavor, night, expid)
         if flavor in ['science']:
             self.type = 'data'
         else:
@@ -108,7 +108,6 @@ class QA_Exposure(object):
         qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
                                   expid=self.expid,
                                   specprod_dir=self.specprod_dir)
-        #import pdb; pdb.set_trace()
         # Load into frames
         for camera,qadata_path in qafiles.items():
             qa_frame = desiio.load_qa_frame(qadata_path)

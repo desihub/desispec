@@ -5,9 +5,10 @@ from desiutil.log import get_logger
 import argparse
 import numpy as np
 
+from  desispec import _version as desis_v
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate QA on Sky Subtraction residuals [v1.2]")
+    parser = argparse.ArgumentParser(description="Generate QA on Sky Subtraction residuals [v{:s}]".format(desis_v.__offline_qa_version__))
     parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--expid', type=int, help='Generate exposure plot on given exposure')
@@ -104,6 +105,7 @@ def main(args) :
         nights = [iarg for iarg in args.nights.split(',')]
     else:
         nights = None
+
     # Full Prod Plot?
     if args.prod:
         from desispec.qa.qa_plots import skysub_resid_dual

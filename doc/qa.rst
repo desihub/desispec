@@ -31,7 +31,7 @@ Here is the usage::
     usage: desi_qa_frame [-h] --frame_file FRAME_FILE [--reduxdir PATH]
                          [--make_plots]
 
-    Generate Frame Level QA [v1.0]
+    Generate Frame Level QA [v0.4.1]
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -53,6 +53,38 @@ Generate the QA YAML file and figures::
 
     desi_qa_frame --frame_file=frame-r7-00000077.fits --make_plots
 
+desi_qa_exposure
+++++++++++++++++
+
+Generates Exposure level QA.
+
+usage
+-----
+
+Here is the usage::
+
+    usage: desi_qa_exposure [-h] --expid EXPID --qatype QATYPE
+                            [--channels CHANNELS] [--reduxdir PATH]
+
+    Generate Exposure Level QA [v0.4.1]
+
+    optional arguments:
+      -h, --help           show this help message and exit
+      --expid EXPID        Exposure ID
+      --qatype QATYPE      Type of QA to generate [fibermap]
+      --channels CHANNELS  List of channels to include. Default = b,r,z]
+      --reduxdir PATH      Override default path ($DESI_SPECTRO_REDUX/$SPECPROD)
+                           to processed data.
+
+fibermap
+--------
+
+Generate QA on the fiber flat across the exposure for one or more channels.::
+
+     desi_qa_exposure --expid=96 --qatype=fibermap
+
+
+
 desi_qa_skyresid
 ++++++++++++++++
 
@@ -68,7 +100,7 @@ Here is the usage::
                         [--channels CHANNELS] [--prod] [--gauss]
                         [--nights NIGHTS]
 
-    Generate QA on Sky Subtraction residuals [v1.2]
+    Generate QA on Sky Subtraction residuals [v0.4.1]
 
     optional arguments:
       -h, --help           show this help message and exit
@@ -124,8 +156,9 @@ Here is the usage::
     usage: desi_qa_prod [-h] [--reduxdir REDUXDIR] [--make_frameqa MAKE_FRAMEQA]
                         [--slurp] [--remove] [--clobber]
                         [--channel_hist CHANNEL_HIST] [--time_series TIME_SERIES]
+                        [--html HTML]
 
-    Generate/Analyze Production Level QA [v1.3]
+    Generate/Analyze Production Level QA [v1.4]
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -142,12 +175,17 @@ Here is the usage::
       --time_series TIME_SERIES
                             Generate time series plot. Input is QATYPE-METRIC,
                             e.g. SKYSUB-MED_RESID
+      --html HTML           Generate HTML files
+
+
 
 frameqa
 -------
 
 One generates the frame QA, the YAML and/or figure files
-with the --make_frameqa flag::
+with the --make_frameqa flag.  These files are created
+in a folder tree QA/ that is parallel to the exposures and
+calib2d folders.::
 
     desi_qa_prod --make_frameqa=1  # Generate all the QA YAML files
     desi_qa_prod --make_frameqa=2  # Generate all the QA figure files
@@ -164,6 +202,17 @@ YAML file of all the QA outputs::
 
     desi_qa_prod --slurp   # Collate all the QA YAML files
     desi_qa_prod --slurp --remove  # Collate and remove the individual files
+
+html
+----
+
+A set of static HTML files that provide simple links
+to the QA figures may be generated::
+
+    desi_qa_prod --slurp --remove  # Collate and remove the individual files
+
+The top-level QA file (in the QA/ folder) includes any PNG
+files located at the top-level of that folder.
 
 Channel Histograms
 ------------------
@@ -183,3 +232,6 @@ in the production, by channel, e.g.::
 
     desi_qa_prod --time_series=SKYSUB-MED_RESID
     desi_qa_prod --time_series=FLUXCALIB-ZP
+
+By default, these files are placed in the QA/ folder in
+the $DESI_SPECTRO_REDUX/$SPECPROD folder.

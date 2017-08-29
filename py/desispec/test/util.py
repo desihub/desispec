@@ -26,7 +26,17 @@ def get_calib_from_frame(frame):
     # Return
     return fluxcalib
 
-def get_frame_data(nspec=10):
+def get_fiberflat_from_frame(frame):
+    from desispec.fiberflat import FiberFlat
+    flux = frame.flux
+    fiberflat = np.ones_like(flux)
+    ffivar = 2*np.ones_like(flux)
+    fiberflat[0] *= 0.8
+    fiberflat[1] *= 1.2
+    ff = FiberFlat(frame.wave, fiberflat, ffivar)
+    return ff
+
+def get_frame_data(nspec=10, objtype=None):
     """
     Return basic test data for desispec.frame object:
     """
@@ -47,9 +57,15 @@ def get_frame_data(nspec=10):
     ivar = np.ones(flux.shape) / sigma**2
     mask = np.zeros(flux.shape, dtype=int)
     fibermap = empty_fibermap(nspec, 1500)
-    fibermap['OBJTYPE'] = 'QSO'
+    if objtype is None:
+        fibermap['OBJTYPE'] = 'QSO'
+        fibermap['OBJTYPE'][0:3] = 'STD'  # For flux tests
+    else:
+        fibermap['OBJTYPE'] = objtype
 
-    frame=Frame(wave, flux, ivar,mask,resol_data,fibermap=fibermap)
+    frame = Frame(wave, flux, ivar, mask,resol_data,fibermap=fibermap)
+    frame.meta = {}
+    frame.meta['EXPTIME'] = 1.  # For flux tests
     return frame
 
 
