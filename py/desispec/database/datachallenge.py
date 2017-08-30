@@ -173,33 +173,35 @@ class ObsList(SchemaMixin, Base):
     """Representation of the obslist table.
     """
 
-    mjd = Column(Float, nullable=False)
-    exptime = Column(Float, nullable=False)
-    program = Column(String, nullable=False)
-    passnum = Column(Integer, nullable=False)
     tileid = Column(Integer, primary_key=True, autoincrement=False)
+    passnum = Column(Integer, nullable=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
-    moonfrac = Column(Float, nullable=False)
-    moondist = Column(Float, nullable=False)
-    moonalt = Column(Float, nullable=False)
+    night = Column(String, nullable=False)
+    mjd = Column(Float, nullable=False)
+    exptime = Column(Float, nullable=False)
     seeing = Column(Float, nullable=False)
     airmass = Column(Float, nullable=False)
+    # program = Column(String, nullable=False)
+    moonfrac = Column(Float, nullable=False)
+    moonalt = Column(Float, nullable=False)
+    moonsep = Column(Float, nullable=False)
     # dateobs = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self):
-        return ("<ObsList(mjd={0.mjd:f}, " +
-                "exptime={0.exptime:f}, " +
-                "program='{0.program}', " +
-                "passnum={0.passnum:d}, " +
+        return ("<ObsList(" +
                 "tileid={0.tileid:d}, " +
+                "passnum={0.passnum:d}, " +
                 "ra={0.ra:f}, dec={0.dec:f}, " +
-                "ebmv={0.ebmv:f}, " +
-                "moonfrac={0.moonfrac:f}, " +
-                "moondist={0.moondist:f}, " +
-                "moonalt={0.moonalt:f}, " +
+                "night='{0.night}', " +
+                "mjd={0.mjd:f}, " +
+                "exptime={0.exptime:f}, " +
                 "seeing={0.seeing:f}, " +
-                "airmass={0.airmass:f})>").format(self)
+                "airmass={0.airmass:f}," +
+                "moonfrac={0.moonfrac:f}, " +
+                "moonalt={0.moonalt:f}, " +
+                "moonsep={0.moonsep:f}" +
+                ")>").format(self)
 
 
 class ZCat(SchemaMixin, Base):
@@ -389,10 +391,10 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    # zbestpath = join(datapath, 'spectro', 'redux', run1d, 'spectra-64',
-    #                  '*', '*', 'zbest-64-*.fits')
-    zbestpath = join(datapath, 'spectra-64',
+    zbestpath = join(datapath, 'spectro', 'redux', run1d, 'spectra-64',
                      '*', '*', 'zbest-64-*.fits')
+    # zbestpath = join(datapath, 'spectra-64',
+    #                  '*', '*', 'zbest-64-*.fits')
     log.info("Using zbest file search path: %s.", zbestpath)
     zbest_files = glob(zbestpath)
     if len(zbest_files) == 0:
@@ -462,7 +464,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    fiberpath = join(datapath, 'fiberassign', 'output',
+    fiberpath = join(datapath, 'fiberassign',
                      'tile_*.fits')
     log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob(fiberpath)
@@ -712,7 +714,7 @@ def main():
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},
-              {'filepath': join(options.datapath, 'twopct.ecsv'),
+              {'filepath': join(options.datapath, 'survey', 'exposures.fits'),
                'tcls': ObsList,
                'hdu': 1,
                'expand': {'PASS': 'passnum'},
@@ -750,7 +752,7 @@ def main():
     q = dbSession.query(ZCat).first()
     if q is None:
         log.info("Loading ZCat from %s.", options.datapath)
-        load_zcat(options.datapath)
+        load_zcat(options.datapath, run1d='mini')
         log.info("Finished loading ZCat.")
     else:
         log.info("ZCat table already loaded.")
