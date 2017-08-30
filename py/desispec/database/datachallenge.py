@@ -410,12 +410,16 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
             data = hdulist[1].data
         log.info("Read data from %s.", f)
         good_targetids = data['TARGETID'] != 0
-        q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'].tolist())).all()
-        if len(q) != 0:
-            log.warning("Duplicate TARGETID found in %s.", f)
-            for z in q:
-                log.warning("Duplicate TARGETID = %d.", z.targetid)
-                good_targetids = good_targetids & (data['TARGETID'] != z.targetid)
+        #
+        # If there are too many targetids, the in_ clause will blow up.
+        # Disabling this test, and crossing fingers.
+        #
+        # q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'].tolist())).all()
+        # if len(q) != 0:
+        #     log.warning("Duplicate TARGETID found in %s.", f)
+        #     for z in q:
+        #         log.warning("Duplicate TARGETID = %d.", z.targetid)
+        #         good_targetids = good_targetids & (data['TARGETID'] != z.targetid)
         data_list = [data[col][good_targetids].tolist()
                      for col in data.names if col != 'COEFF']
         data_names = [col.lower() for col in data.names if col != 'COEFF']
