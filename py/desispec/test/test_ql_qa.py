@@ -155,7 +155,8 @@ class TestQL(unittest.TestCase):
         self.fibermap['OBJTYPE'][::2]='ELG'
         self.fibermap['OBJTYPE'][::3]='STD'
         self.fibermap['OBJTYPE'][::5]='QSO'
-        self.fibermap['OBJTYPE'][::7]='SKY'   #- 0 LRG fibers
+        self.fibermap['OBJTYPE'][::9]='LRG'
+        self.fibermap['OBJTYPE'][::7]='SKY'
         #- add a filter and arbitrary magnitude
         self.fibermap['MAG'][:29]=np.tile(np.random.uniform(18,20,29),5).reshape(29,5) #- Last fiber left
         self.fibermap['FILTER'][:29]=np.tile(['DECAM_R','..','..','..','..'],(29,1)) #- last fiber left 
@@ -259,7 +260,6 @@ class TestQL(unittest.TestCase):
         self.assertEqual(self.fibermap['FILTER'][29][0],'') #- No filter for last fiber
 
         self.assertEqual(len(qa['MEDIAN_SNR']),30)
-        self.assertEqual(len(qa['LRG_FIBERID']),0) #- LRG was not present by construction
 
     #- Test each individual QA:
     def testBiasOverscan(self):

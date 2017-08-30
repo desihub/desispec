@@ -146,7 +146,6 @@ class BootCalibration(pas.PipelineAlg):
 
         return self.run_pa(deg,flatimage,arcimage,outputfile)
 
-
     def run_pa(self,deg,flatimage,arcimage,outputfile):
         from desispec.util import runcmd
         cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
@@ -163,7 +162,6 @@ class BoxcarExtract(pas.PipelineAlg):
     from desispec.frame import Frame as fr
     from desispec.boxcar import do_boxcar
 
-    
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="BoxcarExtract"
@@ -200,7 +198,7 @@ class BoxcarExtract(pas.PipelineAlg):
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
-                wstart, wstop, dw = [float(w) for w in wavelength.split(',')]
+                wstart, wstop, dw = [float(w) for w in wavelength]
             else: 
                 wstart = np.ceil(psf.wmin)
                 wstop = np.floor(psf.wmax)
@@ -245,12 +243,11 @@ class BoxcarExtract(pas.PipelineAlg):
         input_image.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
         input_image.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
         input_image.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
-       
+
         return self.run_pa(input_image,psf
                            ,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,
                            dumpfile=dumpfile,maskFile=maskFile,usesigma=usesigma)
-
 
     def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
                fibers=None, fibermap=None,dumpfile=None,
@@ -271,7 +268,6 @@ class BoxcarExtract(pas.PipelineAlg):
             log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return frame
-
   
     def get_default_config(self):
         return {("BoxWidth",2.5,"Boxcar halfwidth"),
@@ -317,7 +313,7 @@ class Extraction_2d(pas.PipelineAlg):
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
-                wstart, wstop, dw = [float(w) for w in wavelength.split(',')]
+                wstart, wstop, dw = [float(w) for w in wavelength]
             else: 
                 wstart = np.ceil(psf.wmin_all)
                 wstop = np.floor(psf.wmax_all)
