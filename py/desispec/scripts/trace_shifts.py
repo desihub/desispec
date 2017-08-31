@@ -7,13 +7,14 @@ import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
-from desispec.interpolation import resample_flux
+from scipy.signal import fftconvolve
 
+from desispec.interpolation import resample_flux
 from desispec.io import read_image
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
-from desispec.trace_shifts import read_psf,read_traces_in_psf,write_traces_in_psf,boxcar_extraction,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_fiber_bundle_trace_shifts_using_psf,_u,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf
+from desispec.trace_shifts import read_psf,read_traces_in_psf,write_traces_in_psf,boxcar_extraction,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_fiber_bundle_trace_shifts_using_psf,_u,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,resample_boxcar_frame,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
 
 
 
@@ -24,8 +25,10 @@ def parse(options=None):
                         help = 'path of DESI preprocessed fits file')
     parser.add_argument('--psf', type = str, default = None, required=True,
                         help = 'path of DESI psf fits file')
-    parser.add_argument('--fit-lines', type = str, default = None, required=False,
+    parser.add_argument('--lines', type = str, default = None, required=False,
                         help = 'path of lines ASCII file. Using this option changes the fit method.')
+    parser.add_argument('--spectrum', type = str, default = None, required=False,
+                        help = 'path to a spectrum ASCII file (e.g. the DESIMODEL sky spectrum)')
     parser.add_argument('--outpsf', type = str, default = None, required=True,
                         help = 'path of output PSF with shifted traces')
     parser.add_argument('--outoffsets', type = str, default = None, required=False,
@@ -75,16 +78,16 @@ def main(args) :
     xcoef,ycoef,wavemin,wavemax = read_traces_in_psf(args.psf)
     nfibers=xcoef.shape[0]
     log.info("read PSF trace coef with {} fibers and wavelength range {}:{}".format(nfibers,int(wavemin),int(wavemax)))
+    # load the psf model
+    psf = read_psf(args.psf)
     
-    if args.fit_lines is not None :
+    if args.lines is not None :
         log.info("We will fit the image using the psf model and lines")
-        # load the psf model
-        psf = read_psf(args.psf)
         
         # read lines
-        lines=np.loadtxt(args.fit_lines,usecols=[0])
+        lines=np.loadtxt(args.lines,usecols=[0])
         ok=(lines>wavemin)&(lines<wavemax)
-        log.info("read {} lines in {}, with {} of them in traces wavelength range".format(len(lines),args.fit_lines,np.sum(ok)))
+        log.info("read {} lines in {}, with {} of them in traces wavelength range".format(len(lines),args.lines,np.sum(ok)))
         lines=lines[ok]
         
 
@@ -125,10 +128,7 @@ def main(args) :
         # measure y shifts
         x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=7)
 
-    print(wave_for_dx.shape)
-    print(fiber_for_dx.shape)
     
-                
     # write this for debugging
     if args.outoffsets :
         file=open(args.outoffsets,"w")
@@ -179,7 +179,7 @@ def main(args) :
             if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
                 break
         
-        except LinAlgError :
+        except ( LinAlgError , ValueError ) :
             log.warning("polynomial fit failed with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
             if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
                 log.error("polynomial degrees are already 0. we can fit the offsets")
@@ -191,11 +191,11 @@ def main(args) :
                 log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
             
             if degxy>0 and degyy>0 and degxy>degxx and degyy>degyx : # first along wavelength
-                degxy-=1
-                degyy-=1
+                if degxy>0 : degxy-=1
+                if degxy>0 : degyy-=1
             else : # then along fiber
-                degxx-=1
-                degyx-=1
+                if degxx>0 : degxx-=1
+                if degyx>0 : degyx-=1
         else :
             # error is ok, so we quit the loop
             break
@@ -215,26 +215,29 @@ def main(args) :
     log.info("central shifts dx = %4.3f +- %4.3f dy = %4.3f +- %4.3f "%(mdx,mex,mdy,mey))
     
     # for each fiber, apply offsets and recompute legendre polynomial
-    log.info("for each fiber, apply offsets and recompute legendre polynomial")    
-    for fiber in range(nfibers) :
-        wave=np.linspace(wavemin,wavemax,100)
-        x = legval(_u(wave,wavemin,wavemax),xcoef[fiber])
-        y = legval(_u(wave,wavemin,wavemax),ycoef[fiber])
-                
-        m=monomials(x,y,degxx,degxy)
-        dx=m.T.dot(dx_coeff)
-        rwave=_u(wave,wavemin,wavemax)
-        xcoef[fiber]=legfit(rwave,x+dx,deg=xcoef.shape[1]-1)
+    log.info("for each fiber, apply offsets and recompute legendre polynomial")
+    xcoef,ycoef = recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degyx,degyy,dx_coeff,dy_coeff)
         
-        m=monomials(x,y,degyx,degyy)
-        dy=m.T.dot(dy_coeff)
-        rwave=_u(wave,wavemin,wavemax)
-        ycoef[fiber]=legfit(rwave,y+dy,deg=ycoef.shape[1]-1)
     
-    # write the modified PSF
-    write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+    # use an input spectrum as an external calibration of wavelength
+    if args.spectrum :
+        
+        log.info("write and reread PSF to be sure predetermined shifts were propagated")
+        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+        xcoef,ycoef,wavemin,wavemax = read_traces_in_psf(args.outpsf)
+        psf = read_psf(args.outpsf)
+        
+        
+        ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
+                                                  image=image,fibers=fibers,spectrum_filename=args.spectrum,width=7)
     
-    log.info("wrote modified PSF in %s"%args.outpsf)
+    
+        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+        log.info("wrote modified PSF in %s"%args.outpsf)
         
+    else :
         
+        write_traces_in_psf(args.outpsf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+        log.info("wrote modified PSF in %s"%args.outpsf)
         
+    

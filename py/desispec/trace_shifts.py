@@ -7,6 +7,7 @@ import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
+from scipy.signal import fftconvolve
 
 import specter.psf
 from desispec.io import read_image
@@ -171,7 +172,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     
     
     log=get_logger()
-    log.info("Starting perpendicular boxcar extraction...")
+    log.info("Starting compute_dx_from_cross_dispersion_profiles ...")
     
     if fibers is None :
         fibers = np.arange(psf.nspec)
@@ -557,39 +558,28 @@ def compute_fiber_bundle_trace_shifts_using_psf(fibers,line,psf,image,maxshift=2
     return x,y,dx,dy,sx,sy
 
 
-def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers, width=7, degyy=2) :
-
+def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
+    
     log=get_logger()
     
-    log.info("boxcar extraction")
-    boxcar_flux, boxcar_ivar, boxcar_wave = boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=fibers, width=7)
-    
     log.info("resampling with oversampling")
-    nfibers=len(fibers)
-    wave=boxcar_wave[nfibers//2]
-    dwave=np.median(np.gradient(boxcar_wave))/2 # oversampling
+    nfibers=frame_flux.shape[0]
+    wave=frame_wave[nfibers//2]
+    dwave=np.median(np.gradient(frame_wave))/oversampling
     wave=np.linspace(wave[0],wave[-1],int((wave[-1]-wave[0])/dwave))
     nwave=wave.size
-    nfibers=fibers.size
+    
     flux=np.zeros((nfibers,nwave))
     ivar=np.zeros((nfibers,nwave))
     for i in range(nfibers) :
-        log.info("resampling fiber #%03d"%fibers[i])
-        flux[i],ivar[i] = resample_flux(wave, boxcar_wave[i],boxcar_flux[i],boxcar_ivar[i])
-    mflux=np.median(flux,axis=0)
+        log.info("resampling fiber #%03d"%i)
+        flux[i],ivar[i] = resample_flux(wave, frame_wave[i],frame_flux[i],frame_ivar[i])
+    return flux,ivar,wave
 
-    '''
-    import matplotlib.pyplot as plt
-    for i in range(nfibers) :        
-        plt.plot(wave[ivar[i]>0],flux[i][ivar[i]>0])
-    plt.plot(wave,mflux,lw=2)
-    plt.show()
-    '''
+def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoef, ycoef, wavemin, wavemax, reference_flux , n_wavelength_bins = 4) :
 
-    # measure y shifts 
-    nblocks = degyy+2
+    log=get_logger()
 
-    
     x_for_dy=np.array([])
     y_for_dy=np.array([])
     dy=np.array([])
@@ -597,21 +587,23 @@ def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fiber
     fiber_for_dy=np.array([])
     wave_for_dy=np.array([])
     
-    for i,fiber in enumerate(fibers) :
+    nfibers = flux.shape[0]
+    
+    for fiber in range(nfibers) :
         log.info("computing dy for fiber #%03d"%fiber)
         
-        for b in range(nblocks) :
-            wmin=wave[0]+((wave[-1]-wave[0])/nblocks)*b
-            if b<nblocks-1 :
-                wmax=wave[0]+((wave[-1]-wave[0])/nblocks)*(b+1)
+        for b in range(n_wavelength_bins) :
+            wmin=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*b
+            if b<n_wavelength_bins-1 :
+                wmax=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*(b+1)
             else :
                 wmax=wave[-1]
             ok=(wave>=wmin)&(wave<=wmax)
-            sw=np.sum(ivar[i,ok]*flux[i,ok]*(flux[i,ok]>0))
+            sw=np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0))
             if sw<=0 :
                 continue
-            dwave,err = compute_dy_from_spectral_cross_correlation(flux[i,ok],wave[ok],mflux[ok],ivar=ivar[i,ok],hw=3.)
-            block_wave = np.sum(ivar[i,ok]*flux[i,ok]*(flux[i,ok]>0)*wave[ok])/sw
+            dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok],hw=3.)
+            block_wave = np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0)*wave[ok])/sw
             if err > 1 :
                 continue
 
@@ -629,9 +621,25 @@ def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fiber
             ey=np.append(ey,tey)
             fiber_for_dy=np.append(fiber_for_dy,fiber)
             wave_for_dy=np.append(wave_for_dy,block_wave)
-    
 
     return x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy
+
+def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers, width=7, degyy=2) :
+
+    log=get_logger()
+    
+    # boxcar extraction
+    boxcar_flux, boxcar_ivar, boxcar_wave = boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=fibers, width=7)
+    
+    # resampling on common finer wavelength grid
+    flux, ivar, wave = resample_boxcar_frame(boxcar_flux, boxcar_ivar, boxcar_wave, oversampling=2)
+    
+    # median flux used as internal spectral reference
+    mflux=np.median(flux,axis=0)
+
+    # measure y shifts 
+    return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+2)
+    
     
 def compute_dx_dy_using_psf(psf,image,fibers,lines) :
 
@@ -700,3 +708,120 @@ def compute_dx_dy_using_psf(psf,image,fibers,lines) :
     return x,y,dx,ex,dy,ey,fiber_xy,wave_xy
 
     
+def recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degyx,degyy,dx_coeff,dy_coeff) :
+    wave=np.linspace(wavemin,wavemax,100)
+    nfibers=xcoef.shape[0]
+    for fiber in range(nfibers) :
+        x = legval(_u(wave,wavemin,wavemax),xcoef[fiber])
+        y = legval(_u(wave,wavemin,wavemax),ycoef[fiber])
+                
+        m=monomials(x,y,degxx,degxy)
+        dx=m.T.dot(dx_coeff)
+        rwave=_u(wave,wavemin,wavemax)
+        xcoef[fiber]=legfit(rwave,x+dx,deg=xcoef.shape[1]-1)
+        
+        m=monomials(x,y,degyx,degyy)
+        dy=m.T.dot(dy_coeff)
+        rwave=_u(wave,wavemin,wavemax)
+        ycoef[fiber]=legfit(rwave,y+dy,deg=ycoef.shape[1]-1)
+    return xcoef,ycoef
+
+def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fibers,spectrum_filename,degyy=2,width=7) :
+
+    log = get_logger()
+
+    tmp=np.loadtxt(spectrum_filename).T
+    ref_wave=tmp[0]
+    ref_spectrum=tmp[1]
+    log.info("read reference spectrum in %s with %d entries"%(spectrum_filename,ref_wave.size))
+
+    log.info("rextract spectra with boxcar")   
+
+    # boxcar extraction
+    boxcar_flux, boxcar_ivar, boxcar_wave = boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=fibers, width=width)
+
+    # resampling on common finer wavelength grid
+    flux, ivar, wave = resample_boxcar_frame(boxcar_flux, boxcar_ivar, boxcar_wave, oversampling=2)
+
+    # median flux used as internal spectral reference
+    mflux=np.median(flux,axis=0)
+
+
+    # trim ref_spectrum
+    i=(ref_wave>=wave[0])&(ref_wave<=wave[-1])
+    ref_wave=ref_wave[i]
+    ref_spectrum=ref_spectrum[i]
+
+    # check wave is linear or make it linear
+    if np.abs((ref_wave[1]-ref_wave[0])-(ref_wave[-1]-ref_wave[-2]))>0.0001*(ref_wave[1]-ref_wave[0]) :
+        log.info("reference spectrum wavelength is not on a linear grid, resample it")
+        dwave = np.min(np.gradient(ref_wave))
+        tmp_wave = np.linspace(ref_wave[0],ref_wave[-1],int((ref_wave[-1]-ref_wave[0])/dwave))
+        ref_spectrum = resample_flux(tmp_wave, ref_wave , ref_spectrum)
+        ref_wave = tmp_wave
+
+    try :
+        # compute psf at most significant line of ref_spectrum
+        i=np.argmax(ref_spectrum)
+        central_wave_for_psf_evaluation  = ref_wave[i]
+        fiber_for_psf_evaluation = (boxcar_flux.shape[0]//2)
+        dwave=ref_wave[i+1]-ref_wave[i]
+        hw=int(3./dwave)+1 # 3A half width
+        wave_range = ref_wave[i-hw:i+hw+1]
+        x,y=psf.xy(fiber_for_psf_evaluation,wave_range)
+        x=np.tile(x[hw]+np.arange(-hw,hw+1)*(y[-1]-y[0])/(2*hw+1),(y.size,1))
+        y=np.tile(y,(2*hw+1,1)).T
+        kernel2d=psf._value(x,y,fiber_for_psf_evaluation,central_wave_for_psf_evaluation)            
+        kernel1d=np.sum(kernel2d,axis=1)
+        log.info("convolve reference spectrum using PSF at fiber %d and wavelength %dA"%(fiber_for_psf_evaluation,central_wave_for_psf_evaluation))
+        ref_spectrum=fftconvolve(ref_spectrum,kernel1d, mode='same')
+    except :
+        log.warning("couldn't convolve reference spectrum")
+
+    # resample input spectrum
+    log.info("resample convolved reference spectrum")
+    ref_spectrum = resample_flux(wave, ref_wave , ref_spectrum)
+
+    log.info("fit shifts on wavelength bins")
+    # define bins
+    n_wavelength_bins = degyy+2
+    y_for_dy=np.array([])
+    dy=np.array([])
+    ey=np.array([])
+    wave_for_dy=np.array([])
+    for b in range(n_wavelength_bins) :
+        wmin=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*b
+        if b<n_wavelength_bins-1 :
+            wmax=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*(b+1)
+        else :
+            wmax=wave[-1]
+        ok=(wave>=wmin)&(wave<=wmax)
+        sw= np.sum(mflux[ok]*(mflux[ok]>0))
+        if sw==0 :
+            continue
+        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=None,hw=3.)
+        bin_wave  = np.sum(mflux[ok]*(mflux[ok]>0)*wave[ok])/sw
+        x,y=psf.xy(fiber_for_psf_evaluation,bin_wave)
+        eps=0.1
+        x,yp=psf.xy(fiber_for_psf_evaluation,bin_wave+eps)
+        dydw=(yp-y)/eps
+        if err*dydw<1 :
+            dy=np.append(dy,dwave*dydw)
+            ey=np.append(ey,err*dydw)
+            wave_for_dy=np.append(wave_for_dy,bin_wave)
+            y_for_dy=np.append(y_for_dy,y)
+        log.info("wave = %fA , y=%d, measured dwave = %f +- %f A"%(bin_wave,y,dwave,err))
+
+    log.info("polynomial fit of shifts and modification of PSF ycoef")
+    # pol fit
+    coef = np.polyfit(wave_for_dy,dy,degyy,w=1./ey**2)
+    pol  = np.poly1d(coef)
+
+    log.info("apply this to the PSF ycoef")
+    wave = np.linspace(wavemin,wavemax,100)
+    dy   = pol(wave)
+    dycoef = legfit(_u(wave,wavemin,wavemax),dy,deg=ycoef.shape[1]-1)
+    for fiber in range(ycoef.shape[0]) :
+        ycoef[fiber] += dycoef
+
+    return ycoef
