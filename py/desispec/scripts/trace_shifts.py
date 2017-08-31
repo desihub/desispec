@@ -7,7 +7,6 @@ import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
-from scipy.signal import fftconvolve
 
 from desispec.interpolation import resample_flux
 from desispec.io import read_image
@@ -221,15 +220,20 @@ def main(args) :
     
     # use an input spectrum as an external calibration of wavelength
     if args.spectrum :
+         
         
         log.info("write and reread PSF to be sure predetermined shifts were propagated")
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         xcoef,ycoef,wavemin,wavemax = read_traces_in_psf(args.outpsf)
         psf = read_psf(args.outpsf)
         
+        #log.warning("DEBUGGING !!!!")
+        #xcoef,ycoef,wavemin,wavemax = read_traces_in_psf(args.psf)
+        #psf = read_psf(args.psf)
+        
         
         ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
-                                                  image=image,fibers=fibers,spectrum_filename=args.spectrum,width=7)
+                                                  image=image,fibers=fibers,spectrum_filename=args.spectrum,degyy=args.degyy,width=7)
     
     
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)

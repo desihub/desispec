@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division
 
 
+import sys
 import argparse
 import numpy as np
 from numpy.linalg.linalg import LinAlgError
@@ -275,7 +276,16 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
 
 def compute_dy_from_spectral_cross_correlation(flux,refwave,refflux,ivar=None,hw=3.) :
-
+    
+    
+    # absorb differences of calibration (fiberflat not yet applied)
+    x=(refwave-refwave[refwave.size//2])/50.
+    kernel=np.exp(-x**2/2)
+    f1=fftconvolve(flux,kernel,mode='same')
+    f2=fftconvolve(refflux,kernel,mode='same')
+    scale=f1/f2
+    refflux *= scale
+    
     error_floor=0.001 #A
     
     if ivar is None :
@@ -290,6 +300,11 @@ def compute_dy_from_spectral_cross_correlation(flux,refwave,refflux,ivar=None,hw
         if e==0 :
             e=refwave.size
         chi2[i] = np.sum(ivar[ihw:-ihw]*(flux[ihw:-ihw]-refflux[b:e])**2)
+
+    #import matplotlib.pyplot as plt
+    #plt.figure("%d"%int(np.mean(refwave)))
+    #plt.plot(dwave*(np.arange(-ihw,ihw+1)),chi2)
+    
     i=np.argmin(chi2)
     b=i-1
     e=i+2
@@ -612,7 +627,7 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             eps=0.1
             yp = legval(_u(block_wave+eps,wavemin,wavemax),ycoef[fiber])
             dydw = (yp-ty)/eps
-            tdy = dwave*dydw
+            tdy = -dwave*dydw
             tey = err*dydw
             
             x_for_dy=np.append(x_for_dy,tx)
@@ -742,16 +757,17 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
 
     # resampling on common finer wavelength grid
     flux, ivar, wave = resample_boxcar_frame(boxcar_flux, boxcar_ivar, boxcar_wave, oversampling=2)
-
+    
     # median flux used as internal spectral reference
     mflux=np.median(flux,axis=0)
-
-
+    mivar=np.median(ivar,axis=0)*flux.shape[0]*(2./np.pi) # very appoximate !
+    
+    
     # trim ref_spectrum
     i=(ref_wave>=wave[0])&(ref_wave<=wave[-1])
     ref_wave=ref_wave[i]
     ref_spectrum=ref_spectrum[i]
-
+    
     # check wave is linear or make it linear
     if np.abs((ref_wave[1]-ref_wave[0])-(ref_wave[-1]-ref_wave[-2]))>0.0001*(ref_wave[1]-ref_wave[0]) :
         log.info("reference spectrum wavelength is not on a linear grid, resample it")
@@ -778,13 +794,29 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
     except :
         log.warning("couldn't convolve reference spectrum")
 
+    #hdulist.append(pyfits.ImageHDU(ref_spectrum,name="CREFSPECTRUM"))
+    
     # resample input spectrum
     log.info("resample convolved reference spectrum")
     ref_spectrum = resample_flux(wave, ref_wave , ref_spectrum)
 
+    log.info("absorb difference of calibration")
+    x=(wave-wave[wave.size//2])/50.
+    kernel=np.exp(-x**2/2)
+    f1=fftconvolve(mflux,kernel,mode='same')
+    f2=fftconvolve(ref_spectrum,kernel,mode='same')
+    scale=f1/f2
+    ref_spectrum *= scale
+ 
+    #hdulist.append(pyfits.ImageHDU(ref_spectrum,name="RCREFSPECTRUM"))
+    #hdulist.append(pyfits.ImageHDU(wave,name="WAVE"))
+    #hdulist.append(pyfits.ImageHDU(mflux,name="MFLUX"))
+    #hdulist.append(pyfits.ImageHDU(mivar,name="MIVAR"))
+    #hdulist.writeto("toto.fits",clobber=True)
+    
     log.info("fit shifts on wavelength bins")
     # define bins
-    n_wavelength_bins = degyy+2
+    n_wavelength_bins = degyy+4
     y_for_dy=np.array([])
     dy=np.array([])
     ey=np.array([])
@@ -799,23 +831,47 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
         sw= np.sum(mflux[ok]*(mflux[ok]>0))
         if sw==0 :
             continue
-        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=None,hw=3.)
+        dwave,err = compute_dy_from_spectral_cross_correlation(mflux[ok],wave[ok],ref_spectrum[ok],ivar=mivar[ok],hw=3.)
         bin_wave  = np.sum(mflux[ok]*(mflux[ok]>0)*wave[ok])/sw
         x,y=psf.xy(fiber_for_psf_evaluation,bin_wave)
         eps=0.1
         x,yp=psf.xy(fiber_for_psf_evaluation,bin_wave+eps)
         dydw=(yp-y)/eps
+        #print("dydw=%f dwdy=%f"%(dydw,1./dydw))
         if err*dydw<1 :
-            dy=np.append(dy,dwave*dydw)
+            dy=np.append(dy,-dwave*dydw)
             ey=np.append(ey,err*dydw)
             wave_for_dy=np.append(wave_for_dy,bin_wave)
             y_for_dy=np.append(y_for_dy,y)
-        log.info("wave = %fA , y=%d, measured dwave = %f +- %f A"%(bin_wave,y,dwave,err))
+            log.info("wave = %fA , y=%d, measured dwave = %f +- %f A"%(bin_wave,y,dwave,err))
+    
+    if False : # we don't need this for now
+        try :
+            log.info("correcting bias due to asymmetry of PSF")
+
+            hw=5
+            oversampling=4
+            xx=np.tile(np.arange(2*hw*oversampling+1)-hw*oversampling,(2*hw*oversampling+1,1))/float(oversampling)
+            yy=xx.T
+            x,y=psf.xy(fiber_for_psf_evaluation,central_wave_for_psf_evaluation)
+            prof=psf._value(xx+x,yy+y,fiber_for_psf_evaluation,central_wave_for_psf_evaluation)
+            dy_asym_central = np.sum(yy*prof)/np.sum(prof)
+            for i in range(dy.size) :
+                x,y=psf.xy(fiber_for_psf_evaluation,wave_for_dy[i])
+                prof=psf._value(xx+x,yy+y,fiber_for_psf_evaluation,wave_for_dy[i])
+                dy_asym = np.sum(yy*prof)/np.sum(prof)
+                log.info("y=%f, measured dy=%f , bias due to PSF asymetry = %f"%(y,dy[i],dy_asym-dy_asym_central))
+                dy[i] -= (dy_asym-dy_asym_central)
+        except :
+            log.warning("couldn't correct for asymmetry of PSF: %s %s"%(sys.exc_info()[0],sys.exc_info()[1]))
 
     log.info("polynomial fit of shifts and modification of PSF ycoef")
     # pol fit
     coef = np.polyfit(wave_for_dy,dy,degyy,w=1./ey**2)
     pol  = np.poly1d(coef)
+
+    for i in range(dy.size) :
+        log.info("wave=%fA y=%f, measured dy=%f+-%f , pol(wave) = %f"%(wave_for_dy[i],y_for_dy[i],dy[i],ey[i],pol(wave_for_dy[i])))
 
     log.info("apply this to the PSF ycoef")
     wave = np.linspace(wavemin,wavemax,100)
