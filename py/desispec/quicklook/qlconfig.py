@@ -393,7 +393,7 @@ class Palist(object):
             pa_list=self.thislist
         else: #- construct palist
             if self.flavor == "arcs":
-                pa_list=['Initialize','Preproc','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
+                pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
             elif self.flavor == "flat":
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
             elif self.flavor == "science":
@@ -412,11 +412,17 @@ class Palist(object):
             for PA in self.thislist:
                 qalist[PA]=self.algorithms[PA]['QA'].keys()
         else:
-            QAs_initial=['Bias_From_Overscan']
-            QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
-            QAs_extract=['CountSpectralBins']
-            QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
-            QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
+            if self.flavor =="arcs":
+                QAs_initial=['Bias_From_Overscan']
+                QAs_preproc=['Get_RMS','Count_Pixels']
+                QAs_bootcalib=['Calc_XWSigma']
+                QAs_extract=['CountSpectralBins']
+            else:
+                QAs_initial=['Bias_From_Overscan']
+                QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
+                QAs_extract=['CountSpectralBins']
+                QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
+                QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
         
             qalist={}
             for PA in self.palist:
@@ -424,6 +430,8 @@ class Palist(object):
                     qalist[PA] = QAs_initial
                 elif PA == 'Preproc':
                     qalist[PA] = QAs_preproc
+                elif PA == 'BootCalibration':
+                    qalist[PA] = QAs_bootcalib
                 elif PA == 'BoxcarExtract':
                     qalist[PA] = QAs_extract
                 elif PA == 'ApplyFiberFlat_QL':

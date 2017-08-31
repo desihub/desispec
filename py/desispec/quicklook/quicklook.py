@@ -406,14 +406,10 @@ def setup_pipeline(config):
 
     psf=None
     if "PSFFile" in config:
-        if config["Flavor"] == 'arcs':
-            from specter.psf import load_psf
-            from pkg_resources import resource_filename
-            psffile=resource_filename('specter','test/t/psf-monospot.fits')
-            psf=load_psf(psffile)
-        else:
-            import desispec.psf
-            psf=desispec.psf.PSF(config["PSFFile"])
+        #from specter.psf import load_psf
+        import desispec.psf
+        psf=desispec.psf.PSF(config["PSFFile"])
+        #psf=load_psf(config["PSFFile"])
 
     if "basePath" in config:
         basePath=config["basePath"]
