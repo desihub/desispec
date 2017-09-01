@@ -169,7 +169,7 @@ def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=5) 
     
     return frame_flux, frame_ivar, frame_wave
 
-def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=5,deg=2) :
+def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7,deg=2) :
     
     
     log=get_logger()
@@ -215,8 +215,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         x_of_y_int    = np.floor(x_of_y+0.5).astype(int)
         dx            = (xx.T-x_of_y).T
         mask=((xx.T>=x_of_y_int-hw)&(xx.T<=x_of_y_int+hw)).T
-        swdx           = (dx[mask] * image.ivar[mask] * image.pix[mask] ).reshape((n0,width)).sum(-1)
-        sw            = (image.ivar[mask] * image.pix[mask]).reshape((n0,width)).sum(-1)
+        swdx           = (dx[mask] * image.pix[mask] ).reshape((n0,width)).sum(-1)
+        sw            = (image.pix[mask]).reshape((n0,width)).sum(-1)
         swy           = sw*y
         swx           = sw*x_of_y
         swl           = sw*twave
@@ -792,9 +792,9 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
         log.info("convolve reference spectrum using PSF at fiber %d and wavelength %dA"%(fiber_for_psf_evaluation,central_wave_for_psf_evaluation))
         ref_spectrum=fftconvolve(ref_spectrum,kernel1d, mode='same')
     except :
-        log.warning("couldn't convolve reference spectrum")
-
-    #hdulist.append(pyfits.ImageHDU(ref_spectrum,name="CREFSPECTRUM"))
+        log.warning("couldn't convolve reference spectrum: %s %s"%(sys.exc_info()[0],sys.exc_info()[1]))
+    
+    
     
     # resample input spectrum
     log.info("resample convolved reference spectrum")
@@ -807,12 +807,6 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
     f2=fftconvolve(ref_spectrum,kernel,mode='same')
     scale=f1/f2
     ref_spectrum *= scale
- 
-    #hdulist.append(pyfits.ImageHDU(ref_spectrum,name="RCREFSPECTRUM"))
-    #hdulist.append(pyfits.ImageHDU(wave,name="WAVE"))
-    #hdulist.append(pyfits.ImageHDU(mflux,name="MFLUX"))
-    #hdulist.append(pyfits.ImageHDU(mivar,name="MIVAR"))
-    #hdulist.writeto("toto.fits",clobber=True)
     
     log.info("fit shifts on wavelength bins")
     # define bins
@@ -837,7 +831,7 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
         eps=0.1
         x,yp=psf.xy(fiber_for_psf_evaluation,bin_wave+eps)
         dydw=(yp-y)/eps
-        #print("dydw=%f dwdy=%f"%(dydw,1./dydw))
+        
         if err*dydw<1 :
             dy=np.append(dy,-dwave*dydw)
             ey=np.append(ey,err*dydw)
