@@ -10,7 +10,7 @@ from numpy.polynomial.legendre import legval,legfit
 
 from desispec.io import read_image
 from desiutil.log import get_logger
-from desispec.trace_shifts import read_psf,read_traces_in_psf,write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,_u,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
+from desispec.trace_shifts import read_psf_and_traces,write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,_u,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
 
 
 
@@ -78,11 +78,9 @@ def main(args) :
     nfibers=None
     lines=None
 
-    xcoef,ycoef,wavemin,wavemax = read_traces_in_psf(args.psf)
+    psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.psf)
     nfibers=xcoef.shape[0]
     log.info("read PSF trace coef with {} fibers and wavelength range {}:{}".format(nfibers,int(wavemin),int(wavemax)))
-    # load the psf model
-    psf = read_psf(args.psf)
     
     if args.lines is not None :
         log.info("We will fit the image using the psf model and lines")
@@ -227,8 +225,7 @@ def main(args) :
         
         log.info("write and reread PSF to be sure predetermined shifts were propagated")
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
-        xcoef,ycoef,wavemin,wavemax = read_traces_in_psf(args.outpsf)
-        psf = read_psf(args.outpsf)
+        psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.outpsf)
                 
         ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
                                                   image=image,fibers=fibers,spectrum_filename=args.spectrum,degyy=args.degyy,width=7)

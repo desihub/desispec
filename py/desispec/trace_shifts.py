@@ -16,22 +16,13 @@ from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
 
-def read_psf(psf_filename) :
-    try :
-        psftype=pyfits.open(psf_filename)[0].header["PSFTYPE"]
-    except KeyError :
-        psftype=""
-    if psftype=="GAUSS-HERMITE" :
-        return specter.psf.GaussHermitePSF(psf_filename)
-    elif psftype=="SPOTGRID" :
-        return specter.psf.SpotGridPSF(psf_filename)
-
-def read_traces_in_psf(psf_filename) :
-    """Reads traces in PSF file
+def read_psf_and_traces(psf_filename) :
+    """Reads PSF and traces in PSF fits file
     
     Args:
         psf_filename : Path to input fits file which has to contain XTRACE and YTRACE HDUs
     Returns:
+        psf : specter PSF object
         xtrace : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
         ytrace : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
@@ -41,44 +32,54 @@ def read_traces_in_psf(psf_filename) :
     """
 
     log=get_logger()
-    
+
+    psf=None
     xtrace=None
     ytrace=None
     wavemin=None
     wavemax=None
     wavemin2=None
     wavemax2=None
+
+    fits_file = pyfits.open(psf_filename)
     
-    psf=pyfits.open(psf_filename)
-    
-    if "XTRACE" in psf :
-        xtrace=psf["XTRACE"].data
-        ytrace=psf["YTRACE"].data
-        wavemin=psf["XTRACE"].header["WAVEMIN"]
-        wavemax=psf["XTRACE"].header["WAVEMAX"]
-        wavemin2=psf["YTRACE"].header["WAVEMIN"]
-        wavemax2=psf["YTRACE"].header["WAVEMAX"]
+    try :
+        psftype=fits_file[0].header["PSFTYPE"]
+    except KeyError :
+        psftype=""
+    if psftype=="GAUSS-HERMITE" :
+        psf = specter.psf.GaussHermitePSF(psf_filename)
+    elif psftype=="SPOTGRID" :
+        psf = specter.psf.SpotGridPSF(psf_filename)
+
+    # now read trace coefficients
+    if "XTRACE" in fits_file :
+        xtrace=fits_file["XTRACE"].data
+        ytrace=fits_file["YTRACE"].data
+        wavemin=fits_file["XTRACE"].header["WAVEMIN"]
+        wavemax=fits_file["XTRACE"].header["WAVEMAX"]
+        wavemin2=fits_file["YTRACE"].header["WAVEMIN"]
+        wavemax2=fits_file["YTRACE"].header["WAVEMAX"]
         
     else :
-       psftype=psf[0].header["PSFTYPE"]
-       log.info("psf is a '%s'"%psftype)
-       if psftype == "bootcalib" :    
-           wavemin = psf[0].header["WAVEMIN"]
-           wavemax = psf[0].header["WAVEMAX"]
-           xcoef   = psf[0].data
-           ycoef   = psf[1].data
-           xsig    = psf[2].data
-       elif psftype == "GAUSS-HERMITE" :
-           table=psf[1].data        
-           i=np.where(table["PARAM"]=="X")[0][0]
-           wavemin=table["WAVEMIN"][i]
-           wavemax=table["WAVEMAX"][i]
-           xtrace=table["COEFF"][i]
-           i=np.where(table["PARAM"]=="Y")[0][0]
-           ytrace=table["COEFF"][i]
-           wavemin2=table["WAVEMIN"][i]
-           wavemax2=table["WAVEMAX"][i]
-    
+        log.info("psf is a '%s'"%psftype)
+        if psftype == "bootcalib" :    
+            wavemin = fits_file[0].header["WAVEMIN"]
+            wavemax = fits_file[0].header["WAVEMAX"]
+            xcoef   = fits_file[0].data
+            ycoef   = fits_file[1].data
+            xsig    = fits_file[2].data
+        elif psftype == "GAUSS-HERMITE" :
+            table=fits_file[1].data        
+            i=np.where(table["PARAM"]=="X")[0][0]
+            wavemin=table["WAVEMIN"][i]
+            wavemax=table["WAVEMAX"][i]
+            xtrace=table["COEFF"][i]
+            i=np.where(table["PARAM"]=="Y")[0][0]
+            ytrace=table["COEFF"][i]
+            wavemin2=table["WAVEMIN"][i]
+            wavemax2=table["WAVEMAX"][i]
+            
     if xtrace is None or ytrace is None :
         raise ValueError("could not find XTRACE and YTRACE in psf file %s"%psf_filename)
     if wavemin != wavemin2 :
@@ -87,10 +88,13 @@ def read_traces_in_psf(psf_filename) :
         raise ValueError("XTRACE and YTRACE don't have same WAVEMAX %f %f"%(wavemax,wavemax2))
     if xtrace.shape[0] != ytrace.shape[0] :
         raise ValueError("XTRACE and YTRACE don't have same number of fibers %d %d"%(xtrace.shape[0],ytrace.shape[0]))
-        
     
-    psf.close()
-    return xtrace,ytrace,wavemin,wavemax
+    fits_file.close()
+    
+    return psf,xtrace,ytrace,wavemin,wavemax
+
+   
+    
     
 def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavemin,wavemax) :
     
