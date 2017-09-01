@@ -27,8 +27,8 @@ def read_psf_and_traces(psf_filename) :
         xtrace : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
         ytrace : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable u(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(xtrace[fiber],u(wave,wavemin,wavemax))
+        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
     
     """
 
@@ -107,8 +107,8 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
         xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
         ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable u(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(xtrace[fiber],u(wave,wavemin,wavemax))    
+        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])    
     """
     psf_fits=pyfits.open(input_psf_filename)
 
@@ -131,7 +131,18 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
     psf_fits.writeto(output_psf_filename,clobber=True)
     
     
-def _u(wave,wavemin,wavemax) :
+def legx(wave,wavemin,wavemax) :
+    """ 
+    Reduced coordinate (range [-1,1]) for calls to legval and legfit
+
+    Args:
+        wave : ND np.array
+        wavemin : float, min. val
+        wavemax : float, max. val
+    Returns:
+        array of same shape as wave
+    """
+    
     return 2.*(wave-wavemin)/(wavemax-wavemin)-1.
 
 # beginning of routines for cross-correlation method for trace shifts  
@@ -144,8 +155,8 @@ def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) 
         xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
         ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable u(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(xtrace[fiber],u(wave,wavemin,wavemax)) 
+        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
         image : DESI preprocessed image object
 
     Optional:   
@@ -190,10 +201,10 @@ def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) 
     
     for f,fiber in enumerate(fibers) :
         log.info("extracting fiber #%03d"%fiber)
-        y_of_wave     = legval(_u(twave, wavemin, wavemax), ycoef[fiber])
-        coef          = legfit(_u(y_of_wave, 0, n0), twave, deg=ncoef) # add one deg
-        frame_wave[f] = legval(_u(np.arange(n0).astype(float), 0, n0), coef)
-        x_of_y        = np.floor( legval(_u(frame_wave[f], wavemin, wavemax), xcoef[fiber]) + 0.5 ).astype(int)
+        y_of_wave     = legval(legx(twave, wavemin, wavemax), ycoef[fiber])
+        coef          = legfit(legx(y_of_wave, 0, n0), twave, deg=ncoef) # add one deg
+        frame_wave[f] = legval(legx(np.arange(n0).astype(float), 0, n0), coef)
+        x_of_y        = np.floor( legval(legx(frame_wave[f], wavemin, wavemax), xcoef[fiber]) + 0.5 ).astype(int)
         mask=((xx.T>=x_of_y-hw)&(xx.T<=x_of_y+hw)).T
         frame_flux[f]=image.pix[mask].reshape((n0,width)).sum(-1)
         tvar=var[mask].reshape((n0,width)).sum(-1)
@@ -239,7 +250,7 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
 
 
-def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.deg=2) :
+def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.,deg=2) :
     """
     Measure y offsets from two spectra expected to be on the same wavelength grid.
     refflux is the assumed well calibrated spectrum.
@@ -361,11 +372,11 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             block_wave = np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0)*wave[ok])/sw
             if err > 1 :
                 continue
-
-            tx = legval(_u(block_wave,wavemin,wavemax),xcoef[fiber])
-            ty = legval(_u(block_wave,wavemin,wavemax),ycoef[fiber])
+            rw = legx(block_wave,wavemin,wavemax)
+            tx = legval(rw,xcoef[fiber])
+            ty = legval(rw,ycoef[fiber])
             eps=0.1
-            yp = legval(_u(block_wave+eps,wavemin,wavemax),ycoef[fiber])
+            yp = legval(legx(block_wave+eps,wavemin,wavemax),ycoef[fiber])
             dydw = (yp-ty)/eps
             tdy = -dwave*dydw
             tey = err*dydw
@@ -388,8 +399,8 @@ def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fiber
         xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
         ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable u(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(xtrace[fiber],u(wave,wavemin,wavemax)) 
+        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
         image : DESI preprocessed image object
 
     Optional:   
@@ -430,8 +441,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
         ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable u(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(xtrace[fiber],u(wave,wavemin,wavemax)) 
+        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
         image : DESI preprocessed image object
 
     Optional:   
@@ -483,10 +494,10 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     
     for f,fiber in enumerate(fibers) :
         log.info("computing dx for fiber #%03d"%fiber)
-        y_of_wave     = legval(_u(twave, wavemin, wavemax), ycoef[fiber])
-        coef          = legfit(_u(y_of_wave, 0, n0), twave, deg=ncoef) # add one deg
-        twave         = legval(_u(np.arange(n0).astype(float), 0, n0), coef)
-        x_of_y        = legval(_u(twave, wavemin, wavemax), xcoef[fiber])
+        y_of_wave     = legval(legx(twave, wavemin, wavemax), ycoef[fiber])
+        coef          = legfit(legx(y_of_wave, 0, n0), twave, deg=ncoef) # add one deg
+        twave         = legval(legx(np.arange(n0).astype(float), 0, n0), coef)
+        x_of_y        = legval(legx(twave, wavemin, wavemax), xcoef[fiber])
         x_of_y_int    = np.floor(x_of_y+0.5).astype(int)
         dx            = (xx.T-x_of_y).T
         mask=((xx.T>=x_of_y_int-hw)&(xx.T<=x_of_y_int+hw)).T
@@ -560,8 +571,8 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
         xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
         ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable u(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(xtrace[fiber],u(wave,wavemin,wavemax)) 
+        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
         image : DESI preprocessed image object
         fibers : 1D np.array of fiber indices
         spectrum_filename : path to input spectral file ( read with np.loadtxt , first column is wavelength (in vacuum and Angstrom) , second column in flux (arb. units)
@@ -700,7 +711,7 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
     log.info("apply this to the PSF ycoef")
     wave = np.linspace(wavemin,wavemax,100)
     dy   = pol(wave)
-    dycoef = legfit(_u(wave,wavemin,wavemax),dy,deg=ycoef.shape[1]-1)
+    dycoef = legfit(legx(wave,wavemin,wavemax),dy,deg=ycoef.shape[1]-1)
     for fiber in range(ycoef.shape[0]) :
         ycoef[fiber] += dycoef
 
@@ -1025,7 +1036,7 @@ def monomials(x,y,degx,degy) :
     return np.array(M)
     
 def polynomial_fit(z,ez,xx,yy,degx,degy) :
-   """
+    """
     Computes and 2D polynomial fit of z as a function of (x,y) of degrees degx and degy
     
     Args:
@@ -1108,8 +1119,8 @@ def recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degy
         xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
         ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable u(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(xtrace[fiber],u(wave,wavemin,wavemax)) 
+        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
         degxx : int, degree of polynomial for x shifts as a function of x (x is axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction)
         degxy : int, degree of polynomial for x shifts as a function of y (y is axis=0 in numpy image array, AXIS=1 in FITS, wavelength dispersion axis)
         degyx : int, degree of polynomial for y shifts as a function of x
@@ -1123,17 +1134,16 @@ def recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degy
     """
     wave=np.linspace(wavemin,wavemax,100)
     nfibers=xcoef.shape[0]
+    rw=legx(wave,wavemin,wavemax)
     for fiber in range(nfibers) :
-        x = legval(_u(wave,wavemin,wavemax),xcoef[fiber])
-        y = legval(_u(wave,wavemin,wavemax),ycoef[fiber])
+        x = legval(rw,xcoef[fiber])
+        y = legval(rw,ycoef[fiber])
                 
         m=monomials(x,y,degxx,degxy)
         dx=m.T.dot(dx_coeff)
-        rwave=_u(wave,wavemin,wavemax)
-        xcoef[fiber]=legfit(rwave,x+dx,deg=xcoef.shape[1]-1)
+        xcoef[fiber]=legfit(rw,x+dx,deg=xcoef.shape[1]-1)
         
         m=monomials(x,y,degyx,degyy)
         dy=m.T.dot(dy_coeff)
-        rwave=_u(wave,wavemin,wavemax)
-        ycoef[fiber]=legfit(rwave,y+dy,deg=ycoef.shape[1]-1)
+        ycoef[fiber]=legfit(rw,y+dy,deg=ycoef.shape[1]-1)
     return xcoef,ycoef

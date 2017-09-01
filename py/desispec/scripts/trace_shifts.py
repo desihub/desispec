@@ -10,7 +10,7 @@ from numpy.polynomial.legendre import legval,legfit
 
 from desispec.io import read_image
 from desiutil.log import get_logger
-from desispec.trace_shifts import read_psf_and_traces,write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,_u,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
+from desispec.trace_shifts import read_psf_and_traces,write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
 
 
 
@@ -154,8 +154,8 @@ def main(args) :
         
         log.info("polynomial fit of measured offsets with degx=(%d,%d) degy=(%d,%d)"%(degxx,degxy,degyx,degyy))
         try :
-            dx_coeff,dx_coeff_covariance,dx_errorfloor,dx_mod,dx_mask=polynomial_fit(dd=dx,sdd=ex,xx=x_for_dx,yy=y_for_dx,degx=degxx,degy=degxy)
-            dy_coeff,dy_coeff_covariance,dy_errorfloor,dy_mod,dy_mask=polynomial_fit(dd=dy,sdd=ey,xx=x_for_dy,yy=y_for_dy,degx=degyx,degy=degyy)
+            dx_coeff,dx_coeff_covariance,dx_errorfloor,dx_mod,dx_mask=polynomial_fit(z=dx,ez=ex,xx=x_for_dx,yy=y_for_dx,degx=degxx,degy=degxy)
+            dy_coeff,dy_coeff_covariance,dy_errorfloor,dy_mod,dy_mask=polynomial_fit(z=dy,ez=ey,xx=x_for_dy,yy=y_for_dy,degx=degyx,degy=degyy)
             
             log.info("dx dy error floor = %4.3f %4.3f pixels"%(dx_errorfloor,dy_errorfloor))
 
@@ -163,9 +163,9 @@ def main(args) :
             
             merr=0.
             for fiber in [0,nfibers-1] :
-                for wave in [wavemin,wavemax] :
-                    tx = legval(_u(wave,wavemin,wavemax),xcoef[fiber])
-                    ty = legval(_u(wave,wavemin,wavemax),ycoef[fiber])
+                for rw in [-1,1] :
+                    tx = legval(rw,xcoef[fiber])
+                    ty = legval(rw,ycoef[fiber])
                     m=monomials(tx,ty,degxx,degxy)
                     tdx=np.inner(dx_coeff,m)
                     tsx=np.sqrt(np.inner(m,dx_coeff_covariance.dot(m)))
