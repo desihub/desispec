@@ -236,7 +236,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
 
     Args:
         param : dict of QA parameters : see qa_frame.init_skysub for example
-        frame : desispec.Frame object
+        frame : desispec.Frame object;  Should have been flat fielded
         skymodel : desispec.SkyModel object
         quick_look : bool, optional
           If True, do QuickLook specific QA (or avoid some)

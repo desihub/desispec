@@ -207,11 +207,15 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
     Returns:
 
     """
+    import glob
+    import os
+
     from desispec.io import read_frame
     from desispec.io import meta
     from desispec.io.qa import load_qa_frame, write_qa_frame
     from desispec.io.frame import search_for_framefile
     from desispec.io.fiberflat import read_fiberflat
+    from desispec.fiberflat import apply_fiberflat
     from desispec.qa import qa_plots
     from desispec.io.sky import read_sky
     from desispec.io.fluxcalibration import read_flux_calibration
@@ -247,6 +251,15 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
     # SkySub QA
     if qatype == 'qa_data':
         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
+        # Flat field first
+        dummy_fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
+                                      specprod_dir=specprod_dir) # This is dummy
+        path = os.path.split(dummy_fiberflat_fil)
+        fiberflat_files = glob.glob(os.path.join(path,'fiberflat-',camera))
+        fiberflat_files.sort()  # Same as current pipeline
+        fiberflat = read_fiberflat(fiberflat_files[0])
+        apply_fiberflat(frame, fiberflat)
+        # Load sky model and run
         try:
             skymodel = read_sky(sky_fil)
         except FileNotFoundError:
