@@ -228,9 +228,8 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     #current_ivar=frame.ivar[skyfibers].copy()
     #flux = frame.flux[skyfibers]
 
-    # Subtract
-    #res = flux - skymodel.flux[skyfibers] # Residuals
-    #res_ivar = util.combine_ivar(current_ivar, skymodel.ivar[skyfibers])
+    # Record median flux
+    qadict['MED_SKY'] = np.median(skymodel.flux[skyfibers])  # Counts
 
     #- Residuals
     res=frame.flux[skyfibers] #- as this frame is already sky subtracted
