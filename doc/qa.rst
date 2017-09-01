@@ -31,7 +31,7 @@ Here is the usage::
     usage: desi_qa_frame [-h] --frame_file FRAME_FILE [--reduxdir PATH]
                          [--make_plots]
 
-    Generate Frame Level QA [v0.4.1]
+    Generate Frame Level QA [v0.4.2]
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -66,7 +66,7 @@ Here is the usage::
     usage: desi_qa_exposure [-h] --expid EXPID --qatype QATYPE
                             [--channels CHANNELS] [--reduxdir PATH]
 
-    Generate Exposure Level QA [v0.4.1]
+    Generate Exposure Level QA [v0.4.2]
 
     optional arguments:
       -h, --help           show this help message and exit
@@ -100,7 +100,7 @@ Here is the usage::
                         [--channels CHANNELS] [--prod] [--gauss]
                         [--nights NIGHTS]
 
-    Generate QA on Sky Subtraction residuals [v0.4.1]
+    Generate QA on Sky Subtraction residuals [v0.4.2]
 
     optional arguments:
       -h, --help           show this help message and exit
@@ -156,9 +156,9 @@ Here is the usage::
     usage: desi_qa_prod [-h] [--reduxdir REDUXDIR] [--make_frameqa MAKE_FRAMEQA]
                         [--slurp] [--remove] [--clobber]
                         [--channel_hist CHANNEL_HIST] [--time_series TIME_SERIES]
-                        [--html HTML]
+                        [--bright_dark BRIGHT_DARK] [--html HTML]
 
-    Generate/Analyze Production Level QA [v1.4.2]
+    Generate/Analyze Production Level QA [v0.4.2]
 
     optional arguments:
       -h, --help            show this help message and exit
@@ -175,6 +175,9 @@ Here is the usage::
       --time_series TIME_SERIES
                             Generate time series plot. Input is QATYPE-METRIC,
                             e.g. SKYSUB-MED_RESID
+      --bright_dark BRIGHT_DARK
+                            Restrict to bright/dark (flag: 0=all; 1=bright;
+                            2=dark; only used in time_series)
       --html HTML           Generate HTML files
 
 
