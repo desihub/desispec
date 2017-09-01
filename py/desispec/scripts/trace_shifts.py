@@ -8,20 +8,24 @@ from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 
-from desispec.interpolation import resample_flux
 from desispec.io import read_image
 from desiutil.log import get_logger
-from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
-from desispec.interpolation import resample_flux
-from desispec.trace_shifts import read_psf,read_traces_in_psf,write_traces_in_psf,boxcar_extraction,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_fiber_bundle_trace_shifts_using_psf,_u,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,resample_boxcar_frame,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
+from desispec.trace_shifts import read_psf,read_traces_in_psf,write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,_u,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
 
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Measure trace shifts.")
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="""Measure trace shifts from a preprocessed image and an input psf, and writes the modified trace coordinates in an output psf file to be used for extractions.
+Two methods are implemented.
+1) cross-correlation : dx shifts are measured from cross-dispersion profiles of traces. 
+   dy shifts (wavelength calibration) are measured in two steps, an internal calibration determined from the cross-correlation of fiber spectra obtained from a resampled boxcar extraction with their median, and the final wavelength calibration is obtained from the  cross-correlation of the median fiber spectrum (after a second boxcar extraction) with an external spectrum (given with --spectrum option).
+   This method is efficient for measuring trace shifts on science exposures with a large sky background.
+2) forward model : dy,dy shifts are determined simultaneously by a forward modeling of the image around a given external list of lines (--lines option).
+   This method is in principle statisically optimal, but it is slow and cannot be applied to blended and broad sky lines. It is useful to shift traces from arc lamp images (though specex does the same thing in C++).""")
     
     parser.add_argument('--image', type = str, default = None, required=True,
-                        help = 'path of DESI preprocessed fits file')
+                        help = 'path of DESI preprocessed fits image')
     parser.add_argument('--psf', type = str, default = None, required=True,
                         help = 'path of DESI psf fits file')
     parser.add_argument('--lines', type = str, default = None, required=False,
@@ -31,7 +35,7 @@ def parse(options=None):
     parser.add_argument('--outpsf', type = str, default = None, required=True,
                         help = 'path of output PSF with shifted traces')
     parser.add_argument('--outoffsets', type = str, default = None, required=False,
-                        help = 'path of output ASCII file with measured offsets')
+                        help = 'path of output ASCII file with measured offsets for QA')
     parser.add_argument('--degxx', type = int, default = 2, required=False,
                         help = 'polynomial degree for x shifts along x')
     parser.add_argument('--degxy', type = int, default = 2, required=False,
@@ -167,7 +171,6 @@ def main(args) :
                     m=monomials(tx,ty,degxx,degxy)
                     tdx=np.inner(dx_coeff,m)
                     tsx=np.sqrt(np.inner(m,dx_coeff_covariance.dot(m)))
-                    #print(x,y,m,dx)
                     m=monomials(tx,ty,degyx,degyy)
                     tdy=np.inner(dy_coeff,m)
                     tsy=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))
@@ -226,12 +229,7 @@ def main(args) :
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         xcoef,ycoef,wavemin,wavemax = read_traces_in_psf(args.outpsf)
         psf = read_psf(args.outpsf)
-        
-        #log.warning("DEBUGGING !!!!")
-        #xcoef,ycoef,wavemin,wavemax = read_traces_in_psf(args.psf)
-        #psf = read_psf(args.psf)
-        
-        
+                
         ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
                                                   image=image,fibers=fibers,spectrum_filename=args.spectrum,degyy=args.degyy,width=7)
     
