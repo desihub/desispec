@@ -767,7 +767,22 @@ def prod_channel_hist(qa_prod, qatype, metric, xlim=None, outfile=None, pp=None,
     else:  # Show
         plt.show()
 
-def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=True, pp=None):
+def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=True, pp=None,
+                     bright_dark=0):
+    """ Generate a time series plot for a production
+    Args:
+        qa_prod:
+        qatype:
+        metric:
+        xlim:
+        outfile:
+        close:
+        pp:
+        bright_dark: int, optional; (flag: 0=all; 1=bright; 2=dark)
+
+    Returns:
+
+    """
     from astropy.time import Time
 
     log = get_logger()
@@ -798,6 +813,20 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
         atime = Time(qa_tbl['DATE-OBS'], format='isot', scale='utc')
         atime.format = 'mjd'
         mjd = atime.value
+
+        # Bright dark
+        if bright_dark == 0: # All
+            pass
+        elif bright_dark == 1: # Bright
+            log.info("Using a bright/dark kludge for now")
+            bright = qa_tbl['EXPTIME'] < 1200.
+            qa_tbl = qa_tbl[bright]
+            mjd = mjd[bright]
+        elif bright_dark == 2: # Dark
+            log.info("Using a bright/dark kludge for now")
+            dark = qa_tbl['EXPTIME'] > 1200.
+            qa_tbl = qa_tbl[dark]
+            mjd = mjd[dark]
 
         # Scatter me
         ax.scatter(mjd, qa_tbl[metric], color=clrs[channel], s=4.)

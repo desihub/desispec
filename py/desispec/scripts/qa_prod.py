@@ -23,6 +23,8 @@ def parse(options=None):
                         help='Generate channel histogram(s)')
     parser.add_argument('--time_series', type=str, default=None,
                         help='Generate time series plot. Input is QATYPE-METRIC, e.g. SKYSUB-MED_RESID')
+    parser.add_argument('--bright_dark', type=int, default=0,
+                        help='Restrict to bright/dark (flag: 0=all; 1=bright; 2=dark; only used in time_series)')
     parser.add_argument('--html', default = False, action='store_true',
                         help = 'Generate HTML files?')
 
@@ -93,7 +95,7 @@ def main(args) :
         # Run
         qatype, metric = args.time_series.split('-')
         outfile= specprod_dir+'/QA/QA_time_{:s}.png'.format(args.time_series)
-        dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile)
+        dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile, bright_dark=args.bright_dark)
 
     # HTML
     if args.html:
