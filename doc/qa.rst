@@ -158,7 +158,7 @@ Here is the usage::
                         [--channel_hist CHANNEL_HIST] [--time_series TIME_SERIES]
                         [--html HTML]
 
-    Generate/Analyze Production Level QA [v1.4]
+    Generate/Analyze Production Level QA [v1.4.2]
 
     optional arguments:
       -h, --help            show this help message and exit
