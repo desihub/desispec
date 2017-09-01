@@ -299,6 +299,7 @@ def toplevel():
     f.write('<hr>\n')
     f.write('<h2>PNGs</h2>\n')
     all_png = glob.glob(html_path+'/*.png')
+    all_png.sort()
     # Type
     links = ''
     body = ''
