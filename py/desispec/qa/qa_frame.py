@@ -254,8 +254,8 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
         # Flat field first
         dummy_fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
                                       specprod_dir=specprod_dir) # This is dummy
-        path = os.path.split(dummy_fiberflat_fil)
-        fiberflat_files = glob.glob(os.path.join(path,'fiberflat-',camera))
+        path,_ = os.path.split(dummy_fiberflat_fil)
+        fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
         fiberflat_files.sort()  # Same as current pipeline
         fiberflat = read_fiberflat(fiberflat_files[0])
         apply_fiberflat(frame, fiberflat)
