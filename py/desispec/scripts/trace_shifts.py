@@ -80,7 +80,7 @@ def main(args) :
 
     psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.psf)
     nfibers=xcoef.shape[0]
-    log.info("read PSF trace coef with {} fibers and wavelength range {}:{}".format(nfibers,int(wavemin),int(wavemax)))
+    log.info("read PSF trace with xcoef.shape = {} , ycoef.shape = {} , and wavelength range {}:{}".format(xcoef.shape,ycoef.shape,int(wavemin),int(wavemax)))
     
     if args.lines is not None :
         log.info("We will fit the image using the psf model and lines")
@@ -216,8 +216,8 @@ def main(args) :
     
     # for each fiber, apply offsets and recompute legendre polynomial
     log.info("for each fiber, apply offsets and recompute legendre polynomial")
-    xcoef,ycoef = recompute_legendre_coefficients(xcoef,ycoef,wavemin,wavemax,degxx,degxy,degyx,degyy,dx_coeff,dy_coeff)
-        
+    xcoef,ycoef = recompute_legendre_coefficients(xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,degxx=degxx,degxy=degxy,degyx=degyx,degyy=degyy,dx_coeff=dx_coeff,dy_coeff=dy_coeff)
+    
     
     # use an input spectrum as an external calibration of wavelength
     if args.spectrum :
@@ -236,7 +236,7 @@ def main(args) :
         
     else :
         
-        write_traces_in_psf(args.outpsf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         log.info("wrote modified PSF in %s"%args.outpsf)
         
     
