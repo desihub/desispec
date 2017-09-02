@@ -256,7 +256,8 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
                                       specprod_dir=specprod_dir) # This is dummy
         path,_ = os.path.split(dummy_fiberflat_fil)
         fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
-        fiberflat_files.sort()  # Same as current pipeline
+        # Sort and take the first (same as current pipeline)
+        fiberflat_files.sort()
         fiberflat = read_fiberflat(fiberflat_files[0])
         apply_fiberflat(frame, fiberflat)
         # Load sky model and run
