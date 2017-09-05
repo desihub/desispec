@@ -116,9 +116,9 @@ def main(args) :
                 log.info("Loading sky residuals for {:d} cframes".format(len(cframes)))
                 sky_wave, sky_flux, sky_res, _ = qa_utils.get_skyres(cframes)
                 # Plot
-                log.info("Plotting..")
-                skysub_resid_dual(sky_wave, sky_flux, sky_res,
-                             outfile='QA/skyresid_prod_dual_{:s}.png'.format(channel))
+                outfile='QA/skyresid_prod_dual_{:s}.png'.format(channel)
+                log.info("Plotting to {:s}".format(outfile))
+                skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=outfile)
         return
 
     # Full Prod Plot?
