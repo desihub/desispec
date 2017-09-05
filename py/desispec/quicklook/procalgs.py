@@ -735,7 +735,7 @@ class ResolutionFit(pas.PipelineAlg):
 
         #- update the arc frame resolution from new coeffs
         newpsf=PSF(outfile)
-        input_frame.resolution_data=get_resolution(input_frame.wave,newpsf)
+        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf)
  
         return input_frame
 

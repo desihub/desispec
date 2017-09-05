@@ -20,7 +20,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, BootCalibration, BoxcarExtract]
+Pipeline: [Initialize, Preproc, BootCalibration, BoxcarExtract, ResolutionFit]
 Algorithms:
     Initialize:
         QA: 
@@ -51,3 +51,5 @@ Algorithms:
         QA:
             CountSpectralBins:
                 PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_WARN_RANGE: [490, 500], NGOOD_ALARM_RANGE: [480, 500]}
+    ResolutionFit:
+        QA: {}

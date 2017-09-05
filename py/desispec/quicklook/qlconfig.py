@@ -111,6 +111,7 @@ class Config(object):
             arcimg=findfile('pix',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir)
             flatimg=findfile('pix',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,rawdata_dir=self.rawdata_dir)
             bootfile=findfile('psfboot',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
+            psfnightfile=findfile('psfnight',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
         else:
             arcimg=None
             flatimg=None
@@ -119,6 +120,8 @@ class Config(object):
         paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
 
         paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
+
+        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile}
 
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
@@ -138,6 +141,8 @@ class Config(object):
                 paopts[PA]=paopt_bootcalib
             elif PA=='BoxcarExtract':
                 paopts[PA]=paopt_extract
+            elif PA=='ResolutionFit':
+                paopts[PA]=paopt_resfit
             elif PA=='ApplyFiberFlat_QL':
                 paopts[PA]=paopt_apfflat
             elif PA=='SkySub_QL':
@@ -153,7 +158,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'pix', 'BoxcarExtract': 'frame', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'pix', 'BootCalibration': 'psfboot', 'BoxcarExtract': 'frame', 'ResolutionFit': 'psfnight', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -393,7 +398,7 @@ class Palist(object):
             pa_list=self.thislist
         else: #- construct palist
             if self.flavor == "arcs":
-                pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
+                pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract','ResolutionFit'] #- class names for respective PAs (see desispec.quicklook.procalgs)
             elif self.flavor == "flat":
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
             elif self.flavor == "science":
@@ -434,6 +439,8 @@ class Palist(object):
                     qalist[PA] = QAs_bootcalib
                 elif PA == 'BoxcarExtract':
                     qalist[PA] = QAs_extract
+                elif PA == 'ResolutionFit':
+                    qalist[PA] = QAs_resfit
                 elif PA == 'ApplyFiberFlat_QL':
                     qalist[PA] = QAs_apfiberflat
                 elif PA == 'SkySub_QL':
