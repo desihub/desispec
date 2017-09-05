@@ -127,6 +127,7 @@ class QA_Prod(object):
         from desispec.io.sky import read_sky
         from desispec.io.fluxcalibration import read_flux_calibration
         from desispec.qa import qa_plots
+        from desispec.qa.qa_frame import qaframe_from_frame
         from desispec.io.fluxcalibration import read_stdstar_models
         log = get_logger()
 
@@ -140,6 +141,8 @@ class QA_Prod(object):
                         expid = exposure, specprod_dir = self.specprod_dir)
                 for camera,frame_fil in frames_dict.items():
                     # Load frame
+                    qaframe_from_frame(frame_fil, make_plots=make_plots)
+                    '''
                     frame_meta = read_meta_frame(frame_fil)  # Only meta to speed it up
                     spectro = int(frame_meta['CAMERA'][-1])
                     if frame_meta['FLAVOR'] in ['flat','arc']:
@@ -200,6 +203,7 @@ class QA_Prod(object):
                                 qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)#, model_tuple)
                     # Write
                     write_qa_frame(qafile, qaframe)
+                    '''
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files into one master QA file
