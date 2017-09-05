@@ -144,17 +144,16 @@ class BootCalibration(pas.PipelineAlg):
         arcimage=kwargs["ArcLampImage"]
         outputfile=kwargs["outputFile"]
 
-        return self.run_pa(deg,flatimage,arcimage,outputfile)
+        return self.run_pa(deg,flatimage,arcimage,outputfile,args)
 
-    def run_pa(self,deg,flatimage,arcimage,outputfile):
+    def run_pa(self,deg,flatimage,arcimage,outputfile,args):
         from desispec.util import runcmd
         cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
-        runcmd(cmd)
         if runcmd(cmd) !=0:
             raise RuntimeError('desi_bootcalib failed, psfboot not written')
-        else:
-            log.info("PSF file wrtten. Exiting Quicklook for this configuration.") #- File written no need to go further
-        sys.exit(0)
+
+        img=args[0]
+        return img
 
 
 class BoxcarExtract(pas.PipelineAlg):
