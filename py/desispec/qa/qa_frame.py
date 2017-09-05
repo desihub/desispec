@@ -195,7 +195,7 @@ class QA_Frame(object):
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
 
 
-def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
+def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_dir=None):
     """  Generate a qaframe object from an input frame_file name (and night)
     Write QA to disk
     Will also make plots if directed
@@ -203,6 +203,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
         frame_file: str
         specprod_dir: str, optional
         make_plots: bool, optional
+        output_dir: str, optional
 
     Returns:
 
@@ -236,7 +237,8 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
     else:
         qatype = 'qa_data'
     # Load
-    qafile = meta.findfile(qatype, night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
+    qafile = meta.findfile(qatype, night=night, camera=camera, expid=expid, specprod_dir=specprod_dir,
+                           outdir=output_dir)
     qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
     # Flat QA
     if frame.meta['FLAVOR'] in ['flat']:
@@ -246,7 +248,8 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
         qaframe.run_qa('FIBERFLAT', (frame, fiberflat), clobber=True)
         if make_plots:
             # Do it
-            qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
+            qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=expid,
+                                  specprod_dir=specprod_dir, outdir=output_dir)
             qa_plots.frame_fiberflat(qafig, qaframe, frame, fiberflat)
     # SkySub QA
     if qatype == 'qa_data':
@@ -269,7 +272,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
             qaframe.run_qa('SKYSUB', (frame, skymodel))
             if make_plots:
                 qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=expid,
-                                      specprod_dir=specprod_dir)
+                                      specprod_dir=specprod_dir, outdir=output_dir)
                 qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
     # FluxCalib QA
     if qatype == 'qa_data':
@@ -290,7 +293,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
             qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))  # , model_tuple))#, indiv_stars))
             if make_plots:
                 qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=expid,
-                                      specprod_dir=specprod_dir)
+                                      specprod_dir=specprod_dir, outdir=output_dir)
                 qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)  # , model_tuple)
     # Write
     write_qa_frame(qafile, qaframe, verbose=True)
