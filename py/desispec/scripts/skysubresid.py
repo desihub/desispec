@@ -118,7 +118,7 @@ def main(args) :
                 # Plot
                 log.info("Plotting..")
                 skysub_resid_dual(sky_wave, sky_flux, sky_res,
-                             outfile='skyresid_prod_dual_{:s}.png'.format(channel))
+                             outfile='QA/skyresid_prod_dual_{:s}.png'.format(channel))
         return
 
     # Full Prod Plot?
