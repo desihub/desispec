@@ -116,6 +116,7 @@ class Config(object):
             arcimg=None
             flatimg=None
             bootfile=None
+            psfnightfile=None
 
         paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
 
