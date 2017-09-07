@@ -1,7 +1,5 @@
 from desispec.quicklook import qllogger 
 from desispec.quicklook import qlexceptions
-from enum import Enum
-class Severity(Enum):
 class MonitoringAlg:
     """ Simple base class for monitoring algorithms """
     def __init__(self,name,inptype,config,logger=None):
