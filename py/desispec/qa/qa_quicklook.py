@@ -6,7 +6,7 @@ Monitoring algorithms for Quicklook pipeline
 import numpy as np
 import scipy.ndimage
 import yaml
-from desispec.quicklook.qas import MonitoringAlg
+from desispec.quicklook.qas import MonitoringAlg, QASeverity
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
 import os,sys
@@ -56,6 +56,12 @@ class Get_RMS(MonitoringAlg):
         if name is None or name.strip() == "":
             name="RMS"
         from desispec.image import Image as im
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        
+        if "RMS_WARN_RANGE" in parms and "RMS_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["RMS_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["RMS_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -111,10 +117,10 @@ class Get_RMS(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                RMS_WARN_RANGE=[-1.0, 1.0],
-                RMS_ALARM_RANGE=[-2.0, 2.0]
-                )
+            param = {
+                "RMS_NORMAL_RANGE":[-1.0, 1.0],
+                "RMS_WARN_RANGE":[-2.0, 2.0]
+                }
 
         retval["PARAMS"] = param
 
@@ -138,19 +144,7 @@ class Get_RMS(MonitoringAlg):
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
 
-            for i in range(len(rms_over_amps)):
-                if rms_over_amps[i] <= param['RMS_ALARM_RANGE'][0] or rms_over_amps[i] >= param['RMS_ALARM_RANGE'][1]:
-                    rmsdiff = 'ALARM'
-                    break
-                elif rms_over_amps[i] <= param['RMS_WARN_RANGE'][0] or rms_over_amps[i] >= param['RMS_WARN_RANGE'][1]:
-                    rmsdiff = 'WARN'
-                else:
-                    if rmsdiff == 'WARN':
-                        pass
-                    else:
-                        rmsdiff = 'NORMAL'
-
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RESULT":rmsccd,"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"EXPNUM_WARN":expnum}
         else:
             retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rms_over,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum} 
 
@@ -220,11 +214,11 @@ class Count_Pixels(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                 CUTLO = 3,   # low threshold for number of counts in sigmas
-                 CUTHI = 10, 
-                 NPIX_RANGE = [50.0, 200.0, 500.0, 650.0]
-                 )
+            param = {
+                 "CUTLO" : 3,   # low threshold for number of counts in sigmas
+                 "CUTHI" : 10, 
+                 "NPIX_RANGE" : [50.0, 200.0, 500.0, 650.0]
+                 }
 
         retval["PARAMS"] = param
 
@@ -339,9 +333,9 @@ class Integrate_Spec(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                MAGDIFF_RANGE = [-1.0, -0.5, 0.5, 1.0]
-                )
+            param = {
+                "MAGDIFF_RANGE": [-1.0, -0.5, 0.5, 1.0]
+                }
 
         retval["PARAMS"] = param
 
@@ -495,12 +489,12 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                B_CONT=[(4000, 4500), (5250, 5550)],
-                R_CONT=[(5950, 6200), (6990, 7230)],
-                Z_CONT=[(8120, 8270), (9110, 9280)],
-                SKYCONT_RANGE=[50.0, 100.0, 400.0, 600.0]
-                )
+            param = {
+                "B_CONT":[(4000, 4500), (5250, 5550)],
+                "R_CONT":[(5950, 6200), (6990, 7230)],
+                "Z_CONT":[(8120, 8270), (9110, 9280)],
+                "SKYCONT_RANGE":[50.0, 100.0, 400.0, 600.0]
+                }
 
         retval["PARAMS"] = param
 
@@ -730,12 +724,12 @@ class Sky_Peaks(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                B_PEAKS=[3914.4, 5199.3, 5201.8],
-                R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                SUMCOUNT_RANGE=[500.0, 1000.0, 20000.0, 40000.0]
-                )
+            param ={
+                "B_PEAKS":[3914.4, 5199.3, 5201.8],
+                "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
+                "SUMCOUNT_RANGE":[500.0, 1000.0, 20000.0, 40000.0]
+                }
 
         retval["PARAMS"] = param
 
@@ -1061,13 +1055,13 @@ class Calc_XWSigma(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                B_PEAKS=[3914.4, 5199.3, 5201.8],
-                R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                XSHIFT_RANGE = [-4.0, -2.0, 2.0, 4.0],
-                WSHIFT_RANGE = [-4.0, -2.0, 2.0, 4.0]
-                )
+            param = {
+                "B_PEAKS":[3914.4, 5199.3, 5201.8],
+                "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
+                "XSHIFT_RANGE" : [-4.0, -2.0, 2.0, 4.0],
+                "WSHIFT_RANGE":[-4.0, -2.0, 2.0, 4.0]
+                }
 
         retval["PARAMS"] = param
 
