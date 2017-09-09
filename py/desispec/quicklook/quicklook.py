@@ -9,6 +9,7 @@ import importlib
 import yaml
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
+from desispec.io import qa as qawriter
 from desiutil.io import yamlify
 
 def testconfig(outfilename="qlconfig.yaml"):
@@ -291,6 +292,8 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
 
                 if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         #TODO -must run this QA for now. change this later.
                     passqadict=res
+                if "qafile" in qargs:
+                    qawriter.write_qa_ql(qargs["qafile"],res)
                 log.debug("{} {}".format(qa.name,inp))
                 qaresult[qa.name]=res
 
