@@ -203,9 +203,46 @@ def integrate_spec(wave,flux):
     integral=np.trapz(flux,wave)
     return integral
 
-def sky_resid(param, frame, skymodel, quick_look=False):
+def sky_continuum(frame, wrange1, wrange2):
+    """ QA Algorithm for sky continuum
+        To be called from desispec.sky.qa_skysub and desispec.qa.qa_quicklook.Sky_Continuum.run_qa
+    Args:
+        frame:
+        wrange1:
+        wrange2:
+
+    Returns:
+    skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont
+
     """
-    Algorithm for sky residual
+    #- get the skyfibers first
+    skyfiber=np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
+    nspec_sky=skyfiber.shape[0]
+    if isinstance(wrange1,list): # Offline list format
+        wminlow,wmaxlow=wrange1
+        wminhigh,wmaxhigh=wrange2
+    else: # Quick look string format
+        wminlow,wmaxlow=[float(w) for w in wrange1.split(',')]
+        wminhigh,wmaxhigh=[float(w) for w in wrange2.split(',')]
+    selectlow=np.where((frame.wave>wminlow) & (frame.wave<wmaxlow))[0]
+    selecthigh=np.where((frame.wave>wminhigh) & (frame.wave < wmaxhigh))[0]
+
+    contfiberlow=[]
+    contfiberhigh=[]
+    meancontfiber=[]
+    for ii in skyfiber:
+        contlow=continuum(frame.wave[selectlow],frame.flux[ii,selectlow])
+        conthigh=continuum(frame.wave[selecthigh],frame.flux[ii,selecthigh])
+        contfiberlow.append(contlow)
+        contfiberhigh.append(conthigh)
+        meancontfiber.append(np.mean((contlow,conthigh)))
+    skycont=np.mean(meancontfiber) #- over the entire CCD (skyfibers)
+
+    # Return
+    return skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont
+
+def sky_resid(param, frame, skymodel, quick_look=False):
+    """ QA Algorithm for sky residual
     To be called from desispec.sky.qa_skysub and desispec.qa.qa_quicklook.Sky_residual.run_qa
     Args:
         param : dict of QA parameters
