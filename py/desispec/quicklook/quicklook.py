@@ -406,6 +406,7 @@ def setup_pipeline(config):
 
     psf=None
     if config["Flavor"] == 'arcs':
+        os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"]))
         pass
     elif "PSFFile" in config:
         #from specter.psf import load_psf
