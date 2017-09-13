@@ -253,6 +253,8 @@ class BoxcarExtract(pas.PipelineAlg):
                maskFile=None,usesigma=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
+        import desispec.psf
+        psf=desispec.psf.PSF(psf)
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
                                   nspec=nspec,maskFile=maskFile,usesigma=usesigma)
 

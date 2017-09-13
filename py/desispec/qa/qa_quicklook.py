@@ -906,7 +906,7 @@ class Calc_XWSigma(MonitoringAlg):
  
     def run_qa(self,fibermap,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False):
         from scipy.optimize import curve_fit
- 
+
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat() 
@@ -947,7 +947,11 @@ class Calc_XWSigma(MonitoringAlg):
         b_peaks=param['B_PEAKS']
         r_peaks=param['R_PEAKS']
         z_peaks=param['Z_PEAKS']
- 
+
+        if fibermap["OBJTYPE"][0] == 'ARC':
+            import desispec.psf
+            psf=desispec.psf.PSF(psf)
+
         xsigma=[]
         wsigma=[]
         xsigma_sky=[]
@@ -1452,6 +1456,10 @@ class CountSpectralBins(MonitoringAlg):
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
+
+        if fibermap["OBJTYPE"][0] == 'ARC':
+            import desispec.psf
+            psf=desispec.psf.PSF(psf)
 
         grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 

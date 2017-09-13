@@ -405,7 +405,9 @@ def setup_pipeline(config):
         skyfile=config["SkyFile"]
 
     psf=None
-    if "PSFFile" in config:
+    if config["Flavor"] == 'arcs':
+        pass
+    elif "PSFFile" in config:
         #from specter.psf import load_psf
         import desispec.psf
         psf=desispec.psf.PSF(config["PSFFile"])
