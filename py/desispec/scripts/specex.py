@@ -165,15 +165,16 @@ def main(args, comm=None):
         outbundlexml = "{}.xml".format(outbundle)
         outbundlespot = "{}-spots.fits".format(outbundle)
 
-        com = ['specex_desi_psf_fit']
+        com = ['desi_psf_fit']
         com.extend(['-a', imgfile])
-        com.extend(['--xcoord-file', bootfile])
-        com.extend(['--ycoord-file', bootfile])
-        com.extend(['--out_xml', outbundlexml])
-        com.extend(['--out_fits', outbundlefits])
-        com.extend(['--out_spots', outbundlespot])
-        com.extend(['--first_bundle', "{}".format(b)])
-        com.extend(['--last_bundle', "{}".format(b)])
+        com.extend(['--in-psf', bootfile])
+        com.extend(['--out-psf', outbundlefits])
+        com.extend(['--out-psf-xml', outbundlexml])
+        com.extend(['--out-spots', outbundlespot])
+        com.extend(['--first-bundle', "{}".format(b)])
+        com.extend(['--last-bundle', "{}".format(b)])
+        
+
         if verbose:
             com.extend(['--verbose'])
 
@@ -190,7 +191,7 @@ def main(args, comm=None):
 
         if retval != 0:
             comstr = " ".join(com)
-            log.error("specex_desi_psf_fit on process {} failed with return value {} running {}".format(rank, retval, comstr))
+            log.error("desi_psf_fit on process {} failed with return value {} running {}".format(rank, retval, comstr))
             failcount += 1
 
     if comm is not None:

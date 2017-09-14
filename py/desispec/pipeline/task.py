@@ -196,8 +196,8 @@ class WorkerSpecex(Worker):
         # opts["ivar-hdu"] = 2
         # opts["mask-hdu"] = 3
         # opts["header-hdu"] = 1
-        opts["xcoord-hdu"] = 1
-        opts["ycoord-hdu"] = 2
+        # opts["xcoord-hdu"] = 1
+        # opts["ycoord-hdu"] = 2
         # opts["psfmodel"] = "GAUSSHERMITE"
         # opts["half_size_x"] = 8
         # opts["half_size_y"] = 5
@@ -215,7 +215,7 @@ class WorkerSpecex(Worker):
         opts["lamplines"] = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt"
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
-            exefile = os.path.join(path, "specex_desi_psf_fit")
+            exefile = os.path.join(path, "desi_psf_fit")
             if os.path.isfile(exefile) and os.access(exefile, os.X_OK):
                 specexdir = os.path.join(path, "..", "data")
                 opts["lamplines"] = os.path.join(specexdir, "specex_linelist_boss.txt")
