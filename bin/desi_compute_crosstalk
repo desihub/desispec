@@ -107,7 +107,7 @@ for a1 in range(4) :
         ef2=np.zeros(fbins.size-1)
         for i in range(fbins.size-1) :
             ok=(f1>=fbins[i])&(f1<fbins[i+1])
-            if ok.size<3 :
+            if np.sum(ok)<5 :
                 continue
             if1=f1[ok]
             if2=f2[ok]
@@ -121,7 +121,7 @@ for a1 in range(4) :
             mf1[i]=imf1
             mf2[i]=imf2
             ef2[i]=err2
-        i=np.where(mf1>0)[0]
+        i=np.where((mf1>0)&(ef2>0))[0]
         if i.size<2 :
             log.warning("cannot measure cross-talk for %s%s"%(amp1,amp2))
             continue
