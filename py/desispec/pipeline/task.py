@@ -250,27 +250,31 @@ class WorkerSpecex(Worker):
         cam = "{}{}".format(band, spec)
 
         pix = []
-        boot = []
+        inpsf = []
         for input in node["in"]:
+            
+            print("DEBUG  input , grph[input]=", input,grph[input]) 
+
             inode = grph[input]
-            if inode["type"] == "psfboot":
-                boot.append(input)
+            if inode["type"] == "psfboot": 
+                inpsf.append(input)
             elif inode["type"] == "pix":
                 pix.append(input)
-        if len(boot) != 1:
-            raise RuntimeError("specex needs exactly one psfboot file")
+        if len(inpsf) != 1:
+            raise RuntimeError("specex needs exactly one input psf file")
         if len(pix) != 1:
-            raise RuntimeError("specex needs exactly one image file")
-        bootfile = graph_path(boot[0])
+            raise RuntimeError("specex needs exactly one input image file")
+        inpsffile = graph_path(inpsf[0])
         imgfile = graph_path(pix[0])
         outfile = graph_path(task)
 
         options = {}
-        options["input"] = imgfile
-        options["bootfile"] = bootfile
-        options["output"] = outfile
-        if log.getEffectiveLevel() == DEBUG:
-            options["verbose"] = True
+        options["input-image"] = imgfile
+        options["input-psf"]   = inpsffile
+        options["output-psf"]  = outfile
+        #if log.getEffectiveLevel() == DEBUG:
+        #    options["debug"] = True
+            
         if len(opts) > 0:
             extarray = option_list(opts)
             options["extra"] = " ".join(extarray)

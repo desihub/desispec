@@ -54,12 +54,12 @@ if libspecex is not None:
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Estimate the PSF for one frame with specex")
-    parser.add_argument("-i", "--input", type=str, required=True,
+    parser.add_argument("--input-image", type=str, required=True,
                         help="input image")
-    parser.add_argument("-b", "--bootfile", type=str, required=True,
-                        help="input bootcalib psf file")
-    parser.add_argument("-o", "--output", type=str, required=True,
-                        help="output extracted spectra")
+    parser.add_argument("--input-psf", type=str, required=True,
+                        help="input psf file")
+    parser.add_argument("-o", "--output-psf", type=str, required=True,
+                        help="output psf file")
     parser.add_argument("--bundlesize", type=int, required=False, default=25,
                         help="number of spectra per bundle")
     parser.add_argument("-s", "--specmin", type=int, required=False, default=0,
@@ -68,8 +68,9 @@ def parse(options=None):
                         help="number of spectra to extract")
     parser.add_argument("--extra", type=str, required=False, default=None,
                         help="quoted string of arbitrary options to pass to specex_desi_psf_fit")
-    parser.add_argument("-v", "--verbose", action="store_true", help="print more stuff")
-
+    parser.add_argument("--debug", action = 'store_true',
+                        help="debug mode")
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -82,10 +83,10 @@ def main(args, comm=None):
 
     log = get_logger()
 
-    imgfile = args.input
-    outfile = args.output
-    bootfile = args.bootfile
-
+    imgfile = args.input_image
+    outfile = args.output_psf
+    inpsffile = args.input_psf
+    
     optarray = []
     if args.extra is not None:
         optarray = args.extra.split()
@@ -93,9 +94,7 @@ def main(args, comm=None):
     specmin = int(args.specmin)
     nspec = int(args.nspec)
     bundlesize = int(args.bundlesize)
-
-    verbose = args.verbose
-
+    
     specmax = specmin + nspec
 
     # Now we divide our spectra into bundles
@@ -138,7 +137,7 @@ def main(args, comm=None):
         # Print parameters
         log.info("specex:  using {} processes".format(nproc))
         log.info("specex:  input image = {}".format(imgfile))
-        log.info("specex:  bootcalib PSF = {}".format(bootfile))
+        log.info("specex:  input PSF = {}".format(inpsffile))
         log.info("specex:  output = {}".format(outfile))
         log.info("specex:  bundlesize = {}".format(bundlesize))
         log.info("specex:  specmin = {}".format(specmin))
@@ -162,22 +161,15 @@ def main(args, comm=None):
     for b in range(myfirstbundle, myfirstbundle+mynbundle):
         outbundle = "{}_{:02d}".format(outroot, b)
         outbundlefits = "{}.fits".format(outbundle)
-        outbundlexml = "{}.xml".format(outbundle)
-        outbundlespot = "{}-spots.fits".format(outbundle)
-
         com = ['desi_psf_fit']
         com.extend(['-a', imgfile])
-        com.extend(['--in-psf', bootfile])
-        com.extend(['--out-psf', outbundlefits])
-        com.extend(['--out-psf-xml', outbundlexml])
-        com.extend(['--out-spots', outbundlespot])
+        com.extend(['--in-psf', inpsffile])
+        com.extend(['--out-psf', outbundlefits])        
         com.extend(['--first-bundle', "{}".format(b)])
         com.extend(['--last-bundle', "{}".format(b)])
+        if args.debug :
+            com.extend(['--debug'])
         
-
-        if verbose:
-            com.extend(['--verbose'])
-
         com.extend(optarray)
 
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
@@ -200,57 +192,24 @@ def main(args, comm=None):
 
     if failcount > 0:
         # all processes throw
-        raise RuntimeError("some bundles failed specex_desi_psf_fit")
+        raise RuntimeError("some bundles failed desi_psf_fit")
 
     if rank == 0:
         outfits = "{}.fits".format(outroot)
-        outxml = "{}.xml".format(outroot)
-        outspots = "{}-spots.fits".format(outroot)
-
-        com = ['specex_merge_psf']
-        com.extend(['--out-fits', outfits])
-        com.extend(['--out-xml', outxml])
-        com.extend([ "{}_{:02d}.xml".format(outroot, x) for x in bundles ])
-
-        argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
-        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
-        arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
-
-        retval = libspecex.cspecex_psf_merge(argc, arg_pointers)
-
-        if retval != 0:
-            comstr = " ".join(com)
-            log.error("specex_merge_psf failed with return value {} running {}".format(retval, comstr))
-            failcount += 1
-
-        com = ['specex_merge_spot']
-        com.extend(['--out', outspots])
-        com.extend([ "{}_{:02d}-spots.fits".format(outroot, x) for x in bundles ])
-
-        argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
-        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
-        arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
-
-        retval = libspecex.cspecex_spot_merge(argc, arg_pointers)
-
-        if retval != 0:
-            comstr = " ".join(com)
-            log.error("specex_merge_spot failed with return value {} running {}".format(retval, comstr))
-            failcount += 1
-
-        com = []
-        com.extend([ "{}_{:02d}.fits".format(outroot, x) for x in bundles ])
-        com.extend([ "{}_{:02d}-spots.fits".format(outroot, x) for x in bundles ])
-        com.extend([ "{}_{:02d}.xml".format(outroot, x) for x in bundles ])
-
+        
+        inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
+        
+        merge_psf(inputs,outfits)
+        
+        
+        
         if failcount == 0:
             # only remove the per-bundle files if the merge was good
-            for f in com:
+            for f in inputs :
                 if os.path.isfile(f):
                     os.remove(f)
-
+        
+    
     if comm is not None:
         failcount = comm.bcast(failcount, root=0)
 
@@ -269,6 +228,56 @@ def compatible(head1, head2) :
             return False
     return True
 
+def merge_psf(inputs, output):
+    
+    log = get_logger()
+    
+    npsf = len(inputs)
+    log.info("Will merge {} PSFs in {}".format(npsf,output))
+    
+    # we will add/change data to the first PSF
+    psf_hdulist=fits.open(inputs[0])
+    for input_filename in inputs[1:] :
+        log.info("merging {} into {}".format(input_filename,inputs[0]))
+        other_psf_hdulist=fits.open(input_filename)
+        
+        # look at what fibers where actually fit
+        i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
+        status_of_fibers = other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
+        selected_fibers = np.where(status_of_fibers==0)[0]
+        log.info("fitted fibers in PSF {} = {}".format(input_filename,selected_fibers))
+        if selected_fibers.size == 0 :
+            log.warning("no fiber with status=0 found in {}".format(input_filename))
+            other_psf_hdulist.close()
+            continue
+        
+        # copy xtrace and ytrace
+        psf_hdulist["XTRACE"].data[selected_fibers] = other_psf_hdulist["XTRACE"].data[selected_fibers]
+        psf_hdulist["YTRACE"].data[selected_fibers] = other_psf_hdulist["YTRACE"].data[selected_fibers]
+        
+        # copy parameters
+        parameters = psf_hdulist["PSF"].data["PARAM"]
+        for param in parameters :
+            i0=np.where(psf_hdulist["PSF"].data["PARAM"]==param)[0][0]
+            i1=np.where(other_psf_hdulist["PSF"].data["PARAM"]==param)[0][0]
+            psf_hdulist["PSF"].data["COEFF"][i0][selected_fibers] = other_psf_hdulist["PSF"].data["COEFF"][i1][selected_fibers]
+        
+        # copy bundle chi2
+        i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="BUNDLE")[0][0]
+        bundles=np.unique(other_psf_hdulist["PSF"].data["COEFF"][i][selected_fibers,0].astype(int))
+        log.info("fitted bundles in PSF {} = {}".format(input_filename,bundles))
+        for b in bundles :
+            for key in [ "B%02dRCHI2"%b , "B%02dNDATA"%b , "B%02dNPAR"%b ] :
+                psf_hdulist["PSF"].header[key] = other_psf_hdulist["PSF"].header[key]
+        # close file
+        other_psf_hdulist.close()
+    
+    # write
+    psf_hdulist.writeto(output,clobber=True)
+    log.info("Wrote PSF {}".format(output))
+    
+    return
+    
 
 def mean_psf(inputs, output):
 
