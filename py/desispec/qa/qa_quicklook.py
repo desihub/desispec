@@ -538,6 +538,7 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
 
+        skycont_err = []
         if amps:
             leftmax = dict_countbins["LEFT_MAX_FIBER"]
             rightmin = dict_countbins["RIGHT_MIN_FIBER"]
