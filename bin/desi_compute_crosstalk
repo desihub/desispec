@@ -156,12 +156,12 @@ for filename in args.image :
                 coeffs[pair]=[]
             coeffs[pair].append(cross_talk)
 
-        if args.plot :
-            plt.figure("c%s%s"%(amp1,amp2))
-            plt.errorbar(mf1,mf2,ef2,color="b",fmt="o")
-            plt.plot(mf1,offset+mf1*cross_talk,"-",color="r")
-            plt.xlabel("flux in amp %s"%amp1)
-            plt.ylabel("flux in amp %s"%amp2)
+            if args.plot :
+                plt.figure("c%s%s"%(amp1,amp2))
+                plt.errorbar(mf1,mf2,ef2,color="b",fmt="o")
+                plt.plot(mf1,offset+mf1*cross_talk,"-",color="r")
+                plt.xlabel("flux in amp %s"%amp1)
+                plt.ylabel("flux in amp %s"%amp2)
 
 print("")
 print("average values")
