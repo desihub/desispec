@@ -1,0 +1,247 @@
+#!/usr/bin/env python
+
+
+import astropy.io.fits as pyfits
+import matplotlib.pyplot as plt
+import numpy as np
+import sys
+import re
+import argparse
+import matplotlib.pyplot as plt
+
+from desiutil.log import get_logger
+
+def clipped_var(mx,x2) :
+    
+    nsig=5.    
+    ovar=0.001
+    
+    # start with NMAD , less sensitive to outliers
+    var = ( 1.4826*np.median( np.abs(np.sqrt(x2))) )**2
+    #print("ini",var,0)
+    for loop in range(20) :
+        ok=(x2<nsig**2*var)
+        var=np.mean(x2[ok])
+        #print(loop,var,x2.size-ok.size)
+        if np.abs(var/ovar-1)<0.0001 :
+            break
+        ovar=var
+    return np.mean(mx[ok]),var,ok.size,loop
+    
+
+def _parse_sec_keyword(value):
+    '''
+    parse keywords like BIASSECB='[7:56,51:4146]' into python slices
+
+    python and FITS have almost opposite conventions,
+      * FITS 1-indexed vs. python 0-indexed
+      * FITS upperlimit-inclusive vs. python upperlimit-exclusive
+      * FITS[x,y] vs. python[y,x]
+
+    i.e. BIASSEC2='[7:56,51:4146]' -> (slice(50,4146), slice(6,56))
+    '''
+    m = re.search('\[(\d+):(\d+)\,(\d+):(\d+)\]', value)
+    if m is None:
+        m = re.search('\[(\d+):(\d+)\, (\d+):(\d+)\]', value)
+        if m is None :
+            raise ValueError('unable to parse {} as [a:b, c:d]'.format(value))
+
+    xmin, xmax, ymin, ymax = tuple(map(int, m.groups()))
+
+    return np.s_[ymin-1:ymax, xmin-1:xmax]
+
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+description="Compute the CCD gains (in e/ADU) using a series of similar images. Images are paired according to their exposure time")
+parser.add_argument('-i','--image', type = str, default = None, required = True, nargs = "*",
+                    help = 'path of preprocessed image fits files')
+parser.add_argument('--exptime-keyword', type = str, default = "EXPREQ",
+                    help = 'change exposure time keyword for pairing images')
+parser.add_argument('--max-mean-flux',type = float, default = 15000)
+parser.add_argument('--min-pixel-flux',type = float, default = -100)
+parser.add_argument('--max-pixel-flux',type = float, default = 20000)
+parser.add_argument('--bin-size',type = float, default = 400)
+parser.add_argument('--npix',type = int, default = 4,
+                    help = 'number of adjacent pixels (along a row) to add before computing variance')
+parser.add_argument('--amplifiers',type = str, default="ABCD", help="amplifiers being studied") 
+parser.add_argument('--deg',type = int, default=2, help="degree of polynomial fit") 
+parser.add_argument('--plot',action="store_true",help="show the fit")
+parser.add_argument('--outfile',type = str, default=None, help="save PTC values in ASCII file")
+
+
+args = parser.parse_args()
+log  = get_logger()
+
+exposure_times = []
+camera = None
+
+# loop on preprocessed images
+filenames=args.image
+for filename in filenames : 
+    hdulist=pyfits.open(filename)
+    this_camera=hdulist[0].header["CAMERA"].strip()
+    if camera is None :
+        camera = this_camera
+    else :
+        if this_camera != camera :
+            log.error("Not the same camera for all images, I find {} and {}".format(camera,this_camera))
+            sys.exit(1)
+    
+    exposure_times.append(hdulist[0].header[args.exptime_keyword])
+
+unique_exposure_times = np.unique(exposure_times)
+
+log.info("Exposure times = {}".format(unique_exposure_times))
+
+pairs = []
+for exptime in unique_exposure_times :
+    ii=np.where(exposure_times==exptime)[0]
+    npairs=ii.size//2
+    for p in range(npairs) :
+        pairs.append( [ filenames[ii[p*2]],filenames[ii[p*2+1]] ] )
+log.info("Pairs of exposures = {}".format(pairs))
+
+
+
+ofile=None
+if args.outfile is not None :
+    ofile=open(args.outfile,"w")
+    ofile.write("# mean var nval amplifier pair\n")
+    ofile.write("## amplifiers = {} for {}\n".format(np.arange(len(args.amplifiers)),args.amplifiers))
+    
+    
+for a,amp in enumerate(args.amplifiers) :
+    
+    ax=[] # mean fluxes
+    ay=[] # variances for mean fluxes
+    an=[] # number of data points in bin
+    
+    nbins=int(args.max_mean_flux/args.bin_size)
+    
+    for p,pair in enumerate(pairs) :
+        log.info("pair #{} {} {}".format(p,pair[0],pair[1]))
+        h1=pyfits.open(pair[0])
+        h2=pyfits.open(pair[1])
+        k="CCDSEC%s"%amp
+        
+        yy,xx=_parse_sec_keyword(h1[0].header[k])
+        
+        img1=h1[0].data[yy,xx]
+        img2=h2[0].data[yy,xx]
+        
+        if camera=="z1" :
+            log.warning("for z we need to cutout a large fraction of the data")
+            print(pair)
+            
+            margin=200
+            if amp=="B" or amp=="D" :
+                img1=img1[:,:-margin] # remove margin pix on margin
+                img2=img2[:,:-margin] # remove margin pix on margin
+            else :
+                img1=img1[:,margin:] # remove margin pix on margin
+                img2=img2[:,margin:] # remove margin pix on margin
+            if amp=="A" or amp=="B" :
+                img1=img1[margin:]
+                img2=img2[margin:]
+            else :
+                img1=img1[:-margin]
+                img2=img2[:-margin]
+        
+        img1[img1>args.max_pixel_flux]=1e40 # kill entry
+        img2[img2>args.max_pixel_flux]=1e40 # kill entry
+        
+        if args.npix>1 : # rebinning only lines
+            r=args.npix
+            n0=img1.shape[0]            
+            n1=(img1.shape[1]//r)*r
+            img1=img1[:,:n1].reshape(n0,n1//r,r).sum(axis=-1)
+            img2=img2[:,:n1].reshape(n0,n1//r,r).sum(axis=-1)
+            
+        
+        ok=(img1>200)&(img1<args.max_pixel_flux)&(img2>200)&(img2<args.max_pixel_flux)
+        scale=np.exp(np.median(np.log(img1[ok]/img2[ok]))) # better
+        print("pair %d scale = %f"%(p,scale))
+        img2 *= scale
+        
+        ok=(img1>args.min_pixel_flux*args.npix)&(img1<args.max_pixel_flux*args.npix)&(img2>args.min_pixel_flux*args.npix)&(img2<args.max_pixel_flux*args.npix)
+        xx=(img1[ok]+img2[ok])/2.
+        yy=(img1[ok]-img2[ok])**2/2. # we use the difference of images so the var of a single flux = var(diff)/2.        
+        bins=(xx/args.bin_size).astype(int)
+        ok=(bins>=0)&(bins<nbins)
+        ubins=np.unique(bins[ok])
+                
+        x=[]
+        y=[]
+        n=[]
+        
+        for b in ubins :
+            ok=np.where((xx>=args.bin_size*b)&(xx<args.bin_size*(b+1)))[0]
+            if ok.size<400 : continue
+            mean,var,ndata,nloop = clipped_var(xx[ok],yy[ok])
+            log.debug("flux=%f var=%f n=%d nloop=%d"%(mean,var,ndata,nloop))            
+            x.append(mean)
+            y.append(var)
+            n.append(ndata)
+            ax.append(mean)
+            ay.append(var)
+            an.append(ndata)
+            
+        
+            
+        if ofile is not None :
+            for i in range(len(x)) :
+                ofile.write("%f %f %d %d %d\n"%(x[i],y[i],n[i],a,p))
+    
+  
+    # fit the data for this amplifier
+
+    ok=(np.array(ay)>0.1) # var
+    x=np.array(ax)[ok]
+    y=np.array(ay)[ok]
+    n=np.array(an)[ok]     
+    err=np.sqrt(2./n)*y
+    
+    w=1./(err**2+0.1**2)
+    coef=np.polyfit(x,y,args.deg,w=w)
+    log.debug("coef=",coef)
+    linear_pol=np.poly1d(coef[-2:])
+    nonlinear_pol=np.poly1d(coef)
+    chi2=np.sum(w*(y-nonlinear_pol(x))**2)
+    ndf=x.size-(args.deg+1)
+    gain=1./coef[-2]
+    log.info("%s %s gain = %4.3f e/ADU (chi2/ndf= %3.2f) "%(camera,amp,gain,chi2/ndf))
+    
+    if args.plot :
+        ms=5
+        plt.figure("{}-{}".format(camera,amp))
+        plt.subplot(2,1,1)
+        plt.errorbar(x,y,err,fmt="o",ms=ms,color="gray")
+        tx=np.arange(np.min(x),np.max(x),100)        
+        plt.plot(tx,nonlinear_pol(tx),label="non linear fit",color="r")
+        plt.plot(tx,linear_pol(tx),label="linear fit",color="b")
+        
+        plt.ylabel("variance(flux)")
+        plt.legend(loc="upper left")
+        plt.subplot(2,1,2)
+        plt.errorbar(x,y-linear_pol(x),err,fmt="o",ms=ms,color="gray")
+        plt.plot(tx,nonlinear_pol(tx)-linear_pol(tx),"-",color="r")
+        plt.plot(tx,0*tx,"-",color="b")
+        if args.npix==1 :
+            plt.xlabel("flux (single pixel)")
+        else :
+            plt.xlabel("flux (sum of %d pixels)"%args.npix)
+        plt.ylabel("variance(flux) - linear relation")
+        
+
+    # end of loop on amplifiers
+
+  
+if ofile is not None :
+    ofile.close()
+    log.info("wrote {}".format(args.outfile))
+
+if args.plot :
+    plt.show()
+    
+    
+    #plt.show()
