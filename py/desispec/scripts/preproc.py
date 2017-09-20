@@ -50,6 +50,10 @@ to use, but also only if a single camera is specified.
                         help = 'no prior masking of pixels')
     parser.add_argument('--nocrosstalk', action = 'store_true',
                         help = 'no cross-talk correction')
+    parser.add_argument('--nocosmic', action='store_true',
+                        help = 'do not try and reject cosmic rays')
+    parser.add_argument('--nogain', action='store_true',
+                        help = 'do not apply gain correction') 
     
     parser.add_argument('--cosmics-nsig', type = float, default = 6, required=False,
                         help = 'for cosmic ray rejection : number of sigma above background required')
@@ -60,8 +64,7 @@ to use, but also only if a single camera is specified.
 
     parser.add_argument('--bkgsub', action='store_true',
                         help = 'do a background subtraction prior to cosmic ray rejection')
-    parser.add_argument('--nocosmic', action='store_true',
-                        help = 'do not try and reject cosmic rays')
+    
     parser.add_argument('--zero-masked', action='store_true',
                         help = 'set to zero the flux of masked pixels (for convenience to display images, no impact on analysis)')
     parser.add_argument('--no-ccd-calib-filename', action='store_true',
@@ -130,6 +133,7 @@ def main(args=None):
                               cosmics_c2fudge=args.cosmics_c2fudge,
                               ccd_calibration_filename=ccd_calibration_filename,
                               nocrosstalk=args.nocrosstalk,
+                              nogain=args.nogain,
                               fill_header=args.fill_header
             )
         except IOError:
