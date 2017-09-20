@@ -16,8 +16,7 @@
 
 b1:
   V0:
-# cross-talk measured with 'desi_compute_crosstalk -i preproc-b1-00001448.fits -t 100 -m 100000'
-# gain measurement described in docdb:2657
+# gain and cross-talk  measurement described in EM1 spectrograph report
     AMPLIFIERS: ABCD
     DETECTOR: itl_4kx4k_02
     DATE-OBS-BEGIN: '20161221'
@@ -25,26 +24,26 @@ b1:
     DOSVER: trunk
     FEEVER: v20160312
     EXPTIMEKEY: EXPREQ
-    GAINA: 0.587
-    GAINB: 0.614
-    GAINC: 0.630
-    GAIND: 0.615
+    GAINA: 0.579
+    GAINB: 0.651
+    GAINC: 0.648
+    GAIND: 0.621
     SATURLEVA: 200000.0
     SATURLEVB: 200000.0
     SATURLEVC: 200000.0
     SATURLEVD: 200000.0
-    CROSSTALKAB: -0.000356444
-    CROSSTALKAC: -0.000056833
-    CROSSTALKAD: -0.000283667
-    CROSSTALKBA: -0.00813
-    CROSSTALKBC: -0.000022278
-    CROSSTALKBD: -0.000992278
-    CROSSTALKCA: -0.000450889
-    CROSSTALKCB: -0.000498444
-    CROSSTALKCD: -0.000017833
-    CROSSTALKDA: 0.00122089
-    CROSSTALKDB: 0.00181833
-    CROSSTALKDC: -0.00346067
+    CROSSTALKAB: -0.000732564
+    CROSSTALKAC: 6.15218e-05
+    CROSSTALKAD: -0.00141573
+    CROSSTALKBA: -0.014105
+    CROSSTALKBC: -0.000543639
+    CROSSTALKBD: -0.00142127
+    CROSSTALKCA: -0.000307981
+    CROSSTALKCB: -0.00056577
+    CROSSTALKCD: -9.28376e-05
+    CROSSTALKDA: 0.0012078
+    CROSSTALKDB: 0.00173514
+    CROSSTALKDC: -0.00330541
     BIAS: 20170131/bias-b1.fits
     DARK: 20170131/dark-b1.fits
 
@@ -57,11 +56,8 @@ b1:
       DETECTOR: SIM 
 r1:
   V0:
-# cross-talk measured with 'desi_compute_crosstalk -i preproc-r1-00001502.fits -t 2000 -m 15000'
-# cross-talk is allowed to be asymmetric eventhough fit compatible with symmetric cross-talk
-# gain measurement described in docdb:2657
-# note amplifier A is very noisy, gain no measured, set = 1.726/1.073=1.6 from continuity with amp C, but uncertain
-# cross-talk measurement refined with average of exposures 4186-4194 4199-4207 5s HgAr,Ne,Kr,Cd
+# gain and cross-talk  measurement described in EM1 spectrograph report
+# gain A not measured
     AMPLIFIERS: ABCD
     DETECTOR: lbnl_4kx4k_1102_reverse
     DATE-OBS-BEGIN: '20161221'
@@ -70,27 +66,25 @@ r1:
     FEEVER: v20160312
     EXPTIMEKEY: EXPREQ
     GAINA: 1.6
-    GAINB: 1.658
-    GAINC: 1.726
-    GAIND: 1.723
+    GAINB: 1.720
+    GAINC: 1.694
+    GAIND: 1.610
     SATURLEVA: 20000.0
     SATURLEVB: 20000.0
     SATURLEVC: 20000.0
     SATURLEVD: 20000.0
-    CROSSTALKAB: -0.00122222
-    CROSSTALKAC: -0.00550767
-    CROSSTALKAD: -0.000110667
-    CROSSTALKBA: 0.000125778
-    CROSSTALKBC: -0.0001015
-    CROSSTALKBD: -0.0125171
-    CROSSTALKCA: -0.00821194
-    CROSSTALKCB: -3.29444e-05
-    CROSSTALKCD: -0.0006765
-    CROSSTALKDA: 0.00330772
-    CROSSTALKDB: -0.00873872
-    CROSSTALKDC: -0.000611556
-    OVERSCANA: PER_ROW
-    OVERSCANB: PER_ROW    
+    CROSSTALKAB: -0.000430151
+    CROSSTALKAC: -0.00502139
+    CROSSTALKAD: -4.73756e-05
+    CROSSTALKBA: -2.61568e-05
+    CROSSTALKBC: -9.97165e-05
+    CROSSTALKBD: -0.0125125
+    CROSSTALKCA: -0.00884689
+    CROSSTALKCB: 1.17727e-05
+    CROSSTALKCD: -0.000671046
+    CROSSTALKDA: 0.00339101
+    CROSSTALKDB: -0.00872115
+    CROSSTALKDC: -0.000607719
     BIAS: 20170131/bias-r1.fits
     DARK: 20170131/dark-r1.fits
 
@@ -104,10 +98,8 @@ r1:
 
 z1:
   V0:
-# desi_compute_crosstalk -i preproc-z1-00001502.fits -t 1000 -m 10000 
-# gain measurement described in docdb:2657
-# note amplifier C is very noisy, gain no measured, set = 0.9 , but very uncertain (important non-linearities)
-# cross-talk measurement refined with average of exposures 4186-4194 4199-4207 5s HgAr,Ne,Kr,Cd
+# gain and cross-talk  measurement described in EM1 spectrograph report
+# gains A and C not measured
     AMPLIFIERS: ABCD
     DETECTOR: lbnl_4kx4k_1002_reverse
     DATE-OBS-BEGIN: '20161221'
@@ -115,28 +107,26 @@ z1:
     DOSVER: trunk
     FEEVER: v20160312
     EXPTIMEKEY: EXPREQ
-    GAINA: 0.970
-    GAINB: 0.978
-    GAINC: 0.9
-    GAIND: 0.626
+    GAINA: 1.
+    GAINB: 1.13
+    GAINC: 1.
+    GAIND: 0.721
     SATURLEVA: 200000.0
     SATURLEVB: 200000.0
     SATURLEVC: 200000.0
     SATURLEVD: 200000.0
-    CROSSTALKAB: -0.000424056
-    CROSSTALKAC: -0.00104778
-    CROSSTALKAD: -0.000362667
-    CROSSTALKBA: -0.00142061
-    CROSSTALKBC: 0.00170606
-    CROSSTALKBD: -0.00598039
-    CROSSTALKCA: -0.00757122
-    CROSSTALKCB: -0.0013215
-    CROSSTALKCD: -0.000165
-    CROSSTALKDA: -0.00166928
-    CROSSTALKDB: -0.00667406
-    CROSSTALKDC: -0.000696722
-    OVERSCANA: PER_ROW
-    OVERSCANC: PER_ROW  
+    CROSSTALKAB: -0.00042193
+    CROSSTALKAC: -0.00103744
+    CROSSTALKAD: -0.000363374
+    CROSSTALKBA: -0.00142787
+    CROSSTALKBC: 0.00172129
+    CROSSTALKBD: -0.00600321
+    CROSSTALKCA: -0.0075234
+    CROSSTALKCB: -0.00132744
+    CROSSTALKCD: -0.000182816
+    CROSSTALKDA: -0.00167509
+    CROSSTALKDB: -0.00665087
+    CROSSTALKDC: -0.00069539
     BIAS: 20170131/bias-z1.fits
     DARK: 20170131/dark-z1.fits
     MASK: 20161221/mask-z1.fits
