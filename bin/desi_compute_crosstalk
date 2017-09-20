@@ -167,13 +167,25 @@ print("")
 print("average values")
 print("==========================================")
 
-for pair in coeffs.keys() :
+pairs = list(coeffs.keys())
+pairs = np.sort(pairs)
+cross_talk={}
+cross_talk_err={}
+cross_talk_rms={}
+
+for pair in pairs :
     if len(coeffs[pair])>1 :
-        cross_talk=np.median(coeffs[pair])
-        rms=np.std(coeffs[pair])
-        cross_err=np.sqrt(np.pi/2.)*rms/np.sqrt(len(coeffs[pair]))
-        log.info("%s = %g +- %g sig=%f ( rms of images  = %g )"%(pair,cross_talk,cross_err,np.abs(cross_talk/cross_err),rms))
+        cross_talk[pair]=np.median(coeffs[pair])
+        cross_talk_rms[pair]=np.std(coeffs[pair])
+        cross_talk_err[pair]=np.sqrt(np.pi/2.)*cross_talk_rms[pair]/np.sqrt(len(coeffs[pair]))
+        snr=cross_talk[pair]/cross_talk_err[pair]
+        log.info("%s = %g +- %g sig=%f ( rms of images  = %g )"%(pair,cross_talk[pair],cross_talk_err[pair],np.abs(snr),cross_talk_rms[pair]))
     else :
+        cross_talk[pair]=coeffs[pair][0]
+        cross_talk_rms[pair]=0
+        cross_talk_err[pair]=0
         log.info("%s = %g"%(pair,coeffs[pair][0]))
+for pair in pairs :
+    print("CROSSTALK%s: %g"%(pair,cross_talk[pair]))
 if args.plot :
     plt.show()
