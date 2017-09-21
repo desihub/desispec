@@ -212,6 +212,14 @@ def parse(options=None):
     parser.add_argument("--nside", required=False, type=int, default=64, 
         help="HEALPix nside value to use for spectral grouping.")
 
+    parser.add_argument("--redshift_nodes", required=False, type=int, 
+        default=1, help="Number of nodes to use for redshift fitting "
+        "in a single worker.")
+
+    parser.add_argument("--redshift_spec_per_minute", required=False, 
+        type=int, default=80, help="Number of spectra that can be "
+        "processed in a minute on a single node using all templates.")
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -272,13 +280,6 @@ def main(args):
         raise RuntimeError("You must set DESI_ROOT in your environment")
     desiroot = os.environ["DESI_ROOT"]
 
-    # Add any extra options to the initial options.yaml file
-
-    extra = {}
-    if args.starmodels is not None:
-        extra["Stdstars"] = {}
-        extra["Stdstars"]["starmodels"] = args.starmodels
-
     # Check the machine limits we are using for this production
 
     nodecores = 0
@@ -312,6 +313,34 @@ def main(args):
     shell_mpi_run = ""
     if shell_maxcores > 1:
         shell_mpi_run = "{}".format(args.shell_mpi_run)
+
+    # Add any extra options to the initial options.yaml file
+
+    extra = {}
+    if args.starmodels is not None:
+        extra["Stdstars"] = {}
+        extra["Stdstars"]["starmodels"] = args.starmodels
+
+    #
+    # Redrock runtime notes from 2017-09.  All numbers rounded
+    # down to be as conservative as possible:
+    #   Small test (2% DC, one day, one spectrograph)
+    #     edison:  1 node per worker, 24 procs per node,
+    #            ~3500 spectra in 30 min =~ 110 spec per node min
+    #     knl: 1 node per worker, 32 procs per node (not using 64
+    #            due to memory constraint- will gain 2x after fix),
+    #            ~800 spectra in 35 min =~ 20 spec per node min
+    #   Medium test (2% DC, one day)
+    #     edison:  2 nodes per worker, 24 procs per node,
+    #            ~6000 spectra in 40 min =~ 75 spec per node min
+    #     edison:  1 nodes per worker, 24 procs per node,
+    #            ~3000 spectra in 30 min =~ 100 spec per node min
+    #
+
+    extra["Redrock"] = {}
+    extra["Redrock"]["nodes"] = args.redshift_nodes
+    extra["Redrock"]["nodeprocs"] = nodecores // 2
+    extra["Redrock"]["spec_per_minute"] = args.redshift_spec_per_minute
 
     # Select our spectrographs
 
@@ -379,6 +408,7 @@ def main(args):
     optfile = os.path.join(rundir, "options.yaml")
     opts = pipe.yaml_read(optfile)
 
+    workerhandles = {}
     workermax = {}
     workertime = {}
     workernames = {}
@@ -388,6 +418,7 @@ def main(args):
             opts["{}_worker_opts".format(step)])
         workermax[step] = worker.max_nproc()
         workertime[step] = worker.task_time()
+        workerhandles[step] = worker
         print("    {} : {} processes per task".format(step, workermax[step]))
 
     # create scripts for processing
@@ -519,7 +550,7 @@ def main(args):
 
         taskproc = workermax["extract"]
         taskmin = workertime["extract"]
-        step_threads = 1
+        step_threads = 2
         step_mp = 1
         nt = None
         first = "extract"
@@ -549,7 +580,7 @@ def main(args):
     tasktime += workertime["fluxcal"]
     tasktime += workertime["calibrate"]
 
-    step_threads = 1
+    step_threads = 2
     step_mp = 1
     nt = None
     first = "fiberflat"
@@ -570,16 +601,25 @@ def main(args):
 
     # Make spectral groups.  The groups are distributed, and we use
     # approximately 5 spectra per process.  We also use one process
-    # per two cores.
+    # per two cores for more memory.
+
+    # On KNL, the timing for ~5 spectra per process is about 1.5 hours.
+    # we use that empirical metric here to estimate the run time with
+    # some margin.
 
     ngroup = len(allpix.keys())
 
+    spectime = 120
     specprocs = ngroup // 5
     specnodeprocs = nodecores // 2
     specnodes = specprocs // specnodeprocs
     if specnodes == 0:
         specnodes = 1
     specprocs = specnodes * specnodeprocs
+
+    specqueue = args.nersc_queue
+    if spectime > 30 and specqueue == "debug":
+        specqueue = "regular"
 
     rundir = io.get_pipe_rundir()
     scrdir = os.path.join(rundir, io.get_pipe_scriptdir())
@@ -594,9 +634,9 @@ def main(args):
     nersc_path = os.path.join(scrdir, "spectra.slurm")
     nersc_log = os.path.join(logdir, "spectra_slurm")
     pipe.nersc_job(args.nersc_host, nersc_path, nersc_log, setupfile, 
-        speccom, nodes=specnodes, nodeproc=specnodeprocs, minutes=30, 
+        speccom, nodes=specnodes, nodeproc=specnodeprocs, minutes=spectime, 
         multisrun=False, openmp=True, multiproc=False, 
-        queue=args.nersc_queue, jobname="groupspectra")
+        queue=specqueue, jobname="groupspectra")
 
     if args.shifter is not None:
         nersc_path = os.path.join(scrdir, "spectra_shifter.slurm")
@@ -605,33 +645,55 @@ def main(args):
             rawdir, specdir, desiroot, nersc_log, setupfile, speccom, 
             nodes=specnodes, nodeproc=specnodeprocs, minutes=30, 
             multisrun=False, openmp=False, multiproc=False,
-            queue=args.nersc_queue, jobname="groupspectra")
+            queue=specqueue, jobname="groupspectra")
 
-    # redshift fitting.
+    # Redshift fitting.  Use estimated spectra per node minute.
+
+    red_worker_nodes = workerhandles["redshift"].max_nodes()
+    red_nodeprocs = workerhandles["redshift"].node_procs()
+    red_spec_per_node_min = workerhandles["redshift"].spec_per_min()
+    red_totalspec = np.sum([ y for x, y in allpix.items() ])
+
+    red_runtime = workertime["redshift"]
 
     ntask = len(allpix.keys())
-
-    taskproc = workermax["redshift"]
-    tasktime = workertime["redshift"]
-    step_threads = 1
-    nt = None
-    first = "redshift"
-    last = "redshift"
-
-    # FIXME:  we should really have the worker tell us more information
-    # about whether it uses multiprocessing or can use multiple nodes
-    # per task.  For now, we hard-code a switch here for redmonster vs.
-    # redrock.
-
-    step_mp = 1
-    if workernames["redshift"] == "redrock":
-        step_mp = nodecores
     
-    scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
-        rawdir, specdir, desiroot, setupfile, first, last, specs, nt, 
-        ntask, taskproc, tasktime, shell_mpi_run, shell_maxcores, 1, 
-        args.nersc_host, maxnodes, nodecores, step_threads, step_mp, 
-        queuethresh, queue=args.nersc_queue)
+    nworker = 1 + red_totalspec // (red_runtime * red_worker_nodes *
+        red_spec_per_node_min)
+    
+    red_nodes = nworker * red_worker_nodes
+
+    red_queue = args.nersc_queue
+    if red_runtime > 30 and red_queue == "debug":
+        red_queue = "regular"
+    
+    rundir = io.get_pipe_rundir()
+    scrdir = os.path.join(rundir, io.get_pipe_scriptdir())
+    logdir = os.path.join(rundir, io.get_pipe_logdir())
+
+    redcom = ["desi_pipe_run_mpi --first redshift --last redshift"]
+
+    shell_path = os.path.join(scrdir, "redshift.sh")
+    shell_log = os.path.join(logdir, "redshift_sh")
+    pipe.shell_job(shell_path, shell_log, setupfile, redcom, 
+        comrun=shell_mpi_run, mpiprocs=shell_maxcores, threads=1)
+
+    nersc_path = os.path.join(scrdir, "redshift.slurm")
+    nersc_log = os.path.join(logdir, "redshift_slurm")
+    pipe.nersc_job(args.nersc_host, nersc_path, nersc_log, setupfile, 
+        redcom, nodes=red_nodes, nodeproc=red_nodeprocs, 
+        minutes=red_runtime, multisrun=False, openmp=True, multiproc=False, 
+        queue=red_queue, jobname="redshift")
+
+    if args.shifter is not None:
+        nersc_path = os.path.join(scrdir, "redshift_shifter.slurm")
+        nersc_log = os.path.join(logdir, "redshift_shifter")
+        pipe.nersc_shifter_job(args.nersc_host, nersc_path, args.shifter, 
+            rawdir, specdir, desiroot, nersc_log, setupfile, redcom, 
+            nodes=red_nodes, nodeproc=red_nodeprocs, minutes=red_runtime, 
+            multisrun=False, openmp=True, multiproc=False,
+            queue=red_queue, jobname="redshift")
+
 
     # Make high-level shell scripts which run or submit the steps
 

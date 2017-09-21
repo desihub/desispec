@@ -458,3 +458,15 @@ def get_pipe_faildir():
         The name of the subdirectory.
     """
     return "failed"
+
+
+def get_pipe_redshiftdir():
+    """
+    Return the name of the subdirectory containing pipeline redshift
+    log files.
+
+    Returns (str):
+        The name of the subdirectory.
+    """
+    return "redshift"
+
