@@ -58,7 +58,11 @@ class TestQL(unittest.TestCase):
         #- use specter psf for this test
         self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
         #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
-        self.config={}
+        self.config={"kwargs":{
+            "param":{
+            }
+        }
+        }
 
         #- rawimage
 
@@ -278,7 +282,13 @@ class TestQL(unittest.TestCase):
         self.assertEqual(len(res1['METRICS']['BIAS_AMP']),4)
 
     def testGetRMS(self):
-        qa=QA.Get_RMS('rms',self.config)
+        config={"kwargs":{
+            "param":{
+            }
+        }
+        }
+
+        qa=QA.Get_RMS('rms',config)
         inp=self.image
         qargs={}
         qargs["PSFFile"]=self.psf
