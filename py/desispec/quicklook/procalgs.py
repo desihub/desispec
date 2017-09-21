@@ -254,13 +254,14 @@ class BoxcarExtract(pas.PipelineAlg):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
         import desispec.psf
-        psf=desispec.psf.PSF(psf)
+        if fibermap['OBJTYPE'][0] == 'ARC':
+            psf=desispec.psf.PSF(psf)
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
                                   nspec=nspec,maskFile=maskFile,usesigma=usesigma)
 
         #- write to a frame object
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
-        
+
         if dumpfile is not None:
             from desispec import io
             night = frame.meta['NIGHT']
@@ -737,7 +738,7 @@ class ResolutionFit(pas.PipelineAlg):
 
         #- update the arc frame resolution from new coeffs
         newpsf=PSF(outfile)
-        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf)
+        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=True)
  
         return input_frame
 

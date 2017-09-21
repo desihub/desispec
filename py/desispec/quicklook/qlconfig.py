@@ -254,7 +254,9 @@ class Config(object):
         """
         filemap={'Initialize': 'ql_initial',
                  'Preproc': 'ql_preproc',
+                 'BootCalibration': 'ql_bootcalib',
                  'BoxcarExtract': 'ql_boxextract',
+                 'ResolutionFit': 'ql_resfit',
                  'ApplyFiberFlat_QL': 'ql_fiberflat',
                  'SkySub_QL': 'ql_skysub'
                  }
