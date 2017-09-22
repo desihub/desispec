@@ -339,7 +339,7 @@ def get_calibration_image(calibration_data,calibration_data_path,keyword,entry) 
         raise ValueError("Don't known how to read %s in %s"%(keyword,path))
     return False
 
-def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None, nocrosstalk=False):
+def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True, mask=True, bkgsub=False, nocosmic=False, cosmics_nsig=6, cosmics_cfudge=3., cosmics_c2fudge=0.8,ccd_calibration_filename=None, nocrosstalk=False, nogain=False):
 
     '''
     preprocess image using metadata in header
@@ -506,16 +506,19 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     for amp in amp_ids :
         ii = _parse_sec_keyword(header['BIASSEC'+amp])
 
-        #- Initial teststand data may be missing GAIN* keywords; don't crash
-        if 'GAIN'+amp in header:
-            gain = header['GAIN'+amp]          #- gain = electrons / ADU
-        else:
-            if calibration_data  and 'GAIN'+amp in calibration_data :
-                gain = float(calibration_data['GAIN'+amp])
-                log.info('Using GAIN{}={} from calibration data'.format(amp,gain))
-            else :
-                gain = 1.0
-                log.warning('Missing keyword GAIN{} in header and nothing in calib data; using {}'.format(amp,gain))
+        if nogain :
+            gain = 1.
+        else : 
+            #- Initial teststand data may be missing GAIN* keywords; don't crash
+            if 'GAIN'+amp in header:
+                gain = header['GAIN'+amp]          #- gain = electrons / ADU
+            else:
+                if calibration_data  and 'GAIN'+amp in calibration_data :
+                    gain = float(calibration_data['GAIN'+amp])
+                    log.info('Using GAIN{}={} from calibration data'.format(amp,gain))
+                else :
+                    gain = 1.0
+                    log.warning('Missing keyword GAIN{} in header and nothing in calib data; using {}'.format(amp,gain))
 
 
         #- Add saturation level
