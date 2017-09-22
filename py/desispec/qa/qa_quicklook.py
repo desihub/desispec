@@ -1262,8 +1262,11 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["CAMERA"] = camera
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
-        retval["PROGRAM"] = header["PROGRAM"]
         retval["FLAVOR"] = header["FLAVOR"]
+        if retval["FLAVOR"] == 'arc':
+            pass
+        else:
+            retval["PROGRAM"] = header["PROGRAM"]
         retval["NIGHT"] = header["NIGHT"]
 
         rawimage=raw[camera.upper()].data

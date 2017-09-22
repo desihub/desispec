@@ -372,7 +372,7 @@ def check_config(outconfig):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
                 log.info("File check: Okay: {}".format(thisfile))
-        log.info("All necessary file exist for science configuration.")
+        log.info("All necessary files exist for science configuration.")
     if outconfig["Flavor"]=="arcs":
         files = [outconfig["RawImage"], outconfig["FiberMap"]]
         log.info("Checking if all the necessary files exist.")
@@ -381,7 +381,7 @@ def check_config(outconfig):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
                 log.info("File check: Okay: {}".format(thisfile))
-        log.info("All necessary file exist for arc configuration.")
+        log.info("All necessary files exist for arc configuration.")
     return 
 
 
