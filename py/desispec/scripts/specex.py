@@ -53,7 +53,8 @@ if libspecex is not None:
 
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Estimate the PSF for one frame with specex")
+    parser = argparse.ArgumentParser(description="Estimate the PSF for "
+        "one frame with specex")
     parser.add_argument("--input-image", type=str, required=True,
                         help="input image")
     parser.add_argument("--input-psf", type=str, required=True,
@@ -67,7 +68,8 @@ def parse(options=None):
     parser.add_argument("-n", "--nspec", type=int, required=False, default=500,
                         help="number of spectra to extract")
     parser.add_argument("--extra", type=str, required=False, default=None,
-                        help="quoted string of arbitrary options to pass to specex_desi_psf_fit")
+                        help="quoted string of arbitrary options to pass to "
+                        "specex_desi_psf_fit")
     parser.add_argument("--debug", action = 'store_true',
                         help="debug mode")
     
@@ -100,7 +102,8 @@ def main(args, comm=None):
     # Now we divide our spectra into bundles
 
     checkbundles = set()
-    checkbundles.update(np.floor_divide(np.arange(specmin, specmax), bundlesize*np.ones(nspec)).astype(int))
+    checkbundles.update(np.floor_divide(np.arange(specmin, specmax), 
+        bundlesize*np.ones(nspec)).astype(int))
     bundles = sorted(checkbundles)
     nbundle = len(bundles)
 
@@ -131,7 +134,8 @@ def main(args, comm=None):
         mynbundle += 1
         myfirstbundle = rank * mynbundle
     else:
-        myfirstbundle = ((mynbundle + 1) * leftover) + (mynbundle * (rank - leftover))
+        myfirstbundle = ((mynbundle + 1) * leftover) + 
+            (mynbundle * (rank - leftover))
 
     if rank == 0:
         # Print parameters
@@ -175,15 +179,18 @@ def main(args, comm=None):
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
 
         argc = len(com)
-        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) for i in range(argc)]
-        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in map(ct.addressof, arg_buffers) ]
+        arg_buffers = [ct.create_string_buffer(com[i].encode('ascii')) \
+            for i in range(argc)]
+        addrlist = [ ct.cast(x, ct.POINTER(ct.c_char)) for x in \
+            map(ct.addressof, arg_buffers) ]
         arg_pointers = (ct.POINTER(ct.c_char) * argc)(*addrlist)
 
         retval = libspecex.cspecex_desi_psf_fit(argc, arg_pointers)
 
         if retval != 0:
             comstr = " ".join(com)
-            log.error("desi_psf_fit on process {} failed with return value {} running {}".format(rank, retval, comstr))
+            log.error("desi_psf_fit on process {} failed with return "
+                "value {} running {}".format(rank, retval, comstr))
             failcount += 1
 
     if comm is not None:
@@ -200,15 +207,12 @@ def main(args, comm=None):
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
         
         merge_psf(inputs,outfits)
-        
-        
-        
+
         if failcount == 0:
             # only remove the per-bundle files if the merge was good
             for f in inputs :
                 if os.path.isfile(f):
-                    os.remove(f)
-        
+                    os.remove(f)        
     
     if comm is not None:
         failcount = comm.bcast(failcount, root=0)
@@ -222,11 +226,13 @@ def main(args, comm=None):
 
 def compatible(head1, head2) :
     log = get_logger()
-    for k in ["PSFTYPE","NPIX_X","NPIX_Y","HSIZEX","HSIZEY","FIBERMIN","FIBERMAX","NPARAMS","LEGDEG","GHDEGX","GHDEGY"] :
+    for k in ["PSFTYPE", "NPIX_X", "NPIX_Y", "HSIZEX", "HSIZEY", "FIBERMIN",
+        "FIBERMAX", "NPARAMS", "LEGDEG", "GHDEGX", "GHDEGY"] :
         if (head1[k] != head2[k]) :
             log.warning("different {} : {}, {}".format(k, head1[k], head2[k]))
             return False
     return True
+
 
 def merge_psf(inputs, output):
     
@@ -243,32 +249,42 @@ def merge_psf(inputs, output):
         
         # look at what fibers where actually fit
         i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
-        status_of_fibers = other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
+        status_of_fibers = \
+            other_psf_hdulist["PSF"].data["COEFF"][i][:,0].astype(int)
         selected_fibers = np.where(status_of_fibers==0)[0]
-        log.info("fitted fibers in PSF {} = {}".format(input_filename,selected_fibers))
+        log.info("fitted fibers in PSF {} = {}".format(input_filename,
+            selected_fibers))
         if selected_fibers.size == 0 :
-            log.warning("no fiber with status=0 found in {}".format(input_filename))
+            log.warning("no fiber with status=0 found in {}".format(
+                input_filename))
             other_psf_hdulist.close()
             continue
         
         # copy xtrace and ytrace
-        psf_hdulist["XTRACE"].data[selected_fibers] = other_psf_hdulist["XTRACE"].data[selected_fibers]
-        psf_hdulist["YTRACE"].data[selected_fibers] = other_psf_hdulist["YTRACE"].data[selected_fibers]
+        psf_hdulist["XTRACE"].data[selected_fibers] = \
+            other_psf_hdulist["XTRACE"].data[selected_fibers]
+        psf_hdulist["YTRACE"].data[selected_fibers] = \
+            other_psf_hdulist["YTRACE"].data[selected_fibers]
         
         # copy parameters
         parameters = psf_hdulist["PSF"].data["PARAM"]
         for param in parameters :
             i0=np.where(psf_hdulist["PSF"].data["PARAM"]==param)[0][0]
             i1=np.where(other_psf_hdulist["PSF"].data["PARAM"]==param)[0][0]
-            psf_hdulist["PSF"].data["COEFF"][i0][selected_fibers] = other_psf_hdulist["PSF"].data["COEFF"][i1][selected_fibers]
+            psf_hdulist["PSF"].data["COEFF"][i0][selected_fibers] = \
+                other_psf_hdulist["PSF"].data["COEFF"][i1][selected_fibers]
         
         # copy bundle chi2
-        i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="BUNDLE")[0][0]
-        bundles=np.unique(other_psf_hdulist["PSF"].data["COEFF"][i][selected_fibers,0].astype(int))
-        log.info("fitted bundles in PSF {} = {}".format(input_filename,bundles))
+        i = np.where(other_psf_hdulist["PSF"].data["PARAM"]=="BUNDLE")[0][0]
+        bundles = np.unique(other_psf_hdulist["PSF"].data["COEFF"][i]\
+            [selected_fibers,0].astype(int))
+        log.info("fitted bundles in PSF {} = {}".format(input_filename,
+            bundles))
         for b in bundles :
-            for key in [ "B%02dRCHI2"%b , "B%02dNDATA"%b , "B%02dNPAR"%b ] :
-                psf_hdulist["PSF"].header[key] = other_psf_hdulist["PSF"].header[key]
+            for key in [ "B{:02d}RCHI2".format(b), "B{:02d}NDATA".format(b),
+                "B{:02d}NPAR".format(b) ]:
+                psf_hdulist["PSF"].header[key] = \
+                    other_psf_hdulist["PSF"].header[key]
         # close file
         other_psf_hdulist.close()
     
@@ -285,7 +301,6 @@ def mean_psf(inputs, output):
     
     npsf = len(inputs)
     log.info("Will compute the average of {} PSFs".format(npsf))
-    
 
     refhead=None
     tables=[]
@@ -301,9 +316,10 @@ def mean_psf(inputs, output):
     for input in inputs :
         psf=fits.open(input)
         if refhead is None :
-            hdulist=psf
-            refhead=psf["PSF"].header            
-            nfibers=(psf["PSF"].header["FIBERMAX"]-psf["PSF"].header["FIBERMIN"])+1
+            hdulist = psf
+            refhead = psf["PSF"].header            
+            nfibers = \
+                (psf["PSF"].header["FIBERMAX"]-psf["PSF"].header["FIBERMIN"])+1
             PSFVER=int(refhead["PSFVER"])
             if(PSFVER<3) :
                 log.error("ERROR NEED PSFVER>=3")
@@ -311,7 +327,8 @@ def mean_psf(inputs, output):
             
         else :
             if not compatible(psf["PSF"].header,refhead) :
-                log.error("psfs %s and %s are not compatible"%(inputs[0],input))
+                log.error("psfs {} and {} are not compatible".format(inputs[0],
+                    input))
                 sys.exit(12)
         tables.append(psf["PSF"].data)
         wavemins.append(psf["PSF"].header["WAVEMIN"])
@@ -324,18 +341,19 @@ def mean_psf(inputs, output):
 
         rchi2=[]
         b=0
-        while "B%02dRCHI2"%b in psf["PSF"].header :
-            rchi2.append(psf["PSF"].header["B%02dRCHI2"%b])
+        while "B{:02d}RCHI2".format(b) in psf["PSF"].header :
+            rchi2.append(psf["PSF"].header["B{:02d}RCHI2".format(b) ])
             b += 1
         rchi2=np.array(rchi2)
         nbundles=rchi2.size
         bundle_rchi2.append(rchi2)
     
     bundle_rchi2=np.array(bundle_rchi2)
-    log.info("bundle_rchi2= %s"%str(bundle_rchi2))
+    log.info("bundle_rchi2= {}".format(str(bundle_rchi2)))
     median_bundle_rchi2 = np.median(bundle_rchi2)
     rchi2_threshold=median_bundle_rchi2+1.
-    log.info("median chi2=%f threshold=%f"%(median_bundle_rchi2,rchi2_threshold))
+    log.info("median chi2={} threshold={}".format(median_bundle_rchi2,
+        rchi2_threshold))
     
     WAVEMIN=refhead["WAVEMIN"]
     WAVEMAX=refhead["WAVEMAX"]
@@ -351,11 +369,11 @@ def mean_psf(inputs, output):
         fibers_in_bundle[b]=np.where(bundle_of_fibers==b)[0]
     
     for b in bundles :
-        print("%d : %s"%(b,fibers_in_bundle[b]))
+        print("{} : {}".format(b,fibers_in_bundle[b]))
         
     for entry in range(tables[0].size) :
         PARAM=tables[0][entry]["PARAM"]
-        log.info("Averaging '%s' coefficients"%PARAM)        
+        log.info("Averaging '{}' coefficients".format(PARAM))        
         coeff=[tables[0][entry]["COEFF"]]
         npar=coeff[0][1].size
         for p in range(1,npsf) :
@@ -382,9 +400,6 @@ def mean_psf(inputs, output):
         output_rchi2=np.zeros((bundle_rchi2.shape[1]))
         output_coeff=np.zeros(tables[0][entry]["COEFF"].shape)
         
-        #log.info("input coeff.shape  = %d"%coeff.shape)
-        #log.info("output coeff.shape = %d"%output_coeff.shape)
-        
         # now merge, using rchi2 as selection score
         
         for bundle in fibers_in_bundle.keys() :
@@ -393,22 +408,22 @@ def mean_psf(inputs, output):
             #ok=np.array([0,1]) # debug
 
             if entry==0 :
-                log.info("for fiber bundle %d, %d valid PSFs"%(bundle,ok.size))
-            
+                log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
+                    ok.size))
             
             if ok.size>=2 : # use median
-                log.info("bundle #%d : use median"%bundle)
+                log.info("bundle #{} : use median".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=np.median(coeff[ok,f],axis=0)
                 output_rchi2[bundle]=np.median(bundle_rchi2[ok,bundle])
             elif ok.size==1 : # copy
-                log.info("bundle #%d : use only one psf "%bundle)
+                log.info("bundle #{} : use only one psf ".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=coeff[ok[0],f]
                 output_rchi2[bundle]=bundle_rchi2[ok[0],bundle]
                     
             else : # we have a problem here, take the smallest rchi2
-                log.info("bundle #%d : take smallest chi2 "%bundle)
+                log.info("bundle #{} : take smallest chi2 ".format(bundle))
                 i=np.argmin(bundle_rchi2[:,bundle])
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=coeff[i,f]
@@ -418,7 +433,8 @@ def mean_psf(inputs, output):
         hdulist["PSF"].data["COEFF"][entry]=output_coeff
         # change bundle chi2
         for bundle in range(output_rchi2.size) :
-            hdulist["PSF"].header["B%02dRCHI2"%bundle]=output_rchi2[bundle]
+            hdulist["PSF"].header["B{:02d}RCHI2".format(bundle)] = \
+                output_rchi2[bundle]
 
         if len(xtrace)>0 :
             xtrace=np.array(xtrace)
@@ -442,12 +458,9 @@ def mean_psf(inputs, output):
                  
             hdulist["xtrace"].data = np.median(np.array(xtrace),axis=0)
             hdulist["ytrace"].data = np.median(np.array(ytrace),axis=0)
-            
-
 
         # alter other keys in header
-        hdulist["PSF"].header["EXPID"]=0. # it's a mix , need to add the expids here
-        
+        hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
     
     # save output PSF
     hdulist.writeto(output, clobber=True)
