@@ -519,40 +519,27 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
 
-        #- get the skyfibers first
-        skyfiber=np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
-        nspec_sky=skyfiber.shape[0]
-        wminlow,wmaxlow=[float(w) for w in wrange1.split(',')]
-        wminhigh,wmaxhigh=[float(w) for w in wrange2.split(',')]
-        selectlow=np.where((frame.wave>wminlow) & (frame.wave<wmaxlow))[0]
-        selecthigh=np.where((frame.wave>wminhigh) & (frame.wave < wmaxhigh))[0]
-
-        contfiberlow=[]
-        contfiberhigh=[]
-        meancontfiber=[]
-        for ii in skyfiber:
-            contlow=qalib.continuum(frame.wave[selectlow],frame.flux[ii,selectlow])
-            conthigh=qalib.continuum(frame.wave[selecthigh],frame.flux[ii,selecthigh])
-            contfiberlow.append(contlow)
-            contfiberhigh.append(conthigh)
-            meancontfiber.append(np.mean((contlow,conthigh)))
-        skycont=np.mean(meancontfiber) #- over the entire CCD (skyfibers)
-
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                B_CONT=[(4000, 4500), (5250, 5550)],
-                R_CONT=[(5950, 6200), (6990, 7230)],
-                Z_CONT=[(8120, 8270), (9110, 9280)],
-                SKYCONT_WARN_RANGE=[100.0, 400.0],
-                SKYCONT_ALARM_RANGE=[50.0, 600.0]
-                )
-
+            from desispec.io import read_params
+            desi_params = read_params()
+            param = {}
+            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_WARN_RANGE', 'SKYCONT_ALARM_RANGE']:
+                param[key] = desi_params['qa']['skysub']['PARAMS'][key]
+            #param = dict(
+            #    B_CONT=[(4000, 4500), (5250, 5550)],
+            #    R_CONT=[(5950, 6200), (6990, 7230)],
+            #    Z_CONT=[(8120, 8270), (9110, 9280)],
+            #    SKYCONT_WARN_RANGE=[100.0, 400.0],
+            #    SKYCONT_ALARM_RANGE=[50.0, 600.0]
+            #)
         retval["PARAMS"] = param
 
-        skycont_err=[]
-        if amps:
+        skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
+            frame, wrange1, wrange2)
 
+        skycont_err = []
+        if amps:
             leftmax = dict_countbins["LEFT_MAX_FIBER"]
             rightmin = dict_countbins["RIGHT_MIN_FIBER"]
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]

@@ -23,7 +23,8 @@ class TestBinScripts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.nspec = 6
-        cls.nwave = 20
+        cls.nwave = 2000  # Needed for QA
+        cls.wave = 4000+np.arange(cls.nwave)
         id = uuid4().hex
         cls.calibfile = 'calib-'+id+'.fits'
         cls.framefile = 'frame-'+id+'.fits'
@@ -92,24 +93,22 @@ class TestBinScripts(unittest.TestCase):
 
     def _write_frame(self, flavor='none', camera='b', expid=1, night='20160607'):
         """Write a fake frame"""
-        wave = 5000+np.arange(self.nwave)
         flux = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         Rdata = np.ones((self.nspec, 1, self.nwave))
         fibermap = self._get_fibermap()
-        frame = Frame(wave, flux, ivar, mask, Rdata, fibermap=fibermap,
+        frame = Frame(self.wave, flux, ivar, mask, Rdata, fibermap=fibermap,
                       meta=dict(FLAVOR=flavor, CAMERA=camera, EXPID=expid, NIGHT=night, EXPTIME=1000.))
         io.write_frame(self.framefile, frame)
 
     def _write_fiberflat(self):
         """Write a fake fiberflat"""
-        wave = 5000+np.arange(self.nwave)
         fiberflat = np.ones((self.nspec, self.nwave))
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
         meanspec = np.ones(self.nwave)
-        ff = FiberFlat(wave, fiberflat, ivar, mask, meanspec)
+        ff = FiberFlat(self.wave, fiberflat, ivar, mask, meanspec)
         io.write_fiberflat(self.fiberflatfile, ff)
 
     def _get_fibermap(self):
@@ -126,17 +125,15 @@ class TestBinScripts(unittest.TestCase):
 
     def _write_skymodel(self):
         """Write a fake SkyModel"""
-        wave = 5000+np.arange(self.nwave)
         skyflux = np.ones((self.nspec, self.nwave))*0.1  # Must be less 1
         ivar = np.ones((self.nspec, self.nwave))
         mask = np.zeros((self.nspec, self.nwave), dtype=int)
-        sky = SkyModel(wave, skyflux, ivar, mask, nrej=1)
+        sky = SkyModel(self.wave, skyflux, ivar, mask, nrej=1)
         io.write_sky(self.skyfile, sky)
 
     def _write_stdstars(self):
         """Write a fake StdStar model file"""
         # First generation is very simple
-        wave = 5000+np.arange(self.nwave)
         stdflux = np.ones((2, self.nwave))
         fibers = np.array([1,4]).astype(int)
         data={}
@@ -149,7 +146,7 @@ class TestBinScripts(unittest.TestCase):
         data['REDSHIFT']=np.zeros(fibers.size)
         data['DATA_G-R']=np.zeros(fibers.size)
         data['MODEL_G-R']=np.zeros(fibers.size)        
-        io.write_stdstar_models(self.stdfile,stdflux,wave,fibers,data)
+        io.write_stdstar_models(self.stdfile,stdflux,self.wave,fibers,data)
 
     def _remove_files(self, filenames):
         '''Utility to cleanup output files if they exist'''

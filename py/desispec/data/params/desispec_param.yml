@@ -1,2 +1,21 @@
 frame_types: ['none','flat','arc','bias','science']
 frame_meta: ['DATE-OBS', 'CAMERA', 'NIGHT', 'EXPTIME', 'AIRMASS', 'FLAVOR']
+qa:
+  skysub:
+    PARAMS:
+       PCHI_RESID: 0.05  # P(Chi^2) limit for bad skyfiber model residuals
+       PER_RESID: 95.    # Percentile for residual distribution
+       BIN_SZ: 0.1       #- Bin size for residual/sigma histogram
+       SKYRESID_WARN_RANGE: [-5.0, 5.0]
+       SKYRESID_ALARM_RANGE: [-10.0, 10.0]
+       B_CONT:
+       - [4000., 4500.]
+       - [5250., 5550.]
+       R_CONT:
+       - [5950., 6200.]
+       - [6990., 7230.]
+       Z_CONT:
+       - [8120., 8270.]
+       - [9110., 9280.]
+       SKYCONT_WARN_RANGE: [100.0, 400.0]
+       SKYCONT_ALARM_RANGE: [50.0, 600.0]
