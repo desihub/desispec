@@ -134,7 +134,7 @@ def main(args, comm=None):
         mynbundle += 1
         myfirstbundle = rank * mynbundle
     else:
-        myfirstbundle = ((mynbundle + 1) * leftover) + 
+        myfirstbundle = ((mynbundle + 1) * leftover) + \
             (mynbundle * (rank - leftover))
 
     if rank == 0:
