@@ -204,15 +204,19 @@ def integrate_spec(wave,flux):
     return integral
 
 def sky_continuum(frame, wrange1, wrange2):
-    """ QA Algorithm for sky continuum
-        To be called from desispec.sky.qa_skysub and desispec.qa.qa_quicklook.Sky_Continuum.run_qa
+    """ 
+    QA Algorithm for sky continuum.
+
+    To be called from desispec.sky.qa_skysub and
+    desispec.qa.qa_quicklook.Sky_Continuum.run_qa
+    
     Args:
         frame:
         wrange1:
         wrange2:
 
     Returns:
-    skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont
+        skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont
 
     """
     #- get the skyfibers first
