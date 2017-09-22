@@ -82,12 +82,12 @@ class Config(object):
         wavelength=self.wavelength
         if self.wavelength is None:
             #- setting default wavelength for extraction for different cam
-            if self.camera[0] == 'r':
+            if self.camera[0] == 'b':
+                self.wavelength='3570,5730,0.8'
+            elif self.camera[0] == 'r':
                 self.wavelength='5630,7740,0.8'
-            elif self.camera[0] == 'b':
-                self.wavelength='3550,5730,0.8'
             elif self.camera[0] == 'z':
-                self.wavelength='7650,9830,0.8'
+                self.wavelength='7420,9830,0.8'
 
         #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
         paopt_initialize={'camera': self.camera}
@@ -372,7 +372,16 @@ def check_config(outconfig):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
                 log.info("File check: Okay: {}".format(thisfile))
-        log.info("All necessary file exist for this configuration.")
+        log.info("All necessary file exist for science configuration.")
+    if outconfig["Flavor"]=="arcs":
+        files = [outconfig["RawImage"], outconfig["FiberMap"]]
+        log.info("Checking if all the necessary files exist.")
+        for thisfile in files:
+            if not os.path.exists(thisfile):
+                sys.exit("File does not exist: {}".format(thisfile))
+            else:
+                log.info("File check: Okay: {}".format(thisfile))
+        log.info("All necessary file exist for arc configuration.")
     return 
 
 

@@ -42,9 +42,9 @@ Algorithms:
                          WSHIFT_ALARM_RANGE: [-4.0, 4.0]}
     BoxcarExtract:
         wavelength: {
-            b: [3550,5730,0.8],
+            b: [3570,5730,0.8],
             r: [5630,7740,0.8],
-            z: [7650,9830,0.8]
+            z: [7420,9830,0.8]
             }
         QA: 
             CountSpectralBins:
