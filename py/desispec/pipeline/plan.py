@@ -134,6 +134,10 @@ def create_prod(nightstr=None, extra={}, specs=None, fakepix=False, hpxnside=64)
     if not os.path.isdir(faildir):
         os.makedirs(faildir)
 
+    failreddir = os.path.join(faildir, io.get_pipe_redshiftdir())
+    if not os.path.isdir(failreddir):
+        os.makedirs(failreddir)
+
     scriptdir = os.path.join(rundir, io.get_pipe_scriptdir())
     if not os.path.isdir(scriptdir):
         os.makedirs(scriptdir)
@@ -141,6 +145,10 @@ def create_prod(nightstr=None, extra={}, specs=None, fakepix=False, hpxnside=64)
     logdir = os.path.join(rundir, io.get_pipe_logdir())
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
+
+    logreddir = os.path.join(logdir, io.get_pipe_redshiftdir())
+    if not os.path.isdir(logreddir):
+        os.makedirs(logreddir)
 
     optfile = os.path.join(rundir, "options.yaml")
     if not os.path.isfile(optfile):

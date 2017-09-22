@@ -58,6 +58,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         qa_data_exp = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
         qa_bootcalib = '{specprod_dir}/QA/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
         qa_sky_fig = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-sky-{camera}-{expid:08d}.png',
+        qa_skychi_fig = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-skychi-{camera}-{expid:08d}.png',
         qa_flux_fig = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-flux-{camera}-{expid:08d}.png',
         qa_toplevel_html = '{specprod_dir}/QA/qa-toplevel.html',
         qa_calib = '{specprod_dir}/QA/calib2d/{night}/qa-{camera}-{expid:08d}.yaml',
@@ -458,3 +459,15 @@ def get_pipe_faildir():
         The name of the subdirectory.
     """
     return "failed"
+
+
+def get_pipe_redshiftdir():
+    """
+    Return the name of the subdirectory containing pipeline redshift
+    log files.
+
+    Returns (str):
+        The name of the subdirectory.
+    """
+    return "redshift"
+

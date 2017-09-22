@@ -360,7 +360,8 @@ def mean_psf(inputs, output):
             if entry == 0:
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle, ok.size))
 
-            fibers = np.arange(bundle*nfibers_per_bundle,(bundle+1)*nfibers_per_bundle)
+            fibers = np.arange(bundle*nfibers_per_bundle, (bundle+1)*nfibers_per_bundle, 
+                dtype=np.int32)
             if ok.size >= 2: # use median
                 for f in fibers :
                     output_coeff[f] = np.median(coeff[ok,f],axis=0)
@@ -390,3 +391,4 @@ def mean_psf(inputs, output):
     log.info("wrote {}".format(output))
 
     return
+
