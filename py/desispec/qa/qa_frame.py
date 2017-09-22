@@ -7,8 +7,9 @@ from __future__ import print_function, absolute_import, division
 import warnings
 
 from desiutil.log import get_logger
-from desispec.io import read_params
 
+from desispec.io import read_params
+desi_params = read_params()
 
 # log=get_logger()
 
@@ -45,7 +46,6 @@ class QA_Frame(object):
             self.qa_data = {}
 
         # Final test
-        desi_params = read_params()
         assert self.flavor in desi_params['frame_types']
 
     def init_qatype(self, qatype, param, re_init=False):
@@ -131,12 +131,13 @@ class QA_Frame(object):
         """
         assert self.flavor == 'science'
 
+        sky_dict = desi_params['qa']['skysub']['PARAMS']
         # Standard SKYSUB input parameters
-        sky_dict = dict(
-            PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-            PER_RESID=95.,   # Percentile for residual distribution
-            BIN_SZ=0.1, #- Bin size for residual/sigma histogram
-            )
+        #sky_dict = dict(
+        #    PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+        #    PER_RESID=95.,   # Percentile for residual distribution
+        #    BIN_SZ=0.1, #- Bin size for residual/sigma histogram
+        #    )
         # Init
         self.init_qatype('SKYSUB', sky_dict, re_init=re_init)
 
@@ -273,7 +274,10 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
             if make_plots:
                 qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=expid,
                                       specprod_dir=specprod_dir, outdir=output_dir)
+                qafig2 = meta.findfile('qa_skychi_fig', night=night, camera=camera, expid=expid,
+                                      specprod_dir=specprod_dir, outdir=output_dir)
                 qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
+                qa_plots.frame_skychi(qafig2, frame, skymodel, qaframe)
     # FluxCalib QA
     if qatype == 'qa_data':
         # Standard stars
