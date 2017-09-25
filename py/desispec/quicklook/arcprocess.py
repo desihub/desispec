@@ -13,16 +13,6 @@ def sigmas_from_arc(wave,flux,ivar,linelist,n=2):
     n: fit region half width (in bin units): n=2 bins => (2*n+1)=5 bins fitting window. 
     """
 
-#    #- amend line list to only include lines in given wavelength range
-#    if wave[0] >= linelist[0]:
-#        noline_ind_lo=np.where(np.array(linelist)<=wave[0])
-#        linelist=linelist[np.max(noline_ind_lo[0])+1:len(linelist)-1]
-#        log.info("First {} line(s) outside wavelength range, skipping these".format(len(noline_ind_lo[0])))
-#    if wave[len(wave)-1] <= linelist[len(linelist)-1]:
-#        noline_ind_hi=np.where(np.array(linelist)>=wave[len(wave)-1])
-#        linelist=linelist[0:np.min(noline_ind_hi[0])-1]
-#        log.info("Last {} line(s) outside wavelength range, skipping these".format(len(noline_ind_hi[0])))
-
     nwave=wave.shape
 
     #- select the closest match to given lines
