@@ -79,8 +79,19 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
         #linelist=[5854.1101,6404.018,7034.352,7440.9469] #- not final 
         log.info("No line list configured. Fitting for lines {}".format(linelist))  
     coeffs=np.zeros((nspec,npoly+1)) #- coeffs array
+
+    #- amend line list to only include lines in given wavelength range
+    wave=frame.wave
+    if wave[0] >= linelist[0]:
+        noline_ind_lo=np.where(np.array(linelist)<=wave[0])
+        linelist=linelist[np.max(noline_ind_lo[0])+1:len(linelist)-1]
+        log.info("First {} line(s) outside wavelength range, skipping these".format(len(noline_ind_lo[0])))
+    if wave[len(wave)-1] <= linelist[len(linelist)-1]:
+        noline_ind_hi=np.where(np.array(linelist)>=wave[len(wave)-1])
+        linelist=linelist[0:np.min(noline_ind_hi[0])-1]
+        log.info("Last {} line(s) outside wavelength range, skipping these".format(len(noline_ind_hi[0])))
+
     for spec in range(nspec):
-        wave=frame.wave
         flux=frame.flux[spec]
         ivar=frame.ivar[spec]
         meanwaves,emeanwaves,sigmas,esigmas=sigmas_from_arc(wave,flux,ivar,linelist,n=nbins)

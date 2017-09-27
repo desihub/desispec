@@ -144,17 +144,16 @@ class BootCalibration(pas.PipelineAlg):
         arcimage=kwargs["ArcLampImage"]
         outputfile=kwargs["outputFile"]
 
-        return self.run_pa(deg,flatimage,arcimage,outputfile)
+        return self.run_pa(deg,flatimage,arcimage,outputfile,args)
 
-    def run_pa(self,deg,flatimage,arcimage,outputfile):
+    def run_pa(self,deg,flatimage,arcimage,outputfile,args):
         from desispec.util import runcmd
         cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
-        runcmd(cmd)
         if runcmd(cmd) !=0:
             raise RuntimeError('desi_bootcalib failed, psfboot not written')
-        else:
-            log.info("PSF file wrtten. Exiting Quicklook for this configuration.") #- File written no need to go further
-        sys.exit(0)
+
+        img=args[0]
+        return img
 
 
 class BoxcarExtract(pas.PipelineAlg):
@@ -254,12 +253,15 @@ class BoxcarExtract(pas.PipelineAlg):
                maskFile=None,usesigma=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
+        import desispec.psf
+        if fibermap['OBJTYPE'][0] == 'ARC':
+            psf=desispec.psf.PSF(psf)
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
                                   nspec=nspec,maskFile=maskFile,usesigma=usesigma)
 
         #- write to a frame object
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
-        
+
         if dumpfile is not None:
             from desispec import io
             night = frame.meta['NIGHT']
@@ -736,7 +738,7 @@ class ResolutionFit(pas.PipelineAlg):
 
         #- update the arc frame resolution from new coeffs
         newpsf=PSF(outfile)
-        input_frame.resolution_data=get_resolution(input_frame.wave,newpsf)
+        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=True)
  
         return input_frame
 
