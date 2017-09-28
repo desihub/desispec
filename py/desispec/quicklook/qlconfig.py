@@ -122,7 +122,8 @@ class Config(object):
 
         paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
 
-        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile}
+        usesigma=self.usesigma
+        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile, 'UseSigmas': usesigma}
 
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
