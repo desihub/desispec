@@ -61,7 +61,7 @@ def read_raw(filename, camera, **kwargs):
                     hdu_header = fx[hdu].header
                     for key in hdu_header:
                         if ( key not in blacklist ) and ( key not in header ) :
-                            log.debug("adding",key,"=",hdu_header[key])
+                            log.debug("adding {} = {}".format(key,hdu_header[key]))
                             header[key] = hdu_header[key]                        
                         else :
                             log.debug("key %s already in header or blacklisted"%key)

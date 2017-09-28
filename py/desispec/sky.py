@@ -236,7 +236,7 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
 
     Args:
         param : dict of QA parameters : see qa_frame.init_skysub for example
-        frame : desispec.Frame object
+        frame : desispec.Frame object;  Should have been flat fielded
         skymodel : desispec.SkyModel object
         quick_look : bool, optional
           If True, do QuickLook specific QA (or avoid some)
@@ -252,7 +252,17 @@ def qa_skysub(param, frame, skymodel, quick_look=False):
     tempframe=copy.deepcopy(frame) #- make a copy so as to propagate frame unaffected so that downstream pipeline uses it.
     subtract_sky(tempframe,skymodel) #- Note: sky subtract is done to get residuals. As part of pipeline it is done in fluxcalib stage
 
+    # Sky residuals first
     qadict = qalib.sky_resid(param, tempframe, skymodel, quick_look=quick_look)
+
+    # Sky continuum
+    if not quick_look:  # Sky continuum is measured after flat fielding in QuickLook
+        channel = frame.meta['CAMERA'][0]
+        wrange1, wrange2 = param[channel.upper()+'_CONT']
+        skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(frame,wrange1,wrange2)
+        qadict["SKYFIBERID"] = skyfiber.tolist()
+        qadict["SKYCONT"] = skycont
+        qadict["SKYCONT_FIBER"] = meancontfiber
 
     if quick_look:  # The following can be a *large* dict
         qadict_snr = qalib.SignalVsNoise(tempframe,param)

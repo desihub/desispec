@@ -7,8 +7,9 @@ from __future__ import print_function, absolute_import, division
 import warnings
 
 from desiutil.log import get_logger
-from desispec.io import read_params
 
+from desispec.io import read_params
+desi_params = read_params()
 
 # log=get_logger()
 
@@ -45,7 +46,6 @@ class QA_Frame(object):
             self.qa_data = {}
 
         # Final test
-        desi_params = read_params()
         assert self.flavor in desi_params['frame_types']
 
     def init_qatype(self, qatype, param, re_init=False):
@@ -131,12 +131,13 @@ class QA_Frame(object):
         """
         assert self.flavor == 'science'
 
+        sky_dict = desi_params['qa']['skysub']['PARAMS']
         # Standard SKYSUB input parameters
-        sky_dict = dict(
-            PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-            PER_RESID=95.,   # Percentile for residual distribution
-            BIN_SZ=0.1, #- Bin size for residual/sigma histogram
-            )
+        #sky_dict = dict(
+        #    PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+        #    PER_RESID=95.,   # Percentile for residual distribution
+        #    BIN_SZ=0.1, #- Bin size for residual/sigma histogram
+        #    )
         # Init
         self.init_qatype('SKYSUB', sky_dict, re_init=re_init)
 
@@ -195,7 +196,7 @@ class QA_Frame(object):
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
 
 
-def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
+def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_dir=None):
     """  Generate a qaframe object from an input frame_file name (and night)
     Write QA to disk
     Will also make plots if directed
@@ -203,15 +204,20 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
         frame_file: str
         specprod_dir: str, optional
         make_plots: bool, optional
+        output_dir: str, optional
 
     Returns:
 
     """
+    import glob
+    import os
+
     from desispec.io import read_frame
     from desispec.io import meta
     from desispec.io.qa import load_qa_frame, write_qa_frame
     from desispec.io.frame import search_for_framefile
     from desispec.io.fiberflat import read_fiberflat
+    from desispec.fiberflat import apply_fiberflat
     from desispec.qa import qa_plots
     from desispec.io.sky import read_sky
     from desispec.io.fluxcalibration import read_flux_calibration
@@ -232,7 +238,8 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
     else:
         qatype = 'qa_data'
     # Load
-    qafile = meta.findfile(qatype, night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
+    qafile = meta.findfile(qatype, night=night, camera=camera, expid=expid, specprod_dir=specprod_dir,
+                           outdir=output_dir)
     qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
     # Flat QA
     if frame.meta['FLAVOR'] in ['flat']:
@@ -242,11 +249,22 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
         qaframe.run_qa('FIBERFLAT', (frame, fiberflat), clobber=True)
         if make_plots:
             # Do it
-            qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
+            qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=expid,
+                                  specprod_dir=specprod_dir, outdir=output_dir)
             qa_plots.frame_fiberflat(qafig, qaframe, frame, fiberflat)
     # SkySub QA
     if qatype == 'qa_data':
         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
+        # Flat field first
+        dummy_fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
+                                      specprod_dir=specprod_dir) # This is dummy
+        path,_ = os.path.split(dummy_fiberflat_fil)
+        fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
+        # Sort and take the first (same as current pipeline)
+        fiberflat_files.sort()
+        fiberflat = read_fiberflat(fiberflat_files[0])
+        apply_fiberflat(frame, fiberflat)
+        # Load sky model and run
         try:
             skymodel = read_sky(sky_fil)
         except FileNotFoundError:
@@ -255,8 +273,11 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
             qaframe.run_qa('SKYSUB', (frame, skymodel))
             if make_plots:
                 qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=expid,
-                                      specprod_dir=specprod_dir)
+                                      specprod_dir=specprod_dir, outdir=output_dir)
+                qafig2 = meta.findfile('qa_skychi_fig', night=night, camera=camera, expid=expid,
+                                      specprod_dir=specprod_dir, outdir=output_dir)
                 qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
+                qa_plots.frame_skychi(qafig2, frame, skymodel, qaframe)
     # FluxCalib QA
     if qatype == 'qa_data':
         # Standard stars
@@ -276,7 +297,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False):
             qaframe.run_qa('FLUXCALIB', (frame, fluxcalib))  # , model_tuple))#, indiv_stars))
             if make_plots:
                 qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=expid,
-                                      specprod_dir=specprod_dir)
+                                      specprod_dir=specprod_dir, outdir=output_dir)
                 qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)  # , model_tuple)
     # Write
     write_qa_frame(qafile, qaframe, verbose=True)

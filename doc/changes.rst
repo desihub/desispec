@@ -20,16 +20,18 @@ desispec Change Log
 * Add several new plots for skysub residuals (PR `#425`_)
 * Adds method to generate QA Table for Prod (PR `#425`_)
 * Refactor of skysubresid script (PR `#425`_)
-* Refactor QA files to sit in their own folder tree
-* Generate HTML files with links to QA figures
-* Enable generation of Exposure level QA
-* Normalize fiberflat QA by fiber area
-* Fixed exptime in fluxcalib ZP calculation
-* Added find_exposure_night() method
+* Refactor QA files to sit in their own folder tree (PR `#429`_)
+* Generate HTML files with links to QA figures (PR `#429`_)
+* Enable generation of Exposure level QA (PR `#429`_)
+* Normalize fiberflat QA by fiber area (PR `#429`_)
+* Fixed exptime in fluxcalib ZP calculation (PR `#429`_)
+* Added find_exposure_night() method (PR `#429`_)
+* Add MED_SKY metric to QA and bright/dark flag in desi_qa_prod
 
 .. _`#422`: https://github.com/desihub/desispec/pull/422
 .. _`#424`: https://github.com/desihub/desispec/pull/424
 .. _`#425`: https://github.com/desihub/desispec/pull/425
+.. _`#429`: https://github.com/desihub/desispec/pull/429
 
 0.15.2 (2017-07-12)
 -------------------

@@ -150,7 +150,7 @@ def run_step(step, grph, opts, comm=None):
             else:
                 group_ntask = 0
         else:
-            if step == "zfind":
+            if step == "redshift":
                 # We load balance the spectra across process groups based
                 # on the number of targets per group.  All groups with
                 # < taskproc targets are weighted the same.
@@ -163,11 +163,11 @@ def run_step(step, grph, opts, comm=None):
                     worksizes = [ taskproc if (x < taskproc) else x for x in spectrasizes ]
 
                     if rank == 0:
-                        log.debug("zfind {} groups".format(ngroup))
+                        log.debug("redshift {} groups".format(ngroup))
                         workstr = ""
                         for w in worksizes:
                             workstr = "{}{} ".format(workstr, w)
-                        log.debug("zfind work sizes = {}".format(workstr))
+                        log.debug("redshift work sizes = {}".format(workstr))
 
                     group_firsttask, group_ntask = dist_discrete(worksizes, ngroup, group)
 
@@ -215,8 +215,23 @@ def run_step(step, grph, opts, comm=None):
                     group_failcount += 1
                 continue
 
-            nfaildir = os.path.join(faildir, night)
-            nlogdir = os.path.join(logdir, night)
+            nfaildir = None
+            nlogdir = None
+            if step == "redshift":
+                ztype, nstr, pstr = graph_name_split(gname)
+                subdir = io.util.healpix_subdirectory(int(nstr), 
+                    int(pstr))
+                nfaildir = os.path.join(faildir, io.get_pipe_redshiftdir(), 
+                    subdir)
+                nlogdir = os.path.join(logdir, io.get_pipe_redshiftdir(), subdir)
+                if group_rank == 0:
+                    if not os.path.isdir(nfaildir):
+                        os.makedirs(nfaildir)
+                    if not os.path.isdir(nlogdir):
+                        os.makedirs(nlogdir)
+            else:
+                nfaildir = os.path.join(faildir, night)
+                nlogdir = os.path.join(logdir, night)
 
             tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
             ffile = os.path.join(nfaildir, "{}_{}.yaml".format(step, tasks[t]))
@@ -565,37 +580,54 @@ def nersc_job(host, path, logroot, desisetup, commands, nodes=1, \
             f.write("#SBATCH --constraint=haswell\n")
         elif host == "coriknl":
             f.write("#SBATCH --constraint=knl,quad,cache\n")
+            f.write("#SBATCH --core-spec=4\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name={}\n".format(jobname))
         f.write("#SBATCH --output={}_%j.log\n".format(logroot))
+
         f.write("echo Starting slurm script at `date`\n\n")
         f.write("source {}\n\n".format(desisetup))
+
         f.write("# Set TMPDIR to be on the ramdisk\n")
         f.write("export TMPDIR=/dev/shm\n\n")
-        f.write("node_cores=0\n")
-        f.write("if [ ${NERSC_HOST} = edison ]; then\n")
-        f.write("  node_cores=24\n")
-        f.write("else\n")
-        f.write("  node_cores=32\n")
-        f.write("fi\n")
-        f.write("\n")
+
+        if host == "edison":
+            f.write("cpu_per_core=2\n\n")
+            f.write("node_cores=24\n\n")
+        elif host == "cori":
+            f.write("cpu_per_core=2\n\n")
+            f.write("node_cores=32\n\n")
+        elif host == "coriknl":
+            f.write("cpu_per_core=4\n\n")
+            f.write("node_cores=64\n\n")
+        else:
+            raise RuntimeError("Unsupported NERSC host")
+
         f.write("nodes={}\n".format(nodes))
         f.write("node_proc={}\n".format(nodeproc))
         f.write("node_thread=$(( node_cores / node_proc ))\n")
+        f.write("node_depth=$(( cpu_per_core * node_thread ))\n")
+
         f.write("procs=$(( nodes * node_proc ))\n\n")
         if openmp:
             f.write("export OMP_NUM_THREADS=${node_thread}\n")
+            f.write("export OMP_PLACES=threads\n")
+            f.write("export OMP_PROC_BIND=spread\n")
         else:
             f.write("export OMP_NUM_THREADS=1\n")
         f.write("\n")
+
         runstr = "srun"
         if multiproc:
             runstr = "{} --cpu_bind=no".format(runstr)
             f.write("export KMP_AFFINITY=disabled\n")
             f.write("\n")
-        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}}\"\n\n".format(runstr))
+        else:
+            runstr = "{} --cpu_bind=cores".format(runstr)
+        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_depth}}\"\n\n".format(runstr))
+
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("echo \"job datestamp = ${now}\"\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
@@ -655,6 +687,7 @@ def nersc_shifter_job(host, path, img, specdata, specredux, desiroot, logroot, d
             f.write("#SBATCH --constraint=haswell\n")
         elif host == "coriknl":
             f.write("#SBATCH --constraint=knl,quad,cache\n")
+            f.write("#SBATCH --core-spec=4\n")
         f.write("#SBATCH --account=desi\n")
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
@@ -665,29 +698,44 @@ def nersc_shifter_job(host, path, img, specdata, specredux, desiroot, logroot, d
         f.write("echo Starting slurm script at `date`\n\n")
         f.write("source {}\n\n".format(desisetup))
 
-        f.write("node_cores=0\n")
-        f.write("if [ ${NERSC_HOST} = edison ]; then\n")
-        f.write("  module load shifter\n")
-        f.write("  node_cores=24\n")
-        f.write("else\n")
-        f.write("  node_cores=32\n")
-        f.write("fi\n")
-        f.write("\n")
+        f.write("# Set TMPDIR to be on the ramdisk\n")
+        f.write("export TMPDIR=/dev/shm\n\n")
+
+        if host == "edison":
+            f.write("cpu_per_core=2\n\n")
+            f.write("node_cores=24\n\n")
+        elif host == "cori":
+            f.write("cpu_per_core=2\n\n")
+            f.write("node_cores=32\n\n")
+        elif host == "coriknl":
+            f.write("cpu_per_core=4\n\n")
+            f.write("node_cores=64\n\n")
+        else:
+            raise RuntimeError("Unsupported NERSC host")
+
         f.write("nodes={}\n".format(nodes))
         f.write("node_proc={}\n".format(nodeproc))
         f.write("node_thread=$(( node_cores / node_proc ))\n")
+        f.write("node_depth=$(( cpu_per_core * node_thread ))\n")
+
         f.write("procs=$(( nodes * node_proc ))\n\n")
         if openmp:
             f.write("export OMP_NUM_THREADS=${node_thread}\n")
+            f.write("export OMP_PLACES=threads\n")
+            f.write("export OMP_PROC_BIND=spread\n")
         else:
             f.write("export OMP_NUM_THREADS=1\n")
         f.write("\n")
+
         runstr = "srun"
         if multiproc:
             runstr = "{} --cpu_bind=no".format(runstr)
             f.write("export KMP_AFFINITY=disabled\n")
             f.write("\n")
-        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_thread}} shifter\"\n\n".format(runstr))
+        else:
+            runstr = "{} --cpu_bind=cores".format(runstr)
+        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_depth}} shifter\"\n\n".format(runstr))
+
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("echo \"job datestamp = ${now}\"\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))

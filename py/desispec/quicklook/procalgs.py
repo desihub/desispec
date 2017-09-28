@@ -144,18 +144,16 @@ class BootCalibration(pas.PipelineAlg):
         arcimage=kwargs["ArcLampImage"]
         outputfile=kwargs["outputFile"]
 
-        return self.run_pa(deg,flatimage,arcimage,outputfile)
+        return self.run_pa(deg,flatimage,arcimage,outputfile,args)
 
-
-    def run_pa(self,deg,flatimage,arcimage,outputfile):
+    def run_pa(self,deg,flatimage,arcimage,outputfile,args):
         from desispec.util import runcmd
         cmd = "desi_bootcalib --arcfile {} --fiberflat {} --outfile {}".format(arcimage,flatimage,outputfile)
-        runcmd(cmd)
         if runcmd(cmd) !=0:
             raise RuntimeError('desi_bootcalib failed, psfboot not written')
-        else:
-            log.info("PSF file wrtten. Exiting Quicklook for this configuration.") #- File written no need to go further
-        sys.exit(0)
+
+        img=args[0]
+        return img
 
 
 class BoxcarExtract(pas.PipelineAlg):
@@ -163,7 +161,6 @@ class BoxcarExtract(pas.PipelineAlg):
     from desispec.frame import Frame as fr
     from desispec.boxcar import do_boxcar
 
-    
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="BoxcarExtract"
@@ -200,7 +197,7 @@ class BoxcarExtract(pas.PipelineAlg):
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
-                wstart, wstop, dw = [float(w) for w in wavelength.split(',')]
+                wstart, wstop, dw = [float(w) for w in wavelength]
             else: 
                 wstart = np.ceil(psf.wmin)
                 wstop = np.floor(psf.wmax)
@@ -245,24 +242,26 @@ class BoxcarExtract(pas.PipelineAlg):
         input_image.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
         input_image.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
         input_image.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
-       
+
         return self.run_pa(input_image,psf
                            ,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,
                            dumpfile=dumpfile,maskFile=maskFile,usesigma=usesigma)
-
 
     def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
                fibers=None, fibermap=None,dumpfile=None,
                maskFile=None,usesigma=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
+        import desispec.psf
+        if fibermap['OBJTYPE'][0] == 'ARC':
+            psf=desispec.psf.PSF(psf)
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
                                   nspec=nspec,maskFile=maskFile,usesigma=usesigma)
 
         #- write to a frame object
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
-        
+
         if dumpfile is not None:
             from desispec import io
             night = frame.meta['NIGHT']
@@ -271,7 +270,6 @@ class BoxcarExtract(pas.PipelineAlg):
             log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return frame
-
   
     def get_default_config(self):
         return {("BoxWidth",2.5,"Boxcar halfwidth"),
@@ -317,7 +315,7 @@ class Extraction_2d(pas.PipelineAlg):
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
-                wstart, wstop, dw = [float(w) for w in wavelength.split(',')]
+                wstart, wstop, dw = [float(w) for w in wavelength]
             else: 
                 wstart = np.ceil(psf.wmin_all)
                 wstop = np.floor(psf.wmax_all)
@@ -740,7 +738,7 @@ class ResolutionFit(pas.PipelineAlg):
 
         #- update the arc frame resolution from new coeffs
         newpsf=PSF(outfile)
-        input_frame.resolution_data=get_resolution(input_frame.wave,newpsf)
+        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=True)
  
         return input_frame
 
