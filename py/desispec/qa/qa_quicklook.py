@@ -58,7 +58,7 @@ class Get_RMS(MonitoringAlg):
         from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
-        
+
         if "RMS_WARN_RANGE" in parms and "RMS_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["RMS_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["RMS_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
@@ -154,15 +154,26 @@ class Get_RMS(MonitoringAlg):
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
 
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RESULT":rmsccd,"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"EXPNUM_WARN":expnum}
+            for i in range(len(rms_over_amps)):
+                if rms_over_amps[i] >= param['RMS_NORMAL_RANGE'][0] and rms_over_amps[i] <= param['RMS_NORMAL_RANGE'][1]:
+                    if rmsdiff_err == 'WARN':
+                        pass
+                    else:
+                        rmsdiff_err = 'NORMAL'
+                elif rms_over_amps[i] >= param['RMS_WARN_RANGE'][0] and rms_over_amps[i] <= param['RMS_WARN_RANGE'][1]:
+                    rmsdiff_err = 'WARN'
+                else:
+                    rmsdiff_err = 'ALARM'
+                    break
+
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RESULT":rmsccd,"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff_err,"EXPNUM_WARN":expnum}
         else:
-            if rmsover <= param['RMS_ALARM_RANGE'][0] or rmsover >= param['RMS_ALARM_RANGE'][1]:
-                rmsdiff_err = 'ALARM'
-                pass
-            elif rmsover <= param['RMS_WARN_RANGE'][0] or rmsover >= param['RMS_WARN_RANGE'][1]:
+            if rmsover >= param['RMS_NORMAL_RANGE'][0] and rmsover <= param['RMS_NORMAL_RANGE'][1]:
+                rmsdiff_err = 'NORMAL'
+            elif rmsover >= param['RMS_WARN_RANGE'][0] and rmsover <= param['RMS_WARN_RANGE'][1]:
                 rmsdiff_err = 'WARN'
             else:
-                rmsdiff_err = 'NORMAL'
+                rmsdiff_err = 'ALARM'
 
             retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff_err,"EXPNUM_WARN":expnum}
 
@@ -187,6 +198,12 @@ class Count_Pixels(MonitoringAlg):
         if name is None or name.strip() == "":
             name="COUNTPIX"
         from desispec.image import Image as im
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+
+        if "NPIX_WARN_RANGE" in parms and "NPIX_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["NPIX_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["NPIX_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -233,9 +250,10 @@ class Count_Pixels(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = {
-                 "CUTLO" : 3,   # low threshold for number of counts in sigmas
-                 "CUTHI" : 10, 
-                 "NPIX_RANGE" : [50.0, 200.0, 500.0, 650.0]
+                 "CUTLO":3,   # low threshold for number of counts in sigmas
+                 "CUTHI":10, 
+                 "NPIX_NORMAL_RANGE":[200.0, 500.0],
+                 "NPIX_WARN_RANGE":[50.0, 650.0]
                  }
 
         retval["PARAMS"] = param
@@ -259,27 +277,26 @@ class Count_Pixels(MonitoringAlg):
                 npixhi_amps.append(npixhi_thisamp)
 
             for i in range(len(npixlo_amps)):
-                if npixlo_amps[i] <= param['NPIX_ALARM_RANGE'][0] or npixlo_amps[i] >= param['NPIX_ALARM_RANGE'][1]:
-                    npix_err = 'ALARM'
-                    break
-                elif npixlo_amps[i] <= param['NPIX_WARN_RANGE'][0] or npixlo_amps[i] >= param['NPIX_WARN_RANGE'][1]:
-                    npix_err = 'WARN'
-                else:
+                if npixlo_amps[i] >= param['NPIX_NORMAL_RANGE'][0] and npixlo_amps[i] <= param['NPIX_NORMAL_RANGE'][1]:
                     if npix_err == 'WARN':
                         pass
                     else:
                         npix_err = 'NORMAL'
+                elif npixlo_amps[i] >= param['NPIX_WARN_RANGE'][0] and npixlo_amps[i] <= param['NPIX_WARN_RANGE'][1]:
+                    npix_err = 'WARN'
+                else:
+                    npix_err = 'ALARM'
+                    break
 
             retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_ERR":npix_err}
 
         else:
-            if npixlo <= param['NPIX_ALARM_RANGE'][0] or npixlo >= param['NPIX_ALARM_RANGE'][1]:
-                npix_err = 'ALARM'
-                pass
-            elif npixlo <= param['NPIX_WARN_RANGE'][0] or npixlo >= param['NPIX_WARN_RANGE'][1]:
+            if npixlo >= param['NPIX_NORMAL_RANGE'][0] and npixlo <= param['NPIX_NORMAL_RANGE'][1]:
+                npix_err = 'NORMAL'
+            elif npixlo >= param['NPIX_WARN_RANGE'][0] and npixlo <= param['NPIX_WARN_RANGE'][1]:
                 npix_err = 'WARN'
             else:
-                npix_err = 'NORMAL'
+                npix_err = 'ALARM'
 
             retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_ERR":npix_err}
 
@@ -305,6 +322,12 @@ class Integrate_Spec(MonitoringAlg):
         if name is None or name.strip() == "":
             name="INTEG"
         from desispec.frame import Frame as fr
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+
+        if "MAGDIFF_WARN_RANGE" in parms and "MAGDIFF_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["MAGDIFF_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["MAGDIFF_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -373,7 +396,8 @@ class Integrate_Spec(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = {
-                "MAGDIFF_RANGE": [-1.0, -0.5, 0.5, 1.0]
+                "MAGDIFF_NORMAL_RANGE":[-0.5, 0.5],
+                "MAGDIFF_WARN_RANGE":[-1.0, 1.0]
                 }
 
         retval["PARAMS"] = param
@@ -410,27 +434,26 @@ class Integrate_Spec(MonitoringAlg):
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
             for i in range(len(magdiff_avg_amp)):
-                if magdiff_avg_amp[i] <= param['MAGDIFF_ALARM_RANGE'][0] or magdiff_avg_amp[i] >= param['MAGDIFF_ALARM_RANGE'][1]:
-                    magdiff_err = 'ALARM'
-                    break
-                elif magdiff_avg_amp[i] <= param['MAGDIFF_WARN_RANGE'][0] or magdiff_avg_amp[i] >= param['MAGDIFF_WARN_RANGE'][1]:
-                    magdiff_err = 'WARN'
-                else:
+                if magdiff_avg_amp[i] >= param['MAGDIFF_NORMAL_RANGE'][0] and magdiff_avg_amp[i] <= param['MAGDIFF_NORMAL_RANGE'][1]:
                     if magdiff_err == 'WARN':
                         pass
                     else:
                         magdiff_err = 'NORMAL'
+                elif magdiff_avg_amp[i] >= param['MAGDIFF_WARN_RANGE'][0] and magdiff_avg_amp[i] <= param['MAGDIFF_WARN_RANGE'][1]:
+                    magdiff_err = 'WARN'
+                else:
+                    magdiff_err = 'ALARM'
+                    break
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_ERR":magdiff_err}
 
         else:
-            if magdiff_avg <= param['MAGDIFF_ALARM_RANGE'][0] or magdiff_avg >= param['MAGDIFF_ALARM_RANGE'][1]:
-                magdiff_err = 'ALARM'
-                pass
-            elif magdiff_avg <= param['MAGDIFF_WARN_RANGE'][0] or magdiff_avg >= param['MAGDIFF_WARN_RANGE'][1]:
+            if magdiff_avg >= param['MAGDIFF_NORMAL_RANGE'][0] and magdiff_avg <= param['MAGDIFF_NORMAL_RANGE'][1]:
+                magdiff_err = 'NORMAL'
+            elif magdiff_avg >= param['MAGDIFF_WARN_RANGE'][0] and magdiff_avg <= param['MAGDIFF_WARN_RANGE'][1]:
                 magdiff_err = 'WARN'
             else:
-                magdiff_err = 'NORMAL'
+                magdiff_err = 'ALARM'
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_ERR":magdiff_err}
 
@@ -457,6 +480,12 @@ class Sky_Continuum(MonitoringAlg):
         if name is None or name.strip() == "":
             name="SKYCONT"
         from  desispec.frame import Frame as fr
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+    
+        if "SKYCONT_WARN_RANGE" in parms and "SKYCONT_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["SKYCONT_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["SKYCONT_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -532,7 +561,8 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
                 "B_CONT":[(4000, 4500), (5250, 5550)],
                 "R_CONT":[(5950, 6200), (6990, 7230)],
                 "Z_CONT":[(8120, 8270), (9110, 9280)],
-                "SKYCONT_RANGE":[50.0, 100.0, 400.0, 600.0]
+                "SKYCONT_NORMAL_RANGE":[100.0, 400.0],
+                "SKYCONT_WARN_RANGE":[50.0, 600.0]
                 }
 
         retval["PARAMS"] = param
@@ -567,27 +597,26 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
             for i in range(len(skycont_amps)):
-                if skycont_amps[i] <= param['SKYCONT_ALARM_RANGE'][0] or skycont_amps[i] >= param['SKYCONT_ALARM_RANGE'][1]:
-                    skycont_err = 'ALARM'
-                    break
-                elif skycont_amps[i] <= param['SKYCONT_WARN_RANGE'][0] or skycont_amps[i] >= param['SKYCONT_WARN_RANGE'][1]:
-                    skycont_err = 'WARN'
-                else:
+                if skycont_amps[i] >= param['SKYCONT_NORMAL_RANGE'][0] and skycont_amps[i] <= param['SKYCONT_NORMAL_RANGE'][1]:
                     if skycont_err == 'WARN':
                         pass
                     else:
                         skycont_err = 'NORMAL'
+                elif skycont_amps[i] >= param['SKYCONT_WARN_RANGE'][0] and skycont_amps[i] <= param['SKYCONT_WARN_RANGE'][1]:
+                    skycont_err = 'WARN'
+                else:
+                    skycont_err = 'ALARM'
+                    break
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_ERR":skycont_err}
 
         else: 
-            if skycont <= param['SKYCONT_ALARM_RANGE'][0] or skycont >= param['SKYCONT_ALARM_RANGE'][1]:
-                skycont_err = 'ALARM'
-                pass
-            elif skycont <= param['SKYCONT_WARN_RANGE'][0] or skycont >= param['SKYCONT_WARN_RANGE'][1]:
+            if skycont >= param['SKYCONT_NORMAL_RANGE'][0] and skycont <= param['SKYCONT_NORMAL_RANGE'][1]:
+                skycont_err = 'NORMAL'
+            elif skycont >= param['SKYCONT_WARN_RANGE'][0] and skycont <= param['SKYCONT_WARN_RANGE'][1]:
                 skycont_err = 'WARN'
             else:
-                skycont_err = 'NORMAL'
+                skycont_err = 'ALARM'
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_ERR":skycont_err}
 
@@ -615,6 +644,12 @@ class Sky_Peaks(MonitoringAlg):
         if name is None or name.strip() == "":
             name="SKYPEAK"
         from  desispec.frame import Frame as fr
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+
+        if "SUMCOUNT_WARN_RANGE" in parms and "SUMCOUNT_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["SUMCOUNT_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["SUMCOUNT_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -789,23 +824,24 @@ class Sky_Peaks(MonitoringAlg):
                 "B_PEAKS":[3914.4, 5199.3, 5201.8],
                 "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                 "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                "SUMCOUNT_RANGE":[500.0, 1000.0, 20000.0, 40000.0]
+                "SUMCOUNT_NORMAL_RANGE":[1000.0, 20000.0],
+                "SUMCOUNT_WARN_RANGE":[500.0, 40000.0]
                 }
 
         retval["PARAMS"] = param
 
         sumcount_err=[]
         for i in range(len(nspec_counts)):
-            if nspec_counts[i] <= param['SUMCOUNT_ALARM_RANGE'][0] or nspec_counts[i] >= param['SUMCOUNT_ALARM_RANGE'][1]:
-                sumcount_err = 'ALARM'
-                break
-            elif nspec_counts[i] <= param['SUMCOUNT_WARN_RANGE'][0] or nspec_counts[i] >= param['SUMCOUNT_WARN_RANGE'][1]:
-                sumcount_err = 'WARN'
-            else:
+            if nspec_counts[i] >= param['SUMCOUNT_NORMAL_RANGE'][0] and nspec_counts[i] <= param['SUMCOUNT_NORMAL_RANGE'][1]:
                 if sumcount_err == 'WARN':
                     pass
                 else:
                     sumcount_err = 'NORMAL'
+            elif nspec_counts[i] >= param['SUMCOUNT_WARN_RANGE'][0] and nspec_counts[i] <= param['SUMCOUNT_WARN_RANGE'][1]:
+                sumcount_err = 'WARN'
+            else:
+                sumcount_err = 'ALARM'
+                break
 
         if amps:
 
@@ -850,6 +886,14 @@ class Calc_XWSigma(MonitoringAlg):
         if name is None or name.strip() == "":
             name="XWSIGMA"
         from desispec.image import Image as im
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+
+        if "XSHIFT_WARN_RANGE" in parms and "XSHIFT_NORMAL_RANGE" and "WSHIFT_WARN_RANGE" in parms and "WSHIFT_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["XSHIFT_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["XSHIFT_NORMAL_RANGE"]),QASeverity.NORMAL),
+                              (np.asarray(parms["WSHIFT_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["WSHIFT_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -910,25 +954,25 @@ class Calc_XWSigma(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             if image.meta["FLAVOR"] == 'arc':
-                param = dict(
-                    B_PEAKS=[4047.7, 4359.6, 5087.2],
-                    R_PEAKS=[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
-                    Z_PEAKS=[8379.9, 8497.7, 8656.8, 8783.0],
-                    XSHIFT_WARN_RANGE=[-2.0, 2.0],
-                    XSHIFT_ALARM_RANGE=[-4.0, 4.0],
-                    WSHIFT_WARN_RANGE=[-2.0, 2.0],
-                    WSHIFT_ALARM_RANGE=[-4.0, 4.0]
-                    )
+                param = {
+                    "B_PEAKS":[4047.7, 4359.6, 5087.2],
+                    "R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
+                    "Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
+                    "XSHIFT_NORMAL_RANGE":[-2.0, 2.0],
+                    "XSHIFT_WARN_RANGE":[-4.0, 4.0],
+                    "WSHIFT_NORMAL_RANGE":[-2.0, 2.0],
+                    "WSHIFT_WARN_RANGE":[-4.0, 4.0]
+                    }
             else:
-                param = dict(
-                    B_PEAKS=[3914.4, 5199.3, 5578.9],
-                    R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                    Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                    XSHIFT_WARN_RANGE=[-2.0, 2.0],
-                    XSHIFT_ALARM_RANGE=[-4.0, 4.0], 
-                    WSHIFT_WARN_RANGE=[-2.0, 2.0],
-                    WSHIFT_ALARM_RANGE=[-4.0, 4.0]
-                    )
+                param = {
+                    "B_PEAKS":[3914.4, 5199.3, 5578.9],
+                    "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                    "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
+                    "XSHIFT_NORMAL_RANGE":[-2.0, 2.0],
+                    "XSHIFT_WARN_RANGE":[-4.0, 4.0], 
+                    "WSHIFT_NORMAL_RANGE":[-2.0, 2.0],
+                    "WSHIFT_WARN_RANGE":[-4.0, 4.0]
+                    }
 
         dw=2.
         dp=3
@@ -1154,42 +1198,31 @@ class Calc_XWSigma(MonitoringAlg):
         wshift_amp=[]
         shift_warn=[]
 
-        if param is None:
-            log.info("Param is None. Using default param instead")
-            param = {
-                "B_PEAKS":[3914.4, 5199.3, 5201.8],
-                "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                "XSHIFT_RANGE" : [-4.0, -2.0, 2.0, 4.0],
-                "WSHIFT_RANGE":[-4.0, -2.0, 2.0, 4.0]
-                }
-
         retval["PARAMS"] = param
 
         shift_err=[]
         if amps:
             for i in range(len(xshift_amp)):
-                if xshift_amp[i] <= param['XSHIFT_ALARM_RANGE'][0] or xshift_amp[i] >= param['XSHIFT_ALARM_RANGE'][1] or wshift_amp[i] <= param['WSHIFT_ALARM_RANGE'][0] or wshift_amp[i] >= param['WSHIFT_ALARM_RANGE'][1]:
-                    shift_err = 'ALARM'
-                    break
-                elif xshift_amp[i] <= param['XSHIFT_WARN_RANGE'][0] or xshift_amp[i] >= param['XSHIFT_WARN_RANGE'][1] or wshift_amp[i] <= param['WSHIFT_WARN_RANGE'][0] or wshift_amp[i] >= param['WSHIFT_WARN_RANGE'][1]:
-                    shift_err = 'WARN'
-                else:
+                if xshift_amp[i] >= param['XSHIFT_NORMAL_RANGE'][0] and xshift_amp[i] <= param['XSHIFT_NORMAL_RANGE'][1] and wshift_amp[i] >= param['WSHIFT_NORMAL_RANGE'][0] and wshift_amp[i] <= param['WSHIFT_ALARM_RANGE'][1]:
                     if shift_err == 'WARN':
                         pass
                     else:
                         shift_err = 'NORMAL'
+                elif xshift_amp[i] >= param['XSHIFT_WARN_RANGE'][0] and xshift_amp[i] <= param['XSHIFT_WARN_RANGE'][1] and wshift_amp[i] >= param['WSHIFT_WARN_RANGE'][0] and wshift_amp[i] <= param['WSHIFT_WARN_RANGE'][1]:
+                    shift_err = 'WARN'
+                else:
+                    shift_err = 'ALARM'
+                    break
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"SHIFT_ERR":shift_err}
 
         else:
-            if xshift <= param['XSHIFT_ALARM_RANGE'][0] or xshift >= param['XSHIFT_ALARM_RANGE'][1] or wshift <= param['WSHIFT_ALARM_RANGE'][0] or wshift >= param['WSHIFT_ALARM_RANGE'][1]:
-                shift_err = 'ALARM'
-                pass
-            elif xshift <= param['XSHIFT_WARN_RANGE'][0] or xshift >= param['XSHIFT_WARN_RANGE'][1] or wshift <= param['WSHIFT_WARN_RANGE'][1] or wshift >= param['WSHIFT_WARN_RANGE'][1]:
+            if xshift >= param['XSHIFT_NORMAL_RANGE'][0] and xshift <= param['XSHIFT_NORMAL_RANGE'][1] and wshift >= param['WSHIFT_NORMAL_RANGE'][0] and wshift <= param['WSHIFT_NORMAL_RANGE'][1]:
+                shift_err = 'NORMAL'
+            elif xshift >= param['XSHIFT_WARN_RANGE'][0] and xshift <= param['XSHIFT_WARN_RANGE'][1] and wshift >= param['WSHIFT_WARN_RANGE'][1] and wshift <= param['WSHIFT_WARN_RANGE'][1]:
                 shift_err = 'WARN'
             else:
-                shift_err = 'NORMAL'
+                shift_err = 'ALARM'
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"SHIFT_ERR":shift_err}
 
@@ -1218,6 +1251,12 @@ class Bias_From_Overscan(MonitoringAlg):
             name="BIAS_OVERSCAN"
         import astropy
         rawtype=astropy.io.fits.hdu.hdulist.HDUList
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+
+        if "DIFF_WARN_RANGE" in parms and "DIFF_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["DIFF_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["DIFF_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,rawtype,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -1332,11 +1371,11 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                PERCENTILES=[68.2,95.4,99.7],
-                DIFF_WARN_RANGE=[-1.0, 1.0],
-                DIFF_ALARM_RANGE=[-2.0, 2.0]
-                )
+            param = {
+                "PERCENTILES":[68.2,95.4,99.7],
+                "DIFF_NORMAL_RANGE":[-1.0, 1.0],
+                "DIFF_WARN_RANGE:":[-2.0, 2.0]
+                }
 
         sig1_lo = np.percentile(full_data,(100.-param['PERCENTILES'][0])/2.)
         sig1_hi = np.percentile(full_data,100.-sig1_lo)
@@ -1358,27 +1397,26 @@ class Bias_From_Overscan(MonitoringAlg):
         if amps:
             bias_amps=np.array(bias_overscan)
             for i in range(len(bias_amps)):
-                if bias_amps[i] <= param['DIFF_ALARM_RANGE'][0] or bias_amps[i] >= param['DIFF_ALARM_RANGE'][1]:
-                    biasdiff_err = 'ALARM'
-                    break
-                elif bias_amps[i] <= param['DIFF_WARN_RANGE'][0] or bias_amps[i] >= param['DIFF_WARN_RANGE'][1]:
-                    biasdiff_err = 'WARN'
-                else:
+                if bias_amps[i] >= param['DIFF_NORMAL_RANGE'][0] and bias_amps[i] <= param['DIFF_NORMAL_RANGE'][1]:
                     if biasdiff_err == 'WARN':
                         pass
                     else:
                         biasdiff_err = 'NORMAL'
+                elif bias_amps[i] >= param['DIFF_WARN_RANGE'][0] and bias_amps[i] <= param['DIFF_WARN_RANGE'][1]:
+                    biasdiff_err = 'WARN'
+                else:
+                    biasdiff_err = 'NORMAL'
+                    break
 
             retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff_err}
 
         else:
-            if bias <= param['DIFF_ALARM_RANGE'][0] or bias >= param['DIFF_ALARM_RANGE'][1]:
-                biasdiff_err = 'ALARM'
-                pass
-            elif bias <= param['DIFF_ALARM_RANGE'][0] or bias >= param['DIFF_WARN_RANGE'][1]:
+            if bias >= param['DIFF_NORMAL_RANGE'][0] and bias <= param['DIFF_NORMAL_RANGE'][1]:
+                biasdiff_err = 'NORMAL'
+            elif bias >= param['DIFF_ALARM_RANGE'][0] and bias <= param['DIFF_WARN_RANGE'][1]:
                 biasdiff_err = 'WARN'
             else:
-                biasdiff_err = 'NORMAL'
+                biasdiff_err = 'ALARM'
 
             retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff_err}
 
@@ -1406,6 +1444,12 @@ class CountSpectralBins(MonitoringAlg):
         if name is None or name.strip() == "":
             name="COUNTBINS"
         from  desispec.frame import Frame as fr
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+
+        if "NGOOD_WARN_RANGE" in parms and "NGOOD_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["NGOOD_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["NGOOD_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -1469,13 +1513,13 @@ class CountSpectralBins(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                         CUTLO = 100,   # low threshold for number of counts
-                         CUTMED = 250,
-                         CUTHI = 500,
-                         NGOOD_WARN_RANGE = [490, 500],
-                         NGOOD_ALARM_RANGE = [480, 500]
-                         )
+            param = {
+                 "CUTLO":100,   # low threshold for number of counts
+                 "CUTMED":250,
+                 "CUTHI":500,
+                 "NGOOD_NORMAL_RANGE":[490, 500],
+                 "NGOOD_WARN_RANGE":[480, 500]
+                 }
 
         retval["PARAMS"] = param
 
@@ -1494,13 +1538,12 @@ class CountSpectralBins(MonitoringAlg):
         topmin=None
 
         ngood_err=[]
-        if ngoodfibers <= param['NGOOD_ALARM_RANGE'][0] or ngoodfibers >= param['NGOOD_ALARM_RANGE'][1]:
-            ngood_err = 'ALARM'
-            pass
-        elif ngoodfibers <= param['NGOOD_WARN_RANGE'][0] or ngoodfibers >= param['NGOOD_WARN_RANGE'][1]:
+        if ngoodfibers >= param['NGOOD_NORMAL_RANGE'][0] and ngoodfibers <= param['NGOOD_NORMAL_RANGE'][1]:
+            ngood_err = 'NORMAL'
+        elif ngoodfibers >= param['NGOOD_WARN_RANGE'][0] and ngoodfibers <= param['NGOOD_WARN_RANGE'][1]:
             ngood_err = 'WARN'
         else:
-            ngood_err = 'NORMAL'
+            ngood_err = 'ALARM'
 
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
@@ -1586,6 +1629,12 @@ class Sky_Residual(MonitoringAlg):
         if name is None or name.strip() == "":
             name="RESIDUAL"
         from  desispec.frame import Frame as fr
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+
+        if "SKYRESID_WARN_RANGE" in parms and "SKYRESID_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["SKYRESID_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["SKYRESID_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         from desispec.io.sky import read_sky
@@ -1652,14 +1701,14 @@ class Sky_Residual(MonitoringAlg):
 
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(BIN_SZ=0.1, #- Bin size for histograms
-                         PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-                         PER_RESID=95.,   # Percentile for residual distribution
-                         SKYRESID_WARN_RANGE=[-5.0, 5.0],
-                         SKYRESID_ALARM_RANGE=[-10.0, 10.0]
-                        )
+            param = {
+                "BIN_SZ":0.1, #- Bin size for histograms
+                "PCHI_RESID":0.05, # P(Chi^2) limit for bad skyfiber model residuals
+                "PER_RESID":95.,   # Percentile for residual distribution
+                "SKYRESID_NORMAL_RANGE":[-5.0, 5.0],
+                "SKYRESID_WARN_RANGE":[-10.0, 10.0]
+                }
 
-        retval["PARAMS"] = param
         qadict=qalib.sky_resid(param,frame,skymodel,quick_look=True)
 
         retval["METRICS"] = {}
@@ -1669,16 +1718,16 @@ class Sky_Residual(MonitoringAlg):
         if qlf:
             qlf_post(retval)    
 
-#        skyresid_err=[]
-#        if qadict['MED_RESID'] <= param['SKYRESID_ALARM_RANGE'][0] or qadict['MED_RESID'] >= param['SKYRESID_ALARM_RANGE'][1]:
-#            skyresid_err = 'ALARM'
-#            pass
-#        elif qadict['MED_RESID'] <= param['SKYRESID_WARN_RANGE'][0] or qadict['MED_RESID'] >= param['SKYRESID_WARN_RANGE'][1]:
-#            skyresid_err = 'WARN'
-#        else:
-#            skyresid_err = 'NORMAL'
+        skyresid_err=[]
+        if qadict['MED_RESID'] >= param['SKYRESID_NORMAL_RANGE'][0] and qadict['MED_RESID'] <= param['SKYRESID_NORMAL_RANGE'][1]:
+            skyresid_err = 'NORMAL'
+        elif qadict['MED_RESID'] >= param['SKYRESID_WARN_RANGE'][0] and qadict['MED_RESID'] <= param['SKYRESID_WARN_RANGE'][1]:
+            skyresid_err = 'WARN'
+        else:
+            skyresid_err = 'ALARM'
 
-#        retval["METRICS"]["SKY_RESID_ERR"]=skyresid_err
+        retval["PARAMS"] = param
+        retval["METRICS"]["SKY_RESID_ERR"]=skyresid_err
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
@@ -1696,6 +1745,12 @@ class Calculate_SNR(MonitoringAlg):
         if name is None or name.strip() == "":
             name="SNR"
         from  desispec.frame import Frame as fr
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+
+        if "FIDSNR_WARN_RANGE" in parms and "FIDSNR_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["FIDSNR_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["FIDSNR_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         from desispec.io.sky import read_sky
@@ -1752,12 +1807,12 @@ class Calculate_SNR(MonitoringAlg):
         #- select band for mag, using DECAM_R if present
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                SNR_FLUXTHRESH=0.0, # Minimum value of flux to go into SNR calc. 
-                FIDSNR_WARN_RANGE=[6.5, 7.5],
-                FIDSNR_ALARM_RANGE=[6.0, 8.0],
-                FIDMAG=22.
-                )
+            param = {
+                "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc. 
+                "FIDSNR_NORMAL_RANGE":[6.5, 7.5],
+                "FIDSNR_WARN_RANGE":[6.0, 8.0],
+                "FIDMAG":22.
+                }
 
         fidboundary=None
         if amps: 
@@ -1781,13 +1836,12 @@ class Calculate_SNR(MonitoringAlg):
         retval["PARAMS"] = param
 
         snrwarn=[]
-        if qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_ALARM_RANGE'][0] or qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_ALARM_RANGE'][1]:
-            snrwarn = 'ALARM'
-            pass
-        elif qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_WARN_RANGE'][0] or qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_WARN_RANGE'][1]:
+        if qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_NORMAL_RANGE'][0] and qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_NORMAL_RANGE'][1]:
+            snrwarn = 'NORMAL'
+        elif qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_WARN_RANGE'][0] and qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_WARN_RANGE'][1]:
             snrwarn = 'WARN'
         else:
-            snrwarn = 'NORMAL'
+            snrwarn = 'ALARM'
 
         retval["METRICS"]["FIDSNR_WARN"] = snrwarn
 

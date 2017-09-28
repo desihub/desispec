@@ -465,7 +465,7 @@ class TestQL(unittest.TestCase):
         self.assertTrue(len(resl["METRICS"]["MED_RESID_FIBER"]) == 5) #- 5 sky fibers in the input
         self.assertTrue(resl["PARAMS"]["BIN_SZ"] == 0.1)
         #- test with different parameter set:
-        qargs["param"]={"BIN_SZ": 0.2, "PCHI_RESID": 0.05,  "PER_RESID": 95.}
+        qargs["param"]={"BIN_SZ":0.2, "PCHI_RESID":0.05, "PER_RESID":95., "SKYRESID_NORMAL_RANGE":[-5.0, 5.0], "SKYRESID_WARN_RANGE":[-10.0, 10.0]}
         resl2=qa(inp,sky,**qargs)
         self.assertTrue(len(resl["METRICS"]["DEVS_1D"])>len(resl2["METRICS"]["DEVS_1D"])) #- larger histogram bin size than default 0.1
 
