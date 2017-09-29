@@ -66,7 +66,7 @@ Algorithms:
     SkySub_QL:
         QA: 
             Sky_Residual:
-                PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, SKY_NORMAL_RANGE: [-5.0, 5.0], SKY_WARN_RANGE: [-10.0, 10.0]}
+                PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, SKYRESID_NORMAL_RANGE: [-5.0, 5.0], SKYRESID_WARN_RANGE: [-10.0, 10.0]}
             Integrate_Spec:
                 PARAMS: {MAGDIFF_NORMAL_RANGE: [-0.5, 0.5], MAGDIFF_WARN_RANGE: [-1.0, 1.0]}
             Calculate_SNR:

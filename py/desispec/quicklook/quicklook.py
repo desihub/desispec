@@ -313,7 +313,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     if mergeQA is True:
         from desispec.quicklook.util import merge_QAs
         log.info("Merging all the QAs for this pipeline execution")
-        merge_QAs(QAresults)
+        merge_QAs(QAresults,conf)
 
     if isinstance(inp,tuple):
        return inp[0]
