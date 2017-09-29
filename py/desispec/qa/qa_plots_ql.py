@@ -5,6 +5,7 @@ This includes routines to make pdf plots on the qa outputs from quicklook.
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
+from desispec.qa import qalib
 
 def plot_countspectralbins(qa_dict,outfile):
     """
@@ -781,6 +782,19 @@ def plot_SNR(qa_dict,outfile):
     qso_snr_mag=qa_dict["METRICS"]["QSO_SNR_MAG"]
     star_snr_mag=qa_dict["METRICS"]["STAR_SNR_MAG"]
 
+    elg_fit_values=qa_dict["METRICS"]["ELG_FITRESULTS"]
+    lrg_fit_values=qa_dict["METRICS"]["LRG_FITRESULTS"]
+    qso_fit_values=qa_dict["METRICS"]["QSO_FITRESULTS"]
+    star_fit_values=qa_dict["METRICS"]["STAR_FITRESULTS"]
+    elg_mag=np.arange(np.min(elg_snr_mag[1]),np.max(elg_snr_mag[1]),0.1)
+    lrg_mag=np.arange(np.min(lrg_snr_mag[1]),np.max(lrg_snr_mag[1]),0.1)
+    qso_mag=np.arange(np.min(qso_snr_mag[1]),np.max(qso_snr_mag[1]),0.1)
+    star_mag=np.arange(np.min(star_snr_mag[1]),np.max(star_snr_mag[1]),0.1)
+    elg_fit=10**(elg_fit_values[0][0]+elg_fit_values[0][1]*elg_mag+elg_fit_values[0][2]*elg_mag**2)
+    lrg_fit=10**(lrg_fit_values[0][0]+lrg_fit_values[0][1]*lrg_mag+lrg_fit_values[0][2]*lrg_mag**2)
+    qso_fit=10**(qso_fit_values[0][0]+qso_fit_values[0][1]*qso_mag+qso_fit_values[0][2]*qso_mag**2)
+    star_fit=10**(star_fit_values[0][0]+star_fit_values[0][1]*star_mag+star_fit_values[0][2]*star_mag**2)
+
     fig=plt.figure()
     plt.suptitle("Signal/Noise after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
 
@@ -836,6 +850,7 @@ def plot_SNR(qa_dict,outfile):
     ax3.tick_params(axis='x',labelsize=6,labelbottom='on')
     ax3.tick_params(axis='y',labelsize=6,labelleft='on')
     ax3.plot(elg_snr_mag[1][select],elg_snr_mag[0][select],'b.')
+    ax3.plot(elg_mag,elg_fit,'y')
 
     ax4.set_ylabel('',fontsize=10)
     ax4.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
@@ -847,6 +862,7 @@ def plot_SNR(qa_dict,outfile):
     ax4.tick_params(axis='x',labelsize=6,labelbottom='on')
     ax4.tick_params(axis='y',labelsize=6,labelleft='on')
     ax4.plot(lrg_snr_mag[1][select],lrg_snr_mag[0][select],'r.')
+    ax4.plot(lrg_mag,lrg_fit,'y')
 
     ax5.set_ylabel('',fontsize=10)
     ax5.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
@@ -858,6 +874,7 @@ def plot_SNR(qa_dict,outfile):
     ax5.tick_params(axis='x',labelsize=6,labelbottom='on')
     ax5.tick_params(axis='y',labelsize=6,labelleft='on')
     ax5.plot(qso_snr_mag[1][select],qso_snr_mag[0][select],'g.')
+    ax5.plot(qso_mag,qso_fit,'y')
 
     ax6.set_ylabel('',fontsize=10)
     ax6.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
@@ -869,6 +886,7 @@ def plot_SNR(qa_dict,outfile):
     ax6.tick_params(axis='x',labelsize=6,labelbottom='on')
     ax6.tick_params(axis='y',labelsize=6,labelleft='on')
     ax6.plot(star_snr_mag[1][select],star_snr_mag[0][select],'k.')
+    ax6.plot(star_mag,star_fit,'y')
 
     plt.tight_layout()
     fig.savefig(outfile)

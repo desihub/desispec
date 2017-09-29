@@ -15,6 +15,8 @@ import os
 import sys
 import re
 
+from redrock.external.desi import rrdesi
+
 from desiutil.log import get_logger, DEBUG
 from ..util import option_list
 from ..parallel import default_nproc
@@ -28,7 +30,7 @@ from ..scripts import sky as skypkg
 from ..scripts import stdstars
 from ..scripts import fluxcalibration as fluxcal
 from ..scripts import procexp
-from ..scripts import zfind
+#from ..scripts import zfind
 
 from .common import *
 from .graph import *
@@ -96,7 +98,7 @@ class WorkerBootcalib(Worker):
         return 1
 
     def task_time(self):
-        return 15
+        return 30
 
     def default_options(self):
         opts = {}
@@ -194,8 +196,8 @@ class WorkerSpecex(Worker):
         # opts["ivar-hdu"] = 2
         # opts["mask-hdu"] = 3
         # opts["header-hdu"] = 1
-        opts["xcoord-hdu"] = 1
-        opts["ycoord-hdu"] = 2
+        # opts["xcoord-hdu"] = 1
+        # opts["ycoord-hdu"] = 2
         # opts["psfmodel"] = "GAUSSHERMITE"
         # opts["half_size_x"] = 8
         # opts["half_size_y"] = 5
@@ -213,7 +215,7 @@ class WorkerSpecex(Worker):
         opts["lamplines"] = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt"
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
-            exefile = os.path.join(path, "specex_desi_psf_fit")
+            exefile = os.path.join(path, "desi_psf_fit")
             if os.path.isfile(exefile) and os.access(exefile, os.X_OK):
                 specexdir = os.path.join(path, "..", "data")
                 opts["lamplines"] = os.path.join(specexdir, "specex_linelist_boss.txt")
@@ -248,27 +250,31 @@ class WorkerSpecex(Worker):
         cam = "{}{}".format(band, spec)
 
         pix = []
-        boot = []
+        inpsf = []
         for input in node["in"]:
+            
+            print("DEBUG  input , grph[input]=", input,grph[input]) 
+
             inode = grph[input]
-            if inode["type"] == "psfboot":
-                boot.append(input)
+            if inode["type"] == "psfboot": 
+                inpsf.append(input)
             elif inode["type"] == "pix":
                 pix.append(input)
-        if len(boot) != 1:
-            raise RuntimeError("specex needs exactly one psfboot file")
+        if len(inpsf) != 1:
+            raise RuntimeError("specex needs exactly one input psf file")
         if len(pix) != 1:
-            raise RuntimeError("specex needs exactly one image file")
-        bootfile = graph_path(boot[0])
+            raise RuntimeError("specex needs exactly one input image file")
+        inpsffile = graph_path(inpsf[0])
         imgfile = graph_path(pix[0])
         outfile = graph_path(task)
 
         options = {}
-        options["input"] = imgfile
-        options["bootfile"] = bootfile
-        options["output"] = outfile
-        if log.getEffectiveLevel() == DEBUG:
-            options["verbose"] = True
+        options["input-image"] = imgfile
+        options["input-psf"]   = inpsffile
+        options["output-psf"]  = outfile
+        #if log.getEffectiveLevel() == DEBUG:
+        #    options["debug"] = True
+            
         if len(opts) > 0:
             extarray = option_list(opts)
             options["extra"] = " ".join(extarray)
@@ -299,7 +305,7 @@ class WorkerSpecexCombine(Worker):
         return 1
 
     def task_time(self):
-        return 10
+        return 20
 
 
     def default_options(self):
@@ -349,7 +355,7 @@ class WorkerSpecter(Worker):
         return 20
 
     def task_time(self):
-        return 20
+        return 100
 
 
     def default_options(self):
@@ -457,7 +463,7 @@ class WorkerFiberflat(Worker):
         return 1
 
     def task_time(self):
-        return 5
+        return 10
 
 
     def default_options(self):
@@ -603,7 +609,7 @@ class WorkerStdstars(Worker):
         return 1
 
     def task_time(self):
-        return 5
+        return 30
 
 
     def default_options(self):
@@ -667,7 +673,11 @@ class WorkerStdstars(Worker):
         options["skymodels"] = skyfiles
         options["fiberflats"] = flatfiles
         options["outfile"] = outfile
-        options["ncpu"] = str(default_nproc)
+        # Do not mix MPI and multiprocessing.  We are already
+        # running this across many processes per node, so do
+        # not need multiprocessing.
+        #options["ncpu"] = str(default_nproc)
+        options["ncpu"] = "1"
         #- TODO: no QA for fitting standard stars yet
 
         options.update(opts)
@@ -696,7 +706,7 @@ class WorkerFluxcal(Worker):
         return 1
 
     def task_time(self):
-        return 5
+        return 10
 
     def default_options(self):
         opts = {}
@@ -786,7 +796,7 @@ class WorkerProcexp(Worker):
         return 1
 
     def task_time(self):
-        return 5
+        return 10
 
     def default_options(self):
         opts = {}
@@ -924,6 +934,99 @@ class WorkerRedmonster(Worker):
 
         return
 
+
+class WorkerRedrock(Worker):
+    """
+    Use Redrock to classify spectra and compute redshifts.
+    """
+    def __init__(self, opts):
+        self.nodes = 1
+        self.nodeprocs = 1
+        self.specpermin = 20
+        if "nodes" in opts:
+            self.nodes = int(opts["nodes"])
+        if "nodeprocs" in opts:
+            self.nodeprocs = int(opts["nodeprocs"])
+        if "spec_per_minute" in opts:
+            self.specpermin = opts["spec_per_minute"]
+        super(Worker, self).__init__()
+
+    def max_nproc(self):
+        return (self.nodes * self.nodeprocs)
+
+    def max_nodes(self):
+        return self.nodes
+
+    def node_procs(self):
+        return self.nodeprocs
+
+    def spec_per_min(self):
+        return self.specpermin
+
+    def task_time(self):
+        return 60
+
+    def default_options(self):
+        opts = {}
+        return opts
+
+
+    def run(self, grph, task, opts, comm=None):
+        """
+        Run Redrock on a spectral group.
+
+        Args:
+            grph (dict): pruned graph with this task and dependencies.
+            task (str): the name of this task.
+            opts (dict): options to use for this task.
+            comm (mpi4py.MPI.Comm): optional MPI communicator.
+        """
+        nproc = 1
+        rank = 0
+        if comm is not None:
+            nproc = comm.size
+            rank = comm.rank
+
+        log = get_logger()
+
+        node = grph[task]
+
+        spectra = "spectra-{}-{}".format(node["nside"], node["pixel"])
+        specfile = graph_path(spectra)
+
+        outfile = graph_path(task)
+        outdir = os.path.dirname(outfile)
+        details = os.path.join(outdir, "rrdetails_{}.h5".format(task))
+
+        options = {}
+        options["output"] = details
+        options["zbest"] = outfile
+        options.update(opts)
+        optarray = option_list(options)
+        optarray.append(specfile)
+
+        # write out the equivalent commandline
+        if rank == 0:
+            com = ["RUN", "rrdesi_mpi"]
+            com.extend(optarray)
+            log.info(" ".join(com))
+
+        failcount = 0
+        try:
+            rrdesi(options=optarray, comm=comm)
+        except:
+            failcount += 1
+            sys.stdout.flush()
+
+        if comm is not None:
+            failcount = comm.allreduce(failcount)
+
+        if failcount > 0:
+            # all processes throw
+            raise RuntimeError("some redshifts failed for task "
+                "{}".format(task))
+        
+        return
 
 
 class WorkerNoop(Worker):

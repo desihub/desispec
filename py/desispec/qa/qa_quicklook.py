@@ -102,13 +102,6 @@ class Get_RMS(MonitoringAlg):
         # return rms values in rms/sqrt(exptime)
         rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
 
-        rms_row=[]
-        for i in range(image.pix.shape[0]):
-            rmsrow = qalib.getrms(image.pix[i]/np.sqrt(image.meta["EXPTIME"]))
-            rms_row.append(rmsrow)
-
-        expnum=[]
-
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
@@ -118,41 +111,51 @@ class Get_RMS(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        rms_over=[]
+        expnum=[]
+        rms_row=[]
+        rms_amps=[]
+        rms_over_amps=[]
+        overscan_values=[]
+        #- get amp/overcan boundary in pixels
+        from desispec.preproc import _parse_sec_keyword
+        for kk in ['1','2','3','4']:
+            thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
+            thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
+            for i in range(image.pix[thisoverscanboundary].shape[0]):
+                rmsrow = qalib.getrms(image.pix[thisoverscanboundary][i]/np.sqrt(image.meta["EXPTIME"]))
+                rms_row.append(rmsrow)
+            rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
+            rms_thisamp=qalib.getrms(image.pix[thisampboundary]/np.sqrt(image.meta["EXPTIME"]))
+            rms_amps.append(rms_thisamp)
+            rms_over_amps.append(rms_thisover_thisamp)
+        rmsover=np.max(rms_over_amps)
 
-        rmsdiff=[]
+        rmsdiff_err=[]
         if amps:
-            rms_amps=[]
-            rms_over_amps=[]
-            overscan_values=[]
-            #- get amp/overcan boundary in pixels
-            from desispec.preproc import _parse_sec_keyword
-            for kk in ['1','2','3','4']:
-                thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
-                rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
-                thisoverscan_values=np.ravel(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
-                rms_thisamp=qalib.getrms(image.pix[thisampboundary]/np.sqrt(image.meta["EXPTIME"]))
-                rms_amps.append(rms_thisamp)
-                rms_over_amps.append(rms_thisover_thisamp)
-                overscan_values+=thisoverscan_values.tolist()
-            rmsover=np.std(overscan_values)
-
             for i in range(len(rms_over_amps)):
                 if rms_over_amps[i] <= param['RMS_ALARM_RANGE'][0] or rms_over_amps[i] >= param['RMS_ALARM_RANGE'][1]:
-                    rmsdiff = 'ALARM'
+                    rmsdiff_err = 'ALARM'
                     break
                 elif rms_over_amps[i] <= param['RMS_WARN_RANGE'][0] or rms_over_amps[i] >= param['RMS_WARN_RANGE'][1]:
-                    rmsdiff = 'WARN'
+                    rmsdiff_err = 'WARN'
                 else:
-                    if rmsdiff == 'WARN':
+                    if rmsdiff_err == 'WARN':
                         pass
                     else:
-                        rmsdiff = 'NORMAL'
+                        rmsdiff_err = 'NORMAL'
 
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff_err,"EXPNUM_WARN":expnum}
+
         else:
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rms_over,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum} 
+            if rmsover <= param['RMS_ALARM_RANGE'][0] or rmsover >= param['RMS_ALARM_RANGE'][1]:
+                rmsdiff_err = 'ALARM'
+                pass
+            elif rmsover <= param['RMS_WARN_RANGE'][0] or rmsover >= param['RMS_WARN_RANGE'][1]:
+                rmsdiff_err = 'WARN'
+            else:
+                rmsdiff_err = 'NORMAL'
+
+            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff_err,"EXPNUM_WARN":expnum}
 
         if qlf:
             qlf_post(retval)  
@@ -223,17 +226,17 @@ class Count_Pixels(MonitoringAlg):
             param = dict(
                  CUTLO = 3,   # low threshold for number of counts in sigmas
                  CUTHI = 10, 
-                 NPIX_RANGE = [50.0, 200.0, 500.0, 650.0]
+                 NPIX_WARN_RANGE = [200.0, 500.0],
+                 NPIX_ALARM_RANGE = [50.0, 650.0]
                  )
 
         retval["PARAMS"] = param
-
-        npix_warn = []
 
         #- get the counts over entire CCD in counts per second
         npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
         npixhi=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
 
+        npix_err=[]
         #- get the counts for each amp
         if amps:
             npixlo_amps=[]
@@ -246,9 +249,31 @@ class Count_Pixels(MonitoringAlg):
                 npixlo_amps.append(npixlo_thisamp)
                 npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
                 npixhi_amps.append(npixhi_thisamp)
-            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_WARN":npix_warn}
+
+            for i in range(len(npixlo_amps)):
+                if npixlo_amps[i] <= param['NPIX_ALARM_RANGE'][0] or npixlo_amps[i] >= param['NPIX_ALARM_RANGE'][1]:
+                    npix_err = 'ALARM'
+                    break
+                elif npixlo_amps[i] <= param['NPIX_WARN_RANGE'][0] or npixlo_amps[i] >= param['NPIX_WARN_RANGE'][1]:
+                    npix_err = 'WARN'
+                else:
+                    if npix_err == 'WARN':
+                        pass
+                    else:
+                        npix_err = 'NORMAL'
+
+            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_ERR":npix_err}
+
         else:
-            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_WARN":npix_warn} 
+            if npixlo <= param['NPIX_ALARM_RANGE'][0] or npixlo >= param['NPIX_ALARM_RANGE'][1]:
+                npix_err = 'ALARM'
+                pass
+            elif npixlo <= param['NPIX_WARN_RANGE'][0] or npixlo >= param['NPIX_WARN_RANGE'][1]:
+                npix_err = 'WARN'
+            else:
+                npix_err = 'NORMAL'
+
+            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_ERR":npix_err}
 
         if qlf:
             qlf_post(retval)      
@@ -340,15 +365,16 @@ class Integrate_Spec(MonitoringAlg):
         if param is None:
             log.info("Param is None. Using default param instead")
             param = dict(
-                MAGDIFF_RANGE = [-1.0, -0.5, 0.5, 1.0]
+                MAGDIFF_WARN_RANGE = [-0.5, 0.5],
+                MAGDIFF_ALARM_RANGE = [-1.0, 1.0]
                 )
 
         retval["PARAMS"] = param
 
-        magdiff_avg = []
-        magdiff_avg_amp = []
-        magdiff_warn =[]
+        magdiff_avg = 0.0
+        magdiff_avg_amp = [0.0]
 
+        magdiff_err=[]
         #- get the counts for each amp
         if amps:
 
@@ -376,9 +402,30 @@ class Integrate_Spec(MonitoringAlg):
                         integ_thisamp[ii]=qalib.integrate_spec(wave,stdflux_thisamp[ii])
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_WARN":magdiff_warn}
+            for i in range(len(magdiff_avg_amp)):
+                if magdiff_avg_amp[i] <= param['MAGDIFF_ALARM_RANGE'][0] or magdiff_avg_amp[i] >= param['MAGDIFF_ALARM_RANGE'][1]:
+                    magdiff_err = 'ALARM'
+                    break
+                elif magdiff_avg_amp[i] <= param['MAGDIFF_WARN_RANGE'][0] or magdiff_avg_amp[i] >= param['MAGDIFF_WARN_RANGE'][1]:
+                    magdiff_err = 'WARN'
+                else:
+                    if magdiff_err == 'WARN':
+                        pass
+                    else:
+                        magdiff_err = 'NORMAL'
+
+            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_ERR":magdiff_err}
+
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_WARN":magdiff_warn} 
+            if magdiff_avg <= param['MAGDIFF_ALARM_RANGE'][0] or magdiff_avg >= param['MAGDIFF_ALARM_RANGE'][1]:
+                magdiff_err = 'ALARM'
+                pass
+            elif magdiff_avg <= param['MAGDIFF_WARN_RANGE'][0] or magdiff_avg >= param['MAGDIFF_WARN_RANGE'][1]:
+                magdiff_err = 'WARN'
+            else:
+                magdiff_err = 'NORMAL'
+
+            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_ERR":magdiff_err}
 
         if qlf:
             qlf_post(retval) 
@@ -472,40 +519,27 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
 
-        #- get the skyfibers first
-        skyfiber=np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
-        nspec_sky=skyfiber.shape[0]
-        wminlow,wmaxlow=[float(w) for w in wrange1.split(',')]
-        wminhigh,wmaxhigh=[float(w) for w in wrange2.split(',')]
-        selectlow=np.where((frame.wave>wminlow) & (frame.wave<wmaxlow))[0]
-        selecthigh=np.where((frame.wave>wminhigh) & (frame.wave < wmaxhigh))[0]
-
-        contfiberlow=[]
-        contfiberhigh=[]
-        meancontfiber=[]
-        for ii in skyfiber:
-            contlow=qalib.continuum(frame.wave[selectlow],frame.flux[ii,selectlow])
-            conthigh=qalib.continuum(frame.wave[selecthigh],frame.flux[ii,selecthigh])
-            contfiberlow.append(contlow)
-            contfiberhigh.append(conthigh)
-            meancontfiber.append(np.mean((contlow,conthigh)))
-        skycont=np.mean(meancontfiber) #- over the entire CCD (skyfibers)
-
-        skycont_warn=[]
-
         if param is None:
             log.info("Param is None. Using default param instead")
-            param = dict(
-                B_CONT=[(4000, 4500), (5250, 5550)],
-                R_CONT=[(5950, 6200), (6990, 7230)],
-                Z_CONT=[(8120, 8270), (9110, 9280)],
-                SKYCONT_RANGE=[50.0, 100.0, 400.0, 600.0]
-                )
-
+            from desispec.io import read_params
+            desi_params = read_params()
+            param = {}
+            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_WARN_RANGE', 'SKYCONT_ALARM_RANGE']:
+                param[key] = desi_params['qa']['skysub']['PARAMS'][key]
+            #param = dict(
+            #    B_CONT=[(4000, 4500), (5250, 5550)],
+            #    R_CONT=[(5950, 6200), (6990, 7230)],
+            #    Z_CONT=[(8120, 8270), (9110, 9280)],
+            #    SKYCONT_WARN_RANGE=[100.0, 400.0],
+            #    SKYCONT_ALARM_RANGE=[50.0, 600.0]
+            #)
         retval["PARAMS"] = param
 
-        if amps:
+        skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
+            frame, wrange1, wrange2)
 
+        skycont_err = []
+        if amps:
             leftmax = dict_countbins["LEFT_MAX_FIBER"]
             rightmin = dict_countbins["RIGHT_MIN_FIBER"]
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
@@ -530,10 +564,30 @@ dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False):
 
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_WARN":skycont_warn}
+            for i in range(len(skycont_amps)):
+                if skycont_amps[i] <= param['SKYCONT_ALARM_RANGE'][0] or skycont_amps[i] >= param['SKYCONT_ALARM_RANGE'][1]:
+                    skycont_err = 'ALARM'
+                    break
+                elif skycont_amps[i] <= param['SKYCONT_WARN_RANGE'][0] or skycont_amps[i] >= param['SKYCONT_WARN_RANGE'][1]:
+                    skycont_err = 'WARN'
+                else:
+                    if skycont_err == 'WARN':
+                        pass
+                    else:
+                        skycont_err = 'NORMAL'
+
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_ERR":skycont_err}
 
         else: 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_WARN":skycont_warn}
+            if skycont <= param['SKYCONT_ALARM_RANGE'][0] or skycont >= param['SKYCONT_ALARM_RANGE'][1]:
+                skycont_err = 'ALARM'
+                pass
+            elif skycont <= param['SKYCONT_WARN_RANGE'][0] or skycont >= param['SKYCONT_WARN_RANGE'][1]:
+                skycont_err = 'WARN'
+            else:
+                skycont_err = 'NORMAL'
+
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_ERR":skycont_err}
 
         if qlf:
             qlf_post(retval)    
@@ -726,7 +780,6 @@ class Sky_Peaks(MonitoringAlg):
         rms_skyspec=qalib.getrms(sky_counts)
 
         sumcount_med_sky=[]
-        sumcount_warn=[]
 
         if param is None:
             log.info("Param is None. Using default param instead")
@@ -734,10 +787,24 @@ class Sky_Peaks(MonitoringAlg):
                 B_PEAKS=[3914.4, 5199.3, 5201.8],
                 R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                 Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                SUMCOUNT_RANGE=[500.0, 1000.0, 20000.0, 40000.0]
+                SUMCOUNT_WARN_RANGE=[1000.0, 20000.0],
+                SUMCOUNT_ALARM_RANGE=[500.0, 40000.0]
                 )
 
         retval["PARAMS"] = param
+
+        sumcount_err=[]
+        for i in range(len(nspec_counts)):
+            if nspec_counts[i] <= param['SUMCOUNT_ALARM_RANGE'][0] or nspec_counts[i] >= param['SUMCOUNT_ALARM_RANGE'][1]:
+                sumcount_err = 'ALARM'
+                break
+            elif nspec_counts[i] <= param['SUMCOUNT_WARN_RANGE'][0] or nspec_counts[i] >= param['SUMCOUNT_WARN_RANGE'][1]:
+                sumcount_err = 'WARN'
+            else:
+                if sumcount_err == 'WARN':
+                    pass
+                else:
+                    sumcount_err = 'NORMAL'
 
         if amps:
 
@@ -755,9 +822,9 @@ class Sky_Peaks(MonitoringAlg):
             amp4_rms=qalib.getrms(amp4)
             rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp,"SUMCOUNT_WARN":sumcount_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp,"SUMCOUNT_ERR":sumcount_err}
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_WARN":sumcount_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_ERR":sumcount_err}
 
         if qlf:
             qlf_post(retval)
@@ -826,7 +893,7 @@ class Calc_XWSigma(MonitoringAlg):
  
     def run_qa(self,fibermap,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False):
         from scipy.optimize import curve_fit
- 
+
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat() 
@@ -839,12 +906,39 @@ class Calc_XWSigma(MonitoringAlg):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
 
+        if param is None:
+            log.info("Param is None. Using default param instead")
+            if image.meta["FLAVOR"] == 'arc':
+                param = dict(
+                    B_PEAKS=[4047.7, 4359.6, 5087.2],
+                    R_PEAKS=[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
+                    Z_PEAKS=[8379.9, 8497.7, 8656.8, 8783.0],
+                    XSHIFT_WARN_RANGE=[-2.0, 2.0],
+                    XSHIFT_ALARM_RANGE=[-4.0, 4.0],
+                    WSHIFT_WARN_RANGE=[-2.0, 2.0],
+                    WSHIFT_ALARM_RANGE=[-4.0, 4.0]
+                    )
+            else:
+                param = dict(
+                    B_PEAKS=[3914.4, 5199.3, 5578.9],
+                    R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                    Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
+                    XSHIFT_WARN_RANGE=[-2.0, 2.0],
+                    XSHIFT_ALARM_RANGE=[-4.0, 4.0], 
+                    WSHIFT_WARN_RANGE=[-2.0, 2.0],
+                    WSHIFT_ALARM_RANGE=[-4.0, 4.0]
+                    )
+
         dw=2.
-        b_peaks=np.array([3914.4,5199.3,5201.8])
-        r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
-        z_peaks=np.array([8401.5,8432.4,8467.5,9479.4])
- 
         dp=3
+        b_peaks=param['B_PEAKS']
+        r_peaks=param['R_PEAKS']
+        z_peaks=param['Z_PEAKS']
+
+        if fibermap["OBJTYPE"][0] == 'ARC':
+            import desispec.psf
+            psf=desispec.psf.PSF(psf)
+
         xsigma=[]
         wsigma=[]
         xsigma_sky=[]
@@ -857,7 +951,11 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_amp3=[]
         xsigma_amp4=[]
         wsigma_amp4=[]
-        for i in range(fibermap['FIBER'].shape[0]):
+        if fibermap['FIBER'].shape[0] >= 500:
+            fibers = 500
+        else:
+            fibers = fibermap['FIBER'].shape[0]
+        for i in range(fibers):
             if camera[0]=="b":
                 peak_wave=np.array([b_peaks[0]-dw,b_peaks[0]+dw,b_peaks[1]-dw,b_peaks[1]+dw,b_peaks[2]-dw,b_peaks[2]+dw])
  
@@ -871,14 +969,11 @@ class Calc_XWSigma(MonitoringAlg):
                 ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
  
                 xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1
-,int(np.mean(xpix_peak1))])
+                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
                 xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2
-,int(np.mean(xpix_peak2))])
+                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
                 xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3
-,int(np.mean(xpix_peak3))])
+                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
 
                 xsigma1=np.abs(xpopt1[2])
                 wsigma1=np.abs(wpopt1[2])
@@ -891,8 +986,8 @@ class Calc_XWSigma(MonitoringAlg):
                 wsig=np.array([wsigma1,wsigma2,wsigma3])
                 xsigma_avg=np.mean(xsig)
                 wsigma_avg=np.mean(wsig)
-                xsigma.append(xsig)
-                wsigma.append(wsig)
+                xsigma.append(xsigma_avg)
+                wsigma.append(wsigma_avg)
  
             if camera[0]=="r":
                 peak_wave=np.array([r_peaks[0]-dw,r_peaks[0]+dw,r_peaks[1]-dw,r_peaks[1]+dw,r_peaks[2]-dw,r_peaks[2]+dw,r_peaks[3]-dw,r_peaks[3]+dw,r_peaks[4]-dw,r_peaks[4]+dw])
@@ -973,7 +1068,6 @@ class Calc_XWSigma(MonitoringAlg):
 
                 xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4])
                 wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4])
-
                 xsigma_avg=np.mean(xsig)
                 wsigma_avg=np.mean(wsig)
                 xsigma.append(xsigma_avg)
@@ -1051,30 +1145,41 @@ class Calc_XWSigma(MonitoringAlg):
         xsigma_amp=np.array([xamp1_med,xamp2_med,xamp3_med,xamp4_med])
         wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
 
-        xshift=[]
-        wshift=[]
+        xshift=0.0
+        wshift=0.0
         xshift_fib=[]
         wshift_fib=[]
-        xshift_amp=[]
-        wshift_amp=[]
-        shift_warn=[]
-
-        if param is None:
-            log.info("Param is None. Using default param instead")
-            param = dict(
-                B_PEAKS=[3914.4, 5199.3, 5201.8],
-                R_PEAKS=[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                Z_PEAKS=[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                XSHIFT_RANGE = [-4.0, -2.0, 2.0, 4.0],
-                WSHIFT_RANGE = [-4.0, -2.0, 2.0, 4.0]
-                )
+        xshift_amp=[0.0]
+        wshift_amp=[0.0]
 
         retval["PARAMS"] = param
 
+        shift_err=[]
         if amps:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"SHIFT_WARN":shift_warn}
+            for i in range(len(xshift_amp)):
+                if xshift_amp[i] <= param['XSHIFT_ALARM_RANGE'][0] or xshift_amp[i] >= param['XSHIFT_ALARM_RANGE'][1] or wshift_amp[i] <= param['WSHIFT_ALARM_RANGE'][0] or wshift_amp[i] >= param['WSHIFT_ALARM_RANGE'][1]:
+                    shift_err = 'ALARM'
+                    break
+                elif xshift_amp[i] <= param['XSHIFT_WARN_RANGE'][0] or xshift_amp[i] >= param['XSHIFT_WARN_RANGE'][1] or wshift_amp[i] <= param['WSHIFT_WARN_RANGE'][0] or wshift_amp[i] >= param['WSHIFT_WARN_RANGE'][1]:
+                    shift_err = 'WARN'
+                else:
+                    if shift_err == 'WARN':
+                        pass
+                    else:
+                        shift_err = 'NORMAL'
+
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"SHIFT_ERR":shift_err}
+
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"SHIFT_WARN":shift_warn}
+            if xshift <= param['XSHIFT_ALARM_RANGE'][0] or xshift >= param['XSHIFT_ALARM_RANGE'][1] or wshift <= param['WSHIFT_ALARM_RANGE'][0] or wshift >= param['WSHIFT_ALARM_RANGE'][1]:
+                shift_err = 'ALARM'
+                pass
+            elif xshift <= param['XSHIFT_WARN_RANGE'][0] or xshift >= param['XSHIFT_WARN_RANGE'][1] or wshift <= param['WSHIFT_WARN_RANGE'][1] or wshift >= param['WSHIFT_WARN_RANGE'][1]:
+                shift_err = 'WARN'
+            else:
+                shift_err = 'NORMAL'
+
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"SHIFT_ERR":shift_err}
 
         #- http post if needed
         if qlf:
@@ -1144,8 +1249,11 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["CAMERA"] = camera
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
-        retval["PROGRAM"] = header["PROGRAM"]
         retval["FLAVOR"] = header["FLAVOR"]
+        if retval["FLAVOR"] == 'arc':
+            pass
+        else:
+            retval["PROGRAM"] = header["PROGRAM"]
         retval["NIGHT"] = header["NIGHT"]
 
         rawimage=raw[camera.upper()].data
@@ -1234,24 +1342,33 @@ class Bias_From_Overscan(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        biasdiff=[]
+        biasdiff_err=[]
         if amps:
             bias_amps=np.array(bias_overscan)
             for i in range(len(bias_amps)):
                 if bias_amps[i] <= param['DIFF_ALARM_RANGE'][0] or bias_amps[i] >= param['DIFF_ALARM_RANGE'][1]:
-                    biasdiff = 'ALARM'
+                    biasdiff_err = 'ALARM'
                     break
                 elif bias_amps[i] <= param['DIFF_WARN_RANGE'][0] or bias_amps[i] >= param['DIFF_WARN_RANGE'][1]:
-                    biasdiff = 'WARN'
+                    biasdiff_err = 'WARN'
                 else:
-                    if biasdiff == 'WARN':
+                    if biasdiff_err == 'WARN':
                         pass
                     else:
-                        biasdiff = 'NORMAL'
+                        biasdiff_err = 'NORMAL'
 
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff}
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff_err}
+
         else:
-            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
+            if bias <= param['DIFF_ALARM_RANGE'][0] or bias >= param['DIFF_ALARM_RANGE'][1]:
+                biasdiff_err = 'ALARM'
+                pass
+            elif bias <= param['DIFF_ALARM_RANGE'][0] or bias >= param['DIFF_WARN_RANGE'][1]:
+                biasdiff_err = 'WARN'
+            else:
+                biasdiff_err = 'NORMAL'
+
+            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff_err}
 
         #- http post if needed
         if qlf:
@@ -1330,6 +1447,10 @@ class CountSpectralBins(MonitoringAlg):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
 
+        if fibermap["OBJTYPE"][0] == 'ARC':
+            import desispec.psf
+            psf=desispec.psf.PSF(psf)
+
         grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
             log.info("grid_size is NOT UNIFORM")
@@ -1340,25 +1461,34 @@ class CountSpectralBins(MonitoringAlg):
                          CUTLO = 100,   # low threshold for number of counts
                          CUTMED = 250,
                          CUTHI = 500,
-                         NGOOD_RANGE = [480, 490, 500, 500]
+                         NGOOD_WARN_RANGE = [490, 500],
+                         NGOOD_ALARM_RANGE = [480, 500]
                          )
 
         retval["PARAMS"] = param
 
         nbinshi_temp=[]
-        ngood_warn=[]
         
         countslo=qalib.countbins(frame.flux,threshold=param['CUTLO'])
         countsmed=qalib.countbins(frame.flux,threshold=param['CUTMED'])
         countshi=qalib.countbins(frame.flux,threshold=param['CUTHI'])
 
-        goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than 500 counts
+        goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than cuthi counts
         ngoodfibers=goodfibers.shape[0]
 
         leftmax=None
         rightmax=None
         bottommax=None
         topmin=None
+
+        ngood_err=[]
+        if ngoodfibers <= param['NGOOD_ALARM_RANGE'][0] or ngoodfibers >= param['NGOOD_ALARM_RANGE'][1]:
+            ngood_err = 'ALARM'
+            pass
+        elif ngoodfibers <= param['NGOOD_WARN_RANGE'][0] or ngoodfibers >= param['NGOOD_WARN_RANGE'][1]:
+            ngood_err = 'WARN'
+        else:
+            ngood_err = 'NORMAL'
 
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
@@ -1412,9 +1542,9 @@ class CountSpectralBins(MonitoringAlg):
             averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
             averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIBERS": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOOD_WARN":ngood_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIBERS": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOOD_ERR":ngood_err}
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIBERS": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOOD_WARN":ngood_warn}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIBERS": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOOD_ERR":ngood_err}
 
         retval["LEFT_MAX_FIBER"]=int(leftmax)
         retval["RIGHT_MIN_FIBER"]=int(rightmin)
@@ -1513,7 +1643,8 @@ class Sky_Residual(MonitoringAlg):
             param = dict(BIN_SZ=0.1, #- Bin size for histograms
                          PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
                          PER_RESID=95.,   # Percentile for residual distribution
-                         SKY_RANGE = [-10.0, -5.0, 5.0, 10.0]
+                         SKYRESID_WARN_RANGE=[-5.0, 5.0],
+                         SKYRESID_ALARM_RANGE=[-10.0, 10.0]
                         )
 
         retval["PARAMS"] = param
@@ -1525,6 +1656,17 @@ class Sky_Residual(MonitoringAlg):
 
         if qlf:
             qlf_post(retval)    
+
+#        skyresid_err=[]
+#        if qadict['MED_RESID'] <= param['SKYRESID_ALARM_RANGE'][0] or qadict['MED_RESID'] >= param['SKYRESID_ALARM_RANGE'][1]:
+#            skyresid_err = 'ALARM'
+#            pass
+#        elif qadict['MED_RESID'] <= param['SKYRESID_WARN_RANGE'][0] or qadict['MED_RESID'] >= param['SKYRESID_WARN_RANGE'][1]:
+#            skyresid_err = 'WARN'
+#        else:
+#            skyresid_err = 'NORMAL'
+
+#        retval["METRICS"]["SKY_RESID_ERR"]=skyresid_err
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
@@ -1563,7 +1705,6 @@ class Calculate_SNR(MonitoringAlg):
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
-
         paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
@@ -1601,7 +1742,8 @@ class Calculate_SNR(MonitoringAlg):
             log.info("Param is None. Using default param instead")
             param = dict(
                 SNR_FLUXTHRESH=0.0, # Minimum value of flux to go into SNR calc. 
-                FIDSNR_RANGE=[6.0, 6.5, 7.5, 8.0],
+                FIDSNR_WARN_RANGE=[6.5, 7.5],
+                FIDSNR_ALARM_RANGE=[6.0, 8.0],
                 FIDMAG=22.
                 )
 
@@ -1613,7 +1755,8 @@ class Calculate_SNR(MonitoringAlg):
             bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
             fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-        qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
+        #qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
+        qadict = qalib.SNRFit(frame,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
         for mag in [qadict["ELG_SNR_MAG"][1],qadict["LRG_SNR_MAG"][1],qadict["QSO_SNR_MAG"][1],qadict["STAR_SNR_MAG"][1]]:
@@ -1624,6 +1767,18 @@ class Calculate_SNR(MonitoringAlg):
             mag[k]=26.  #- Putting 26, so as to make sure within reasonable range for plots.
         retval["METRICS"] = qadict
         retval["PARAMS"] = param
+
+        snrwarn=[]
+        if qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_ALARM_RANGE'][0] or qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_ALARM_RANGE'][1]:
+            snrwarn = 'ALARM'
+            pass
+        elif qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_WARN_RANGE'][0] or qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_WARN_RANGE'][1]:
+            snrwarn = 'WARN'
+        else:
+            snrwarn = 'NORMAL'
+
+        retval["METRICS"]["FIDSNR_WARN"] = snrwarn
+
         #- http post if valid
         if qlf:
             qlf_post(retval)            

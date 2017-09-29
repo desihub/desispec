@@ -5,6 +5,7 @@ Extract spectra from DESI pre-processed raw data
 from __future__ import absolute_import, division, print_function
 
 import sys
+import traceback
 import os
 import re
 import os.path
@@ -100,7 +101,7 @@ def main(args):
     else:
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
-        dw = 0.5
+        dw = 0.7
 
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)

@@ -7,7 +7,10 @@ import argparse
 import numpy as np
 
 from desispec import io
+from desispec.preproc import masked_median
 from desiutil.log import get_logger
+
+
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description="Compute a master dark",
@@ -28,8 +31,10 @@ parser.add_argument('--camera',type = str, required = True,
 parser.add_argument('--bias', type = str, default = None, required=False,
                         help = 'bias image calibration file (standard preprocessing calibration is turned off)')
 
-parser.add_argument('--cosmicsub', action = 'store_true',
-                        help = 'perform comic ray subtraction (much slower, but more accurate because median can leave traces)')
+parser.add_argument('--nocosmic', action = 'store_true',
+                        help = 'do not perform comic ray subtraction (much slower, but more accurate because median can leave traces)')
+parser.add_argument('--scale', action = 'store_true',
+                        help = 'apply a scale correction to each image (needed for teststand of EM0, hopefully not later)')
 
 args        = parser.parse_args()
 log = get_logger()
@@ -38,7 +43,12 @@ log.info("read images ...")
 
 shape=None
 images=[]
-masks=[]
+
+if args.nocosmic :
+    masks=None
+else :
+    masks=[]
+
 for filename in args.image :
 
     log.info(filename)
@@ -60,24 +70,37 @@ for filename in args.image :
     pixflat=False
     mask=False
     
-    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=(not args.cosmicsub),mask=mask,dark=dark,pixflat=pixflat,ccd_calibration_filename=False)
+    img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=args.nocosmic,mask=mask,dark=dark,pixflat=pixflat,ccd_calibration_filename=False)
     if shape is None :
         shape=img.pix.shape
     log.info("adding dark %s divided by exposure time %f s"%(filename,exptime))
     images.append(img.pix.ravel()/exptime)
-    masks.append(img.mask.ravel())
+    if masks is not None :
+        masks.append(img.mask.ravel())
 
 images=np.array(images)
-masks=np.array(masks)
-
-
-if not args.cosmicsub :
-    log.info("compute simple median image ...")
-    medimage=np.median(images,axis=0).reshape(shape)
+if masks is not None :
+    masks=np.array(masks)
+    smask=np.sum(masks,axis=0)
 else :
-    # need to do median of only the valid pixels
-    medimage=np.ma.median(np.ma.masked_array(data=images,mask=(masks!=0)),axis=0).data.reshape(shape)
+    smask=np.zeros(images[0].shape)
 
+log.info("compute median image ...")
+medimage=masked_median(images,masks)
+
+if args.scale :
+    log.info("compute a scale per image ...")
+    sm2=np.sum((smask==0)*medimage**2)
+    ok=(medimage>0.6*np.median(medimage))*(smask==0)
+    for i,image in enumerate(images) :
+        s=np.sum((smask==0)*medimage*image)/sm2
+        #s=np.median(image[ok]/medimage[ok])
+        log.info("image %d scale = %f"%(i,s))
+        images[i] /= s
+    log.info("recompute median image after scaling ...")
+    medimage=masked_median(images,masks)
+
+medimage=medimage.reshape(shape)
 
 log.info("write result in %s ..."%args.outfile)
 hdulist=pyfits.HDUList([pyfits.PrimaryHDU(medimage)])

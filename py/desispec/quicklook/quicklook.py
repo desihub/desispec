@@ -394,7 +394,10 @@ def setup_pipeline(config):
     fiberflatfile=None
     fiberflat=None
     if "FiberFlatFile" in config:
-        fiberflatfile=config["FiberFlatFile"]
+        if config["Flavor"] == 'arcs':
+            pass
+        else:
+            fiberflatfile=config["FiberFlatFile"]
 
     skyfile=None
     skyimage=None
@@ -402,7 +405,11 @@ def setup_pipeline(config):
         skyfile=config["SkyFile"]
 
     psf=None
-    if "PSFFile" in config:
+    if config["Flavor"] == 'arcs':
+        if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"])):
+            os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"]))
+        pass
+    elif "PSFFile" in config:
         #from specter.psf import load_psf
         import desispec.psf
         psf=desispec.psf.PSF(config["PSFFile"])

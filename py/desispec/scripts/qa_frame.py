@@ -14,6 +14,8 @@ def parse(options=None):
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--make_plots', default=False, action="store_true",
                         help = 'Generate QA figs too?')
+    parser.add_argument('--output_dir', type = str, default = None, metavar = 'PATH',
+                        help = 'Override default path for output files')
 
 
     args = None
@@ -37,6 +39,7 @@ def main(args) :
         specprod_dir = args.reduxdir
 
     # Generate qaframe (and figures?)
-    _ = qaframe_from_frame(args.frame_file, specprod_dir=specprod_dir, make_plots=args.make_plots)
+    _ = qaframe_from_frame(args.frame_file, specprod_dir=specprod_dir, make_plots=args.make_plots,
+                           output_dir=args.output_dir)
 
 
