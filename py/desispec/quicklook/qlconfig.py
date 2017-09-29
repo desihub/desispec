@@ -253,14 +253,22 @@ class Config(object):
         """
         Specify the filenames: yaml and png of the pa level qa files"
         """
-        filemap={'Initialize': 'ql_initial',
-                 'Preproc': 'ql_preproc',
-                 'BootCalibration': 'ql_bootcalib',
-                 'BoxcarExtract': 'ql_boxextract',
-                 'ResolutionFit': 'ql_resfit',
-                 'ApplyFiberFlat_QL': 'ql_fiberflat',
-                 'SkySub_QL': 'ql_skysub'
-                 }
+        if self.conf["Flavor"] == 'arcs':
+            filemap={'Initialize': 'ql_initial_arc',
+                     'Preproc': 'ql_preproc_arc',
+                     'BootCalibration': 'ql_bootcalib',
+                     'BoxcarExtract': 'ql_boxextract_arc',
+                     'ResolutionFit': 'ql_resfit_arc'
+                     }
+        else:
+            filemap={'Initialize': 'ql_initial',
+                     'Preproc': 'ql_preproc',
+                     'BootCalibration': 'ql_bootcalib',
+                     'BoxcarExtract': 'ql_boxextract',
+                     'ResolutionFit': 'ql_resfit',
+                     'ApplyFiberFlat_QL': 'ql_fiberflat',
+                     'SkySub_QL': 'ql_skysub'
+                     }
 
         if paname in filemap:
             filetype=filemap[paname]+'_file'
@@ -279,17 +287,25 @@ class Config(object):
         """
         Specify the filenames: yaml and png for the given qa output
         """
-        filemap={'Bias_From_Overscan': 'ql_getbias',
-                 'Get_RMS' : 'ql_getrms',
-                 'Count_Pixels': 'ql_countpix',
-                 'Calc_XWSigma': 'ql_xwsigma',
-                 'CountSpectralBins': 'ql_countbins',
-                 'Sky_Continuum': 'ql_skycont',
-                 'Sky_Peaks': 'ql_skypeak',
-                 'Sky_Residual': 'ql_skyresid',
-                 'Integrate_Spec': 'ql_integ',
-                 'Calculate_SNR': 'ql_snr'
-                 }
+        if self.conf["Flavor"] == 'arcs':
+            filemap={'Bias_From_Overscan': 'ql_getbias_arc',
+                     'Get_RMS' : 'ql_getrms_arc',
+                     'Count_Pixels': 'ql_countpix_arc',
+                     'Calc_XWSigma': 'ql_xwsigma_arc',
+                     'CountSpectralBins': 'ql_countbins_arc'
+                     }
+        else:
+            filemap={'Bias_From_Overscan': 'ql_getbias',
+                     'Get_RMS' : 'ql_getrms',
+                     'Count_Pixels': 'ql_countpix',
+                     'Calc_XWSigma': 'ql_xwsigma',
+                     'CountSpectralBins': 'ql_countbins',
+                     'Sky_Continuum': 'ql_skycont',
+                     'Sky_Peaks': 'ql_skypeak',
+                     'Sky_Residual': 'ql_skyresid',
+                     'Integrate_Spec': 'ql_integ',
+                     'Calculate_SNR': 'ql_snr'
+                     }
 
         if qaname in filemap:
             filetype=filemap[qaname]+'_file'
