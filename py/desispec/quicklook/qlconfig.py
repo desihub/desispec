@@ -99,7 +99,11 @@ class Config(object):
         paopt_preproc={'camera': self.camera,'dumpfile': pixfile}
 
         if self.dumpintermediates:
-            framefile=self.dump_pa("BoxcarExtract")
+            if self.conf["Flavor"] == 'arcs':
+                calibdir=os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d',self.night)
+                framefile=findfile('frame',night=self.night,expid=self.expid,camera=self.camera,outdir=calibdir)
+            else:
+                framefile=self.dump_pa("BoxcarExtract")
             fframefile=self.dump_pa("ApplyFiberFlat_QL")
             sframefile=self.dump_pa("SkySub_QL")
         else:
@@ -167,7 +171,7 @@ class Config(object):
         else:
             raise IOError("PA name does not match any file type. Check PA name in config") 
            
-        pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+        pafile=findfile(filetype,night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return pafile
 
@@ -390,7 +394,7 @@ def check_config(outconfig):
             else:
                 log.info("File check: Okay: {}".format(thisfile))
         log.info("All necessary files exist for science configuration.")
-    if outconfig["Flavor"]=="arcs":
+    elif outconfig["Flavor"]=="arcs":
         files = [outconfig["RawImage"], outconfig["FiberMap"]]
         log.info("Checking if all the necessary files exist.")
         for thisfile in files:
