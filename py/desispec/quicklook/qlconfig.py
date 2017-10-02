@@ -210,7 +210,8 @@ class Config(object):
     def qaargs(self):
 
         qaopts = {}
-        
+        referencemetrics=[]        
+
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
                 if self.writestaticplots:
@@ -218,8 +219,11 @@ class Config(object):
                 else:
                     qaplot = None
 
+                pa_yaml = PA.upper()
+                referencemetrics = self.reference[pa_yaml]['METRICS']
+
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf, 'ReferenceMetrics': referencemetrics}
                 
         return qaopts 
    
@@ -336,15 +340,24 @@ class Config(object):
         self.timeout = self.conf["Timeout"]
         self.fiberflatexpid = self.conf["FiberflatExpid"]
         self.psftype = self.conf["PSFType"]
+        self.templateexpid = self.conf["TemplateExpid"]
 
         #- some global variables:
-        self.rawfile=findfile("raw",night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
-        self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
  
-        self.fiberflat=findfile("fiberflat",night=self.night,expid=self.fiberflatexpid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) #- TODO: Assuming same night for calibration files (here and psf)
+        self.fiberflat=findfile("fiberflat",night=self.night,expid=self.fiberflatexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) #- TODO: Assuming same night for calibration files (here and psf)
         
-        self.psf=findfile(self.psftype,night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)  
+        self.psf=findfile(self.psftype,night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)  
+
+        #- Get reference metrics from template yaml file
+        if self.flavor == 'arcs':
+            template=findfile('ql_mergedQAarc_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        else:
+            template=findfile('ql_mergedQA_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        with open(template) as reference:
+            self.reference=yaml.load(reference)
         
         outconfig={}
 
