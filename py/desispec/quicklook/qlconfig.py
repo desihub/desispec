@@ -220,7 +220,9 @@ class Config(object):
                     qaplot = None
 
                 pa_yaml = PA.upper()
-                referencemetrics = self.reference[pa_yaml]['METRICS']
+                referencemetrics = None
+                if self.reference != None:
+                    referencemetrics = self.reference[pa_yaml]['METRICS']
 
                 params=self._qaparams(qa)
                 qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf, 'ReferenceMetrics': referencemetrics}
@@ -356,9 +358,12 @@ class Config(object):
             template=findfile('ql_mergedQAarc_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
             template=findfile('ql_mergedQA_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-        with open(template) as reference:
-            self.reference=yaml.load(reference)
-        
+        if os.path.isfile(template):
+            with open(template) as reference:
+                self.reference=yaml.load(reference)
+        else:
+            self.reference=None
+
         outconfig={}
 
         outconfig['Night'] = self.night
