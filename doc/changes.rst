@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.15.3 (unreleased)
+0.16.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.16.0 (2017-09-29)
 -------------------
 
 * Small fixes to desi_qa_prod and qa_prod
@@ -27,11 +32,20 @@ desispec Change Log
 * Fixed exptime in fluxcalib ZP calculation (PR `#429`_)
 * Added find_exposure_night() method (PR `#429`_)
 * Add MED_SKY metric to QA and bright/dark flag in desi_qa_prod
+* Update pipeline code for specex and redrock (PR `#439`_ and `#440`_)
+* Adds code for adjusting trace locations to match sky lines (PR `#433`_)
+* Updates to DB loading (PR `#431`_)
+* Adds pixelflat code (PR `#426`_)
 
 .. _`#422`: https://github.com/desihub/desispec/pull/422
 .. _`#424`: https://github.com/desihub/desispec/pull/424
 .. _`#425`: https://github.com/desihub/desispec/pull/425
+.. _`#426`: https://github.com/desihub/desispec/pull/426
 .. _`#429`: https://github.com/desihub/desispec/pull/429
+.. _`#431`: https://github.com/desihub/desispec/pull/431
+.. _`#433`: https://github.com/desihub/desispec/pull/433
+.. _`#439`: https://github.com/desihub/desispec/pull/439
+.. _`#440`: https://github.com/desihub/desispec/pull/440
 
 0.15.2 (2017-07-12)
 -------------------

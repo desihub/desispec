@@ -101,6 +101,7 @@ def ql_main(args=None):
     pipeline, convdict = quicklook.setup_pipeline(configdict)
     res=quicklook.runpipeline(pipeline,convdict,configdict,mergeQA=args.mergeQA)
     inpname=configdict["RawImage"]
+    night=configdict["Night"]
     camera=configdict["Camera"]
     expid=configdict["Expid"]
 
@@ -112,14 +113,20 @@ def ql_main(args=None):
             log.critical("No final outputname given. Writing to a image file {}".format(finalname))
         imIO.write_image(finalname,res,meta=None)        
     elif isinstance(res,frame.Frame):
-        if configdict["OutputFile"]: 
-            finalname=configdict["OutputFile"]
+        if configdict["Flavor"] == 'arcs':
+            from desispec.io.meta import findfile
+            finalname="psfnight-{}.fits".format(camera)
+            finalframe=findfile('frame',night=night,expid=expid,camera=camera)
+            frIO.write_frame(finalframe,res,header=None)
         else:
-            finalname="frame-{}-{:08d}.fits".format(camera,expid)
-            log.critical("No final outputname given. Writing to a frame file {}".format(finalname)) 
-        frIO.write_frame(finalname,res,header=None)
+            if configdict["OutputFile"]: 
+                finalname=configdict["OutputFile"]
+            else:
+                finalname="frame-{}-{:08d}.fits".format(camera,expid)
+                log.critical("No final outputname given. Writing to a frame file {}".format(finalname)) 
+            frIO.write_frame(finalname,res,header=None)
     else:
-        log.error("Result of pipeline is in unkown type {}. Don't know how to write".format(type(res)))
+        log.error("Result of pipeline is an unknown type {}. Don't know how to write".format(type(res)))
         sys.exit("Unknown pipeline result type {}.".format(type(res)))
     log.info("Pipeline completed. Final result is in {}".format(finalname))
 if __name__=='__main__':

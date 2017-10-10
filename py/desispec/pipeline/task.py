@@ -196,8 +196,8 @@ class WorkerSpecex(Worker):
         # opts["ivar-hdu"] = 2
         # opts["mask-hdu"] = 3
         # opts["header-hdu"] = 1
-        opts["xcoord-hdu"] = 1
-        opts["ycoord-hdu"] = 2
+        # opts["xcoord-hdu"] = 1
+        # opts["ycoord-hdu"] = 2
         # opts["psfmodel"] = "GAUSSHERMITE"
         # opts["half_size_x"] = 8
         # opts["half_size_y"] = 5
@@ -215,7 +215,7 @@ class WorkerSpecex(Worker):
         opts["lamplines"] = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt"
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
-            exefile = os.path.join(path, "specex_desi_psf_fit")
+            exefile = os.path.join(path, "desi_psf_fit")
             if os.path.isfile(exefile) and os.access(exefile, os.X_OK):
                 specexdir = os.path.join(path, "..", "data")
                 opts["lamplines"] = os.path.join(specexdir, "specex_linelist_boss.txt")
@@ -250,27 +250,31 @@ class WorkerSpecex(Worker):
         cam = "{}{}".format(band, spec)
 
         pix = []
-        boot = []
+        inpsf = []
         for input in node["in"]:
+            
+            print("DEBUG  input , grph[input]=", input,grph[input]) 
+
             inode = grph[input]
-            if inode["type"] == "psfboot":
-                boot.append(input)
+            if inode["type"] == "psfboot": 
+                inpsf.append(input)
             elif inode["type"] == "pix":
                 pix.append(input)
-        if len(boot) != 1:
-            raise RuntimeError("specex needs exactly one psfboot file")
+        if len(inpsf) != 1:
+            raise RuntimeError("specex needs exactly one input psf file")
         if len(pix) != 1:
-            raise RuntimeError("specex needs exactly one image file")
-        bootfile = graph_path(boot[0])
+            raise RuntimeError("specex needs exactly one input image file")
+        inpsffile = graph_path(inpsf[0])
         imgfile = graph_path(pix[0])
         outfile = graph_path(task)
 
         options = {}
-        options["input"] = imgfile
-        options["bootfile"] = bootfile
-        options["output"] = outfile
-        if log.getEffectiveLevel() == DEBUG:
-            options["verbose"] = True
+        options["input-image"] = imgfile
+        options["input-psf"]   = inpsffile
+        options["output-psf"]  = outfile
+        #if log.getEffectiveLevel() == DEBUG:
+        #    options["debug"] = True
+            
         if len(opts) > 0:
             extarray = option_list(opts)
             options["extra"] = " ".join(extarray)

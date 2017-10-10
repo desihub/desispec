@@ -405,15 +405,15 @@ def setup_pipeline(config):
         skyfile=config["SkyFile"]
 
     psf=None
-    if "PSFFile" in config:
-        if config["Flavor"] == 'arcs':
-            from specter.psf import load_psf
-            from pkg_resources import resource_filename
-            psffile=resource_filename('specter','test/t/psf-monospot.fits')
-            psf=load_psf(psffile)
-        else:
-            import desispec.psf
-            psf=desispec.psf.PSF(config["PSFFile"])
+    if config["Flavor"] == 'arcs':
+        if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"])):
+            os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"]))
+        pass
+    elif "PSFFile" in config:
+        #from specter.psf import load_psf
+        import desispec.psf
+        psf=desispec.psf.PSF(config["PSFFile"])
+        #psf=load_psf(config["PSFFile"])
 
     if "basePath" in config:
         basePath=config["basePath"]

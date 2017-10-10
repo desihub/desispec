@@ -82,12 +82,12 @@ class Config(object):
         wavelength=self.wavelength
         if self.wavelength is None:
             #- setting default wavelength for extraction for different cam
-            if self.camera[0] == 'r':
+            if self.camera[0] == 'b':
+                self.wavelength='3570,5730,0.8'
+            elif self.camera[0] == 'r':
                 self.wavelength='5630,7740,0.8'
-            elif self.camera[0] == 'b':
-                self.wavelength='3550,5730,0.8'
             elif self.camera[0] == 'z':
-                self.wavelength='7650,9830,0.8'
+                self.wavelength='7420,9830,0.8'
 
         #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
         paopt_initialize={'camera': self.camera}
@@ -111,14 +111,18 @@ class Config(object):
             arcimg=findfile('pix',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir)
             flatimg=findfile('pix',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,rawdata_dir=self.rawdata_dir)
             bootfile=findfile('psfboot',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
+            psfnightfile=findfile('psfnight',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
         else:
             arcimg=None
             flatimg=None
             bootfile=None
+            psfnightfile=None
 
         paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
 
         paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
+
+        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile}
 
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
@@ -138,6 +142,8 @@ class Config(object):
                 paopts[PA]=paopt_bootcalib
             elif PA=='BoxcarExtract':
                 paopts[PA]=paopt_extract
+            elif PA=='ResolutionFit':
+                paopts[PA]=paopt_resfit
             elif PA=='ApplyFiberFlat_QL':
                 paopts[PA]=paopt_apfflat
             elif PA=='SkySub_QL':
@@ -153,7 +159,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'pix', 'BoxcarExtract': 'frame', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'pix', 'BootCalibration': 'psfboot', 'BoxcarExtract': 'frame', 'ResolutionFit': 'psfnight', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -248,7 +254,9 @@ class Config(object):
         """
         filemap={'Initialize': 'ql_initial',
                  'Preproc': 'ql_preproc',
+                 'BootCalibration': 'ql_bootcalib',
                  'BoxcarExtract': 'ql_boxextract',
+                 'ResolutionFit': 'ql_resfit',
                  'ApplyFiberFlat_QL': 'ql_fiberflat',
                  'SkySub_QL': 'ql_skysub'
                  }
@@ -364,7 +372,16 @@ def check_config(outconfig):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
                 log.info("File check: Okay: {}".format(thisfile))
-        log.info("All necessary file exist for this configuration.")
+        log.info("All necessary files exist for science configuration.")
+    if outconfig["Flavor"]=="arcs":
+        files = [outconfig["RawImage"], outconfig["FiberMap"]]
+        log.info("Checking if all the necessary files exist.")
+        for thisfile in files:
+            if not os.path.exists(thisfile):
+                sys.exit("File does not exist: {}".format(thisfile))
+            else:
+                log.info("File check: Okay: {}".format(thisfile))
+        log.info("All necessary files exist for arc configuration.")
     return 
 
 
@@ -393,7 +410,7 @@ class Palist(object):
             pa_list=self.thislist
         else: #- construct palist
             if self.flavor == "arcs":
-                pa_list=['Initialize','Preproc','BoxcarExtract'] #- class names for respective PAs (see desispec.quicklook.procalgs)
+                pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract','ResolutionFit'] #- class names for respective PAs (see desispec.quicklook.procalgs)
             elif self.flavor == "flat":
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
             elif self.flavor == "science":
@@ -412,11 +429,17 @@ class Palist(object):
             for PA in self.thislist:
                 qalist[PA]=self.algorithms[PA]['QA'].keys()
         else:
-            QAs_initial=['Bias_From_Overscan']
-            QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
-            QAs_extract=['CountSpectralBins']
-            QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
-            QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
+            if self.flavor =="arcs":
+                QAs_initial=['Bias_From_Overscan']
+                QAs_preproc=['Get_RMS','Count_Pixels']
+                QAs_bootcalib=['Calc_XWSigma']
+                QAs_extract=['CountSpectralBins']
+            else:
+                QAs_initial=['Bias_From_Overscan']
+                QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
+                QAs_extract=['CountSpectralBins']
+                QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
+                QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
         
             qalist={}
             for PA in self.palist:
@@ -424,8 +447,12 @@ class Palist(object):
                     qalist[PA] = QAs_initial
                 elif PA == 'Preproc':
                     qalist[PA] = QAs_preproc
+                elif PA == 'BootCalibration':
+                    qalist[PA] = QAs_bootcalib
                 elif PA == 'BoxcarExtract':
                     qalist[PA] = QAs_extract
+                elif PA == 'ResolutionFit':
+                    qalist[PA] = QAs_resfit
                 elif PA == 'ApplyFiberFlat_QL':
                     qalist[PA] = QAs_apfiberflat
                 elif PA == 'SkySub_QL':

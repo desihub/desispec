@@ -173,33 +173,35 @@ class ObsList(SchemaMixin, Base):
     """Representation of the obslist table.
     """
 
-    mjd = Column(Float, nullable=False)
-    exptime = Column(Float, nullable=False)
-    program = Column(String, nullable=False)
-    passnum = Column(Integer, nullable=False)
     tileid = Column(Integer, primary_key=True, autoincrement=False)
+    passnum = Column(Integer, nullable=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
-    moonfrac = Column(Float, nullable=False)
-    moondist = Column(Float, nullable=False)
-    moonalt = Column(Float, nullable=False)
+    night = Column(String, nullable=False)
+    mjd = Column(Float, nullable=False)
+    exptime = Column(Float, nullable=False)
     seeing = Column(Float, nullable=False)
     airmass = Column(Float, nullable=False)
+    # program = Column(String, nullable=False)
+    moonfrac = Column(Float, nullable=False)
+    moonalt = Column(Float, nullable=False)
+    moonsep = Column(Float, nullable=False)
     # dateobs = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self):
-        return ("<ObsList(mjd={0.mjd:f}, " +
-                "exptime={0.exptime:f}, " +
-                "program='{0.program}', " +
-                "passnum={0.passnum:d}, " +
+        return ("<ObsList(" +
                 "tileid={0.tileid:d}, " +
+                "passnum={0.passnum:d}, " +
                 "ra={0.ra:f}, dec={0.dec:f}, " +
-                "ebmv={0.ebmv:f}, " +
-                "moonfrac={0.moonfrac:f}, " +
-                "moondist={0.moondist:f}, " +
-                "moonalt={0.moonalt:f}, " +
+                "night='{0.night}', " +
+                "mjd={0.mjd:f}, " +
+                "exptime={0.exptime:f}, " +
                 "seeing={0.seeing:f}, " +
-                "airmass={0.airmass:f})>").format(self)
+                "airmass={0.airmass:f}," +
+                "moonfrac={0.moonfrac:f}, " +
+                "moonalt={0.moonalt:f}, " +
+                "moonsep={0.moonsep:f}" +
+                ")>").format(self)
 
 
 class ZCat(SchemaMixin, Base):
@@ -391,6 +393,8 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
     log = get_logger()
     zbestpath = join(datapath, 'spectro', 'redux', run1d, 'spectra-64',
                      '*', '*', 'zbest-64-*.fits')
+    # zbestpath = join(datapath, 'spectra-64',
+    #                  '*', '*', 'zbest-64-*.fits')
     log.info("Using zbest file search path: %s.", zbestpath)
     zbest_files = glob(zbestpath)
     if len(zbest_files) == 0:
@@ -406,12 +410,16 @@ def load_zcat(datapath, run1d='dc17a2', q3c=False):
             data = hdulist[1].data
         log.info("Read data from %s.", f)
         good_targetids = data['TARGETID'] != 0
-        q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'].tolist())).all()
-        if len(q) != 0:
-            log.warning("Duplicate TARGETID found in %s.", f)
-            for z in q:
-                log.warning("Duplicate TARGETID = %d.", z.targetid)
-                good_targetids = good_targetids & (data['TARGETID'] != z.targetid)
+        #
+        # If there are too many targetids, the in_ clause will blow up.
+        # Disabling this test, and crossing fingers.
+        #
+        # q = dbSession.query(ZCat).filter(ZCat.targetid.in_(data['TARGETID'].tolist())).all()
+        # if len(q) != 0:
+        #     log.warning("Duplicate TARGETID found in %s.", f)
+        #     for z in q:
+        #         log.warning("Duplicate TARGETID = %d.", z.targetid)
+        #         good_targetids = good_targetids & (data['TARGETID'] != z.targetid)
         data_list = [data[col][good_targetids].tolist()
                      for col in data.names if col != 'COEFF']
         data_names = [col.lower() for col in data.names if col != 'COEFF']
@@ -460,7 +468,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    fiberpath = join(datapath, 'fiberassign', 'output',
+    fiberpath = join(datapath, 'fiberassign',
                      'tile_*.fits')
     log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob(fiberpath)
@@ -540,61 +548,26 @@ def q3c_index(table):
     return
 
 
-def main():
-    """Entry point for command-line script.
+def setup_db(options):
+    """Initialize the database connection.
+
+    Parameters
+    ----------
+    options : :class:`argpare.Namespace`
+        Parsed command-line options.
 
     Returns
     -------
-    :class:`int`
-        An integer suitable for passing to :func:`sys.exit`.
+    :class:`bool`
+        ``True`` if the configured database is a PostgreSQL database.
     """
     global engine, schemaname
     from os import remove
     from os.path import basename, exists, join
-    from sys import argv
-    from argparse import ArgumentParser
-    from pkg_resources import resource_filename
-    from pytz import utc
-    from desiutil.log import get_logger, DEBUG, INFO
+    from desiutil.log import get_logger
+    log = get_logger()
     #
-    # command-line arguments
-    #
-    prsr = ArgumentParser(description=("Load a data challenge simulation into a " +
-                                       "database."),
-                          prog=basename(argv[0]))
-    prsr.add_argument('-c', '--clobber', action='store_true', dest='clobber',
-                      help='Delete any existing file(s) before loading.')
-    prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
-                      default='quicksurvey.db', metavar='FILE',
-                      help="Store data in FILE.")
-    prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
-                      metavar='HOSTNAME',
-                      help='If specified, connect to a PostgreSQL database on HOSTNAME.')
-    prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
-                      type=int, default=0, metavar='M',
-                      help="Load up to M rows in the tables (default is all rows).")
-    prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
-                      type=int, default=50000, metavar='N',
-                      help="Load N rows at a time (default %(default)s).")
-    prsr.add_argument('-s', '--schema', action='store', dest='schema',
-                      metavar='SCHEMA',
-                      help='Set the schema name in the PostgreSQL database.')
-    prsr.add_argument('-U', '--username', action='store', dest='username',
-                      metavar='USERNAME', default='desidev_admin',
-                      help="If specified, connect to a PostgreSQL database with USERNAME.")
-    prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
-                      help='Print extra information.')
-    prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
-    options = prsr.parse_args()
-    #
-    # Logging
-    #
-    if options.verbose:
-        log = get_logger(DEBUG, timestamp=True)
-    else:
-        log = get_logger(INFO, timestamp=True)
-    #
-    # Schema.
+    # Schema creation
     #
     if options.schema:
         schemaname = options.schema
@@ -635,6 +608,85 @@ def main():
         tab.schema = schemaname
     Base.metadata.create_all(engine)
     log.info("Finished creating tables.")
+    return postgresql
+
+
+def get_options(*args):
+    """Parse command-line options.
+
+    Parameters
+    ----------
+    args : iterable
+        If arguments are passed, use them instead of ``sys.argv``.
+
+    Returns
+    -------
+    :class:`argparse.Namespace`
+        The parsed options.
+    """
+    from sys import argv
+    from os.path import basename
+    from argparse import ArgumentParser
+    prsr = ArgumentParser(description=("Load a data challenge simulation into a " +
+                                       "database."),
+                          prog=basename(argv[0]))
+    prsr.add_argument('-c', '--clobber', action='store_true', dest='clobber',
+                      help='Delete any existing file(s) before loading.')
+    prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
+                      default='quicksurvey.db', metavar='FILE',
+                      help="Store data in FILE.")
+    prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
+                      metavar='HOSTNAME',
+                      help='If specified, connect to a PostgreSQL database on HOSTNAME.')
+    prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
+                      type=int, default=0, metavar='M',
+                      help="Load up to M rows in the tables (default is all rows).")
+    prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
+                      type=int, default=50000, metavar='N',
+                      help="Load N rows at a time (default %(default)s).")
+    prsr.add_argument('-s', '--schema', action='store', dest='schema',
+                      metavar='SCHEMA',
+                      help='Set the schema name in the PostgreSQL database.')
+    prsr.add_argument('-U', '--username', action='store', dest='username',
+                      metavar='USERNAME', default='desidev_admin',
+                      help="If specified, connect to a PostgreSQL database with USERNAME.")
+    prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
+                      help='Print extra information.')
+    prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
+    if len(args) > 0:
+        options = prsr.parse_args(args)
+    else:
+        options = prsr.parse_args()
+    return options
+
+
+def main():
+    """Entry point for command-line script.
+
+    Returns
+    -------
+    :class:`int`
+        An integer suitable for passing to :func:`sys.exit`.
+    """
+    from os.path import join
+    # from pkg_resources import resource_filename
+    from pytz import utc
+    from desiutil.log import get_logger, DEBUG, INFO
+    #
+    # command-line arguments
+    #
+    options = get_options()
+    #
+    # Logging
+    #
+    if options.verbose:
+        log = get_logger(DEBUG, timestamp=True)
+    else:
+        log = get_logger(INFO, timestamp=True)
+    #
+    # Initialize DB
+    #
+    postgresql = setup_db(options)
     #
     # Load configuration
     #
@@ -665,16 +717,16 @@ def main():
                'convert': None,
                'q3c': postgresql,
                'chunksize': options.chunksize,
-               'maxrows': options.maxrows},
-              {'filepath': join(options.datapath, 'twopct.ecsv'),
-               'tcls': ObsList,
-               'hdu': 1,
-               'expand': {'PASS': 'passnum'},
-               # 'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
-               'convert': None,
-               'q3c': postgresql,
-               'chunksize': options.chunksize,
                'maxrows': options.maxrows},]
+            #   {'filepath': join(options.datapath, 'survey', 'exposures.fits'),
+            #    'tcls': ObsList,
+            #    'hdu': 1,
+            #    'expand': {'PASS': 'passnum'},
+            #    # 'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
+            #    'convert': None,
+            #    'q3c': postgresql,
+            #    'chunksize': options.chunksize,
+            #    'maxrows': options.maxrows},]
             #   {'filepath': join(options.datapath, 'output', 'dark', '4', 'zcat.fits'),
             #    'tcls': ZCat,
             #    'hdu': 1,
@@ -704,7 +756,7 @@ def main():
     q = dbSession.query(ZCat).first()
     if q is None:
         log.info("Loading ZCat from %s.", options.datapath)
-        load_zcat(options.datapath)
+        load_zcat(options.datapath, run1d='mini')
         log.info("Finished loading ZCat.")
     else:
         log.info("ZCat table already loaded.")
