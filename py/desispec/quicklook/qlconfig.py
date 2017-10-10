@@ -138,23 +138,35 @@ class Config(object):
         paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile,'Apply_resolution': self.usesigma}
 
         paopts={}
+        defList={
+            'Initialize':paopt_initialize,
+            'Preproc':paopt_preproc,
+            'BootCalibration':paopt_bootcalib,
+            'BoxcarExtract':paopt_extract,
+            'ResolutionFit':paopt_resfit,
+            'ApplyFiberFlat_QL':paopt_apfflat,
+            'SkySub_QL':paopt_skysub
+        }
+
+        def getPAConfigFromFile(PA,algs):
+            def mergeDicts(source,dest):
+                for k in source:
+                    if k not in dest:
+                        dest[k]=source[k]
+            userconfig={}
+            if PA in algs:
+                fc=algs[PA]
+                for k in fc: #do a deep copy leave QA config out
+                    if k != "QA":
+                        userconfig[k]=fc[k]
+            defconfig={}
+            if PA in defList:
+                defconfig=defList[PA]
+            mergeDicts(defconfig,userconfig)
+            return userconfig
+
         for PA in self.palist:
-            if PA=='Initialize':
-                paopts[PA]=paopt_initialize
-            elif PA=='Preproc':
-                paopts[PA]=paopt_preproc
-            elif PA=='BootCalibration':
-                paopts[PA]=paopt_bootcalib
-            elif PA=='BoxcarExtract':
-                paopts[PA]=paopt_extract
-            elif PA=='ResolutionFit':
-                paopts[PA]=paopt_resfit
-            elif PA=='ApplyFiberFlat_QL':
-                paopts[PA]=paopt_apfflat
-            elif PA=='SkySub_QL':
-                paopts[PA]=paopt_skysub
-            else:
-                paopts[PA]={}
+            paopts[PA]=getPAConfigFromFile(PA,self.algorithms)
         #- Ignore intermediate dumping and write explicitly the outputfile for 
         self.outputfile=self.dump_pa(self.palist[-1]) 
 
@@ -220,12 +232,14 @@ class Config(object):
                     qaplot = None
 
                 pa_yaml = PA.upper()
-                referencemetrics = None
-                if self.reference != None:
-                    referencemetrics = self.reference[pa_yaml]['METRICS']
-
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf, 'ReferenceMetrics': referencemetrics}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 
+                            'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 
+                            'param': params, 'qlf': self.qlf}
+
+                if self.reference != None and pa_yaml in self.reference and 'METRICS' in self.reference[pa_yaml]:
+                    qaopts[qa]['ReferenceMetrics'] = self.reference[pa_yaml]['METRICS']
+                    
                 
         return qaopts 
    
@@ -358,11 +372,21 @@ class Config(object):
             template=findfile('ql_mergedQAarc_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
             template=findfile('ql_mergedQA_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        self.reference=None
         if os.path.isfile(template):
             with open(template) as reference:
-                self.reference=yaml.load(reference)
+                refdict=yaml.load(reference)
+                rkeys=refdict.keys()
+                if len(rkeys)==1:
+                    sni=refdict[rkeys[0]]
+                    if self.templateexpid in sni:
+                        sei=sni[self.templateexpid]
+                        if self.camera in sei:
+                            self.reference=sei[self.camera]
+                if self.reference is None:
+                    log.warning("WARNING template file is malformed %s"%template)                    
         else:
-            self.reference=None
+            log.warning("WARNING can't open template file %s"%template)
 
         outconfig={}
 
