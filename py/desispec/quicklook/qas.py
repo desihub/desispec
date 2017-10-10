@@ -1,5 +1,7 @@
 from desispec.quicklook import qllogger 
 from desispec.quicklook import qlexceptions
+import collections
+import numpy as np
 from enum import Enum
 
 class QASeverity(Enum):
@@ -25,11 +27,17 @@ class MonitoringAlg:
         cargs=self.config['kwargs']
         params=cargs['param']
         deviation=None
-        if "RESULT" in res['METRICS'] and "REFERENCE" in params:
-            current=res['METRICS']["RESULT"]
+        reskey="RESULT"
+        QARESULTKEY="QA_STATUS"
+        if "SAMI_QASTATUSKEY" in cargs:
+            QARESULTKEY=cargs["SAMI_QASTATUSKEY"]
+        if "SAMI_RESULTKEY" in cargs:
+            reskey=cargs["SAMI_RESULTKEY"]
+        if reskey in res['METRICS'] and "REFERENCE" in params:
+            current=res['METRICS'][reskey]
             old=params["REFERENCE"]
-            currlist=isinstance(current,list)
-            oldlist=isinstance(old,list)
+            currlist=isinstance(current,(np.ndarray,collections.Sequence))
+            oldlist=isinstance(old,(np.ndarray,collections.Sequence))
             if currlist != oldlist: # different types
                 self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different types!".format(self.name,type(old),type(current)))
             elif currlist: #both are lists
@@ -56,20 +64,20 @@ class MonitoringAlg:
             return val
         if self.__deviation is not None and "RANGES" in cargs:
             thr=cargs["RANGES"]
-            res["QA_STATUS"]="ERROR"
-            thrlist=isinstance(thr[0][0][0],list) #multiple threshols for multiple results
-            devlist=isinstance(self.__deviation,list)
-            if devlist!=thrlist and len(thr)!=1:
+            res[QARESULTKEY]="ERROR"
+            thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
+            devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
+            if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
                 self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible!".format(self.name,len(thr),len(self.__deviation)))
                 return res
-            else:
-                if devlist:
-                    if len(thr)==1:
-                        res["QA_STATUS"]=[findThr(d,thr) for d in self.__deviation] # check all results against same thresholds
-                    else:
-                        res["QA_STATUS"]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
-                else:
-                    res["QA_STATUS"]=str(findThr(self.__deviation,thr))
+            else: #they are of the same type
+                if devlist: # if results are a list
+                    if len(thr)==1: # check all results against same thresholds
+                        res[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
+                    else: # each result has its own thresholds
+                        res[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
+                else: #result is a scalar
+                    res[QARESULTKEY]=str(findThr(self.__deviation,thr))
         return res
     def run(self,*argv,**kwargs):
         pass
