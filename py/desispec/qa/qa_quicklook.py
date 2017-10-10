@@ -58,10 +58,18 @@ class Get_RMS(MonitoringAlg):
         from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="RMS_OVER_AMP"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="RMSDIFF_ERR"
 
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
         if "RMS_WARN_RANGE" in parms and "RMS_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["RMS_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["RMS_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
+        
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -95,7 +103,7 @@ class Get_RMS(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-
+        
         return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
@@ -156,7 +164,6 @@ class Get_RMS(MonitoringAlg):
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-
             for i in range(len(rms_over_amps)):
                 if rms_over_amps[i] >= param['RMS_NORMAL_RANGE'][0] and rms_over_amps[i] <= param['RMS_NORMAL_RANGE'][1]:
                     if rmsdiff_err == 'WARN':
@@ -203,7 +210,13 @@ class Count_Pixels(MonitoringAlg):
         from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
-
+        key="NPIXLO_AMP"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="NPIX_ERR"
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
         if "NPIX_WARN_RANGE" in parms and "NPIX_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["NPIX_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["NPIX_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
@@ -295,7 +308,6 @@ class Count_Pixels(MonitoringAlg):
                     break
 
             retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_ERR":npix_err}
-
         else:
             if npixlo >= param['NPIX_NORMAL_RANGE'][0] and npixlo <= param['NPIX_NORMAL_RANGE'][1]:
                 npix_err = 'NORMAL'
@@ -330,6 +342,13 @@ class Integrate_Spec(MonitoringAlg):
         from desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="INTEG_AVG"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="MAGDIFF_ERR"
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
 
         if "MAGDIFF_WARN_RANGE" in parms and "MAGDIFF_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["MAGDIFF_WARN_RANGE"]),QASeverity.WARNING),
@@ -491,6 +510,13 @@ class Sky_Continuum(MonitoringAlg):
         from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="SKYCONT"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="SKYCONT_ERR"
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
     
         if "SKYCONT_WARN_RANGE" in parms and "SKYCONT_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["SKYCONT_WARN_RANGE"]),QASeverity.WARNING),
@@ -657,6 +683,13 @@ class Sky_Peaks(MonitoringAlg):
         from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="SKYPEAKS"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="SUMCOUNT_ERR"
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
 
         if "SUMCOUNT_WARN_RANGE" in parms and "SUMCOUNT_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["SUMCOUNT_WARN_RANGE"]),QASeverity.WARNING),
@@ -902,6 +935,13 @@ class Calc_XWSigma(MonitoringAlg):
         from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="WSIGMA_MED_SKY"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="SHIFT_ERR"
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
 
         if "XSHIFT_WARN_RANGE" in parms and "XSHIFT_NORMAL_RANGE" and "WSHIFT_WARN_RANGE" in parms and "WSHIFT_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["XSHIFT_WARN_RANGE"]),QASeverity.WARNING),
@@ -1270,6 +1310,14 @@ class Bias_From_Overscan(MonitoringAlg):
         rawtype=astropy.io.fits.hdu.hdulist.HDUList
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="BIAS_AMP"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="BIASDIFF_ERR"
+
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
 
         if "DIFF_WARN_RANGE" in parms and "DIFF_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["DIFF_WARN_RANGE"]),QASeverity.WARNING),
@@ -1466,6 +1514,14 @@ class CountSpectralBins(MonitoringAlg):
         from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="NGOODFIBERS"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="NGOOD_ERR"
+
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
 
         if "NGOOD_WARN_RANGE" in parms and "NGOOD_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["NGOOD_WARN_RANGE"]),QASeverity.WARNING),
@@ -1654,6 +1710,14 @@ class Sky_Residual(MonitoringAlg):
         from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="RESID_RMS"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="SKY_RESID_ERR"
+
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
 
         if "SKYRESID_WARN_RANGE" in parms and "SKYRESID_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["SKYRESID_WARN_RANGE"]),QASeverity.WARNING),
@@ -1773,6 +1837,13 @@ class Calculate_SNR(MonitoringAlg):
         from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key="ELG_FIDSNR"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]="FIDSNR_WARN"
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
 
         if "FIDSNR_WARN_RANGE" in parms and "FIDSNR_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["FIDSNR_WARN_RANGE"]),QASeverity.WARNING),
