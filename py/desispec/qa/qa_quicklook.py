@@ -164,26 +164,26 @@ class Get_RMS(MonitoringAlg):
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-            for i in range(len(rms_over_amps)):
-                if rms_over_amps[i] >= param['RMS_NORMAL_RANGE'][0] and rms_over_amps[i] <= param['RMS_NORMAL_RANGE'][1]:
-                    if rmsdiff_err == 'WARN':
-                        pass
-                    else:
-                        rmsdiff_err = 'NORMAL'
-                elif rms_over_amps[i] >= param['RMS_WARN_RANGE'][0] and rms_over_amps[i] <= param['RMS_WARN_RANGE'][1]:
-                    rmsdiff_err = 'WARN'
-                else:
-                    rmsdiff_err = 'ALARM'
-                    break
+            # for i in range(len(rms_over_amps)):
+            #     if rms_over_amps[i] >= param['RMS_NORMAL_RANGE'][0] and rms_over_amps[i] <= param['RMS_NORMAL_RANGE'][1]:
+            #         if rmsdiff_err == 'WARN':
+            #             pass
+            #         else:
+            #             rmsdiff_err = 'NORMAL'
+            #     elif rms_over_amps[i] >= param['RMS_WARN_RANGE'][0] and rms_over_amps[i] <= param['RMS_WARN_RANGE'][1]:
+            #         rmsdiff_err = 'WARN'
+            #     else:
+            #         rmsdiff_err = 'ALARM'
+            #         break
 
             retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RESULT":rmsccd,"RMS_OVER_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff_err,"EXPNUM_WARN":expnum}
         else:
-            if rmsover >= param['RMS_NORMAL_RANGE'][0] and rmsover <= param['RMS_NORMAL_RANGE'][1]:
-                rmsdiff_err = 'NORMAL'
-            elif rmsover >= param['RMS_WARN_RANGE'][0] and rmsover <= param['RMS_WARN_RANGE'][1]:
-                rmsdiff_err = 'WARN'
-            else:
-                rmsdiff_err = 'ALARM'
+            # if rmsover >= param['RMS_NORMAL_RANGE'][0] and rmsover <= param['RMS_NORMAL_RANGE'][1]:
+            #     rmsdiff_err = 'NORMAL'
+            # elif rmsover >= param['RMS_WARN_RANGE'][0] and rmsover <= param['RMS_WARN_RANGE'][1]:
+            #     rmsdiff_err = 'WARN'
+            # else:
+            #     rmsdiff_err = 'ALARM'
 
             retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_ROW":rms_row,"RMSDIFF_ERR":rmsdiff_err,"EXPNUM_WARN":expnum}
 
@@ -295,26 +295,26 @@ class Count_Pixels(MonitoringAlg):
                 npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
                 npixhi_amps.append(npixhi_thisamp)
 
-            for i in range(len(npixlo_amps)):
-                if npixlo_amps[i] >= param['NPIX_NORMAL_RANGE'][0] and npixlo_amps[i] <= param['NPIX_NORMAL_RANGE'][1]:
-                    if npix_err == 'WARN':
-                        pass
-                    else:
-                        npix_err = 'NORMAL'
-                elif npixlo_amps[i] >= param['NPIX_WARN_RANGE'][0] and npixlo_amps[i] <= param['NPIX_WARN_RANGE'][1]:
-                    npix_err = 'WARN'
-                else:
-                    npix_err = 'ALARM'
-                    break
+            # for i in range(len(npixlo_amps)):
+            #     if npixlo_amps[i] >= param['NPIX_NORMAL_RANGE'][0] and npixlo_amps[i] <= param['NPIX_NORMAL_RANGE'][1]:
+            #         if npix_err == 'WARN':
+            #             pass
+            #         else:
+            #             npix_err = 'NORMAL'
+            #     elif npixlo_amps[i] >= param['NPIX_WARN_RANGE'][0] and npixlo_amps[i] <= param['NPIX_WARN_RANGE'][1]:
+            #         npix_err = 'WARN'
+            #     else:
+            #         npix_err = 'ALARM'
+            #         break
 
             retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_LOW_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_ERR":npix_err}
         else:
-            if npixlo >= param['NPIX_NORMAL_RANGE'][0] and npixlo <= param['NPIX_NORMAL_RANGE'][1]:
-                npix_err = 'NORMAL'
-            elif npixlo >= param['NPIX_WARN_RANGE'][0] and npixlo <= param['NPIX_WARN_RANGE'][1]:
-                npix_err = 'WARN'
-            else:
-                npix_err = 'ALARM'
+            # if npixlo >= param['NPIX_NORMAL_RANGE'][0] and npixlo <= param['NPIX_NORMAL_RANGE'][1]:
+            #     npix_err = 'NORMAL'
+            # elif npixlo >= param['NPIX_WARN_RANGE'][0] and npixlo <= param['NPIX_WARN_RANGE'][1]:
+            #     npix_err = 'WARN'
+            # else:
+            #     npix_err = 'ALARM'
 
             retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_ERR":npix_err}
 
@@ -461,27 +461,27 @@ class Integrate_Spec(MonitoringAlg):
                         integ_thisamp[ii]=qalib.integrate_spec(wave,stdflux_thisamp[ii])
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
-            for i in range(len(magdiff_avg_amp)):
-                if magdiff_avg_amp[i] >= param['MAGDIFF_NORMAL_RANGE'][0] and magdiff_avg_amp[i] <= param['MAGDIFF_NORMAL_RANGE'][1]:
-                    if magdiff_err == 'WARN':
-                        pass
-                    else:
-                        magdiff_err = 'NORMAL'
-                elif magdiff_avg_amp[i] >= param['MAGDIFF_WARN_RANGE'][0] and magdiff_avg_amp[i] <= param['MAGDIFF_WARN_RANGE'][1]:
-                    magdiff_err = 'WARN'
-                else:
-                    magdiff_err = 'ALARM'
-                    break
+            # for i in range(len(magdiff_avg_amp)):
+            #     if magdiff_avg_amp[i] >= param['MAGDIFF_NORMAL_RANGE'][0] and magdiff_avg_amp[i] <= param['MAGDIFF_NORMAL_RANGE'][1]:
+            #         if magdiff_err == 'WARN':
+            #             pass
+            #         else:
+            #             magdiff_err = 'NORMAL'
+            #     elif magdiff_avg_amp[i] >= param['MAGDIFF_WARN_RANGE'][0] and magdiff_avg_amp[i] <= param['MAGDIFF_WARN_RANGE'][1]:
+            #         magdiff_err = 'WARN'
+            #     else:
+            #         magdiff_err = 'ALARM'
+            #         break
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_ERR":magdiff_err}
 
         else:
-            if magdiff_avg >= param['MAGDIFF_NORMAL_RANGE'][0] and magdiff_avg <= param['MAGDIFF_NORMAL_RANGE'][1]:
-                magdiff_err = 'NORMAL'
-            elif magdiff_avg >= param['MAGDIFF_WARN_RANGE'][0] and magdiff_avg <= param['MAGDIFF_WARN_RANGE'][1]:
-                magdiff_err = 'WARN'
-            else:
-                magdiff_err = 'ALARM'
+            # if magdiff_avg >= param['MAGDIFF_NORMAL_RANGE'][0] and magdiff_avg <= param['MAGDIFF_NORMAL_RANGE'][1]:
+            #     magdiff_err = 'NORMAL'
+            # elif magdiff_avg >= param['MAGDIFF_WARN_RANGE'][0] and magdiff_avg <= param['MAGDIFF_WARN_RANGE'][1]:
+            #     magdiff_err = 'WARN'
+            # else:
+            #     magdiff_err = 'ALARM'
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_ERR":magdiff_err}
 
@@ -633,27 +633,27 @@ class Sky_Continuum(MonitoringAlg):
 
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
-            for i in range(len(skycont_amps)):
-                if skycont_amps[i] >= param['SKYCONT_NORMAL_RANGE'][0] and skycont_amps[i] <= param['SKYCONT_NORMAL_RANGE'][1]:
-                    if skycont_err == 'WARN':
-                        pass
-                    else:
-                        skycont_err = 'NORMAL'
-                elif skycont_amps[i] >= param['SKYCONT_WARN_RANGE'][0] and skycont_amps[i] <= param['SKYCONT_WARN_RANGE'][1]:
-                    skycont_err = 'WARN'
-                else:
-                    skycont_err = 'ALARM'
-                    break
+            # for i in range(len(skycont_amps)):
+            #     if skycont_amps[i] >= param['SKYCONT_NORMAL_RANGE'][0] and skycont_amps[i] <= param['SKYCONT_NORMAL_RANGE'][1]:
+            #         if skycont_err == 'WARN':
+            #             pass
+            #         else:
+            #             skycont_err = 'NORMAL'
+            #     elif skycont_amps[i] >= param['SKYCONT_WARN_RANGE'][0] and skycont_amps[i] <= param['SKYCONT_WARN_RANGE'][1]:
+            #         skycont_err = 'WARN'
+            #     else:
+            #         skycont_err = 'ALARM'
+            #         break
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_ERR":skycont_err}
 
         else: 
-            if skycont >= param['SKYCONT_NORMAL_RANGE'][0] and skycont <= param['SKYCONT_NORMAL_RANGE'][1]:
-                skycont_err = 'NORMAL'
-            elif skycont >= param['SKYCONT_WARN_RANGE'][0] and skycont <= param['SKYCONT_WARN_RANGE'][1]:
-                skycont_err = 'WARN'
-            else:
-                skycont_err = 'ALARM'
+            # if skycont >= param['SKYCONT_NORMAL_RANGE'][0] and skycont <= param['SKYCONT_NORMAL_RANGE'][1]:
+            #     skycont_err = 'NORMAL'
+            # elif skycont >= param['SKYCONT_WARN_RANGE'][0] and skycont <= param['SKYCONT_WARN_RANGE'][1]:
+            #     skycont_err = 'WARN'
+            # else:
+            #     skycont_err = 'ALARM'
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_ERR":skycont_err}
 
@@ -683,7 +683,7 @@ class Sky_Peaks(MonitoringAlg):
         from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key="SKYPEAKS"
+        key="SUMCOUNT_MED_SKY"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]="SUMCOUNT_ERR"
         if "ReferenceMetrics" in kwargs:
@@ -878,17 +878,17 @@ class Sky_Peaks(MonitoringAlg):
         retval["PARAMS"] = param
 
         sumcount_err=[]
-        for i in range(len(nspec_counts)):
-            if nspec_counts[i] >= param['SUMCOUNT_NORMAL_RANGE'][0] and nspec_counts[i] <= param['SUMCOUNT_NORMAL_RANGE'][1]:
-                if sumcount_err == 'WARN':
-                    pass
-                else:
-                    sumcount_err = 'NORMAL'
-            elif nspec_counts[i] >= param['SUMCOUNT_WARN_RANGE'][0] and nspec_counts[i] <= param['SUMCOUNT_WARN_RANGE'][1]:
-                sumcount_err = 'WARN'
-            else:
-                sumcount_err = 'ALARM'
-                break
+        # for i in range(len(nspec_counts)):
+        #     if nspec_counts[i] >= param['SUMCOUNT_NORMAL_RANGE'][0] and nspec_counts[i] <= param['SUMCOUNT_NORMAL_RANGE'][1]:
+        #         if sumcount_err == 'WARN':
+        #             pass
+        #         else:
+        #             sumcount_err = 'NORMAL'
+        #     elif nspec_counts[i] >= param['SUMCOUNT_WARN_RANGE'][0] and nspec_counts[i] <= param['SUMCOUNT_WARN_RANGE'][1]:
+        #         sumcount_err = 'WARN'
+        #     else:
+        #         sumcount_err = 'ALARM'
+        #         break
 
         if amps:
 
@@ -1259,27 +1259,27 @@ class Calc_XWSigma(MonitoringAlg):
 
         shift_err=[]
         if amps:
-            for i in range(len(xshift_amp)):
-                if xshift_amp[i] >= param['XSHIFT_NORMAL_RANGE'][0] and xshift_amp[i] <= param['XSHIFT_NORMAL_RANGE'][1] and wshift_amp[i] >= param['WSHIFT_NORMAL_RANGE'][0] and wshift_amp[i] <= param['WSHIFT_ALARM_RANGE'][1]:
-                    if shift_err == 'WARN':
-                        pass
-                    else:
-                        shift_err = 'NORMAL'
-                elif xshift_amp[i] >= param['XSHIFT_WARN_RANGE'][0] and xshift_amp[i] <= param['XSHIFT_WARN_RANGE'][1] and wshift_amp[i] >= param['WSHIFT_WARN_RANGE'][0] and wshift_amp[i] <= param['WSHIFT_WARN_RANGE'][1]:
-                    shift_err = 'WARN'
-                else:
-                    shift_err = 'ALARM'
-                    break
+            # for i in range(len(xshift_amp)):
+            #     if xshift_amp[i] >= param['XSHIFT_NORMAL_RANGE'][0] and xshift_amp[i] <= param['XSHIFT_NORMAL_RANGE'][1] and wshift_amp[i] >= param['WSHIFT_NORMAL_RANGE'][0] and wshift_amp[i] <= param['WSHIFT_ALARM_RANGE'][1]:
+            #         if shift_err == 'WARN':
+            #             pass
+            #         else:
+            #             shift_err = 'NORMAL'
+            #     elif xshift_amp[i] >= param['XSHIFT_WARN_RANGE'][0] and xshift_amp[i] <= param['XSHIFT_WARN_RANGE'][1] and wshift_amp[i] >= param['WSHIFT_WARN_RANGE'][0] and wshift_amp[i] <= param['WSHIFT_WARN_RANGE'][1]:
+            #         shift_err = 'WARN'
+            #     else:
+            #         shift_err = 'ALARM'
+            #         break
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"SHIFT_ERR":shift_err}
 
         else:
-            if xshift >= param['XSHIFT_NORMAL_RANGE'][0] and xshift <= param['XSHIFT_NORMAL_RANGE'][1] and wshift >= param['WSHIFT_NORMAL_RANGE'][0] and wshift <= param['WSHIFT_NORMAL_RANGE'][1]:
-                shift_err = 'NORMAL'
-            elif xshift >= param['XSHIFT_WARN_RANGE'][0] and xshift <= param['XSHIFT_WARN_RANGE'][1] and wshift >= param['WSHIFT_WARN_RANGE'][1] and wshift <= param['WSHIFT_WARN_RANGE'][1]:
-                shift_err = 'WARN'
-            else:
-                shift_err = 'ALARM'
+            # if xshift >= param['XSHIFT_NORMAL_RANGE'][0] and xshift <= param['XSHIFT_NORMAL_RANGE'][1] and wshift >= param['WSHIFT_NORMAL_RANGE'][0] and wshift <= param['WSHIFT_NORMAL_RANGE'][1]:
+            #     shift_err = 'NORMAL'
+            # elif xshift >= param['XSHIFT_WARN_RANGE'][0] and xshift <= param['XSHIFT_WARN_RANGE'][1] and wshift >= param['WSHIFT_WARN_RANGE'][1] and wshift <= param['WSHIFT_WARN_RANGE'][1]:
+            #     shift_err = 'WARN'
+            # else:
+            #     shift_err = 'ALARM'
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"SHIFT_ERR":shift_err}
 
@@ -1464,27 +1464,27 @@ class Bias_From_Overscan(MonitoringAlg):
         biasdiff_err=[]
         if amps:
             bias_amps=np.array(bias_overscan)
-            for i in range(len(bias_amps)):
-                if bias_amps[i] >= param['DIFF_NORMAL_RANGE'][0] and bias_amps[i] <= param['DIFF_NORMAL_RANGE'][1]:
-                    if biasdiff_err == 'WARN':
-                        pass
-                    else:
-                        biasdiff_err = 'NORMAL'
-                elif bias_amps[i] >= param['DIFF_WARN_RANGE'][0] and bias_amps[i] <= param['DIFF_WARN_RANGE'][1]:
-                    biasdiff_err = 'WARN'
-                else:
-                    biasdiff_err = 'NORMAL'
-                    break
+            # for i in range(len(bias_amps)):
+            #     if bias_amps[i] >= param['DIFF_NORMAL_RANGE'][0] and bias_amps[i] <= param['DIFF_NORMAL_RANGE'][1]:
+            #         if biasdiff_err == 'WARN':
+            #             pass
+            #         else:
+            #             biasdiff_err = 'NORMAL'
+            #     elif bias_amps[i] >= param['DIFF_WARN_RANGE'][0] and bias_amps[i] <= param['DIFF_WARN_RANGE'][1]:
+            #         biasdiff_err = 'WARN'
+            #     else:
+            #         biasdiff_err = 'NORMAL'
+            #         break
 
             retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff_err}
 
         else:
-            if bias >= param['DIFF_NORMAL_RANGE'][0] and bias <= param['DIFF_NORMAL_RANGE'][1]:
-                biasdiff_err = 'NORMAL'
-            elif bias >= param['DIFF_ALARM_RANGE'][0] and bias <= param['DIFF_WARN_RANGE'][1]:
-                biasdiff_err = 'WARN'
-            else:
-                biasdiff_err = 'ALARM'
+            # if bias >= param['DIFF_NORMAL_RANGE'][0] and bias <= param['DIFF_NORMAL_RANGE'][1]:
+            #     biasdiff_err = 'NORMAL'
+            # elif bias >= param['DIFF_ALARM_RANGE'][0] and bias <= param['DIFF_WARN_RANGE'][1]:
+            #     biasdiff_err = 'WARN'
+            # else:
+            #     biasdiff_err = 'ALARM'
 
             retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIASDIFF_ERR":biasdiff_err}
 
@@ -1616,13 +1616,13 @@ class CountSpectralBins(MonitoringAlg):
         bottommax=None
         topmin=None
 
-        ngood_err=[]
-        if ngoodfibers >= param['NGOOD_NORMAL_RANGE'][0] and ngoodfibers <= param['NGOOD_NORMAL_RANGE'][1]:
-            ngood_err = 'NORMAL'
-        elif ngoodfibers >= param['NGOOD_WARN_RANGE'][0] and ngoodfibers <= param['NGOOD_WARN_RANGE'][1]:
-            ngood_err = 'WARN'
-        else:
-            ngood_err = 'ALARM'
+        ngood_err="UNKNOWN"
+        # if ngoodfibers >= param['NGOOD_NORMAL_RANGE'][0] and ngoodfibers <= param['NGOOD_NORMAL_RANGE'][1]:
+        #     ngood_err = 'NORMAL'
+        # elif ngoodfibers >= param['NGOOD_WARN_RANGE'][0] and ngoodfibers <= param['NGOOD_WARN_RANGE'][1]:
+        #     ngood_err = 'WARN'
+        # else:
+        #     ngood_err = 'ALARM'
 
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
@@ -1809,12 +1809,12 @@ class Sky_Residual(MonitoringAlg):
             qlf_post(retval)    
 
         skyresid_err=[]
-        if qadict['MED_RESID'] >= param['SKYRESID_NORMAL_RANGE'][0] and qadict['MED_RESID'] <= param['SKYRESID_NORMAL_RANGE'][1]:
-            skyresid_err = 'NORMAL'
-        elif qadict['MED_RESID'] >= param['SKYRESID_WARN_RANGE'][0] and qadict['MED_RESID'] <= param['SKYRESID_WARN_RANGE'][1]:
-            skyresid_err = 'WARN'
-        else:
-            skyresid_err = 'ALARM'
+        # if qadict['MED_RESID'] >= param['SKYRESID_NORMAL_RANGE'][0] and qadict['MED_RESID'] <= param['SKYRESID_NORMAL_RANGE'][1]:
+        #     skyresid_err = 'NORMAL'
+        # elif qadict['MED_RESID'] >= param['SKYRESID_WARN_RANGE'][0] and qadict['MED_RESID'] <= param['SKYRESID_WARN_RANGE'][1]:
+        #     skyresid_err = 'WARN'
+        # else:
+        #     skyresid_err = 'ALARM'
 
         retval["PARAMS"] = param
         retval["METRICS"]["SKY_RESID_ERR"]=skyresid_err
@@ -1936,12 +1936,12 @@ class Calculate_SNR(MonitoringAlg):
         retval["PARAMS"] = param
 
         snrwarn=[]
-        if qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_NORMAL_RANGE'][0] and qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_NORMAL_RANGE'][1]:
-            snrwarn = 'NORMAL'
-        elif qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_WARN_RANGE'][0] and qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_WARN_RANGE'][1]:
-            snrwarn = 'WARN'
-        else:
-            snrwarn = 'ALARM'
+        # if qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_NORMAL_RANGE'][0] and qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_NORMAL_RANGE'][1]:
+        #     snrwarn = 'NORMAL'
+        # elif qadict["ELG_FIDMAG_SNR"] >= param['FIDSNR_WARN_RANGE'][0] and qadict["ELG_FIDMAG_SNR"] <= param['FIDSNR_WARN_RANGE'][1]:
+        #     snrwarn = 'WARN'
+        # else:
+        #     snrwarn = 'ALARM'
 
         retval["METRICS"]["FIDSNR_WARN"] = snrwarn
 
