@@ -10,16 +10,15 @@ Spring 2016
 
 from __future__ import absolute_import, division, print_function
 
-from desispec.quicklook import quicklook,qllogger,qlconfig
-import desispec.image as image
-import desispec.frame as frame
-import desispec.io.frame as frIO
-import desispec.io.image as imIO
 
 import os,sys
 import yaml
 
 import argparse
+
+def quietDesiLogger(loglvl=20):
+    from desiutil.log import get_logger
+    get_logger(level=loglvl)
 
 def parse():
     """
@@ -36,18 +35,27 @@ def parse():
     parser.add_argument("--save",type=str, required=False,help="save this full config to a file")
     parser.add_argument("--qlf",type=str,required=False,help="setup for QLF run", default=False)
     parser.add_argument("--mergeQA", default=False, action='store_true',help="output Merged QA file")
+    parser.add_argument("--loglvl",default=20,type=int,help="log level for quicklook (0=verbose, 50=Critical)")
 
     args=parser.parse_args()
     return args
 
 def ql_main(args=None):
-
-    qlog=qllogger.QLLogger("QuickLook",20)
-    log=qlog.getlog()
+    from desispec.quicklook import quicklook,qllogger,qlconfig
+    import desispec.image as image
+    import desispec.frame as frame
+    import desispec.io.frame as frIO
+    import desispec.io.image as imIO
 
     if args is None:
         args = parse()
 
+    qlog=qllogger.QLLogger(name="QuickLook",loglevel=args.loglvl)
+    log=qlog.getlog()
+    # Sami
+    # quiet down DESI logs. We don't want DESI_LOGGER to print messages unless they are important
+    # initalize singleton with WARNING level
+    quietDesiLogger(args.loglvl+10)
     if args.config is not None:
 
         if args.rawdata_dir:
@@ -64,7 +72,7 @@ def ql_main(args=None):
                 sys.exit("must set ${} environment variable or provide specprod_dir".format('QL_SPEC_REDUX'))
             specprod_dir=os.getenv('QL_SPEC_REDUX')
 
-        log.info("Running Quicklook using configuration file {}".format(args.config))
+        log.debug("Running Quicklook using configuration file {}".format(args.config))
         if os.path.exists(args.config):
             if "yaml" in args.config:
                 config=qlconfig.Config(args.config, args.night,args.camera, args.expid,rawdata_dir=rawdata_dir, specprod_dir=specprod_dir)
@@ -76,7 +84,7 @@ def ql_main(args=None):
             sys.exit("File does not exist: {}".format(args.config)) 
     
     elif args.fullconfig is not None: #- This is mostly for development/debugging purpose
-       log.info("Running Quicklook using full configuration file {}".format(args.fullconfig))
+       log.debug("Running Quicklook using full configuration file {}".format(args.fullconfig))
        if os.path.exists(args.fullconfig):
            if "yaml" in args.fullconfig:
                configdict=yaml.load(open(args.fullconfig,"r"))
@@ -96,7 +104,7 @@ def ql_main(args=None):
             log.info("Output saved for this configuration to {}".format(args.save))
             f.close()
         else:
-            log.info("Can save config to only yaml output. Put a yaml in the argument")
+            log.warning("Can save config to only yaml output. Put a yaml in the argument")
         
     pipeline, convdict = quicklook.setup_pipeline(configdict)
     res=quicklook.runpipeline(pipeline,convdict,configdict,mergeQA=args.mergeQA)
@@ -129,5 +137,6 @@ def ql_main(args=None):
         log.error("Result of pipeline is an unknown type {}. Don't know how to write".format(type(res)))
         sys.exit("Unknown pipeline result type {}.".format(type(res)))
     log.info("Pipeline completed. Final result is in {}".format(finalname))
+
 if __name__=='__main__':
     ql_main()    

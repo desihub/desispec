@@ -3,9 +3,6 @@ import yaml
 from desispec.io import findfile
 import os,sys
 from desispec.quicklook import qlexceptions,qllogger
-qlog=qllogger.QLLogger("QuickLook",20)
-log=qlog.getlog()
-
 
 class Config(object):
     """ 
@@ -48,6 +45,8 @@ class Config(object):
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
             else: self.wavelength = None
         self._qlf=qlf
+        qlog=qllogger.QLLogger(name="QLConfig")
+        self.log=qlog.getlog()
 
 
     @property
@@ -347,7 +346,8 @@ class Config(object):
         """
         config: desispec.quicklook.qlconfig.Config object
         """
-        log.info("Building Full Configuration")
+
+        self.log.debug("Building Full Configuration")
 
         self.program = self.conf["Program"]
         self.flavor = self.conf["Flavor"]
@@ -384,9 +384,9 @@ class Config(object):
                         if self.camera in sei:
                             self.reference=sei[self.camera]
                 if self.reference is None:
-                    log.warning("WARNING template file is malformed %s"%template)                    
+                    self.log.warning("WARNING template file is malformed %s"%template)                    
         else:
-            log.warning("WARNING can't open template file %s"%template)
+            self.log.warning("WARNING can't open template file %s"%template)
 
         outconfig={}
 
@@ -426,25 +426,27 @@ def check_config(outconfig):
     """
     Given the expanded config, check for all possible file existence etc....
     """
+    qlog=qllogger.QLLogger(name="QLConfig")
+    log=qlog.getlog()
 
     if outconfig["Flavor"]=="science":
         files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
-        log.info("Checking if all the necessary files exist.")
+        log.debug("Checking if all the necessary files exist.")
         for thisfile in files:
             if not os.path.exists(thisfile):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
-                log.info("File check: Okay: {}".format(thisfile))
-        log.info("All necessary files exist for science configuration.")
+                log.debug("File check: Okay: {}".format(thisfile))
+        log.debug("All necessary files exist for science configuration.")
     elif outconfig["Flavor"]=="arcs":
         files = [outconfig["RawImage"], outconfig["FiberMap"]]
-        log.info("Checking if all the necessary files exist.")
+        log.debug("Checking if all the necessary files exist.")
         for thisfile in files:
             if not os.path.exists(thisfile):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
-                log.info("File check: Okay: {}".format(thisfile))
-        log.info("All necessary files exist for arc configuration.")
+                log.debug("File check: Okay: {}".format(thisfile))
+        log.debug("All necessary files exist for arc configuration.")
     return 
 
 
@@ -466,6 +468,8 @@ class Palist(object):
         self.algorithms=algorithms
         self.palist=self._palist()
         self.qalist=self._qalist()
+        qlog=qllogger.QLLogger(name="QLConfig")
+        self.log=qlog.getlog()
         
     def _palist(self):
         
@@ -479,7 +483,7 @@ class Palist(object):
             elif self.flavor == "science":
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
             else:
-                log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
+                self.log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
                 sys.exit(0)
         self.pamodule='desispec.quicklook.procalgs'
         return pa_list       

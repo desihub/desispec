@@ -35,7 +35,7 @@ def qlf_post(qadict):
         else: 
             qlf_user=os.environ.get("QLF_USER")
             qlf_passwd=os.environ.get("QLF_PASSWD")
-            log.info("Environment variables are set for QLF. Now trying HTTP post.")
+            log.debug("Environment variables are set for QLF. Now trying HTTP post.")
             #- All set. Now try to HTTP post
             try: 
                 import requests
@@ -46,7 +46,7 @@ def qlf_post(qadict):
                 job={"name":"QL","status":0,"dictionary":qadict} #- QLF should disintegrate dictionary
                 response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
             except:
-                log.info("Skipping HTTP post...")    
+                log.error("Skipping HTTP post... Exception",exc_info=true)
 
     else:   
         log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
@@ -120,7 +120,7 @@ class Get_RMS(MonitoringAlg):
         rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param = {
                 "RMS_NORMAL_RANGE":[-1.0, 1.0],
                 "RMS_WARN_RANGE":[-2.0, 2.0]
@@ -192,11 +192,11 @@ class Get_RMS(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_RMS
             plot_RMS(retval,qafig)            
-            log.info("Output QA fig {}".format(qafig))      
+            log.debug("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -267,7 +267,7 @@ class Count_Pixels(MonitoringAlg):
         retval["NIGHT"] = image.meta["NIGHT"]
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param = {
                  "CUTLO":3,   # low threshold for number of counts in sigmas
                  "CUTHI":10, 
@@ -323,12 +323,12 @@ class Count_Pixels(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countpix
             plot_countpix(retval,qafig)
             
-            log.info("Output QA fig {}".format(qafig))      
+            log.debug("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -417,12 +417,12 @@ class Integrate_Spec(MonitoringAlg):
         #- average integrals over star fibers
         starfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
         if len(starfibers) < 1:
-            log.info("WARNING: no STD fibers found.")
+            log.warning("no STD fibers found.")
         int_stars=integrals[starfibers]
         int_average=np.mean(int_stars)
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param = {
                 "MAGDIFF_NORMAL_RANGE":[-0.5, 0.5],
                 "MAGDIFF_WARN_RANGE":[-1.0, 1.0]
@@ -490,12 +490,12 @@ class Integrate_Spec(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_integral
             plot_integral(retval,qafig)
             
-            log.info("Output QA fig {}".format(qafig))      
+            log.debug("Output QA fig {}".format(qafig))      
 
         return retval    
 
@@ -577,7 +577,10 @@ class Sky_Continuum(MonitoringAlg):
         else: qafig=None
         return self.run_qa(fibermap,input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,paname=None,amps=False,dict_countbins=None,qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,
+               paname=None,amps=False,dict_countbins=None,
+               qafile=None,qafig=None, param=None, qlf=False, 
+               refmetrics=None):
 
         #- qa dictionary 
         retval={}
@@ -593,7 +596,7 @@ class Sky_Continuum(MonitoringAlg):
         dec = fibermap["DEC_TARGET"]
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param = {
                 "B_CONT":[(4000, 4500), (5250, 5550)],
                 "R_CONT":[(5950, 6200), (6990, 7230)],
@@ -662,13 +665,13 @@ class Sky_Continuum(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
 
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_continuum
             plot_sky_continuum(retval,qafig)
             
-            log.info("Output QA fig {}".format(qafig))                   
+            log.debug("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -866,7 +869,7 @@ class Sky_Peaks(MonitoringAlg):
         sumcount_med_sky=[]
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param ={
                 "B_PEAKS":[3914.4, 5199.3, 5201.8],
                 "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
@@ -915,12 +918,12 @@ class Sky_Peaks(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_sky_peaks
             plot_sky_peaks(retval,qafig)
 
-            log.info("Output QA fig {}".format(qafig))
+            log.debug("Output QA fig {}".format(qafig))
 
         return retval
 
@@ -1009,7 +1012,7 @@ class Calc_XWSigma(MonitoringAlg):
         dec = fibermap["DEC_TARGET"]
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             if image.meta["FLAVOR"] == 'arc':
                 param = {
                     "B_PEAKS":[4047.7, 4359.6, 5087.2],
@@ -1289,12 +1292,12 @@ class Calc_XWSigma(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_XWSigma
             plot_XWSigma(retval,qafig)
 
-            log.info("Output QA fig {}".format(qafig))
+            log.debug("Output QA fig {}".format(qafig))
 
         return retval
  
@@ -1438,7 +1441,7 @@ class Bias_From_Overscan(MonitoringAlg):
         bias=np.mean(bias_overscan)
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param = {
                 "PERCENTILES":[68.2,95.4,99.7],
                 "DIFF_NORMAL_RANGE":[-1.0, 1.0],
@@ -1494,12 +1497,12 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_bias_overscan
             plot_bias_overscan(retval,qafig)
             
-            log.info("Output QA fig {}".format(qafig))                   
+            log.debug("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -1588,10 +1591,10 @@ class CountSpectralBins(MonitoringAlg):
 
         grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
-            log.info("grid_size is NOT UNIFORM")
+            log.debug("grid_size is NOT UNIFORM")
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param = {
                  "CUTLO":100,   # low threshold for number of counts
                  "CUTMED":250,
@@ -1691,12 +1694,12 @@ class CountSpectralBins(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countspectralbins
             plot_countspectralbins(retval,qafig)
             
-            log.info("Output QA fig {}".format(qafig))                   
+            log.debug("Output QA fig {}".format(qafig))                   
         
         return retval
 
@@ -1736,7 +1739,7 @@ class Sky_Residual(MonitoringAlg):
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
             skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
-            log.info("Using given sky file {} for subtraction".format(skyfile))
+            log.debug("Using given sky file {} for subtraction".format(skyfile))
 
             skymodel=read_sky(skyfile)
 
@@ -1790,7 +1793,7 @@ class Sky_Residual(MonitoringAlg):
         dec = fibermap["DEC_TARGET"]
 
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param = {
                 "BIN_SZ":0.1, #- Bin size for histograms
                 "PCHI_RESID":0.05, # P(Chi^2) limit for bad skyfiber model residuals
@@ -1821,12 +1824,12 @@ class Sky_Residual(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_residuals
             plot_residuals(retval,qafig)
             
-            log.info("Output QA fig {}".format(qafig))            
+            log.debug("Output QA fig {}".format(qafig))            
 
         return retval
         
@@ -1906,7 +1909,7 @@ class Calculate_SNR(MonitoringAlg):
 
         #- select band for mag, using DECAM_R if present
         if param is None:
-            log.info("Param is None. Using default param instead")
+            log.debug("Param is None. Using default param instead")
             param = {
                 "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc. 
                 "FIDSNR_NORMAL_RANGE":[6.5, 7.5],
@@ -1951,11 +1954,11 @@ class Calculate_SNR(MonitoringAlg):
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
-            log.info("Output QA data is in {}".format(outfile))
+            log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
             plot_SNR(retval,qafig)         
-            log.info("Output QA fig {}".format(qafig))
+            log.debug("Output QA fig {}".format(qafig))
 
         return retval
 

@@ -102,7 +102,7 @@ class Preproc(pas.PipelineAlg):
                     header[key] = h0[key]
         #- WARNING!!!This is a hack for QL to run on old raw images for QLF to be working on old set of data
         if "PROGRAM" not in header:
-            log.info("WARNING!!! Temporary hack for QL to add header key PROGRAM. Only to facilitate QLF to work on their dataset. Remove this after some time and run with new data set")
+            log.warning("Temporary hack for QL to add header key PROGRAM. Only to facilitate QLF to work on their dataset. Remove this after some time and run with new data set")
             header["PROGRAM"]= 'dark'
         if header["FLAVOR"] not in [None,'bias','arc','flat','science']:
             header["FLAVOR"] = 'science'        
@@ -113,7 +113,7 @@ class Preproc(pas.PipelineAlg):
             night = img.meta['NIGHT']
             expid = img.meta['EXPID']
             io.write_image(dumpfile, img)
-            log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         return img
 
 
@@ -267,7 +267,7 @@ class BoxcarExtract(pas.PipelineAlg):
             night = frame.meta['NIGHT']
             expid = frame.meta['EXPID']
             io.write_frame(dumpfile, frame)
-            log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return frame
   
@@ -393,7 +393,7 @@ class Extraction_2d(pas.PipelineAlg):
         if outfile is not None:  #- writing to a frame file if needed.
             from desispec import io
             io.write_frame(outfile,frame)
-            log.info("wrote frame output file  %s"%outfile)
+            log.debug("wrote frame output file  %s"%outfile)
 
         return frame
 
@@ -425,7 +425,9 @@ class ComputeFiberflat(pas.PipelineAlg):
         import desispec.io.fiberflat as ffIO
         fiberflat=compute_fiberflat(input_frame)
         ffIO.write_fiberflat(outputfile,fiberflat,header=input_frame.meta)
-        log.info("Fiberflat file wrtten. Exiting Quicklook for this configuration") #- File written no need to go further
+        log.debug("Fiberflat file wrtten. Exiting Quicklook for this configuration") #- File written no need to go further
+        # !!!!! SAMI to whoever wrote this
+        # PA's or any other components *CANNOT* call sys.exit()!! this needs to be fixed!!!!!
         sys.exit(0) 
  
 class ApplyFiberFlat(pas.PipelineAlg):
@@ -499,7 +501,7 @@ class ApplyFiberFlat_QL(pas.PipelineAlg):
             night = fframe.meta['NIGHT']
             expid = fframe.meta['EXPID']
             io.write_frame(dumpfile, fframe)
-            log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return fframe
 
@@ -540,7 +542,7 @@ class ComputeSky(pas.PipelineAlg):
         #- calculate the model
         skymodel=compute_sky(input_frame)
         write_sky(outputfile,skymodel,input_frame.meta)
-        log.info("Sky Model file wrtten. Exiting pipeline for this configuration")
+        log.debug("Sky Model file wrtten. Exiting pipeline for this configuration")
         sys.exit(0)
 
 
@@ -580,7 +582,8 @@ class ComputeSky_QL(pas.PipelineAlg):
         skymodel=compute_sky(input_frame,fibermap,apply_resolution=apply_resolution)                
         
         write_sky(outputfile,skymodel,input_frame.meta)
-        log.info("Sky Model file wrtten. Exiting the pipeline for this configuration")
+        # SEE ABOVE COMMENT!!!!
+        log.debug("Sky Model file wrtten. Exiting the pipeline for this configuration")
         sys.exit(0)
 
 class SkySub(pas.PipelineAlg):
@@ -641,7 +644,7 @@ class SkySub_QL(pas.PipelineAlg):
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
             skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
-            log.info("Using given sky file %s for subtraction"%skyfile)
+            log.debug("Using given sky file %s for subtraction"%skyfile)
 
             skymodel=read_sky(skyfile)
 
@@ -650,17 +653,17 @@ class SkySub_QL(pas.PipelineAlg):
                 outskyfile=kwargs["Outskyfile"]
             else: outskyfile=None
 
-            log.info("No sky file given. Computing sky first")
+            log.debug("No sky file given. Computing sky first")
             from desispec.quicklook.quicksky import compute_sky
             if "Apply_resolution" in kwargs:
                 apply_resolution=kwargs["Apply_resolution"]
-                log.info("Apply fiber to fiber resolution variation in computing sky")
+                log.debug("Apply fiber to fiber resolution variation in computing sky")
             else: apply_resolution = False
             fibermap=input_frame.fibermap
             skymodel=compute_sky(input_frame,fibermap,apply_resolution=apply_resolution)
             if outskyfile is not None:
                 from desispec.io.sky import write_sky
-                log.info("writing an output sky model file %s "%outskyfile)
+                log.debug("writing an output sky model file %s "%outskyfile)
                 write_sky(outskyfile,skymodel,input_frame.meta)
 
         #- now do the subtraction                   
@@ -675,7 +678,7 @@ class SkySub_QL(pas.PipelineAlg):
             night = sframe.meta['NIGHT']
             expid = sframe.meta['EXPID']
             io.write_frame(dumpfile, sframe)
-            log.info("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return (sframe,skymodel)
 
@@ -735,7 +738,7 @@ class ResolutionFit(pas.PipelineAlg):
         #- write out the psf outfile
         wstep=input_frame.meta["WAVESTEP"]
         write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=wstep)
-        log.info("Wrote psf file {}".format(outfile))
+        log.debug("Wrote psf file {}".format(outfile))
 
         #- update the arc frame resolution from new coeffs
         newpsf=PSF(outfile)
