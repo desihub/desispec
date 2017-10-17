@@ -425,8 +425,61 @@ class ComputeFiberflat(pas.PipelineAlg):
         import desispec.io.fiberflat as ffIO
         fiberflat=compute_fiberflat(input_frame)
         ffIO.write_fiberflat(outputfile,fiberflat,header=input_frame.meta)
-        log.info("Fiberflat file wrtten. Exiting Quicklook for this configuration") #- File written no need to go further
-        sys.exit(0) 
+
+class ComputeFiberflat_QL(pas.PipelineAlg):
+    """ PA to compute fiberflat field correction from a DESI continuum lamp frame
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="ComputeFiberflat"
+        from desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_frame=args[0] #- frame object to calculate fiberflat from
+        if "outputFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need output file name to write fiberflat File")
+        outputfile=kwargs["outputFile"]            
+
+        return self.run_pa(input_frame,outputfile)
+    
+    def run_pa(self,frame,outputfile):
+        from desispec.fiberflat import FiberFlat
+        import desispec.io.fiberflat as ffIO
+        from desispec.linalg import cholesky_solve
+        nwave=frame.nwave
+        nfibers=frame.nspec
+        wave = frame.wave  #- this will become part of output too
+        flux = frame.flux
+        sumFlux=np.zeros((nwave))
+        realFlux=np.zeros(flux.shape)
+        ivar = frame.ivar*(frame.mask==0)
+        #deconv
+        for fib in range(nfibers):
+            Rf=frame.R[fib].todense()
+            B=flux[fib]
+            realFlux[fib]=cholesky_solve(Rf,B)
+            sumFlux+=realFlux[fib]
+        #iflux=nfibers/sumFlux
+        flat = np.zeros(flux.shape)
+        flat_ivar=np.zeros(ivar.shape)
+        avg=sumFlux/nfibers
+        for fib in range(nfibers):
+            Rf=frame.R[fib]
+            # apply and reconvolute
+            M=Rf.dot(avg)
+            M0=(M==0)
+            flat[fib]=(~M0)*flux[fib]/(M+M0) +M0
+            flat_ivar[fib]=ivar[fib]*M**2
+        fibflat=FiberFlat(frame.wave.copy(),flat,flat_ivar,frame.mask.copy(),avg)
+        
+        #fiberflat=compute_fiberflat(input_frame)
+        ffIO.write_fiberflat(outputfile,fiberflat,header=input_frame.meta)
  
 class ApplyFiberFlat(pas.PipelineAlg):
     """
@@ -540,8 +593,6 @@ class ComputeSky(pas.PipelineAlg):
         #- calculate the model
         skymodel=compute_sky(input_frame)
         write_sky(outputfile,skymodel,input_frame.meta)
-        log.info("Sky Model file wrtten. Exiting pipeline for this configuration")
-        sys.exit(0)
 
 
 class ComputeSky_QL(pas.PipelineAlg):
@@ -580,8 +631,6 @@ class ComputeSky_QL(pas.PipelineAlg):
         skymodel=compute_sky(input_frame,fibermap,apply_resolution=apply_resolution)                
         
         write_sky(outputfile,skymodel,input_frame.meta)
-        log.info("Sky Model file wrtten. Exiting the pipeline for this configuration")
-        sys.exit(0)
 
 class SkySub(pas.PipelineAlg):
 
