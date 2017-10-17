@@ -50,6 +50,7 @@ def parse(options=None):
     parser.add_argument("--nwavestep", type=int, required=False, default=50,
                         help="number of wavelength steps per divide-and-conquer extraction step")
     parser.add_argument("-v", "--verbose", action="store_true", help="print more stuff")
+    parser.add_argument("--mpi", action="store_true", help="Use MPI for parallelism")
 
     args = None
     if options is None:
@@ -66,6 +67,11 @@ def _trim(filepath, maxchar=40):
 
 
 def main(args):
+
+    if args.mpi:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        return main_mpi(args, comm)
 
     psf_file = args.psf
     input_file = args.input
@@ -227,7 +233,7 @@ def main_mpi(args, comm=None):
     else:
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
-        dw = 0.5
+        dw = 0.7
 
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)
