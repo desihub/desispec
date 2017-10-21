@@ -5,10 +5,12 @@ desispec.quicklook.util
 put pipeline related utility functions here.
 """
 
+import os
 import numpy as np
 import yaml
+from desispec.quicklook import qllogger
 
-def merge_QAs(qaresult):
+def merge_QAs(qaresult,config):
 
     """
     Per QL pipeline level merging of QA results
@@ -16,40 +18,47 @@ def merge_QAs(qaresult):
     This list is created inside the QL pipeline.
     
     """
-    mergedQA={}
+    qlog=qllogger.QLLogger("QuickLook",20)
+    log=qlog.getlog()
+
+    night=config['Night']
+    flavor=config['Flavor']
+    camera=config['Camera']
+    expid=config['Expid']
+
+    mergedQA={'NIGHT':night,
+              'FLAVOR':flavor,
+              'CAMERA':camera,
+              'EXPID':expid
+              }
 
     for s,result in enumerate(qaresult):
-        pa=result[0].upper()
-        night=result[1].values()[0]['NIGHT']
-        expid=int(result[1].values()[0]['EXPID'])
-        camera=result[1].values()[0]['CAMERA']
-        flavor=result[1].values()[0]['FLAVOR']
-            
-        if night not in mergedQA:
-            mergedQA[night]={} #- top level key
-        if expid not in mergedQA[night]:
-            mergedQA[night][expid]={}
-        if camera not in mergedQA[night][expid]:
-            mergedQA[night][expid][camera]={}
-        if 'flavor' not in mergedQA[night][expid]:
-            mergedQA[night][expid]['flavor']=flavor
-        mergedQA[night][expid][camera][pa]={}
-        mergedQA[night][expid][camera][pa]['PARAMS']={}
-        mergedQA[night][expid][camera][pa]['METRICS']={}
+        pa=result[0].upper() 
+        mergedQA[pa]={}
+        mergedQA[pa]['PARAMS']={}
+        mergedQA[pa]['METRICS']={}
 
         #- now merge PARAM and QA metrics for all QAs
         for qa in result[1]:
             if 'PARAMS' in result[1][qa]:
-                mergedQA[night][expid][camera][pa]['PARAMS'].update(result[1][qa]['PARAMS'])
+                mergedQA[pa]['PARAMS'].update(result[1][qa]['PARAMS'])
             if 'METRICS' in result[1][qa]:
-                mergedQA[night][expid][camera][pa]['METRICS'].update(result[1][qa]['METRICS'])
+                mergedQA[pa]['METRICS'].update(result[1][qa]['METRICS'])
+
     from desiutil.io import yamlify
+    from desispec.io import findfile
     qadict=yamlify(mergedQA)
-    f=open('mergedQA-{}-{:08d}.yaml'.format(camera,expid),'w') #- IO/file naming should move from here. 
+    specprod=os.environ['QL_SPEC_REDUX']
+    if flavor == 'arcs':
+        merged_file=findfile('ql_mergedQAarc_file',night=night,expid=expid,camera=camera,specprod_dir=specprod)
+    else:
+        merged_file=findfile('ql_mergedQA_file',night=night,expid=expid,camera=camera,specprod_dir=specprod)
+    f=open(merged_file,'w')
     f.write(yaml.dump(qadict))
     f.close()
+
+    log.info("Wrote merged QA file {}".format(merged_file))
+
     return
 
-    
-    
-        
+
