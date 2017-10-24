@@ -324,8 +324,8 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             ftype='ql_mergedQAarc_file'
         destFile=findfile(ftype,night=conf['Night'],
                           expid=conf['Expid'],
-                          camera=conf['camera'],
-                          specprod_dir=specprod)
+                          camera=conf['Camera'],
+                          specprod_dir=specprod_dir)
 # this will overwrite the file. above function returns same name for different QL executions
 # results will be erased.
         with open(destFile,'w') as f:
