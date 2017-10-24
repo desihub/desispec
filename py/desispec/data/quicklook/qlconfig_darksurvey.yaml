@@ -1,5 +1,5 @@
-# Default Configurations for a Quicklook Pipeline setup for a science exposure
-name: DESI Quicklook Darktime
+# Default Configurations for a Quicklook Pipeline setup for a dark science exposure
+name: DESI Quicklook Dark Survey
 Program: dark
 Flavor: science
 #- Calibration files: Assuming the same night for psf and fiberflat
