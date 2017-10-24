@@ -263,6 +263,14 @@ class Config(object):
                      'BoxcarExtract': 'ql_boxextract_arc',
                      'ResolutionFit': 'ql_resfit_arc'
                      }
+        elif self.conf["Flavor"] == 'bias':
+            filemap={'Initialize': 'ql_initial_bias',
+                     'Preproc': 'ql_preproc_bias'
+                     }
+        elif self.conf["Flavor"] == 'dark':
+            filemap={'Initialize': 'ql_initial_dark',
+                     'Preproc': 'ql_preproc_dark'
+                     }
         else:
             filemap={'Initialize': 'ql_initial',
                      'Preproc': 'ql_preproc',
@@ -296,6 +304,16 @@ class Config(object):
                      'Count_Pixels': 'ql_countpix_arc',
                      'Calc_XWSigma': 'ql_xwsigma_arc',
                      'CountSpectralBins': 'ql_countbins_arc'
+                     }
+        elif self.conf["Flavor"] == 'bias':
+            filemap={'Bias_From_Overscan': 'ql_getbias_bias',
+                     'Get_RMS' : 'ql_getrms_bias',
+                     'Count_Pixels': 'ql_countpix_bias'
+                     }
+        elif self.conf["Flavor"] == 'dark':
+            filemap={'Bias_From_Overscan': 'ql_getbias_dark',
+                     'Get_RMS' : 'ql_getrms_dark',
+                     'Count_Pixels': 'ql_countpix_dark'
                      }
         else:
             filemap={'Bias_From_Overscan': 'ql_getbias',
@@ -384,7 +402,8 @@ def check_config(outconfig):
     Given the expanded config, check for all possible file existence etc....
     """
 
-    if outconfig["Flavor"]=="science":
+    calib_flavors=['arcs','dark','bias']
+    if outconfig["Flavor"]=='science':
         files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
         log.info("Checking if all the necessary files exist.")
         for thisfile in files:
@@ -393,7 +412,7 @@ def check_config(outconfig):
             else:
                 log.info("File check: Okay: {}".format(thisfile))
         log.info("All necessary files exist for science configuration.")
-    elif outconfig["Flavor"]=="arcs":
+    elif outconfig["Flavor"] in calib_flavors:
         files = [outconfig["RawImage"], outconfig["FiberMap"]]
         log.info("Checking if all the necessary files exist.")
         for thisfile in files:
@@ -429,11 +448,13 @@ class Palist(object):
         if self.thislist is not None:
             pa_list=self.thislist
         else: #- construct palist
-            if self.flavor == "arcs":
+            if self.flavor == 'arcs':
                 pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract','ResolutionFit'] #- class names for respective PAs (see desispec.quicklook.procalgs)
-            elif self.flavor == "flat":
+            elif self.flavor == 'flat':
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
-            elif self.flavor == "science":
+            elif self.flavor == 'bias' or self.flavor == 'dark':
+                pa_list=['Initialize','Preproc']
+            elif self.flavor == 'science':
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
             else:
                 log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
@@ -449,11 +470,14 @@ class Palist(object):
             for PA in self.thislist:
                 qalist[PA]=self.algorithms[PA]['QA'].keys()
         else:
-            if self.flavor =="arcs":
+            if self.flavor == 'arcs':
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels']
                 QAs_bootcalib=['Calc_XWSigma']
                 QAs_extract=['CountSpectralBins']
+            elif self.flavor == 'bias' or self.flavor == 'dark':
+                QAs_initial=['Bias_From_Overscan']
+                QAs_preproc=['Get_RMS','Count_Pixels']
             else:
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
