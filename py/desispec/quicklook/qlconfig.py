@@ -46,7 +46,7 @@ class Config(object):
         if "BoxcarExtract" in self.algorithms.keys():
             if "wavelength" in self.algorithms["BoxcarExtract"].keys():
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
-            else: self.wavelength = None
+        else: self.wavelength = None
         self._qlf=qlf
 
 
