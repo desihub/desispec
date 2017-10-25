@@ -47,7 +47,7 @@ def parse(options=None):
                         help="regularization amount (default %(default)s)")
     parser.add_argument("--bundlesize", type=int, required=False, default=25,
                         help="number of spectra per bundle")
-    parser.add_argument("--nsubbundles", type=int, required=False, default=5,
+    parser.add_argument("--nsubbundles", type=int, required=False, default=6,
                         help="number of extraction sub-bundles")
     parser.add_argument("--nwavestep", type=int, required=False, default=50,
                         help="number of wavelength steps per divide-and-conquer extraction step")
