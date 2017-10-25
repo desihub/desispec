@@ -47,6 +47,8 @@ def parse(options=None):
                         help="regularization amount (default %(default)s)")
     parser.add_argument("--bundlesize", type=int, required=False, default=25,
                         help="number of spectra per bundle")
+    parser.add_argument("--nsubbundles", type=int, required=False, default=5,
+                        help="number of extraction sub-bundles")
     parser.add_argument("--nwavestep", type=int, required=False, default=50,
                         help="number of wavelength steps per divide-and-conquer extraction step")
     parser.add_argument("-v", "--verbose", action="store_true", help="print more stuff")
@@ -141,7 +143,7 @@ regularize: {regularize}
     results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
                  regularize=args.regularize, ndecorr=True,
                  bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                 full_output=True)
+                 full_output=True, nsubbundles=args.nsubbundles)
     flux = results['flux']
     ivar = results['ivar']
     Rdata = results['resolution_data']
@@ -327,7 +329,7 @@ def main_mpi(args, comm=None):
             results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b],
                 bnspec[b], wave, regularize=args.regularize, ndecorr=True,
                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                full_output=True)
+                full_output=True, nsubbundles=args.nsubbundles)
 
             flux = results['flux']
             ivar = results['ivar']
