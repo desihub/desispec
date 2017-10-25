@@ -107,7 +107,7 @@ def get_resolution(wave,nspec,psf,usesigma=False):
         else:
 
             if hasattr(psf,'xsigma_boot'): #- only use if xsigma comes from psfboot
-                log.info("Getting resolution matrix band diagonal elements from constant Gaussing Xsigma")
+                log.info("Getting resolution matrix band diagonal elements from constant Gaussian Xsigma")
                 for ispec in range(nspec):
                     thissigma=psf.xsigma(ispec,wave) 
                     Rsig=Resolution(thissigma)
