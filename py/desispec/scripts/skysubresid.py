@@ -5,10 +5,11 @@ from desiutil.log import get_logger
 import argparse
 import numpy as np
 
-from  desispec import _version as desis_v
+#from desispec import version as desis_v
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate QA on Sky Subtraction residuals [v{:s}]".format(desis_v.__offline_qa_version__))
+    parser = argparse.ArgumentParser(description="Generate QA on Sky Subtraction residuals [v1]")
+    #parser = argparse.ArgumentParser(description="Generate QA on Sky Subtraction residuals [v{:s}]".format(desis_v.__offline_qa_version__))
     parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--expid', type=int, help='Generate exposure plot on given exposure')
@@ -17,6 +18,7 @@ def parse(options=None):
     parser.add_argument('--prod', default=False, action="store_true", help="Results for full production run")
     parser.add_argument('--gauss', default=False, action="store_true", help="Expore Gaussianity for full production run")
     parser.add_argument('--nights', type=str, help='List of nights to limit prod plots')
+    parser.add_argument('--skyline', default=False, action="store_true", help="Skyline residuals?")
 
     if options is None:
         args = parser.parse_args()
@@ -105,6 +107,22 @@ def main(args) :
         nights = [iarg for iarg in args.nights.split(',')]
     else:
         nights = None
+
+    # Skyline
+    if args.skyline:
+        from desispec.qa.qa_plots import skyline_resid
+        # Loop on channel
+        for channel in channels:
+            cframes = get_reduced_frames(nights=nights, channels=[channel])
+            if len(cframes) > 0:
+                log.info("Loading sky residuals for {:d} cframes".format(len(cframes)))
+                sky_wave, sky_flux, sky_res, sky_ivar = qa_utils.get_skyres(cframes)
+                # Plot
+                outfile='QA/skyline_{:s}.png'.format(channel)
+                log.info("Plotting to {:s}".format(outfile))
+                skyline_resid(channel, sky_wave, sky_flux, sky_res, sky_ivar,
+                              outfile=outfile)
+        return
 
     # Full Prod Plot?
     if args.prod:

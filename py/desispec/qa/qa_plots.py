@@ -23,6 +23,9 @@ from desispec.io import makepath
 
 from desiutil.plots import plot_slices as du_pslices
 
+from desispec.io import read_params
+desi_params = read_params()
+
 
 def brick_zbest(outfil, zf, qabrick):
     """ QA plots for Flux calibration in a Frame
@@ -863,6 +866,61 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
     else:  # Show
         plt.show()
 
+def skyline_resid(channel, sky_wave, sky_flux, sky_res, sky_ivar, outfile=None, pp=None,
+                   close=True, dpi=700):
+    """ QA plot for residuals on sky lines
+    ala Julien Guy
+    Args:
+        sky_wave:
+        sky_flux:
+        sky_res:
+        outfile:
+        pp:
+        close:
+        nslices:
+        dpi:
+
+    Returns:
+
+    """
+    # Grab the sky lines
+    sky_peaks = desi_params['qa']['skypeaks']['PARAMS']['{:s}_PEAKS'.format(channel.upper())]
+    npeaks = len(sky_peaks)
+
+    # Start the plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(npeaks, 1)
+
+    wv_off = 15.
+
+    # Loop on peaks
+    for ss,peak in enumerate(sky_peaks):
+        ax= plt.subplot(gs[ss])
+
+        # Zoom in
+        pix = np.abs(sky_wave-peak) < wv_off
+
+        # Calculate
+        orig = np.sqrt(sky_ivar[pix]) * sky_flux[pix]
+        ax.scatter(sky_wave[pix], orig, color='red', label=r"$\sqrt{ < 1+(0.05 sky)^2/\sigma^2 > }$")
+        #ax_flux.set_xlabel('log10(Sky Flux)')
+        #ax_flux.set_ylabel('Residual Flux')
+        #ax_flux.set_ylim(-600, 100)
+
+
+    # Finish
+    plt.tight_layout(pad=0.1, h_pad=0.0, w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile, dpi=dpi)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
 
 def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None,
                       close=True, nslices=20, dpi=700):
