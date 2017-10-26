@@ -10,6 +10,7 @@ import yaml
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
 from desiutil.io import yamlify
+from desispec.quicklook.merger import QL_QAMerger
 
 def testconfig(outfilename="qlconfig.yaml"):
     """
@@ -261,15 +262,15 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
     StepsArr=[]
+    
     mergedQADict={'NIGHTS':[{'NIGHT':conf['Night'],'EXPOSURES':[{'EXPID':conf['Expid'],'FLAVOR':conf['Flavor'],'CAMERAS':[{'CAMERA':conf['Camera'],'PIPELINE_STEPS':StepsArr}]}]}]}
+    schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'])
     QAresults=[] #- merged QA list for the whole pipeline. This will be reorganized for databasing after the pipeline executes
     for s,step in enumerate(pl):
         log.info("Starting to run step {}".format(paconf[s]["StepName"]))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
-        metricsDict={}
-        paramsDict={}
-        StepsArr.append({"PIPELINE_STEP":paconf[s]["StepName"].upper(),'METRICS':metricsDict,'PARAMS':paramsDict})
+        schemaStep=schemaMerger.addPipelineStep(paconf[s]["StepName"])
         try:
             hb.start("Running {}".format(step[0].name))
             oldinp=inp #-  copy for QAs that need to see earlier input
@@ -297,8 +298,8 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                     passqadict=res
                 log.debug("{} {}".format(qa.name,inp))
                 qaresult[qa.name]=res
-                paramsDict.update(res['PARAMS'])
-                metricsDict.update(res['METRICS'])
+                schemaStep.addParams(res['PARAMS'])
+                schemaStep.addMetrics(res['METRICS'])
             except Exception as e:
                 log.warning("Failed to run QA {} error was {}".format(qa.name,e))
         if len(qaresult):
@@ -328,8 +329,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                           specprod_dir=specprod_dir)
 # this will overwrite the file. above function returns same name for different QL executions
 # results will be erased.
-        with open(destFile,'w') as f:
-            f.write(yaml.dump(yamlify(mergedQADict)))
+        schemaMerger.writeToFile(destFile)
         log.info("Wrote merged QA file {}".format(destFile))
     if isinstance(inp,tuple):
        return inp[0]
