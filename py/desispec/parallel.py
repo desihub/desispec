@@ -14,6 +14,7 @@ import io
 from contextlib import contextmanager
 import logging
 import ctypes
+import warnings
 
 import numpy as np
 
@@ -215,27 +216,38 @@ def dist_discrete(worksizes, workers, id, pow=1.0):
     weights = np.power(chunks.astype(np.float64), pow)
     max_per_proc = float(distribute_partition(weights.astype(np.int64), workers))
 
+    if len(worksizes) < workers:
+        warnings.warn("Too many workers ({}) for {} work items.  Some workers"
+            " idle.".format(workers, len(worksizes)), RuntimeWarning)
+
     target = np.sum(weights) / workers
 
     dist = []
 
     off = 0
     curweight = 0.0
-    proc = 0
     for cur in range(0, weights.shape[0]):
         if curweight + weights[cur] > max_per_proc:
             dist.append( (off, cur-off) )
             over = curweight - target
             curweight = weights[cur] + over
             off = cur
-            proc += 1
         else:
             curweight += weights[cur]
 
-    dist.append( (off, weights.shape[0]-off) )
+    # Now distribute the remaining items uniformly among the remaining
+    # workers.  In the case of good load balance, there should only be
+    # one worker left, but that does not always happen...
+    remain = dist_uniform(weights.shape[0]-off, workers-len(dist))
+    for i in range(workers-len(dist)):
+        dist.append( (off + remain[i][0], remain[i][1]) )
 
-    if len(dist) != workers:
-        raise RuntimeError("Number of distributed groups different than number requested")
+    if len(dist) < workers:
+        # The load imbalance was really bad.  Just warn and assign the
+        # remaining workers zero items. 
+        warnings.warn("Load imbalance.  Some work items are so large that not all workers have items.", RuntimeWarning)
+        for i in range(len(dist), workers):
+            dist.append( (off, 0) )
 
     return dist[id]
 

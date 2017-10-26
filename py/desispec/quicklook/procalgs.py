@@ -705,6 +705,10 @@ class ResolutionFit(pas.PipelineAlg):
         psfoutfile=kwargs["PSFoutfile"]
         psfbootfile=kwargs["PSFbootfile"] 
 
+        if "usesigma" in kwargs:
+             usesigma=kwargs["usesigma"]
+        else: usesigma = False
+
         from desispec.psf import PSF
         psfboot=PSF(psfbootfile)
         domain=(psfboot.wmin,psfboot.wmax)
@@ -722,15 +726,15 @@ class ResolutionFit(pas.PipelineAlg):
         if "NBINS" in kwargs:
             nbins=kwargs["NBINS"]
 
-        return self.run_pa(input_frame, psfbootfile, psfoutfile, linelist=linelist, npoly=npoly, nbins=nbins,domain=domain)
+        return self.run_pa(input_frame,psfbootfile,psfoutfile,usesigma,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
     
-    def run_pa(self,input_frame,psfbootfile,outfile,linelist=None,npoly=2,nbins=2,domain=None):
+    def run_pa(self,input_frame,psfbootfile,outfile,usesigma,linelist=None,npoly=2,nbins=2,domain=None):
         from desispec.quicklook.arcprocess import process_arc,write_psffile
         from desispec.quicklook.palib import get_resolution
         from desispec.psf import PSF
 
         wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
-        
+
         #- write out the psf outfile
         wstep=input_frame.meta["WAVESTEP"]
         write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=wstep)
@@ -738,7 +742,7 @@ class ResolutionFit(pas.PipelineAlg):
 
         #- update the arc frame resolution from new coeffs
         newpsf=PSF(outfile)
-        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=True)
+        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=usesigma)
  
         return input_frame
 

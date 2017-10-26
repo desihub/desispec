@@ -1,5 +1,5 @@
-# Default Configurations for a Quicklook Pipeline setup for a science exposure
-name: DESI Quicklook Darktime
+# Default Configurations for a Quicklook Pipeline setup for an arc exposure
+name: DESI Quicklook Arc Calibration
 Program: dark
 Flavor: arcs
 #- Calibration files: Assuming the same night for psf and fiberflat
@@ -13,8 +13,8 @@ WriteIntermediatefiles: False
 WriteStaticPlots: False
 #-Debuglevel 
 Debuglevel: 20
-#- Use resolution in extraction  
-UseResolution: False
+#- Apply x or w resolution to frame file
+UseResolution: True
 #- Heartbeat Period in seconds
 Period: 5.0
 #- Time out in seconds
