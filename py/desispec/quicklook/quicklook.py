@@ -261,9 +261,6 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     qlog=qllogger.QLLogger("QuickLook",0)
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
-    StepsArr=[]
-    
-    mergedQADict={'NIGHTS':[{'NIGHT':conf['Night'],'EXPOSURES':[{'EXPID':conf['Expid'],'FLAVOR':conf['Flavor'],'CAMERAS':[{'CAMERA':conf['Camera'],'PIPELINE_STEPS':StepsArr}]}]}]}
     schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'])
     QAresults=[] #- merged QA list for the whole pipeline. This will be reorganized for databasing after the pipeline executes
     for s,step in enumerate(pl):
