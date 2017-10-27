@@ -550,7 +550,7 @@ def main(args):
 
         taskproc = workermax["extract"]
         taskmin = workertime["extract"]
-        step_threads = 2
+        step_threads = 1 # faster to use max number of processes per node
         step_mp = 1
         nt = None
         first = "extract"
