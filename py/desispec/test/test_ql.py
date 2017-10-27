@@ -15,36 +15,6 @@ desi_templates_available = 'DESI_ROOT' in os.environ
 desi_root_available = 'DESI_ROOT' in os.environ
 
 class TestQL(unittest.TestCase):
-    def test_env(self):
-        """
-        Check required environment variables; raise RuntimeException if missing
-        """
-        log = logging.get_logger()
-        log.setLevel(logging.DEBUG)
-        missing_env = False
-    
-        if 'DESI_BASIS_TEMPLATES' not in os.environ:
-            log.warning('missing $DESI_BASIS_TEMPLATES directory')
-            log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v1.0')
-            missing_env = True
-    
-        for name in (
-            'DESI_SPECTRO_SIM','PIXPROD','DESIMODEL','QL_SPEC_REDUX','QL_SPEC_DATA'):
-            if name not in os.environ:
-                log.warning("missing ${}".format(name))
-                missing_env = True
-    
-        if missing_env:
-            log.warning("Why are these needed?")
-            log.warning("    Simulations written to $DESI_SPECTRO_SIM/$PIXPROD")
-            log.warning("    Raw data read from $QL_SPEC_DATA")
-            log.warning("    Spectro/QuickLook pipeline output written to $QL_SPEC_REDUX")
-            log.warning("    PSF files are found in $DESIMODEL")
-            log.warning("    Templates are read from $DESI_BASIS_TEMPLATES")
-    
-        if missing_env:
-            raise RuntimeError("missing environment variable(s), can't run pipeline")
-
     #- Set simulation input
     def setUp(self):
         self.configFile=resource_filename('desispec','data/quicklook/qlconfig_dark.yaml')
