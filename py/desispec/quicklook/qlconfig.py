@@ -46,7 +46,7 @@ class Config(object):
         if "BoxcarExtract" in self.algorithms.keys():
             if "wavelength" in self.algorithms["BoxcarExtract"].keys():
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
-            else: self.wavelength = None
+        else: self.wavelength = None
         self._qlf=qlf
 
 
@@ -99,7 +99,11 @@ class Config(object):
         paopt_preproc={'camera': self.camera,'dumpfile': pixfile}
 
         if self.dumpintermediates:
-            framefile=self.dump_pa("BoxcarExtract")
+            if self.conf["Flavor"] == 'arcs':
+                calibdir=os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d',self.night)
+                framefile=findfile('frame',night=self.night,expid=self.expid,camera=self.camera,outdir=calibdir)
+            else:
+                framefile=self.dump_pa("BoxcarExtract")
             fframefile=self.dump_pa("ApplyFiberFlat_QL")
             sframefile=self.dump_pa("SkySub_QL")
         else:
@@ -122,7 +126,7 @@ class Config(object):
 
         paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
 
-        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile}
+        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile, 'usesigma': self.usesigma}
 
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
@@ -166,7 +170,7 @@ class Config(object):
         else:
             raise IOError("PA name does not match any file type. Check PA name in config") 
            
-        pafile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+        pafile=findfile(filetype,night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return pafile
 
@@ -252,14 +256,30 @@ class Config(object):
         """
         Specify the filenames: yaml and png of the pa level qa files"
         """
-        filemap={'Initialize': 'ql_initial',
-                 'Preproc': 'ql_preproc',
-                 'BootCalibration': 'ql_bootcalib',
-                 'BoxcarExtract': 'ql_boxextract',
-                 'ResolutionFit': 'ql_resfit',
-                 'ApplyFiberFlat_QL': 'ql_fiberflat',
-                 'SkySub_QL': 'ql_skysub'
-                 }
+        if self.conf["Flavor"] == 'arcs':
+            filemap={'Initialize': 'ql_initial_arc',
+                     'Preproc': 'ql_preproc_arc',
+                     'BootCalibration': 'ql_bootcalib',
+                     'BoxcarExtract': 'ql_boxextract_arc',
+                     'ResolutionFit': 'ql_resfit_arc'
+                     }
+        elif self.conf["Flavor"] == 'bias':
+            filemap={'Initialize': 'ql_initial_bias',
+                     'Preproc': 'ql_preproc_bias'
+                     }
+        elif self.conf["Flavor"] == 'dark':
+            filemap={'Initialize': 'ql_initial_dark',
+                     'Preproc': 'ql_preproc_dark'
+                     }
+        else:
+            filemap={'Initialize': 'ql_initial',
+                     'Preproc': 'ql_preproc',
+                     'BootCalibration': 'ql_bootcalib',
+                     'BoxcarExtract': 'ql_boxextract',
+                     'ResolutionFit': 'ql_resfit',
+                     'ApplyFiberFlat_QL': 'ql_fiberflat',
+                     'SkySub_QL': 'ql_skysub'
+                     }
 
         if paname in filemap:
             filetype=filemap[paname]+'_file'
@@ -278,17 +298,35 @@ class Config(object):
         """
         Specify the filenames: yaml and png for the given qa output
         """
-        filemap={'Bias_From_Overscan': 'ql_getbias',
-                 'Get_RMS' : 'ql_getrms',
-                 'Count_Pixels': 'ql_countpix',
-                 'Calc_XWSigma': 'ql_xwsigma',
-                 'CountSpectralBins': 'ql_countbins',
-                 'Sky_Continuum': 'ql_skycont',
-                 'Sky_Peaks': 'ql_skypeak',
-                 'Sky_Residual': 'ql_skyresid',
-                 'Integrate_Spec': 'ql_integ',
-                 'Calculate_SNR': 'ql_snr'
-                 }
+        if self.conf["Flavor"] == 'arcs':
+            filemap={'Bias_From_Overscan': 'ql_getbias_arc',
+                     'Get_RMS' : 'ql_getrms_arc',
+                     'Count_Pixels': 'ql_countpix_arc',
+                     'Calc_XWSigma': 'ql_xwsigma_arc',
+                     'CountSpectralBins': 'ql_countbins_arc'
+                     }
+        elif self.conf["Flavor"] == 'bias':
+            filemap={'Bias_From_Overscan': 'ql_getbias_bias',
+                     'Get_RMS' : 'ql_getrms_bias',
+                     'Count_Pixels': 'ql_countpix_bias'
+                     }
+        elif self.conf["Flavor"] == 'dark':
+            filemap={'Bias_From_Overscan': 'ql_getbias_dark',
+                     'Get_RMS' : 'ql_getrms_dark',
+                     'Count_Pixels': 'ql_countpix_dark'
+                     }
+        else:
+            filemap={'Bias_From_Overscan': 'ql_getbias',
+                     'Get_RMS' : 'ql_getrms',
+                     'Count_Pixels': 'ql_countpix',
+                     'Calc_XWSigma': 'ql_xwsigma',
+                     'CountSpectralBins': 'ql_countbins',
+                     'Sky_Continuum': 'ql_skycont',
+                     'Sky_Peaks': 'ql_skypeak',
+                     'Sky_Residual': 'ql_skyresid',
+                     'Integrate_Spec': 'ql_integ',
+                     'Calculate_SNR': 'ql_snr'
+                     }
 
         if qaname in filemap:
             filetype=filemap[qaname]+'_file'
@@ -364,7 +402,8 @@ def check_config(outconfig):
     Given the expanded config, check for all possible file existence etc....
     """
 
-    if outconfig["Flavor"]=="science":
+    calib_flavors=['arcs','dark','bias']
+    if outconfig["Flavor"]=='science':
         files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
         log.info("Checking if all the necessary files exist.")
         for thisfile in files:
@@ -373,7 +412,7 @@ def check_config(outconfig):
             else:
                 log.info("File check: Okay: {}".format(thisfile))
         log.info("All necessary files exist for science configuration.")
-    if outconfig["Flavor"]=="arcs":
+    elif outconfig["Flavor"] in calib_flavors:
         files = [outconfig["RawImage"], outconfig["FiberMap"]]
         log.info("Checking if all the necessary files exist.")
         for thisfile in files:
@@ -409,11 +448,13 @@ class Palist(object):
         if self.thislist is not None:
             pa_list=self.thislist
         else: #- construct palist
-            if self.flavor == "arcs":
+            if self.flavor == 'arcs':
                 pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract','ResolutionFit'] #- class names for respective PAs (see desispec.quicklook.procalgs)
-            elif self.flavor == "flat":
+            elif self.flavor == 'flat':
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
-            elif self.flavor == "science":
+            elif self.flavor == 'bias' or self.flavor == 'dark':
+                pa_list=['Initialize','Preproc']
+            elif self.flavor == 'science':
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
             else:
                 log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
@@ -429,11 +470,14 @@ class Palist(object):
             for PA in self.thislist:
                 qalist[PA]=self.algorithms[PA]['QA'].keys()
         else:
-            if self.flavor =="arcs":
+            if self.flavor == 'arcs':
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels']
                 QAs_bootcalib=['Calc_XWSigma']
                 QAs_extract=['CountSpectralBins']
+            elif self.flavor == 'bias' or self.flavor == 'dark':
+                QAs_initial=['Bias_From_Overscan']
+                QAs_preproc=['Get_RMS','Count_Pixels']
             else:
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']

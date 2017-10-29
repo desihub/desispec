@@ -47,9 +47,12 @@ def parse(options=None):
                         help="regularization amount (default %(default)s)")
     parser.add_argument("--bundlesize", type=int, required=False, default=25,
                         help="number of spectra per bundle")
+    parser.add_argument("--nsubbundles", type=int, required=False, default=6,
+                        help="number of extraction sub-bundles")
     parser.add_argument("--nwavestep", type=int, required=False, default=50,
                         help="number of wavelength steps per divide-and-conquer extraction step")
     parser.add_argument("-v", "--verbose", action="store_true", help="print more stuff")
+    parser.add_argument("--mpi", action="store_true", help="Use MPI for parallelism")
 
     args = None
     if options is None:
@@ -66,6 +69,11 @@ def _trim(filepath, maxchar=40):
 
 
 def main(args):
+
+    if args.mpi:
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        return main_mpi(args, comm)
 
     psf_file = args.psf
     input_file = args.input
@@ -135,7 +143,7 @@ regularize: {regularize}
     results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
                  regularize=args.regularize, ndecorr=True,
                  bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                 full_output=True)
+                 full_output=True, nsubbundles=args.nsubbundles)
     flux = results['flux']
     ivar = results['ivar']
     Rdata = results['resolution_data']
@@ -160,7 +168,8 @@ regularize: {regularize}
                 chi2pix=chi2pix)
 
     #- Write output
-    io.write_frame(args.output, frame, units='photon/bin')
+    frame.meta['BUNIT'] = 'photon/bin'
+    io.write_frame(args.output, frame)
 
     if args.model is not None:
         from astropy.io import fits
@@ -227,7 +236,7 @@ def main_mpi(args, comm=None):
     else:
         wstart = np.ceil(psf.wmin_all)
         wstop = np.floor(psf.wmax_all)
-        dw = 0.5
+        dw = 0.7
 
     wave = np.arange(wstart, wstop+dw/2.0, dw)
     nwave = len(wave)
@@ -321,7 +330,7 @@ def main_mpi(args, comm=None):
             results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b],
                 bnspec[b], wave, regularize=args.regularize, ndecorr=True,
                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                full_output=True)
+                full_output=True, nsubbundles=args.nsubbundles)
 
             flux = results['flux']
             ivar = results['ivar']
@@ -354,7 +363,8 @@ def main_mpi(args, comm=None):
                         chi2pix=chi2pix)
 
             #- Write output
-            io.write_frame(outbundle, frame, units='photon/bin')
+            frame.meta['BUNIT'] = 'photon/bin'
+            io.write_frame(outbundle, frame)
 
             if args.model is not None:
                 from astropy.io import fits
