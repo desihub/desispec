@@ -901,7 +901,8 @@ def skyline_resid(channel, sky_wave, sky_flux, sky_res, sky_ivar, outfile=None, 
         pix = np.abs(sky_wave-peak) < wv_off
 
         # Calculate
-        orig = np.sqrt(sky_ivar[pix]) * sky_flux[pix]
+        import pdb; pdb.set_trace()
+        orig = np.sqrt(sky_ivar[pix]) * sky_res[pix]
         ax.scatter(sky_wave[pix], orig, color='red', label=r"$\sqrt{ < 1+(0.05 sky)^2/\sigma^2 > }$")
         #ax_flux.set_xlabel('log10(Sky Flux)')
         #ax_flux.set_ylabel('Residual Flux')
