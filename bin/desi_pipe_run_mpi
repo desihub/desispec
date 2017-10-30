@@ -24,8 +24,9 @@ else:
 import time
 import numpy.random
 sec=numpy.random.uniform()*0.01*comm.size
-print("waiting {} seconds before starting".format(sec))
-time.sleep(sec)
+if comm is not None and comm.rank == 0 :
+    print("each proc will wait a few seconds before starting, max is {} sec".format(0.01*comm.size))
+    time.sleep(sec)
 
 
 
