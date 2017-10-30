@@ -479,7 +479,8 @@ class ComputeFiberflat_QL(pas.PipelineAlg):
         fibflat=FiberFlat(frame.wave.copy(),flat,flat_ivar,frame.mask.copy(),avg)
         
         #fiberflat=compute_fiberflat(input_frame)
-        ffIO.write_fiberflat(outputfile,fiberflat,header=input_frame.meta)
+        ffIO.write_fiberflat(outputfile,fibflat,header=frame.meta)
+        log.info("Wrote fiberflat file {}".format(outputfile))
  
 class ApplyFiberFlat(pas.PipelineAlg):
     """
