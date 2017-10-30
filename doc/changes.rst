@@ -5,6 +5,8 @@ desispec Change Log
 0.16.1 (unreleased)
 -------------------
 
+* Enabled specter.extract.ex2d nsubbundles option for faster extractions.
+  Requires specter 0.8.1.
 * Fixed bug in :func:`desispec.parallel.dist_discrete` (PR `#446`_)
 
 .. _`#446`: https://github.com/desihub/desispec/pull/446
