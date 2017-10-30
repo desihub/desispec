@@ -124,6 +124,8 @@ class Config(object):
 
         paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile}
 
+        paopt_comflat={'outputFile': self.fiberflat}
+
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
         if self.writeskymodelfile:
@@ -144,6 +146,8 @@ class Config(object):
                 paopts[PA]=paopt_extract
             elif PA=='ResolutionFit':
                 paopts[PA]=paopt_resfit
+            elif PA=='ComputeFiberflat_QL':
+                paopts[PA]=paopt_comflat
             elif PA=='ApplyFiberFlat_QL':
                 paopts[PA]=paopt_apfflat
             elif PA=='SkySub_QL':
@@ -159,7 +163,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'pix', 'BootCalibration': 'psfboot', 'BoxcarExtract': 'frame', 'ResolutionFit': 'psfnight', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'pix', 'BootCalibration': 'psfboot', 'BoxcarExtract': 'frame', 'ResolutionFit': 'psfnight', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -257,6 +261,7 @@ class Config(object):
                  'BootCalibration': 'ql_bootcalib',
                  'BoxcarExtract': 'ql_boxextract',
                  'ResolutionFit': 'ql_resfit',
+                 'ComputeFiberflat_QL': 'ql_computeflat',
                  'ApplyFiberFlat_QL': 'ql_fiberflat',
                  'SkySub_QL': 'ql_skysub'
                  }
@@ -363,25 +368,30 @@ def check_config(outconfig):
     """
     Given the expanded config, check for all possible file existence etc....
     """
-
+    log.info("Checking if all the necessary files exist.")
     if outconfig["Flavor"]=="science":
         files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
-        log.info("Checking if all the necessary files exist.")
         for thisfile in files:
             if not os.path.exists(thisfile):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
                 log.info("File check: Okay: {}".format(thisfile))
-        log.info("All necessary files exist for science configuration.")
-    if outconfig["Flavor"]=="arcs":
+    elif outconfig["Flavor"]=="arcs":
         files = [outconfig["RawImage"], outconfig["FiberMap"]]
-        log.info("Checking if all the necessary files exist.")
         for thisfile in files:
             if not os.path.exists(thisfile):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
                 log.info("File check: Okay: {}".format(thisfile))
-        log.info("All necessary files exist for arc configuration.")
+    elif outconfig["Flavor"]=="flat":
+        files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["PSFFile"]]
+        for thisfile in files:
+            if not os.path.exists(thisfile):
+                sys.exit("File does not exist: {}".format(thisfile))
+            else:
+                log.info("File check: Okay: {}".format(thisfile))
+    log.info("All necessary files exist for this configuration.")
+
     return 
 
 
@@ -412,9 +422,9 @@ class Palist(object):
             if self.flavor == "arcs":
                 pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract','ResolutionFit'] #- class names for respective PAs (see desispec.quicklook.procalgs)
             elif self.flavor == "flat":
-                pa_list=['Initialize','Preproc','BoxcarExtract', 'ComputeFiberFlat_QL']
+                pa_list=['Initialize','Preproc','BoxcarExtract','ComputeFiberflat_QL']
             elif self.flavor == "science":
-                pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
+                pa_list=['Initialize','Preproc','BoxcarExtract','ApplyFiberFlat_QL','SkySub_QL']
             else:
                 log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
                 sys.exit(0)
@@ -434,6 +444,12 @@ class Palist(object):
                 QAs_preproc=['Get_RMS','Count_Pixels']
                 QAs_bootcalib=['Calc_XWSigma']
                 QAs_extract=['CountSpectralBins']
+                QAs_resfit=[]
+            elif self.flavor =="flat":
+                QAs_initial=['Bias_From_Overscan']
+                QAs_preproc=['Get_RMS','Count_Pixels']
+                QAs_extract=['CountSpectralBins']
+                QAs_computeflat=[]
             else:
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
@@ -453,6 +469,8 @@ class Palist(object):
                     qalist[PA] = QAs_extract
                 elif PA == 'ResolutionFit':
                     qalist[PA] = QAs_resfit
+                elif PA == 'ComputeFiberflat_QL':
+                    qalist[PA] = QAs_computeflat
                 elif PA == 'ApplyFiberFlat_QL':
                     qalist[PA] = QAs_apfiberflat
                 elif PA == 'SkySub_QL':
