@@ -187,7 +187,7 @@ class WorkerSpecex(Worker):
         return 20
 
     def task_time(self):
-        return 5 # less than 3 min on edison
+        return 15 # in general faster but convergence slower for some realizations
 
 
     def default_options(self):
@@ -355,7 +355,7 @@ class WorkerSpecter(Worker):
         return 20 # 20 bundles per camera
 
     def task_time(self):
-        return 10 # 8 minute per bundle of 25 fibers on edison
+        return 15 # 8 minute per bundle of 25 fibers on edison, but can be slower
 
 
     def default_options(self):
