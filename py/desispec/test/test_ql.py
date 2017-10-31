@@ -163,7 +163,7 @@ class TestQL(unittest.TestCase):
 
     #- Test if QuickLook outputs merged QA file
     def test_mergeQA(self):
-        cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid)
+        cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
         if runcmd(cmd) != 0:
             raise RuntimeError('quicklook pipeline failed')
 
