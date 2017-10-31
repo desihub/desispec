@@ -305,7 +305,7 @@ class WorkerSpecexCombine(Worker):
         return 1
 
     def task_time(self):
-        return 1 # fast 
+        return 2 # fast 
 
 
     def default_options(self):
@@ -530,7 +530,7 @@ class WorkerSky(Worker):
         return 1
 
     def task_time(self):
-        return 1 # less than 1 minute 
+        return 2 # less than 1 minute 
 
     def default_options(self):
         opts = {}
@@ -609,7 +609,7 @@ class WorkerStdstars(Worker):
         return 1
 
     def task_time(self):
-        return 10 # less than 4 min on edison bu cat vary quite a bit
+        return 15 # less than 4 min on edison but can vary quite a bit
         
 
     def default_options(self):
@@ -706,7 +706,7 @@ class WorkerFluxcal(Worker):
         return 1
 
     def task_time(self):
-        return 1 # this is fast
+        return 2 # this is fast
 
     def default_options(self):
         opts = {}
