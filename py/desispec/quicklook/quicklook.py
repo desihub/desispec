@@ -419,7 +419,9 @@ def setup_pipeline(config):
         skyfile=config["SkyFile"]
 
     psf=None
-    if config["Flavor"] == 'arcs':
+    if config["Flavor"] == 'dark' or config["Flavor"] == 'bias':
+        pass
+    elif config["Flavor"] == 'arcs':
         if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"])):
             os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"]))
         pass

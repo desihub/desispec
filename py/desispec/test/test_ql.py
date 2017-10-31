@@ -4,102 +4,128 @@ Test capabilities of  QuickLook pipeline
 python -m desispec.test.test_ql
 """
 import os
-import sys
 import shutil
 import unittest
-from pkg_resources import resource_filename
-import desiutil.log as logging
+import yaml
+import numpy as np
 from desispec.util import runcmd
-
-desi_templates_available = 'DESI_ROOT' in os.environ
-desi_root_available = 'DESI_ROOT' in os.environ
+from desispec.io.raw import write_raw
+from desispec.io import empty_fibermap
+from desispec.io.fibermap import write_fibermap
 
 class TestQL(unittest.TestCase):
     #- Set simulation input
     def setUp(self):
-        self.configFile=resource_filename('desispec','data/quicklook/qlconfig_dark.yaml')
-        self.night = '20150105'
-        self.camera = 'r0'
-        self.arcExpid = 312
-        self.flatExpid = 313
-        self.expid = 314
-        self.nspec = 5
+        self.program = program = 'dark'
+        self.flavor = flavor = 'bias'
+        self.night = night = '20150105'
+        self.camera = camera = 'r0'
+        self.expid = expid = 314
+        self.flatExpid = flatExpid = 313
+        self.nspec = nspec = 5
+        self.exptime = exptime = 100
 
-        #- Override default environment variables
-        self.testDir = os.path.join(os.environ['HOME'],'ql_test_io')
-        if 'PIXPROD' in os.environ:
-            os.environ['PIXPROD'] = '.'
-        if 'DESI_SPECTRO_SIM' in os.environ:
-            os.environ['DESI_SPECTRO_SIM'] = self.testDir
+        #- Seup environment and override default environment variables
+        self.testDir = testDir = os.path.join(os.environ['HOME'],'ql_test_io')
+        dataDir = os.path.join(testDir,night)
+        expDir = os.path.join(testDir,'exposures')
+        nightDir = os.path.join(expDir,night)
+        reduxDir = os.path.join(nightDir,'{:08d}'.format(expid))
+        if not os.path.exists(testDir):
+            os.makedirs(testDir)
+            os.makedirs(dataDir)
+            os.makedirs(expDir)
+            os.makedirs(nightDir)
+            os.makedirs(reduxDir)
         if 'QL_SPEC_DATA' in os.environ:
-            os.environ['QL_SPEC_DATA'] = self.testDir
+            os.environ['QL_SPEC_DATA'] = testDir
         if 'QL_SPEC_REDUX' in os.environ:
-            os.environ['QL_SPEC_REDUX'] = self.testDir
+            os.environ['QL_SPEC_REDUX'] = testDir
+
+        #- Write dummy configuration and input files to test merging
+        configdict = {'name': 'Test Configuration',
+                      'Program': self.program,
+                      'Flavor': self.flavor,
+                      'PSFType': 'psfboot',
+                      'FiberflatExpid': self.flatExpid,
+                      'WritePixfile': False,
+                      'WriteSkyModelfile': False,
+                      'WriteIntermediatefiles': False,
+                      'WriteStaticPlots': False,
+                      'Debuglevel': 20,
+                      'UseResolution': False,
+                      'Period': 5.0,
+                      'Timeout': 120.0,
+                      'Pipeline': ['Initialize','Preproc'],
+                      'Algorithms': {'Initialize':{
+                                         'QA':{
+                                             'Bias_From_Overscan':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'DIFF_WARN_RANGE':[-1.0,1.0],'DIFF_ALARM_RANGE':[-2.0,2.0]}}}},
+                                     'Preproc':{
+                                         'QA':{
+                                             'Get_RMS':{'PARAMS':{'RMS_WARN_RANGE':[-1.0,1.0],'RMS_ALARM_RANGE':[-2.0,2.0]}},
+                                             'Count_Pixels':{'PARAMS':{'CUTHI':500,'CUTLO':100,'NPIX_WARN_RANGE':[200.0,500.0],'NPIX_ALARM_RANGE':[50.0,650.0]}}}}}
+                      }
+        with open('{}/test_config.yaml'.format(testDir),'w') as config:
+            yaml.dump(configdict,config)
+        self.configfile = '{}/test_config.yaml'.format(testDir)
+
+        #- Generate raw file
+        rawfile = os.path.join(dataDir,'desi-00000314.fits.fz')
+        raw_hdr = {}
+        raw_hdr['DATE-OBS'] = '2015-01-05T08:17:03.988'
+        raw_hdr['NIGHT'] = night
+        raw_hdr['PROGRAM'] = program
+        raw_hdr['FLAVOR'] = flavor
+        raw_hdr['CAMERA'] = camera
+        raw_hdr['EXPID'] = expid
+        raw_hdr['EXPTIME'] = exptime
+        raw_hdr['DOSVER'] = 'SIM'
+        raw_hdr['FEEVER'] = 'SIM'
+        raw_hdr['DETECTOR'] = 'SIM'
+        raw_hdr['PRESEC1'] = '[1:4,1:2048]'
+        raw_hdr['DATASEC1'] = '[5:2052,1:2048]'
+        raw_hdr['BIASSEC1'] = '[2053:2102,1:2048]'
+        raw_hdr['CCDSEC1']  = '[1:2048,1:2048]'
+        raw_hdr['PRESEC2']  = '[4201:4204,1:2048]'
+        raw_hdr['DATASEC2'] = '[2153:4200,1:2048]'
+        raw_hdr['BIASSEC2'] = '[2103:2152,1:2048]'
+        raw_hdr['CCDSEC2'] = '[2049:4096,1:2048]'
+        raw_hdr['PRESEC3'] = '[1:4,2049:4096]'
+        raw_hdr['DATASEC3'] = '[5:2052,2049:4096]'
+        raw_hdr['BIASSEC3'] = '[2053:2102,2049:4096]'
+        raw_hdr['CCDSEC3'] = '[1:2048,2049:4096]'
+        raw_hdr['PRESEC4'] = '[4201:4204,2049:4096]'
+        raw_hdr['DATASEC4'] = '[2153:4200,2049:4096]'
+        raw_hdr['BIASSEC4'] = '[2103:2152,2049:4096]'
+        raw_hdr['CCDSEC4'] = '[2049:4096,2049:4096]'
+        raw_hdr['GAIN1'] = 1.0
+        raw_hdr['GAIN2'] = 1.0
+        raw_hdr['GAIN3'] = 1.0
+        raw_hdr['GAIN4'] = 1.0
+        raw_hdr['RDNOISE1'] = 3.0
+        raw_hdr['RDNOISE2'] = 3.0
+        raw_hdr['RDNOISE3'] = 3.0
+        raw_hdr['RDNOISE4'] = 3.0
+        
+        data=np.zeros((4096,4204))+200.
+        raw_data=data.astype(int)
+        write_raw(rawfile,raw_data,raw_hdr)
+
+        #- Generate fibermap file
+        fibermapfile = os.path.join(dataDir,'fibermap-00000314.fits')
+        fibermap = empty_fibermap(nspec)
+        write_fibermap(fibermapfile,fibermap)
 
    #- Clean up test files and directories if they exist
     def tearDown(self):
         if os.path.exists(self.testDir):
             shutil.rmtree(self.testDir)
 
-    #- Simulate test inputs for QuickLook
-    def sim(self):
-        night = self.night
-        camera = self.camera
-        expid = self.expid
-        arcid = self.arcExpid
-        flatid = self.flatExpid
-        nspec = self.nspec
-        simDir = self.testDir
-
-        psf_b = os.path.join(os.environ['DESIMODEL'],'data','specpsf','psf-b.fits')
-        psf_r = os.path.join(os.environ['DESIMODEL'],'data','specpsf','psf-r.fits')
-        psf_z = os.path.join(os.environ['DESIMODEL'],'data','specpsf','psf-z.fits')
-
-        cmd = "newarc --nspec {} --night {} --expid {} --outdir {}".format(nspec,night,arcid,simDir)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('newexp failed for arc exposure')
-    
-        cmd = "newflat --nspec {} --night {} --expid {} --outdir {}".format(nspec,night,flatid,simDir)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('newexp failed for flat exposure')
-    
-        cmd = "newexp-random --program dark --nspec {} --night {} --expid {} --outdir {}".format(nspec,night,expid,simDir)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('newexp failed for dark exposure')
-    
-        cmd = "pixsim --night {} --cameras {} --expid {} --nspec {} --rawfile {}/desi-00000000.fits.fz --preproc --preproc_dir {}".format(night,camera,arcid,nspec,simDir,simDir)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('pixsim failed for arc exposure')
-    
-        cmd = "pixsim --night {} --cameras {} --expid {} --nspec {} --rawfile {}/desi-00000001.fits.fz --preproc --preproc_dir {}".format(night,camera,flatid,nspec,sim0Dir,simDir)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('pixsim failed for flat exposure')
-    
-        cmd = "pixsim --night {} --cameras {} --expid {} --nspec {} --rawfile {}/desi-00000002.fits.fz".format(night,camera,expid,nspec,simDir)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('pixsim failed for dark exposure')
-
-        cmd = "desi_extract_spectra -i {}/pix-r0-00000001.fits -o {}/frame-r0-00000001.fits -f {}/fibermap-00000001.fits -p {} -w 5630,7740,0.8 -n {}".format(simDir,simDir,simDir,psf_r,nspec)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('desi_extract_spectra failed for camera r0')
-
-        cmd = "desi_compute_fiberflat --infile {}/frame-{}-00000001.fits --outfile {}/fiberflat-{}-00000001.fits".format(simDir,camera,simDir,camera)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('desi_compute_fiberflat failed for camera {}'.format(camera))
-
-        cmd = "desi_bootcalib --fiberflat {}/pix-{}-00000001.fits --arcfile {}/pix-{}-00000000.fits --outfile {}/psfboot-{}.fits".format(simDir,camera,simDir,camera,simDir,camera)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('desi_bootcalib failed for camera {}'.format(camera))
-
-    #- Generate inputs
-    def test_run_sim(self):
-        TestQL.sim(self)
-
     #- Test if QuickLook outputs merged QA file
     def test_mergeQA(self):
-        cmd = "desi_quicklook -i {} -n {} -c {} -e {} --mergeQA".format(self.configFile,self.night,self.camera,self.expid)
+        cmd = "desi_quicklook -i {} -n {} -c {} -e {} --mergeQA".format(self.configfile,self.night,self.camera,self.expid)
         if runcmd(cmd) != 0:
-            raise RuntimeError('quicklook pipeline failed'.format(self.camera))
+            raise RuntimeError('quicklook pipeline failed')
 
 
 #- This runs all test* functions in any TestCase class in this file
