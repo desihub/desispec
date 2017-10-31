@@ -73,10 +73,6 @@ class TestQL(unittest.TestCase):
             os.makedirs(expDir)
             os.makedirs(nightDir)
             os.makedirs(reduxDir)
-        if 'QL_SPEC_DATA' in os.environ:
-            os.environ['QL_SPEC_DATA'] = testDir
-        if 'QL_SPEC_REDUX' in os.environ:
-            os.environ['QL_SPEC_REDUX'] = testDir
 
         #- Write dummy configuration and input files to test merging
         configdict = {'name': 'Test Configuration',
@@ -163,6 +159,7 @@ class TestQL(unittest.TestCase):
 
     #- Test if QuickLook outputs merged QA file
     def test_mergeQA(self):
+        os.environ['QL_SPEC_REDUX'] = self.testDir
         cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
         if runcmd(cmd) != 0:
             raise RuntimeError('quicklook pipeline failed')
