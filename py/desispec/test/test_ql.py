@@ -3,8 +3,9 @@ Test capabilities of  QuickLook pipeline
 
 python -m desispec.test.test_ql
 """
-import os
+import os, sys
 import shutil
+from uuid import uuid4
 import unittest
 import yaml
 import numpy as np
@@ -14,19 +15,54 @@ from desispec.io import empty_fibermap
 from desispec.io.fibermap import write_fibermap
 
 class TestQL(unittest.TestCase):
-    #- Set simulation input
-    def setUp(self):
-        self.program = program = 'dark'
-        self.flavor = flavor = 'bias'
-        self.night = night = '20150105'
-        self.camera = camera = 'r0'
-        self.expid = expid = 314
-        self.flatExpid = flatExpid = 313
-        self.nspec = nspec = 5
-        self.exptime = exptime = 100
+    @classmethod
+    def setUp(cls):
+        cls.program = program = 'dark'
+        cls.flavor = flavor = 'bias'
+        cls.night = night = '20150105'
+        cls.camera = camera = 'r0'
+        cls.expid = expid = 314
+        cls.flatExpid = flatExpid = 313
+        cls.nspec = nspec = 5
+        cls.exptime = exptime = 100
 
         #- Seup environment and override default environment variables
-        self.testDir = testDir = os.path.join(os.environ['HOME'],'ql_test_io')
+
+        #- python 2.7 location:
+        cls.topDir = os.path.dirname( # top-level
+            os.path.dirname( # py/
+                os.path.dirname( # desispec/
+                    os.path.dirname(os.path.abspath(__file__)) # test/
+                    )
+                )
+            )
+        cls.binDir = os.path.join(cls.topDir,'bin')
+        if not os.path.isdir(cls.binDir):
+            #- python 3.x setup.py test location:
+            cls.topDir = os.path.dirname( # top-level
+                os.path.dirname( # build/
+                    os.path.dirname( # lib/
+                        os.path.dirname( # desispec/
+                            os.path.dirname(os.path.abspath(__file__)) # test/
+                            )
+                        )
+                    )
+                )
+            cls.binDir = os.path.join(cls.topDir,'bin')
+
+        #- last attempt
+        if not os.path.isdir(cls.binDir):
+            cls.topDir = os.getcwd()
+            cls.binDir = os.path.join(cls.topDir, 'bin')
+
+        if not os.path.isdir(cls.binDir):
+            raise RuntimeError('Unable to auto-locate desispec/bin from {}'.format(__file__))
+
+        id = uuid4().hex
+        cls.fibermapfile = 'fibermap-'+id+'.fits'
+        cls.framefile = 'frame-'+id+'.fits'
+
+        cls.testDir = testDir = os.path.join(os.environ['HOME'],'ql_test_io')
         dataDir = os.path.join(testDir,night)
         expDir = os.path.join(testDir,'exposures')
         nightDir = os.path.join(expDir,night)
@@ -44,10 +80,10 @@ class TestQL(unittest.TestCase):
 
         #- Write dummy configuration and input files to test merging
         configdict = {'name': 'Test Configuration',
-                      'Program': self.program,
-                      'Flavor': self.flavor,
+                      'Program': program,
+                      'Flavor': flavor,
                       'PSFType': 'psfboot',
-                      'FiberflatExpid': self.flatExpid,
+                      'FiberflatExpid': flatExpid,
                       'WritePixfile': False,
                       'WriteSkyModelfile': False,
                       'WriteIntermediatefiles': False,
@@ -67,7 +103,7 @@ class TestQL(unittest.TestCase):
                       }
         with open('{}/test_config.yaml'.format(testDir),'w') as config:
             yaml.dump(configdict,config)
-        self.configfile = '{}/test_config.yaml'.format(testDir)
+        cls.configfile = '{}/test_config.yaml'.format(testDir)
 
         #- Generate raw file
         rawfile = os.path.join(dataDir,'desi-00000314.fits.fz')
@@ -117,13 +153,17 @@ class TestQL(unittest.TestCase):
         write_fibermap(fibermapfile,fibermap)
 
    #- Clean up test files and directories if they exist
-    def tearDown(self):
-        if os.path.exists(self.testDir):
-            shutil.rmtree(self.testDir)
+    @classmethod
+    def tearDown(cls):
+        for filename in [cls.fibermapfile,cls.framefile]:
+            if os.path.exists(filename):
+                os.remove(filename)
+        if os.path.exists(cls.testDir):
+            shutil.rmtree(cls.testDir)
 
     #- Test if QuickLook outputs merged QA file
     def test_mergeQA(self):
-        cmd = "desi_quicklook -i {} -n {} -c {} -e {} --mergeQA".format(self.configfile,self.night,self.camera,self.expid)
+        cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid)
         if runcmd(cmd) != 0:
             raise RuntimeError('quicklook pipeline failed')
 
