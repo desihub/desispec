@@ -201,6 +201,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     median_spectrum = mean_spectrum*1.
 
     previous_smooth_fiberflat = smooth_fiberflat*0
+    previous_max_diff = 0.
     log.info("after 1st pass : nout = %d/%d"%(np.sum(ivar==0),np.size(ivar.flatten())))
     # 2nd pass is full solution including deconvolved spectrum, no outlier rejection
     for iteration in range(max_iterations) :
@@ -287,6 +288,12 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         if max_diff<accuracy :
             break
 
+        if np.abs(max_diff-previous_max_diff)<accuracy*0.1 :
+            log.warning("no significant improvement on max diff, quit loop")
+            break
+        
+        previous_max_diff=max_diff
+        
         log.info("2nd pass, iter %d, max diff. = %g > requirement = %g, continue iterating"%(iteration,max_diff,accuracy))
 
 
