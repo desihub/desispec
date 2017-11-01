@@ -79,6 +79,7 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
         input_ivar : 1D array of weights for input_flux
         order (int) : spline order
         max_resolution (float) : if not None and first fit fails, try once this resolution
+
     Returns:
         output_flux : 1D array of flux sampled at output_wave
     """
