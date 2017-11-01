@@ -314,6 +314,9 @@ def mean_psf(inputs, output):
     nbundles=None
     nfibers_per_bundle=None
     for input in inputs :
+        if not os.path.isfile(input) :
+            log.warning("missing {}".format(input))
+            continue
         psf=fits.open(input)
         if refhead is None :
             hdulist = psf
@@ -347,7 +350,8 @@ def mean_psf(inputs, output):
         rchi2=np.array(rchi2)
         nbundles=rchi2.size
         bundle_rchi2.append(rchi2)
-    
+
+    npsf=len(tables)
     bundle_rchi2=np.array(bundle_rchi2)
     log.info("bundle_rchi2= {}".format(str(bundle_rchi2)))
     median_bundle_rchi2 = np.median(bundle_rchi2)
