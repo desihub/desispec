@@ -10,6 +10,7 @@ import yaml
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
 from desiutil.io import yamlify
+from desispec.quicklook.merger import QL_QAMerger
 
 def testconfig(outfilename="qlconfig.yaml"):
     """
@@ -260,12 +261,13 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     qlog=qllogger.QLLogger("QuickLook",0)
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
-
+    schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'])
     QAresults=[] #- merged QA list for the whole pipeline. This will be reorganized for databasing after the pipeline executes
     for s,step in enumerate(pl):
         log.info("Starting to run step {}".format(paconf[s]["StepName"]))
         pa=step[0]
         pargs=mapkeywords(step[0].config["kwargs"],convdict)
+        schemaStep=schemaMerger.addPipelineStep(paconf[s]["StepName"])
         try:
             hb.start("Running {}".format(step[0].name))
             oldinp=inp #-  copy for QAs that need to see earlier input
@@ -293,7 +295,8 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                     passqadict=res
                 log.debug("{} {}".format(qa.name,inp))
                 qaresult[qa.name]=res
-
+                schemaStep.addParams(res['PARAMS'])
+                schemaStep.addMetrics(res['METRICS'])
             except Exception as e:
                 log.warning("Failed to run QA {} error was {}".format(qa.name,e))
         if len(qaresult):
@@ -308,10 +311,23 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
 
     #- merge QAs for this pipeline execution
     if mergeQA is True:
-        from desispec.quicklook.util import merge_QAs
-        log.info("Merging all the QAs for this pipeline execution")
-        merge_QAs(QAresults)
-
+        # from desispec.quicklook.util import merge_QAs
+        # log.info("Merging all the QAs for this pipeline execution")
+        # merge_QAs(QAresults,conf)
+        log.debug("Dumping mergedQAs")
+        from desispec.io import findfile
+        ftype='ql_mergedQA_file'
+        specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
+        if conf['Flavor']=='arcs':
+            ftype='ql_mergedQAarc_file'
+        destFile=findfile(ftype,night=conf['Night'],
+                          expid=conf['Expid'],
+                          camera=conf['Camera'],
+                          specprod_dir=specprod_dir)
+# this will overwrite the file. above function returns same name for different QL executions
+# results will be erased.
+        schemaMerger.writeToFile(destFile)
+        log.info("Wrote merged QA file {}".format(destFile))
     if isinstance(inp,tuple):
        return inp[0]
     else:
@@ -403,7 +419,9 @@ def setup_pipeline(config):
         skyfile=config["SkyFile"]
 
     psf=None
-    if config["Flavor"] == 'arcs':
+    if config["Flavor"] == 'dark' or config["Flavor"] == 'bias':
+        pass
+    elif config["Flavor"] == 'arcs':
         if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"])):
             os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"]))
         pass
