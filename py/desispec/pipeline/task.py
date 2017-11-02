@@ -192,33 +192,20 @@ class WorkerSpecex(Worker):
 
     def default_options(self):
         opts = {}
-        # opts["flux-hdu"] = 1
-        # opts["ivar-hdu"] = 2
-        # opts["mask-hdu"] = 3
-        # opts["header-hdu"] = 1
-        # opts["xcoord-hdu"] = 1
-        # opts["ycoord-hdu"] = 2
-        # opts["psfmodel"] = "GAUSSHERMITE"
-        # opts["half_size_x"] = 8
-        # opts["half_size_y"] = 5
-        # opts["verbose"] = False
-        # opts["gauss_hermite_deg"] = 6
-        # opts["legendre_deg_wave"] = 4
-        # opts["legendre_deg_x"] = 1
-        # opts["trace_deg_wave"] = 6
-        # opts["trace_deg_x"] = 6
-
+        opts["trace-deg-wave"] = 6
+        opts["trace-deg-x"] = 6
+        
         # to get the lampline location, look in our path for specex
         # and use that install prefix to find the data directory.
         # if that directory does not exist, use a default NERSC
         # location.
-        opts["lamplines"] = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_boss.txt"
+        opts["lamplines"] = "/project/projectdirs/desi/software/edison/specex/specex-0.3.9/data/specex_linelist_desi.txt"
         for path in os.environ["PATH"].split(os.pathsep):
             path = path.strip('"')
             exefile = os.path.join(path, "desi_psf_fit")
             if os.path.isfile(exefile) and os.access(exefile, os.X_OK):
                 specexdir = os.path.join(path, "..", "data")
-                opts["lamplines"] = os.path.join(specexdir, "specex_linelist_boss.txt")
+                opts["lamplines"] = os.path.join(specexdir, "specex_linelist_desi.txt")
 
         return opts
 
