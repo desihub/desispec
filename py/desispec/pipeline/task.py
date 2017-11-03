@@ -192,8 +192,9 @@ class WorkerSpecex(Worker):
 
     def default_options(self):
         opts = {}
-        opts["trace-deg-wave"] = 6
-        opts["trace-deg-x"] = 6
+        opts["trace-deg-wave"] = 7
+        opts["trace-deg-x"] = 7
+        opts["trace-prior-deg"] = 4
         
         # to get the lampline location, look in our path for specex
         # and use that install prefix to find the data directory.
