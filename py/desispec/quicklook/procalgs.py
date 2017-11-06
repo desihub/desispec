@@ -429,6 +429,62 @@ class ComputeFiberflat(pas.PipelineAlg):
         # !!!!! SAMI to whoever wrote this
         # PA's or any other components *CANNOT* call sys.exit()!! this needs to be fixed!!!!!
         sys.exit(0) 
+
+class ComputeFiberflat_QL(pas.PipelineAlg):
+    """ PA to compute fiberflat field correction from a DESI continuum lamp frame
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="ComputeFiberflat"
+        from desispec.frame import Frame as fr
+        from desispec.image import Image as im
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_frame=args[0] #- frame object to calculate fiberflat from
+        if "outputFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need output file name to write fiberflat File")
+        outputfile=kwargs["outputFile"]            
+
+        return self.run_pa(input_frame,outputfile)
+    
+    def run_pa(self,frame,outputfile):
+        from desispec.fiberflat import FiberFlat
+        import desispec.io.fiberflat as ffIO
+        from desispec.linalg import cholesky_solve
+        nwave=frame.nwave
+        nfibers=frame.nspec
+        wave = frame.wave  #- this will become part of output too
+        flux = frame.flux
+        sumFlux=np.zeros((nwave))
+        realFlux=np.zeros(flux.shape)
+        ivar = frame.ivar*(frame.mask==0)
+        #deconv
+        for fib in range(nfibers):
+            Rf=frame.R[fib].todense()
+            B=flux[fib]
+            realFlux[fib]=cholesky_solve(Rf,B)
+            sumFlux+=realFlux[fib]
+        #iflux=nfibers/sumFlux
+        flat = np.zeros(flux.shape)
+        flat_ivar=np.zeros(ivar.shape)
+        avg=sumFlux/nfibers
+        for fib in range(nfibers):
+            Rf=frame.R[fib]
+            # apply and reconvolute
+            M=Rf.dot(avg)
+            M0=(M==0)
+            flat[fib]=(~M0)*flux[fib]/(M+M0) +M0
+            flat_ivar[fib]=ivar[fib]*M**2
+        fibflat=FiberFlat(frame.wave.copy(),flat,flat_ivar,frame.mask.copy(),avg)
+
+        #fiberflat=compute_fiberflat(input_frame)
+        ffIO.write_fiberflat(outputfile,fibflat,header=frame.meta)
+        log.info("Wrote fiberflat file {}".format(outputfile))
  
 class ApplyFiberFlat(pas.PipelineAlg):
     """
@@ -544,7 +600,6 @@ class ComputeSky(pas.PipelineAlg):
         write_sky(outputfile,skymodel,input_frame.meta)
         log.debug("Sky Model file wrtten. Exiting pipeline for this configuration")
         sys.exit(0)
-
 
 class ComputeSky_QL(pas.PipelineAlg):
     """ PA to compute sky model from a DESI frame
@@ -707,7 +762,10 @@ class ResolutionFit(pas.PipelineAlg):
 
         psfoutfile=kwargs["PSFoutfile"]
         psfbootfile=kwargs["PSFbootfile"] 
-        usesigmas=kwargs["UseSigmas"]
+
+        if "usesigma" in kwargs:
+             usesigma=kwargs["usesigma"]
+        else: usesigma = False
 
         from desispec.psf import PSF
         psfboot=PSF(psfbootfile)
@@ -726,9 +784,9 @@ class ResolutionFit(pas.PipelineAlg):
         if "NBINS" in kwargs:
             nbins=kwargs["NBINS"]
 
-        return self.run_pa(input_frame, psfbootfile, psfoutfile, usesigmas, linelist=linelist, npoly=npoly, nbins=nbins,domain=domain)
+        return self.run_pa(input_frame,psfbootfile,psfoutfile,usesigma,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
     
-    def run_pa(self,input_frame,psfbootfile,outfile,usesigmas,linelist=None,npoly=2,nbins=2,domain=None):
+    def run_pa(self,input_frame,psfbootfile,outfile,usesigma,linelist=None,npoly=2,nbins=2,domain=None):
         from desispec.quicklook.arcprocess import process_arc,write_psffile
         from desispec.quicklook.palib import get_resolution
         from desispec.psf import PSF
@@ -742,7 +800,7 @@ class ResolutionFit(pas.PipelineAlg):
 
         #- update the arc frame resolution from new coeffs
         newpsf=PSF(outfile)
-        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=usesigmas)
+        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=usesigma)
  
         return input_frame
 

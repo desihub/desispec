@@ -35,7 +35,7 @@ def gaussian2D(x,y,amp,xmu,ymu,xsigma,ysigma):
     gauss = amp*np.exp(-(x-xmu)**2/(2*xsigma**2)-(y-ymu)**2/(2*ysigma**2))
     return gauss
 
-class TestQL(unittest.TestCase):
+class TestQL_QA(unittest.TestCase):
 
     def tearDown(self):
         self.rawimage.close()

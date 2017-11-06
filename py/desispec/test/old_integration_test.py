@@ -4,25 +4,27 @@ Run integration tests from pixsim through redshifts
 python -m desispec.test.integration_test
 """
 from __future__ import absolute_import, print_function
-import sys
 import os
-import random
 import time
 
 import numpy as np
 from astropy.io import fits
 
-from desispec.util import runcmd
-from desispec import io
-from desispec.qa import QA_Exposure
+from ..util import runcmd
+from .. import io
+from ..qa import QA_Exposure
+from ..database.datachallenge import get_options, setup_db, load_zcat
+
 from desiutil.log import get_logger
 
 #- prevent nose from trying to run this test since it takes too long
 __test__ = False
 
 def check_env():
-    """
-    Check required environment variables; raise RuntimeException if missing
+    """Check required environment variables.
+
+    Raises:
+        RuntimeError if any script fails
     """
     log = get_logger()
     #- template locations
@@ -48,12 +50,8 @@ def check_env():
         log.warning("    Raw data read from $DESI_SPECTRO_DATA/")
         log.warning("    Spectro pipeline output written to $DESI_SPECTRO_REDUX/$SPECPROD/")
         log.warning("    Templates are read from $DESI_BASIS_TEMPLATES")
-
-    #- Wait until end to raise exception so that we report everything that
-    #- is missing before actually failing
-    if missing_env:
         log.critical("missing env vars; exiting without running pipeline")
-        sys.exit(1)
+        raise RuntimeError("missing env vars; exiting without running pipeline")
 
     #- Override $DESI_SPECTRO_DATA to match $DESI_SPECTRO_SIM/$PIXPROD
     os.environ['DESI_SPECTRO_DATA'] = os.path.join(os.getenv('DESI_SPECTRO_SIM'), os.getenv('PIXPROD'))
@@ -61,7 +59,7 @@ def check_env():
 
 #- TODO: fix usage of night to be something other than today
 def integration_test(night=None, nspec=5, clobber=False):
-    """Run an integration test from raw data simulations through redshifts
+    """Run an integration test from raw data simulations through redshifts.
 
     Args:
         night (str, optional): YEARMMDD, defaults to current night
@@ -70,7 +68,6 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     Raises:
         RuntimeError if any script fails
-
     """
     log = get_logger()
     #- YEARMMDD string, rolls over at noon not midnight
@@ -85,8 +82,12 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     #-----
     #- Input fibermaps, spectra, and pixel-level raw data
-    raw_dict = {0: 'flat', 1: 'arc', 2: 'dark'}
-    for expid, program in raw_dict.items():
+    # raw_dict = {0: 'flat', 1: 'arc', 2: 'dark'}
+    programs = ('flat', 'arc', 'dark')
+    channels = ('b', 'r', 'z')
+    cameras = ('b0', 'r0', 'z0')
+    # for expid, program in raw_dict.items():
+    for expid, program in enumerate(programs):
         cmd = "newexp-random --program {program} --nspec {nspec} --night {night} --expid {expid}".format(
             expid=expid, program=program, **params)
 
@@ -101,7 +102,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs = [fibermap, simspec]
         outputs = list()
         outputs.append(fibermap.replace('fibermap-', 'simpix-'))
-        for camera in ['b0', 'r0', 'z0']:
+        for camera in cameras:
             pixfile = io.findfile('pix', night, expid, camera)
             outputs.append(pixfile)
             # outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
@@ -111,18 +112,13 @@ def integration_test(night=None, nspec=5, clobber=False):
     #-----
     #- Extract
 
-    waverange = dict(
-        b = "3570,5940,1.0",
-        r = "5630,7740,1.0",
-        z = "7440,9830,1.0",
-        )
-    for expid in [0,1,2]:
-        for channel in ['b', 'r', 'z']:
-            camera = channel+'0'
-            pixfile = io.findfile('pix', night, expid, camera)
+    waverange = dict(b="3570,5940,1.0", r="5630,7740,1.0", z="7440,9830,1.0")
+    for expid, program in enumerate(programs):
+        for ic, channel in enumerate(channels):
+            pixfile = io.findfile('pix', night, expid, cameras[ic])
             fiberfile = io.findfile('fibermap', night, expid)
             psffile = '{}/data/specpsf/psf-{}.fits'.format(os.getenv('DESIMODEL'), channel)
-            framefile = io.findfile('frame', night, expid, camera)
+            framefile = io.findfile('frame', night, expid, cameras[ic])
             # cmd = "exspec -i {pix} -p {psf} --specmin 0 --nspec {nspec} -w {wave} -o {frame}".format(
             #     pix=pixfile, psf=psffile, wave=waverange[channel], frame=framefile, **params)
             cmd = "desi_extract_spectra -i {pix} -p {psf} -f {fibermap} --specmin 0 --nspec {nspec} -o {frame}".format(
@@ -131,43 +127,41 @@ def integration_test(night=None, nspec=5, clobber=False):
             inputs = [pixfile, psffile, fiberfile]
             outputs = [framefile,]
             if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-                raise RuntimeError('extraction failed for {} expid {}'.format(camera, expid))
+                raise RuntimeError('extraction failed for {} expid {}'.format(cameras[ic], expid))
 
     #-----
     #- Fiber flat
     expid = 0
-    for channel in ['b', 'r', 'z']:
-        camera = channel+"0"
-        framefile = io.findfile('frame', night, expid, camera)
-        fiberflat = io.findfile('fiberflat', night, expid, camera)
+    for ic, channel in enumerate(channels):
+        framefile = io.findfile('frame', night, expid, cameras[ic])
+        fiberflat = io.findfile('fiberflat', night, expid, cameras[ic])
         fibermap = io.findfile('fibermap', night, expid)  # for QA
-        qafile = io.findfile('qa_calib', night, expid, camera)
-        qafig = io.findfile('qa_flat_fig', night, expid, camera)
+        qafile = io.findfile('qa_calib', night, expid, cameras[ic])
+        qafig = io.findfile('qa_flat_fig', night, expid, cameras[ic])
         cmd = "desi_compute_fiberflat --infile {frame} --outfile {fiberflat} --qafile {qafile} --qafig {qafig}".format(
             frame=framefile, fiberflat=fiberflat, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile,fibermap,]
         outputs = [fiberflat,qafile,qafig,]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('fiberflat failed for '+camera)
+            raise RuntimeError('fiberflat failed for '+cameras[ic])
 
     #-----
     #- Sky model
     flat_expid = 0
     expid = 2
-    for channel in ['b', 'r', 'z']:
-        camera = channel+"0"
-        framefile = io.findfile('frame', night, expid, camera)
+    for ic, channel in enumerate(channels):
+        framefile = io.findfile('frame', night, expid, cameras[ic])
         fibermap = io.findfile('fibermap', night, expid)
-        fiberflat = io.findfile('fiberflat', night, flat_expid, camera)
-        skyfile = io.findfile('sky', night, expid, camera)
-        qafile = io.findfile('qa_data', night, expid, camera)
-        qafig = io.findfile('qa_sky_fig', night, expid, camera)
+        fiberflat = io.findfile('fiberflat', night, flat_expid, cameras[ic])
+        skyfile = io.findfile('sky', night, expid, cameras[ic])
+        qafile = io.findfile('qa_data', night, expid, cameras[ic])
+        qafig = io.findfile('qa_sky_fig', night, expid, cameras[ic])
         cmd="desi_compute_sky --infile {frame} --fiberflat {fiberflat} --outfile {sky} --qafile {qafile} --qafig {qafig}".format(
             frame=framefile, fiberflat=fiberflat, sky=skyfile, qafile=qafile, qafig=qafig, **params)
         inputs = [framefile, fibermap, fiberflat]
         outputs = [skyfile, qafile, qafig,]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('sky model failed for '+camera)
+            raise RuntimeError('sky model failed for '+cameras[ic])
 
 
     #-----
@@ -181,11 +175,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     flats = list()
     frames = list()
     skymodels = list()
-    for channel in ['b', 'r', 'z']:
-        camera = channel+'0'
-        frames.append( io.findfile('frame', night, expid, camera) )
-        flats.append( io.findfile('fiberflat', night, flat_expid, camera) )
-        skymodels.append( io.findfile('sky', night, expid, camera) )
+    for ic, channel in enumerate(channels):
+        frames.append( io.findfile('frame', night, expid, cameras[ic]) )
+        flats.append( io.findfile('fiberflat', night, flat_expid, cameras[ic]) )
+        skymodels.append( io.findfile('sky', night, expid, cameras[ic]) )
 
     frames = ' '.join(frames)
     flats = ' '.join(flats)
@@ -208,15 +201,14 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     #-----
     #- Flux calibration
-    for channel in ['b', 'r', 'z']:
-        camera = channel+"0"
-        framefile = io.findfile('frame', night, expid, camera)
+    for ic, channel in enumerate(channels):
+        framefile = io.findfile('frame', night, expid, cameras[ic])
         fibermap  = io.findfile('fibermap', night, expid)
-        fiberflat = io.findfile('fiberflat', night, flat_expid, camera)
-        skyfile   = io.findfile('sky', night, expid, camera)
-        calibfile = io.findfile('calib', night, expid, camera)
-        qafile = io.findfile('qa_data', night, expid, camera)
-        qafig = io.findfile('qa_flux_fig', night, expid, camera)
+        fiberflat = io.findfile('fiberflat', night, flat_expid, cameras[ic])
+        skyfile   = io.findfile('sky', night, expid, cameras[ic])
+        calibfile = io.findfile('calib', night, expid, cameras[ic])
+        qafile = io.findfile('qa_data', night, expid, cameras[ic])
+        qafig = io.findfile('qa_flux_fig', night, expid, cameras[ic])
 
         #- Compute flux calibration vector
         cmd = """desi_compute_fluxcalibration \
@@ -228,10 +220,10 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs = [framefile, fibermap, fiberflat, skyfile, stdstarfile]
         outputs = [calibfile, qafile, qafig]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('flux calibration failed for '+camera)
+            raise RuntimeError('flux calibration failed for '+cameras[ic])
 
         #- Apply the flux calibration to write a cframe file
-        cframefile = io.findfile('cframe', night, expid, camera)
+        cframefile = io.findfile('cframe', night, expid, cameras[ic])
         cmd = """desi_process_exposure \
           --infile {frame} --fiberflat {fiberflat} --sky {sky} --calib {calib} \
           --outfile {cframe}""".format(frame=framefile, fibermap=fibermap,
@@ -239,7 +231,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         inputs = [framefile, fiberflat, skyfile, calibfile]
         outputs = [cframefile, ]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
-            raise RuntimeError('combining calibration steps failed for '+camera)
+            raise RuntimeError('combining calibration steps failed for '+cameras[ic])
 
     #-----
     #- Collate QA
@@ -251,7 +243,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     expid = 2
     qafile = io.findfile('qa_data_exp', night, expid)
     if clobber or not os.path.exists(qafile):
-        flavor = program2flavor[raw_dict[expid]]
+        flavor = program2flavor[programs[expid]]
         qaexp_data = QA_Exposure(expid, night, flavor)  # Removes camera files
         io.write_qa_exposure(os.path.splitext(qafile)[0], qaexp_data)
         if not os.path.exists(qafile):
@@ -261,7 +253,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     for expid in calib_expid:
         qafile = io.findfile('qa_calib_exp', night, expid)
         if clobber or not os.path.exists(qafile):
-            qaexp_calib = QA_Exposure(expid, night, raw_dict[expid])
+            qaexp_calib = QA_Exposure(expid, night, programs[expid])
             io.write_qa_exposure(os.path.splitext(qafile)[0], qaexp_calib)
             if not os.path.exists(qafile):
                 raise RuntimeError('FAILED calib QA_Exposure({},{}, ...) -> {}'.format(expid, night, qafile))
@@ -270,7 +262,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     #- Regroup cframe -> spectra
     expid = 2
     inputs = list()
-    for camera in ['b0', 'r0', 'z0']:
+    for camera in cameras:
         inputs.append( io.findfile('cframe', night, expid, camera) )
 
     outputs = list()
@@ -296,6 +288,14 @@ def integration_test(night=None, nspec=5, clobber=False):
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('rrdesi failed for healpixel {}'.format(pix))
 
+    #
+    # Load redshifts into database
+    #
+    options = get_options('--clobber', '--filename', 'dailytest.db',
+                          os.path.join(os.environ['DESI_SPECTRO_REDUX'],
+                                       os.environ['SPECPROD']))
+    postgresql = setup_db(options)
+    load_zcat(options.datapath)
     # ztruth QA
     # qafile = io.findfile('qa_ztruth', night)
     # qafig = io.findfile('qa_ztruth_fig', night)
@@ -358,5 +358,12 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     print("--------------------------------------------------")
 
+
 if __name__ == '__main__':
-    integration_test()
+    from sys import exit
+    status = 0
+    try:
+        integration_test()
+    except RuntimeError:
+        status = 1
+    exit(status)

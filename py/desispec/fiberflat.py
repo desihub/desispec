@@ -164,7 +164,12 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             F = flux[fib,:]*0
             w=(mean_spectrum!=0) & (ivar[fib,:]>0)
             F[w]= flux[fib,w]/mean_spectrum[w]
-            smooth_fiberflat[fib,:] = spline_fit(wave,wave[w],F[w],smoothing_res,ivar[fib,w]*mean_spectrum[w]**2)
+            try :
+                smooth_fiberflat[fib,:] = spline_fit(wave,wave[w],F[w],smoothing_res,ivar[fib,w]*mean_spectrum[w]**2,max_resolution=1.5*smoothing_res)
+            except ValueError as err  :
+                log.error("Error when smoothing the flat")
+                log.error("Setting ivar=0 for fiber {} because spline fit failed".format(fib))
+                ivar[fib,:] *= 0
             chi2 = ivar[fib,:]*(flux[fib,:]-mean_spectrum*smooth_fiberflat[fib,:])**2
             w=np.isnan(chi2)
             bad=np.where(chi2>nsig_clipping**2)[0]
@@ -201,6 +206,7 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     median_spectrum = mean_spectrum*1.
 
     previous_smooth_fiberflat = smooth_fiberflat*0
+    previous_max_diff = 0.
     log.info("after 1st pass : nout = %d/%d"%(np.sum(ivar==0),np.size(ivar.flatten())))
     # 2nd pass is full solution including deconvolved spectrum, no outlier rejection
     for iteration in range(max_iterations) :
@@ -256,7 +262,12 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
             ok=(M!=0) & (ivar[fiber,:]>0)
             if ok.sum()==0:
                 continue
-            smooth_fiberflat[fiber]=spline_fit(wave,wave[ok],flux[fiber,ok]/M[ok],smoothing_res,ivar[fiber,ok]*M[ok]**2)*(ivar[fiber,:]*M**2>0)
+            try :
+                smooth_fiberflat[fiber] = spline_fit(wave,wave[ok],flux[fiber,ok]/M[ok],smoothing_res,ivar[fiber,ok]*M[ok]**2,max_resolution=1.5*smoothing_res)*(ivar[fiber,:]*M**2>0)
+            except ValueError as err  :
+                log.error("Error when smoothing the flat")
+                log.error("Setting ivar=0 for fiber {} because spline fit failed".format(fiber))
+                ivar[fiber,:] *= 0
             chi2 = ivar[fiber]*(flux[fiber]-smooth_fiberflat[fiber]*M)**2
             sum_chi2 += chi2.sum()
             w=np.isnan(smooth_fiberflat[fiber])
@@ -287,6 +298,12 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
         if max_diff<accuracy :
             break
 
+        if np.abs(max_diff-previous_max_diff)<accuracy*0.1 :
+            log.warning("no significant improvement on max diff, quit loop")
+            break
+        
+        previous_max_diff=max_diff
+        
         log.info("2nd pass, iter %d, max diff. = %g > requirement = %g, continue iterating"%(iteration,max_diff,accuracy))
 
 

@@ -5,6 +5,7 @@
 from __future__ import absolute_import, division
 # The line above will help with 2to3 support.
 import unittest, os
+import tempfile
 from datetime import datetime, timedelta
 from shutil import rmtree
 from pkg_resources import resource_filename
@@ -25,17 +26,27 @@ class TestIO(unittest.TestCase):
         cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
         cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
         cls.testbrfile = 'test-{uuid}/test-br-{uuid}.fits'.format(uuid=uuid1())
-        cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
+        # cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
+        cls.testDir = tempfile.mkdtemp()
         cls.origEnv = {'SPECPROD':None,
             "DESI_SPECTRO_DATA":None,
             "DESI_SPECTRO_REDUX":None}
         cls.testEnv = {'SPECPROD':'dailytest',
             "DESI_SPECTRO_DATA":os.path.join(cls.testDir,'spectro','data'),
             "DESI_SPECTRO_REDUX":os.path.join(cls.testDir,'spectro','redux')}
+        cls.datadir = cls.testEnv['DESI_SPECTRO_DATA']
+        cls.reduxdir = os.path.join(cls.testEnv['DESI_SPECTRO_REDUX'],
+                                    cls.testEnv['SPECPROD'])
         for e in cls.origEnv:
             if e in os.environ:
                 cls.origEnv[e] = os.environ[e]
             os.environ[e] = cls.testEnv[e]
+
+    def setUp(self):
+        if os.path.isdir(self.datadir):
+            rmtree(self.datadir)
+        if os.path.isdir(self.reduxdir):
+            rmtree(self.reduxdir)
 
     @classmethod
     def tearDownClass(cls):

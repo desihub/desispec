@@ -10,6 +10,12 @@ Spring 2016
 
 from __future__ import absolute_import, division, print_function
 
+from desispec.quicklook import quicklook,qllogger,qlconfig
+from desispec.io.meta import findfile
+import desispec.image as image
+import desispec.frame as frame
+import desispec.io.frame as frIO
+import desispec.io.image as imIO
 
 import os,sys
 import yaml
@@ -121,18 +127,22 @@ def ql_main(args=None):
             log.critical("No final outputname given. Writing to a image file {}".format(finalname))
         imIO.write_image(finalname,res,meta=None)        
     elif isinstance(res,frame.Frame):
-        if configdict["Flavor"] == 'arcs':
-            from desispec.io.meta import findfile
-            finalname="psfnight-{}.fits".format(camera)
-            finalframe=findfile('frame',night=night,expid=expid,camera=camera)
-            frIO.write_frame(finalframe,res,header=None)
+        if configdict["OutputFile"]: 
+            finalname=configdict["OutputFile"]
         else:
-            if configdict["OutputFile"]: 
-                finalname=configdict["OutputFile"]
-            else:
-                finalname="frame-{}-{:08d}.fits".format(camera,expid)
-                log.critical("No final outputname given. Writing to a frame file {}".format(finalname)) 
-            frIO.write_frame(finalname,res,header=None)
+            finalname="frame-{}-{:08d}.fits".format(camera,expid)
+            log.critical("No final outputname given. Writing to a frame file {}".format(finalname)) 
+        frIO.write_frame(finalname,res,header=None)
+    elif configdict["Flavor"] == 'arcs':
+        if configdict["OutputFile"]:
+            finalname=configdict["OutputFile"]
+        else:
+            finalname="psfnight-{}.fits".format(camera)
+    elif configdict["Flavor"] == 'flat':
+        if configdict["OutputFile"]:
+            finalname=configdict["OutputFile"]
+        else:
+            finalname="fiberflat-{}-{:08d}.fits".format(camera,expid)
     else:
         log.error("Result of pipeline is an unknown type {}. Don't know how to write".format(type(res)))
         sys.exit("Unknown pipeline result type {}.".format(type(res)))
