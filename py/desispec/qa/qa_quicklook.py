@@ -688,8 +688,8 @@ class Sky_Peaks(MonitoringAlg):
                 else:
                     sumcount_err = 'NORMAL'
 
+        '''
         if amps:
-
             if frame.fibermap['FIBER'].shape[0]<260:
                 amp2=np.zeros(len(sky_counts))
                 amp4=np.zeros(len(sky_counts))
@@ -706,7 +706,8 @@ class Sky_Peaks(MonitoringAlg):
 
             retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp,"SUMCOUNT_ERR":sumcount_err}
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_ERR":sumcount_err}
+        '''
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_ERR":sumcount_err}
 
         if qlf:
             qlf_post(retval)
