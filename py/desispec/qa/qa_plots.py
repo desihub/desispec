@@ -922,7 +922,7 @@ def skyline_resid(channel, sky_wave, sky_flux, sky_res, sky_ivar, outfile=None, 
         # Labels
         ax.set_ylabel(r'$n \sigma$')
         #ax_flux.set_ylabel('Residual Flux')
-        ax.set_ylim(0., 10.)
+        ax.set_ylim(bottom=0.)
         ax.axhline(1., color='gray', linestyle='dashed')
 
         if ss == 0:
