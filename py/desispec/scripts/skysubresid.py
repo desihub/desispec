@@ -115,7 +115,11 @@ def main(args) :
             cframes = get_reduced_frames(nights=nights, channels=[channel])
             if len(cframes) > 0:
                 log.info("Loading sky residuals for {:d} cframes".format(len(cframes)))
-                sky_wave, sky_flux, sky_res, sky_ivar = qa_utils.get_skyres(cframes)
+                if len(cframes) == 1:
+                    pdb.set_trace() # Need to call differently
+                else:
+                    sky_wave, sky_flux, sky_res, sky_ivar = qa_utils.get_skyres(
+                        cframes, flatten=False)
                 # Plot
                 outfile='QA/skyline_{:s}.png'.format(channel)
                 log.info("Plotting to {:s}".format(outfile))
