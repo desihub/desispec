@@ -66,18 +66,19 @@ def cholesky_invert(A) :
     return inv
 
 
-def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=None,order=3):
+def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=None,order=3,max_resolution=None):
     """Performs spline fit of input_flux vs. input_wave and resamples at output_wave
 
     Args:
         output_wave : 1D array of output wavelength samples
         input_wave : 1D array of input wavelengths
         input_flux : 1D array of input flux density
-        required_resolution (float) : resolution for spline knot placement
+        required_resolution (float) : resolution for spline knot placement (same unit as wavelength)
 
     Options:
         input_ivar : 1D array of weights for input_flux
         order (int) : spline order
+        max_resolution (float) : if not None and first fit fails, try once this resolution
 
     Returns:
         output_flux : 1D array of flux sampled at output_wave
@@ -104,7 +105,15 @@ def spline_fit(output_wave,input_wave,input_flux,required_resolution,input_ivar=
     mins = np.amin(dknots,axis=1)
     w=mins<res
     knots = knots[w]
-
-    toto=scipy.interpolate.splrep(input_wave,input_flux,w=input_ivar,k=order,task=-1,t=knots)
-    output_flux = scipy.interpolate.splev(output_wave,toto)
+    try :
+        toto=scipy.interpolate.splrep(input_wave,input_flux,w=input_ivar,k=order,task=-1,t=knots)
+        output_flux = scipy.interpolate.splev(output_wave,toto)
+    except ValueError as err :
+        log=get_logger()
+        if max_resolution is not None  and required_resolution < max_resolution :
+            log.warning("spline fit failed with resolution={}, retrying with {}".format(required_resolution,max_resolution))
+            return spline_fit(output_wave,input_wave,input_flux,max_resolution,input_ivar=input_ivar,order=3,max_resolution=None)
+        else :
+            log.error("spline fit failed")
+            raise ValueError
     return output_flux

@@ -187,7 +187,7 @@ class WorkerSpecex(Worker):
         return 20
 
     def task_time(self):
-        return 20
+        return 15 # in general faster but convergence slower for some realizations
 
 
     def default_options(self):
@@ -305,7 +305,7 @@ class WorkerSpecexCombine(Worker):
         return 1
 
     def task_time(self):
-        return 20
+        return 2 # fast 
 
 
     def default_options(self):
@@ -352,10 +352,10 @@ class WorkerSpecter(Worker):
 
 
     def max_nproc(self):
-        return 20
+        return 20 # 20 bundles per camera
 
     def task_time(self):
-        return 100
+        return 15 # 8 minute per bundle of 25 fibers on edison, but can be slower
 
 
     def default_options(self):
@@ -463,7 +463,7 @@ class WorkerFiberflat(Worker):
         return 1
 
     def task_time(self):
-        return 10
+        return 4 # 2 minutes on edison
 
 
     def default_options(self):
@@ -530,7 +530,7 @@ class WorkerSky(Worker):
         return 1
 
     def task_time(self):
-        return 5
+        return 2 # less than 1 minute 
 
     def default_options(self):
         opts = {}
@@ -609,8 +609,8 @@ class WorkerStdstars(Worker):
         return 1
 
     def task_time(self):
-        return 30
-
+        return 15 # less than 4 min on edison but can vary quite a bit
+        
 
     def default_options(self):
         log = get_logger()
@@ -706,7 +706,7 @@ class WorkerFluxcal(Worker):
         return 1
 
     def task_time(self):
-        return 10
+        return 2 # this is fast
 
     def default_options(self):
         opts = {}
@@ -796,7 +796,7 @@ class WorkerProcexp(Worker):
         return 1
 
     def task_time(self):
-        return 10
+        return 1 # fast
 
     def default_options(self):
         opts = {}
@@ -964,7 +964,7 @@ class WorkerRedrock(Worker):
         return self.specpermin
 
     def task_time(self):
-        return 60
+        return 30 # this really depends on the size of the spectra file??
 
     def default_options(self):
         opts = {}

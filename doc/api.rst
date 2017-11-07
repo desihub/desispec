@@ -201,7 +201,7 @@ Full desispec API Reference
 .. automodule:: desispec.quicklook.quicksky
     :members:
 
-.. automodule:: desispec.quicklook.util
+.. automodule:: desispec.quicklook.merger
     :members:
 
 .. automodule:: desispec.resolution

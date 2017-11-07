@@ -206,15 +206,20 @@ def run_step(step, grph, opts, comm=None):
                     fspath = graph_path(iname)
                     if not os.path.exists(fspath):
                         missing += 1
-                        log.error("skipping step {} task {} due to missing input {}".format(step, tasks[t], fspath))
+                        if step=="psfcombine" :
+                            log.warning("step {} task {} missing input {}".format(step, tasks[t], fspath))
+                        else :
+                            log.error("skipping step {} task {} due to missing input {}".format(step, tasks[t], fspath))
             if comm_group is not None:
                 missing = comm_group.bcast(missing, root=0)
 
-            if missing > 0:
-                if group_rank == 0:
-                    group_failcount += 1
-                continue
-
+            if missing > 0 :
+                if step != "psfcombine"  or missing>1 :
+                    if group_rank == 0:
+                        group_failcount += 1
+                    continue
+                else :
+                    log.warning("will run step {} task {} even if 1 missing input".format(step, tasks[t]))
             nfaildir = None
             nlogdir = None
             if step == "redshift":

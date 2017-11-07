@@ -550,7 +550,7 @@ def main(args):
 
         taskproc = workermax["extract"]
         taskmin = workertime["extract"]
-        step_threads = 2
+        step_threads = 1 # faster to use max number of processes per node
         step_mp = 1
         nt = None
         first = "extract"
@@ -609,7 +609,7 @@ def main(args):
 
     ngroup = len(allpix.keys())
 
-    spectime = 120
+    spectime = 30 # default set to 30 minutes to fit in debug queue
     specprocs = ngroup // 5
     specnodeprocs = nodecores // 2
     specnodes = specprocs // specnodeprocs
