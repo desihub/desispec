@@ -19,6 +19,7 @@ def write_sky(outfile, skymodel, header=None):
             flux : 2D[nspec, nwave] sky flux
             ivar : 2D inverse variance of sky flux
             mask : 2D mask for sky flux
+            stat_ivar : 2D inverse variance of sky flux (statistical only)
         header : optional fits header data (fits.Header, dict, or list)
     """
     from desiutil.depend import add_dependencies
@@ -41,6 +42,10 @@ def write_sky(outfile, skymodel, header=None):
     hx.append( fits.ImageHDU(skymodel.ivar.astype('f4'), name='IVAR') )
     hx.append( fits.CompImageHDU(skymodel.mask, name='MASK') )
     hx.append( fits.ImageHDU(skymodel.wave.astype('f4'), name='WAVELENGTH') )
+    if skymodel.stat_ivar is not None :
+       hx.append( fits.ImageHDU(skymodel.stat_ivar.astype('f4'), name='STATIVAR') )
+    
+
     hx[-1].header['BUNIT'] = 'Angstrom'
 
     hx.writeto(outfile+'.tmp', clobber=True, checksum=True)
@@ -69,8 +74,12 @@ def read_sky(filename) :
     skyflux = native_endian(fx["SKY"].data.astype('f8'))
     ivar = native_endian(fx["IVAR"].data.astype('f8'))
     mask = native_endian(fx["MASK"].data)
+    if "STATIVAR" in fx :
+        stat_ivar = native_endian(fx["STATIVAR"].data.astype('f8'))
+    else :
+        stat_ivar = None
     fx.close()
 
-    skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr)
-
+    skymodel = SkyModel(wave, skyflux, ivar, mask, header=hdr,stat_ivar=stat_ivar)
+    
     return skymodel

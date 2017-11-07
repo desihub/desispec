@@ -167,14 +167,69 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
     for i in range(frame.nspec):
         cskyflux[i] = frame.R[i].dot(skyflux)
 
+    # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
+    if skyfibers.size > 1 :
+        log.info("Look at sky residuals")
+        
+        tivar = util.combine_ivar(frame.ivar[skyfibers], cskyivar[skyfibers])
+        
+        # the chi2 at a given wavelength can be large because on a cosmic
+        # and not a psf error or sky non uniformity
+        # so we need to consider only waves for which 
+        # a reasonable sky model error can be computed
+        
+        # mean sky
+        msky = np.mean(cskyflux,axis=0)
+        # reconvolve mean sky with mean resolution to get broader lines
+        rmsky = R.dot(msky)
+        # now we consider the max possible sky model error is 20% of this
+        max_possible_var = 1./(tivar+(tivar==0)) + (0.2*rmsky)**2
+        
+        # exclude residuals inconsistent with this max possible variance (at 3 sigma)
+        bad = (frame.flux[skyfibers]-cskyflux[skyfibers])**2 > 3**2*max_possible_var
+        tivar[bad]=0
+        ndata = np.sum(tivar>0,axis=0)
+        chi2  = np.zeros(frame.wave.size)
+        chi2[ndata>1] = np.sum(tivar*(frame.flux[skyfibers]-cskyflux[skyfibers])**2,axis=0)/(ndata-1)
+        chi2[ndata<=1] = 1. # default
+
+        # boost sky model error only on sky flux peaks
+        tmp=np.zeros(frame.wave.size)
+        tmp = (msky[1:-1]>msky[2:])*(msky[1:-1]>msky[:-2])*(msky[1:-1]>0.1*np.max(msky))
+        peaks = np.where(tmp)[0]+1
+        
+        modified_csky_var = 1./(cskyivar+(cskyivar==0))
+        dwave = np.mean(np.gradient(frame.wave))
+        dpix = int(np.ceil(dwave/3.)) # +- n Angstrom around each peak
+        for peak in peaks :
+            b=peak-dpix
+            e=peak+dpix+1
+            mchi2  = np.mean(chi2[b:e]) # mean reduced chi2 around peak
+            mndata = np.mean(ndata[b:e]) # mean number of fibers contributing
+            if mchi2>1. :
+                skyfrac=0.005
+                res2=(frame.flux[skyfibers,b:e]-cskyflux[skyfibers,b:e])**2
+                var=1./(tivar[:,b:e]+(tivar[:,b:e]==0))
+                nd=np.sum(tivar[:,b:e]>0)
+                while(skyfrac<0.2) :
+                    pivar=1./(var+(skyfrac*rmsky[b:e])**2)
+                    pchi2=np.sum(pivar*res2)/nd
+                    if pchi2<=1 :
+                        log.info("peak at {}A : add in quad. {} of sky to error".format(int(frame.wave[peak]),skyfrac))
+                        modified_csky_var[:,b:e] += (skyfrac*rmsky[b:e])**2                        
+                        break
+                    skyfrac += 0.005
+                
+        modified_cskyivar = (cskyivar>0)/modified_csky_var
+        
     # need to do better here
     mask = (cskyivar==0).astype(np.uint32)
 
-    return SkyModel(frame.wave.copy(), cskyflux, cskyivar, mask,
-                    nrej=nout_tot)
+    return SkyModel(frame.wave.copy(), cskyflux, modified_cskyivar, mask,
+                    nrej=nout_tot, stat_ivar = cskyivar) # keep a record of the statistical ivar for QA
 
 class SkyModel(object):
-    def __init__(self, wave, flux, ivar, mask, header=None, nrej=0):
+    def __init__(self, wave, flux, ivar, mask, header=None, nrej=0, stat_ivar=None):
         """Create SkyModel object
 
         Args:
@@ -199,7 +254,7 @@ class SkyModel(object):
         self.mask = util.mask32(mask)
         self.header = header
         self.nrej = nrej
-
+        self.stat_ivar = stat_ivar
 
 def subtract_sky(frame, skymodel) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
