@@ -9,9 +9,11 @@ desispec Change Log
   Requires specter 0.8.1.
 * Fixed bug in :func:`desispec.parallel.dist_discrete` (PR `#446`_)
 * Tuned pipeline for scaling tests (PR `#457`_)
+* Skyline QA and refactoring (PR `#458`_)
 
 .. _`#446`: https://github.com/desihub/desispec/pull/446
 .. _`#457`: https://github.com/desihub/desispec/pull/457
+.. _`#458`: https://github.com/desihub/desispec/pull/458
 
 0.16.0 (2017-09-29)
 -------------------
