@@ -110,7 +110,7 @@ def get_resolution(wave,nspec,psf,usesigma=False):
                 log.info("Getting resolution matrix band diagonal elements from constant Gaussian Xsigma")
                 for ispec in range(nspec):
                     thissigma=psf.xsigma(ispec,wave) 
-                    Rsig=Resolution(sigma=thissigma)
+                    Rsig=QuickResolution(sigma=thissigma)
                     resolution_data[ispec]=Rsig.data
 
     return resolution_data

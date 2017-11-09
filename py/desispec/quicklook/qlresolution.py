@@ -2,8 +2,10 @@
 desispec.quicklook.qlresolution
 ===================
 
-Quicklook version of resolution object that can reduce the file size
+Quicklook version of resolution object that can 
+calculate resolution efficiently from psf information
 
+Author: Sami Kama
 
 """
 
@@ -52,7 +54,7 @@ class QuickResolution(scipy.sparse.dia_matrix):
         bins=bins-(bins[0]+bins[-1])/2.0
         x=np.concatenate([bins+0.5,bins[-1:]-0.5])
         self.offsets=bins
-        rdata=_binIntegral(x,sigma=s).T
+        rdata=_binIntegral(x,mu=mu,sigma=s).T
         
         scipy.sparse.dia_matrix.__init__(self,(rdata,self.offsets),(nwave,nwave))
        
