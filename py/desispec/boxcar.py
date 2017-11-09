@@ -98,9 +98,9 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
                 pass
     else:
         mask,ranges=calcMask(psf)
-
-    maskedimg=(image.pix*mask.T)
-    maskedvar=(1/image.ivar.clip(0)*mask.T)
+    Tmask=mask.T
+    maskedimg=(image.pix*Tmask)
+    maskedvar=(Tmask/image.ivar.clip(0))
 
     flux=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))
     ivar=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))
