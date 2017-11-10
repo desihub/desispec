@@ -67,8 +67,17 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     hdus.append( fits.CompImageHDU(frame.mask, name='MASK') )
     hdus.append( fits.ImageHDU(frame.wave.astype('f4'), name='WAVELENGTH') )
     hdus[-1].header['BUNIT'] = 'Angstrom'
-    hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
-
+    if frame.resolution_data is not None:
+        hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
+    elif frame.wcoeff is not None:
+        qrimg=fits.ImageHDU(frame.coeffs.astype('f8'), name='QUICKRESOLUTION' ) 
+        qrimg.header["WMIN"]  =frame.wmin
+        qrimg.header["WMAX"]  =frame.wmax
+        qrimg.header["YMIN"]  =frame.ymin
+        qrimg.header["YMAX"]  =frame.ymax
+        qrimg.header["NPIX_Y"]=frame.npix_y
+        qrimg.header["NDIAG"] =frame.ndiag
+        hdus.append(qrimg)
     if fibermap is not None:
         fibermap = encode_table(fibermap)  #- unicode -> bytes
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
@@ -138,8 +147,26 @@ def read_frame(filename, nspec=None):
     else:
         mask = None   #- let the Frame object create the default mask
 
-    resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
-
+    resolution_data=None
+    qwcoeff=None
+    qwmin=None
+    qwmax=None
+    qymin=None
+    qymax=None
+    qndiag=None
+    qnpix_y=None
+    if 'RESOLUTION' in fx:
+        resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
+    elif 'QUICKRESOLUTION' in fx:
+        qr=fx['QUICKRESOLUTION'].header
+        qwmin  =native_endian(qr['WMIN'])
+        qwmax  =native_endian(qr['WMAX'])
+        qymin  =native_endian(qr['YMIN'])
+        qymax  =native_endian(qr['YMAX'])
+        qnpix_y=native_endian(qr['NPIX_Y'])
+        qndiag =native_endian(qr['NDIAG'])
+        qwcoeff=native_endiag(fx['QUICKRESOLUTION'].data.astype('f8'))
+        
     if 'FIBERMAP' in fx:
         fibermap = fx['FIBERMAP'].data
     else:
@@ -155,14 +182,19 @@ def read_frame(filename, nspec=None):
     if nspec is not None:
         flux = flux[0:nspec]
         ivar = ivar[0:nspec]
-        resolution_data = resolution_data[0:nspec]
+        if resolution_data is not None:
+            resolution_data = resolution_data[0:nspec]
+        else:
+            qwcoeff=wcoeff[0:nspec]
         if chi2pix is not None:
             chi2pix = chi2pix[0:nspec]
         if mask is not None:
             mask = mask[0:nspec]
 
     # return flux,ivar,wave,resolution_data, hdr
-    frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix)
+    frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix,
+                  coefficients=qwcoeff,ndiag=qndiag,ymin=qymin,ymax=qymax,wmin=qwmin,wmax=qwmax,npix_y=qnpix_y
+    )
 
     # Vette
     diagnosis = frame.vet()

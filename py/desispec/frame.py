@@ -42,7 +42,14 @@ from desispec import util
 class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
                 fibers=None, spectrograph=None, meta=None, fibermap=None,
-                chi2pix=None):
+                 chi2pix=None,
+                 coefficients=None,
+                 ndiag=21,
+                 ymin=None,
+                 ymax=None,
+                 wmin=None,
+                 wmax=None,
+                 npix_y=None ):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
@@ -63,7 +70,14 @@ class Frame(object):
             fibermap: fibermap table
             chi2pix: 2D[nspec, nwave] chi2 of 2D model to pixel-level data
                 for pixels that contributed to each flux bin
-
+        Parameters below allow on-the-fly resolution calculation
+            coefficients: [nspec,12] concatenated psf.icoeff and psf.wcoeff arrays 
+            ndiag: width of the diagonals in resolution matrix ignored if resolution_data is given
+            ymin: psf.ymin
+            ymax: psf.ymax
+            wmin: psf.wmin
+            wmax: psf.wmax
+            npix_y: psf.npix_y
         Notes:
             spectrograph input is used only if fibers is None.  In this case,
             it assumes nspec_per_spectrograph = flux.shape[0] and calculates
@@ -109,10 +123,44 @@ class Frame(object):
                raise ValueError("Wrong dimensions for resolution_data[nspec, ndiag, nwave]")
 
         #- Maybe setup non-None identity matrix resolution matrix instead?
+        self.coeffs=coefficients
+        self.ndiag=ndiag
+        self.wmin   = wmin 
+        self.wmax   = wmax 
+        self.ymin   = ymin 
+        self.ymax   = ymax 
+        self.npix_y = npix_y
+        self.ndiag  = ndiag
         self.resolution_data = resolution_data
         if resolution_data is not None:
+            self.coeffs=None #ignore width coefficients if resolution data is given explicitly
+            self.ndiag=None 
             self.R = np.array( [Resolution(r) for r in resolution_data] )
-
+        elif coefficients is not None:
+            assert self.wmin   is not None
+            assert self.wmax   is not None
+            assert self.ymin   is not None
+            assert self.ymax   is not None
+            assert self.npix_y is not None
+            assert self.ndiag  is not None and self.ndiag>0
+            
+            from desiutil import funcfits as dufits
+            from desispec.quicklook.qlresolution import QuickResolution
+            def wavelength(ispec,y,ymin,ymax):
+                c=self.coeffs[:,:9]
+                new_dict=dufits.mk_fit_dict(c[ispec,:],c[ispec,:].shape,'legendre',ymin,ymax)
+                wfit=dufits.func_val(y,new_dict)
+                return wfit
+            def angstroms_per_pixel(ispec,wavelength,npix_y):
+                ww = wavelength(ispec, y=np.arange(npix_y))
+                dw = np.gradient( ww )
+                return np.interp(wavelength, ww, dw)
+                r=[]
+            for f in fibers:
+                new_dict=dufits.mk_fit_dict(coefficients[f,9:],3,'legendre',wmin,wmax)
+                wsigma=dufits.func_val(wave,new_dict)
+                r.append(QuickResolution(sigma=wsigma/angstroms_per_pixel(f,self.wave,npix_y),ndiag=self.ndiag))
+            self.R=np.array(r)
         self.spectrograph = spectrograph
 
         # Deal with Fibers (these must be set!)
@@ -223,10 +271,15 @@ class Frame(object):
         else:
             chi2pix = None
 
+        wcoeff=None
+        if self.wcoeff is not None:
+            wcoeff=self.wcoeff[index]
+
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
-                    meta=self.meta, fibermap=fibermap, chi2pix=chi2pix)
+                       meta=self.meta, fibermap=fibermap, chi2pix=chi2pix,
+                       wcoeff=wcoeff,ndiag=self.ndiag)
 
         return result
 

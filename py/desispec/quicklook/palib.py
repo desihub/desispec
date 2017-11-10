@@ -102,7 +102,7 @@ def get_resolution(wave,nspec,psf,usesigma=False):
             log.info("Getting resolution from wsigmas from arc lines PSF")
             for ispec in range(nspec):
                 thissigma=psf.wdisp(ispec,wave)/psf.angstroms_per_pixel(ispec,wave) #- in pixel units
-                Rsig=QuickResolution(sigma=thissigma)
+                Rsig=QuickResolution(sigma=thissigma,ndiag=nband)
                 resolution_data[ispec]=Rsig.data
         else:
 
@@ -110,7 +110,7 @@ def get_resolution(wave,nspec,psf,usesigma=False):
                 log.info("Getting resolution matrix band diagonal elements from constant Gaussian Xsigma")
                 for ispec in range(nspec):
                     thissigma=psf.xsigma(ispec,wave) 
-                    Rsig=QuickResolution(sigma=thissigma)
+                    Rsig=QuickResolution(sigma=thissigma,ndiag=nband)
                     resolution_data[ispec]=Rsig.data
 
     return resolution_data

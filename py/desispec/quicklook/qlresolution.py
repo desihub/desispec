@@ -58,5 +58,3 @@ class QuickResolution(scipy.sparse.dia_matrix):
         
         scipy.sparse.dia_matrix.__init__(self,(rdata,self.offsets),(nwave,nwave))
        
-
-    #- (Unit tests moved to desispec.test.test_resolution)
