@@ -271,15 +271,17 @@ class Frame(object):
         else:
             chi2pix = None
 
-        wcoeff=None
-        if self.wcoeff is not None:
-            wcoeff=self.wcoeff[index]
+        coeff=None
+        if self.coeffs is not None:
+            coeff=self.coeffs[index]
 
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
                        meta=self.meta, fibermap=fibermap, chi2pix=chi2pix,
-                       wcoeff=wcoeff,ndiag=self.ndiag)
+                       coefficients=coeff,ndiag=self.ndiag,wmin=self.wmin,
+                       wmax=self.wmax,ymin=self.ymin,ymax=self.ymax,npix_y=self.npix_y
+        )
 
         return result
 
