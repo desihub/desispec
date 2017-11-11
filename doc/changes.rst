@@ -2,17 +2,26 @@
 desispec Change Log
 ===================
 
-0.17.0 (unreleased)
+0.17.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.17.0 (2017-11-10)
 -------------------
 
 * Enabled specter.extract.ex2d nsubbundles option for faster extractions.
-  Requires specter 0.8.1.
+  Requires specter 0.8.1 (PR `#451`_).
 * Fixed bug in :func:`desispec.parallel.dist_discrete` (PR `#446`_)
 * Tuned pipeline for scaling tests (PR `#457`_)
 * Improved wavelength fitting (via specex update) and sky model error
   propagation (PR `#459`_)
+* Added QL fiberflat, py3 fixes, updated algorithms and config
+* Enables MPI parallelism for desi_extract_spectra script (PR `#448`_)
 
 .. _`#446`: https://github.com/desihub/desispec/pull/446
+.. _`#448`: https://github.com/desihub/desispec/pull/448
+.. _`#451`: https://github.com/desihub/desispec/pull/451
 .. _`#457`: https://github.com/desihub/desispec/pull/457
 .. _`#459`: https://github.com/desihub/desispec/pull/459
 
