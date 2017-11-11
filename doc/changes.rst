@@ -17,6 +17,7 @@ desispec Change Log
 * Improved wavelength fitting (via specex update) and sky model error
   propagation (PR `#459`_)
 * Added QL fiberflat, py3 fixes, updated algorithms and config
+* Many other QL updates (PR `#462`_)
 * Enables MPI parallelism for desi_extract_spectra script (PR `#448`_)
 
 .. _`#446`: https://github.com/desihub/desispec/pull/446
@@ -24,6 +25,7 @@ desispec Change Log
 .. _`#451`: https://github.com/desihub/desispec/pull/451
 .. _`#457`: https://github.com/desihub/desispec/pull/457
 .. _`#459`: https://github.com/desihub/desispec/pull/459
+.. _`#462`: https://github.com/desihub/desispec/pull/462
 
 0.16.0 (2017-09-29)
 -------------------
