@@ -8,8 +8,9 @@ class QLLogger:
     def __init__(self,name=None,loglevel=logging.INFO):
         if name is not None:
             self.__loggername__=name
-        if self.__loglvl__ is None:
-            self.__loglvl__=loglevel
+        if QLLogger.__loglvl__ is None: #set singleton
+            QLLogger.__loglvl__=loglevel
+        self.__loglvl__=QLLogger.__loglvl__
         format = '%(asctime)-15s %(name)s %(levelname)s : %(message)s'
         logging.basicConfig(format=format,level=self.__loglvl__)
     def getlog(self,name=None):
@@ -18,3 +19,4 @@ class QLLogger:
         else:
             loggername=name
         return logging.getLogger(loggername)
+

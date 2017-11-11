@@ -3,9 +3,6 @@ import yaml
 from desispec.io import findfile
 import os,sys
 from desispec.quicklook import qlexceptions,qllogger
-qlog=qllogger.QLLogger("QuickLook",20)
-log=qlog.getlog()
-
 
 class Config(object):
     """ 
@@ -48,6 +45,8 @@ class Config(object):
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
         else: self.wavelength = None
         self._qlf=qlf
+        qlog=qllogger.QLLogger(name="QLConfig")
+        self.log=qlog.getlog()
 
 
     @property
@@ -128,7 +127,12 @@ class Config(object):
 
         paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile, 'usesigma': self.usesigma}
 
-        paopt_comflat={'outputFile': self.fiberflat}
+        if self.conf["Flavor"] == 'flat':
+            fiberflatfile=findfile('fiberflat',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,specprod_dir=self.specprod_dir)
+        else:
+            fiberflatfile=None
+
+        paopt_comflat={'outputFile': fiberflatfile}
 
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
@@ -139,25 +143,36 @@ class Config(object):
         paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile,'Apply_resolution': self.usesigma}
 
         paopts={}
+        defList={
+            'Initialize':paopt_initialize,
+            'Preproc':paopt_preproc,
+            'BootCalibration':paopt_bootcalib,
+            'BoxcarExtract':paopt_extract,
+            'ResolutionFit':paopt_resfit,
+            'ComputeFiberflat_QL':paopt_comflat,
+            'ApplyFiberFlat_QL':paopt_apfflat,
+            'SkySub_QL':paopt_skysub
+        }
+
+        def getPAConfigFromFile(PA,algs):
+            def mergeDicts(source,dest):
+                for k in source:
+                    if k not in dest:
+                        dest[k]=source[k]
+            userconfig={}
+            if PA in algs:
+                fc=algs[PA]
+                for k in fc: #do a deep copy leave QA config out
+                    if k != "QA":
+                        userconfig[k]=fc[k]
+            defconfig={}
+            if PA in defList:
+                defconfig=defList[PA]
+            mergeDicts(defconfig,userconfig)
+            return userconfig
+
         for PA in self.palist:
-            if PA=='Initialize':
-                paopts[PA]=paopt_initialize
-            elif PA=='Preproc':
-                paopts[PA]=paopt_preproc
-            elif PA=='BootCalibration':
-                paopts[PA]=paopt_bootcalib
-            elif PA=='BoxcarExtract':
-                paopts[PA]=paopt_extract
-            elif PA=='ResolutionFit':
-                paopts[PA]=paopt_resfit
-            elif PA=='ComputeFiberflat_QL':
-                paopts[PA]=paopt_comflat
-            elif PA=='ApplyFiberFlat_QL':
-                paopts[PA]=paopt_apfflat
-            elif PA=='SkySub_QL':
-                paopts[PA]=paopt_skysub
-            else:
-                paopts[PA]={}
+            paopts[PA]=getPAConfigFromFile(PA,self.algorithms)
         #- Ignore intermediate dumping and write explicitly the outputfile for 
         self.outputfile=self.dump_pa(self.palist[-1]) 
 
@@ -213,7 +228,8 @@ class Config(object):
     def qaargs(self):
 
         qaopts = {}
-        
+        referencemetrics=[]        
+
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
                 if self.writestaticplots:
@@ -221,8 +237,15 @@ class Config(object):
                 else:
                     qaplot = None
 
+                pa_yaml = PA.upper()
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 'param': params, 'qlf': self.qlf}
+                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 
+                            'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 
+                            'param': params, 'qlf': self.qlf}
+
+                if self.reference != None and pa_yaml in self.reference and 'METRICS' in self.reference[pa_yaml]:
+                    qaopts[qa]['ReferenceMetrics'] = self.reference[pa_yaml]['METRICS']
+                    
                 
         return qaopts 
    
@@ -354,7 +377,8 @@ class Config(object):
         """
         config: desispec.quicklook.qlconfig.Config object
         """
-        log.info("Building Full Configuration")
+
+        self.log.debug("Building Full Configuration")
 
         self.program = self.conf["Program"]
         self.flavor = self.conf["Flavor"]
@@ -363,16 +387,38 @@ class Config(object):
         self.timeout = self.conf["Timeout"]
         self.fiberflatexpid = self.conf["FiberflatExpid"]
         self.psftype = self.conf["PSFType"]
+        self.templateexpid = self.conf["TemplateExpid"]
 
         #- some global variables:
-        self.rawfile=findfile("raw",night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
-        self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
  
-        self.fiberflat=findfile("fiberflat",night=self.night,expid=self.fiberflatexpid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) #- TODO: Assuming same night for calibration files (here and psf)
+        self.fiberflat=findfile("fiberflat",night=self.night,expid=self.fiberflatexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) #- TODO: Assuming same night for calibration files (here and psf)
         
-        self.psf=findfile(self.psftype,night=self.night,expid=self.expid,camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)  
-        
+        self.psf=findfile(self.psftype,night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)  
+
+        #- Get reference metrics from template yaml file
+        if self.flavor == 'arcs':
+            template=findfile('ql_mergedQAarc_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        else:
+            template=findfile('ql_mergedQA_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        self.reference=None
+        if os.path.isfile(template):
+            with open(template) as reference:
+                refdict=yaml.load(reference)
+                rkeys=refdict.keys()
+                if len(rkeys)==1:
+                    sni=refdict[rkeys[0]]
+                    if self.templateexpid in sni:
+                        sei=sni[self.templateexpid]
+                        if self.camera in sei:
+                            self.reference=sei[self.camera]
+                if self.reference is None:
+                    self.log.warning("WARNING template file is malformed %s"%template)                    
+        else:
+            self.log.warning("WARNING can't open template file %s"%template)
+
         outconfig={}
 
         outconfig['Night'] = self.night
@@ -411,7 +457,10 @@ def check_config(outconfig):
     """
     Given the expanded config, check for all possible file existence etc....
     """
+    qlog=qllogger.QLLogger(name="QLConfig")
+    log=qlog.getlog()
     log.info("Checking if all the necessary files exist.")
+
     calib_flavors=['arcs','dark','bias']
     if outconfig["Flavor"]=='science':
         files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
@@ -434,7 +483,7 @@ def check_config(outconfig):
                 sys.exit("File does not exist: {}".format(thisfile))
             else:
                 log.info("File check: Okay: {}".format(thisfile))
-    log.info("All necessary files exist for this configuration.")
+    log.info("All necessary files exist for {} configuration.".format(outconfig["Flavor"]))
 
     return 
 
@@ -457,6 +506,8 @@ class Palist(object):
         self.algorithms=algorithms
         self.palist=self._palist()
         self.qalist=self._qalist()
+        qlog=qllogger.QLLogger(name="QLConfig")
+        self.log=qlog.getlog()
         
     def _palist(self):
         
@@ -472,7 +523,7 @@ class Palist(object):
             elif self.flavor == 'science':
                 pa_list=['Initialize','Preproc','BoxcarExtract', 'ApplyFiberFlat_QL','SkySub_QL']
             else:
-                log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
+                self.log.warning("Not a valid flavor. Use a valid flavor type to build a palist. Exiting.")
                 sys.exit(0)
         self.pamodule='desispec.quicklook.procalgs'
         return pa_list       
