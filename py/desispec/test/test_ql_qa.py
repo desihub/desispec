@@ -58,7 +58,11 @@ class TestQL_QA(unittest.TestCase):
         #- use specter psf for this test
         self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
         #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
-        self.config={}
+        self.config={"kwargs":{
+            "param":{
+            }
+        }
+        }
 
         #- rawimage
 
@@ -278,7 +282,13 @@ class TestQL_QA(unittest.TestCase):
         self.assertEqual(len(res1['METRICS']['BIAS_AMP']),4)
 
     def testGetRMS(self):
-        qa=QA.Get_RMS('rms',self.config)
+        config={"kwargs":{
+            "param":{
+            }
+        }
+        }
+
+        qa=QA.Get_RMS('rms',config)
         inp=self.image
         qargs={}
         qargs["PSFFile"]=self.psf
@@ -455,7 +465,7 @@ class TestQL_QA(unittest.TestCase):
         self.assertTrue(len(resl["METRICS"]["MED_RESID_FIBER"]) == 5) #- 5 sky fibers in the input
         self.assertTrue(resl["PARAMS"]["BIN_SZ"] == 0.1)
         #- test with different parameter set:
-        qargs["param"]={"BIN_SZ": 0.2, "PCHI_RESID": 0.05,  "PER_RESID": 95.}
+        qargs["param"]={"BIN_SZ":0.2, "PCHI_RESID":0.05, "PER_RESID":95., "SKYRESID_NORMAL_RANGE":[-5.0, 5.0], "SKYRESID_WARN_RANGE":[-10.0, 10.0]}
         resl2=qa(inp,sky,**qargs)
         self.assertTrue(len(resl["METRICS"]["DEVS_1D"])>len(resl2["METRICS"]["DEVS_1D"])) #- larger histogram bin size than default 0.1
 

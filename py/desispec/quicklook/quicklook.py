@@ -9,6 +9,7 @@ import importlib
 import yaml
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
+from desispec.io import qa as qawriter
 from desiutil.io import yamlify
 from desispec.quicklook.merger import QL_QAMerger
 
@@ -18,7 +19,7 @@ def testconfig(outfilename="qlconfig.yaml"):
     Below the %% variables are replaced by actual object when the respective
     algorithm is executed.
     """
-    qlog=qllogger.QLLogger("QuickLook",20)
+    qlog=qllogger.QLLogger()
     log=qlog.getlog()
     url=None #- QA output will be posted to QLF if set true
 
@@ -222,8 +223,8 @@ def mapkeywords(kw,kwmap):
     """
 
     newmap={}
-    qlog=qllogger.QLLogger("QuickLook",20)
-    log=qlog.getlog()
+    # qlog=qllogger.QLLogger()
+    # log=qlog.getlog()
     for k,v in kw.items():
         if isinstance(v,str) and len(v)>=3 and  v[0:2]=="%%": #- For direct configuration
             if v[2:] in kwmap:
@@ -252,13 +253,13 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             should always be True, but leaving as option, until configuration and IO settles.
     """
 
-    qlog=qllogger.QLLogger("QuickLook",20)
+    qlog=qllogger.QLLogger()
     log=qlog.getlog()
     hb=QLHB.QLHeartbeat(log,conf["Period"],conf["Timeout"])
 
     inp=convdict["rawimage"]
     paconf=conf["PipeLine"]
-    qlog=qllogger.QLLogger("QuickLook",0)
+    qlog=qllogger.QLLogger()
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
     schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'])
@@ -273,7 +274,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             oldinp=inp #-  copy for QAs that need to see earlier input
             inp=pa(inp,**pargs)
         except Exception as e:
-            log.critical("Failed to run PA {} error was {}".format(step[0].name,e))
+            log.critical("Failed to run PA {} error was {}".format(step[0].name,e),exc_info=True)
             sys.exit("Failed to run PA {}".format(step[0].name))
         qaresult={}
         for qa in step[1]:
@@ -293,12 +294,14 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
 
                 if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         #TODO -must run this QA for now. change this later.
                     passqadict=res
+                if "qafile" in qargs:
+                    qawriter.write_qa_ql(qargs["qafile"],res)
                 log.debug("{} {}".format(qa.name,inp))
                 qaresult[qa.name]=res
                 schemaStep.addParams(res['PARAMS'])
                 schemaStep.addMetrics(res['METRICS'])
             except Exception as e:
-                log.warning("Failed to run QA {} error was {}".format(qa.name,e))
+                log.warning("Failed to run QA {}. Got Exception {}".format(qa.name,e),exc_info=True)
         if len(qaresult):
             if conf["DumpIntermediates"]:
                 f = open(paconf[s]["OutputFile"],"w")
@@ -353,11 +356,11 @@ def setup_pipeline(config):
     from desispec.quicklook import procalgs
     from desispec.boxcar import do_boxcar
 
-    qlog=qllogger.QLLogger("QuickLook",20)
+    qlog=qllogger.QLLogger()
     log=qlog.getlog()
     if config is None:
         return None
-    log.info("Reading Configuration")
+    log.debug("Reading Configuration")
     if "RawImage" not in config:
         log.critical("Config is missing \"RawImage\" key.")
         sys.exit("Missing \"RawImage\" key.")

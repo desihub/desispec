@@ -23,6 +23,7 @@ class TestQL(unittest.TestCase):
         cls.camera = camera = 'r0'
         cls.expid = expid = 314
         cls.flatExpid = flatExpid = 313
+        cls.templateExpid = templateExpid = 312
         cls.nspec = nspec = 5
         cls.exptime = exptime = 100
 
@@ -80,6 +81,7 @@ class TestQL(unittest.TestCase):
                       'Flavor': flavor,
                       'PSFType': 'psfboot',
                       'FiberflatExpid': flatExpid,
+                      'TemplateExpid': templateExpid,
                       'WritePixfile': False,
                       'WriteSkyModelfile': False,
                       'WriteIntermediatefiles': False,
