@@ -192,8 +192,10 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
         bad = (frame.flux[skyfibers]-cskyflux[skyfibers])**2 > 3**2*max_possible_var
         tivar[bad]=0
         ndata = np.sum(tivar>0,axis=0)
+        ok=np.where(ndata>1)[0]
+        print("ok.size=",ok.size)
         chi2  = np.zeros(frame.wave.size)
-        chi2[ndata>1] = np.sum(tivar*(frame.flux[skyfibers]-cskyflux[skyfibers])**2,axis=0)/(ndata-1)
+        chi2[ok] = np.sum(tivar*(frame.flux[skyfibers]-cskyflux[skyfibers])**2,axis=0)[ok]/(ndata[ok]-1)
         chi2[ndata<=1] = 1. # default
         
         # now we are going to evaluate a sky model error based on this chi2, 
