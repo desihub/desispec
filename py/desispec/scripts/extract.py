@@ -141,7 +141,7 @@ regularize: {regularize}
 
     #- The actual extraction
     results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
-                 regularize=args.regularize, ndecorr=True,
+                 regularize=args.regularize, ndecorr=False,
                  bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
                  full_output=True, nsubbundles=args.nsubbundles)
     flux = results['flux']
