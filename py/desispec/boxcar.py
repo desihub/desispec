@@ -132,7 +132,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
 
     #- Get resolution from the psf  
     resolution=None
-    if not quick_resolution:
+    if not quick_resolution or not hasattr(psf,"wcoeff"):
         resolution=get_resolution(wtarget,nspec,psf,usesigma=usesigma)
 
     return fflux,iivar,resolution
