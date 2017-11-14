@@ -69,7 +69,8 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     hdus[-1].header['BUNIT'] = 'Angstrom'
     if frame.resolution_data is not None:
         hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
-    elif frame.wcoeff is not None:
+    elif frame.coeffs is not None:
+        log.info("SAMI SAMI SAMI")
         qrimg=fits.ImageHDU(frame.coeffs.astype('f8'), name='QUICKRESOLUTION' ) 
         qrimg.header["WMIN"]  =frame.wmin
         qrimg.header["WMAX"]  =frame.wmax
@@ -185,7 +186,7 @@ def read_frame(filename, nspec=None):
         if resolution_data is not None:
             resolution_data = resolution_data[0:nspec]
         else:
-            qwcoeff=wcoeff[0:nspec]
+            qwcoeff=qwcoeff[0:nspec]
         if chi2pix is not None:
             chi2pix = chi2pix[0:nspec]
         if mask is not None:

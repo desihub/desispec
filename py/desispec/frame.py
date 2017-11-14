@@ -151,16 +151,18 @@ class Frame(object):
                 new_dict=dufits.mk_fit_dict(c[ispec,:],c[ispec,:].shape,'legendre',ymin,ymax)
                 wfit=dufits.func_val(y,new_dict)
                 return wfit
-            def angstroms_per_pixel(ispec,wavelength,npix_y):
-                ww = wavelength(ispec, y=np.arange(npix_y))
+            def angstroms_per_pixel(ispec,wavearr,npix_y):
+                ww = wavelength(ispec, y=np.arange(npix_y),ymin=self.ymin,ymax=self.ymax)
                 dw = np.gradient( ww )
-                return np.interp(wavelength, ww, dw)
-                r=[]
+                return np.interp(wavearr, ww, dw)
+            r=[]
             for f in fibers:
                 new_dict=dufits.mk_fit_dict(coefficients[f,9:],3,'legendre',wmin,wmax)
                 wsigma=dufits.func_val(wave,new_dict)
                 r.append(QuickResolution(sigma=wsigma/angstroms_per_pixel(f,self.wave,npix_y),ndiag=self.ndiag))
             self.R=np.array(r)
+        else:
+            raise ValueError("Need either resolution_data or coefficients to generate it")
         self.spectrograph = spectrograph
 
         # Deal with Fibers (these must be set!)
