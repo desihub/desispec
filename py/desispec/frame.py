@@ -156,7 +156,15 @@ class Frame(object):
                 dw = np.gradient( ww )
                 return np.interp(wavearr, ww, dw)
             r=[]
-            for f in fibers:
+            # this for loop might need to be modified to use actual
+            # fibers from the psf if not all fibers are included in
+            # this frame of course QuickResolution makes it harder to
+            # merge fluxes from different cameras into same frame. One
+            # has to put respective parameters into coefficients and
+            # set appropriate limits.  Still, using QuickResolution
+            # will reduce the data size to around 50KB instead of
+            # ~105MB
+            for f in range(self.nspec):
                 new_dict=dufits.mk_fit_dict(coefficients[f,9:],3,'legendre',wmin,wmax)
                 wsigma=dufits.func_val(wave,new_dict)
                 r.append(QuickResolution(sigma=wsigma/angstroms_per_pixel(f,self.wave,npix_y),ndiag=self.ndiag))
