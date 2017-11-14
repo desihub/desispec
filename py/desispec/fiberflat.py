@@ -434,6 +434,9 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
 
     log.info("done fiberflat")
 
+    log.info("add a systematic error of 0.0035 to fiberflat variance (calibrated on sims)")
+    fiberflat_ivar = (fiberflat_ivar>0)/( 1./ (fiberflat_ivar+(fiberflat_ivar==0) ) + 0.0035**2)
+    
     return FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
                      chi2pdf=chi2pdf)
 
