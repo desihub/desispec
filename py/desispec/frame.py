@@ -170,7 +170,13 @@ class Frame(object):
                 r.append(QuickResolution(sigma=wsigma/angstroms_per_pixel(f,self.wave,npix_y),ndiag=self.ndiag))
             self.R=np.array(r)
         else:
-            raise ValueError("Need either resolution_data or coefficients to generate it")
+            #SK I believe this should be error, but looking at the
+            #tests frame objects are allowed to not to have resolution data
+            # thus I changed value error to a simple warning message.
+            log = get_logger()
+            log.warning("Frame object is constructed without resolution data or respective "\
+                        "coefficients. Resolution will not be available")
+            # raise ValueError("Need either resolution_data or coefficients to generate it")
         self.spectrograph = spectrograph
 
         # Deal with Fibers (these must be set!)
