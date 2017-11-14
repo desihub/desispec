@@ -17,9 +17,9 @@ from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
-def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
+def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False) :
     """Compute a sky model.
-
+    
     Input has to correspond to sky fibers only.
     Input flux are expected to be flatfielded!
     We don't check this in this routine.
@@ -33,6 +33,10 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
           - resolution_data : 3D[nspec, ndiag, nwave]  (only sky fibers)
         nsig_clipping : [optional] sigma clipping value for outlier rejection
 
+    Optional:
+        max_iterations : int , number of iterations
+        model_ivar : replace ivar by a model to avoid bias due to correlated flux and ivar. this has a negligible effect on sims.
+    
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
 
@@ -49,6 +53,22 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
     current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
+    
+    input_ivar=None 
+    if model_ivar :
+        log.info("use a model of the inverse variance to remove bias due to correlated ivar and flux")
+        input_ivar=current_ivar.copy()
+        median_ivar_vs_wave  = np.median(current_ivar,axis=0)
+        median_ivar_vs_fiber = np.median(current_ivar,axis=1)
+        median_median_ivar   = np.median(median_ivar_vs_fiber)
+        for f in range(current_ivar.shape[0]) :
+            threshold=0.01
+            current_ivar[f] = median_ivar_vs_fiber[f]/median_median_ivar * median_ivar_vs_wave
+            # keep input ivar for very low weights
+            ii=(input_ivar[f]<=(threshold*median_ivar_vs_wave))
+            #log.info("fiber {} keep {}/{} original ivars".format(f,np.sum(ii),current_ivar.shape[1]))                      
+            current_ivar[f][ii] = input_ivar[f][ii]
+    
 
     sqrtw=np.sqrt(current_ivar)
     sqrtwflux=sqrtw*flux
@@ -136,13 +156,15 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
 
     log.info("nout tot=%d"%nout_tot)
 
+    # no need restore original ivar to compute model error when modeling ivar
+    # the sky inverse variances are very similar
 
     # solve once again to get deconvolved sky variance
     try :
-        skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+        unused_skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
     except np.linalg.linalg.LinAlgError :
         log.warning("cholesky_solve_and_invert failed, switching to np.linalg.lstsq and np.linalg.pinv")
-        skyflux = np.linalg.lstsq(A.todense(),B)[0]
+        #skyflux = np.linalg.lstsq(A.todense(),B)[0]
         skycovar = np.linalg.pinv(A.todense())
 
     #- sky inverse variance, but incomplete and not needed anyway
@@ -215,7 +237,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100) :
             mndata = np.mean(ndata[b:e]) # mean number of fibers contributing
                             
             # sky model variance = sigma_flat * msky  + sigma_wave * dmskydw
-            sigma_flat=0.005 # fixed
+            sigma_flat=0.000 # the fiber flat error is already included in the flux ivar
             sigma_wave=0.005 # A, minimum value                
             res2=(frame.flux[skyfibers,b:e]-cskyflux[skyfibers,b:e])**2
             var=1./(tivar[:,b:e]+(tivar[:,b:e]==0))
