@@ -160,13 +160,13 @@ def read_frame(filename, nspec=None):
         resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
     elif 'QUICKRESOLUTION' in fx:
         qr=fx['QUICKRESOLUTION'].header
-        qwmin  =native_endian(qr['WMIN'])
-        qwmax  =native_endian(qr['WMAX'])
-        qymin  =native_endian(qr['YMIN'])
-        qymax  =native_endian(qr['YMAX'])
-        qnpix_y=native_endian(qr['NPIX_Y'])
-        qndiag =native_endian(qr['NDIAG'])
-        qwcoeff=native_endiag(fx['QUICKRESOLUTION'].data.astype('f8'))
+        qwmin  =qr['WMIN']
+        qwmax  =qr['WMAX']
+        qymin  =qr['YMIN']
+        qymax  =qr['YMAX']
+        qnpix_y=qr['NPIX_Y']
+        qndiag =qr['NDIAG']
+        qwcoeff=native_endian(fx['QUICKRESOLUTION'].data.astype('f8'))
         
     if 'FIBERMAP' in fx:
         fibermap = fx['FIBERMAP'].data
