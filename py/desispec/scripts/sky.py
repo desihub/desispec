@@ -9,6 +9,7 @@ from desispec.io import write_qa_frame
 from desispec.fiberflat import apply_fiberflat
 from desispec.sky import compute_sky
 from desispec.qa import qa_plots
+from desispec.cosmics import reject_cosmic_rays_1d
 from desiutil.log import get_logger
 import argparse
 import numpy as np
@@ -45,6 +46,9 @@ def main(args) :
     # read exposure to load data and get range of spectra
     frame = read_frame(args.infile)
     specmin, specmax = np.min(frame.fibers), np.max(frame.fibers)
+
+    # Reject cosmics 
+    reject_cosmic_rays_1d(frame)
 
     # read fiberflat
     fiberflat = read_fiberflat(args.fiberflat)

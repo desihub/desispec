@@ -12,6 +12,7 @@ from desispec.fiberflat import apply_fiberflat
 from desispec.sky import subtract_sky
 from desispec.fluxcalibration import apply_flux_calibration
 from desiutil.log import get_logger
+from desispec.cosmics import reject_cosmic_rays_1d
 
 import argparse
 import sys
@@ -46,6 +47,9 @@ def main(args):
         sys.exit(12)
 
     frame = read_frame(args.infile)
+
+    # Reject cosmics 
+    reject_cosmic_rays_1d(frame)
 
     if args.fiberflat!=None :
         log.info("apply fiberflat")

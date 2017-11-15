@@ -17,6 +17,8 @@ from desiutil.log import get_logger
 from desispec.io.qa import load_qa_frame
 from desispec.io import write_qa_frame
 from desispec.qa import qa_plots
+from desispec.cosmics import reject_cosmic_rays_1d
+
 import argparse
 
 
@@ -53,6 +55,10 @@ def main(args) :
 
     # Process
     frame = read_frame(args.infile)
+
+    # Reject cosmics 
+    reject_cosmic_rays_1d(frame)
+    
     fiberflat = compute_fiberflat(frame,nsig_clipping=args.nsig,accuracy=args.acc,smoothing_res=args.smoothing_resolution)
 
     # QA
