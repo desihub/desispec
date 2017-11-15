@@ -73,6 +73,9 @@ def main(args):
         # apply calibration
         apply_flux_calibration(frame, fluxcalib)
 
+    # Reject cosmics one more time after sky subtraction to catch cosmics close to sky lines
+    reject_cosmic_rays_1d(frame)
+    
 
     # save output
     write_frame(args.outfile, frame, units='1e-17 erg/(s cm2 A)')
