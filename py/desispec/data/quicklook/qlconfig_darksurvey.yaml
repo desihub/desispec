@@ -50,7 +50,7 @@ Algorithms:
             }
         QA: 
             CountSpectralBins:
-                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_NORMAL_RANGE: [490, 500], NGOOD_WARN_RANGE: [480, 500]}
+                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOODFIB_NORMAL_RANGE: [490, 500], NGOODFIB_WARN_RANGE: [480, 500]}
     ApplyFiberFlat_QL:
         QA: 
             Sky_Continuum:

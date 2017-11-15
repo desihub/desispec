@@ -89,6 +89,6 @@ class MonitoringAlg:
         """ return a dictionary of 3-tuples,
         field 0 is the name of the parameter
         field 1 is the default value of the parameter
-        field 2 is the comment for human readeable format.
+        field 2 is the comment for human readable format.
         Field 2 can be used for QLF to dynamically setup the display"""
         return None
