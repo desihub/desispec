@@ -301,8 +301,8 @@ class TestQL_QA(unittest.TestCase):
         resl=qa(inp,**qargs)
         self.assertTrue("yaml" in qargs["qafile"])
         self.assertTrue("png" in qargs["qafig"])
-        self.assertTrue(len(resl['METRICS']['RMS_OVER_AMP'])==4)
-        self.assertTrue((np.all(resl['METRICS']['RMS_OVER_AMP'])>0))
+        self.assertTrue(len(resl['METRICS']['NOISE_AMP'])==4)
+        self.assertTrue((np.all(resl['METRICS']['NOISE_AMP'])>0))
 
     def testCalcXWSigma(self):
 
@@ -376,7 +376,7 @@ class TestQL_QA(unittest.TestCase):
         #- test if amp QAs exist
         qargs["amps"] = True
         resl2=qa(inp,**qargs)
-        self.assertTrue(len(resl2['METRICS']['NPIX_LOW_AMP'])==4)
+        self.assertTrue(len(resl2['METRICS']['NPIX_AMP'])==4)
 
     def testCountSpectralBins(self):
         qa=QA.CountSpectralBins('countbins',self.config)
