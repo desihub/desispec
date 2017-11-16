@@ -28,7 +28,7 @@ def plot_countspectralbins(qa_dict,outfile):
                    'NBINSMED_AMP': array([ 1149.55,     0.  ,  1095.02,     0.  ]),
                    'NBINSHIGH': array([ 2307.,  2448.,   229.,  1910.,    94.,   306.,  2056.,  1941.,  2164.,   785.]),
                    'NBINSHIGH_AMP': array([ 688.85,    0.  ,  648.75,    0.  ])
-                   'NGOODFIBERS: 10}}}
+                   'NGOODFIB: 10}}}
 
     Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
@@ -163,7 +163,7 @@ def plot_countpix(qa_dict,outfile):
         'PANAME': 'PREPROC',
         'PARAMS': {'CUTLO': 3, 'CUTHI': 10},
         'METRICS': {'NPIX_LOW': 0,
-                  'NPIX_LOW_AMP': [254549, 0, 242623, 0],
+                  'NPIX_AMP': [254549, 0, 242623, 0],
                   'NPIX_HIGH': 0,
                   'NPIX_HIGH_AMP': [1566, 0, 1017, 0]}}}
 
@@ -175,7 +175,7 @@ def plot_countpix(qa_dict,outfile):
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
     countlo=qa_dict["METRICS"]["NPIX_LOW"]
-    countlo_amp=np.array(qa_dict["METRICS"]["NPIX_LOW_AMP"])
+    countlo_amp=np.array(qa_dict["METRICS"]["NPIX_AMP"])
     counthi=qa_dict["METRICS"]["NPIX_HIGH"]
     counthi_amp=np.array(qa_dict["METRICS"]["NPIX_HIGH_AMP"])
 
@@ -400,7 +400,7 @@ def plot_RMS(qa_dict,outfile):
          'METRICS': {'RMS': 40.218151021598679,
                    'RMS_AMP': array([ 55.16847779,   2.91397089,  55.26686528,   2.91535373])
                    'RMS_OVER': 40.21815,
-                   'RMS_OVER_AMP': array([ 55.168,   2.913,   55.266,  2.915])
+                   'NOISE_AMP': array([ 55.168,   2.913,   55.266,  2.915])
                     }
         }
 
@@ -411,7 +411,7 @@ def plot_RMS(qa_dict,outfile):
     rms=qa_dict["METRICS"]["RMS"]
     rms_amp=qa_dict["METRICS"]["RMS_AMP"]
     rms_over=qa_dict["METRICS"]["RMS_OVER"]
-    rms_over_amp=qa_dict["METRICS"]["RMS_OVER_AMP"]
+    rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
     # arm=qa_dict["ARM"]
     # spectrograph=qa_dict["SPECTROGRAPH"]
     camera = qa_dict["CAMERA"]
