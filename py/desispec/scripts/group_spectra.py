@@ -130,7 +130,7 @@ def main(args, comm=None):
                             pix = desimodel.footprint.radec2pix(
                                                 args.hpxnside, ra, dec)
                             pix[bad] = -1
-                            for p in pix:
+                            for p in np.unique(pix):
                                 if p >= 0:
                                     sname = "spectra-{}-{}".format(args.hpxnside, p)
                                     if sname not in grph:
@@ -230,17 +230,25 @@ def main(args, comm=None):
             meta["HPIX"] = spec_pixel[sp]
             specdata = Spectra(meta=meta, single=True)
 
+        #- TODO: add a check here if this pixel really needs to be done,
+        #- comparing set(zip(fm['NIGHT'], fm['EXPID'], fm['PETAL_LOC']))
+        #- formatted to match spec_frames[sp]
+
         if args.cache:
             # Clean out any cached frame data we don't need
             existing = list(framedata.keys())
+            ndrop = 0
             for fr in existing:
                 if fr not in spec_frames[sp]:
                     #log.info("frame {} not needed for spec {}, purging".format(fr, sp))
+                    ndrop += 1
                     del framedata[fr]
 
             # Read frame data if we don't have it
+            nadd = 0
             for fr in spec_frames[sp]:
                 if fr not in framedata:
+                    nadd += 1
                     #log.info("frame {} not in cache for spec {}, reading".format(fr, sp))
                     if os.path.isfile(frame_paths[fr]):
                         framedata[fr] = io.read_frame_as_spectra(frame_paths[fr], 
@@ -248,7 +256,7 @@ def main(args, comm=None):
                     else:
                         framedata[fr] = Spectra()
 
-            msg = "    ({:04d}) {} frames resident in memory".format(rank, len(framedata))
+            msg = "    ({:04d}) dropped {}; added {}; {} frames resident in memory".format(rank, ndrop, nadd, len(framedata))
             log.info(msg)
             sys.stdout.flush()
 
@@ -263,6 +271,7 @@ def main(args, comm=None):
                     fdata = io.read_frame_as_spectra(frame_paths[fr], 
                         frame_nights[fr], frame_expids[fr], frame_bands[fr])
                 else:
+                    log.warning('Missing {}'.format(frame_paths[fr]))
                     fdata = Spectra()
             # Get the targets that hit this pixel.
             targets = []

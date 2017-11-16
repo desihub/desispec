@@ -12,6 +12,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import re
 import warnings
+import time
 
 import numpy as np
 import astropy.io.fits as fits
@@ -20,13 +21,11 @@ from astropy.table import Table
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 
-from .util import fitsheader, native_endian
+from .util import fitsheader, native_endian, add_columns
 
 from .frame import read_frame
 
-from ..spectra import (Spectra, spectra_columns, 
-    spectra_comments, spectra_dtype)
-
+from ..spectra import Spectra
 
 def write_spectra(outfile, spec, units=None):
     """
@@ -71,13 +70,13 @@ def write_spectra(outfile, spec, units=None):
     hdu = fits.convenience.table_to_hdu(fmap)
 
     # Add comments for fibermap columns.
-    comments = spectra_comments()
-    num_columns = len(comments)
-    for i in range(1, 1 + num_columns):
-        key = "TTYPE{}".format(i)
-        name = hdu.header[key]
-        comment = comments[name]
-        hdu.header[key] = (name, comment)
+    # comments = spectra_comments()
+    # num_columns = len(comments)
+    # for i in range(1, 1 + num_columns):
+    #     key = "TTYPE{}".format(i)
+    #     name = hdu.header[key]
+    #     comment = comments[name]
+    #     hdu.header[key] = (name, comment)
 
     all_hdus.append(hdu)
 
@@ -225,7 +224,6 @@ def read_spectra(infile, single=False):
 
     return spec
 
-
 def read_frame_as_spectra(filename, night, expid, band, single=False):
     """
     Read a FITS file containing a Frame and return a Spectra.
@@ -250,14 +248,17 @@ def read_frame_as_spectra(filename, night, expid, band, single=False):
         raise RuntimeError("reading Frame files into Spectra only supported if a fibermap exists")
 
     nspec = len(fr.fibermap)
-    
-    fmap = np.zeros(shape=(nspec,), dtype=spectra_columns())
-    for s in range(nspec):
-        for tp in fr.fibermap.dtype.fields:
-            fmap[s][tp] = fr.fibermap[s][tp]
+   
+    fmap = np.asarray(fr.fibermap.copy())
+    fmap = add_columns(fmap, NIGHT=np.int32(night), EXPID=np.int32(expid))
 
-    fmap[:]["NIGHT"] = night
-    fmap[:]["EXPID"] = expid
+    # fmap = np.zeros(shape=(nspec,), dtype=spectra_columns())
+    # for s in range(nspec):
+    #     for tp in fr.fibermap.dtype.fields:
+    #         fmap[s][tp] = fr.fibermap[s][tp]
+    #
+    # fmap[:]["NIGHT"] = night
+    # fmap[:]["EXPID"] = expid
 
     fmap = encode_table(fmap)
 

@@ -7,6 +7,7 @@ Utility functions for desispec IO.
 import os
 import astropy.io
 import numpy as np
+from astropy.table import Table
 
 from ..util import healpix_degrade_fixed
 
@@ -79,6 +80,41 @@ def native_endian(data):
         return data
     else:
         return data.byteswap().newbyteorder()
+
+def add_columns(data, **extra):
+    '''
+    Adds extra columns to a data table
+    
+    Args:
+        data: astropy Table or numpy structured array
+        **extra: named columns to add; the values can be either scalars
+          or vectors.
+    
+    Returns:
+        new table with extra columns added
+    
+    Example:
+        fibermap = add_columns(fibermap,
+                        NIGHT=20102020, EXPID=np.arange(len(fibermap)))
+    '''
+    if isinstance(data, Table):
+        data = data.copy()
+        for key, value in extra.items():
+            data[key] = value
+    else:
+        nrows = len(data)
+        colnames = list()
+        colvals = list()
+        for key, value in extra.items():
+            colnames.append(key)
+            if np.isscalar(value):
+                colvals.append(np.full(nrows, value, dtype=type(value)))
+            else:
+                assert len(value) == nrows
+                colvals.append(value)
+        data = np.lib.recfunctions.append_fields(data, colnames, colvals, usemask=False)
+
+    return data
 
 def makepath(outfile, filetype=None):
     """Create path to outfile if needed.
