@@ -203,6 +203,7 @@ def integrate_spec(wave,flux):
     integral=np.trapz(flux,wave)
     return integral
 
+
 def sky_continuum(frame, wrange1, wrange2):
     """ 
     QA Algorithm for sky continuum.
@@ -244,6 +245,89 @@ def sky_continuum(frame, wrange1, wrange2):
 
     # Return
     return skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont
+
+
+def sky_peaks(param, frame, dw=2, amps=False):
+
+    # define sky peaks and wavelength region around peak flux to be integrated
+    camera = frame.meta['CAMERA']
+    peaks=np.array(param['{:s}_PEAKS'.format(camera[0].upper())])
+
+    nspec_counts=[]
+    sky_counts=[]
+    nspec_counts_rms=[]
+    amp1=[]
+    amp2=[]
+    amp3=[]
+    amp4=[]
+    rmsamp1=[]
+    rmsamp2=[]
+    rmsamp3=[]
+    rmsamp4=[]
+    for i in range(frame.flux.shape[0]):
+        peak_fluxes = []
+        for peak in peaks:
+            iwave = np.argmin(np.abs(frame.wave-peak))
+            peak_fluxes.append(np.trapz(frame.flux[i,iwave-dw:iwave+dw+1]))
+
+        # Sum
+        sum_counts=np.sum(peak_fluxes)/frame.meta["EXPTIME"]
+        sum_counts_rms=np.sum(peak_fluxes)/np.sqrt(frame.meta["EXPTIME"])  # This looks funny to me..
+        nspec_counts.append(sum_counts)
+        nspec_counts_rms.append(sum_counts_rms)
+
+        # Sky?
+        if frame.fibermap['OBJTYPE'][i]=='SKY':
+            sky_counts.append(sum_counts)
+            '''
+            if amps:
+                if frame.fibermap['FIBER'][i]<240:
+                    if camera[0]=="b":
+                        amp1_flux=peak1_flux/frame.meta["EXPTIME"]
+                        amp3_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                        rmsamp1_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
+                        rmsamp3_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    if camera[0]=="r":
+                        amp1_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
+                        amp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                        rmsamp1_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                        rmsamp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    if camera[0]=="z":
+                        amp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                        amp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                        rmsamp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                        rmsamp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    amp1.append(amp1_flux)
+                    amp3.append(amp3_flux)
+                    rmsamp1.append(rmsamp1_flux)
+                    rmsamp3.append(rmsamp3_flux)
+                if frame.fibermap['FIBER'][i]>260:
+                    if camera[0]=="b":
+                        amp2_flux=peak1_flux/frame.meta["EXPTIME"]
+                        amp4_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                        rmsamp2_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
+                        rmsamp4_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    if camera[0]=="r":
+                        amp2_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
+                        amp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                        rmsamp2_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                        rmsamp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    if camera[0]=="z":
+                        amp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                        amp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                        rmsamp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                        rmsamp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    amp2.append(amp2_flux)
+                    amp4.append(amp4_flux)
+                    rmsamp2.append(rmsamp2_flux)
+                    rmsamp4.append(rmsamp4_flux)
+            '''
+
+    nspec_counts = np.array(nspec_counts)
+    sky_counts = np.array(sky_counts)
+    # Return
+    return nspec_counts, sky_counts
+
 
 def sky_resid(param, frame, skymodel, quick_look=False):
     """ QA Algorithm for sky residual
