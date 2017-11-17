@@ -115,6 +115,9 @@ class Get_RMS(MonitoringAlg):
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['NOISE_AMP_REF']=kwargs["REFERENCE"]
 
         # return rms values in rms/sqrt(exptime)
         rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
@@ -247,6 +250,9 @@ class Count_Pixels(MonitoringAlg):
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['NPIX_AMP_REF']=kwargs["REFERENCE"]
 
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -365,6 +371,9 @@ class Integrate_Spec(MonitoringAlg):
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['MAGDIFF_TGT_REF']=kwargs["REFERENCE"]
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
@@ -535,6 +544,9 @@ class Sky_Continuum(MonitoringAlg):
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['SKYCONT_REF']=kwargs["REFERENCE"]
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
@@ -673,6 +685,9 @@ class Sky_Peaks(MonitoringAlg):
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['PEAKCOUNT_REF']=kwargs["REFERENCE"]
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
@@ -919,6 +934,9 @@ class Calc_XWSigma(MonitoringAlg):
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['XWSIGMA_REF']=kwargs["REFERENCE"]
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
@@ -1270,6 +1288,9 @@ class Bias_From_Overscan(MonitoringAlg):
         else:
             retval["PROGRAM"] = header["PROGRAM"]
         retval["NIGHT"] = header["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['BIAS_AMP_REF']=kwargs["REFERENCE"]
 
         rawimage=raw[camera.upper()].data
         header=raw[camera.upper()].header
@@ -1456,6 +1477,9 @@ class CountSpectralBins(MonitoringAlg):
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['NGOODFIB_REF']=kwargs["REFERENCE"]
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
@@ -1657,6 +1681,9 @@ class Sky_Residual(MonitoringAlg):
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['RESIDRMS_REF']=kwargs["REFERENCE"]
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
@@ -1765,6 +1792,9 @@ class Calculate_SNR(MonitoringAlg):
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        if "REFERENCE" in kwargs:
+            retval['FIDSNR_TGT_REF']=kwargs["REFERENCE"]
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
