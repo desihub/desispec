@@ -58,6 +58,7 @@ class Get_RMS(MonitoringAlg):
         from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
+        key=kwargs['refKey']
         key="NOISE_AMP"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]="NOISE_STAT"

@@ -47,7 +47,8 @@ class Config(object):
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
-
+        #Fill this dict with qa names and keys
+        self._qaRefKeys={"Get_RMS":"NOISE_AMP"}
 
     @property
     def mode(self):
@@ -241,14 +242,17 @@ class Config(object):
                 params=self._qaparams(qa)
                 qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 
                             'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 
-                            'param': params, 'qlf': self.qlf}
+                            'param': params, 'qlf': self.qlf,
+                            'refKey':self._qaRefKeys[qa]}
 
-                if self.reference != None and pa_yaml in self.reference and 'METRICS' in self.reference[pa_yaml]:
-                    qaopts[qa]['ReferenceMetrics'] = self.reference[pa_yaml]['METRICS']
-                    
-                
-        return qaopts 
-   
+                if self.reference != None:
+                    for step in self.reference:
+                        if pa_yaml == step['PIPELINE_STEP']:
+                            if 'METRICS' in step:
+                                key=self._qaRefKeys[qa]
+                                qaopts[qa]['ReferenceMetrics']={key:step['METRICS'][key]}
+        return qaopts
+
     def _qaparams(self,qa):
             
         params={}
@@ -407,13 +411,16 @@ class Config(object):
         if os.path.isfile(template):
             with open(template) as reference:
                 refdict=yaml.load(reference)
-                rkeys=refdict.keys()
-                if len(rkeys)==1:
-                    sni=refdict[rkeys[0]]
-                    if self.templateexpid in sni:
-                        sei=sni[self.templateexpid]
-                        if self.camera in sei:
-                            self.reference=sei[self.camera]
+                nights=refdict['NIGHTS']
+                for night in nights:
+                    if self.night == night['NIGHT']:
+                        exposures=night['EXPOSURES']
+                        for exposure in exposures:
+                            if self.templateexpid == exposure['EXPID']:
+                                cameras=exposure['CAMERAS']
+                                for camera in cameras:
+                                    if self.camera == camera['CAMERA']:
+                                        self.reference=camera['PIPELINE_STEPS']
                 if self.reference is None:
                     self.log.warning("WARNING template file is malformed %s"%template)                    
         else:
