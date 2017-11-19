@@ -461,7 +461,7 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
 
-def exposure_fibermap(channel, expid, metric, outfile=None):
+def exposure_fiberflat(channel, expid, metric, outfile=None):
     """ Generate an Exposure level plot of a FiberFlat metric
     Args:
         channel: str, e.g. 'b', 'r', 'z'
@@ -514,7 +514,7 @@ def exposure_fibermap(channel, expid, metric, outfile=None):
     metrics = np.concatenate(metrics)
     # Plot
     if outfile is None:
-        outfile='qa_{:08d}_{:s}_fibermap.png'.format(expid, channel)
+        outfile='qa_{:08d}_{:s}_fiberflat.png'.format(expid, channel)
     exposure_map(x,y,metrics, mlbl='Mean Flux',
                  title='Mean Flux for Exposure {:08d}, Channel {:s}'.format(expid, channel),
                  outfile=outfile)

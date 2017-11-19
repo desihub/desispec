@@ -56,7 +56,8 @@ Generate the QA YAML file and figures::
 desi_qa_exposure
 ++++++++++++++++
 
-Generates Exposure level QA.
+Generates Exposure level QA.   The current
+implementation is only for the flat flux.
 
 usage
 -----
@@ -66,22 +67,22 @@ Here is the usage::
     usage: desi_qa_exposure [-h] --expid EXPID --qatype QATYPE
                             [--channels CHANNELS] [--reduxdir PATH]
 
-    Generate Exposure Level QA [v0.4.2]
+    Generate Exposure Level QA [v0.4.3]
 
     optional arguments:
       -h, --help           show this help message and exit
       --expid EXPID        Exposure ID
-      --qatype QATYPE      Type of QA to generate [fibermap]
+      --qatype QATYPE      Type of QA to generate [fiberflat]
       --channels CHANNELS  List of channels to include. Default = b,r,z]
       --reduxdir PATH      Override default path ($DESI_SPECTRO_REDUX/$SPECPROD)
                            to processed data.
 
-fibermap
---------
+fiberflat
+---------
 
 Generate QA on the fiber flat across the exposure for one or more channels.::
 
-     desi_qa_exposure --expid=96 --qatype=fibermap
+     desi_qa_exposure --expid=96 --qatype=fiberflat
 
 
 
@@ -212,7 +213,7 @@ html
 A set of static HTML files that provide simple links
 to the QA figures may be generated::
 
-    desi_qa_prod --slurp --remove  # Collate and remove the individual files
+    desi_qa_prod --html  # Generate HTML files
 
 The top-level QA file (in the QA/ folder) includes any PNG
 files located at the top-level of that folder.
