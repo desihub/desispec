@@ -136,8 +136,10 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
 
         # Use diagonal of skycovar convolved with mean resolution of all fibers
         # first compute average resolution
-        mean_res_data=np.mean(fframe.resolution_data,axis=0)
-        R = Resolution(mean_res_data)
+        #- computing mean from matrix itself
+        R= (fframe.R.sum()/fframe.nspec).todia()
+        #mean_res_data=np.mean(fframe.resolution_data,axis=0)
+        #R = Resolution(mean_res_data)
         # compute convolved sky and ivar
         cskycovar=R.dot(skycovar).dot(R.T.todense())
         cskyvar=np.diagonal(cskycovar)

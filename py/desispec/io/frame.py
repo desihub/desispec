@@ -70,7 +70,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if frame.resolution_data is not None:
         hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     elif frame.coeffs is not None:
-        log.info("SAMI SAMI SAMI")
+        log.info("Using coeffs to add QUICKRESOLUTION HDU")
         qrimg=fits.ImageHDU(frame.coeffs.astype('f8'), name='QUICKRESOLUTION' ) 
         qrimg.header["WMIN"]  =frame.wmin
         qrimg.header["WMAX"]  =frame.wmax
