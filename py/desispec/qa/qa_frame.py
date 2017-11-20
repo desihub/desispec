@@ -277,7 +277,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
                 qafig2 = meta.findfile('qa_skychi_fig', night=night, camera=camera, expid=expid,
                                       specprod_dir=specprod_dir, outdir=output_dir)
                 qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
-                qa_plots.frame_skychi(qafig2, frame, skymodel, qaframe)
+                #qa_plots.frame_skychi(qafig2, frame, skymodel, qaframe)
     # FluxCalib QA
     if qatype == 'qa_data':
         # Standard stars

@@ -5,4 +5,4 @@ from .qa_frame import QA_Frame
 from .qa_brick import QA_Brick
 from .qa_prod import QA_Prod
 
-__offline_qa_version__ = '0.4.2'
+__offline_qa_version__ = '0.4.3'

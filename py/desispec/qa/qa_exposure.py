@@ -95,7 +95,10 @@ class QA_Exposure(object):
         for key in desi_params['frame_meta']:
             if key in ['CAMERA']:  # Frame specific
                 continue
-            self.meta[key] = frame_meta[key]
+            try:
+                self.meta[key] = frame_meta[key]
+            except KeyError:
+                print("Keyword {:s} not present!  Could be a problem".format(key))
 
     def load_qa_data(self, remove=False):
         """ Load the QA data files for a given exposure (currently yaml)
