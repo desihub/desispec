@@ -48,6 +48,7 @@ Algorithms:
             r: [5630,7740,0.8],
             z: [7650,9830,0.8]
             }
+        QuickResolution: True
         QA: 
             CountSpectralBins:
                 PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOOD_NORMAL_RANGE: [490, 500], NGOOD_WARN_RANGE: [480, 500]}
