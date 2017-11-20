@@ -29,7 +29,9 @@ def parse(options=None):
                         help = 'path of DESI calibration fits file')
     parser.add_argument('--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
-
+    parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
+                        help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -48,9 +50,9 @@ def main(args):
 
     frame = read_frame(args.infile)
 
-    # Reject cosmics 
-    reject_cosmic_rays_1d(frame)
-
+    if args.cosmics_nsig>0 : # Reject cosmics         
+        reject_cosmic_rays_1d(frame,args.cosmics_nsig)
+    
     if args.fiberflat!=None :
         log.info("apply fiberflat")
         # read fiberflat
@@ -73,10 +75,9 @@ def main(args):
         # apply calibration
         apply_flux_calibration(frame, fluxcalib)
 
-    # Reject cosmics one more time after sky subtraction to catch cosmics close to sky lines
-    reject_cosmic_rays_1d(frame)
+    if args.cosmics_nsig>0 : # Reject cosmics one more time after sky subtraction to catch cosmics close to sky lines
+        reject_cosmic_rays_1d(frame,args.cosmics_nsig)
     
-
     # save output
     write_frame(args.outfile, frame, units='1e-17 erg/(s cm2 A)')
 

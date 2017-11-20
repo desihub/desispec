@@ -38,7 +38,9 @@ def parse(options=None):
                         help = 'required accuracy (iterative loop)')
     parser.add_argument('--smoothing-resolution', type = float, default = 5., required=False,
                         help = 'resolution for spline fit to reject outliers')
-
+    parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
+                        help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
+    
 
     args = None
     if options is None:
@@ -55,9 +57,9 @@ def main(args) :
 
     # Process
     frame = read_frame(args.infile)
-
-    # Reject cosmics 
-    reject_cosmic_rays_1d(frame)
+    
+    if args.cosmics_nsig>0 : # Reject cosmics         
+        reject_cosmic_rays_1d(frame,args.cosmics_nsig)
     
     fiberflat = compute_fiberflat(frame,nsig_clipping=args.nsig,accuracy=args.acc,smoothing_res=args.smoothing_resolution)
 
