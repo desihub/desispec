@@ -243,7 +243,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
     return files
 
 
-def get_files(filetype, night, expid, specprod_dir=None):
+def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
     """Get files for a specified exposure.
 
     Uses :func:`findfile` to determine the valid file names for the specified 
@@ -369,13 +369,14 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None, ):
     return sorted(exposures)
 
 
-def get_reduced_frames(channels=['b','r','z'], nights=None, ftype='cframe'):
+def get_reduced_frames(channels=['b','r','z'], nights=None, ftype='cframe', **kwargs):
     """ Loops through a production to find all reduced frames (default is cframes)
     One can choose a subset of reduced frames by argument
     Args:
         channels: list, optional
         nights: list, optional
         ftype: str, optional
+        kwargs: passed to get_files()
 
     Returns:
         all_frames: list for frame filenames
@@ -389,7 +390,7 @@ def get_reduced_frames(channels=['b','r','z'], nights=None, ftype='cframe'):
     for night in nights:
         exposures = get_exposures(night)
         for exposure in exposures:
-            frames_dict = get_files(filetype=ftype, night=night, expid=exposure)
+            frames_dict = get_files(filetype=ftype, night=night, expid=exposure, **kwargs)
             # Restrict on channel
             for key in frames_dict.keys():
                 for channel in channels:

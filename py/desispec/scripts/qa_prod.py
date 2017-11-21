@@ -4,10 +4,10 @@ from __future__ import absolute_import, division
 import argparse
 import numpy as np
 
-from  desispec import _version as desis_v
+from desispec.qa import __offline_qa_version__
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v{:s}]".format(desis_v.__offline_qa_version__))
+    parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v{:s}]".format(__offline_qa_version__))
 
     parser.add_argument('--reduxdir', type = str, default = None, required=False,
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')

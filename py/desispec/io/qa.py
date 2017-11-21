@@ -196,6 +196,9 @@ def load_qa_prod(inroot):
     infile = inroot+'.json'
     log.info("Loading QA prod file: {:s}".format(infile))
     # Read
+    if not os.path.exists(infile):
+        log.info("QA prod file {:s} does not exist!".format(infile))
+        log.error("You probably need to generate it with desi_qa_prod --make_frameqa=3 --slurp")
     with open(infile, 'rt') as fh:
         odict = json.load(fh)
     # Return

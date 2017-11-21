@@ -4,10 +4,10 @@ from __future__ import absolute_import, division
 from desiutil.log import get_logger
 import argparse
 
-from  desispec import _version as desis_v
+from desispec.qa import __offline_qa_version__
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate Frame Level QA [v{:s}]".format(desis_v.__offline_qa_version__))
+    parser = argparse.ArgumentParser(description="Generate Frame Level QA [v{:s}]".format(__offline_qa_version__))
     parser.add_argument('--frame_file', type = str, required=True,
                         help='Frame filename.  Full path is not required nor desired. ')
     parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',

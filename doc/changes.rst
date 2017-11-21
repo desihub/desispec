@@ -5,7 +5,9 @@ desispec Change Log
 0.17.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Adds skyline QA; fixes QA version usage (PR `#458`_).
+
+.. _`#458`: https://github.com/desihub/desispec/pull/458
 
 0.17.0 (2017-11-10)
 -------------------

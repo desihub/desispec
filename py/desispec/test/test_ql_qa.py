@@ -420,11 +420,11 @@ class TestQL_QA(unittest.TestCase):
         qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
-        qargs["amps"]=True
+        #qargs["amps"]=True
         qargs["paname"]="abc"
         qargs["dict_countbins"]=self.map2pix
         resl=qa(inp,**qargs)
-        self.assertTrue(np.all(resl['METRICS']['PEAKCOUNT_RMS_AMP'])>=0.)
+        #self.assertTrue(np.all(resl['METRICS']['PEAKCOUNT_RMS_AMP'])>=0.)
         self.assertTrue(resl['METRICS']['PEAKCOUNT_RMS']>0)
 
     def testIntegrateSpec(self):

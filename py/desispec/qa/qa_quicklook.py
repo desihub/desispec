@@ -104,7 +104,7 @@ class Get_RMS(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        
+
         return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
@@ -182,7 +182,7 @@ class Get_RMS(MonitoringAlg):
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_RMS
             plot_RMS(retval,qafig)            
-            log.debug("Output QA fig {}".format(qafig))      
+            log.debug("Output QA fig {}".format(qafig))
 
         return retval    
 
@@ -205,7 +205,7 @@ class Count_Pixels(MonitoringAlg):
                 kwargs["REFERENCE"]=r[key]
         if "NPIX_WARN_RANGE" in parms and "NPIX_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["NPIX_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["NPIX_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
+                              (np.asarray(parms["NPIX_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -259,7 +259,7 @@ class Count_Pixels(MonitoringAlg):
             log.debug("Param is None. Using default param instead")
             param = {
                  "CUTLO":3,   # low threshold for number of counts in sigmas
-                 "CUTHI":10, 
+                 "CUTHI":10,
                  "NPIX_NORMAL_RANGE":[200.0, 500.0],
                  "NPIX_WARN_RANGE":[50.0, 650.0]
                  }
@@ -298,7 +298,7 @@ class Count_Pixels(MonitoringAlg):
             from desispec.qa.qa_plots_ql import plot_countpix
             plot_countpix(retval,qafig)
             
-            log.debug("Output QA fig {}".format(qafig))      
+            log.debug("Output QA fig {}".format(qafig))
 
         return retval    
 
@@ -322,7 +322,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if "MAGDIFF_WARN_RANGE" in parms and "MAGDIFF_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["MAGDIFF_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["MAGDIFF_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
+                              (np.asarray(parms["MAGDIFF_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -469,7 +469,7 @@ class Integrate_Spec(MonitoringAlg):
             from desispec.qa.qa_plots_ql import plot_integral
             plot_integral(retval,qafig)
             
-            log.debug("Output QA fig {}".format(qafig))      
+            log.debug("Output QA fig {}".format(qafig))
 
         return retval    
 
@@ -491,10 +491,10 @@ class Sky_Continuum(MonitoringAlg):
             r=kwargs["ReferenceMetrics"]
             if key in r:
                 kwargs["REFERENCE"]=r[key]
-    
+
         if "SKYCONT_WARN_RANGE" in parms and "SKYCONT_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["SKYCONT_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["SKYCONT_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
+                              (np.asarray(parms["SKYCONT_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -553,7 +553,7 @@ class Sky_Continuum(MonitoringAlg):
 
     def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,
                paname=None,amps=False,dict_countbins=None,
-               qafile=None,qafig=None, param=None, qlf=False, 
+               qafile=None,qafig=None, param=None, qlf=False,
                refmetrics=None):
 
         #- qa dictionary 
@@ -574,14 +574,11 @@ class Sky_Continuum(MonitoringAlg):
 
         if param is None:
             log.debug("Param is None. Using default param instead")
-            param = {
-                "B_CONT":[(4000, 4500), (5250, 5550)],
-                "R_CONT":[(5950, 6200), (6990, 7230)],
-                "Z_CONT":[(8120, 8270), (9110, 9280)],
-                "SKYCONT_NORMAL_RANGE":[100.0, 400.0],
-                "SKYCONT_WARN_RANGE":[50.0, 600.0]
-                }
-
+            from desispec.io import read_params
+            desi_params = read_params()
+            param = {}
+            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_WARN_RANGE', 'SKYCONT_ALARM_RANGE']:
+                param[key] = desi_params['qa']['skysub']['PARAMS'][key]
         retval["PARAMS"] = param
 
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
@@ -629,7 +626,7 @@ class Sky_Continuum(MonitoringAlg):
             from desispec.qa.qa_plots_ql import plot_sky_continuum
             plot_sky_continuum(retval,qafig)
             
-            log.debug("Output QA fig {}".format(qafig))                   
+            log.debug("Output QA fig {}".format(qafig))
         
         return retval
 
@@ -698,6 +695,7 @@ class Sky_Peaks(MonitoringAlg):
         return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+        from desispec.qa.qalib import sky_peaks
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
@@ -713,153 +711,24 @@ class Sky_Peaks(MonitoringAlg):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
 
-        # define sky peaks and wavelength region around peak flux to be integrated
-        dw=2
-        b_peaks=np.array([3914.4,5199.3,5201.8])
-        r_peaks=np.array([6301.9,6365.4,7318.2,7342.8,7371.3])
-        z_peaks=np.array([8401.5,8432.4,8467.5,9479.4,9505.6,9521.8])
-
-        nspec_counts=[]
-        sky_counts=[]
-        nspec_counts_rms=[]
-        sky_counts_rms=[]
-        rms_skyspec_amp=[]
-        amp1=[]
-        amp2=[]
-        amp3=[]
-        amp4=[]
-        rmsamp1=[]
-        rmsamp2=[]
-        rmsamp3=[]
-        rmsamp4=[]
-        for i in range(frame.flux.shape[0]):
-            if camera[0]=="b":
-                iwave1=np.argmin(np.abs(frame.wave-b_peaks[0]))
-                iwave2=np.argmin(np.abs(frame.wave-b_peaks[1]))
-                iwave3=np.argmin(np.abs(frame.wave-b_peaks[2]))
-                peak1_flux=np.trapz(frame.flux[i,iwave1-dw:iwave1+dw+1])
-                peak2_flux=np.trapz(frame.flux[i,iwave2-dw:iwave2+dw+1])
-                peak3_flux=np.trapz(frame.flux[i,iwave3-dw:iwave3+dw+1])
-                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
-                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                nspec_counts.append(sum_counts)
-                nspec_counts_rms.append(sum_counts_rms)
-            if camera[0]=="r":
-                iwave1=np.argmin(np.abs(frame.wave-r_peaks[0]))
-                iwave2=np.argmin(np.abs(frame.wave-r_peaks[1]))
-                iwave3=np.argmin(np.abs(frame.wave-r_peaks[2]))
-                iwave4=np.argmin(np.abs(frame.wave-r_peaks[3]))
-                iwave5=np.argmin(np.abs(frame.wave-r_peaks[4]))
-                peak1_flux=np.trapz(frame.flux[i,iwave1-dw:iwave1+dw+1])
-                peak2_flux=np.trapz(frame.flux[i,iwave2-dw:iwave2+dw+1])
-                peak3_flux=np.trapz(frame.flux[i,iwave3-dw:iwave3+dw+1])
-                peak4_flux=np.trapz(frame.flux[i,iwave4-dw:iwave4+dw+1])
-                peak5_flux=np.trapz(frame.flux[i,iwave5-dw:iwave5+dw+1])
-                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
-                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                nspec_counts.append(sum_counts)
-                nspec_counts_rms.append(sum_counts_rms)
-            if camera[0]=="z":
-                iwave1=np.argmin(np.abs(frame.wave-z_peaks[0]))
-                iwave2=np.argmin(np.abs(frame.wave-z_peaks[1]))
-                iwave3=np.argmin(np.abs(frame.wave-z_peaks[2]))
-                iwave4=np.argmin(np.abs(frame.wave-z_peaks[3]))
-                iwave5=np.argmin(np.abs(frame.wave-z_peaks[4]))
-                iwave6=np.argmin(np.abs(frame.wave-z_peaks[5]))
-                peak1_flux=np.trapz(frame.flux[i,iwave1-dw:iwave1+dw+1])
-                peak2_flux=np.trapz(frame.flux[i,iwave2-dw:iwave2+dw+1])
-                peak3_flux=np.trapz(frame.flux[i,iwave3-dw:iwave3+dw+1])
-                peak4_flux=np.trapz(frame.flux[i,iwave4-dw:iwave4+dw+1])
-                peak5_flux=np.trapz(frame.flux[i,iwave5-dw:iwave5+dw+1])
-                peak6_flux=np.trapz(frame.flux[i,iwave6-dw:iwave6+dw+1])
-                sum_counts=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
-                sum_counts_rms=np.sum((peak1_flux+peak2_flux+peak3_flux+peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                nspec_counts.append(sum_counts)
-                nspec_counts_rms.append(sum_counts_rms)
-
-            if frame.fibermap['OBJTYPE'][i]=='SKY':
-                sky_counts.append(sum_counts)
-
-                if amps:
-                    if frame.fibermap['FIBER'][i]<240:
-                        if camera[0]=="b":
-                            amp1_flux=peak1_flux/frame.meta["EXPTIME"]
-                            amp3_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
-                            rmsamp1_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
-                            rmsamp3_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                        if camera[0]=="r":
-                            amp1_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
-                            amp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
-                            rmsamp1_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                            rmsamp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                        if camera[0]=="z":
-                            amp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
-                            amp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
-                            rmsamp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                            rmsamp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                        amp1.append(amp1_flux)
-                        amp3.append(amp3_flux)
-                        rmsamp1.append(rmsamp1_flux)
-                        rmsamp3.append(rmsamp3_flux)
-                    if frame.fibermap['FIBER'][i]>260:
-                        if camera[0]=="b":
-                            amp2_flux=peak1_flux/frame.meta["EXPTIME"]
-                            amp4_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
-                            rmsamp2_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
-                            rmsamp4_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                        if camera[0]=="r":
-                            amp2_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
-                            amp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
-                            rmsamp2_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                            rmsamp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                        if camera[0]=="z":
-                            amp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
-                            amp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
-                            rmsamp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                            rmsamp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
-                        amp2.append(amp2_flux)
-                        amp4.append(amp4_flux)
-                        rmsamp2.append(rmsamp2_flux)
-                        rmsamp4.append(rmsamp4_flux)
-
-        nspec_counts=np.array(nspec_counts)
-        sky_counts=np.array(sky_counts)
-        rms_nspec=qalib.getrms(nspec_counts)
-        rms_skyspec=qalib.getrms(sky_counts)
-
-        sumcount_med_sky=[]
-
+        # Parameters
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param ={
-                "B_PEAKS":[3914.4, 5199.3, 5201.8],
-                "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                "PEAKCOUNT_NORMAL_RANGE":[1000.0, 20000.0],
-                "PEAKCOUNT_WARN_RANGE":[500.0, 40000.0]
-                }
+            log.info("Param is None. Using default param instead")
+            from desispec.io import read_params
+            desi_params = read_params()
+            param = desi_params['qa']['skypeaks']['PARAMS']
+
+        # Run
+        nspec_counts, sky_counts = sky_peaks(param, frame, amps=amps)
+        rms_nspec = qalib.getrms(nspec_counts)
+        rms_skyspec = qalib.getrms(sky_counts)
+        sumcount_med_sky=[]
 
         retval["PARAMS"] = param
 
         sumcount_err=[]
-        if amps:
-            if frame.fibermap['FIBER'].shape[0]<260:
-                amp2=np.zeros(len(sky_counts))
-                amp4=np.zeros(len(sky_counts))
-            else:
-                amp2=np.array(rmsamp2)
-                amp4=np.array(rmsamp4)
-            amp1=np.array(rmsamp1)
-            amp3=np.array(rmsamp3)
-            amp1_rms=qalib.getrms(amp1)
-            amp2_rms=qalib.getrms(amp2)
-            amp3_rms=qalib.getrms(amp3)
-            amp4_rms=qalib.getrms(amp4)
-            rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_RMS_AMP":rms_skyspec_amp,"PEAKCOUNT_STAT":sumcount_err}
-        else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STAT":sumcount_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STAT":sumcount_err}
 
         if qlf:
             qlf_post(retval)
@@ -1414,7 +1283,7 @@ class Bias_From_Overscan(MonitoringAlg):
             from desispec.qa.qa_plots_ql import plot_bias_overscan
             plot_bias_overscan(retval,qafig)
             
-            log.debug("Output QA fig {}".format(qafig))                   
+            log.debug("Output QA fig {}".format(qafig))
         
         return retval
 
@@ -1441,6 +1310,7 @@ class CountSpectralBins(MonitoringAlg):
         if "NGOODFIB_WARN_RANGE" in parms and "NGOODFIB_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["NGOODFIB_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["NGOODFIB_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
+
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -1608,7 +1478,7 @@ class CountSpectralBins(MonitoringAlg):
             from desispec.qa.qa_plots_ql import plot_countspectralbins
             plot_countspectralbins(retval,qafig)
             
-            log.debug("Output QA fig {}".format(qafig))                   
+            log.debug("Output QA fig {}".format(qafig))
         
         return retval
 
@@ -1634,6 +1504,7 @@ class Sky_Residual(MonitoringAlg):
         if "RESID_WARN_RANGE" in parms and "RESID_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["RESID_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["RESID_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
+
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         from desispec.io.sky import read_sky
@@ -1734,7 +1605,7 @@ class Sky_Residual(MonitoringAlg):
             from desispec.qa.qa_plots_ql import plot_residuals
             plot_residuals(retval,qafig)
             
-            log.debug("Output QA fig {}".format(qafig))            
+            log.debug("Output QA fig {}".format(qafig))
 
         return retval
         
@@ -1755,7 +1626,7 @@ class Calculate_SNR(MonitoringAlg):
 
         if "FIDSNR_WARN_RANGE" in parms and "FIDSNR_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["FIDSNR_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["FIDSNR_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
+                              (np.asarray(parms["FIDSNR_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         from desispec.io.sky import read_sky
@@ -1819,7 +1690,7 @@ class Calculate_SNR(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
-                "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc. 
+                "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc.
                 "FIDSNR_NORMAL_RANGE":[6.5, 7.5],
                 "FIDSNR_WARN_RANGE":[6.0, 8.0],
                 "FIDMAG":22.
