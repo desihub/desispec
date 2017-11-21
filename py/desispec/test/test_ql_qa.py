@@ -59,8 +59,8 @@ class TestQL_QA(unittest.TestCase):
         self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
         #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
         self.config={"kwargs":{
-            "param":{
-            }
+            "refKey":{},
+            "param":{}
         }
         }
 
@@ -283,8 +283,8 @@ class TestQL_QA(unittest.TestCase):
 
     def testGetRMS(self):
         config={"kwargs":{
-            "param":{
-            }
+            "refKey":{},
+            "param":{}
         }
         }
 
@@ -424,8 +424,8 @@ class TestQL_QA(unittest.TestCase):
         qargs["paname"]="abc"
         qargs["dict_countbins"]=self.map2pix
         resl=qa(inp,**qargs)
-        self.assertTrue(np.all(resl['METRICS']['SUMCOUNT_RMS_AMP'])>=0.)
-        self.assertTrue(resl['METRICS']['SUMCOUNT_RMS']>0)
+        self.assertTrue(np.all(resl['METRICS']['PEAKCOUNT_RMS_AMP'])>=0.)
+        self.assertTrue(resl['METRICS']['PEAKCOUNT_RMS']>0)
 
     def testIntegrateSpec(self):
         qa=QA.Integrate_Spec('integ',self.config)

@@ -169,9 +169,9 @@ class Get_RMS(MonitoringAlg):
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
 
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"RESULT":rmsccd,"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"NOISE_STAT":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_AMP":np.array(rms_amps),"RESULT":rmsccd,"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"NOISE_STAT":rmsdiff_err,"EXPNUM_WARN":expnum}
         else:
-            retval["METRICS"]={"RMS":rmsccd,"RMS_OVER":rmsover,"RMS_ROW":rms_row,"NOISE_STAT":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_ROW":rms_row,"NOISE_STAT":rmsdiff_err,"EXPNUM_WARN":expnum}
 
         if qlf:
             qlf_post(retval)  
@@ -387,12 +387,33 @@ class Integrate_Spec(MonitoringAlg):
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
         
-        #- average integrals over star fibers
-        starfibers=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
-        if len(starfibers) < 1:
-            log.warning("no STD fibers found.")
-        int_stars=integrals[starfibers]
-        int_average=np.mean(int_stars)
+        #- average integrals over fibers of each object type and get imaging magnitudes
+        integ_avg_tgt=[]
+        mag_avg_tgt=[]
+        for T in ["ELG","QSO","LRG","STD"]:
+            fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
+            if len(fibers) < 1:
+                log.warning("no {} fibers found.".format(T))
+            magnitudes=frame.fibermap['MAG'][fibers]
+            mag_avg=np.mean(magnitudes)
+            mag_avg_tgt.append(mag_avg)
+            integ=integrals[fibers]
+            integ_avg=np.mean(integ)
+            integ_avg_tgt.append(integ_avg)
+            if T == "STD":
+                starfibers=fibers
+                int_stars=integ
+                int_average=integ_avg
+
+        # simple, temporary magdiff calculation (to be corrected...)
+        magdiff_avg=[]
+        for i in range(len(mag_avg_tgt)):
+            mag_fib=-2.5*np.log(integ_avg_tgt[i]/frame.meta["EXPTIME"])+30.
+            if mag_avg_tgt[i] != np.nan:
+                magdiff=mag_fib-mag_avg_tgt[i]
+            else:
+                magdiff=nan
+            magdiff_avg.append(magdiff)
 
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -403,7 +424,6 @@ class Integrate_Spec(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        magdiff_avg = 0.0
         magdiff_avg_amp = [0.0]
 
         magdiff_err=[]
@@ -434,10 +454,10 @@ class Integrate_Spec(MonitoringAlg):
                         integ_thisamp[ii]=qalib.integrate_spec(wave,stdflux_thisamp[ii])
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_STAT":magdiff_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_STAT":magdiff_err}
 
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_AVG":magdiff_avg,"MAGDIFF_STAT":magdiff_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_STAT":magdiff_err}
 
         if qlf:
             qlf_post(retval) 
@@ -837,9 +857,9 @@ class Sky_Peaks(MonitoringAlg):
             amp4_rms=qalib.getrms(amp4)
             rms_skyspec_amp=np.array([amp1_rms,amp2_rms,amp3_rms,amp4_rms])
 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"SUMCOUNT_RMS_AMP":rms_skyspec_amp,"PEAKCOUNT_STAT":sumcount_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_RMS_AMP":rms_skyspec_amp,"PEAKCOUNT_STAT":sumcount_err}
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SUMCOUNT":nspec_counts,"SUMCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"SUMCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STAT":sumcount_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"SUMCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STAT":sumcount_err}
 
         if qlf:
             qlf_post(retval)
@@ -874,11 +894,9 @@ class Calc_XWSigma(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
-        if "XSHIFT_WARN_RANGE" in parms and "XSHIFT_NORMAL_RANGE" and "WSHIFT_WARN_RANGE" in parms and "WSHIFT_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["XSHIFT_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["XSHIFT_NORMAL_RANGE"]),QASeverity.NORMAL),
-                              (np.asarray(parms["WSHIFT_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["WSHIFT_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        if "XWSIGMA_WARN_RANGE" in parms and "XWSIGMA_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["XWSIGMA_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["XWSIGMA_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -949,20 +967,16 @@ class Calc_XWSigma(MonitoringAlg):
                     "B_PEAKS":[4047.7, 4359.6, 5087.2],
                     "R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
                     "Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
-                    "XSHIFT_NORMAL_RANGE":[-2.0, 2.0],
-                    "XSHIFT_WARN_RANGE":[-4.0, 4.0],
-                    "WSHIFT_NORMAL_RANGE":[-2.0, 2.0],
-                    "WSHIFT_WARN_RANGE":[-4.0, 4.0]
+                    "XWSIGMA_NORMAL_RANGE":[-2.0, 2.0],
+                    "XWSIGMA_WARN_RANGE":[-4.0, 4.0]
                     }
             else:
                 param = {
                     "B_PEAKS":[3914.4, 5199.3, 5578.9],
                     "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                     "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                    "XSHIFT_NORMAL_RANGE":[-2.0, 2.0],
-                    "XSHIFT_WARN_RANGE":[-4.0, 4.0], 
-                    "WSHIFT_NORMAL_RANGE":[-2.0, 2.0],
-                    "WSHIFT_WARN_RANGE":[-4.0, 4.0]
+                    "XWSIGMA_NORMAL_RANGE":[-2.0, 2.0],
+                    "XWSIGMA_WARN_RANGE":[-4.0, 4.0]
                     }
 
         dw=2.
@@ -1170,6 +1184,7 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_med=np.median(wsigma)
         xsigma_med_sky=np.median(xsigma_sky)
         wsigma_med_sky=np.median(wsigma_sky)
+        xwsigma=np.array([xsigma_med_sky,wsigma_med_sky])
         xamp1_med=np.median(xsigma_amp1)
         xamp2_med=np.median(xsigma_amp2)
         xamp3_med=np.median(xsigma_amp3)
@@ -1193,7 +1208,7 @@ class Calc_XWSigma(MonitoringAlg):
 
         shift_err=[]
         if amps:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA_STAT":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWSIGMA_STAT":shift_err}
 
         else:
             retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA_STAT":shift_err}

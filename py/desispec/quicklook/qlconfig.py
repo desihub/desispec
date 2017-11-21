@@ -47,8 +47,7 @@ class Config(object):
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
-        #Fill this dict with qa names and keys
-        self._qaRefKeys={"Get_RMS":"NOISE_AMP"}
+        self._qaRefKeys={"Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"NPIX_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"MAGDIFF_TGT", "Sky_Residual":"RESIDRMS", "Calculate_SNR":"FIDSNR_TGT"}
 
     @property
     def mode(self):

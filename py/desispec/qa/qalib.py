@@ -500,6 +500,7 @@ def SNRFit(frame,params,fidboundary=None):
     #- purposes.
 
     #- Loop over each target type, and associate SNR and image magnitudes for each type.
+    fidsnr_tgt=[]
     for T in ["ELG","QSO","LRG","STD"]:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
@@ -533,7 +534,7 @@ def SNRFit(frame,params,fidboundary=None):
             vs=out[0]
             cov=out[1]
             qadict["%s_FITRESULTS"%T]=[vs,cov]
-            qadict["%s_FIDMAG_SNR"%T]=10**fitfunc(fmag,*out[0])
+            fidsnr_tgt.append(10**fitfunc(fmag,*out[0]))
             #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
         except ValueError:
             log.warning("In fit of {}, data contain NANs! can't fit".format(T))
@@ -542,7 +543,7 @@ def SNRFit(frame,params,fidboundary=None):
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
             qadict["%s_FITRESULTS"%T]=[vs,cov]
-            qadict["%s_FIDMAG_SNR"%T]=np.nan
+            fidsnr_tgt.append(np.nan)
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
             vs=np.array(initialParams)
@@ -550,21 +551,22 @@ def SNRFit(frame,params,fidboundary=None):
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
             qadict["%s_FITRESULTS"%T]=[vs,cov]
-            qadict["%s_FIDMAG_SNR"%T]=np.nan
+            fidsnr_tgt.append(np.nan)
         except scipy.optimize.OptimizeWarning:
             log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
             vs=out[0]
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
             qadict["%s_FITRESULTS"%T]=[vs,cov]
-            qadict["%s_FIDMAG_SNR"%T]=np.nan
+            fidsnr_tgt.append(np.nan)
             
         qadict["%s_FIBERID"%T]=fibers.tolist()
         qadict["%s_SNR_MAG"%T]=np.array((medsnr,mags))
         qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
 
-        qadict["RA"]=frame.fibermap['RA_TARGET']
-        qadict["DEC"]=frame.fibermap['DEC_TARGET']
+    qadict["FIDSNR_TGT"]=fidsnr_tgt
+    qadict["RA"]=frame.fibermap['RA_TARGET']
+    qadict["DEC"]=frame.fibermap['DEC_TARGET']
 
     return qadict
 

@@ -12,7 +12,7 @@ WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: False
 #- Exposure ID for Reference Template
-TemplateExpid: 2
+TemplateExpid: 20
 #- Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file
@@ -38,10 +38,8 @@ Algorithms:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5578.9],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                          Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4],
-                         XSHIFT_NORMAL_RANGE: [-2.0, 2.0],
-                         XSHIFT_WARN_RANGE: [-4.0, 4.0],
-                         WSHIFT_NORMAL_RANGE: [-2.0, 2.0],
-                         WSHIFT_WARN_RANGE: [-4.0, 4.0]}
+                         XWSIGMA_NORMAL_RANGE: [-2.0, 2.0],
+                         XWSIGMA_WARN_RANGE: [-4.0, 4.0]}
     BoxcarExtract:
         wavelength: {
             b: [3570,5730,0.8],

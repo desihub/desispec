@@ -294,12 +294,11 @@ def plot_XWSigma(qa_dict,outfile):
          'SPECTROGRAPH': 0,
          'METRICS': {'XSIGMA': array([ 1.9, 1.81, 1.2...]),
                    'XSIGMA_MED': 1.81,
-                   'XSIGMA_MED_SKY': 1.72,
                    'XSIGMA_AMP': array([ 1.9, 1.8, 1.7, 1.84]),
                    'WSIGMA': array([ 1.9, 1.81, 1.2...]),
                    'WSIGMA_MED': 1.81,
-                   'WSIGMA_MED_SKY': 1.72,
-                   'WSIGMA_AMP': array([ 1.9, 1.8, 1.7, 1.84])}}
+                   'WSIGMA_AMP': array([ 1.9, 1.8, 1.7, 1.84]),
+                   'XWSIGMA': array([ 1.72, 1.72])}}
 
     Args:
         qa_dict: qa dictionary from countpix qa
@@ -399,7 +398,7 @@ def plot_RMS(qa_dict,outfile):
          'SPECTROGRAPH': 0,
          'METRICS': {'RMS': 40.218151021598679,
                    'RMS_AMP': array([ 55.16847779,   2.91397089,  55.26686528,   2.91535373])
-                   'RMS_OVER': 40.21815,
+                   'NOISE': 40.21815,
                    'NOISE_AMP': array([ 55.168,   2.913,   55.266,  2.915])
                     }
         }
@@ -410,7 +409,7 @@ def plot_RMS(qa_dict,outfile):
     """
     rms=qa_dict["METRICS"]["RMS"]
     rms_amp=qa_dict["METRICS"]["RMS_AMP"]
-    rms_over=qa_dict["METRICS"]["RMS_OVER"]
+    rms_over=qa_dict["METRICS"]["NOISE"]
     rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
     # arm=qa_dict["ARM"]
     # spectrograph=qa_dict["SPECTROGRAPH"]
@@ -616,10 +615,10 @@ def plot_sky_peaks(qa_dict,outfile):
         'EXPID': '00000006',
         'QATIME': '2016-07-08T06:05:34.56',
         'PANAME': 'APPLY_FIBERFLAT', 'SPECTROGRAPH': 0,
-        'METRICS': {'SUMCOUNT': array([ 1500.0,  1400.0, ....]),
-                  'SUMCOUNT_RMS': 1445.0,
-                  'SUMCOUNT_RMS_SKY': 1455.0,
-                  'SUMCOUNT_RMS_AMP': array([ 1444.0, 1433.0, 1422.0, 1411.0])}}
+        'METRICS': {'PEAKCOUNT': array([ 1500.0,  1400.0, ....]),
+                  'PEAKCOUNT_RMS': 1445.0,
+                  'PEAKCOUNT_RMS_SKY': 1455.0,
+                  'PEAKCOUNT_RMS_AMP': array([ 1444.0, 1433.0, 1422.0, 1411.0])}}
 
     Args:
         qa_dict: dictionary from sky peaks QA
@@ -628,9 +627,9 @@ def plot_sky_peaks(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera=qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    sumcount=qa_dict["METRICS"]["SUMCOUNT"]
+    sumcount=qa_dict["METRICS"]["PEAKCOUNT"]
     fiber=np.arange(sumcount.shape[0])
-    skyfiber_rms=qa_dict["METRICS"]["SUMCOUNT_RMS_SKY"]
+    skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_RMS_SKY"]
     fig=plt.figure()
     plt.suptitle("Counts and Amp RMS for Sky Fibers after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
 
@@ -642,8 +641,8 @@ def plot_sky_peaks(qa_dict,outfile):
     ax1.tick_params(axis='y',labelsize=10)
     plt.xlim(0,len(fiber))
 
-    if "SUMCOUNT_RMS_AMP" in qa_dict["METRICS"]:
-        sky_amp_rms=np.array(qa_dict["METRICS"]["SUMCOUNT_RMS_AMP"])
+    if "PEAKCOUNT_RMS_AMP" in qa_dict["METRICS"]:
+        sky_amp_rms=np.array(qa_dict["METRICS"]["PEAKCOUNT_RMS_AMP"])
         ax2=fig.add_subplot(212)
         heatmap2=ax2.pcolor(sky_amp_rms.reshape(2,2),cmap=plt.cm.OrRd)
         plt.title('Sky peaks for sky fibers = {:.4f}'.format(skyfiber_rms), fontsize=10)
