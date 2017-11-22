@@ -17,6 +17,9 @@ class QuickResolution(scipy.sparse.dia_matrix):
     """
     Quicklook version of the resolution mimicking desispec.resolution.Resolution 
     with some reduction in dimentionality. Contains code from Resolution implementation
+    Note that this is similar to desispec.resolution.Resolution, though faster and differing 
+    in implementation details that should be cross checked before merging these 
+    or replacing one with the other
     """
     def __init__(self,mu=None,sigma=None,wdict=None,waves=None,ndiag=9):
         self.__ndiag=ndiag
