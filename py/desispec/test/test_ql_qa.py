@@ -59,8 +59,8 @@ class TestQL_QA(unittest.TestCase):
         self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
         #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
         self.config={"kwargs":{
-            "param":{
-            }
+            "refKey":{},
+            "param":{}
         }
         }
 
@@ -283,8 +283,8 @@ class TestQL_QA(unittest.TestCase):
 
     def testGetRMS(self):
         config={"kwargs":{
-            "param":{
-            }
+            "refKey":{},
+            "param":{}
         }
         }
 
@@ -301,8 +301,8 @@ class TestQL_QA(unittest.TestCase):
         resl=qa(inp,**qargs)
         self.assertTrue("yaml" in qargs["qafile"])
         self.assertTrue("png" in qargs["qafig"])
-        self.assertTrue(len(resl['METRICS']['RMS_OVER_AMP'])==4)
-        self.assertTrue((np.all(resl['METRICS']['RMS_OVER_AMP'])>0))
+        self.assertTrue(len(resl['METRICS']['NOISE_AMP'])==4)
+        self.assertTrue((np.all(resl['METRICS']['NOISE_AMP'])>0))
 
     def testCalcXWSigma(self):
 
@@ -376,7 +376,7 @@ class TestQL_QA(unittest.TestCase):
         #- test if amp QAs exist
         qargs["amps"] = True
         resl2=qa(inp,**qargs)
-        self.assertTrue(len(resl2['METRICS']['NPIX_LOW_AMP'])==4)
+        self.assertTrue(len(resl2['METRICS']['NPIX_AMP'])==4)
 
     def testCountSpectralBins(self):
         qa=QA.CountSpectralBins('countbins',self.config)
@@ -424,8 +424,8 @@ class TestQL_QA(unittest.TestCase):
         qargs["paname"]="abc"
         qargs["dict_countbins"]=self.map2pix
         resl=qa(inp,**qargs)
-        #self.assertTrue(np.all(resl['METRICS']['SUMCOUNT_RMS_AMP'])>=0.)
-        self.assertTrue(resl['METRICS']['SUMCOUNT_RMS']>0)
+        #self.assertTrue(np.all(resl['METRICS']['PEAKCOUNT_RMS_AMP'])>=0.)
+        self.assertTrue(resl['METRICS']['PEAKCOUNT_RMS']>0)
 
     def testIntegrateSpec(self):
         qa=QA.Integrate_Spec('integ',self.config)
