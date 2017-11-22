@@ -263,26 +263,22 @@ class BoxcarExtract(pas.PipelineAlg):
                                   quick_resolution=quick_resolution)
 
         #- write to a frame object
-        qwmin=None
-        qwmax=None
-        qymin=None
-        qymax=None
         qndiag=21
-        qnpix_y=None
-        qwcoeff=None
-        if quick_resolution and hasattr(psf,'wcoeff'):
-            qwmin=psf.wmin
-            qwmax=psf.wmax
-            qymin=psf.ymin
-            qymax=psf.ymax
-            qndiag=21
-            qnpix_y=psf.npix_y
-            qwcoeff=np.concatenate([psf.icoeff,psf.wcoeff],axis=1)
-            
+        wsigma=None
+        if quick_resolution:
+            if hasattr(psf,'wcoeff'):
+                wsigma=np.empty(flux.shape)
+                if isinstance(nspec,(tuple,list,np.ndarray)):
+                    for i,s in enumerate(nspec):
+                        wsigma[i]=psf.wdisp(s,outwave)
+                else:
+                    for i in range(nspec):
+                        wsigma[i]=psf.wdisp(i,outwave)
+            elif hasattr(psf,'xsigma_boot'):
+                wsigma=np.tile(psf.xsigma_boot,(outwave.shape[0],1))
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, 
                    meta=input_image.meta, fibermap=fibermap,
-                   coefficients=qwcoeff, ndiag=qndiag,ymin=qymin,ymax=qymax,wmin=qwmin,wmax=qwmax,
-                   npix_y=qnpix_y)
+                   wsigma=wsigma, ndiag=qndiag)
 
         if dumpfile is not None:
             from desispec import io

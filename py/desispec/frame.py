@@ -43,13 +43,8 @@ class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
                 fibers=None, spectrograph=None, meta=None, fibermap=None,
                  chi2pix=None,
-                 coefficients=None,
-                 ndiag=21,
-                 ymin=None,
-                 ymax=None,
-                 wmin=None,
-                 wmax=None,
-                 npix_y=None ):
+                 wsigma=None,ndiag=21
+    ):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
@@ -71,13 +66,7 @@ class Frame(object):
             chi2pix: 2D[nspec, nwave] chi2 of 2D model to pixel-level data
                 for pixels that contributed to each flux bin
         Parameters below allow on-the-fly resolution calculation
-            coefficients: [nspec,12] concatenated psf.icoeff and psf.wcoeff arrays 
-            ndiag: width of the diagonals in resolution matrix ignored if resolution_data is given
-            ymin: psf.ymin
-            ymax: psf.ymax
-            wmin: psf.wmin
-            wmax: psf.wmax
-            npix_y: psf.npix_y
+            wsigma: 2D[nspec,nwave] sigma widths for each wavelength bin for all fibers
         Notes:
             spectrograph input is used only if fibers is None.  In this case,
             it assumes nspec_per_spectrograph = flux.shape[0] and calculates
@@ -108,7 +97,7 @@ class Frame(object):
         self.fibermap = fibermap
         self.nspec, self.nwave = self.flux.shape
         self.chi2pix = chi2pix
-
+        self.ndiag=ndiag
         fibers_per_spectrograph = 500   #- hardcode; could get from desimodel
 
         if mask is None:
@@ -123,51 +112,16 @@ class Frame(object):
                raise ValueError("Wrong dimensions for resolution_data[nspec, ndiag, nwave]")
 
         #- Maybe setup non-None identity matrix resolution matrix instead?
-        self.coeffs=coefficients
-        self.ndiag=ndiag
-        self.wmin   = wmin 
-        self.wmax   = wmax 
-        self.ymin   = ymin 
-        self.ymax   = ymax 
-        self.npix_y = npix_y
-        self.ndiag  = ndiag
+        self.wsigma=wsigma
         self.resolution_data = resolution_data
         if resolution_data is not None:
-            self.coeffs=None #ignore width coefficients if resolution data is given explicitly
+            self.wsigma=None #ignore width coefficients if resolution data is given explicitly
             self.ndiag=None 
             self.R = np.array( [Resolution(r) for r in resolution_data] )
-        elif coefficients is not None:
-            assert self.wmin   is not None
-            assert self.wmax   is not None
-            assert self.ymin   is not None
-            assert self.ymax   is not None
-            assert self.npix_y is not None
-            assert self.ndiag  is not None and self.ndiag>0
-            
-            from desiutil import funcfits as dufits
-            from desispec.quicklook.qlresolution import QuickResolution
-            def wavelength(ispec,y,ymin,ymax):
-                c=self.coeffs[:,:9]
-                new_dict=dufits.mk_fit_dict(c[ispec,:],c[ispec,:].shape,'legendre',ymin,ymax)
-                wfit=dufits.func_val(y,new_dict)
-                return wfit
-            def angstroms_per_pixel(ispec,wavearr,npix_y):
-                ww = wavelength(ispec, y=np.arange(npix_y),ymin=self.ymin,ymax=self.ymax)
-                dw = np.gradient( ww )
-                return np.interp(wavearr, ww, dw)
-            r=[]
-            # this for loop might need to be modified to use actual
-            # fibers from the psf if not all fibers are included in
-            # this frame of course QuickResolution makes it harder to
-            # merge fluxes from different cameras into same frame. One
-            # has to put respective parameters into coefficients and
-            # set appropriate limits.  Still, using QuickResolution
-            # will reduce the data size to around 50KB instead of
-            # ~105MB
-            for f in range(self.nspec):
-                new_dict=dufits.mk_fit_dict(coefficients[f,9:],3,'legendre',wmin,wmax)
-                wsigma=dufits.func_val(wave,new_dict)
-                r.append(QuickResolution(sigma=wsigma/angstroms_per_pixel(f,self.wave,npix_y),ndiag=self.ndiag))
+        elif wsigma is not None:
+            assert ndiag is not None
+            for sigma in wsigma:
+                r.append(QuickResolution(sigma=sigma,ndiag=self.ndiag))
             self.R=np.array(r)
         else:
             #SK I believe this should be error, but looking at the
@@ -288,16 +242,14 @@ class Frame(object):
             chi2pix = None
 
         coeff=None
-        if self.coeffs is not None:
-            coeff=self.coeffs[index]
+        if self.wsigma is not None:
+            coeff=self.wsigma[index]
 
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
                        meta=self.meta, fibermap=fibermap, chi2pix=chi2pix,
-                       coefficients=coeff,ndiag=self.ndiag,wmin=self.wmin,
-                       wmax=self.wmax,ymin=self.ymin,ymax=self.ymax,npix_y=self.npix_y
-        )
+                       wsigma=wsigma,ndiag=self.ndiag)
 
         return result
 

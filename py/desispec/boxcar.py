@@ -131,8 +131,8 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
         fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
     #- Get resolution from the psf  
-    resolution=None
-    if not quick_resolution or not hasattr(psf,"wcoeff"):
-        resolution=get_resolution(wtarget,nspec,psf,usesigma=usesigma)
+    if quick_resolution and  (hasattr(psf,"wcoeff") or hasattr(psf,'xsigma_boot')):
+        return fflux,iivar,None
+    resolution=get_resolution(wtarget,nspec,psf,usesigma=usesigma)
 
     return fflux,iivar,resolution
