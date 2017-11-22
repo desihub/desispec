@@ -26,6 +26,10 @@ class MonitoringAlg:
         res["QA_STATUS"]="UNKNOWN"
         cargs=self.config['kwargs']
         params=cargs['param']
+        metrics=res["METRICS"] if 'METRICS' in res else None
+        if metrics is None:
+            metrics={}
+            res["METRICS"]=metrics
         deviation=None
         reskey="RESULT"
         QARESULTKEY="QA_STATUS"
@@ -64,20 +68,21 @@ class MonitoringAlg:
             return val
         if self.__deviation is not None and "RANGES" in cargs:
             thr=cargs["RANGES"]
-            res[QARESULTKEY]="ERROR"
+            metrics[QARESULTKEY]="ERROR"
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
             devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
             if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
-                self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible!".format(self.name,len(thr),len(self.__deviation)))
+                self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation)
+                                                                                                                                                         thr,current))
                 return res
             else: #they are of the same type
                 if devlist: # if results are a list
                     if len(thr)==1: # check all results against same thresholds
-                        res[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
+                        metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
                     else: # each result has its own thresholds
-                        res[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
+                        metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
                 else: #result is a scalar
-                    res[QARESULTKEY]=str(findThr(self.__deviation,thr))
+                    metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
         return res
     def run(self,*argv,**kwargs):
         pass

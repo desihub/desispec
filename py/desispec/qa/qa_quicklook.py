@@ -58,10 +58,10 @@ class Get_RMS(MonitoringAlg):
         from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey']
-        key="NOISE_AMP"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "NOISE_AMP" 
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STAT" 
         kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]="NOISE_STAT"
+        kwargs["SAMI_QASTATUSKEY"]=status
 
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
@@ -117,8 +117,6 @@ class Get_RMS(MonitoringAlg):
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
-        if "REFERENCE" in kwargs:
-            retval['NOISE_AMP_REF']=kwargs["REFERENCE"]
 
         # return rms values in rms/sqrt(exptime)
         rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
@@ -131,6 +129,8 @@ class Get_RMS(MonitoringAlg):
                 }
 
         retval["PARAMS"] = param
+        if "REFERENCE" in kwargs:
+            retval['PARAMS']['NOISE_AMP_REF']=kwargs["REFERENCE"]
 
         expnum=[]
         rms_row=[]
