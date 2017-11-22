@@ -151,7 +151,7 @@ class Get_RMS(MonitoringAlg):
             rms_over_amps.append(rms_thisover_thisamp)
         rmsover=np.max(rms_over_amps)
 
-        rmsdiff_err=[]
+        rmsdiff_err='NORMAL'
         if amps:
             rms_amps=[]
             rms_over_amps=[]
@@ -270,7 +270,7 @@ class Count_Pixels(MonitoringAlg):
         npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
         npixhi=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
 
-        npix_err=[]
+        npix_err='NORMAL'
         #- get the counts for each amp
         if amps:
             npixlo_amps=[]
@@ -426,7 +426,7 @@ class Integrate_Spec(MonitoringAlg):
 
         magdiff_avg_amp = [0.0]
 
-        magdiff_err=[]
+        magdiff_err='NORMAL'
         #- get the counts for each amp
         if amps:
 
@@ -584,7 +584,7 @@ class Sky_Continuum(MonitoringAlg):
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
 
-        skycont_err = []
+        skycont_err = 'NORMAL'
         if amps:
             leftmax = dict_countbins["LEFT_MAX_FIBER"]
             rightmin = dict_countbins["RIGHT_MIN_FIBER"]
@@ -726,7 +726,7 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        sumcount_err=[]
+        sumcount_err='NORMAL'
 
         retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STAT":sumcount_err}
 
@@ -1075,7 +1075,7 @@ class Calc_XWSigma(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        shift_err=[]
+        shift_err='NORMAL'
         if amps:
             retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWSIGMA_STAT":shift_err}
 
@@ -1263,7 +1263,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        biasdiff_err=[]
+        biasdiff_err='NORMAL'
         if amps:
             bias_amps=np.array(bias_overscan)
 
@@ -1404,7 +1404,7 @@ class CountSpectralBins(MonitoringAlg):
         bottommax=None
         topmin=None
 
-        ngood_err="UNKNOWN"
+        ngood_err='NORMAL'
 
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
@@ -1594,7 +1594,7 @@ class Sky_Residual(MonitoringAlg):
         if qlf:
             qlf_post(retval)    
 
-        skyresid_err=[]
+        skyresid_err='NORMAL'
         retval["PARAMS"] = param
         retval["METRICS"]["RESIDRMS_STAT"]=skyresid_err
 
@@ -1717,7 +1717,7 @@ class Calculate_SNR(MonitoringAlg):
         retval["METRICS"] = qadict
         retval["PARAMS"] = param
 
-        snrwarn=[]
+        snrwarn='NORMAL'
         retval["METRICS"]["FIDSNR_STAT"] = snrwarn
 
         #- http post if valid
