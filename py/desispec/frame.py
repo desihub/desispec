@@ -129,7 +129,7 @@ class Frame(object):
             # thus I changed value error to a simple warning message.
             log = get_logger()
             log.warning("Frame object is constructed without resolution data or respective "\
-                        "coefficients. Resolution will not be available")
+                        "sigma widths. Resolution will not be available")
             # raise ValueError("Need either resolution_data or coefficients to generate it")
         self.spectrograph = spectrograph
 
@@ -241,9 +241,9 @@ class Frame(object):
         else:
             chi2pix = None
 
-        coeff=None
+        wsigma=None
         if self.wsigma is not None:
-            coeff=self.wsigma[index]
+            wsigma=self.wsigma[index]
 
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
