@@ -59,7 +59,7 @@ class TestQL_QA(unittest.TestCase):
         self.psffile=resource_filename('specter', 'test/t/psf-monospot.fits') 
         #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
         self.config={"kwargs":{
-            "refKey":{},
+            "refKey":None,
             "param":{}
         }
         }
@@ -283,7 +283,7 @@ class TestQL_QA(unittest.TestCase):
 
     def testGetRMS(self):
         config={"kwargs":{
-            "refKey":{},
+            "refKey":"NOISE_AMP",
             "param":{}
         }
         }

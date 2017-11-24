@@ -37,8 +37,8 @@ class MonitoringAlg:
             QARESULTKEY=cargs["SAMI_QASTATUSKEY"]
         if "SAMI_RESULTKEY" in cargs:
             reskey=cargs["SAMI_RESULTKEY"]
-        if reskey in res['METRICS'] and "REFERENCE" in params:
-            current=res['METRICS'][reskey]
+        if reskey in metrics and "REFERENCE" in params:
+            current=metrics[reskey]
             old=params["REFERENCE"]
             currlist=isinstance(current,(np.ndarray,collections.Sequence))
             oldlist=isinstance(old,(np.ndarray,collections.Sequence))
@@ -72,7 +72,7 @@ class MonitoringAlg:
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
             devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
             if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
-                self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation)
+                self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation),
                                                                                                                                                          thr,current))
                 return res
             else: #they are of the same type
