@@ -119,19 +119,22 @@ def ql_main(args=None):
     camera=configdict["Camera"]
     expid=configdict["Expid"]
 
+    if configdict["OutputFile"] is None:
+        log.warning("Output filename is None and has a object of {}. SKIPPING FINAL OUTPUT".format(type(res)))
+        return
     if isinstance(res,image.Image):
         if configdict["OutputFile"]: 
             finalname=configdict["OutputFile"]
         else:
             finalname="image-{}-{:08d}.fits".format(camera,expid)
             log.critical("No final outputname given. Writing to a image file {}".format(finalname))
-        imIO.write_image(finalname,res,meta=None)        
+        imIO.write_image(finalname,res,meta=None)
     elif isinstance(res,frame.Frame):
         if configdict["OutputFile"]: 
             finalname=configdict["OutputFile"]
         else:
             finalname="frame-{}-{:08d}.fits".format(camera,expid)
-            log.critical("No final outputname given. Writing to a frame file {}".format(finalname)) 
+            log.critical("No final outputname given. Writing to a frame file {}".format(finalname))
         frIO.write_frame(finalname,res,header=None)
     elif configdict["Flavor"] == 'arcs':
         if configdict["OutputFile"]:

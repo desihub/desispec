@@ -136,8 +136,10 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
 
         # Use diagonal of skycovar convolved with mean resolution of all fibers
         # first compute average resolution
-        mean_res_data=np.mean(fframe.resolution_data,axis=0)
-        R = Resolution(mean_res_data)
+        #- computing mean from matrix itself
+        R= (fframe.R.sum()/fframe.nspec).todia()
+        #mean_res_data=np.mean(fframe.resolution_data,axis=0)
+        #R = Resolution(mean_res_data)
         # compute convolved sky and ivar
         cskycovar=R.dot(skycovar).dot(R.T.todense())
         cskyvar=np.diagonal(cskycovar)
@@ -193,10 +195,13 @@ def subtract_sky(fframe,skymodel):
         message = "frame and sky not on same wavelength grid"
         raise ValueError(message)
 
-    sflux = fframe.flux-skymodel.flux
-    sivar = util.combine_ivar(fframe.ivar.clip(0), skymodel.ivar.clip(0))
-    smask = fframe.mask | skymodel.mask
+    #SK. This wouldn't work since not all properties of the input
+    #frame is modified. Just modify input frame directly instead!
+
+    fframe.flux= fframe.flux-skymodel.flux
+    fframe.ivar = util.combine_ivar(fframe.ivar.clip(0), skymodel.ivar.clip(0))
+    fframe.mask = fframe.mask | skymodel.mask
     #- create a frame object now
-    sframe=fr.Frame(fframe.wave,sflux,sivar,smask,fframe.resolution_data,meta=fframe.meta,fibermap=fframe.fibermap)
-    return sframe
+    #sframe=fr.Frame(fframe.wave,sflux,sivar,smask,fframe.resolution_data,meta=fframe.meta,fibermap=fframe.fibermap)
+    return fframe
     

@@ -186,6 +186,7 @@ class BoxcarExtract(pas.PipelineAlg):
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
+        quickRes=kwargs["QuickResolution"] if "QuickResolution" in kwargs else False
         if "usesigma" in kwargs:
              usesigma=kwargs["usesigma"]
         else: usesigma = False
@@ -246,21 +247,39 @@ class BoxcarExtract(pas.PipelineAlg):
         return self.run_pa(input_image,psf
                            ,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,
-                           dumpfile=dumpfile,maskFile=maskFile,usesigma=usesigma)
+                           dumpfile=dumpfile,maskFile=maskFile,usesigma=usesigma,
+                           quick_resolution=quickRes)
 
     def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
                fibers=None, fibermap=None,dumpfile=None,
-               maskFile=None,usesigma=False):
+               maskFile=None,usesigma=False,quick_resolution=False):
         from desispec.boxcar import do_boxcar
         from desispec.frame import Frame as fr
         import desispec.psf
         if fibermap['OBJTYPE'][0] == 'ARC':
             psf=desispec.psf.PSF(psf)
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
-                                  nspec=nspec,maskFile=maskFile,usesigma=usesigma)
+                                  nspec=nspec,maskFile=maskFile,usesigma=usesigma,
+                                  quick_resolution=quick_resolution)
 
         #- write to a frame object
-        frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, meta=input_image.meta, fibermap=fibermap)
+        qndiag=21
+        wsigma=None
+        if quick_resolution:
+            if hasattr(psf,'wcoeff'):
+                wsigma=np.empty(flux.shape)
+                if isinstance(nspec,(tuple,list,np.ndarray)):
+                    for i,s in enumerate(nspec):
+                        #- GD: Need confirmation, but this appears to be missing.
+                        wsigma[i]=psf.wdisp(s,outwave)/psf.angstroms_per_pixel(s,outwave)
+                else:
+                    for i in range(nspec):
+                        wsigma[i]=psf.wdisp(i,outwave)/psf.angstroms_per_pixel(i,outwave)
+            elif hasattr(psf,'xsigma_boot'):
+                wsigma=np.tile(psf.xsigma_boot,(outwave.shape[0],1))
+        frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, 
+                   meta=input_image.meta, fibermap=fibermap,
+                   wsigma=wsigma, ndiag=qndiag)
 
         if dumpfile is not None:
             from desispec import io
