@@ -119,7 +119,9 @@ class Frame(object):
             self.ndiag=None 
             self.R = np.array( [Resolution(r) for r in resolution_data] )
         elif wsigma is not None:
+            from desispec.quicklook.qlresolution import QuickResolution
             assert ndiag is not None
+            r=[]
             for sigma in wsigma:
                 r.append(QuickResolution(sigma=sigma,ndiag=self.ndiag))
             self.R=np.array(r)
