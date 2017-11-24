@@ -270,6 +270,7 @@ class BoxcarExtract(pas.PipelineAlg):
                 wsigma=np.empty(flux.shape)
                 if isinstance(nspec,(tuple,list,np.ndarray)):
                     for i,s in enumerate(nspec):
+                        #- GD: Need confirmation, but this appears to be missing.
                         wsigma[i]=psf.wdisp(s,outwave)/psf.angstroms_per_pixel(s,outwave)
                 else:
                     for i in range(nspec):
