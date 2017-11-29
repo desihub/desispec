@@ -776,6 +776,13 @@ def plot_SNR(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
 
+    if camera[0] == 'b':
+        thisfilter='DECAM_G'
+    elif camera[0] == 'r':
+        thisfilter='DECAM_R'
+    else:
+        thisfilter='DECAM_Z'
+
     elg_snr_mag=qa_dict["METRICS"]["ELG_SNR_MAG"]
     lrg_snr_mag=qa_dict["METRICS"]["LRG_SNR_MAG"]
     qso_snr_mag=qa_dict["METRICS"]["QSO_SNR_MAG"]
@@ -839,7 +846,7 @@ def plot_SNR(qa_dict,outfile):
                  )
 
     ax3.set_ylabel('Median S/N',fontsize=8)
-    ax3.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
+    ax3.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
     ax3.set_title("ELG", fontsize=8)
     select=np.where((elg_snr_mag[1] != np.array(None)) & (~np.isnan(elg_snr_mag[1])) & (np.abs(elg_snr_mag[1])!=np.inf))[0] #- avoid nan, None, inf in magnitudes for plotting 
     ax3.set_xlim(np.min(elg_snr_mag[1][select])-0.1,np.max(elg_snr_mag[1][select])+0.1)
@@ -852,7 +859,7 @@ def plot_SNR(qa_dict,outfile):
     ax3.plot(elg_mag,elg_fit,'y')
 
     ax4.set_ylabel('',fontsize=10)
-    ax4.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
+    ax4.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
     ax4.set_title("LRG",fontsize=8)
     select=np.where((lrg_snr_mag[1] != np.array(None)) & (~np.isnan(lrg_snr_mag[1])) & (np.abs(lrg_snr_mag[1])!=np.inf))[0]
     ax4.set_xlim(np.min(lrg_snr_mag[1][select])-0.1,np.max(lrg_snr_mag[1][select])+0.1)
@@ -864,7 +871,7 @@ def plot_SNR(qa_dict,outfile):
     ax4.plot(lrg_mag,lrg_fit,'y')
 
     ax5.set_ylabel('',fontsize=10)
-    ax5.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
+    ax5.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
     ax5.set_title("QSO", fontsize=8)
     select=np.where((qso_snr_mag[1] != np.array(None)) & (~np.isnan(qso_snr_mag[1])) & (np.abs(qso_snr_mag[1])!=np.inf))[0]
     ax5.set_xlim(np.min(qso_snr_mag[1][select])-0.1,np.max(qso_snr_mag[1][select])+0.1)
@@ -876,7 +883,7 @@ def plot_SNR(qa_dict,outfile):
     ax5.plot(qso_mag,qso_fit,'y')
 
     ax6.set_ylabel('',fontsize=10)
-    ax6.set_xlabel('Magnitude (DECAM_R)',fontsize=8)
+    ax6.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
     ax6.set_title("STD", fontsize=8)
     select=np.where((star_snr_mag[1] != np.array(None)) & (~np.isnan(star_snr_mag[1])) & (np.abs(star_snr_mag[1])!=np.inf))[0]
     ax6.set_xlim(np.min(star_snr_mag[1][select])-0.1,np.max(star_snr_mag[1][select])+0.1)
