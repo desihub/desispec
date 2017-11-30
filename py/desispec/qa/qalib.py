@@ -525,7 +525,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     return qadict
 
-def SNRFit(frame,params,fidboundary=None):
+def SNRFit(frame,camera,params,fidboundary=None):
     """
     Signal vs. Noise With fitting
 
@@ -549,7 +549,12 @@ def SNRFit(frame,params,fidboundary=None):
             and wavelength directions for each amp (output of slice_fidboundary function)
     Returns a dictionary similar to SignalVsNoise
     """
-    thisfilter='DECAM_R' #- should probably come from param. Hard coding for now
+    if camera[0] == 'b':
+        thisfilter='DECAM_G' #- should probably come from param. Hard coding for now
+    elif camera[0] =='r':
+        thisfilter='DECAM_R'
+    else:
+        thisfilter='DECAM_Z'
     if "Filter" in params:
         thisfilter=params["Filter"]
 #    def polyFun(*O):
