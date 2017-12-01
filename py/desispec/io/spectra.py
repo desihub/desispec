@@ -250,7 +250,10 @@ def read_frame_as_spectra(filename, night, expid, band, single=False):
     nspec = len(fr.fibermap)
    
     fmap = np.asarray(fr.fibermap.copy())
-    fmap = add_columns(fmap, NIGHT=np.int32(night), EXPID=np.int32(expid))
+    fmap = add_columns(fmap,
+                       ['NIGHT', 'EXPID', 'TILEID'],
+                       [np.int32(night), np.int32(expid), np.int32(fr.meta['TILEID'])],
+                       )
 
     # fmap = np.zeros(shape=(nspec,), dtype=spectra_columns())
     # for s in range(nspec):

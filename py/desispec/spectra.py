@@ -21,11 +21,7 @@ from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 
 from .maskbits import specmask
-from .io.fibermap import empty_fibermap
-from .io.util import add_columns
-
 from .resolution import Resolution
-
 
 # def spectra_columns():
 #     ret = [

@@ -13,8 +13,8 @@ import sys
 import re
 
 import numpy as np
-
 import healpy as hp
+import fitsio
 
 from desiutil.log import get_logger
 import desimodel.footprint
@@ -80,6 +80,8 @@ def main(args, comm=None):
     grph = None
 
     if rank == 0:
+        #- TODO: this could be parallelized, or converted into a pure
+        #- geometric calculation without having to read fibermaps
         if not args.pipeline:
             # We have to rescan all cframe files on the fly...
             # Put these into a "fake" dependency graph so that we
@@ -115,21 +117,18 @@ def main(args, comm=None):
 
                         cframe = io.read_frame(cf)
                         fmdata = cframe.fibermap
+                        fmdata = fitsio.read(cf, 'FIBERMAP',
+                                    columns=('FLAVOR', 'RA_TARGET', 'DEC_TARGET'))
 
                         if (cframe.meta["FLAVOR"] != "arc") and \
                             (cframe.meta["FLAVOR"] != "flat"):
-                            ra = np.array(fmdata["RA_TARGET"],
-                                dtype=np.float64)
-                            dec = np.array(fmdata["DEC_TARGET"],
-                                dtype=np.float64)
-                            bad = np.where(fmdata["TARGETID"] < 0)[0]
-                            ra[bad] = 0.0
-                            dec[bad] = 0.0
-                            # pix = hp.ang2pix(args.hpxnside, ra, dec, nest=True,
-                            #     lonlat=True)
+                            ra = fmdata["RA_TARGET"]
+                            dec = fmdata["DEC_TARGET"]
+                            ok = (ra == ra)  #- strip NaN
+                            ra = ra[ok]
+                            dec = dec[ok]
                             pix = desimodel.footprint.radec2pix(
                                                 args.hpxnside, ra, dec)
-                            pix[bad] = -1
                             for p in np.unique(pix):
                                 if p >= 0:
                                     sname = "spectra-{}-{}".format(args.hpxnside, p)
@@ -147,6 +146,81 @@ def main(args, comm=None):
             sgrph = pipe.graph_slice(grph, types=["spectra"], deps=True)
             pipe.graph_db_check(sgrph)
 
+            #- The pipeline dependency graph associates all frames from an
+            #- exposure with the spectra, not just the overlapping frames,
+            #- so trim down to just the ones that are needed before reading
+            #- the entire frame files
+            log.info("Trimming extraneous frames")
+            for name, nd in sorted(grph.items()):
+                if nd["type"] != "spectra":
+                    continue
+
+                keep = list()
+                discard = set()
+                for cf in nd['in']:
+                    #- Check if another frame from same spectro,expid has
+                    #- already been discarded
+                    night, cfname = pipe.graph_night_split(cf)
+                    spectrograph, expid = pipe.graph_name_split(cfname)[2:4]
+                    if (spectrograph, expid) in discard:
+                        log.debug('{} discarding {}'.format(name, cf))
+                        continue
+
+                    framefile = pipe.graph_path(cf)
+                    fibermap = fitsio.read(framefile, 'FIBERMAP',
+                                columns=('RA_TARGET', 'DEC_TARGET'))
+                    #- Strip NaN
+                    ii = fibermap['RA_TARGET'] == fibermap['RA_TARGET']
+                    fibermap = fibermap[ii]
+                    ra, dec = fibermap['RA_TARGET'], fibermap['DEC_TARGET']
+
+                    pix = desimodel.footprint.radec2pix(args.hpxnside, ra, dec)
+                    thispix = int(pipe.graph_name_split(name)[2])
+                    if thispix in pix:
+                        log.debug('{} keeping {}'.format(name, cf))
+                        keep.append(cf)
+                    else:
+                        log.debug('{} discarding {}'.format(name, cf))
+                        discard.add((spectrograph, expid))
+
+                nd['in'] = keep
+
+    #- TODO: parallelize this
+    #- Check for spectra files that have new frames
+    spectra_todo = list()
+    if rank == 0:
+        for name, nd in sorted(grph.items()):
+            if nd["type"] != "spectra":
+                continue
+            spectrafile = pipe.graph_path(name)
+            if not os.path.exists(spectrafile):
+                log.info('{} not yet done'.format(name))
+                spectra_todo.append(name)
+            else:
+                fm = fitsio.read(spectrafile, 'FIBERMAP')
+                frames_done = list()
+                for night, petal, expid in \
+                        set(zip(fm['NIGHT'],fm['PETAL_LOC'],fm['EXPID'])):
+                    for channel in ['b', 'r', 'z']:
+                        tmp = '{}_cframe-{}{}-{:08d}'.format(
+                                                      night,channel,petal,expid)
+                        frames_done.append(tmp)
+
+                frames_todo = set(nd['in']) - set(frames_done)
+
+                if len(frames_todo) == 0:
+                    log.info('All {} frames for {} already in spectra file; skipping'.format(
+                        len(nd['in']), name))
+                else:
+                    log.info('Adding {}/{} frames to {}'.format(
+                        len(frames_todo), len(nd['in']), name))
+                    nd['in'] = list(frames_todo)
+                    spectra_todo.append(name)
+
+        #- Only keep the graph entries with something to do
+        grph = pipe.graph_slice(grph, names=spectra_todo, deps=True)
+
+    #- Send graph to all ranks
     if comm is not None:
         grph = comm.bcast(grph, root=0)
 
@@ -230,10 +304,6 @@ def main(args, comm=None):
             meta["HPIX"] = spec_pixel[sp]
             specdata = Spectra(meta=meta, single=True)
 
-        #- TODO: add a check here if this pixel really needs to be done,
-        #- comparing set(zip(fm['NIGHT'], fm['EXPID'], fm['PETAL_LOC']))
-        #- formatted to match spec_frames[sp]
-
         if args.cache:
             # Clean out any cached frame data we don't need
             existing = list(framedata.keys())
@@ -262,7 +332,7 @@ def main(args, comm=None):
 
         # Update spectral data
 
-        for fr in spec_frames[sp]:
+        for fr in sorted(spec_frames[sp]):
             fdata = None
             if args.cache:
                 fdata = framedata[fr]
@@ -285,13 +355,15 @@ def main(args, comm=None):
             pix = desimodel.footprint.radec2pix(nside, ra, dec)
             pix[bad] = -1
 
-            for fm in zip(fmap["TARGETID"], pix):
-                if fm[1] == spec_pixel[sp]:
-                    targets.append(fm[0])
+            ii = (specdata.meta['HPIX'] == pix)
+            pixtargets = fdata.fibermap['TARGETID'][ii]
 
-            if len(targets) > 0:
+            if len(pixtargets) > 0:
                 # update with data from this frame
-                specdata.update(fdata.select(targets=targets))
+                log.debug('  ({:04d}) Adding {} targets from {} to {}'.format(
+                    rank, len(pixtargets), fr, sp))
+
+                specdata.update(fdata.select(targets=pixtargets))
 
             del fdata
 
@@ -303,6 +375,8 @@ def main(args, comm=None):
         log.info(msg)
         sys.stdout.flush()
 
+    log.info("Rank {} done with {} spectra files at {}".format(
+        rank, len(specs), time.asctime()))
 
     if comm is not None:
         comm.barrier()

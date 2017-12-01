@@ -81,37 +81,41 @@ def native_endian(data):
     else:
         return data.byteswap().newbyteorder()
 
-def add_columns(data, **extra):
+def add_columns(data, colnames, colvals):
     '''
     Adds extra columns to a data table
     
     Args:
         data: astropy Table or numpy structured array
-        **extra: named columns to add; the values can be either scalars
-          or vectors.
+        colnames: list of new column names to add
+        colvals: list of column values to add;
+            each element can be scalar or vector
     
     Returns:
         new table with extra columns added
     
     Example:
         fibermap = add_columns(fibermap,
-                        NIGHT=20102020, EXPID=np.arange(len(fibermap)))
+                    ['NIGHT', 'EXPID'], [20102020, np.arange(len(fibermap))])
+
+    Notes:
+        This is similar to `numpy.lib.recfunctions.append_fields`, but
+        it also accepts astropy Tables as the `data` input, and accepts
+        scalar values to expand as entries in `colvals`.
     '''
     if isinstance(data, Table):
         data = data.copy()
-        for key, value in extra.items():
+        for key, value in zip(colnames, colvals):
             data[key] = value
     else:
         nrows = len(data)
-        colnames = list()
-        colvals = list()
-        for key, value in extra.items():
-            colnames.append(key)
+        colvals = list(colvals)  #- copy so that we can modify
+        for i, value in enumerate(colvals):
             if np.isscalar(value):
-                colvals.append(np.full(nrows, value, dtype=type(value)))
+                colvals[i] = np.full(nrows, value, dtype=type(value))
             else:
                 assert len(value) == nrows
-                colvals.append(value)
+
         data = np.lib.recfunctions.append_fields(data, colnames, colvals, usemask=False)
 
     return data
