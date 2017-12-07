@@ -270,7 +270,10 @@ class Spectra(object):
         Returns (int):
             Number of spectra contained in this group.
         """
-        return len(self.fibermap)
+        if self.fibermap is not None:
+            return len(self.fibermap)
+        else:
+            return 0
 
 
     def num_targets(self):
@@ -280,7 +283,10 @@ class Spectra(object):
         Returns (int):
             Number of unique targets with spectra in this object.
         """
-        return len(np.unique(self.fibermap["TARGETID"]))
+        if self.fibermap is not None:
+            return len(np.unique(self.fibermap["TARGETID"]))
+        else:
+            return 0
 
 
     def select(self, nights=None, bands=None, targets=None, fibers=None, invert=False):
