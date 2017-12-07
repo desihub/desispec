@@ -78,10 +78,6 @@ class Spectra(object):
             if nspec is None:
                 nspec = flux[b].shape[0]
             if fibermap is not None:
-                # if fibermap.dtype != spectra_dtype():
-                #     print(fibermap.dtype)
-                #     print(spectra_dtype())
-                #     raise RuntimeError("fibermap data type does not match desispec.spectra.spectra_columns")
                 if len(fibermap) != flux[b].shape[0]:
                     raise RuntimeError("flux array number of spectra for band {} does not match fibermap".format(b))
             if ivar[b].shape != flux[b].shape:
