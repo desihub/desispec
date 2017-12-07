@@ -9,7 +9,9 @@ desispec Change Log
   from inputs (PR `#473`).
 * Removed deprecated Brick class, and unused coadds and redmonder zfind
   that were using Bricks (PR `#473`).
+* Adds skyline QA; fixes QA version usage (PR `#458`_).
 
+.. _`#458`: https://github.com/desihub/desispec/pull/458
 .. _`#473`: https://github.com/desihub/desispec/pull/446
 
 0.17.0 (2017-11-10)

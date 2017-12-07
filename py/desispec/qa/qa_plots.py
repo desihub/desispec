@@ -23,6 +23,9 @@ from desispec.io import makepath
 
 from desiutil.plots import plot_slices as du_pslices
 
+from desispec.io import read_params
+desi_params = read_params()
+
 
 def brick_zbest(outfil, zf, qabrick):
     """ QA plots for Flux calibration in a Frame
@@ -458,7 +461,7 @@ def frame_fluxcalib(outfil, qaframe, frame, fluxcalib):
     print('Wrote QA SkyRes file: {:s}'.format(outfil))
 
 
-def exposure_fibermap(channel, expid, metric, outfile=None):
+def exposure_fiberflat(channel, expid, metric, outfile=None):
     """ Generate an Exposure level plot of a FiberFlat metric
     Args:
         channel: str, e.g. 'b', 'r', 'z'
@@ -511,7 +514,7 @@ def exposure_fibermap(channel, expid, metric, outfile=None):
     metrics = np.concatenate(metrics)
     # Plot
     if outfile is None:
-        outfile='qa_{:08d}_{:s}_fibermap.png'.format(expid, channel)
+        outfile='qa_{:08d}_{:s}_fiberflat.png'.format(expid, channel)
     exposure_map(x,y,metrics, mlbl='Mean Flux',
                  title='Mean Flux for Exposure {:08d}, Channel {:s}'.format(expid, channel),
                  outfile=outfile)
@@ -863,6 +866,82 @@ def prod_time_series(qa_prod, qatype, metric, xlim=None, outfile=None, close=Tru
     else:  # Show
         plt.show()
 
+
+def skyline_resid(channel, sky_wave, sky_flux, sky_res, sky_ivar, outfile=None, pp=None,
+                   close=True, dpi=700):
+    """ QA plot for residuals on sky lines
+    ala Julien Guy
+    Args:
+        sky_wave:
+        sky_flux:
+        sky_res:
+        outfile:
+        pp:
+        close:
+        nslices:
+        dpi:
+
+    Returns:
+
+    """
+    # Grab the sky lines
+    sky_peaks = desi_params['qa']['skypeaks']['PARAMS']['{:s}_PEAKS'.format(channel.upper())]
+    npeaks = len(sky_peaks)
+
+    # Collapse the sky data
+    #sky_wave = np.median(sky_wave, axis=0)
+    #sky_res = np.median(sky_res, axis=0)
+    #sky_ivar = np.median(sky_ivar, axis=0)
+    #sky_flux = np.median(sky_flux, axis=0)
+
+    # Start the plot
+    fig = plt.figure(figsize=(8, 5.0))
+    gs = gridspec.GridSpec(npeaks, 1)
+
+    wv_off = 15.
+
+    clrs = dict(b='b', r='r', z='purple')
+
+    # Loop on peaks
+    for ss,peak in enumerate(sky_peaks):
+        ax= plt.subplot(gs[ss])
+
+        # Zoom in
+        pix = np.abs(sky_wave[0,:]-peak) < wv_off
+
+        # Calculate
+        orig = np.sqrt(np.mean(sky_ivar[:,pix] * sky_res[:,pix]**2, axis=0))
+        lbl=r"$\sqrt{ <flux^2/\sigma^2>}$"
+        if ss > 0:
+            lbl = None
+        ax.plot(sky_wave[0,pix], orig, color=clrs[channel], label=lbl)
+
+        # Sky scaling
+        #lbl=r"$\sqrt{ < 1+(0.05 sky)^2/\sigma^2 > }$"
+
+        # Labels
+        ax.set_ylabel(r'$n \sigma$')
+        #ax_flux.set_ylabel('Residual Flux')
+        ax.set_ylim(bottom=0.)
+        ax.axhline(1., color='gray', linestyle='dashed')
+
+        if ss == 0:
+            legend = ax.legend(loc='upper left', borderpad=0.3,
+                        handletextpad=0.3, fontsize='small')
+
+    # Finish
+    plt.tight_layout(pad=0.1, h_pad=0.0, w_pad=0.0)
+    if outfile is not None:
+        plt.savefig(outfile, dpi=dpi)
+        if close:
+            plt.close()
+    elif pp is not None:
+        pp.savefig()
+        if close:
+            plt.close()
+            pp.close()
+    else:  # Show
+        plt.show()
 
 def skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=None, pp=None,
                       close=True, nslices=20, dpi=700):

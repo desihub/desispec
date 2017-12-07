@@ -203,6 +203,7 @@ def integrate_spec(wave,flux):
     integral=np.trapz(flux,wave)
     return integral
 
+
 def sky_continuum(frame, wrange1, wrange2):
     """ 
     QA Algorithm for sky continuum.
@@ -244,6 +245,89 @@ def sky_continuum(frame, wrange1, wrange2):
 
     # Return
     return skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont
+
+
+def sky_peaks(param, frame, dw=2, amps=False):
+
+    # define sky peaks and wavelength region around peak flux to be integrated
+    camera = frame.meta['CAMERA']
+    peaks=np.array(param['{:s}_PEAKS'.format(camera[0].upper())])
+
+    nspec_counts=[]
+    sky_counts=[]
+    nspec_counts_rms=[]
+    amp1=[]
+    amp2=[]
+    amp3=[]
+    amp4=[]
+    rmsamp1=[]
+    rmsamp2=[]
+    rmsamp3=[]
+    rmsamp4=[]
+    for i in range(frame.flux.shape[0]):
+        peak_fluxes = []
+        for peak in peaks:
+            iwave = np.argmin(np.abs(frame.wave-peak))
+            peak_fluxes.append(np.trapz(frame.flux[i,iwave-dw:iwave+dw+1]))
+
+        # Sum
+        sum_counts=np.sum(peak_fluxes)/frame.meta["EXPTIME"]
+        sum_counts_rms=np.sum(peak_fluxes)/np.sqrt(frame.meta["EXPTIME"])  # This looks funny to me..
+        nspec_counts.append(sum_counts)
+        nspec_counts_rms.append(sum_counts_rms)
+
+        # Sky?
+        if frame.fibermap['OBJTYPE'][i]=='SKY':
+            sky_counts.append(sum_counts)
+            '''
+            if amps:
+                if frame.fibermap['FIBER'][i]<240:
+                    if camera[0]=="b":
+                        amp1_flux=peak1_flux/frame.meta["EXPTIME"]
+                        amp3_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                        rmsamp1_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
+                        rmsamp3_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    if camera[0]=="r":
+                        amp1_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
+                        amp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                        rmsamp1_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                        rmsamp3_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    if camera[0]=="z":
+                        amp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                        amp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                        rmsamp1_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                        rmsamp3_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    amp1.append(amp1_flux)
+                    amp3.append(amp3_flux)
+                    rmsamp1.append(rmsamp1_flux)
+                    rmsamp3.append(rmsamp3_flux)
+                if frame.fibermap['FIBER'][i]>260:
+                    if camera[0]=="b":
+                        amp2_flux=peak1_flux/frame.meta["EXPTIME"]
+                        amp4_flux=np.sum((peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                        rmsamp2_flux=peak1_flux/np.sqrt(frame.meta["EXPTIME"])
+                        rmsamp4_flux=np.sum((peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    if camera[0]=="r":
+                        amp2_flux=np.sum((peak1_flux+peak2_flux)/frame.meta["EXPTIME"])
+                        amp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/frame.meta["EXPTIME"])
+                        rmsamp2_flux=np.sum((peak1_flux+peak2_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                        rmsamp4_flux=np.sum((peak3_flux+peak4_flux+peak5_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    if camera[0]=="z":
+                        amp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/frame.meta["EXPTIME"])
+                        amp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/frame.meta["EXPTIME"])
+                        rmsamp2_flux=np.sum((peak1_flux+peak2_flux+peak3_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                        rmsamp4_flux=np.sum((peak4_flux+peak5_flux+peak6_flux)/np.sqrt(frame.meta["EXPTIME"]))
+                    amp2.append(amp2_flux)
+                    amp4.append(amp4_flux)
+                    rmsamp2.append(rmsamp2_flux)
+                    rmsamp4.append(rmsamp4_flux)
+            '''
+
+    nspec_counts = np.array(nspec_counts)
+    sky_counts = np.array(sky_counts)
+    # Return
+    return nspec_counts, sky_counts
+
 
 def sky_resid(param, frame, skymodel, quick_look=False):
     """ QA Algorithm for sky residual
@@ -299,7 +383,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
-    qadict['RESID_RMS'] = []
+    qadict['RESIDRMS'] = []
 
     qadict["SKY_FIBERID"]=skyfibers.tolist()
     #- Residuals in wave and fiber axes
@@ -441,7 +525,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     return qadict
 
-def SNRFit(frame,params,fidboundary=None):
+def SNRFit(frame,camera,params,fidboundary=None):
     """
     Signal vs. Noise With fitting
 
@@ -465,7 +549,12 @@ def SNRFit(frame,params,fidboundary=None):
             and wavelength directions for each amp (output of slice_fidboundary function)
     Returns a dictionary similar to SignalVsNoise
     """
-    thisfilter='DECAM_R' #- should probably come from param. Hard coding for now
+    if camera[0] == 'b':
+        thisfilter='DECAM_G' #- should probably come from param. Hard coding for now
+    elif camera[0] =='r':
+        thisfilter='DECAM_R'
+    else:
+        thisfilter='DECAM_Z'
     if "Filter" in params:
         thisfilter=params["Filter"]
 #    def polyFun(*O):
@@ -500,6 +589,7 @@ def SNRFit(frame,params,fidboundary=None):
     #- purposes.
 
     #- Loop over each target type, and associate SNR and image magnitudes for each type.
+    fidsnr_tgt=[]
     for T in ["ELG","QSO","LRG","STD"]:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
@@ -533,7 +623,7 @@ def SNRFit(frame,params,fidboundary=None):
             vs=out[0]
             cov=out[1]
             qadict["%s_FITRESULTS"%T]=[vs,cov]
-            qadict["%s_FIDMAG_SNR"%T]=10**fitfunc(fmag,*out[0])
+            fidsnr_tgt.append(10**fitfunc(fmag,*out[0]))
             #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
         except ValueError:
             log.warning("In fit of {}, data contain NANs! can't fit".format(T))
@@ -542,7 +632,7 @@ def SNRFit(frame,params,fidboundary=None):
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
             qadict["%s_FITRESULTS"%T]=[vs,cov]
-            qadict["%s_FIDMAG_SNR"%T]=np.nan
+            fidsnr_tgt.append(np.nan)
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
             vs=np.array(initialParams)
@@ -550,21 +640,22 @@ def SNRFit(frame,params,fidboundary=None):
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
             qadict["%s_FITRESULTS"%T]=[vs,cov]
-            qadict["%s_FIDMAG_SNR"%T]=np.nan
+            fidsnr_tgt.append(np.nan)
         except scipy.optimize.OptimizeWarning:
             log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
             vs=out[0]
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
             qadict["%s_FITRESULTS"%T]=[vs,cov]
-            qadict["%s_FIDMAG_SNR"%T]=np.nan
+            fidsnr_tgt.append(np.nan)
             
         qadict["%s_FIBERID"%T]=fibers.tolist()
         qadict["%s_SNR_MAG"%T]=np.array((medsnr,mags))
         qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
 
-        qadict["RA"]=frame.fibermap['RA_TARGET']
-        qadict["DEC"]=frame.fibermap['DEC_TARGET']
+    qadict["FIDSNR_TGT"]=fidsnr_tgt
+    qadict["RA"]=frame.fibermap['RA_TARGET']
+    qadict["DEC"]=frame.fibermap['DEC_TARGET']
 
     return qadict
 

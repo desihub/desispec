@@ -188,9 +188,9 @@ class TestQA(unittest.TestCase):
         write_qa_exposure(self.qafile_exp, qaexp)
 
     def test_exposure_fibermap_plot(self):
-        from desispec.qa.qa_plots import exposure_fibermap
+        from desispec.qa.qa_plots import exposure_fiberflat
         self._write_flat_files()
-        exposure_fibermap('b', self.expid, 'meanflux', outfile=self.exp_fmap_plot)
+        exposure_fiberflat('b', self.expid, 'meanflux', outfile=self.exp_fmap_plot)
 
     """
     # This needs to run as a script for the figure generation to pass Travis..

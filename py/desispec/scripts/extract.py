@@ -53,6 +53,7 @@ def parse(options=None):
                         help="number of wavelength steps per divide-and-conquer extraction step")
     parser.add_argument("-v", "--verbose", action="store_true", help="print more stuff")
     parser.add_argument("--mpi", action="store_true", help="Use MPI for parallelism")
+    parser.add_argument("--decorrelate-fibers", action="store_true", help="Not recommended")
 
     args = None
     if options is None:
@@ -141,7 +142,7 @@ regularize: {regularize}
 
     #- The actual extraction
     results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
-                 regularize=args.regularize, ndecorr=True,
+                 regularize=args.regularize, ndecorr=args.decorrelate_fibers,
                  bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
                  full_output=True, nsubbundles=args.nsubbundles)
     flux = results['flux']
@@ -328,7 +329,7 @@ def main_mpi(args, comm=None):
         #- The actual extraction
         try:
             results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b],
-                bnspec[b], wave, regularize=args.regularize, ndecorr=True,
+                bnspec[b], wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
                 full_output=True, nsubbundles=args.nsubbundles)
 

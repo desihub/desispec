@@ -42,7 +42,9 @@ from desispec import util
 class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
                 fibers=None, spectrograph=None, meta=None, fibermap=None,
-                chi2pix=None):
+                 chi2pix=None,
+                 wsigma=None,ndiag=21
+    ):
         """
         Lightweight wrapper for multiple spectra on a common wavelength grid
 
@@ -63,7 +65,8 @@ class Frame(object):
             fibermap: fibermap table
             chi2pix: 2D[nspec, nwave] chi2 of 2D model to pixel-level data
                 for pixels that contributed to each flux bin
-
+        Parameters below allow on-the-fly resolution calculation
+            wsigma: 2D[nspec,nwave] sigma widths for each wavelength bin for all fibers
         Notes:
             spectrograph input is used only if fibers is None.  In this case,
             it assumes nspec_per_spectrograph = flux.shape[0] and calculates
@@ -94,7 +97,7 @@ class Frame(object):
         self.fibermap = fibermap
         self.nspec, self.nwave = self.flux.shape
         self.chi2pix = chi2pix
-
+        self.ndiag=ndiag
         fibers_per_spectrograph = 500   #- hardcode; could get from desimodel
 
         if mask is None:
@@ -109,10 +112,27 @@ class Frame(object):
                raise ValueError("Wrong dimensions for resolution_data[nspec, ndiag, nwave]")
 
         #- Maybe setup non-None identity matrix resolution matrix instead?
+        self.wsigma=wsigma
         self.resolution_data = resolution_data
         if resolution_data is not None:
+            self.wsigma=None #ignore width coefficients if resolution data is given explicitly
+            self.ndiag=None 
             self.R = np.array( [Resolution(r) for r in resolution_data] )
-
+        elif wsigma is not None:
+            from desispec.quicklook.qlresolution import QuickResolution
+            assert ndiag is not None
+            r=[]
+            for sigma in wsigma:
+                r.append(QuickResolution(sigma=sigma,ndiag=self.ndiag))
+            self.R=np.array(r)
+        else:
+            #SK I believe this should be error, but looking at the
+            #tests frame objects are allowed to not to have resolution data
+            # thus I changed value error to a simple warning message.
+            log = get_logger()
+            log.warning("Frame object is constructed without resolution data or respective "\
+                        "sigma widths. Resolution will not be available")
+            # raise ValueError("Need either resolution_data or coefficients to generate it")
         self.spectrograph = spectrograph
 
         # Deal with Fibers (these must be set!)
@@ -223,10 +243,15 @@ class Frame(object):
         else:
             chi2pix = None
 
+        wsigma=None
+        if self.wsigma is not None:
+            wsigma=self.wsigma[index]
+
         result = Frame(self.wave, self.flux[index], self.ivar[index],
                     self.mask[index], resolution_data=rdata,
                     fibers=self.fibers[index], spectrograph=self.spectrograph,
-                    meta=self.meta, fibermap=fibermap, chi2pix=chi2pix)
+                       meta=self.meta, fibermap=fibermap, chi2pix=chi2pix,
+                       wsigma=wsigma,ndiag=self.ndiag)
 
         return result
 

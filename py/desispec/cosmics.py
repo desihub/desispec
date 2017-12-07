@@ -10,7 +10,89 @@ from desiutil.log import get_logger
 import numpy as np
 import math
 import copy
+import scipy.ndimage
 from desispec.maskbits import ccdmask
+from desispec.maskbits import specmask
+
+def reject_cosmic_rays_1d(frame,nsig=3,psferr=0.05) :
+    """Use resolution matrix in frame to detect spikes in the spectra that
+    are narrower than the PSF, and mask them"""
+    log=get_logger()
+    
+    log.info("subtract continuum to flux")
+    tflux=np.zeros(frame.flux.shape)
+    for fiber in range(frame.nspec) :
+        tflux[fiber]=frame.flux[fiber]-scipy.ndimage.filters.median_filter(frame.flux[fiber],200,mode='constant')
+    log.info("done")
+        
+    # we do not use the mask here because we want to re-detect cosmics
+    # to broaden the masked area if needed
+    # variance of flux
+    var=(frame.ivar>0)/(frame.ivar+(frame.ivar==0)) 
+    var[var==0]=(np.max(var)*1000.) # a large number
+    var += (psferr*tflux)**2 # add a psf error
+    
+    # positive peaks
+    peaks=np.zeros(tflux.shape)
+    peaks[:,1:-1]=(tflux[:,1:-1]>tflux[:,:-2])*(tflux[:,1:-1]>tflux[:,2:])
+    
+    # gradients on both sides
+    dfp=np.zeros(tflux.shape)
+    dfm=np.zeros(tflux.shape)    
+    dfp[:,1:-1]=(tflux[:,1:-1]-tflux[:,2:])
+    dfm[:,1:-1]=(tflux[:,1:-1]-tflux[:,:-2])
+    # variance of gradients
+    vp=np.zeros(tflux.shape)
+    vm=np.zeros(tflux.shape)
+    vp[:,1:-1]=(var[:,1:-1]+var[:,2:])
+    vm[:,1:-1]=(var[:,1:-1]+var[:,:-2])
+    # chi2 of gradients
+    chi2p=dfp**2*(dfp>0)*(tflux>0)/(vp+(vp==0))
+    chi2m=dfm**2*(dfm>0)*(tflux>0)/(vm+(vm==0))
+        
+    for fiber in range(chi2m.shape[0]) :
+        R=frame.R[fiber]
+        
+        # potential cosmics 
+        selection=np.where( ( (chi2p[fiber]>nsig**2) | (chi2m[fiber]>nsig**2) ) & (peaks[fiber]>0) )[0]
+        if selection.size==0 : continue # no potential cosmic
+        
+        # loop on peaks
+        for i in selection :
+            
+            # relative variations
+            rdfpi=dfp[fiber,i]/tflux[fiber,i]
+            rdfmi=dfm[fiber,i]/tflux[fiber,i]
+            # error
+            errp=np.sqrt(vp[fiber,i])/tflux[fiber,i]
+            errm=np.sqrt(vm[fiber,i])/tflux[fiber,i]
+            
+            # profile from resolution matrix
+            r  =  R.data[:,i]
+            d  = r.size//2
+            rdrp = 1-r[d+1]/r[d]
+            rdrm = 1-r[d-1]/r[d]
+            snrp = (rdfpi-rdrp)/errp
+            snrm = (rdfmi-rdrm)/errm
+            
+            # S/N at peak (difference between peak at i and PSF profile at peak from adjacent pixels) 
+            # snr  = (dflux[fiber,i]-psfpeak)/np.sqrt( 1./(divar[fiber,i]+(divar[fiber,i]==0))+dr[d]**2/a )
+            snr=max(snrp,snrm)
+            if snr>nsig :
+                # also mask neighboring pixels if >nsig
+                d=2
+                b=i-d
+                e=i+d+1
+                previous_nmasked=np.sum(frame.mask[fiber,b:e]>0)
+                frame.mask[fiber,b:e][np.sqrt(frame.ivar[fiber,b:e])*tflux[fiber,b:e]>nsig] |= specmask.COSMIC
+                new_nmasked=np.sum(frame.mask[fiber,b:e]>0)
+                nmasked=(new_nmasked-previous_nmasked)
+                if nmasked>0 :
+                    if previous_nmasked>0 :
+                        log.info("fiber {} wave={} S/N={} broaden cosmic mask by {} pix".format(fiber,int(frame.wave[i]),int(snr),nmasked))
+                    else :
+                        log.info("fiber {} wave={} S/N={} add cosmic mask of {} pix".format(fiber,int(frame.wave[i]),int(snr),nmasked))
+    log.info("done")
 
 def reject_cosmic_rays_ala_sdss_single(img,selection,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.

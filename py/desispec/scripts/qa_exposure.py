@@ -4,13 +4,13 @@ from __future__ import absolute_import, division
 from desiutil.log import get_logger
 import argparse
 
-from  desispec import _version as desis_v
+from desispec.qa import __offline_qa_version__
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Generate Exposure Level QA [v{:s}]".format(desis_v.__offline_qa_version__))
+    parser = argparse.ArgumentParser(description="Generate Exposure Level QA [v{:s}]".format(__offline_qa_version__))
     parser.add_argument('--expid', type = int, required=True, help='Exposure ID')
     parser.add_argument('--qatype', type = str, required=True,
-                        help="Type of QA to generate [fibermap]")
+                        help="Type of QA to generate [fiberflat]")
     parser.add_argument('--channels', type=str, help="List of channels to include. Default = b,r,z]")
     parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
@@ -27,7 +27,7 @@ def parse(options=None):
 def main(args) :
 
     from desispec.io import meta
-    from desispec.qa.qa_plots import exposure_fibermap
+    from desispec.qa.qa_plots import exposure_fiberflat
     log=get_logger()
 
     log.info("starting")
@@ -43,7 +43,7 @@ def main(args) :
     # Fiber QA
     if args.qatype == 'fibermap':
         for channel in channels:
-            exposure_fibermap(channel, args.expid, 'meanflux')
+            exposure_fiberflat(channel, args.expid, 'meanflux')
 
 
 
