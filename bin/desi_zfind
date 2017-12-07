@@ -1,8 +1,0 @@
-#!/usr/bin/env python
-# See top-level LICENSE.rst file for Copyright information
-
-import desispec.scripts.zfind as zfind
-
-if __name__ == '__main__':
-    args = zfind.parse()
-    zfind.main(args)

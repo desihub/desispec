@@ -63,7 +63,11 @@ fibermap_comments = dict(
     RA_OBS       = "RA of obs from (X,Y)_FVCOBS and optics [deg]",
     DEC_OBS      = "dec of obs from (X,Y)_FVCOBS and optics [deg]",
     MAG          = "magnitudes in each of the filters",
-    FILTER       = "SDSS_R, DECAM_Z, WISE1, etc."
+    FILTER       = "SDSS_R, DECAM_Z, WISE1, etc.",
+    #- Optional columns, used by spectra but not by frames
+    NIGHT        = "Night of exposure YYYYMMDD",
+    EXPID        = "Exposure ID",
+    TILEID       = "Tile ID",
 )
 
 def empty_fibermap(nspec, specmin=0):
