@@ -167,7 +167,8 @@ class ObsList(SchemaMixin, Base):
     """Representation of the obslist table.
     """
 
-    tileid = Column(Integer, primary_key=True, autoincrement=False)
+    expid = Column(Integer, primary_key=True, autoincrement=False)
+    tileid = Column(Integer, nullable=False)
     passnum = Column(Integer, nullable=False)
     ra = Column(Float, nullable=False)
     dec = Column(Float, nullable=False)
@@ -265,8 +266,8 @@ class FiberAssign(SchemaMixin, Base):
                 "brickname='{0.brickname}')>").format(self)
 
 
-def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
-              chunksize=50000, maxrows=0):
+def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
+              q3c=False, chunksize=50000, maxrows=0):
     """Load a data file into the database, assuming that column names map
     to database column names with no surprises.
 
@@ -283,6 +284,8 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
     convert : :class:`dict`, optional
         If set, convert the data for a named (database) column using the
         supplied function.
+    index : :class:`str`, optional
+        If set, add a column that just counts the number of rows.
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     chunksize : :class:`int`, optional
@@ -350,6 +353,9 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, q3c=False,
             i = data_names.index(col)
             data_list[i] = [convert[col](x) for x in data_list[i]]
     log.info("Column conversion complete on %s.", tn)
+    if index is not None:
+        data_list.insert(0, list(range(1, maxrows+1)))
+        data_names.insert(0, index)
     data_rows = list(zip(*data_list))
     del data_list
     log.info("Converted columns into rows on %s.", tn)
@@ -696,6 +702,7 @@ def main():
                'hdu': 'TRUTH',
                'expand': None,
                'convert': None,
+               'index': None,
                'q3c': False,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},
@@ -704,6 +711,7 @@ def main():
                'hdu': 'TARGETS',
                'expand': None,
                'convert': None,
+               'index': None,
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},
@@ -713,6 +721,7 @@ def main():
                'expand': {'PASS': 'passnum'},
                # 'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
                'convert': None,
+               'index': expid,
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},]
