@@ -721,7 +721,7 @@ def main():
                'expand': {'PASS': 'passnum'},
                # 'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
                'convert': None,
-               'index': expid,
+               'index': 'expid',
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},]
