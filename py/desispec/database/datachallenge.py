@@ -183,10 +183,12 @@ class ObsList(SchemaMixin, Base):
     moonalt = Column(Float, nullable=False)
     moonsep = Column(Float, nullable=False)
     program = Column(String, nullable=False)
+    flavor = Column(String, nullable=False)
     # dateobs = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self):
         return ("<ObsList(" +
+                "expid={0.expid:d}, " +
                 "tileid={0.tileid:d}, " +
                 "passnum={0.passnum:d}, " +
                 "ra={0.ra:f}, dec={0.dec:f}, " +
@@ -200,7 +202,8 @@ class ObsList(SchemaMixin, Base):
                 "moonfrac={0.moonfrac:f}, " +
                 "moonalt={0.moonalt:f}, " +
                 "moonsep={0.moonsep:f}" +
-                "program='{0.program}'" +
+                "program='{0.program}'," +
+                "flavor='{0.flavor}'" +
                 ")>").format(self)
 
 
@@ -356,6 +359,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
     if index is not None:
         data_list.insert(0, list(range(1, maxrows+1)))
         data_names.insert(0, index)
+        log.info("Added index column '%s'.", index)
     data_rows = list(zip(*data_list))
     del data_list
     log.info("Converted columns into rows on %s.", tn)
@@ -717,11 +721,11 @@ def main():
                'maxrows': options.maxrows},
               {'filepath': join(options.datapath, 'survey', 'exposures.fits'),
                'tcls': ObsList,
-               'hdu': 1,
+               'hdu': 'EXPOSURES',
                'expand': {'PASS': 'passnum'},
                # 'convert': {'dateobs': lambda x: convert_dateobs(x, tzinfo=utc)},
                'convert': None,
-               'index': 'expid',
+               'index': None,
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},]
