@@ -56,8 +56,8 @@ class Truth(SchemaMixin, Base):
     flux_g = Column(Float, nullable=False)
     flux_r = Column(Float, nullable=False)
     flux_z = Column(Float, nullable=False)
-    flux_W1 = Column(Float, nullable=False)
-    flux_W2 = Column(Float, nullable=False)
+    flux_w1 = Column(Float, nullable=False)
+    flux_w2 = Column(Float, nullable=False)
     oiiflux = Column(Float, nullable=False)
     hbetaflux = Column(Float, nullable=False)
     teff = Column(Float, nullable=False)
@@ -78,8 +78,8 @@ class Truth(SchemaMixin, Base):
                 "flux_g={0.flux_g:f}, " +
                 "flux_r={0.flux_r:f}, " +
                 "flux_z={0.flux_z:f}, " +
-                "flux_W1={0.flux_W1:f}, " +
-                "flux_W2={0.flux_W2:f}, " +
+                "flux_w1={0.flux_w1:f}, " +
+                "flux_w2={0.flux_w2:f}, " +
                 "oiiflux={0.oiiflux:f}, " +
                 "hbetaflux={0.hbetaflux:f}, " +
                 "teff={0.teff:f}, " +
@@ -100,8 +100,8 @@ class Target(SchemaMixin, Base):
     flux_g = Column(Float, nullable=False)
     flux_r = Column(Float, nullable=False)
     flux_z = Column(Float, nullable=False)
-    flux_W1 = Column(Float, nullable=False)
-    flux_W2 = Column(Float, nullable=False)
+    flux_w1 = Column(Float, nullable=False)
+    flux_w2 = Column(Float, nullable=False)
     shapeexp_r = Column(Float, nullable=False)
     shapeexp_e1 = Column(Float, nullable=False)
     shapeexp_e2 = Column(Float, nullable=False)
@@ -117,8 +117,8 @@ class Target(SchemaMixin, Base):
     mw_transmission_g = Column(Float, nullable=False)
     mw_transmission_r = Column(Float, nullable=False)
     mw_transmission_z = Column(Float, nullable=False)
-    mw_transmission_W1 = Column(Float, nullable=False)
-    mw_transmission_W2 = Column(Float, nullable=False)
+    mw_transmission_w1 = Column(Float, nullable=False)
+    mw_transmission_w2 = Column(Float, nullable=False)
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     desi_target = Column(BigInteger, nullable=False)
     bgs_target = Column(BigInteger, nullable=False)
@@ -135,8 +135,8 @@ class Target(SchemaMixin, Base):
                 "flux_u={0.flux_u:f}, " +
                 "flux_g={0.flux_g:f}, " +
                 "flux_r={0.flux_r:f}, " +
-                "flux_W1={0.flux_W1:f}, " +
-                "flux_W2={0.flux_W2:f}, " +
+                "flux_w1={0.flux_w1:f}, " +
+                "flux_w2={0.flux_w2:f}, " +
                 "shapeexp_r={0.shapeexp_r:f}," +
                 "shapeexp_e1={0.shapeexp_e1:f}," +
                 "shapeexp_e2={0.shapeexp_e2:f}," +
@@ -152,8 +152,8 @@ class Target(SchemaMixin, Base):
                 "mw_transmission_g={0.mw_transmission_g:f}, " +
                 "mw_transmission_r={0.mw_transmission_r:f}, " +
                 "mw_transmission_z={0.mw_transmission_z:f}, " +
-                "mw_transmission_W1={0.mw_transmission_W1:f}, " +
-                "mw_transmission_W2={0.mw_transmission_W2:f}, " +
+                "mw_transmission_w1={0.mw_transmission_w1:f}, " +
+                "mw_transmission_w2={0.mw_transmission_w2:f}, " +
                 "targetid={0.targetid:d}, " +
                 "desi_target={0.desi_target:d}, bgs_target={0.bgs_target}, " +
                 "mws_target={0.mws_target:d}, " +
@@ -702,16 +702,7 @@ def main():
               {'filepath': join(options.datapath, 'targets', 'targets.fits'),
                'tcls': Target,
                'hdu': 'TARGETS',
-               'expand': {'DECAM_FLUX': ('decam_flux_u', 'decam_flux_g',
-                                         'decam_flux_r', 'decam_flux_i',
-                                         'decam_flux_z', 'decam_flux_Y'),
-                          'WISE_FLUX': ('wise_flux_W1', 'wise_flux_W2'),
-                          'DECAM_DEPTH': ('decam_depth_u', 'decam_depth_g',
-                                          'decam_depth_r', 'decam_depth_i',
-                                          'decam_depth_z', 'decam_depth_Y'),
-                          'DECAM_GALDEPTH': ('decam_galdepth_u', 'decam_galdepth_g',
-                                             'decam_galdepth_r', 'decam_galdepth_i',
-                                             'decam_galdepth_z', 'decam_galdepth_Y'),},
+               'expand': None,
                'convert': None,
                'q3c': postgresql,
                'chunksize': options.chunksize,
