@@ -6,6 +6,7 @@ desispec Change Log
 -------------------
 
 * Adds skyline QA; fixes QA version usage (PR `#458`_).
+* Fixes write_bintable bug if extname=None; fixes missing header comments
 
 .. _`#458`: https://github.com/desihub/desispec/pull/458
 
