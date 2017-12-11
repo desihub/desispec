@@ -21,82 +21,7 @@ from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 
 from .maskbits import specmask
-
 from .resolution import Resolution
-
-
-def spectra_columns():
-    ret = [
-        ('OBJTYPE', (str, 10)),
-        ('TARGETCAT', (str, 20)),
-        ('BRICKNAME', (str, 8)),
-        ('TARGETID', 'i8'),
-        ('DESI_TARGET', 'i8'),
-        ('BGS_TARGET', 'i8'),
-        ('MWS_TARGET', 'i8'),
-        ('MAG', 'f4', (5,)),
-        ('FILTER', (str, 10), (5,)),
-        ('SPECTROID', 'i4'),
-        ('POSITIONER', 'i4'),   #- deprecated; use LOCATION
-        ('LOCATION',   'i4'),
-        ('DEVICE_LOC', 'i4'),
-        ('PETAL_LOC',  'i4'),
-        ('FIBER', 'i4'),
-        ('LAMBDAREF', 'f4'),
-        ('RA_TARGET', 'f8'),
-        ('DEC_TARGET', 'f8'),
-        ('RA_OBS', 'f8'), ('DEC_OBS', 'f8'),
-        ('X_TARGET', 'f8'), ('Y_TARGET', 'f8'),
-        ('X_FVCOBS', 'f8'), ('Y_FVCOBS', 'f8'),
-        ('Y_FVCERR', 'f4'), ('X_FVCERR', 'f4'),
-        ("NIGHT","i4"),
-        ("EXPID","i4")
-    ]
-    return ret
-
-
-def spectra_comments():
-    ret = dict(
-        FIBER        = "Fiber ID [0-4999]",
-        POSITIONER   = "Positioner ID [0-4999] (deprecated)",
-        LOCATION     = "Positioner location ID 1000*PETAL + DEVICE",
-        PETAL_LOC    = "Petal location on focal plane [0-9]",
-        DEVICE_LOC   = "Device location on petal [0-542]",
-        SPECTROID    = "Spectrograph ID [0-9]",
-        TARGETID     = "Unique target ID",
-        TARGETCAT    = "Name/version of the target catalog",
-        BRICKNAME    = "Brickname from target imaging",
-        OBJTYPE      = "Target type [ELG, LRG, QSO, STD, STAR, SKY]",
-        LAMBDAREF    = "Reference wavelength at which to align fiber",
-        DESI_TARGET  = "DESI dark+calib targeting bit mask",
-        BGS_TARGET   = "DESI Bright Galaxy Survey targeting bit mask",
-        MWS_TARGET   = "DESI Milky Way Survey targeting bit mask",
-        RA_TARGET    = "Target right ascension [degrees]",
-        DEC_TARGET   = "Target declination [degrees]",
-        X_TARGET     = "X on focal plane derived from (RA,DEC)_TARGET",
-        Y_TARGET     = "Y on focal plane derived from (RA,DEC)_TARGET",
-        X_FVCOBS     = "X location observed by Fiber View Cam [mm]",
-        Y_FVCOBS     = "Y location observed by Fiber View Cam [mm]",
-        X_FVCERR     = "X location uncertainty from Fiber View Cam [mm]",
-        Y_FVCERR     = "Y location uncertainty from Fiber View Cam [mm]",
-        RA_OBS       = "RA of obs from (X,Y)_FVCOBS and optics [deg]",
-        DEC_OBS      = "dec of obs from (X,Y)_FVCOBS and optics [deg]",
-        MAG          = "magnitudes in each of the filters",
-        FILTER       = "SDSS_R, DECAM_Z, WISE1, etc.",
-        NIGHT        = "Night of exposure YYYYMMDD",
-        EXPID        = "Exposure ID"
-    )
-    return ret
-
-
-def spectra_dtype():
-    """
-    Return the astropy table dtype after encoding.
-    """
-    pre = np.zeros(shape=(1,), dtype=spectra_columns())
-    post = encode_table(pre)
-    return post.dtype
-
 
 class Spectra(object):
     """
@@ -153,10 +78,6 @@ class Spectra(object):
             if nspec is None:
                 nspec = flux[b].shape[0]
             if fibermap is not None:
-                if fibermap.dtype != spectra_dtype():
-                    print(fibermap.dtype)
-                    print(spectra_dtype())
-                    raise RuntimeError("fibermap data type does not match desispec.spectra.spectra_columns")
                 if len(fibermap) != flux[b].shape[0]:
                     raise RuntimeError("flux array number of spectra for band {} does not match fibermap".format(b))
             if ivar[b].shape != flux[b].shape:
@@ -183,15 +104,7 @@ class Spectra(object):
         if fibermap is not None:
             self.fibermap = fibermap.copy()
         else:
-            # create bogus fibermap table.
-            fmap = np.zeros(shape=(nspec,), dtype=spectra_columns())
-            if nspec > 0:
-                fake = np.arange(nspec, dtype=np.int32)
-                fiber = np.mod(fake, 5000).astype(np.int32)
-                expid = np.floor_divide(fake, 5000).astype(np.int32)
-                fmap[:]["EXPID"] = expid
-                fmap[:]["FIBER"] = fiber
-            self.fibermap = encode_table(fmap)   #- unicode -> bytes
+            self.fibermap = None
 
         self.wave = {}
         self.flux = {}
@@ -280,7 +193,10 @@ class Spectra(object):
         Returns (int):
             Number of spectra contained in this group.
         """
-        return len(self.fibermap)
+        if self.fibermap is not None:
+            return len(self.fibermap)
+        else:
+            return 0
 
 
     def num_targets(self):
@@ -290,7 +206,10 @@ class Spectra(object):
         Returns (int):
             Number of unique targets with spectra in this object.
         """
-        return len(np.unique(self.fibermap["TARGETID"]))
+        if self.fibermap is not None:
+            return len(np.unique(self.fibermap["TARGETID"]))
+        else:
+            return 0
 
 
     def select(self, nights=None, bands=None, targets=None, fibers=None, invert=False):
@@ -474,13 +393,14 @@ class Spectra(object):
 
         indx_original = []
 
-        for r in range(nother):
-            expid = other.fibermap[r]["EXPID"]
-            fiber = other.fibermap[r]["FIBER"]
-            for i, row in enumerate(self.fibermap):
-                if (expid == row["EXPID"]) and (fiber == row["FIBER"]):
-                    indx_original.append(i)
-                    exists[r] += 1
+        if self.fibermap is not None:
+            for r in range(nother):
+                expid = other.fibermap[r]["EXPID"]
+                fiber = other.fibermap[r]["FIBER"]
+                for i, row in enumerate(self.fibermap):
+                    if (expid == row["EXPID"]) and (fiber == row["FIBER"]):
+                        indx_original.append(i)
+                        exists[r] += 1
 
         if len(np.where(exists > 1)[0]) > 0:
             raise RuntimeError("found duplicate spectra (same EXPID and FIBER) in the fibermap")
@@ -488,14 +408,19 @@ class Spectra(object):
         indx_exists = np.where(exists == 1)[0]
         indx_new = np.where(exists == 0)[0]
 
-        nupdate = len(indx_exists)
-        nnew = len(indx_new)
-        nold = len(self.fibermap)
-
         # Make new data arrays of the correct size to hold both the old and 
         # new data
 
-        newfmap = encode_table(np.zeros( (nold + nnew, ), dtype=spectra_columns()))
+        nupdate = len(indx_exists)
+        nnew = len(indx_new)
+
+        if self.fibermap is None:
+            nold = 0
+            newfmap = other.fibermap.copy()
+        else:
+            nold = len(self.fibermap)
+            newfmap = encode_table(np.zeros( (nold + nnew, ),
+                                   dtype=self.fibermap.dtype))
         
         newwave = {}
         newflux = {}

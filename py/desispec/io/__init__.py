@@ -9,7 +9,6 @@ Tools for data and metadata I/O.
 from __future__ import absolute_import
 # The line above will help with 2to3 support.
 
-from .brick import Brick
 from .download import download, filepath2url
 from .fiberflat import read_fiberflat, write_fiberflat
 from .fibermap import read_fibermap, write_fibermap, empty_fibermap
@@ -33,7 +32,6 @@ from .sky import read_sky, write_sky
 from .util import (header2wave, fitsheader, native_endian, makepath,
                    write_bintable, iterfiles, healpix_degrade_fixed,
                    healpix_subdirectory)
-from .zfind import read_zbest, write_zbest
 
 # Why is this even here?
 from desispec.preproc import read_bias, read_pixflat, read_mask

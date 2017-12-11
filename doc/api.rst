@@ -54,9 +54,6 @@ Full desispec API Reference
 .. automodule:: desispec.io
     :members:
 
-.. automodule:: desispec.io.brick
-    :members:
-
 .. automodule:: desispec.io.download
     :members:
 
@@ -91,9 +88,6 @@ Full desispec API Reference
     :members:
 
 .. automodule:: desispec.io.util
-    :members:
-
-.. automodule:: desispec.io.zfind
     :members:
 
 .. automodule:: desispec.linalg
@@ -267,23 +261,8 @@ Full desispec API Reference
 .. automodule:: desispec.scripts.stdstars
     :members:
 
-.. automodule:: desispec.scripts.updatecoadd
-    :members:
-
-.. automodule:: desispec.scripts.zfind
-    :members:
-
 .. automodule:: desispec.sky
     :members:
 
 .. automodule:: desispec.util
-    :members:
-
-.. automodule:: desispec.zfind
-    :members:
-
-.. automodule:: desispec.zfind.redmonster
-    :members:
-
-.. automodule:: desispec.zfind.zfind
     :members:

@@ -14,11 +14,12 @@ import numpy.testing as nt
 #from astropy.table import Table
 
 from desiutil.io import encode_table
+from desispec.io import empty_fibermap
+from desispec.io.util import add_columns
 
 # Import all functions from the module we are testing.
 from desispec.spectra import *
 from desispec.io.spectra import *
-
 
 class TestSpectra(unittest.TestCase):
 
@@ -34,7 +35,12 @@ class TestSpectra(unittest.TestCase):
         self.nspec = 5
         self.ndiag = 3
 
-        fmap = np.zeros(shape=(self.nspec,), dtype=spectra_columns())
+        fmap = empty_fibermap(self.nspec)
+        fmap = add_columns(fmap,
+                           ['NIGHT', 'EXPID', 'TILEID'],
+                           [np.int32(0), np.int32(0), np.int32(0)],
+                           )
+        
         for s in range(self.nspec):
             fmap[s]["TARGETID"] = 456 + s
             fmap[s]["FIBER"] = 123 + s
@@ -42,7 +48,12 @@ class TestSpectra(unittest.TestCase):
             fmap[s]["EXPID"] = s
         self.fmap1 = encode_table(fmap)
 
-        fmap = np.zeros(shape=(self.nspec,), dtype=spectra_columns())
+        fmap = empty_fibermap(self.nspec)
+        fmap = add_columns(fmap,
+                           ['NIGHT', 'EXPID', 'TILEID'],
+                           [np.int32(0), np.int32(0), np.int32(0)],
+                           )
+
         for s in range(self.nspec):
             fmap[s]["TARGETID"] = 789 + s
             fmap[s]["FIBER"] = 200 + s

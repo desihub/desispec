@@ -38,6 +38,7 @@ class TestQA(unittest.TestCase):
         cls.qafile_exp = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-{:08d}'.format(id,id)
         cls.qafile_brick = cls.testDir+'/brick/3582m005/qa-3582m005.yaml'
         cls.flux_pdf = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-flux-{:08d}.pdf'.format(id,id)
+        cls.frame_pdf = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-frame-{:08d}.pdf'.format(id,id)
         # Files for exposure fibermap QA figure
         cls.frame_b0 = findfile('frame', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b0')
         cls.frame_b1 = findfile('frame', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b1')
@@ -49,7 +50,7 @@ class TestQA(unittest.TestCase):
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
         for filename in [cls.qafile_b0, cls.qafile_b1, cls.flux_pdf, cls.frame_b0, cls.frame_b1,
-                         cls.fflat_b0, cls.fflat_b1, cls.exp_fmap_plot]:
+                         cls.fflat_b0, cls.fflat_b1, cls.exp_fmap_plot, cls.frame_pdf]:
             if os.path.exists(filename):
                 os.remove(filename)
                 #testpath = os.path.normpath(os.path.dirname(filename))
@@ -231,7 +232,7 @@ class TestQA(unittest.TestCase):
         tdict['20190829'][dint]['b']['FLUXCALIB']['METRICS']['BLAH'] = 1
         qaframe = qa_frame.QA_Frame(tdict)
         # Plot
-        qa_plots.frame_fluxcalib('tmp.pdf', qaframe, frame, fluxcalib)
+        qa_plots.frame_fluxcalib(self.frame_pdf, qaframe, frame, fluxcalib)
 
     def runTest(self):
         pass

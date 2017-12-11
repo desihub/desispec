@@ -5,10 +5,15 @@ desispec Change Log
 0.17.1 (unreleased)
 -------------------
 
+* Refactors spectral regouping to be faster and derive fibermap format
+  from inputs (PR `#473`).
+* Removed deprecated Brick class, and unused coadds and redmonder zfind
+  that were using Bricks (PR `#473`).
 * Adds skyline QA; fixes QA version usage (PR `#458`_).
 * Fixes write_bintable bug if extname=None; fixes missing header comments
 
 .. _`#458`: https://github.com/desihub/desispec/pull/458
+.. _`#473`: https://github.com/desihub/desispec/pull/446
 
 0.17.0 (2017-11-10)
 -------------------
@@ -178,8 +183,8 @@ desispec Change Log
 * Update :func:`desispec.io.raw.write_raw` to enable writing simulated raw
   data with new headers.
 * Allow ``test_bootcalib`` to run even if NERSC portal is returning 403 errors.
-* Add ``bricksize`` property to :class:`desispec.brick.Bricks`; allow
-  :meth:`~desispec.brick.Bricks.brickname` to specify bricksize.
+* Add ``bricksize`` property to desispec.brick.Bricks; allow
+  `desispec.brick.Bricks.brickname` to specify bricksize.
 * Do SVD inverses when cholesky decompositions fail in fiberflat, sky
   subtraction, and flux calibration.
 * Algorithm updates for teststand and BOSS data
@@ -213,7 +218,7 @@ desispec Change Log
 
 * Update template Module file to reflect DESI+Anaconda infrastructure.
 * Update redmonster wrapper for reproducibility.
-* :meth:`desispec.io.brick.BrickBase.get_target_ids` returns target IDs in the order they appear in input file.
+* `desispec.io.brick.BrickBase.get_target_ids` returns target IDs in the order they appear in input file.
 * Set BUNIT header keywords (PR `#284`_).
 * Improved pipeline logging robustness.
 * MPI updates for robustness and non-NERSC operation.

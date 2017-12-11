@@ -63,7 +63,11 @@ fibermap_comments = dict(
     RA_OBS       = "RA of obs from (X,Y)_FVCOBS and optics [deg]",
     DEC_OBS      = "dec of obs from (X,Y)_FVCOBS and optics [deg]",
     MAG          = "magnitudes in each of the filters",
-    FILTER       = "SDSS_R, DECAM_Z, WISE1, etc."
+    FILTER       = "SDSS_R, DECAM_Z, WISE1, etc.",
+    #- Optional columns, used by spectra but not by frames
+    NIGHT        = "Night of exposure YYYYMMDD",
+    EXPID        = "Exposure ID",
+    TILEID       = "Tile ID",
 )
 
 def empty_fibermap(nspec, specmin=0):
@@ -77,6 +81,7 @@ def empty_fibermap(nspec, specmin=0):
     """
     import desimodel.io
 
+    assert 0 <= nspec < 5000, "nspec {} should be within 0-5000".format(nspec)
     fibermap = Table(np.zeros(nspec, dtype=fibermap_columns))
     fibermap['FIBER'] = np.arange(specmin, specmin+nspec)
     fibers_per_spectrograph = 500
