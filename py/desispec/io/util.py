@@ -122,10 +122,16 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     hdu = astropy.io.fits.convenience.table_to_hdu(outdata)
     if extname is not None:
         hdu.header['EXTNAME'] = extname
+    else:
+        extname = 1
 
     if header is not None:
-        for key, value in header.items():
-            hdu.header[key] = value
+        if isinstance(header, astropy.io.fits.header.Header):
+            for key, value in header.items():
+                comment = header.comments[key]
+                hdu.header[key] = (value, comment)
+        else:
+            hdu.header.update(header)
 
     #- Write the data and header
     if clobber:

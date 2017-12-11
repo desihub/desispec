@@ -48,6 +48,10 @@ class TestIO(unittest.TestCase):
         if os.path.isdir(self.reduxdir):
             rmtree(self.reduxdir)
 
+    def tearDown(self):
+        if os.path.exists(self.testfile):
+            os.remove(self.testfile)
+
     @classmethod
     def tearDownClass(cls):
         """Cleanup test files if they exist.
@@ -67,6 +71,37 @@ class TestIO(unittest.TestCase):
 
         if os.path.exists(cls.testDir):
             rmtree(cls.testDir)
+
+    def test_write_bintable(self):
+        '''test write_bintable'''
+        from ..io.util import write_bintable, fitsheader
+        hdr = fitsheader(dict(A=1, B=2))
+        hdr['C'] = ('BLAT', 'FOO')
+        data = Table()
+        data['X'] = [1,2,3]
+        data['Y'] = [3,4,5]
+        write_bintable(self.testfile, data, header=hdr)
+
+        result, newhdr = fits.getdata(self.testfile, header=True)
+        self.assertEqual(result.dtype.names, data.dtype.names)
+        for colname in data.dtype.names:
+            self.assertTrue(np.all(result[colname] == data[colname]), '{} data mismatch'.format(colname))
+
+        self.assertEqual(newhdr.comments['C'], 'FOO')
+        for key in hdr.keys():
+            self.assertIn(key, newhdr)
+
+        #- repeat with other data types
+        os.remove(self.testfile)
+        hdr = dict(A=1, B=2)
+        data = data.as_array()
+        write_bintable(self.testfile, data, header=hdr)
+        result, newhdr = fits.getdata(self.testfile, header=True)
+        self.assertEqual(result.dtype.names, data.dtype.names)
+        for colname in data.dtype.names:
+            self.assertTrue(np.all(result[colname] == data[colname]), '{} data mismatch'.format(colname))
+        for key in hdr.keys():
+            self.assertIn(key, newhdr)
 
     def test_fitsheader(self):
         """Test desispec.io.util.fitsheader.
