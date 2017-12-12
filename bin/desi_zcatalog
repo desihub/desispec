@@ -18,37 +18,78 @@ from __future__ import absolute_import, division, print_function
 import sys, os
 import numpy as np
 from astropy.table import Table, vstack
-
+from desiutil.log import get_logger,DEBUG
 from desispec import io
 
-import optparse
+import argparse
 
-parser = optparse.OptionParser(usage = "%prog [options]")
-parser.add_option("-i", "--indir",   type=str,  help="input directory")
-parser.add_option("-o", "--outfile", type=str,  help="output file")
-parser.add_option("-v", "--verbose", action="store_true", help="some flag")
-opts, args = parser.parse_args()
+from numpy.lib.recfunctions import append_fields
 
-if opts.indir is None:
-    print('ERROR: --input directory required')
+def match(table1,table2,key="TARGETID") :
+    """
+    matching two tables
+    
+    Args:
+        table1 : a numpy recarray
+        table2 : another numpy recarray
+        key : string, the key of the columns to match
+    
+    Returns joined table
+    """
+    
+    k1=table1[key]
+    k2=table2[key]
+    d2  =  {v : i for i,v in enumerate(k2)}
+    i21 = np.array([d2.get(v,-1) for v in k1]) # not always a match
+    ok=(i21>=0)
+    for k in table2.dtype.names :
+        if k in table1.dtype.names : continue # do not duplicate columns
+        table1=append_fields(table1,k,np.zeros(k1.size).astype(table2[k].dtype)) 
+        table1[k][ok]=table2[k][i21[ok]] # unmatched values are set the 0 value corresponding to the dtype
+    return table1
+    
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("-i", "--indir",   type=str,  help="input directory")
+parser.add_argument("-o", "--outfile", type=str,  help="output file")
+parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
+parser.add_argument("--match", type=str, nargs="*", help="match other tables (targets,truth...)")
+
+args = parser.parse_args()
+
+
+log=get_logger()
+if args.verbose :
+    log=get_logger(DEBUG)
+else :
+    log=get_logger()
+
+if args.indir is None:
+    log.error('--input directory required')
     sys.exit(1)
     
-if opts.outfile is None:
-    opts.outfile = io.findfile('zcatalog')
+if args.outfile is None:
+    args.outfile = io.findfile('zcatalog')
 
 import fitsio
-zbestfiles = sorted(io.iterfiles(opts.indir, 'zbest'))
+zbestfiles = sorted(io.iterfiles(args.indir, 'zbest'))
 data = list()
 for zbestfile in zbestfiles:
     zbest = fitsio.read(zbestfile, 'ZBEST')
     data.append(zbest)
-    if opts.verbose:
-        print(zbestfile, len(zbest))
+    log.debug("{} {}".format(zbestfile, len(zbest)))
 
 zcat = np.hstack(data)
+
+
+for filename in args.match :
+    log.info("matching {}".format(filename))
+    zcat = match(zcat,fitsio.read(filename))
+
 header = fitsio.read_header(zbestfiles[0], 0)
 
-fitsio.write(opts.outfile, zcat, header=header, extname='ZCATALOG', clobber=True)
+fitsio.write(args.outfile, zcat, header=header, extname='ZCATALOG', clobber=True)
+log.info("wrote {}".format(args.outfile))
 
 
 
