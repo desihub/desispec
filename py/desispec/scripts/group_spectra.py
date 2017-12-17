@@ -113,15 +113,15 @@ def main(args, comm=None):
                         cfname = pipe.graph_name(nt, "cframe-{}-{:08d}".format(cam, ex))
                         node = {}
                         node["type"] = "cframe"
+                        node["in"] = []
+                        node["out"] = []
                         grph[cfname] = node
 
-                        cframe = io.read_frame(cf)
-                        fmdata = cframe.fibermap
-                        fmdata = fitsio.read(cf, 'FIBERMAP',
-                                    columns=('FLAVOR', 'RA_TARGET', 'DEC_TARGET'))
+                        hdr = fitsio.read_header(cf)
+                        if hdr["FLAVOR"].strip() == "science":
+                            fmdata = fitsio.read(cf, 'FIBERMAP',
+                                    columns=('RA_TARGET', 'DEC_TARGET'))
 
-                        if (cframe.meta["FLAVOR"] != "arc") and \
-                            (cframe.meta["FLAVOR"] != "flat"):
                             ra = fmdata["RA_TARGET"]
                             dec = fmdata["DEC_TARGET"]
                             ok = (ra == ra)  #- strip NaN
@@ -138,8 +138,10 @@ def main(args, comm=None):
                                         node["nside"] = args.hpxnside
                                         node["pixel"] = p
                                         node["in"] = []
+                                        node["out"] = ['zbest-{}-{}'.format(args.hpxnside, p), ]
                                         grph[sname] = node
                                     grph[sname]["in"].append(cfname)
+                                    grph[cfname]["out"].append(sname)
 
         else:
             grph = pipe.load_prod(nightstr=args.nights)

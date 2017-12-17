@@ -321,12 +321,12 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Pixel     True  z        -> Class   z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for pix in pixels:
-        zbest = io.read_zbest(io.findfile('zbest', groupname=pix))
-        for i in range(len(zbest.z)):
-            objtype = zbest.spectype[i]
-            z, zwarn = zbest.z[i], zbest.zwarn[i]
+        zbest = fits.getdata(io.findfile('zbest', groupname=pix))
+        for i in range(len(zbest)):
+            objtype = zbest['SPECTYPE'][i]
+            z, zwarn = zbest['Z'][i], zbest['ZWARN'][i]
 
-            j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
+            j = np.where(fibermap['TARGETID'] == zbest['TARGETID'][i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
             oiiflux = siminfo['OIIFLUX'][j]
             truez = siminfo['REDSHIFT'][j]
