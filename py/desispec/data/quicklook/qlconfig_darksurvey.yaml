@@ -10,7 +10,7 @@ FiberflatExpid: 1
 WritePixfile: False
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
-WriteStaticPlots: False
+WriteStaticPlots: True
 #- Exposure ID for Reference Template
 TemplateExpid: 2
 #- Debuglevel 
@@ -71,5 +71,7 @@ Algorithms:
             Integrate_Spec:
                 PARAMS: {MAGDIFF_NORMAL_RANGE: [-0.5, 0.5], MAGDIFF_WARN_RANGE: [-1.0, 1.0]}
             Calculate_SNR:
+                #- Include QSOs in SNR Residuals over focal plane (bright QSOs bias this result)
+                QSO_SNR_Residuals: True
                 PARAMS: {FIDSNR_NORMAL_RANGE: [6.5, 7.5], FIDSNR_WARN_RANGE: [6.0, 8.0], FIDMAG: 22.}
 

@@ -44,6 +44,10 @@ class Config(object):
             if "wavelength" in self.algorithms["BoxcarExtract"].keys():
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
         else: self.wavelength = None
+        if "SkySub_QL" in self.algorithms.keys():
+            if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
+                self.qso_snr_resid = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["QSO_SNR_Residuals"]
+        else: self.qso_snr_resid = None
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
@@ -140,7 +144,7 @@ class Config(object):
             outskyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
         else:
             outskyfile=None       
-        paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile,'Apply_resolution': self.usesigma}
+        paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile, 'Apply_resolution': self.usesigma}
 
         paopts={}
         defList={
@@ -241,7 +245,14 @@ class Config(object):
 
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
-                qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 
+                if qa =='Calculate_SNR':
+                    qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps,
+                            'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 
+                            'param': params, 'qlf': self.qlf,
+                            'refKey':self._qaRefKeys[qa],
+                            'qso_resid':self.qso_snr_resid}
+                else:
+                    qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 
                             'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 
                             'param': params, 'qlf': self.qlf,
                             'refKey':self._qaRefKeys[qa]}
