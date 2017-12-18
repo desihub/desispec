@@ -46,8 +46,9 @@ class Config(object):
         else: self.wavelength = None
         if "SkySub_QL" in self.algorithms.keys():
             if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
-                self.qso_snr_resid = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["QSO_SNR_Residuals"]
-        else: self.qso_snr_resid = None
+                if "QSO_SNR_Residuals" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
+                    self.qso_snr_resid = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["QSO_SNR_Residuals"]
+                else: self.qso_snr_resid = None
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
