@@ -44,6 +44,8 @@ Two methods are implemented.
                         help = 'polynomial degree for y shifts along x')
     parser.add_argument('--degyy', type = int, default = 2, required=False,
                         help = 'polynomial degree for y shifts along y')
+    parser.add_argument('--continuum', action='store_true',
+                        help = 'only fit shifts along x for continuum input image')
     parser.add_argument('--nfibers', type = int, default = None, required=False,
                         help = 'limit the number of fibers for debugging')
     
@@ -126,9 +128,17 @@ def main(args) :
         
         # measure x shifts
         x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=7, deg=args.degxy)
-        # measure y shifts
-        x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=7)
-
+        if not args.continuum :
+            # measure y shifts
+            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=7)
+        else :
+            # duplicate dx results with zero shift to avoid write special case code below
+            x_for_dy = x_for_dx.copy()
+            y_for_dy = y_for_dx.copy()
+            dy       = np.zeros(dx.shape)
+            ey       = 1.e-6*np.ones(ex.shape)
+            fiber_for_dy = fiber_for_dx.copy()
+            wave_for_dy  = wave_for_dx.copy()
     
     # write this for debugging
     if args.outoffsets :

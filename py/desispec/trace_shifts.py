@@ -61,9 +61,16 @@ def read_psf_and_traces(psf_filename) :
         xcoef   = fits_file[0].data
         ycoef   = fits_file[1].data        
         wavemin2 = wavemin
-        wavemax2 = wavemax        
+        wavemax2 = wavemax
+    elif "XTRACE" in fits_file :
+        xtrace=fits_file["XTRACE"].data
+        ytrace=fits_file["YTRACE"].data
+        wavemin=fits_file["XTRACE"].header["WAVEMIN"]
+        wavemax=fits_file["XTRACE"].header["WAVEMAX"]
+        wavemin2=fits_file["YTRACE"].header["WAVEMIN"]
+        wavemax2=fits_file["YTRACE"].header["WAVEMAX"]
     elif psftype == "GAUSS-HERMITE" :
-        table=fits_file[1].data        
+        table=fits_file["PSF"].data        
         i=np.where(table["PARAM"]=="X")[0][0]
         wavemin=table["WAVEMIN"][i]
         wavemax=table["WAVEMAX"][i]
@@ -72,13 +79,6 @@ def read_psf_and_traces(psf_filename) :
         ytrace=table["COEFF"][i]
         wavemin2=table["WAVEMIN"][i]
         wavemax2=table["WAVEMAX"][i]
-    elif "XTRACE" in fits_file :
-        xtrace=fits_file["XTRACE"].data
-        ytrace=fits_file["YTRACE"].data
-        wavemin=fits_file["XTRACE"].header["WAVEMIN"]
-        wavemax=fits_file["XTRACE"].header["WAVEMAX"]
-        wavemin2=fits_file["YTRACE"].header["WAVEMIN"]
-        wavemax2=fits_file["YTRACE"].header["WAVEMAX"]
     
     if xtrace is None or ytrace is None :
         raise ValueError("could not find XTRACE and YTRACE in psf file %s"%psf_filename)
@@ -117,29 +117,30 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
     psftype=psf_fits[0].header["PSFTYPE"]
     if psftype=="GAUSS-HERMITE" :             
         
-        i=np.where(psf_fits[1].data["PARAM"]=="X")[0][0]
-        ishape=psf_fits[1].data["COEFF"][i].shape
-        if ishape != xcoef.shape :
-            log.warning("xcoef from file and from arg don't have same shape : %s != %s"%(str(ishape),str(xcoef.shape)))
+        if "X" in psf_fits["PSF"].data["PARAM"] :        
+            i=np.where(psf_fits["PSF"].data["PARAM"]=="X")[0][0]
+            ishape=psf_fits["PSF"].data["COEFF"][i].shape
+            if ishape != xcoef.shape :
+                log.warning("xcoef from file and from arg don't have same shape : %s != %s"%(str(ishape),str(xcoef.shape)))
+
+            n0=min(ishape[0],xcoef.shape[0])
+            n1=min(ishape[1],xcoef.shape[1])
+            psf_fits["PSF"].data["COEFF"][i] *= 0.
+            psf_fits["PSF"].data["COEFF"][i][:n0,:n1]=xcoef[:n0,:n1]
+            psf_fits["PSF"].data["WAVEMIN"][i]=wavemin
+            psf_fits["PSF"].data["WAVEMAX"][i]=wavemax
         
-        n0=min(ishape[0],xcoef.shape[0])
-        n1=min(ishape[1],xcoef.shape[1])
-        psf_fits[1].data["COEFF"][i] *= 0.
-        psf_fits[1].data["COEFF"][i][:n0,:n1]=xcoef[:n0,:n1]
-        psf_fits[1].data["WAVEMIN"][i]=wavemin
-        psf_fits[1].data["WAVEMAX"][i]=wavemax
-        
-        
-        i=np.where(psf_fits[1].data["PARAM"]=="Y")[0][0]
-        ishape=psf_fits[1].data["COEFF"][i].shape
-        if ishape != ycoef.shape :
-            log.warning("xcoef from file and from arg don't have same shape : %s != %s"%(str(ishape),str(ycoef.shape)))
-        n0=min(psf_fits[1].data["COEFF"][i].shape[0],ycoef.shape[0])
-        n1=min(psf_fits[1].data["COEFF"][i].shape[1],ycoef.shape[1])
-        psf_fits[1].data["COEFF"][i] *= 0.
-        psf_fits[1].data["COEFF"][i][:n0,:n1]=ycoef[:n0,:n1]
-        psf_fits[1].data["WAVEMIN"][i]=wavemin
-        psf_fits[1].data["WAVEMAX"][i]=wavemax
+        if "Y" in psf_fits["PSF"].data["PARAM"] :
+            i=np.where(psf_fits["PSF"].data["PARAM"]=="Y")[0][0]
+            ishape=psf_fits["PSF"].data["COEFF"][i].shape
+            if ishape != ycoef.shape :
+                log.warning("xcoef from file and from arg don't have same shape : %s != %s"%(str(ishape),str(ycoef.shape)))
+            n0=min(psf_fits["PSF"].data["COEFF"][i].shape[0],ycoef.shape[0])
+            n1=min(psf_fits["PSF"].data["COEFF"][i].shape[1],ycoef.shape[1])
+            psf_fits["PSF"].data["COEFF"][i] *= 0.
+            psf_fits["PSF"].data["COEFF"][i][:n0,:n1]=ycoef[:n0,:n1]
+            psf_fits["PSF"].data["WAVEMIN"][i]=wavemin
+            psf_fits["PSF"].data["WAVEMAX"][i]=wavemax
         
     if "XTRACE" in psf_fits :
         psf_fits["XTRACE"].data = xcoef
