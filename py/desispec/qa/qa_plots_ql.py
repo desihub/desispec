@@ -826,7 +826,7 @@ def plot_SNR(qa_dict,outfile,qso_resid):
     ax5=fig.add_subplot(gs[4:,4:6])
     ax6=fig.add_subplot(gs[4:,6:])
 
-    hist_med=ax1.bar(index,med_snr,align='center')
+    hist_med=ax1.plot(index,med_snr,linewidth=1)
     ax1.set_xlabel('Fiber #',fontsize=10)
     ax1.set_ylabel('Median S/N',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)

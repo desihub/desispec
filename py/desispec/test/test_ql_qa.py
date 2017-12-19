@@ -60,7 +60,8 @@ class TestQL_QA(unittest.TestCase):
         #self.psffile=os.environ['DESIMODEL']+'/data/specpsf/psf-b.fits'
         self.config={"kwargs":{
             "refKey":None,
-            "param":{}
+            "param":{},
+            "qso_resid":None
         }
         }
 

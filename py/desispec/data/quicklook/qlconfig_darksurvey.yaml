@@ -10,7 +10,7 @@ FiberflatExpid: 1
 WritePixfile: False
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
-WriteStaticPlots: True
+WriteStaticPlots: False
 #- Exposure ID for Reference Template
 TemplateExpid: 2
 #- Debuglevel 
