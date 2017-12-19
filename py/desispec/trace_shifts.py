@@ -117,9 +117,8 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
     psftype=psf_fits[0].header["PSFTYPE"]
     if psftype=="GAUSS-HERMITE" :             
         
-        i=np.where(psf_fits["PSF"].data["PARAM"]=="X")[0]
-        if i.size>0 :
-            i=i[0]
+        if "X" in psf_fits["PSF"].data["PARAM"] :        
+            i=np.where(psf_fits["PSF"].data["PARAM"]=="X")[0][0]
             ishape=psf_fits["PSF"].data["COEFF"][i].shape
             if ishape != xcoef.shape :
                 log.warning("xcoef from file and from arg don't have same shape : %s != %s"%(str(ishape),str(xcoef.shape)))
@@ -131,10 +130,8 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
             psf_fits["PSF"].data["WAVEMIN"][i]=wavemin
             psf_fits["PSF"].data["WAVEMAX"][i]=wavemax
         
-        
-        i=np.where(psf_fits["PSF"].data["PARAM"]=="Y")[0]
-        if i.size>0 :
-            i=i[0]
+        if "Y" in psf_fits["PSF"].data["PARAM"] :
+            i=np.where(psf_fits["PSF"].data["PARAM"]=="Y")[0][0]
             ishape=psf_fits["PSF"].data["COEFF"][i].shape
             if ishape != ycoef.shape :
                 log.warning("xcoef from file and from arg don't have same shape : %s != %s"%(str(ishape),str(ycoef.shape)))
