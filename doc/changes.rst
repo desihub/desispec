@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.17.1 (unreleased)
+0.17.2 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.17.1 (2017-12-20)
 -------------------
 
 * Refactors spectral regouping to be faster and derive fibermap format
@@ -11,9 +16,16 @@ desispec Change Log
   that were using Bricks (PR `#473`).
 * Adds skyline QA; fixes QA version usage (PR `#458`_).
 * Fixes write_bintable bug if extname=None; fixes missing header comments
+* spectro DB database loading updates (PR `#477`_).
+* trace shift updates for fiber flats (PR `#479`_).
+* Pipeline scaling updates (PR `#459`_ and `#466`).
 
 .. _`#458`: https://github.com/desihub/desispec/pull/458
-.. _`#473`: https://github.com/desihub/desispec/pull/446
+.. _`#473`: https://github.com/desihub/desispec/pull/473
+.. _`#477`: https://github.com/desihub/desispec/pull/477
+.. _`#479`: https://github.com/desihub/desispec/pull/479
+.. _`#459`: https://github.com/desihub/desispec/pull/459
+.. _`#466`: https://github.com/desihub/desispec/pull/466
 
 0.17.0 (2017-11-10)
 -------------------
