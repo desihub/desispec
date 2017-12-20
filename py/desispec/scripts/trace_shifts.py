@@ -48,7 +48,8 @@ Two methods are implemented.
                         help = 'only fit shifts along x for continuum input image')
     parser.add_argument('--nfibers', type = int, default = None, required=False,
                         help = 'limit the number of fibers for debugging')
-    
+    parser.add_argument('--max-error', type = float, default = 0.05 , required=False,
+                        help = "max statistical error threshold to automatically lower polynomial degree")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -196,7 +197,7 @@ def main(args) :
                 raise RuntimeError("polynomial degrees are already 0. we can fit the offsets")
             merr = 100000. # this will lower the pol. degree.
         
-        if merr > 0.05 :
+        if merr > args.max_error :
             if merr != 100000. :
                 log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
             
@@ -239,8 +240,7 @@ def main(args) :
                 
         ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
                                                   image=image,fibers=fibers,spectrum_filename=args.spectrum,degyy=args.degyy,width=7)
-    
-    
+        
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         log.info("wrote modified PSF in %s"%args.outpsf)
         
