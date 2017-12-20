@@ -738,7 +738,7 @@ def plot_residuals(qa_dict,outfile):
     #plt.tight_layout()
     fig.savefig(outfile)
     
-def plot_SNR(qa_dict,outfile):
+def plot_SNR(qa_dict,outfile,qso_resid):
     """
     Plot SNR
 
@@ -772,9 +772,24 @@ def plot_SNR(qa_dict,outfile):
     med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
+    resid_snr=qa_dict["METRICS"]["SNR_RESID"]
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
+
+    ra=[]
+    dec=[]
+    if qso_resid is True:
+        object_list = ['ELG','LRG','QSO','STAR']
+    else:
+        object_list = ['ELG','LRG','STAR']
+    for T in object_list:
+        fibers = qa_dict['METRICS']['%s_FIBERID'%T]
+        for c in range(len(fibers)):
+            ras = qa_dict['METRICS']['RA'][fibers[c]]
+            decs = qa_dict['METRICS']['DEC'][fibers[c]]
+            ra.append(ras)
+            dec.append(decs)
 
     if camera[0] == 'b':
         thisfilter='DECAM_G'
@@ -811,39 +826,49 @@ def plot_SNR(qa_dict,outfile):
     ax5=fig.add_subplot(gs[4:,4:6])
     ax6=fig.add_subplot(gs[4:,6:])
 
-    hist_med=ax1.bar(index,med_snr,align='center')
+    hist_med=ax1.plot(index,med_snr,linewidth=1)
     ax1.set_xlabel('Fiber #',fontsize=10)
     ax1.set_ylabel('Median S/N',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
     ax1.set_xlim(0)
 
-    #- plot for amp zones
-    if "MEDIAN_AMP_SNR" in qa_dict["METRICS"]:
-        ax2=fig.add_subplot(gs[1:4,4:])
-        med_amp_snr=qa_dict["METRICS"]["MEDIAN_AMP_SNR"]
-        heatmap_med=ax2.pcolor(med_amp_snr.reshape(2,2),cmap=plt.cm.OrRd)
-        plt.title('Avg. Median S/N = {:.4f}'.format(avg_med_snr), fontsize=10)
-        ax2.set_xlabel("Avg. Median S/N (per Amp)",fontsize=10)
-        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-        ax2.annotate("Amp 1\n{:.3f}".format(med_amp_snr[0]),
-                 xy=(0.4,0.4), #- Full scale is 2
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 2\n{:.3f}".format(med_amp_snr[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 3\n{:.3f}".format(med_amp_snr[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
+    ax2=fig.add_subplot(gs[1:4,4:])
+    if qso_resid is True:
+        ax2.set_title('Residual SNR (Calculated SNR - SNR from fit)\n(QSOs included)',fontsize=8)
+    else:
+        ax2.set_title('Residual SNR (Calculated SNR - SNR from fit)\n(QSOs not included)',fontsize=8)
+    ax2.set_xlabel('RA',fontsize=8)
+    ax2.set_ylabel('DEC',fontsize=8)
+    resid_plot=ax2.scatter(ra,dec,s=2,c=resid_snr,cmap=plt.cm.OrRd)
+    fig.colorbar(resid_plot,ticks=[np.min(resid_snr),0,np.max(resid_snr)])
 
-        ax2.annotate("Amp 4\n{:.3f}".format(med_amp_snr[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
+#    #- plot for amp zones
+#    if "MEDIAN_AMP_SNR" in qa_dict["METRICS"]:
+#        ax2=fig.add_subplot(gs[1:4,4:])
+#        med_amp_snr=qa_dict["METRICS"]["MEDIAN_AMP_SNR"]
+#        heatmap_med=ax2.pcolor(med_amp_snr.reshape(2,2),cmap=plt.cm.OrRd)
+#        plt.title('Avg. Median S/N = {:.4f}'.format(avg_med_snr), fontsize=10)
+#        ax2.set_xlabel("Avg. Median S/N (per Amp)",fontsize=10)
+#        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
+#        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+#        ax2.annotate("Amp 1\n{:.3f}".format(med_amp_snr[0]),
+#                 xy=(0.4,0.4), #- Full scale is 2
+#                 fontsize=10
+#                 )
+#        ax2.annotate("Amp 2\n{:.3f}".format(med_amp_snr[1]),
+#                 xy=(1.4,0.4),
+#                 fontsize=10
+#                 )
+#        ax2.annotate("Amp 3\n{:.3f}".format(med_amp_snr[2]),
+#                 xy=(0.4,1.4),
+#                 fontsize=10
+#                 )
+#
+#        ax2.annotate("Amp 4\n{:.3f}".format(med_amp_snr[3]),
+#                 xy=(1.4,1.4),
+#                 fontsize=10
+#                 )
 
     ax3.set_ylabel('Median S/N',fontsize=8)
     ax3.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)

@@ -525,7 +525,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     return qadict
 
-def SNRFit(frame,camera,params,fidboundary=None):
+def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
     """
     Signal vs. Noise With fitting
 
@@ -549,6 +549,7 @@ def SNRFit(frame,camera,params,fidboundary=None):
             and wavelength directions for each amp (output of slice_fidboundary function)
     Returns a dictionary similar to SignalVsNoise
     """
+
     if camera[0] == 'b':
         thisfilter='DECAM_G' #- should probably come from param. Hard coding for now
     elif camera[0] =='r':
@@ -589,6 +590,9 @@ def SNRFit(frame,camera,params,fidboundary=None):
     #- purposes.
 
     #- Loop over each target type, and associate SNR and image magnitudes for each type.
+    ra=[]
+    dec=[]
+    resid_snr=[]
     fidsnr_tgt=[]
     for T in ["ELG","QSO","LRG","STD"]:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
@@ -650,9 +654,22 @@ def SNRFit(frame,camera,params,fidboundary=None):
             fidsnr_tgt.append(np.nan)
             
         qadict["%s_FIBERID"%T]=fibers.tolist()
-        qadict["%s_SNR_MAG"%T]=np.array((medsnr,mags))
+        qadict["%s_SNR_MAG"%T]=snr_mag=np.array((medsnr,mags))
         qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
 
+        fit_snr=[]
+        fit=qadict["%s_FITRESULTS"%T]
+        if T == 'QSO' and qso_resid is False:
+            pass
+        else:
+            for m in range(len(mags)):
+                snr = 10**fitfunc(mags[m],fit[0][0],fit[0][1],fit[0][2])
+                fit_snr.append(snr)
+            for r in range(len(fit_snr)):
+                resid = snr_mag[0][r] - fit_snr[r]
+                resid_snr.append(resid)
+
+    qadict["SNR_RESID"]=resid_snr
     qadict["FIDSNR_TGT"]=fidsnr_tgt
     qadict["RA"]=frame.fibermap['RA_TARGET']
     qadict["DEC"]=frame.fibermap['DEC_TARGET']
