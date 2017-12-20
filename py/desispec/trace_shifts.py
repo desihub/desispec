@@ -115,6 +115,10 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
     psf_fits=pyfits.open(input_psf_filename)
 
     psftype=psf_fits[0].header["PSFTYPE"]
+
+    modified_x=False
+    modified_y=False
+
     if psftype=="GAUSS-HERMITE" :             
         
         if "X" in psf_fits["PSF"].data["PARAM"] :        
@@ -129,6 +133,7 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
             psf_fits["PSF"].data["COEFF"][i][:n0,:n1]=xcoef[:n0,:n1]
             psf_fits["PSF"].data["WAVEMIN"][i]=wavemin
             psf_fits["PSF"].data["WAVEMAX"][i]=wavemax
+            modified_x=True
         
         if "Y" in psf_fits["PSF"].data["PARAM"] :
             i=np.where(psf_fits["PSF"].data["PARAM"]=="Y")[0][0]
@@ -141,16 +146,27 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
             psf_fits["PSF"].data["COEFF"][i][:n0,:n1]=ycoef[:n0,:n1]
             psf_fits["PSF"].data["WAVEMIN"][i]=wavemin
             psf_fits["PSF"].data["WAVEMAX"][i]=wavemax
-        
+            modified_y=True
+            
     if "XTRACE" in psf_fits :
         psf_fits["XTRACE"].data = xcoef
         psf_fits["XTRACE"].header["WAVEMIN"] = wavemin
         psf_fits["XTRACE"].header["WAVEMAX"] = wavemax
+        modified_x=True
+        
     if "YTRACE" in psf_fits :
         psf_fits["YTRACE"].data = ycoef
         psf_fits["YTRACE"].header["WAVEMIN"] = wavemin
         psf_fits["YTRACE"].header["WAVEMAX"] = wavemax
-    
+        modified_y=True
+
+    if not modified_x :
+        log.error("didn't change the X coefs in the psf: I/O error")
+        raise IOError("didn't change the X coefs in the psf")
+    if not modified_y :
+        log.error("didn't change the Y coefs in the psf: I/O error")
+        raise IOError("didn't change the Y coefs in the psf")
+
     psf_fits.writeto(output_psf_filename,clobber=True)
     log.info("wrote traces and psf in %s"%output_psf_filename)
     
