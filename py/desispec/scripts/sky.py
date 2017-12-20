@@ -30,6 +30,8 @@ def parse(options=None):
                         help = 'path of QA figure file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
+    parser.add_argument('--no-extra-variance', action='store_true',
+                        help = 'do not increase sky model variance based on chi2 on sky lines')
     
     args = None
     if options is None:
@@ -59,8 +61,8 @@ def main(args) :
     apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skymodel = compute_sky(frame)
-
+    skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance))
+    
     # QA
     if (args.qafile is not None) or (args.qafig is not None):
         log.info("performing skysub QA")
