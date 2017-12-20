@@ -82,9 +82,10 @@ for zbestfile in zbestfiles:
 zcat = np.hstack(data)
 
 
-for filename in args.match :
-    log.info("matching {}".format(filename))
-    zcat = match(zcat,fitsio.read(filename))
+if args.match:
+    for filename in args.match :
+        log.info("matching {}".format(filename))
+        zcat = match(zcat,fitsio.read(filename))
 
 header = fitsio.read_header(zbestfiles[0], 0)
 
