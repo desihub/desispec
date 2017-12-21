@@ -315,7 +315,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
     """
     
     # absorb differences of calibration (fiberflat not yet applied)
-    x=(wave-wave[wave.size//2])/50.
+    x=(wave-wave[wave.size//2])/500.
     kernel=np.exp(-x**2/2)
     f1=fftconvolve(flux,kernel,mode='same')
     f2=fftconvolve(refflux,kernel,mode='same')
@@ -337,9 +337,6 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
             e=wave.size
         chi2[i] = np.sum(ivar[ihw:-ihw]*(flux[ihw:-ihw]-refflux[b:e])**2)
 
-    #import matplotlib.pyplot as plt
-    #plt.figure("%d"%int(np.mean(wave)))
-    #plt.plot(dwave*(np.arange(-ihw,ihw+1)),chi2)
     
     i=np.argmin(chi2)
     b=i-1
@@ -464,13 +461,13 @@ def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fiber
     boxcar_flux, boxcar_ivar, boxcar_wave = boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=fibers, width=7)
     
     # resampling on common finer wavelength grid
-    flux, ivar, wave = resample_boxcar_frame(boxcar_flux, boxcar_ivar, boxcar_wave, oversampling=2)
+    flux, ivar, wave = resample_boxcar_frame(boxcar_flux, boxcar_ivar, boxcar_wave, oversampling=4)
     
     # median flux used as internal spectral reference
     mflux=np.median(flux,axis=0)
 
     # measure y shifts 
-    return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+2)
+    return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
     
 
 def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7,deg=2) :
@@ -548,7 +545,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         swl           = sw*twave
 
         # rebin
-        rebin = 100
+        rebin = 500
         sw  = sw[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
         swdx = swdx[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
         swx = swx[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
