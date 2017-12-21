@@ -322,13 +322,14 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
     scale=f1/f2
     refflux *= scale
     
-    error_floor=0.001 #A
+    error_floor=0.01 #A 
     
     if ivar is None :
         ivar=np.ones(flux.shape)
     dwave=wave[1]-wave[0]
     ihw=int(hw/dwave)+1
     chi2=np.zeros((2*ihw+1))
+    ndata=np.sum(ivar[ihw:-ihw]>0)
     for i in range(2*ihw+1) :
         d=i-ihw
         b=ihw+d
@@ -339,22 +340,51 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
 
     
     i=np.argmin(chi2)
-    b=i-1
-    e=i+2
-    if b<0 : 
-        b=0
-        e=b+3
-    if e>2*ihw+1 :
-        e=2*ihw+1
-        b=e-3
-    x=dwave*(np.arange(b,e)-ihw)
-    c=np.polyfit(x,chi2[b:e],deg)
-    if c[0]>0 :
-        delta=-c[1]/(2.*c[0])
-        sigma=np.sqrt(1./c[0] + error_floor**2)
-    else :
+    if i<2 or i>=chi2.size-2 :
+        # something went wrong
         delta=0.
         sigma=100.
+    else :
+        # refine minimum
+        hh=int(0.6/dwave)+1
+        b=i-hh
+        e=i+hh+1
+        if b<0 : 
+            b=0
+            e=b+2*hh+1
+        if e>2*ihw+1 :
+            e=2*ihw+1
+            b=e-(2*hh+1)
+        x=dwave*(np.arange(b,e)-ihw)
+        c=np.polyfit(x,chi2[b:e],deg)
+        if c[0]>0 :
+            delta=-c[1]/(2.*c[0])
+            sigma=np.sqrt(1./c[0] + error_floor**2)
+            if ndata>1 :
+                chi2pdf=(c[0]*delta**2+c[1]*delta+c[2])/(ndata+1)
+                if chi2pdf>1 : sigma *= np.sqrt(chi2pdf) 
+
+        else :
+            # something else went wrong
+            delta=0.
+            sigma=100.
+        
+    '''
+    print("dw= %f +- %f"%(delta,sigma))
+    if np.abs(delta)>1. :    
+        print("chi2/ndf=%f/%d=%f"%(chi2[i],(ndata-1),chi2[i]/(ndata-1)))
+        import matplotlib.pyplot as plt
+        x=dwave*(np.arange(chi2.size)-ihw)
+        plt.plot(x,chi2,"o-")
+        pol=np.poly1d(c)
+        xx=np.linspace(x[b],x[e-1],20)
+        plt.plot(xx,pol(xx))
+        plt.axvline(delta)
+        plt.axvline(delta-sigma)
+        plt.axvline(delta+sigma)
+        plt.show()
+    '''
+
     return delta,sigma
 
 
@@ -506,7 +536,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     if image.mask is not None :
         image.ivar *= (image.mask==0)
 
-        
+    error_floor = 0.04 # pixel
+    
     #   Variance based on inverse variance's size
     var    = np.zeros(image.ivar.shape)
 
@@ -538,60 +569,87 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         x_of_y_int    = np.floor(x_of_y+0.5).astype(int)
         dx            = (xx.T-x_of_y).T
         mask=((xx.T>=x_of_y_int-hw)&(xx.T<=x_of_y_int+hw)).T
-        swdx           = (dx[mask] * image.pix[mask] ).reshape((n0,width)).sum(-1)
+        ok            = ((image.ivar[mask]==0).reshape((n0,width)).sum(-1)==0)
+        swdx          = (dx[mask] * image.pix[mask] ).reshape((n0,width)).sum(-1)
+        swdxvar       = (dx[mask]**2/(image.ivar[mask]+0.1*(image.ivar[mask]==0) )).reshape((n0,width)).sum(-1)
         sw            = (image.pix[mask]).reshape((n0,width)).sum(-1)
         swy           = sw*y
         swx           = sw*x_of_y
         swl           = sw*twave
-
+        
         # rebin
-        rebin = 500
+        rebin = 200
+        ok  = ((ok[:(n0//rebin)*rebin].reshape(n0//rebin,rebin)==0).sum(-1)==0)
         sw  = sw[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
         swdx = swdx[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
+        swdxvar = swdxvar[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
         swx = swx[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
         swy = swy[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
         swl = swl[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
-
-
-        sw[sw<0]       = 0        
-        fdx            = swdx/(sw+(sw==0))
-        fx             = swx/(sw+(sw==0))
-        fy             = swy/(sw+(sw==0))
-        fl             = swl/(sw+(sw==0))
-        fex            = 1./np.sqrt(sw+(sw==0))
+        
+        '''
+        import matplotlib.pyplot as plt
+        i=np.where((sw>0.01)&(ok>0))[0]
+        plt.errorbar(swy[i]/sw[i],swdx[i]/sw[i],np.sqrt(swdxvar[i])/sw[i],fmt="o")
+        plt.show()
+        '''
+        
+        sw[sw<0]       = 0 
+        
+        
+        fex            = np.sqrt(swdxvar/(sw+(sw==0))**2 + error_floor**2) # error on dx, with an error floor
+        ok             &= (fex>0)&(fex<10) # ok means no ivar=0 pixel
+        fex            = fex[ok]
+        fdx            = (swdx/(sw+(sw==0)))[ok]
+        fx             = (swx/(sw+(sw==0)))[ok]
+        fy             = (swy/(sw+(sw==0)))[ok]
+        fl             = (swl/(sw+(sw==0)))[ok]        
+        
+        
         
         good_fiber=True
         for loop in range(10) :
 
-            if np.sum(sw>0) < deg+2 :
+            if fdx.size < deg+2 :
                 good_fiber=False
                 break
 
             try :
-                c             = np.polyfit(fy,fdx,deg,w=sw)
+                c             = np.polyfit(fy,fdx,deg,w=1/fex**2)
                 pol           = np.poly1d(c)
-                chi2          = sw*(fdx-pol(fy))**2
-                mchi2         = np.median(chi2[sw>0])
-                sw /= mchi2
-                bad           = chi2>25.*mchi2
-                nbad          = np.sum(bad)
-                sw[bad]       = 0.
+                chi2          = (fdx-pol(fy))**2/fex**2
+                mchi2         = np.median(chi2)
+                
+                #log.info("mchi2=%f"%mchi2)
+                #if mchi2>1 :
+                #    fex *= np.sqrt(mchi2)
+                
+                ok            = np.where(chi2<=25.*mchi2)[0]
+                nbad          = fdx.size-ok.size
+                
+                
+                fex            = fex[ok]
+                fdx            = fdx[ok]
+                fx             = fx[ok]
+                fy             = fy[ok]
+                fl             = fl[ok]     
+                
             except LinAlgError :
                 good_fiber=False
                 break
             
             if nbad==0 :
                 break
-        
+            #print("removing %d bad measurements"%nbad)
         
         # we return the original sample of offset values
         if good_fiber :
-            ox  = np.append(ox,fx[sw>0])
-            oy  = np.append(oy,fy[sw>0])
-            odx = np.append(odx,fdx[sw>0])
-            oex = np.append(oex,fex[sw>0])
-            of = np.append(of,fiber*np.ones(fy[sw>0].size))
-            ol = np.append(ol,fl[sw>0])
+            ox  = np.append(ox,fx)
+            oy  = np.append(oy,fy)
+            odx = np.append(odx,fdx)
+            oex = np.append(oex,fex)
+            of = np.append(of,fiber*np.ones(fy.size))
+            ol = np.append(ol,fl)
     
     return ox,oy,odx,oex,of,ol
 
@@ -1094,16 +1152,13 @@ def polynomial_fit(z,ez,xx,yy,degx,degy) :
     """
     M=monomials(x=xx,y=yy,degx=degx,degy=degy)
     
-    a_large_error = 1.e4
-    ez[ez>1]= a_large_error # totally deweight unmeasured data
-    
-    error_floor=0.002 # pix
+    error_floor = 0.
     
     npar=M.shape[0]
     A=np.zeros((npar,npar))
     B=np.zeros((npar))
     
-    mask=(ez<a_large_error)
+    mask=np.ones(z.shape).astype(int)
     for loop in range(100) : # loop to increase errors
         
         w=1./(ez**2+error_floor**2)
