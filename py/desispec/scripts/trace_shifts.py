@@ -141,21 +141,6 @@ def main(args) :
             fiber_for_dy = fiber_for_dx.copy()
             wave_for_dy  = wave_for_dx.copy()
     
-    # write this for debugging
-    if args.outoffsets :
-        file=open(args.outoffsets,"w")
-        file.write("# axis f x y delta error\n")
-        for e in range(dy.size) :
-            file.write("0 %f %d %f %f %f %f\n"%(wave_for_dy[e],fiber_for_dy[e],x_for_dy[e],y_for_dy[e],dy[e],ey[e]))
-        for e in range(dx.size) :
-            file.write("1 %f %d %f %f %f %f\n"%(wave_for_dx[e],fiber_for_dx[e],x_for_dx[e],y_for_dx[e],dx[e],ex[e]))
-            
-        file.close()
-        log.info("wrote offsets in ASCII file %s"%args.outoffsets)
-    
-    
-    
-    
     degxx=args.degxx
     degxy=args.degxy
     degyx=args.degyx
@@ -211,6 +196,17 @@ def main(args) :
             # error is ok, so we quit the loop
             break
     
+    # write this for debugging
+    if args.outoffsets :
+        file=open(args.outoffsets,"w")
+        file.write("# axis wave fiber x y delta error polval (axis 0=y axis1=x)\n")
+        for e in range(dy.size) :
+            file.write("0 %f %d %f %f %f %f %f\n"%(wave_for_dy[e],fiber_for_dy[e],x_for_dy[e],y_for_dy[e],dy[e],ey[e],dy_mod[e]))
+        for e in range(dx.size) :
+            file.write("1 %f %d %f %f %f %f %f\n"%(wave_for_dx[e],fiber_for_dx[e],x_for_dx[e],y_for_dx[e],dx[e],ex[e],dx_mod[e]))            
+        file.close()
+        log.info("wrote offsets in ASCII file %s"%args.outoffsets)
+
     # print central shift
     mx=np.median(x_for_dx)
     my=np.median(y_for_dx)
