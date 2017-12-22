@@ -17,7 +17,7 @@ from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
-def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False) :
+def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True) :
     """Compute a sky model.
     
     Input has to correspond to sky fibers only.
@@ -188,10 +188,12 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False) :
     cskyflux = np.zeros(frame.flux.shape)
     for i in range(frame.nspec):
         cskyflux[i] = frame.R[i].dot(skyflux)
-
+    
+    
+    
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
-    if skyfibers.size > 1 :
-        log.info("Add a sky model error")
+    if skyfibers.size > 1 and add_variance :
+        log.info("Add a model error due to wavelength solution noise")
         
         tivar = util.combine_ivar(frame.ivar[skyfibers], cskyivar[skyfibers])
         
@@ -252,7 +254,9 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False) :
                 sigma_wave += 0.005
         
         modified_cskyivar = (cskyivar>0)/skyvar
-        
+    else :
+        modified_cskyivar = cskyivar.copy()
+    
     # need to do better here
     mask = (cskyivar==0).astype(np.uint32)
     

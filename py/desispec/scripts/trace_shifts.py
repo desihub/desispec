@@ -48,7 +48,8 @@ Two methods are implemented.
                         help = 'only fit shifts along x for continuum input image')
     parser.add_argument('--nfibers', type = int, default = None, required=False,
                         help = 'limit the number of fibers for debugging')
-    
+    parser.add_argument('--max-error', type = float, default = 0.05 , required=False,
+                        help = "max statistical error threshold to automatically lower polynomial degree")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -140,21 +141,6 @@ def main(args) :
             fiber_for_dy = fiber_for_dx.copy()
             wave_for_dy  = wave_for_dx.copy()
     
-    # write this for debugging
-    if args.outoffsets :
-        file=open(args.outoffsets,"w")
-        file.write("# axis f x y delta error\n")
-        for e in range(dy.size) :
-            file.write("0 %f %d %f %f %f %f\n"%(wave_for_dy[e],fiber_for_dy[e],x_for_dy[e],y_for_dy[e],dy[e],ey[e]))
-        for e in range(dx.size) :
-            file.write("1 %f %d %f %f %f %f\n"%(wave_for_dx[e],fiber_for_dx[e],x_for_dx[e],y_for_dx[e],dx[e],ex[e]))
-            
-        file.close()
-        log.info("wrote offsets in ASCII file %s"%args.outoffsets)
-    
-    
-    
-    
     degxx=args.degxx
     degxy=args.degxy
     degyx=args.degyx
@@ -196,7 +182,7 @@ def main(args) :
                 raise RuntimeError("polynomial degrees are already 0. we can fit the offsets")
             merr = 100000. # this will lower the pol. degree.
         
-        if merr > 0.05 :
+        if merr > args.max_error :
             if merr != 100000. :
                 log.warning("max edge shift error = %4.3f pixels is too large, reducing degrees"%merr)
             
@@ -210,6 +196,17 @@ def main(args) :
             # error is ok, so we quit the loop
             break
     
+    # write this for debugging
+    if args.outoffsets :
+        file=open(args.outoffsets,"w")
+        file.write("# axis wave fiber x y delta error polval (axis 0=y axis1=x)\n")
+        for e in range(dy.size) :
+            file.write("0 %f %d %f %f %f %f %f\n"%(wave_for_dy[e],fiber_for_dy[e],x_for_dy[e],y_for_dy[e],dy[e],ey[e],dy_mod[e]))
+        for e in range(dx.size) :
+            file.write("1 %f %d %f %f %f %f %f\n"%(wave_for_dx[e],fiber_for_dx[e],x_for_dx[e],y_for_dx[e],dx[e],ex[e],dx_mod[e]))            
+        file.close()
+        log.info("wrote offsets in ASCII file %s"%args.outoffsets)
+
     # print central shift
     mx=np.median(x_for_dx)
     my=np.median(y_for_dx)
@@ -239,8 +236,7 @@ def main(args) :
                 
         ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
                                                   image=image,fibers=fibers,spectrum_filename=args.spectrum,degyy=args.degyy,width=7)
-    
-    
+        
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         log.info("wrote modified PSF in %s"%args.outpsf)
         
