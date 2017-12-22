@@ -5,7 +5,9 @@ desispec Change Log
 0.17.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Trace shift optimizations from analyzing teststand data (PR `#482`_).
+
+.. _`#482`: https://github.com/desihub/desispec/pull/482
 
 0.17.1 (2017-12-20)
 -------------------
