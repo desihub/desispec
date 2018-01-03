@@ -9,9 +9,9 @@ import warnings
 
 from desispec.io import get_exposures
 from desispec.io import get_files
-from desispec.io import read_frame
 from desispec.io import read_meta_frame
 from desispec.io import specprod_root
+from desispec.io import get_nights
 
 from desiutil.log import get_logger
 
@@ -122,13 +122,10 @@ class QA_Prod(object):
         """
         # imports
         from desispec.qa.qa_frame import qaframe_from_frame
-        from desispec.io import get_nights
         from desispec.io.qa import qafile_from_framefile
 
         # Loop on nights
-        #path_nights = glob.glob(self.specprod_dir+'/exposures/*')
-        #nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
-        nights = get_nights()
+        nights = get_nights(specprod_dir=self.specprod_dir)
         for night in nights:
             for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
                 # Object only??
@@ -159,8 +156,7 @@ class QA_Prod(object):
         if make_frameqa:
             self.make_frameqa(**kwargs)
         # Loop on nights
-        path_nights = glob.glob(self.specprod_dir+'/exposures/*')
-        nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
+        nights = get_nights(specprod_dir=self.specprod_dir)
         # Reset
         log.info("Resetting qa_exps in qa_prod")
         self.qa_exps = []
