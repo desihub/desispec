@@ -110,7 +110,7 @@ class QA_Prod(object):
             inroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
         self.data = load_qa_prod(inroot)
 
-    def make_frameqa(self, make_plots=False, clobber=True):
+    def make_frameqa(self, make_plots=False, clobber=False):
         """ Work through the Production and make QA for all frames
 
         Parameters:
@@ -121,19 +121,14 @@ class QA_Prod(object):
 
         """
         # imports
-        from desispec.io import meta
-        from desispec.io.qa import load_qa_frame, write_qa_frame
-        from desispec.io.fiberflat import read_fiberflat
-        from desispec.io.sky import read_sky
-        from desispec.io.fluxcalibration import read_flux_calibration
-        from desispec.qa import qa_plots
         from desispec.qa.qa_frame import qaframe_from_frame
-        from desispec.io.fluxcalibration import read_stdstar_models
-        log = get_logger()
+        from desispec.io import get_nights
+        from desispec.io.qa import qafile_from_framefile
 
         # Loop on nights
-        path_nights = glob.glob(self.specprod_dir+'/exposures/*')
-        nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
+        #path_nights = glob.glob(self.specprod_dir+'/exposures/*')
+        #nights = [ipathn[ipathn.rfind('/')+1:] for ipathn in path_nights]
+        nights = get_nights()
         for night in nights:
             for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
                 # Object only??
@@ -141,69 +136,10 @@ class QA_Prod(object):
                         expid = exposure, specprod_dir = self.specprod_dir)
                 for camera,frame_fil in frames_dict.items():
                     # Load frame
-                    qaframe_from_frame(frame_fil, make_plots=make_plots)
-                    '''
-                    frame_meta = read_meta_frame(frame_fil)  # Only meta to speed it up
-                    spectro = int(frame_meta['CAMERA'][-1])
-                    if frame_meta['FLAVOR'] in ['flat','arc']:
-                        qatype = 'qa_calib'
-                    else:
-                        qatype = 'qa_data'
-                    qafile = meta.findfile(qatype, night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                    if (not clobber) & os.path.isfile(qafile):
-                        log.info("qafile={:s} exists.  Not over-writing.  Consider clobber=True".format(qafile))
+                    qafile, _ = qafile_from_framefile(frame_fil)
+                    if os.path.isfile(qafile) and (not clobber):
                         continue
-                    else:  # Now the full read
-                        frame = read_frame(frame_fil)
-                    # Load
-                    try:
-                        qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
-                    except AttributeError:
-                        import pdb; pdb.set_trace
-                    # Flat QA
-                    if frame.meta['FLAVOR'] in ['flat']:
-                        fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                        fiberflat = read_fiberflat(fiberflat_fil)
-                        qaframe.run_qa('FIBERFLAT', (frame, fiberflat), clobber=clobber)
-                        if make_plots:
-                            # Do it
-                            qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                            qa_plots.frame_fiberflat(qafig, qaframe, frame, fiberflat)
-                    # SkySub QA
-                    if qatype == 'qa_data':
-                        sky_fil = meta.findfile('sky', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                        try:
-                            skymodel = read_sky(sky_fil)
-                        except FileNotFoundError:
-                            warnings.warn("Sky file {:s} not found.  Skipping..".format(sky_fil))
-                        else:
-                            qaframe.run_qa('SKYSUB', (frame, skymodel))
-                            if make_plots:
-                                qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                                qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
-                    # FluxCalib QA
-                    if qatype == 'qa_data':
-                        # Standard stars
-                        stdstar_fil = meta.findfile('stdstars', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir,
-                                                    spectrograph=spectro)
-                        #try:
-                        #    model_tuple=read_stdstar_models(stdstar_fil)
-                        #except FileNotFoundError:
-                        #    warnings.warn("Standard star file {:s} not found.  Skipping..".format(stdstar_fil))
-                        #else:
-                        flux_fil = meta.findfile('calib', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                        try:
-                            fluxcalib = read_flux_calibration(flux_fil)
-                        except FileNotFoundError:
-                            warnings.warn("Flux file {:s} not found.  Skipping..".format(flux_fil))
-                        else:
-                            qaframe.run_qa('FLUXCALIB', (frame, fluxcalib)) #, model_tuple))#, indiv_stars))
-                            if make_plots:
-                                qafig = meta.findfile('qa_flux_fig', night=night, camera=camera, expid=exposure, specprod_dir=self.specprod_dir)
-                                qa_plots.frame_fluxcalib(qafig, qaframe, frame, fluxcalib)#, model_tuple)
-                    # Write
-                    write_qa_frame(qafile, qaframe)
-                    '''
+                    qaframe_from_frame(frame_fil, make_plots=make_plots)
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files into one master QA file
