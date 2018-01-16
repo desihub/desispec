@@ -257,6 +257,10 @@ def make_exposure(night, expid):
 
 def toplevel():
     """ Generate HTML to top level QA
+    Mainly generates the highest level HTML file
+    which has links to the Exposure and Calib QA.
+
+    This also slurps any .png files in the top-level
 
     Parameters
     ----------
