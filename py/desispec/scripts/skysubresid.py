@@ -17,7 +17,7 @@ def parse(options=None):
     parser.add_argument('--gauss', default=False, action="store_true", help="Expore Gaussianity for full production run")
     parser.add_argument('--nights', type=str, help='List of nights to limit prod plots')
     parser.add_argument('--skyline', default=False, action="store_true", help="Skyline residuals?")
-    parser.add_argument('--outdir', type=str, default='QA', metavar = 'PATH',
+    parser.add_argument('--outdir', type=str, default=None, metavar = 'PATH',
                         help = 'Override default output path with is $(pwd)/QA and *must exist*')
 
     if options is None:
@@ -31,7 +31,7 @@ def parse(options=None):
 def main(args) :
     # imports
     import glob
-    from desispec.io import findfile
+    from desispec.io import findfile, makepath
     from desispec.io import get_exposures
     from desispec.io import get_files, get_nights
     from desispec.io import read_frame
@@ -52,6 +52,10 @@ def main(args) :
     else:
         specprod_dir = specprod_root()
 
+    if args.outdir is not None:
+        qafig_path = args.outdir
+    else:
+        qafig_path = specprod_dir+'/QA/'
 
     # Channels
     if args.channels is not None:
@@ -100,9 +104,9 @@ def main(args) :
                     if channel_dict[channel]['count'] > 0:
                         from desispec.qa.qa_plots import skysub_resid_series  # Hidden to help with debugging
                         skysub_resid_series(channel_dict[channel], 'wave',
-                             outfile=args.outdir+'/QA_skyresid_wave_expid_{:d}{:s}.png'.format(args.expid, channel))
+                             outfile=qafig_path+'/QA_skyresid_wave_expid_{:d}{:s}.png'.format(args.expid, channel))
                         skysub_resid_series(channel_dict[channel], 'flux',
-                             outfile=args.outdir+'/QA_skyresid_flux_expid_{:d}{:s}.png'.format(args.expid, channel))
+                             outfile=qafig_path+'/QA_skyresid_flux_expid_{:d}{:s}.png'.format(args.expid, channel))
         return
 
 
@@ -137,7 +141,8 @@ def main(args) :
                 log.info("Loading sky residuals for {:d} cframes".format(len(cframes)))
                 sky_wave, sky_flux, sky_res, _ = qa_utils.get_skyres(cframes)
                 # Plot
-                outfile=args.outdir+'/skyresid_prod_dual_{:s}.png'.format(channel)
+                outfile=qafig_path+'/skyresid_prod_dual_{:s}.png'.format(channel)
+                makepath(outfile)
                 log.info("Plotting to {:s}".format(outfile))
                 skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=outfile)
         return
@@ -156,7 +161,8 @@ def main(args) :
                 sky_wave, sky_flux, sky_res, sky_ivar = qa_utils.get_skyres(cframes)
                 # Plot
                 log.info("Plotting..")
-                outfile=args.outdir+'/skyresid_prod_gauss_{:s}.png'.format(channel)
+                outfile=qafig_path+'/skyresid_prod_gauss_{:s}.png'.format(channel)
+                makepath(outfile)
                 skysub_gauss(sky_wave, sky_flux, sky_res, sky_ivar,
                                   outfile=outfile)
         return
