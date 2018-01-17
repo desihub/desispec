@@ -288,7 +288,6 @@ def validate_night(night):
     try:
         return datetime.datetime.strptime(night,'%Y%m%d').date()
     except ValueError:
-        import pdb; pdb.set_trace()
         raise RuntimeError('Badly formatted night %s' % night)
 
 
