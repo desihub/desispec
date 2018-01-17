@@ -526,10 +526,13 @@ class TestIO(unittest.TestCase):
         os.environ['SPECPROD'] = self.testEnv['SPECPROD']
         # Generate dummy path
         for night in ['20150101', '20150102']:
-            x = findfile('frame', camera='b0', night=night, expid=123)
-            makepath(x)
-            x = findfile('fiberflat', camera='b0', night=night, expid=123)
-            makepath(x)
+            x1 = findfile('frame', camera='b0', night=night, expid=123)
+            makepath(x1)
+            x2 = findfile('fiberflat', camera='b0', night=night, expid=123)
+            makepath(x2)
+        # Add a bad 'night'
+        x1 = x1.replace('20150102', 'dummy')
+        makepath(x1)
         # Search for nights
         nights = get_nights()
         self.assertEqual(len(nights), 2)

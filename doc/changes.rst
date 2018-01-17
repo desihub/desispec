@@ -6,6 +6,7 @@ desispec Change Log
 -------------------
 
 * Trace shift optimizations from analyzing teststand data (PR `#482`_).
+* Minor QA edits to accommodate minitest
 
 .. _`#482`: https://github.com/desihub/desispec/pull/482
 

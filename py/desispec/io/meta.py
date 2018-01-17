@@ -401,7 +401,9 @@ def get_reduced_frames(channels=['b','r','z'], nights=None, ftype='cframe', **kw
 
 
 def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
-    """
+    """ Generate a list of nights in a given folder (default is exposures/)
+    Demands an 8 digit name beginning with 20
+
     Args:
         strip_path:  bool, optional; Strip the path to the nights folders
         rawdata_dir:
@@ -416,12 +418,20 @@ def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
         specprod_dir = specprod_root()
     # Glob for nights
     sub_path = os.path.join(specprod_dir, sub_folder)
-    nights_path = glob.glob(sub_path+'/*')
-    # Strip off path?
-    if strip_path:
-        return [night_path.split('/')[-1] for night_path in nights_path]
-    else:
-        return nights_path
+    nights_with_path = glob.glob(sub_path+'/*')
+    # Strip off path
+    stripped = [os.path.basename(inight_path) for inight_path in nights_with_path]
+    # Vet and generate
+    nights = []
+    for ii,istrip in enumerate(stripped):
+        if (istrip[0:2] == '20') and len(istrip) == 8:
+            if strip_path:
+                nights.append(istrip)
+            else:
+                nights.append(nights_with_path[ii])
+    # Return
+    return nights
+
 
 
 def rawdata_root():

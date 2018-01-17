@@ -195,9 +195,9 @@ class QA_Frame(object):
         return ('{:s}: night={:s}, expid={:d}, camera={:s}, flavor={:s}'.format(
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
 
-
-def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_dir=None):
+def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_dir=None, clobber=True):
     """  Generate a qaframe object from an input frame_file name (and night)
+
     Write QA to disk
     Will also make plots if directed
     Args:
@@ -215,6 +215,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
     from desispec.io import read_frame
     from desispec.io import meta
     from desispec.io.qa import load_qa_frame, write_qa_frame
+    from desispec.io.qa import qafile_from_framefile
     from desispec.io.frame import search_for_framefile
     from desispec.io.fiberflat import read_fiberflat
     from desispec.fiberflat import apply_fiberflat
@@ -226,6 +227,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
         pass
     else: # Find the frame file in the desispec hierarchy?
         frame_file = search_for_framefile(frame_file)
+
     # Load frame
     frame = read_frame(frame_file)
     frame_meta = frame.meta
@@ -233,20 +235,16 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
     camera = frame_meta['CAMERA'].strip()
     expid = frame_meta['EXPID']
     spectro = int(frame_meta['CAMERA'][-1])
-    if frame_meta['FLAVOR'] in ['flat', 'arc']:
-        qatype = 'qa_calib'
-    else:
-        qatype = 'qa_data'
-    # Load
-    qafile = meta.findfile(qatype, night=night, camera=camera, expid=expid, specprod_dir=specprod_dir,
-                           outdir=output_dir)
+
+    # Filename
+    qafile, qatype = qafile_from_framefile(frame_file)
     qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
     # Flat QA
-    if frame.meta['FLAVOR'] in ['flat']:
+    if frame_meta['FLAVOR'] in ['flat']:
         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
                                       specprod_dir=specprod_dir)
         fiberflat = read_fiberflat(fiberflat_fil)
-        qaframe.run_qa('FIBERFLAT', (frame, fiberflat), clobber=True)
+        qaframe.run_qa('FIBERFLAT', (frame, fiberflat), clobber=clobber)
         if make_plots:
             # Do it
             qafig = meta.findfile('qa_flat_fig', night=night, camera=camera, expid=expid,
@@ -270,7 +268,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
         except FileNotFoundError:
             warnings.warn("Sky file {:s} not found.  Skipping..".format(sky_fil))
         else:
-            qaframe.run_qa('SKYSUB', (frame, skymodel))
+            qaframe.run_qa('SKYSUB', (frame, skymodel), clobber=clobber)
             if make_plots:
                 qafig = meta.findfile('qa_sky_fig', night=night, camera=camera, expid=expid,
                                       specprod_dir=specprod_dir, outdir=output_dir)

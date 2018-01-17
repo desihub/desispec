@@ -11,11 +11,26 @@ import json
 
 from desiutil.io import yamlify
 
-from desispec.io import findfile
+from desispec.io import findfile, read_meta_frame
 from desispec.io.util import makepath
 from desiutil.log import get_logger
 # log=get_logger()
 
+def qafile_from_framefile(frame_file, specprod_dir=None, output_dir=None):
+    # Load frame
+    frame_meta = read_meta_frame(frame_file)
+    night = frame_meta['NIGHT'].strip()
+    camera = frame_meta['CAMERA'].strip()
+    expid = frame_meta['EXPID']
+    if frame_meta['FLAVOR'] in ['flat', 'arc']:
+        qatype = 'qa_calib'
+    else:
+        qatype = 'qa_data'
+    # Name
+    qafile = findfile(qatype, night=night, camera=camera, expid=expid,
+                      specprod_dir=specprod_dir, outdir=output_dir)
+    # Return
+    return qafile, qatype
 
 def read_qa_data(filename):
     """Read data from a QA file

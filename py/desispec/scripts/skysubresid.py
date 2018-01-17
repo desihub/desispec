@@ -142,7 +142,7 @@ def main(args) :
                 skysub_resid_dual(sky_wave, sky_flux, sky_res, outfile=outfile)
         return
 
-    # Full Prod Plot?
+    # Test sky noise for Gaussianity
     if args.gauss:
         from desispec.qa.qa_plots import skysub_gauss
         # Loop on channel
