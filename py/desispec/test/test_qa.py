@@ -212,6 +212,9 @@ class TestQA(unittest.TestCase):
 
     def test_init_qa_prod(self):
         qaprod = QA_Prod(self.testDir)
+        # Test
+        assert '20160101' in qaprod.mexp_dict.keys()
+        assert isinstance(qaprod.data, dict)
 
     def test_qa_frame_plot(self):
         from desispec.qa import qa_plots

@@ -1,4 +1,5 @@
-""" Class to organize QA for a full DESI production run
+""" Class to organize QA for multiple exposures
+Likely to only be used as parent of QA_Night or QA_Prod
 """
 
 from __future__ import print_function, absolute_import, division
@@ -12,14 +13,13 @@ from desispec.io import get_files
 from desispec.io import read_meta_frame
 from desispec.io import specprod_root
 from desispec.io import get_nights
-from .qa_multiexp import QA_MultiExp
 
 from desiutil.log import get_logger
 
 # log = get_logger()
 
 
-class QA_Prod(QA_MultiExp):
+class QA_MultiExp(object):
     def __init__(self, specprod_dir=None):
         """ Class to organize and execute QA for a DESI production
 
@@ -36,29 +36,78 @@ class QA_Prod(QA_MultiExp):
         if specprod_dir is None:
             specprod_dir = specprod_root()
         self.specprod_dir = specprod_dir
-        # Init
-        QA_MultiExp.__init__(self, specprod_dir=specprod_dir)
-        # Load up exposures
-        nights = get_nights(specprod_dir=self.specprod_dir)
-        for night in nights:
-            self.mexp_dict[night] = {}
-            for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
-                # Object only??
-                frames_dict = get_files(filetype = str('frame'), night = night,
-                                        expid = exposure, specprod_dir = self.specprod_dir)
-                self.mexp_dict[night][exposure] = frames_dict
+        tmp = specprod_dir.split('/')
+        self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
+        # Exposure dict
+        self.mexp_dict = {}
+        # QA Exposure objects
+        self.qa_exps = []
+        # dict to hold QA data
+        #  Data Model :  key1 = Night(s);  key2 = Expids
+        self.data = {}
 
-    def load_data(self, inroot=None):
-        """ Load QA data from disk
+    def get_qa_table(self, qatype, metric, nights='all', channels='all'):
+        """ Generate a table of QA values from .data
+        Args:
+            qatype: str
+              FIBERFLAT, SKYSUB
+            metric: str
+            nights: str or list of str, optional
+            channels: str or list of str, optional
+              'b', 'r', 'z'
+
+        Returns:
+            qa_tbl: Table
         """
-        from desispec.io.qa import load_qa_prod
-        #
-        if inroot is None:
-            inroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
-        self.data = load_qa_prod(inroot)
+        from astropy.table import Table
+        out_list = []
+        out_expid = []
+        out_expmeta = []
+        out_cameras = []
+        # Nights
+        for night in self.data:
+            if (night not in nights) and (nights != 'all'):
+                continue
+            # Exposures
+            for expid in self.data[night]:
+                # Cameras
+                exp_meta = self.data[night][expid]['meta']
+                for camera in self.data[night][expid]:
+                    if camera in ['flavor', 'meta']:
+                        continue
+                    if (camera[0] not in channels) and (channels != 'all'):
+                        continue
+                    # Grab
+                    try:
+                        val = self.data[night][expid][camera][qatype]['METRICS'][metric]
+                    except KeyError:  # Each exposure has limited qatype
+                        pass
+                    except TypeError:
+                        import pdb; pdb.set_trace()
+                    else:
+                        if isinstance(val, (list,tuple)):
+                            out_list.append(val[0])
+                        else:
+                            out_list.append(val)
+                        # Meta data
+                        out_expid.append(expid)
+                        out_cameras.append(camera)
+                        out_expmeta.append(exp_meta)
+        # Return Table
+        qa_tbl = Table()
+        qa_tbl[metric] = out_list
+        qa_tbl['EXPID'] = out_expid
+        qa_tbl['CAMERA'] = out_cameras
+        # Add expmeta
+        for key in out_expmeta[0].keys():
+            tmp_list = []
+            for exp_meta in out_expmeta:
+                tmp_list.append(exp_meta[key])
+            qa_tbl[key] = tmp_list
+        return qa_tbl
 
     def make_frameqa(self, make_plots=False, clobber=False):
-        """ Work through the Production and make QA for all frames
+        """ Work through the exposures and make QA for all frames
 
         Parameters:
             make_plots: bool, optional
