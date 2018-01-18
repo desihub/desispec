@@ -211,8 +211,18 @@ class TestQA(unittest.TestCase):
         assert qabrck.data['ZBEST']['PARAMS']['MAX_NFAIL'] > 0
 
     def test_init_qa_prod(self):
+        self._write_qaframes()
         qaprod = QA_Prod(self.testDir)
+        # Load
+        qaprod.make_frameqa()
+        _ = qaprod.slurp()
+        qaprod.build_data()
+        # Build a Table
+        tbl = qaprod.get_qa_table('FIBERFLAT', 'CHI2PDF')
         # Test
+        assert len(tbl) == 2
+        assert tbl['FLAVOR'][0] == 'flat'
+        assert len(qaprod.qa_exps) == 1
         assert '20160101' in qaprod.mexp_dict.keys()
         assert isinstance(qaprod.data, dict)
 

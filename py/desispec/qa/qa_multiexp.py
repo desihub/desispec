@@ -12,7 +12,7 @@ from desispec.io import get_exposures
 from desispec.io import get_files
 from desispec.io import read_meta_frame
 from desispec.io import specprod_root
-from desispec.io import get_nights
+from desispec.io import write_qa_exposure
 
 from desiutil.log import get_logger
 
@@ -45,6 +45,19 @@ class QA_MultiExp(object):
         # dict to hold QA data
         #  Data Model :  key1 = Night(s);  key2 = Expids
         self.data = {}
+
+    def build_data(self):
+        """  Build QA data dict
+        """
+        from desiutil.io import combine_dicts
+        # Loop on exposures
+        odict = {}
+        for qaexp in self.qa_exps:
+            # Get the exposure dict
+            idict = write_qa_exposure('foo', qaexp, ret_dict=True)
+            odict = combine_dicts(odict, idict)
+        # Finish
+        self.data = odict
 
     def get_qa_table(self, qatype, metric, nights='all', channels='all'):
         """ Generate a table of QA values from .data
@@ -121,13 +134,10 @@ class QA_MultiExp(object):
         from desispec.io.qa import qafile_from_framefile
 
         # Loop on nights
-        nights = get_nights(specprod_dir=self.specprod_dir)
-        for night in nights:
-            for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
+        for night in self.mexp_dict.keys():
+            for exposure in self.mexp_dict[night]:
                 # Object only??
-                frames_dict = get_files(filetype = str('frame'), night = night,
-                        expid = exposure, specprod_dir = self.specprod_dir)
-                for camera,frame_fil in frames_dict.items():
+                for camera,frame_fil in self.mexp_dict[night][exposure].items():
                     # Load frame
                     qafile, _ = qafile_from_framefile(frame_fil)
                     if os.path.isfile(qafile) and (not clobber):
@@ -136,6 +146,7 @@ class QA_MultiExp(object):
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files into one master QA file
+
         Args:
             make_frameqa: bool, optional
               Regenerate the individual QA files (at the frame level first)
@@ -143,25 +154,23 @@ class QA_MultiExp(object):
               Remove
 
         Returns:
+        outroot : str
 
         """
         from desispec.qa import QA_Exposure
-        from desispec.io import write_qa_prod
         log = get_logger()
         # Remake?
         if make_frameqa:
             self.make_frameqa(**kwargs)
         # Loop on nights
-        nights = get_nights(specprod_dir=self.specprod_dir)
         # Reset
-        log.info("Resetting qa_exps in qa_prod")
+        log.info("Resetting QA_Exposure objects")
         self.qa_exps = []
         # Loop
-        for night in nights:
+        for night in self.mexp_dict.keys():
             # Loop on exposures
-            for exposure in get_exposures(night, specprod_dir = self.specprod_dir):
-                frames_dict = get_files(filetype = str('frame'), night = night,
-                                        expid = exposure, specprod_dir = self.specprod_dir)
+            for exposure in self.mexp_dict[night].keys():
+                frames_dict = self.mexp_dict[night][exposure]
                 if len(frames_dict) == 0:
                     continue
                 # Load any frame (for the type and meta info)
@@ -175,7 +184,11 @@ class QA_MultiExp(object):
                 self.qa_exps.append(qa_exp)
         # Write
         outroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
-        write_qa_prod(outroot, self)
+        self.write_slurp(outroot)
+        return outroot
+
+    def write_slurp(self, outroot):
+        pass  # Should be using the Child write method
 
     def __repr__(self):
         """ Print formatting

@@ -220,30 +220,27 @@ def load_qa_prod(inroot):
     return odict
 
 
-def write_qa_prod(outroot, qaprod, indent=True):
+def write_qa_prod(outroot, qaprod, indent=True, skip_rebuild=False):
     """Write QA for a given production
 
     Args:
         outroot : str
           filename without format extension
         qa_prod : QA_Prod object
+        skip_rebuild : bool, optional
+          Do not rebuild the data dict
 
     Returns:
         outfile: str
           output filename
     """
-    from desiutil.io import combine_dicts
     log=get_logger()
     outfile = outroot+'.json'
     outfile = makepath(outfile, 'qa')
 
-    # Loop on exposures
-    odict = {}
-    for qaexp in qaprod.qa_exps:
-        # Get the exposure dict
-        idict = write_qa_exposure('foo', qaexp, ret_dict=True)
-        odict = combine_dicts(odict, idict)
-    ydict = yamlify(odict)  # This works well for JSON too
+    if not skip_rebuild:
+        qaprod.build_data()
+    ydict = yamlify(qaprod.data)  # This works well for JSON too
     # Simple json
     with open(outfile, 'wt') as fh:
         json.dump(ydict, fh, indent=indent)
