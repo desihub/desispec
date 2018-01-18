@@ -9,16 +9,13 @@ from desispec.qa import __offline_qa_version__
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate QA on Sky Subtraction residuals [v{:s}]".format(__offline_qa_version__))
-    parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',
-                        help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--expid', type=int, help='Generate exposure plot on given exposure')
     parser.add_argument('--channels', type=str, help='List of channels to include')
     parser.add_argument('--prod', default=False, action="store_true", help="Results for full production run")
     parser.add_argument('--gauss', default=False, action="store_true", help="Expore Gaussianity for full production run")
     parser.add_argument('--nights', type=str, help='List of nights to limit prod plots')
     parser.add_argument('--skyline', default=False, action="store_true", help="Skyline residuals?")
-    parser.add_argument('--outdir', type=str, default=None, metavar = 'PATH',
-                        help = 'Override default output path with is $(pwd)/QA and *must exist*')
+    parser.add_argument('--qafig_path', type=str, default=None, help = 'Path to where QA figure files are generated.  Default is qaprod_dir')
 
     if options is None:
         args = parser.parse_args()
@@ -38,24 +35,23 @@ def main(args) :
     from desispec.io import get_reduced_frames
     from desispec.io.sky import read_sky
     from desispec.io import specprod_root
+    from desispec.io import qaprod_root
     from desispec.qa import utils as qa_utils
     import copy
     import pdb
+
+    # Init
+    specprod_dir = specprod_root()
 
     # Log
     log=get_logger()
     log.info("starting")
 
     # Path
-    if args.reduxdir is not None:
-        specprod_dir = args.reduxdir
+    if args.qafig_path is not None:
+        qafig_path = args.qafig_path
     else:
-        specprod_dir = specprod_root()
-
-    if args.outdir is not None:
-        qafig_path = args.outdir
-    else:
-        qafig_path = specprod_dir+'/QA/'
+        qafig_path = qaprod_root()
 
     # Channels
     if args.channels is not None:
