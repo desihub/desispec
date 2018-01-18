@@ -13,6 +13,7 @@ from desispec.io import get_files
 from desispec.io import read_meta_frame
 from desispec.io import specprod_root
 from desispec.io import write_qa_exposure
+from desispec.io import write_qa_multiexp
 
 from desiutil.log import get_logger
 
@@ -187,8 +188,17 @@ class QA_MultiExp(object):
         self.write_slurp(outroot)
         return outroot
 
-    def write_slurp(self, outroot):
-        pass  # Should be using the Child write method
+    def write_slurp(self, outroot, **kwargs):
+        """  Write the slurp to the hard drive
+        Args:
+            outroot: str
+            **kwargs:
+
+        Returns:
+            output_file : str
+
+        """
+        return write_qa_multiexp(outroot, self, **kwargs)
 
     def __repr__(self):
         """ Print formatting

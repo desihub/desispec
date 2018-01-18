@@ -220,7 +220,7 @@ def load_qa_prod(inroot):
     return odict
 
 
-def write_qa_prod(outroot, qaprod, indent=True, skip_rebuild=False):
+def write_qa_multiexp(outroot, qa_mexp, indent=True, skip_rebuild=False):
     """Write QA for a given production
 
     Args:
@@ -239,8 +239,8 @@ def write_qa_prod(outroot, qaprod, indent=True, skip_rebuild=False):
     outfile = makepath(outfile, 'qa')
 
     if not skip_rebuild:
-        qaprod.build_data()
-    ydict = yamlify(qaprod.data)  # This works well for JSON too
+        qa_mexp.build_data()
+    ydict = yamlify(qa_mexp.data)  # This works well for JSON too
     # Simple json
     with open(outfile, 'wt') as fh:
         json.dump(ydict, fh, indent=indent)

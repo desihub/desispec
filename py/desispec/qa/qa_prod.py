@@ -12,7 +12,6 @@ from desispec.io import get_files
 from desispec.io import read_meta_frame
 from desispec.io import specprod_root
 from desispec.io import get_nights
-from desispec.io import write_qa_prod
 from .qa_multiexp import QA_MultiExp
 
 from desiutil.log import get_logger
@@ -57,8 +56,5 @@ class QA_Prod(QA_MultiExp):
         if inroot is None:
             inroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
         self.data = load_qa_prod(inroot)
-
-    def write_slurp(self, outroot):
-        write_qa_prod(outroot, self)
 
 
