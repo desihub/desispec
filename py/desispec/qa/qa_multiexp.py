@@ -14,6 +14,7 @@ from desispec.io import read_meta_frame
 from desispec.io import specprod_root
 from desispec.io import write_qa_exposure
 from desispec.io import write_qa_multiexp
+from desispec.io import qaprod_root
 
 from desiutil.log import get_logger
 
@@ -21,7 +22,7 @@ from desiutil.log import get_logger
 
 
 class QA_MultiExp(object):
-    def __init__(self, specprod_dir=None):
+    def __init__(self, specprod_dir=None, qaprod_dir=None):
         """ Class to organize and execute QA for a DESI production
 
         Args:
@@ -34,9 +35,13 @@ class QA_MultiExp(object):
               List of QA_Exposure classes, one per exposure in production
             data : dict
         """
+        # Init
         if specprod_dir is None:
             specprod_dir = specprod_root()
+        if qaprod_dir is None:
+            qaprod_dir = qaprod_root()
         self.specprod_dir = specprod_dir
+        self.qaprod_dir = qaprod_dir
         tmp = specprod_dir.split('/')
         self.prod_name = tmp[-1] if (len(tmp[-1]) > 0) else tmp[-2]
         # Exposure dict
@@ -46,6 +51,8 @@ class QA_MultiExp(object):
         # dict to hold QA data
         #  Data Model :  key1 = Night(s);  key2 = Expids
         self.data = {}
+        #
+        self.qaexp_outroot = None
 
     def build_data(self):
         """  Build QA data dict
@@ -120,6 +127,16 @@ class QA_MultiExp(object):
             qa_tbl[key] = tmp_list
         return qa_tbl
 
+    def load_data(self, inroot=None):
+        """ Load QA data from disk
+        """
+        from desispec.io import load_qa_multiexp
+        # Init
+        if inroot is None:
+            inroot = self.qaexp_outroot
+        # Load
+        self.data = load_qa_multiexp(inroot)
+
     def make_frameqa(self, make_plots=False, clobber=False):
         """ Work through the exposures and make QA for all frames
 
@@ -146,16 +163,16 @@ class QA_MultiExp(object):
                     qaframe_from_frame(frame_fil, make_plots=make_plots)
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
-        """ Slurp all the individual QA files into one master QA file
+        """ Slurp all the individual QA files to generate
+        a list of QA_Exposure objects
 
         Args:
             make_frameqa: bool, optional
               Regenerate the individual QA files (at the frame level first)
             remove: bool, optional
-              Remove
+              Remove the individual QA files?
 
         Returns:
-        outroot : str
 
         """
         from desispec.qa import QA_Exposure
@@ -183,13 +200,9 @@ class QA_MultiExp(object):
                 qa_exp.load_meta(frame_meta)
                 # Append
                 self.qa_exps.append(qa_exp)
-        # Write
-        outroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
-        self.write_slurp(outroot)
-        return outroot
 
-    def write_slurp(self, outroot, **kwargs):
-        """  Write the slurp to the hard drive
+    def write_qa_exposures(self, outroot=None, **kwargs):
+        """  Write the slurp of QA Exposures to the hard drive
         Args:
             outroot: str
             **kwargs:
@@ -198,6 +211,8 @@ class QA_MultiExp(object):
             output_file : str
 
         """
+        if outroot is None:
+            outroot = self.qaexp_outroot
         return write_qa_multiexp(outroot, self, **kwargs)
 
     def __repr__(self):

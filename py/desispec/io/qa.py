@@ -198,7 +198,7 @@ def write_qa_exposure(outroot, qaexp, ret_dict=False):
     return outfile
 
 
-def load_qa_prod(inroot):
+def load_qa_multiexp(inroot):
     """Load QA for a given production
 
     Args:
