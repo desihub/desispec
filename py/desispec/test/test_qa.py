@@ -27,8 +27,8 @@ class TestQA(unittest.TestCase):
         cls.nwave = 20
         cls.id = 1
         # Run
-        cls.nights = ['20160101','20160102']
-        cls.expids = [1,2]
+        cls.nights = ['20160101']*2 + ['20160102']*2
+        cls.expids = [1,2,3,4]
         cls.cameras = ['b0','b1']
         # Files
         cls.files_written = []
@@ -86,6 +86,11 @@ class TestQA(unittest.TestCase):
         # Return
         return frame_file, fflat_file
 
+    def _write_flat_files(self):
+        for expid, night in zip(self.expids, self.nights):
+            for camera in self.cameras:
+                self._write_flat_file(camera=camera, night=night, expid=expid)
+
     def _write_qaframe(self, camera='b0', expid=1, night='20160101', ZPval=24.):
         """Write QA data frame files"""
         frm = self._make_frame(camera=camera)
@@ -106,6 +111,18 @@ class TestQA(unittest.TestCase):
         write_qa_frame(qafile, qafrm)
         self.files_written.append(qafile)
         return qafile
+
+    def _write_qaframes(self, **kwargs):
+        """ Build the standard set of qaframes
+        Args:
+            **kwargs:  passed to _write_qaframe
+
+        Returns:
+
+        """
+        for expid, night in zip(self.expids, self.nights):
+            for camera in self.cameras:
+                self._write_qaframe(camera=camera, expid=expid, night=night, **kwargs)
 
     def _write_qabrick(self):
         """Write a QA data brick file"""
@@ -162,7 +179,7 @@ class TestQA(unittest.TestCase):
         write_qa_frame(outfile, qafrm0)
         self.files_written.append(outfile)
         # Load
-        qafrm2 = load_qa_frame(self.qafile_b0, frm0)
+        qafrm2 = load_qa_frame(outfile, frm0)
         assert qafrm2.night == qafrm0.night
 
 
@@ -185,9 +202,8 @@ class TestQA(unittest.TestCase):
 
     def test_qa_exposure_load_write_data(self):
         #- Test loading data
+        self._write_qaframes()
         expid, night = self.expids[0], self.nights[0]
-        for camera in self.cameras:
-            self._write_qaframe(camera=camera)
         qaexp = QA_Exposure(expid, night, 'science', specprod_dir=self.testDir)
         assert 'b0' in qaexp.data['frames']
         assert 'b1' in qaexp.data['frames']
@@ -199,7 +215,8 @@ class TestQA(unittest.TestCase):
     def test_exposure_fibermap_plot(self):
         from desispec.qa.qa_plots import exposure_fiberflat
         self._write_flat_files()
-        exposure_fiberflat('b', self.expid, 'meanflux', outfile=self.exp_fmap_plot)
+        exposure_fiberflat('b', self.expids[0], 'meanflux', outfile=self.exp_fmap_plot)
+        self.files_written.append(self.exp_fmap_plot)
 
     """
     # This needs to run as a script for the figure generation to pass Travis..
@@ -231,7 +248,7 @@ class TestQA(unittest.TestCase):
         # Test
         assert len(tbl) == 2
         assert tbl['FLAVOR'][0] == 'flat'
-        assert len(qaprod.qa_exps) == 1
+        assert len(qaprod.qa_exps) == 4
         assert '20160101' in qaprod.mexp_dict.keys()
         assert isinstance(qaprod.data, dict)
 
