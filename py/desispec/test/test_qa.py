@@ -13,6 +13,7 @@ from desispec.qa.qa_frame import QA_Frame
 from desispec.qa.qa_exposure import QA_Exposure
 from desispec.qa.qa_brick import QA_Brick
 from desispec.qa.qa_prod import QA_Prod
+from desispec.qa.qa_night import QA_Night
 from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure, findfile, write_frame
 from desispec.io import write_fiberflat, specprod_root
 from desispec.test.util import get_frame_data, get_calib_from_frame, get_fiberflat_from_frame
@@ -251,6 +252,23 @@ class TestQA(unittest.TestCase):
         assert len(qaprod.qa_exps) == 4
         assert '20160101' in qaprod.mexp_dict.keys()
         assert isinstance(qaprod.data, dict)
+
+    def test_init_qa_night(self):
+        self._write_qaframes()
+        night = self.nights[0]
+        qanight = QA_Night(night, specprod_dir=self.testDir)
+        # Load
+        qanight.make_frameqa()
+        _ = qanight.slurp()
+        qanight.build_data()
+        # Build a Table
+        tbl = qanight.get_qa_table('FIBERFLAT', 'CHI2PDF')
+        # Test
+        assert len(tbl) == 2
+        assert tbl['FLAVOR'][0] == 'flat'
+        assert len(qanight.qa_exps) == 2
+        assert night in qanight.mexp_dict.keys()
+        assert isinstance(qanight.data, dict)
 
     def test_qa_frame_plot(self):
         from desispec.qa import qa_plots
