@@ -56,7 +56,7 @@ env:
         # - SCIPY_VERSION=0.16
         - ASTROPY_VERSION=1.2.1
         - SPHINX_VERSION=1.5
-        - DESIUTIL_VERSION=1.9.5
+        - DESIUTIL_VERSION=1.9.9
         - SPECLITE_VERSION=0.5
         - SPECTER_VERSION=0.8.1
         # - DESIMODEL_VERSION=0.7.0
