@@ -456,6 +456,18 @@ def specprod_root():
     return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'))
 
 
+def qaprod_root():
+    """Return directory root for spectro production QA, i.e.
+    ``$DESI_SPECTRO_REDUX/$SPECPROD/QA``.
+
+    Raises:
+        AssertionError: if these environment variables aren't set.
+    """
+    assert 'SPECPROD' in os.environ, 'Missing $SPECPROD environment variable'
+    assert 'DESI_SPECTRO_REDUX' in os.environ, 'Missing $DESI_SPECTRO_REDUX environment variable'
+    return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'QA')
+
+
 def get_pipe_plandir(specprod_dir=None):
     """
     Return the directory path for pipeline planning files.

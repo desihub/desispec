@@ -9,8 +9,6 @@ from desispec.qa import __offline_qa_version__
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Generate/Analyze Production Level QA [v{:s}]".format(__offline_qa_version__))
 
-    parser.add_argument('--reduxdir', type = str, default = None, required=False,
-                        help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
     parser.add_argument('--make_frameqa', type = int, default = 0,
                         help = 'Bitwise flag to control remaking the QA files (1) and figures (2) for each frame in the production')
     parser.add_argument('--slurp', default = False, action='store_true',
@@ -27,6 +25,7 @@ def parse(options=None):
                         help='Restrict to bright/dark (flag: 0=all; 1=bright; 2=dark; only used in time_series)')
     parser.add_argument('--html', default = False, action='store_true',
                         help = 'Generate HTML files?')
+    parser.add_argument('--qafig_path', type=str, default=None, help = 'Path to where QA figure files are generated.  Default is qaprod_dir')
 
     args = None
     if options is None:
@@ -47,10 +46,11 @@ def main(args) :
 
     log.info("starting")
     # Initialize
-    if args.reduxdir is None:
-        specprod_dir = meta.specprod_root()
+    specprod_dir = meta.specprod_root()
+    if args.qafig_path is None:
+        qafig_path = meta.qaprod_root()
     else:
-        specprod_dir = args.reduxdir
+        qafig_path = args.qafig_path
 
     qa_prod = QA_Prod(specprod_dir)
 
@@ -94,7 +94,7 @@ def main(args) :
         qa_prod.load_data()
         # Run
         qatype, metric = args.time_series.split('-')
-        outfile= specprod_dir+'/QA/QA_time_{:s}.png'.format(args.time_series)
+        outfile= qafig_path+'/QA_time_{:s}.png'.format(args.time_series)
         dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile, bright_dark=args.bright_dark)
 
     # HTML

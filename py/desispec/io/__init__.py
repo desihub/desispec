@@ -20,7 +20,7 @@ from .spectra import read_spectra, write_spectra, read_frame_as_spectra
 from .frame import read_meta_frame, read_frame, write_frame
 from .image import read_image, write_image
 from .meta import (findfile, get_exposures, get_files, get_raw_files,
-                   rawdata_root, specprod_root, validate_night,
+                   rawdata_root, specprod_root, validate_night, qaprod_root,
                    get_pipe_plandir, get_pipe_rundir, get_pipe_scriptdir,
                    get_pipe_logdir, get_pipe_faildir, get_reduced_frames,
                    get_nights, find_exposure_night, get_pipe_redshiftdir)
