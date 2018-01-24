@@ -65,9 +65,10 @@ def main(args) :
         if (args.make_frameqa & 2**0) or (args.make_frameqa & 2**1):
             qa_prod.make_frameqa(make_plots=make_frame_plots, clobber=args.clobber)
 
-    # Slurp?
+    # Slurp and write?
     if args.slurp:
         qa_prod.slurp(make=(args.make_frameqa > 0), remove=args.remove)
+        qa_prod.write_qa_exposures()
 
     # Channel histograms
     if args.channel_hist is not None:

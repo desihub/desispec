@@ -13,6 +13,7 @@ from desispec.qa.qa_frame import QA_Frame
 from desispec.qa.qa_exposure import QA_Exposure
 from desispec.qa.qa_brick import QA_Brick
 from desispec.qa.qa_prod import QA_Prod
+from desispec.qa.qa_night import QA_Night
 from desispec.io import write_qa_frame, write_qa_brick, load_qa_frame, write_qa_exposure, findfile, write_frame
 from desispec.io import write_fiberflat, specprod_root
 from desispec.test.util import get_frame_data, get_calib_from_frame, get_fiberflat_from_frame
@@ -25,32 +26,28 @@ class TestQA(unittest.TestCase):
     def setUpClass(cls):
         cls.nspec = 6
         cls.nwave = 20
-        id = 1
-        cls.night = '20160101'
-        cls.expid = 1
+        cls.id = 1
+        # Run
+        cls.nights = ['20160101']*2 + ['20160102']*2
+        cls.expids = [1,2,3,4]
+        cls.cameras = ['b0','b1']
+        # Files
+        cls.files_written = []
         # Paths
         os.environ['DESI_SPECTRO_REDUX'] = os.environ['HOME']
         os.environ['SPECPROD'] = 'desi_test_qa'
-        # Files
         cls.testDir = specprod_root()
-        cls.qafile_b0 = findfile('qa_data', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b0')
-        cls.qafile_b1 = findfile('qa_data', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b1')
-        cls.qafile_exp = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-{:08d}'.format(id,id)
+        # Files
         cls.qafile_brick = cls.testDir+'/brick/3582m005/qa-3582m005.yaml'
-        cls.flux_pdf = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-flux-{:08d}.pdf'.format(id,id)
-        cls.frame_pdf = cls.testDir+'/exposures/'+cls.night+'/{:08d}/qa-frame-{:08d}.pdf'.format(id,id)
+        cls.flux_pdf = cls.testDir+'/exposures/'+cls.nights[0]+'/{:08d}/qa-flux-{:08d}.pdf'.format(cls.id,cls.id)
+        cls.frame_pdf = cls.testDir+'/exposures/'+cls.nights[0]+'/{:08d}/qa-frame-{:08d}.pdf'.format(cls.id,cls.id)
         # Files for exposure fibermap QA figure
-        cls.frame_b0 = findfile('frame', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b0')
-        cls.frame_b1 = findfile('frame', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b1')
-        cls.fflat_b0 = findfile('fiberflat', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b0')
-        cls.fflat_b1 = findfile('fiberflat', night=cls.night, expid=cls.expid, specprod_dir=cls.testDir, camera='b1')
         cls.exp_fmap_plot = cls.testDir+'/test_exp_fibermap_plot.png'
 
     @classmethod
     def tearDownClass(cls):
         """Cleanup in case tests crashed and left files behind"""
-        for filename in [cls.qafile_b0, cls.qafile_b1, cls.flux_pdf, cls.frame_b0, cls.frame_b1,
-                         cls.fflat_b0, cls.fflat_b1, cls.exp_fmap_plot, cls.frame_pdf]:
+        for filename in cls.files_written:
             if os.path.exists(filename):
                 os.remove(filename)
                 #testpath = os.path.normpath(os.path.dirname(filename))
@@ -60,52 +57,73 @@ class TestQA(unittest.TestCase):
             rmtree(cls.testDir)
 
     def _make_frame(self, camera='b0', flavor='science', night=None, expid=None, nspec=3, objtype=None):
+        # Init
         if night is None:
-            night = self.night
+            night = self.nights[0]
         if expid is None:
-            expid = self.expid
+            expid = self.expids[0]
         # Generate
         frame = get_frame_data(nspec=nspec, objtype=objtype)
         frame.meta = dict(CAMERA=camera, FLAVOR=flavor, NIGHT=night, EXPID=expid)
         return frame
 
-    def _write_flat_files(self):
+    def _write_flat_file(self, camera='b0', night=None, expid=None):
+        # Init
+        if night is None:
+            night = self.nights[0]
+        if expid is None:
+            expid = self.expids[0]
+        # Filename
+        frame_file = findfile('frame', night=night, expid=expid, specprod_dir=self.testDir, camera=camera)
+        fflat_file = findfile('fiberflat', night=night, expid=expid, specprod_dir=self.testDir, camera=camera)
         # Frames
-        fb0 = self._make_frame(camera='b0', flavor='flat', nspec=10, objtype='FLAT')
-        _ = write_frame(self.frame_b0, fb0)
-        fb1 = self._make_frame(camera='b1', flavor='flat', nspec=10, objtype='FLAT')
-        _ = write_frame(self.frame_b1, fb1)
+        fb = self._make_frame(camera=camera, flavor='flat', nspec=10, objtype='FLAT')
+        _ = write_frame(frame_file, fb)
+        self.files_written.append(frame_file)
         # Fiberflats
-        ff0 = get_fiberflat_from_frame(fb0)
-        write_fiberflat(self.fflat_b0, ff0)
-        ff1 = get_fiberflat_from_frame(fb1)
-        write_fiberflat(self.fflat_b1, ff1)
+        ff = get_fiberflat_from_frame(fb)
+        write_fiberflat(fflat_file, ff)
+        self.files_written.append(fflat_file)
+        # Return
+        return frame_file, fflat_file
 
-    def _write_qaframes(self):
+    def _write_flat_files(self):
+        for expid, night in zip(self.expids, self.nights):
+            for camera in self.cameras:
+                self._write_flat_file(camera=camera, night=night, expid=expid)
+
+    def _write_qaframe(self, camera='b0', expid=1, night='20160101', ZPval=24.):
         """Write QA data frame files"""
-        frm0 = self._make_frame(camera='b0')
-        frm1 = self._make_frame(camera='b1')
-        qafrm0 = QA_Frame(frm0)
-        qafrm1 = QA_Frame(frm1)
+        frm = self._make_frame(camera=camera)
+        qafrm = QA_Frame(frm)
         # SKY
-        qafrm0.init_skysub()
-        qafrm1.init_skysub()
-        qafrm0.qa_data['SKYSUB']['METRICS'] = {}
-        qafrm1.qa_data['SKYSUB']['METRICS'] = {}
-        qafrm0.qa_data['SKYSUB']['METRICS']['NSKY_FIB'] = 10
-        qafrm1.qa_data['SKYSUB']['METRICS']['NSKY_FIB'] = 30
+        qafrm.init_skysub()
+        qafrm.qa_data['SKYSUB']['METRICS'] = {}
+        qafrm.qa_data['SKYSUB']['METRICS']['NSKY_FIB'] = 10
         # FLUX
-        qafrm0.init_fluxcalib()
-        qafrm1.init_fluxcalib()
-        qafrm0.qa_data['FLUXCALIB']['METRICS'] = {}
-        qafrm0.qa_data['FLUXCALIB']['METRICS']['ZP'] = 24.
-        qafrm0.qa_data['FLUXCALIB']['METRICS']['RMS_ZP'] = 0.05
-        qafrm1.qa_data['FLUXCALIB']['METRICS'] = {}
-        qafrm1.qa_data['FLUXCALIB']['METRICS']['ZP'] = 24.5
-        qafrm1.qa_data['FLUXCALIB']['METRICS']['RMS_ZP'] = 0.05
+        qafrm.init_fluxcalib()
+        qafrm.qa_data['FLUXCALIB']['METRICS'] = {}
+        qafrm.qa_data['FLUXCALIB']['METRICS']['ZP'] = ZPval
+        qafrm.qa_data['FLUXCALIB']['METRICS']['RMS_ZP'] = 0.05
+        # Outfile
+        qafile = findfile('qa_data', night=night, expid=expid,
+                         specprod_dir=self.testDir, camera=camera)
         # WRITE
-        write_qa_frame(self.qafile_b0, qafrm0)
-        write_qa_frame(self.qafile_b1, qafrm1)
+        write_qa_frame(qafile, qafrm)
+        self.files_written.append(qafile)
+        return qafile
+
+    def _write_qaframes(self, **kwargs):
+        """ Build the standard set of qaframes
+        Args:
+            **kwargs:  passed to _write_qaframe
+
+        Returns:
+
+        """
+        for expid, night in zip(self.expids, self.nights):
+            for camera in self.cameras:
+                self._write_qaframe(camera=camera, expid=expid, night=night, **kwargs)
 
     def _write_qabrick(self):
         """Write a QA data brick file"""
@@ -115,6 +133,7 @@ class TestQA(unittest.TestCase):
         qabrck.data['ZBEST']['METRICS'] = {}
         qabrck.data['ZBEST']['METRICS']['NFAIL'] = 10
         write_qa_brick(self.qafile_brick, qabrck)
+        self.files_written.append(self.qafile_brick)
 
     def test_init_qa_frame(self):
         #- Simple Init call
@@ -155,9 +174,13 @@ class TestQA(unittest.TestCase):
         # Write
         frm0 = self._make_frame()
         qafrm0 = QA_Frame(frm0)
-        write_qa_frame(self.qafile_b0, qafrm0)
+        # Write
+        outfile = findfile('qa_data', night=self.nights[0], expid=self.expids[0],
+                           specprod_dir=self.testDir, camera='b0')
+        write_qa_frame(outfile, qafrm0)
+        self.files_written.append(outfile)
         # Load
-        qafrm2 = load_qa_frame(self.qafile_b0, frm0)
+        qafrm2 = load_qa_frame(outfile, frm0)
         assert qafrm2.night == qafrm0.night
 
 
@@ -181,16 +204,20 @@ class TestQA(unittest.TestCase):
     def test_qa_exposure_load_write_data(self):
         #- Test loading data
         self._write_qaframes()
-        qaexp = QA_Exposure(self.expid, self.night, 'science', specprod_dir=self.testDir)
+        expid, night = self.expids[0], self.nights[0]
+        qaexp = QA_Exposure(expid, night, 'science', specprod_dir=self.testDir)
         assert 'b0' in qaexp.data['frames']
         assert 'b1' in qaexp.data['frames']
         # Write
-        write_qa_exposure(self.qafile_exp, qaexp)
+        qafile_exp_file = self.testDir+'/exposures/'+night+'/{:08d}/qa-{:08d}'.format(self.id,self.id)
+        write_qa_exposure(qafile_exp_file, qaexp)
+        self.files_written.append(qafile_exp_file)
 
     def test_exposure_fibermap_plot(self):
         from desispec.qa.qa_plots import exposure_fiberflat
         self._write_flat_files()
-        exposure_fiberflat('b', self.expid, 'meanflux', outfile=self.exp_fmap_plot)
+        exposure_fiberflat('b', self.expids[0], 'meanflux', outfile=self.exp_fmap_plot)
+        self.files_written.append(self.exp_fmap_plot)
 
     """
     # This needs to run as a script for the figure generation to pass Travis..
@@ -211,7 +238,37 @@ class TestQA(unittest.TestCase):
         assert qabrck.data['ZBEST']['PARAMS']['MAX_NFAIL'] > 0
 
     def test_init_qa_prod(self):
+        self._write_qaframes()
         qaprod = QA_Prod(self.testDir)
+        # Load
+        qaprod.make_frameqa()
+        _ = qaprod.slurp()
+        qaprod.build_data()
+        # Build a Table
+        tbl = qaprod.get_qa_table('FIBERFLAT', 'CHI2PDF')
+        # Test
+        assert len(tbl) == 2
+        assert tbl['FLAVOR'][0] == 'flat'
+        assert len(qaprod.qa_exps) == 4
+        assert '20160101' in qaprod.mexp_dict.keys()
+        assert isinstance(qaprod.data, dict)
+
+    def test_init_qa_night(self):
+        self._write_qaframes()
+        night = self.nights[0]
+        qanight = QA_Night(night, specprod_dir=self.testDir)
+        # Load
+        qanight.make_frameqa()
+        _ = qanight.slurp()
+        qanight.build_data()
+        # Build a Table
+        tbl = qanight.get_qa_table('FIBERFLAT', 'CHI2PDF')
+        # Test
+        assert len(tbl) == 2
+        assert tbl['FLAVOR'][0] == 'flat'
+        assert len(qanight.qa_exps) == 2
+        assert night in qanight.mexp_dict.keys()
+        assert isinstance(qanight.data, dict)
 
     def test_qa_frame_plot(self):
         from desispec.qa import qa_plots
