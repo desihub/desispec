@@ -163,6 +163,18 @@ def read_frame(filename, nspec=None):
     else:
         chi2pix = None
 
+    if 'SCORES' in fx:
+        scores = fx['SCORES'].data
+        # I need to open the header to read the comments        
+        scores_comments = dict()
+        head   = fx['SCORES'].header
+        for i in range(1,len(scores.columns)+1) :
+            k='TTYPE'+str(i)
+            scores_comments[head[k]]=head.comments[k]
+    else:
+        scores = None
+        scores_comments = None
+        
     fx.close()
 
     if nspec is not None:
@@ -179,6 +191,7 @@ def read_frame(filename, nspec=None):
 
     # return flux,ivar,wave,resolution_data, hdr
     frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix,
+                  scores=scores,scores_comments=scores_comments,
                   wsigma=qwsigma,ndiag=qndiag)
 
     # Vette

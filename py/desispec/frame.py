@@ -42,7 +42,7 @@ from desispec import util
 class Frame(object):
     def __init__(self, wave, flux, ivar, mask=None, resolution_data=None,
                 fibers=None, spectrograph=None, meta=None, fibermap=None,
-                 chi2pix=None,
+                 chi2pix=None,scores=None,scores_comments=None,
                  wsigma=None,ndiag=21
     ):
         """
@@ -97,6 +97,8 @@ class Frame(object):
         self.fibermap = fibermap
         self.nspec, self.nwave = self.flux.shape
         self.chi2pix = chi2pix
+        self.scores  = scores
+        self.scores_comments  = scores_comments
         self.ndiag=ndiag
         fibers_per_spectrograph = 500   #- hardcode; could get from desimodel
 
@@ -243,6 +245,8 @@ class Frame(object):
         else:
             chi2pix = None
 
+        #- we do not propagate the scores here
+            
         wsigma=None
         if self.wsigma is not None:
             wsigma=self.wsigma[index]
