@@ -12,10 +12,12 @@ from astropy.io import fits
 
 from desispec import io
 from desiutil.log import get_logger
-from desispec.specscore import compute_frame_scores,append_scores_and_write_frame
+from desispec.specscore import compute_and_append_frame_scores
+from desispec.io.util import write_bintable
+from desispec.io  import write_frame
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Add or modify SCORES HDU to a frame or cframe fits file with simple scores on the spectra.")
+    parser = argparse.ArgumentParser(description="Add or modify SCORES HDU in a frame or cframe fits.")
     parser.add_argument('-i', '--infile', type = str, default = None, required=True, nargs='*',
                         help = 'list of path to DESI frame fits files')
     parser.add_argument('--overwrite', action="store_true",
@@ -36,17 +38,11 @@ def main(args) :
 
     log = get_logger()
 
-    
     for filename in args.infile :
         
         log.info("reading %s"%filename)
-        frame=io.read_frame(filename)
-
-        # is it a frame or a cframe ... this depends on the units
-
-        
-        new_scores,new_comments=compute_frame_scores(frame,suffix=args.suffix,calibrated=args.calibrated)
-        
-        append_scores_and_write_frame(frame,filename,new_scores,new_comments,args.overwrite)
-        
-        
+        frame=io.read_frame(filename)        
+        scores,comments=compute_and_append_frame_scores(frame,suffix=args.suffix,calibrated=args.calibrated,overwrite=args.overwrite)
+        log.info("Adding or replacing SCORES extention with {} in {}".format(scores.keys(),filename))
+        write_bintable(filename,data=scores,comments=comments,extname="SCORES",clobber=True)        
+        #write_frame(filename,frame) # an alternative 

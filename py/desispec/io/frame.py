@@ -90,6 +90,19 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if frame.chi2pix is not None:
         hdus.append( fits.ImageHDU(frame.chi2pix.astype('f4'), name='CHI2PIX' ) )
 
+    if frame.scores is not None :
+        scores_tbl = encode_table(frame.scores)  #- unicode -> bytes
+        scores_tbl.meta['EXTNAME'] = 'SCORES'
+        hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
+        if frame.scores_comments is not None : # add comments in header
+            hdu=hdus['SCORES']
+            for i in range(1,999):
+                key = 'TTYPE'+str(i)
+                if key in hdu.header:                    
+                    value = hdu.header[key]
+                    if value in frame.scores_comments.keys() :
+                        hdu.header[key] = (value, frame.scores_comments[value])
+    
     hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 

@@ -23,6 +23,7 @@ from desispec.frame import Frame
 from desispec.maskbits import specmask
 
 import desispec.scripts.mergebundles as mergebundles
+from desispec.specscore import compute_and_append_frame_scores
 
 
 def parse(options=None):
@@ -168,6 +169,9 @@ regularize: {regularize}
                 fibers=fibers, meta=img.meta, fibermap=fibermap,
                 chi2pix=chi2pix)
 
+    #- Add scores to frame
+    compute_and_append_frame_scores(frame,suffix="RAW",calibrated=False)
+    
     #- Write output
     frame.meta['BUNIT'] = 'photon/bin'
     io.write_frame(args.output, frame)
