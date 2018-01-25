@@ -18,7 +18,7 @@ def _auto_detect_camera(frame) :
     elif mwave>=tophat_wave["z"][0] : return "z"
     else : return "r"
 
-def compute_frame_scores(frame,band=None,suffix=None,calibrated=False) :
+def compute_frame_scores(frame,band=None,suffix=None,calibrated=None) :
     """
     Computes scores in spectra of a frame.
     The scores are sum,mean,medians in a predefined and fixed wavelength range
@@ -34,8 +34,10 @@ def compute_frame_scores(frame,band=None,suffix=None,calibrated=False) :
     Options:
         band : 'b','r', or 'z' (auto-detected by default)
         suffix : character string added to the keywords in the output dictionnary, for instance suffix='RAW'
-        calibrated : boolean, if true the spectra are assumed calibrated, i.e. flux densities
-    
+        calibrated : boolean, if true the spectra are assumed calibrated, i.e. flux densities. if false,
+                     the spectra are assumed to be counts or photo-electrons per bin. None by default in
+                     which case the frame.units string is read to find out whether the flux quantity is
+                     per unit wavelenght or per bin.
     Returns:
         scores : dictionnary of 1D arrays of size = number of spectra in frame
         comments : dictionnary of string with comments on the type of scores
@@ -66,7 +68,33 @@ def compute_frame_scores(frame,band=None,suffix=None,calibrated=False) :
         suffix="_"
     else :
         suffix="_%s_"%suffix
-    
+
+    if calibrated is None :
+
+        units=None
+        if frame.meta is not None :
+            if "BUNIT" in frame.meta :
+                units=frame.meta["BUNIT"]
+        if units is None :
+            log.error("Cannot interpret the flux units because no BUNIT information in frame.meta, and the calibrated argument is None. Returning empty dicts.")
+            # return empty dicts
+            scores=dict()
+            comments=dict()
+            return scores,comments
+
+        denominator=units.strip().split("/")[-1]
+        if denominator.find("A")>=0 :
+            calibrated=True
+        elif denominator.find("bin")>=0 :
+            calibrated=False
+        else :
+            log.error("Cannot understand in the flux unit '%s' whether it is per Angstrom or per bin. Returning empty dicts.")
+            # return empty dicts
+            scores=dict()
+            comments=dict()
+            return scores,comments
+        
+        
     if calibrated :
         # we need to integrate the flux accounting for the wavelength bin
         k="INTEG%sFLUX_%s"%(suffix,band.upper())
