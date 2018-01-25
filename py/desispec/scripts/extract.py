@@ -176,7 +176,7 @@ regularize: {regularize}
     frame.meta['BUNIT'] = 'electrons/Angstrom' 
     
     #- Add scores to frame
-    compute_and_append_frame_scores(frame,suffix="RAW",calibrated=False)
+    compute_and_append_frame_scores(frame,suffix="RAW")
 
     #- Write output
     io.write_frame(args.output, frame)
@@ -372,8 +372,16 @@ def main_mpi(args, comm=None):
                         fibers=bfibers, meta=img.meta, fibermap=bfibermap,
                         chi2pix=chi2pix)
 
+            #- Add unit
+            #   In specter.extract.ex2d one has flux /= dwave
+            #   to convert the measured total number of electrons per
+            #   wavelength node to an electron 'density'
+            frame.meta['BUNIT'] = 'electrons/Angstrom' 
+            
+            #- Add scores to frame
+            compute_and_append_frame_scores(frame,suffix="RAW")
+            
             #- Write output
-            frame.meta['BUNIT'] = 'photon/bin'
             io.write_frame(outbundle, frame)
 
             if args.model is not None:
