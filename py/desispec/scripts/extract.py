@@ -168,12 +168,17 @@ regularize: {regularize}
     frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdata,
                 fibers=fibers, meta=img.meta, fibermap=fibermap,
                 chi2pix=chi2pix)
-
+    
+    #- Add unit
+    #   In specter.extract.ex2d one has flux /= dwave
+    #   to convert the measured total number of electrons per
+    #   wavelength node to an electron 'density'
+    frame.meta['BUNIT'] = 'electrons/Angstrom' 
+    
     #- Add scores to frame
     compute_and_append_frame_scores(frame,suffix="RAW",calibrated=False)
-    
+
     #- Write output
-    frame.meta['BUNIT'] = 'photon/bin'
     io.write_frame(args.output, frame)
 
     if args.model is not None:
