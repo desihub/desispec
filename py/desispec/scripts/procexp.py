@@ -50,6 +50,9 @@ def main(args):
         sys.exit(12)
 
     frame = read_frame(args.infile)
+
+    #- Raw scores already added in extraction, but just in case they weren't
+    #- it is harmless to rerun to make sure we have them.
     compute_and_append_frame_scores(frame,suffix="RAW",calibrated=False)
     
     if args.cosmics_nsig>0 : # Reject cosmics         

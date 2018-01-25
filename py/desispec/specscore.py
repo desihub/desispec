@@ -74,7 +74,7 @@ def compute_frame_scores(frame,band=None,suffix=None,calibrated=False) :
         comments[k]     = "integ. flux in wave. range {},{}A".format(tophat_wave[band][0],tophat_wave[band][1])
         # simple median
         k="MEDIAN%sFLUX_%s"%(suffix,band.upper())
-        scores[k]       = np.median(frame.flux[:,ii]/dwave[ii],axis=1) # per angstrom
+        scores[k]       = np.median(frame.flux[:,ii],axis=1) # already per angstrom
         comments[k]     = "median flux in wave. range {},{}A".format(tophat_wave[band][0],tophat_wave[band][1])        
     else :
         # simple sum of counts
