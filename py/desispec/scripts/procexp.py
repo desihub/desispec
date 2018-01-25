@@ -53,7 +53,7 @@ def main(args):
 
     #- Raw scores already added in extraction, but just in case they weren't
     #- it is harmless to rerun to make sure we have them.
-    compute_and_append_frame_scores(frame,suffix="RAW",calibrated=False)
+    compute_and_append_frame_scores(frame,suffix="RAW")
     
     if args.cosmics_nsig>0 : # Reject cosmics         
         reject_cosmic_rays_1d(frame,args.cosmics_nsig)
@@ -65,7 +65,7 @@ def main(args):
 
         # apply fiberflat to sky fibers
         apply_fiberflat(frame, fiberflat)
-        compute_and_append_frame_scores(frame,suffix="FFLAT",calibrated=False)
+        compute_and_append_frame_scores(frame,suffix="FFLAT")
     
     if args.sky!=None :
         log.info("subtract sky")
@@ -73,7 +73,7 @@ def main(args):
         skymodel=read_sky(args.sky)
         # subtract sky
         subtract_sky(frame, skymodel)
-        compute_and_append_frame_scores(frame,suffix="SKYSUB",calibrated=False)
+        compute_and_append_frame_scores(frame,suffix="SKYSUB")
         
     if args.calib!=None :
         log.info("calibrate")
@@ -81,7 +81,7 @@ def main(args):
         fluxcalib=read_flux_calibration(args.calib)
         # apply calibration
         apply_flux_calibration(frame, fluxcalib)
-        compute_and_append_frame_scores(frame,suffix="CALIB",calibrated=True)
+        compute_and_append_frame_scores(frame,suffix="CALIB")
         
     if args.cosmics_nsig>0 : # Reject cosmics one more time after sky subtraction to catch cosmics close to sky lines
         reject_cosmic_rays_1d(frame,args.cosmics_nsig)
