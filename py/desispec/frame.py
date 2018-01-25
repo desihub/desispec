@@ -65,6 +65,9 @@ class Frame(object):
             fibermap: fibermap table
             chi2pix: 2D[nspec, nwave] chi2 of 2D model to pixel-level data
                 for pixels that contributed to each flux bin
+            scores: dictionnary of 1D arrays of size nspec
+            scores_comments: dictionnary of string (explaining the scores)
+        
         Parameters below allow on-the-fly resolution calculation
             wsigma: 2D[nspec,nwave] sigma widths for each wavelength bin for all fibers
         Notes:
