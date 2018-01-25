@@ -26,9 +26,9 @@ class TestScores(unittest.TestCase):
     def test_scores(self):        
         #- 
         frame = self._get_frame()
-        scores,comments=compute_and_append_frame_scores(frame,suffix="RAW",calibrated=False)        
-        scores,comments=compute_and_append_frame_scores(frame,suffix="RAW",calibrated=False)
-        scores,comments=compute_and_append_frame_scores(frame,suffix="CALIB",calibrated=True)
+        scores,comments=compute_and_append_frame_scores(frame,suffix="RAW",flux_per_angstrom=False)        
+        scores,comments=compute_and_append_frame_scores(frame,suffix="RAW",flux_per_angstrom=False)
+        scores,comments=compute_and_append_frame_scores(frame,suffix="CALIB",flux_per_angstrom=True)
         print(scores)
         print(comments)
 

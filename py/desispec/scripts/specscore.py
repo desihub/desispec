@@ -22,9 +22,9 @@ def parse(options=None):
                         help = 'list of path to DESI frame fits files')
     parser.add_argument('--overwrite', action="store_true",
                         help = 'The HDU SCORES is overwritten if it already exists in the file')
-    parser.add_argument('--calibrated', action="store_true",
+    parser.add_argument('--flux-per-angstrom', action="store_true",
                         help = "the fluxes calibrated")
-    parser.add_argument('--not-calibrated', action="store_true",
+    parser.add_argument('--flux-per-pixel', action="store_true",
                         help = "the fluxes are not calibrated")
     parser.add_argument('--suffix', type = str, default = None, required=False,
                         help = 'suffix added to the column name in the SCORES table to describe the level of processing of the spectra in the frame. For instance "RAW","FFLAT","SKYSUB","CALIB"')
@@ -44,15 +44,16 @@ def main(args) :
         
         log.info("reading %s"%filename)
         frame=io.read_frame(filename)
-        
-        if args.calibrated :
-            calibrated=True
-        elif args.not_calibrated :
-            calibrated=False
+
+        flux_per_angstrom=None
+        if args.flux_per_angstrom :
+            flux_per_angstrom=True
+        elif args.flux_per_pixel :
+            flux_per_angstrom=False
         else :
-            calibrated=None
+            flux_per_angstrom=None
         
-        scores,comments=compute_and_append_frame_scores(frame,suffix=args.suffix,calibrated=calibrated,overwrite=args.overwrite)
+        scores,comments=compute_and_append_frame_scores(frame,suffix=args.suffix,flux_per_angstrom=flux_per_angstrom,overwrite=args.overwrite)
         log.info("Adding or replacing SCORES extention with {} in {}".format(scores.keys(),filename))
         write_bintable(filename,data=scores,comments=comments,extname="SCORES",clobber=True)        
         #write_frame(filename,frame) # an alternative 

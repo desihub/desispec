@@ -18,23 +18,22 @@ def _auto_detect_camera(frame) :
     elif mwave>=tophat_wave["z"][0] : return "z"
     else : return "r"
 
-def compute_frame_scores(frame,band=None,suffix=None,calibrated=None) :
+def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
     """
     Computes scores in spectra of a frame.
     The scores are sum,mean,medians in a predefined and fixed wavelength range
     for each DESI camera arm, or band, b, r or z.
     The band argument is optional because it can be automatically chosen from the wavelength range in the frame.
     The suffix is added to the key name in the output dictionnary, for instance 'RAW', 'SKYSUB', 'CALIB' ...
-    The boolean argument calibrated is used to chose the type of scores. The reason is that uncalibrated data
-    are counts per bin, whereas calibrated data are flux densities, i.e. per Angstrom.
-
+    The boolean argument flux_per_angstrom is needed if there is no 'BUNIT' keyword in frame.meta (frame fits header)
+    
     Args: 
         frame : a desispec.Frame object
     
     Options:
         band : 'b','r', or 'z' (auto-detected by default)
         suffix : character string added to the keywords in the output dictionnary, for instance suffix='RAW'
-        calibrated : boolean, if true the spectra are assumed calibrated, i.e. flux densities. if false,
+        flux_per_angstrom : boolean, if true the spectra are assumed flux_per_angstrom, i.e. flux densities. if false,
                      the spectra are assumed to be counts or photo-electrons per bin. None by default in
                      which case the frame.units string is read to find out whether the flux quantity is
                      per unit wavelenght or per bin.
@@ -69,14 +68,14 @@ def compute_frame_scores(frame,band=None,suffix=None,calibrated=None) :
     else :
         suffix="_%s_"%suffix
 
-    if calibrated is None :
+    if flux_per_angstrom is None :
 
         units=None
         if frame.meta is not None :
             if "BUNIT" in frame.meta :
                 units=frame.meta["BUNIT"]
         if units is None :
-            log.error("Cannot interpret the flux units because no BUNIT information in frame.meta, and the calibrated argument is None. Returning empty dicts.")
+            log.error("Cannot interpret the flux units because no BUNIT information in frame.meta, and the flux_per_angstrom argument is None. Returning empty dicts.")
             # return empty dicts
             scores=dict()
             comments=dict()
@@ -84,9 +83,9 @@ def compute_frame_scores(frame,band=None,suffix=None,calibrated=None) :
 
         denominator=units.strip().split("/")[-1]
         if denominator.find("A")>=0 :
-            calibrated=True
+            flux_per_angstrom=True
         elif denominator.find("bin")>=0 :
-            calibrated=False
+            flux_per_angstrom=False
         else :
             log.error("Cannot understand in the flux unit '%s' whether it is per Angstrom or per bin. Returning empty dicts.")
             # return empty dicts
@@ -95,7 +94,7 @@ def compute_frame_scores(frame,band=None,suffix=None,calibrated=None) :
             return scores,comments
         
         
-    if calibrated :
+    if flux_per_angstrom :
         # we need to integrate the flux accounting for the wavelength bin
         k="INTEG%sFLUX_%s"%(suffix,band.upper())
         scores[k]       = np.sum(frame.flux[:,ii]*dwave[ii],axis=1)
@@ -164,7 +163,7 @@ def append_frame_scores(frame,new_scores,new_comments,overwrite) :
     return scores,comments
 
     
-def compute_and_append_frame_scores(frame,band=None,suffix=None,calibrated=False,overwrite=True) :
-    new_scores,new_comments = compute_frame_scores(frame,band=band,suffix=suffix,calibrated=calibrated)
+def compute_and_append_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=False,overwrite=True) :
+    new_scores,new_comments = compute_frame_scores(frame,band=band,suffix=suffix,flux_per_angstrom=flux_per_angstrom)
     return append_frame_scores(frame,new_scores,new_comments,overwrite=overwrite)
 
