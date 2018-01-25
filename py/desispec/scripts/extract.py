@@ -173,7 +173,7 @@ regularize: {regularize}
     #   In specter.extract.ex2d one has flux /= dwave
     #   to convert the measured total number of electrons per
     #   wavelength node to an electron 'density'
-    frame.meta['BUNIT'] = 'electrons/Angstrom' 
+    frame.meta['BUNIT'] = 'electron/Angstrom' 
     
     #- Add scores to frame
     compute_and_append_frame_scores(frame,suffix="RAW")
@@ -376,7 +376,7 @@ def main_mpi(args, comm=None):
             #   In specter.extract.ex2d one has flux /= dwave
             #   to convert the measured total number of electrons per
             #   wavelength node to an electron 'density'
-            frame.meta['BUNIT'] = 'electrons/Angstrom' 
+            frame.meta['BUNIT'] = 'electron/Angstrom' 
             
             #- Add scores to frame
             compute_and_append_frame_scores(frame,suffix="RAW")
