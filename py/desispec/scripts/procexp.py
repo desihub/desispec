@@ -13,6 +13,7 @@ from desispec.sky import subtract_sky
 from desispec.fluxcalibration import apply_flux_calibration
 from desiutil.log import get_logger
 from desispec.cosmics import reject_cosmic_rays_1d
+from desispec.specscore import compute_and_append_frame_scores
 
 import argparse
 import sys
@@ -50,6 +51,10 @@ def main(args):
 
     frame = read_frame(args.infile)
 
+    #- Raw scores already added in extraction, but just in case they weren't
+    #- it is harmless to rerun to make sure we have them.
+    compute_and_append_frame_scores(frame,suffix="RAW")
+    
     if args.cosmics_nsig>0 : # Reject cosmics         
         reject_cosmic_rays_1d(frame,args.cosmics_nsig)
     
@@ -60,21 +65,24 @@ def main(args):
 
         # apply fiberflat to sky fibers
         apply_fiberflat(frame, fiberflat)
-
+        compute_and_append_frame_scores(frame,suffix="FFLAT")
+    
     if args.sky!=None :
         log.info("subtract sky")
         # read sky
         skymodel=read_sky(args.sky)
         # subtract sky
         subtract_sky(frame, skymodel)
-
+        compute_and_append_frame_scores(frame,suffix="SKYSUB")
+        
     if args.calib!=None :
         log.info("calibrate")
         # read calibration
         fluxcalib=read_flux_calibration(args.calib)
         # apply calibration
         apply_flux_calibration(frame, fluxcalib)
-
+        compute_and_append_frame_scores(frame,suffix="CALIB")
+        
     if args.cosmics_nsig>0 : # Reject cosmics one more time after sky subtraction to catch cosmics close to sky lines
         reject_cosmic_rays_1d(frame,args.cosmics_nsig)
     

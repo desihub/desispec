@@ -90,6 +90,19 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if frame.chi2pix is not None:
         hdus.append( fits.ImageHDU(frame.chi2pix.astype('f4'), name='CHI2PIX' ) )
 
+    if frame.scores is not None :
+        scores_tbl = encode_table(frame.scores)  #- unicode -> bytes
+        scores_tbl.meta['EXTNAME'] = 'SCORES'
+        hdus.append( fits.convenience.table_to_hdu(scores_tbl) )
+        if frame.scores_comments is not None : # add comments in header
+            hdu=hdus['SCORES']
+            for i in range(1,999):
+                key = 'TTYPE'+str(i)
+                if key in hdu.header:                    
+                    value = hdu.header[key]
+                    if value in frame.scores_comments.keys() :
+                        hdu.header[key] = (value, frame.scores_comments[value])
+    
     hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
@@ -163,6 +176,18 @@ def read_frame(filename, nspec=None):
     else:
         chi2pix = None
 
+    if 'SCORES' in fx:
+        scores = fx['SCORES'].data
+        # I need to open the header to read the comments        
+        scores_comments = dict()
+        head   = fx['SCORES'].header
+        for i in range(1,len(scores.columns)+1) :
+            k='TTYPE'+str(i)
+            scores_comments[head[k]]=head.comments[k]
+    else:
+        scores = None
+        scores_comments = None
+        
     fx.close()
 
     if nspec is not None:
@@ -179,6 +204,7 @@ def read_frame(filename, nspec=None):
 
     # return flux,ivar,wave,resolution_data, hdr
     frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix,
+                  scores=scores,scores_comments=scores_comments,
                   wsigma=qwsigma,ndiag=qndiag)
 
     # Vette

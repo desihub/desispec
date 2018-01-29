@@ -87,8 +87,8 @@ class TestExtract(unittest.TestCase):
         self.assertTrue(np.allclose(model1, model2, rtol=1e-11, atol=1e-11))
 
         #- Check that units made it into the file
-        self.assertEqual(frame1.meta['BUNIT'], 'photon/bin')
-        self.assertEqual(frame2.meta['BUNIT'], 'photon/bin')
+        self.assertEqual(frame1.meta['BUNIT'], 'electron/Angstrom')
+        self.assertEqual(frame2.meta['BUNIT'], 'electron/Angstrom')
 
     def test_boxcar(self):
         from desispec.boxcar import do_boxcar

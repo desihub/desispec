@@ -8,6 +8,7 @@ import os
 import astropy.io
 import numpy as np
 from astropy.table import Table
+from desiutil.log import get_logger
 
 from ..util import healpix_degrade_fixed
 
@@ -152,6 +153,9 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     """
     from astropy.table import Table
     from desiutil.io import encode_table
+
+    log = get_logger()
+    
     #- Convert data as needed
     if isinstance(data, (np.recarray, np.ndarray, Table)):
         outdata = encode_table(data, encoding='ascii')
@@ -174,10 +178,38 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
             hdu.header.update(header)
 
     #- Write the data and header
-    if clobber:
-        astropy.io.fits.writeto(filename, hdu.data, hdu.header, clobber=True, checksum=True)
-    else:
-        astropy.io.fits.append(filename, hdu.data, hdu.header, checksum=True)
+
+    
+    if os.path.isfile(filename) :
+        if extname is None :
+            if clobber :
+                #- overwrite file
+                log.debug("overwriting {}".format(filename))
+                astropy.io.fits.writeto(filename, hdu.data, hdu.header, clobber=True, checksum=True)
+            else :
+                #- append file
+                log.debug("adding new HDU to {}".format(filename))
+                astropy.io.fits.append(filename, hdu.data, hdu.header, checksum=True)
+        else :
+            #- we need to open the file and only overwrite the extension
+            fx = astropy.io.fits.open(filename,mode='update')
+            if extname in fx :                
+                if not clobber :
+                    log.warning("do not modify {} because extname {} exists".format(filename,extname))
+                    return
+                #- need replace here
+                log.debug("replacing HDU {} in {}".format(extname,filename))
+                fx[extname]=hdu
+            else :
+                log.debug("adding HDU {} to {}".format(extname,filename))
+                fx.append(hdu)
+            #- Write updates and close file
+            fx.flush()
+            fx.close()
+    else :
+        log.debug("writing new file {}".format(filename))
+        astropy.io.fits.writeto(filename, hdu.data, hdu.header, checksum=True)
+    
 
     #- TODO:
     #- The following could probably be implemented for efficiently by updating
