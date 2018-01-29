@@ -187,7 +187,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod,
         'night':night, 'expid':expid, 'camera':camera, 'groupname':groupname,
-        'nside':nside, 'hpixdir':hpixdir, 'band':band, 
+        'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph,
         'hpixdir':hpixdir,
         }
@@ -214,20 +214,20 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
 def get_raw_files(filetype, night, expid, rawdata_dir=None):
     """Get files for a specified exposure.
 
-    Uses :func:`findfile` to determine the valid file names for the specified 
-    type.  Any camera identifiers not matching the regular expression 
+    Uses :func:`findfile` to determine the valid file names for the specified
+    type.  Any camera identifiers not matching the regular expression
     [brz][0-9] will be silently ignored.
 
     Args:
-        filetype(str): Type of files to get. Valid choices are 'raw', 'pix', 
+        filetype(str): Type of files to get. Valid choices are 'raw', 'pix',
             'fibermap'.
-        night(str): Date string for the requested night in the format 
+        night(str): Date string for the requested night in the format
             YYYYMMDD.
         expid(int): Exposure number to get files for.
         rawdata_dir(str): [optional] overrides $DESI_SPECTRO_DATA
 
     Returns:
-        dict: Dictionary of found file names using camera id strings as keys, 
+        dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', rawdata_dir=rawdata_dir)
@@ -246,21 +246,21 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
 def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
     """Get files for a specified exposure.
 
-    Uses :func:`findfile` to determine the valid file names for the specified 
-    type.  Any camera identifiers not matching the regular expression 
+    Uses :func:`findfile` to determine the valid file names for the specified
+    type.  Any camera identifiers not matching the regular expression
     [brz][0-9] will be silently ignored.
 
     Args:
-        filetype(str): Type of files to get. Valid choices are 'frame', 
+        filetype(str): Type of files to get. Valid choices are 'frame',
             'cframe', 'psf', etc.
         night(str): Date string for the requested night in the format YYYYMMDD.
         expid(int): Exposure number to get files for.
-        specprod_dir(str): Path containing the exposures/ directory to use. If 
-            the value is None, then the value of :func:`specprod_root` is used 
+        specprod_dir(str): Path containing the exposures/ directory to use. If
+            the value is None, then the value of :func:`specprod_root` is used
             instead. Ignored when raw is True.
 
     Returns:
-        dict: Dictionary of found file names using camera id strings as keys, 
+        dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
@@ -520,23 +520,21 @@ def get_pipe_logdir():
     return "logs"
 
 
-def get_pipe_faildir():
+def get_pipe_nightdir():
     """
-    Return the name of the subdirectory containing pipeline failures.
+    Return the name of the subdirectory containing per-night log files.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "failed"
+    return "nights"
 
 
-def get_pipe_redshiftdir():
+def get_pipe_pixeldir():
     """
-    Return the name of the subdirectory containing pipeline redshift
-    log files.
+    Return the name of the subdirectory containing per-pixel log files.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "redshift"
-
+    return "pixels"

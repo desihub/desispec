@@ -189,9 +189,8 @@ def distribute_partition(A, k):
             low = mid + 1
     return low
 
-def dist_discrete(worksizes, workers, id, pow=1.0):
-    """
-    Distribute indivisible blocks of items between groups.
+def dist_discrete_all(worksizes, workers, power=1.0):
+    """Distribute indivisible blocks of items between groups.
 
     Given some contiguous blocks of items which cannot be
     subdivided, distribute these blocks to the specified
@@ -205,16 +204,16 @@ def dist_discrete(worksizes, workers, id, pow=1.0):
     Args:
         worksizes (list): The sizes of the indivisible blocks.
         workers (int): The number of workers.
-        id (int): The worker ID whose range should be returned.
         pow (float): The power to use for weighting
 
     Returns:
-        A tuple.  The first element of the tuple is the first
-        block assigned to the worker ID, and the second element
-        is the number of blocks assigned to the worker.
+        list:  Each element is a tuple.  The first element of the tuple
+            is the first block assigned to the worker, and the second
+            element is the number of blocks assigned to the worker.
+
     """
     chunks = np.array(worksizes, dtype=np.int64)
-    weights = np.power(chunks.astype(np.float64), pow)
+    weights = np.power(chunks.astype(np.float64), power)
     max_per_proc = float(distribute_partition(weights.astype(np.int64), workers))
 
     if len(worksizes) < workers:
@@ -251,6 +250,33 @@ def dist_discrete(worksizes, workers, id, pow=1.0):
             dist.append( (off, 0) )
 
     return dist[id]
+
+
+def dist_discrete(worksizes, workers, workerid, power=1.0):
+    """Distribute indivisible blocks of items between groups.
+
+    Given some contiguous blocks of items which cannot be
+    subdivided, distribute these blocks to the specified
+    number of groups in a way which minimizes the maximum
+    total items given to any group.  Optionally weight the
+    blocks by a power of their size when computing the
+    distribution.
+
+    This is effectively the "Painter"s Partition Problem".
+
+    Args:
+        worksizes (list): The sizes of the indivisible blocks.
+        workers (int): The number of workers.
+        workerid (int): The worker ID whose range should be returned.
+        power (float): The power to use for weighting
+
+    Returns:
+        A tuple.  The first element of the tuple is the first
+        block assigned to the worker ID, and the second element
+        is the number of blocks assigned to the worker.
+    """
+    allworkers = dist_discrete_all(worksizes, workers, power=power)
+    return allworkers[workerid]
 
 
 @contextmanager

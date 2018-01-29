@@ -20,6 +20,17 @@ from ..parallel import dist_discrete, dist_balanced
 from .. import pipeline as pipe
 
 
+
+# REFACTOR:
+# Almost all of this functionality should be moved into pipeline.scriptgen
+# and pipeline.run.
+#
+# This entrypoint should go away and be replaced by several lightweight ones
+# for separately generating a list of tasks and then creating a script from that
+# list of tasks.
+
+
+
 def job_size(ntask, taskprocs, tasktime, nodeproc, maxnodes):
     """
     Internal helper function used only in the desi_pipe
@@ -33,7 +44,7 @@ def job_size(ntask, taskprocs, tasktime, nodeproc, maxnodes):
     nodes = None
     time = None
     procs = None
-    
+
     if fullprocs <= maxprocs:
         # we can run fully unpacked, with every process group
         # assigned one task.
@@ -45,7 +56,7 @@ def job_size(ntask, taskprocs, tasktime, nodeproc, maxnodes):
         nworker = len(workers)
         procs = nworker * taskprocs
         time = tasktime * workers[0][1]
-    
+
     nodes = procs // nodeproc + 1
     return (nodes, procs, time)
 
@@ -85,8 +96,8 @@ def step_props(first, last, specs, night):
     return (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname)
 
 
-def compute_step(img, specdata, specredux, desiroot, setupfile, 
-    first, last, specs, night, ntask, taskproc, tasktime, shell_mpi_run, 
+def compute_step(img, specdata, specredux, desiroot, setupfile,
+    first, last, specs, night, ntask, taskproc, tasktime, shell_mpi_run,
     shell_maxcores, shell_threads, nersc_host, nersc_maxnodes,
     nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
     queue="debug"):
@@ -124,7 +135,7 @@ def compute_step(img, specdata, specredux, desiroot, setupfile,
         com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
     else:
         com = ["desi_pipe_run_mpi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
-    
+
     pipe.shell_job(shell_path, shell_log, setupfile, com, comrun=shell_mpi_run,
         mpiprocs=shell_procs, threads=shell_threads)
 
@@ -155,24 +166,24 @@ def compute_step(img, specdata, specredux, desiroot, setupfile,
     nersc_path = os.path.join(ntdir, "{}.slurm".format(stepstr))
     nersc_log = os.path.join(logntdir, "{}_slurm".format(stepstr))
 
-    pipe.nersc_job(nersc_host, nersc_path, nersc_log, setupfile, com, 
-        nodes=nodes, nodeproc=nodeproc, minutes=time, multisrun=False, 
-        openmp=(nersc_threads > 1), multiproc=(nersc_mp > 1), queue=queue, 
+    pipe.nersc_job(nersc_host, nersc_path, nersc_log, setupfile, com,
+        nodes=nodes, nodeproc=nodeproc, minutes=time, multisrun=False,
+        openmp=(nersc_threads > 1), multiproc=(nersc_mp > 1), queue=queue,
         jobname=jobname)
 
     nersc_shifter_path = ""
     if img is not None:
         # write shifter slurm script
 
-        nersc_shifter_path = os.path.join(ntdir, 
+        nersc_shifter_path = os.path.join(ntdir,
             "{}_shifter.slurm".format(stepstr))
-        nersc_shifter_log = os.path.join(logntdir, 
+        nersc_shifter_log = os.path.join(logntdir,
             "{}_shifter".format(stepstr))
 
         pipe.nersc_shifter_job(nersc_host, nersc_shifter_path, img, specdata,
-            specredux, desiroot, nersc_shifter_log, setupfile, com, 
-            nodes=nodes, nodeproc=nodeproc, minutes=time, multisrun=False, 
-            openmp=(nersc_threads > 1), multiproc=(nersc_mp > 1), queue=queue, 
+            specredux, desiroot, nersc_shifter_log, setupfile, com,
+            nodes=nodes, nodeproc=nodeproc, minutes=time, multisrun=False,
+            openmp=(nersc_threads > 1), multiproc=(nersc_mp > 1), queue=queue,
             jobname=jobname)
 
     return (shell_path, nersc_path, nersc_shifter_path)
@@ -183,11 +194,11 @@ def parse(options=None):
     parser.add_argument("--data", required=False, default=None, help="override DESI_SPECTRO_DATA")
     parser.add_argument("--redux", required=False, default=None, help="override DESI_SPECTRO_REDUX")
     parser.add_argument("--prod", required=False, default=None, help="override SPECPROD")
-    
+
     parser.add_argument("--starmodels", required=False, default=None, help="override the default star model file")
 
     parser.add_argument("--nights", required=False, default=None, help="comma separated (YYYYMMDD) or regex pattern")
-    
+
     parser.add_argument("--nersc_host", required=False, default="edison", help="NERSC slurm scripts host name (edison|cori|coriknl)")
 
     parser.add_argument("--nersc_queue", required=False, default="regular", help="NERSC queue to use.")
@@ -209,14 +220,14 @@ def parse(options=None):
 
     parser.add_argument("--shifter", required=False, default=None, help="shifter image to use in alternate slurm scripts")
 
-    parser.add_argument("--nside", required=False, type=int, default=64, 
+    parser.add_argument("--nside", required=False, type=int, default=64,
         help="HEALPix nside value to use for spectral grouping.")
 
-    parser.add_argument("--redshift_nodes", required=False, type=int, 
+    parser.add_argument("--redshift_nodes", required=False, type=int,
         default=1, help="Number of nodes to use for redshift fitting "
         "in a single worker.")
 
-    parser.add_argument("--redshift_spec_per_minute", required=False, 
+    parser.add_argument("--redshift_spec_per_minute", required=False,
         type=int, default=80, help="Number of spectra that can be "
         "processed in a minute on a single node using all templates.")
 
@@ -354,7 +365,7 @@ def main(args):
     print("Working with production {} :".format(proddir))
 
     print("  Updating plans ...")
-    expnightcount, allpix = pipe.create_prod(nightstr=args.nights, 
+    expnightcount, allpix = pipe.create_prod(nightstr=args.nights,
         extra=extra, specs=specs, fakepix=args.fakepix, hpxnside=args.nside)
     totcount = {}
     totcount["flat"] = 0
@@ -414,7 +425,7 @@ def main(args):
     workernames = {}
     for step in pipe.step_types:
         workernames[step] = opts["{}_worker".format(step)]
-        worker = pipe.get_worker(step, opts["{}_worker".format(step)], 
+        worker = pipe.get_worker(step, opts["{}_worker".format(step)],
             opts["{}_worker_opts".format(step)])
         workermax[step] = worker.max_nproc()
         workertime[step] = worker.task_time()
@@ -444,14 +455,14 @@ def main(args):
         nt = None
         first = "bootstrap"
         last = "bootstrap"
-        
+
         for nt in nights:
 
             ntask = 3 * nspect
 
-            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
-                rawdir, specdir, desiroot, setupfile, first, last, specs, nt, 
-                ntask, taskproc, taskmin, shell_mpi_run, shell_maxcores, 1, 
+            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter,
+                rawdir, specdir, desiroot, setupfile, first, last, specs, nt,
+                ntask, taskproc, taskmin, shell_mpi_run, shell_maxcores, 1,
                 args.nersc_host, maxnodes, nodecores, step_threads, step_mp,
                 queuethresh, queue=args.nersc_queue)
             nt_shell[nt].append(scr_shell)
@@ -493,9 +504,9 @@ def main(args):
 
             ntask = expnightcount[nt]["arc"] * 3 * nspect
 
-            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
-                rawdir, specdir, desiroot, setupfile, first, last, specs, nt, 
-                ntask, taskproc, taskmin, shell_mpi_run, shell_maxcores, 1, 
+            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter,
+                rawdir, specdir, desiroot, setupfile, first, last, specs, nt,
+                ntask, taskproc, taskmin, shell_mpi_run, shell_maxcores, 1,
                 args.nersc_host, maxnodes, nodecores, step_threads, step_mp,
                 queuethresh, queue=args.nersc_queue)
             nt_shell[nt].append(scr_shell)
@@ -516,9 +527,9 @@ def main(args):
 
             ntask = 3 * nspect
 
-            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
-                rawdir, specdir, desiroot, setupfile, first, last, specs, nt, 
-                ntask, taskproc, taskmin, shell_mpi_run, shell_maxcores, 1, 
+            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter,
+                rawdir, specdir, desiroot, setupfile, first, last, specs, nt,
+                ntask, taskproc, taskmin, shell_mpi_run, shell_maxcores, 1,
                 args.nersc_host, maxnodes, nodecores, step_threads, step_mp,
                 queuethresh, queue=args.nersc_queue)
             nt_shell[nt].append(scr_shell)
@@ -560,9 +571,9 @@ def main(args):
 
             ntask = (expnightcount[nt]["flat"] + expnightcount[nt]["science"]) * 3 * nspect
 
-            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
-                rawdir, specdir, desiroot, setupfile, first, last, specs, nt, 
-                ntask, taskproc, taskmin, shell_mpi_run, shell_maxcores, 1, 
+            scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter,
+                rawdir, specdir, desiroot, setupfile, first, last, specs, nt,
+                ntask, taskproc, taskmin, shell_mpi_run, shell_maxcores, 1,
                 args.nersc_host, maxnodes, nodecores, step_threads, step_mp,
                 queuethresh, queue=args.nersc_queue)
             nt_shell[nt].append(scr_shell)
@@ -572,7 +583,7 @@ def main(args):
     # calibration
 
     taskproc = 1
-    
+
     tasktime = 0
     tasktime += workertime["fiberflat"]
     tasktime += workertime["sky"]
@@ -590,10 +601,10 @@ def main(args):
 
         ntask = expnightcount[nt]["science"] * 3 * nspect
 
-        scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter, 
-            rawdir, specdir, desiroot, setupfile, first, last, specs, nt, 
-            ntask, taskproc, tasktime, shell_mpi_run, shell_maxcores, 1, 
-            args.nersc_host, maxnodes, nodecores, step_threads, step_mp, 
+        scr_shell, scr_slurm, scr_shifter = compute_step(args.shifter,
+            rawdir, specdir, desiroot, setupfile, first, last, specs, nt,
+            ntask, taskproc, tasktime, shell_mpi_run, shell_maxcores, 1,
+            args.nersc_host, maxnodes, nodecores, step_threads, step_mp,
             queuethresh, queue=args.nersc_queue)
         nt_shell[nt].append(scr_shell)
         nt_slurm[nt].append(scr_slurm)
@@ -633,17 +644,17 @@ def main(args):
 
     nersc_path = os.path.join(scrdir, "spectra.slurm")
     nersc_log = os.path.join(logdir, "spectra_slurm")
-    pipe.nersc_job(args.nersc_host, nersc_path, nersc_log, setupfile, 
-        speccom, nodes=specnodes, nodeproc=specnodeprocs, minutes=spectime, 
-        multisrun=False, openmp=True, multiproc=False, 
+    pipe.nersc_job(args.nersc_host, nersc_path, nersc_log, setupfile,
+        speccom, nodes=specnodes, nodeproc=specnodeprocs, minutes=spectime,
+        multisrun=False, openmp=True, multiproc=False,
         queue=specqueue, jobname="groupspectra")
 
     if args.shifter is not None:
         nersc_path = os.path.join(scrdir, "spectra_shifter.slurm")
         nersc_log = os.path.join(logdir, "spectra_shifter")
-        pipe.nersc_shifter_job(args.nersc_host, nersc_path, args.shifter, 
-            rawdir, specdir, desiroot, nersc_log, setupfile, speccom, 
-            nodes=specnodes, nodeproc=specnodeprocs, minutes=30, 
+        pipe.nersc_shifter_job(args.nersc_host, nersc_path, args.shifter,
+            rawdir, specdir, desiroot, nersc_log, setupfile, speccom,
+            nodes=specnodes, nodeproc=specnodeprocs, minutes=30,
             multisrun=False, openmp=False, multiproc=False,
             queue=specqueue, jobname="groupspectra")
 
@@ -657,16 +668,16 @@ def main(args):
     red_runtime = workertime["redshift"]
 
     ntask = len(allpix.keys())
-    
+
     nworker = 1 + red_totalspec // (red_runtime * red_worker_nodes *
         red_spec_per_node_min)
-    
+
     red_nodes = nworker * red_worker_nodes
 
     red_queue = args.nersc_queue
     if red_runtime > 30 and red_queue == "debug":
         red_queue = "regular"
-    
+
     rundir = io.get_pipe_rundir()
     scrdir = os.path.join(rundir, io.get_pipe_scriptdir())
     logdir = os.path.join(rundir, io.get_pipe_logdir())
@@ -675,22 +686,22 @@ def main(args):
 
     shell_path = os.path.join(scrdir, "redshift.sh")
     shell_log = os.path.join(logdir, "redshift_sh")
-    pipe.shell_job(shell_path, shell_log, setupfile, redcom, 
+    pipe.shell_job(shell_path, shell_log, setupfile, redcom,
         comrun=shell_mpi_run, mpiprocs=shell_maxcores, threads=1)
 
     nersc_path = os.path.join(scrdir, "redshift.slurm")
     nersc_log = os.path.join(logdir, "redshift_slurm")
-    pipe.nersc_job(args.nersc_host, nersc_path, nersc_log, setupfile, 
-        redcom, nodes=red_nodes, nodeproc=red_nodeprocs, 
-        minutes=red_runtime, multisrun=False, openmp=True, multiproc=False, 
+    pipe.nersc_job(args.nersc_host, nersc_path, nersc_log, setupfile,
+        redcom, nodes=red_nodes, nodeproc=red_nodeprocs,
+        minutes=red_runtime, multisrun=False, openmp=True, multiproc=False,
         queue=red_queue, jobname="redshift")
 
     if args.shifter is not None:
         nersc_path = os.path.join(scrdir, "redshift_shifter.slurm")
         nersc_log = os.path.join(logdir, "redshift_shifter")
-        pipe.nersc_shifter_job(args.nersc_host, nersc_path, args.shifter, 
-            rawdir, specdir, desiroot, nersc_log, setupfile, redcom, 
-            nodes=red_nodes, nodeproc=red_nodeprocs, minutes=red_runtime, 
+        pipe.nersc_shifter_job(args.nersc_host, nersc_path, args.shifter,
+            rawdir, specdir, desiroot, nersc_log, setupfile, redcom,
+            nodes=red_nodes, nodeproc=red_nodeprocs, minutes=red_runtime,
             multisrun=False, openmp=True, multiproc=False,
             queue=red_queue, jobname="redshift")
 
