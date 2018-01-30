@@ -32,7 +32,7 @@ def parse(options=None):
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--no-extra-variance', action='store_true',
                         help = 'do not increase sky model variance based on chi2 on sky lines')
-    
+     
     args = None
     if options is None:
         args = parser.parse_args()

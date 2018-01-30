@@ -323,11 +323,85 @@ def subtract_sky(frame, skymodel, throughput_correction = False) :
         # coincides with one of the sky lines.
         
         # it's more robust to have a hardcoded set of sky lines here
-        # they have been auto-detected on a set of simulated frame.
-        #skylines=np.array([3914,5200,5579.0,5656.5,5891.5,6302.,6365.5,65006617.5,6663.,6679.,6690.5,)
-        log.warning("throughput correction is not implemented!")
-    
+        # these are all the sky lines with a flux >5% of the max flux
+        # except in b where we add an extra weaker line at 5199.4A
+        skyline=np.array([5199.4,5578.4,5656.4,5891.4,5891.4,5897.4,6302.4,6308.4,6365.4,6500.4,6546.4,6555.4,6618.4,6663.4,6679.4,6690.4,6765.4,6831.4,6836.4,6865.4,6925.4,6951.4,6980.4,7242.4,7247.4,7278.4,7286.4,7305.4,7318.4,7331.4,7343.4,7360.4,7371.4,7394.4,7404.4,7440.4,7526.4,7714.4,7719.4,7752.4,7762.4,7782.4,7796.4,7810.4,7823.4,7843.4,7855.4,7862.4,7873.4,7881.4,7892.4,7915.4,7923.4,7933.4,7951.4,7966.4,7982.4,7995.4,8016.4,8028.4,8064.4,8280.4,8284.4,8290.4,8298.4,8301.4,8313.4,8346.4,8355.4,8367.4,8384.4,8401.4,8417.4,8432.4,8454.4,8467.4,8495.4,8507.4,8627.4,8630.4,8634.4,8638.4,8652.4,8657.4,8662.4,8667.4,8672.4,8677.4,8683.4,8763.4,8770.4,8780.4,8793.4,8829.4,8835.4,8838.4,8852.4,8870.4,8888.4,8905.4,8922.4,8945.4,8960.4,8990.4,9003.4,9040.4,9052.4,9105.4,9227.4,9309.4,9315.4,9320.4,9326.4,9340.4,9378.4,9389.4,9404.4,9422.4,9442.4,9461.4,9479.4,9505.4,9521.4,9555.4,9570.4,9610.4,9623.4,9671.4,9684.4,9693.4,9702.4,9714.4,9722.4,9740.4,9748.4,9793.4,9802.4,9814.4,9820.4])
+        
+        
+        
+        sw=[]
+        swf=[]
+        sws=[]
+        sws2=[]
+        swsf=[]
+        
+        # half width of wavelength region around each sky line
+        # larger values give a better statistical precision
+        # but also a larger sensitivity to source features
+        # best solution on one dark night exposure obtained with
+        # a half width of 4A.
+        hw=4#A 
+        tivar=frame.ivar
+        if frame.mask is not None :
+            tivar *= (frame.mask==0)
+            tivar *= (skymodel.ivar>0)
+        
+        # we precompute the quantities needed to fit each sky line + continuum
+        # the sky "line profile" is the actual sky model
+        # and we consider an additive constant
+        for line in skyline :
+            if line<=frame.wave[0] or line>=frame.wave[-1] : continue            
+            ii=np.where((frame.wave>=line-hw)&(frame.wave<=line+hw))[0]
+            if ii.size<2 : continue
+            sw.append(np.sum(tivar[:,ii],axis=1))
+            swf.append(np.sum(tivar[:,ii]*frame.flux[:,ii],axis=1))
+            swsf.append(np.sum(tivar[:,ii]*frame.flux[:,ii]*skymodel.flux[:,ii],axis=1))            
+            sws.append(np.sum(tivar[:,ii]*skymodel.flux[:,ii],axis=1))
+            sws2.append(np.sum(tivar[:,ii]*skymodel.flux[:,ii]**2,axis=1))
+        
+        nlines=len(sw)
 
+        throughput_correction = np.ones(frame.flux.shape[0])
+        for fiber in range(frame.flux.shape[0]) :
+
+            # we solve the 2x2 linear system for each fiber and sky line
+            # and save the results for each fiber
+
+            coef=[] # list of scale values
+            var=[] # list of variance on scale values
+            for line in range(nlines) :
+                if sw[line][fiber]<=0 : continue
+                A=np.array([[sw[line][fiber],sws[line][fiber]],[sws[line][fiber],sws2[line][fiber]]])
+                B=np.array([swf[line][fiber],swsf[line][fiber]])
+                Ai=np.linalg.inv(A)
+                X=Ai.dot(B)
+                coef.append(X[1]) # the scale coef (marginalized over cst background)
+                var.append(Ai[1,1])
+            coef=np.array(coef)
+            var=np.array(var)
+            ivar=(var>0)/(var+(var==0))
+            
+            # loop for outlier rejection
+            for loop in range(50) :
+                a=np.sum(ivar)
+                if a <= 0 :
+                    log.warning("cannot corr. throughput. ivar=0 everywhere on sky lines for fiber %d"%fiber)
+                    continue
+                mcoef=np.sum(ivar*coef)/a
+                mcoeferr=1/np.sqrt(a)                
+                nsig=3
+                chi2=ivar*(coef-mcoef)**2
+                worst=np.argmax(chi2)
+                if chi2[worst]>nsig**2 :
+                    log.debug("discard a bad measurement for fiber %d"%(fiber))
+                    ivar[worst]=0
+                else :
+                    break
+            
+            log.info("fiber #%03d throughput corr = %5.4f +- %5.4f (mean fiber flux=%f)"%(fiber,mcoef,mcoeferr,np.median(frame.flux[fiber])))
+            # apply this correction to the sky model
+            skymodel.flux[fiber] *= mcoef
+    
     frame.flux -= skymodel.flux
     frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
     frame.mask |= skymodel.mask

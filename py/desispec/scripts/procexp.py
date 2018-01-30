@@ -32,7 +32,9 @@ def parse(options=None):
                         help = 'path of DESI sky fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
-    
+    parser.add_argument('--sky-throughput-correction', action='store_true',
+                        help = 'apply a throughput correction when subtraction the sky')
+   
     args = None
     if options is None:
         args = parser.parse_args()
@@ -72,7 +74,7 @@ def main(args):
         # read sky
         skymodel=read_sky(args.sky)
         # subtract sky
-        subtract_sky(frame, skymodel)
+        subtract_sky(frame, skymodel, throughput_correction = args.sky_throughput_correction )
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
         
     if args.calib!=None :
