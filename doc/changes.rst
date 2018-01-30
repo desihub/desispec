@@ -2,17 +2,25 @@
 desispec Change Log
 ===================
 
-0.17.2 (unreleased)
+0.17.3 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.17.2 (2018-01-30)
 -------------------
 
 * Trace shift optimizations from analyzing teststand data (PR `#482`_).
 * Minor QA edits to accommodate minitest (PR `#489`_)
 * Additional QA edits including qaprod_root() method (PR `#490`_)
-* Introduce QA_Night, QA_MultiExp and refactor QA_Prod accordingly
+* Introduce QA_Night, QA_MultiExp and refactor QA_Prod accordingly (PR `#491`_)
+* Add SCORES HDU to frame files (PR `#492`_)
 
 .. _`#482`: https://github.com/desihub/desispec/pull/482
 .. _`#489`: https://github.com/desihub/desispec/pull/489
 .. _`#490`: https://github.com/desihub/desispec/pull/490
+.. _`#491`: https://github.com/desihub/desispec/pull/491
+.. _`#492`: https://github.com/desihub/desispec/pull/492
 
 0.17.1 (2017-12-20)
 -------------------
