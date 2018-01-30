@@ -291,12 +291,15 @@ class SkyModel(object):
         self.nrej = nrej
         self.stat_ivar = stat_ivar
 
-def subtract_sky(frame, skymodel) :
+def subtract_sky(frame, skymodel, throughput_correction = False) :
     """Subtract skymodel from frame, altering frame.flux, .ivar, and .mask
 
     Args:
         frame : desispec.Frame object
         skymodel : desispec.SkyModel object
+    Option:
+        throughput_correction : if True, fit for an achromatic throughput correction, default=False
+                                This is to absorb variations of Focal Ratio Degradation with fiber flexure.
     """
     assert frame.nspec == skymodel.nspec
     assert frame.nwave == skymodel.nwave
@@ -309,6 +312,21 @@ def subtract_sky(frame, skymodel) :
         message = "frame and sky not on same wavelength grid"
         log.error(message)
         raise ValueError(message)
+
+    if throughput_correction :
+        # need to fit for a multiplicative factor of the sky model
+        # before subtraction
+        # we are going to use a set of bright sky lines,
+        # and fit a multiplicative factor + background around
+        # each of them individually, and then combine the results
+        # with outlier rejection in case a source emission line
+        # coincides with one of the sky lines.
+        
+        # it's more robust to have a hardcoded set of sky lines here
+        # they have been auto-detected on a set of simulated frame.
+        #skylines=np.array([3914,5200,5579.0,5656.5,5891.5,6302.,6365.5,65006617.5,6663.,6679.,6690.5,)
+        log.warning("throughput correction is not implemented!")
+    
 
     frame.flux -= skymodel.flux
     frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
