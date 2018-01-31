@@ -297,11 +297,10 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
     Args:
         frame : desispec.Frame object
         skymodel : desispec.SkyModel object
-    
+
     Option:
-        throughput_correction : if True, fit for an achromatic throughput correction, default=False
-                                This is to absorb variations of Focal Ratio Degradation with fiber flexure.
-        default_throughput_correction : float, default value of correction if the fit on sky lines failed (default is 1, but might choose 0 if this is a second iteration)
+        throughput_correction : if True, fit for an achromatic throughput correction. This is to absorb variations of Focal Ratio Degradation with fiber flexure.
+        default_throughput_correction : float, default value of correction if the fit on sky lines failed.
     """
     assert frame.nspec == skymodel.nspec
     assert frame.nwave == skymodel.nwave
