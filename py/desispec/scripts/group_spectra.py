@@ -169,6 +169,11 @@ def main(args, comm=None):
                         continue
 
                     framefile = pipe.graph_path(cf)
+                    if not os.path.isfile(framefile) :
+                        log.debug('{} discarding {} because missing file'.format(name, cf))
+                        discard.add((spectrograph, expid))
+                        continue
+                    
                     fibermap = fitsio.read(framefile, 'FIBERMAP',
                                 columns=('RA_TARGET', 'DEC_TARGET'))
                     #- Strip NaN
