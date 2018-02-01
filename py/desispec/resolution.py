@@ -168,7 +168,7 @@ def _gauss_pix(x, mean=0.0, sigma=1.0):
     Note:
         All pixels must be the same size
     """
-    x = (np.asarray(x, dtype=float) - mean) / sigma
+    x = (np.asarray(x, dtype=float) - mean) / (sigma*np.sqrt(2))
     dx = x[1]-x[0]
     if not np.allclose(np.diff(x), dx):
         raise ValueError('all pixels must have the same size')
