@@ -264,7 +264,10 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
     # no need to restore the original ivar to compute the model errors when modeling ivar
     # the sky inverse variances are very similar
     
-    log.info("compute the parameter covariance")
+    log.info("compute the parameter covariance (this is slow ...)")
+    # we may have to use a different method to compute this
+    # covariance
+   
     try :
         unused,parameter_covar=cholesky_solve_and_invert(A,B)
         #unused,parameter_covar=cholesky_solve_and_invert(A.todense(),B)
@@ -273,7 +276,6 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         #parameter_covar = np.linalg.pinv(A.todense())
         parameter_covar = np.linalg.pinv(A)
     
-
     log.info("compute mean resolution")
     # we make an approximation for the variance to save CPU time
     # we use the average resolution of all fibers in the frame:
