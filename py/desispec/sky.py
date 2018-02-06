@@ -17,7 +17,7 @@ from desiutil import stats as dustat
 import scipy,scipy.sparse,scipy.stats,scipy.ndimage
 import sys
 
-def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True) :
+def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_variance=True,fp_corr_deg=0) :
     """Compute a sky model.
     
     Input has to correspond to sky fibers only.
@@ -36,6 +36,8 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
     Optional:
         max_iterations : int , number of iterations
         model_ivar : replace ivar by a model to avoid bias due to correlated flux and ivar. this has a negligible effect on sims.
+        add_variance : evaluate calibration error and add this to the sky model variance
+        fp_corr_deg  : degree of 2D polynomial correction as a function of fiber focal plane coordinates (default=0, i.e. no correction). One set of coefficients per wavelength
     
     returns SkyModel object with attributes wave, flux, ivar, mask
     """
@@ -53,6 +55,39 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
     current_ivar=frame.ivar[skyfibers].copy()*(frame.mask[skyfibers]==0)
     flux = frame.flux[skyfibers]
     Rsky = frame.R[skyfibers]
+    
+    
+    x = None
+    y = None
+    xm = None
+    ym = None
+    xs = None
+    ys = None
+    ncoef = 1
+    monomials=None
+    if fp_corr_deg > 0 : 
+        # need focal plane coordinates of fibers
+        x = frame.fibermap["X_TARGET"][skyfibers]
+        y = frame.fibermap["Y_TARGET"][skyfibers]
+        # normalize for numerical stability
+        xm = np.mean(frame.fibermap["X_TARGET"])
+        ym = np.mean(frame.fibermap["Y_TARGET"])
+        xs = np.std(frame.fibermap["X_TARGET"])
+        ys = np.std(frame.fibermap["Y_TARGET"])
+        if xs==0 : xs = 1
+        if ys==0 : ys = 1
+        x = (x-xm)/xs
+        y = (y-ym)/ys
+        
+        # precompute the monomials for the sky fibers
+        log.debug("compute monomials for deg={}".format(fp_corr_deg))
+        monomials=[]
+        for dx in range(fp_corr_deg+1) :
+            for dy in range(fp_corr_deg+1-dx) :
+                monomials.append((x**dx)*(y**dy))
+        ncoef=len(monomials)
+        monomials=np.array(monomials)
+        
     
     input_ivar=None 
     if model_ivar :
@@ -75,20 +110,62 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
 
     chi2=np.zeros(flux.shape)
 
-    #debug
-    #nfibers=min(nfibers,2)
-
+    
+    
+    
     nout_tot=0
     for iteration in range(max_iterations) :
 
-        A=scipy.sparse.lil_matrix((nwave,nwave)).tocsr()
-        B=np.zeros((nwave))
+        npar = nwave * ncoef 
+ 
+        # the matrix A is 1/2 of the second derivative of the chi2 with respect to the parameters
+        # A_ij = 1/2 d2(chi2)/di/dj
+        # A_ij = sum_fiber sum_wave_w ivar[fiber,w] d(model)/di[fiber,w] * d(model)/dj[fiber,w]
+        
+        # the vector B is 1/2 of the first derivative of the chi2 with respect to the parameters
+        # B_i  = 1/2 d(chi2)/di
+        # B_i  = sum_fiber sum_wave_w ivar[fiber,w] d(model)/di[fiber,w] * (flux[fiber,w]-model[fiber,w])
+        
+        # 1) for a fit of a uniform sky, but varying resolution per fiber
+        # the model is simply model[fiber]=R[fiber]*sky
+        # and the parameters are the unconvolved sky flux at the wavelength i
+        
+        # so, d(model)/di[fiber,w] = R[fiber][w,i]
+        # this gives
+        # A_ij = sum_fiber  sum_wave_w ivar[fiber,w] R[fiber][w,i] R[fiber][w,j]
+        # A = sum_fiber ( diag(sqrt(ivar))*R[fiber] ) ( diag(sqrt(ivar))* R[fiber] )^t
+        # A = sum_fiber sqrtwR[fiber] sqrtwR[fiber]^t
+        # and 
+        # B = sum_fiber sum_wave_w ivar[fiber,w] R[fiber][w] * flux[fiber,w]
+        # B = sum_fiber sum_wave_w sqrt(ivar)[fiber,w]*flux[fiber,w] sqrtwR[fiber,wave]
+        
+        
+        # 2) for a fit of a non-uniform sky it's a bit more complex.
+        # with x_fiber,y_fiber the fiber coordinates in the focal plane (or sky)
+        # the unconvolved sky flux at wavelength i is a polynomial of x_fiber,y_fiber
+        # sky(fiber,i) = pol(x_fiber,y_fiber,p) = sum_p a_ip * x_fiber**degx(p) y_fiber**degy(p)
+        # sky(fiber,i) =  sum_p monom[fiber,p] *  a_ip
+        # the convolved sky flux at wavelength w is 
+        # model[fiber,w] = sum_i R[fiber][w,i] sum_p monom[fiber,p] *  a_ip
+        # model[fiber,w] = sum_p monom[fiber,p] R[fiber][w,i] a_ip
+        # 
+        # so, the matrix A is composed of blocks (p,k) corresponding to polynomial coefficient indices where
+        # A[pk] = sum_fiber monom[fiber,p]*monom[fiber,k] sqrtwR[fiber] sqrtwR[fiber]^t
+        # similarily
+        # B[p]  =  sum_fiber monom[fiber,p] * sum_wave_w (sqrt(ivar)[fiber,w]*flux[fiber,w]) sqrtwR[fiber,wave]
+        
+        
+        #A=scipy.sparse.lil_matrix((nwave*ncoef,nwave*ncoef)).tocsr()
+        A=np.zeros((nwave*ncoef,nwave*ncoef))
+        B=np.zeros((nwave*ncoef))
+        
         # diagonal sparse matrix with content = sqrt(ivar)*flat of a given fiber
         SD=scipy.sparse.lil_matrix((nwave,nwave))
+        
         # loop on fiber to handle resolution
         for fiber in range(nfibers) :
             if fiber%10==0 :
-                log.info("iter %d fiber %d"%(iteration,fiber))
+                log.info("iter %d sky fiber %d/%d"%(iteration,fiber,nfibers))
             R = Rsky[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)
@@ -96,28 +173,52 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
 
             sqrtwR = SD*R # each row r of R is multiplied by sqrtw[r]
 
-            A = A+(sqrtwR.T*sqrtwR).tocsr()
-            B += sqrtwR.T*sqrtwflux[fiber]
-
+            #wRtR=(sqrtwR.T*sqrtwR).tocsr()
+            wRtR=(sqrtwR.T*sqrtwR).todense()
+            wRtF=sqrtwR.T*sqrtwflux[fiber]
+            if fp_corr_deg == 0 : # no variation of sky in the focal plane
+                
+                A += wRtR
+                B += wRtF
+                
+            else :
+               
+                # loop on polynomial coefficients (double loop for A)
+                # fill only blocks of A and B
+                for p in range(ncoef) :
+                    for k in range(ncoef) :
+                        A[p*nwave:(p+1)*nwave,k*nwave:(k+1)*nwave] += monomials[p,fiber]*monomials[k,fiber]*wRtR
+                    B[p*nwave:(p+1)*nwave] += monomials[p,fiber]*wRtF
+                
         log.info("iter %d solving"%iteration)
-
         w = A.diagonal()>0
-        A_pos_def = A.todense()[w,:]
+        A_pos_def = A[w,:]
         A_pos_def = A_pos_def[:,w]
-        skyflux = B*0
+        parameters = B*0
         try:
-            skyflux[w]=cholesky_solve(A_pos_def,B[w])
+            parameters[w]=cholesky_solve(A_pos_def,B[w])
         except:
             log.info("cholesky failed, trying svd in iteration {}".format(iteration))
-            skyflux[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
-
+            parameters[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
+        
         log.info("iter %d compute chi2"%iteration)
 
         for fiber in range(nfibers) :
-
-            S = Rsky[fiber].dot(skyflux)
-            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-S)**2
-
+            
+            if fp_corr_deg == 0 :
+                # the parameters are directly the unconvolve sky flux
+                # so we simply have to reconvolve it
+                fiber_convolved_sky_flux = Rsky[fiber].dot(parameters)
+            else :
+                # need to loop on polynomial indices
+                unconvolved_fiber_sky_flux = np.zeros(nwave)
+                for p in range(ncoef) :
+                    unconvolved_fiber_sky_flux += monomials[p,fiber]*parameters[p*nwave:(p+1)*nwave]
+                # then convolve
+                fiber_convolved_sky_flux = Rsky[fiber].dot(unconvolved_fiber_sky_flux)
+            
+            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-fiber_convolved_sky_flux)**2
+            
         log.info("rejecting")
 
         nout_iter=0
@@ -156,39 +257,92 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
 
     log.info("nout tot=%d"%nout_tot)
 
-    # no need restore original ivar to compute model error when modeling ivar
-    # the sky inverse variances are very similar
 
-    # solve once again to get deconvolved sky variance
+    # we know have to compute the sky model for all fibers
+    # and propagate the uncertainties
+
+    # no need to restore the original ivar to compute the model errors when modeling ivar
+    # the sky inverse variances are very similar
+    
+    log.info("compute the parameter covariance")
     try :
-        unused_skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
+        unused,parameter_covar=cholesky_solve_and_invert(A,B)
+        #unused,parameter_covar=cholesky_solve_and_invert(A.todense(),B)
     except np.linalg.linalg.LinAlgError :
         log.warning("cholesky_solve_and_invert failed, switching to np.linalg.lstsq and np.linalg.pinv")
-        #skyflux = np.linalg.lstsq(A.todense(),B)[0]
-        skycovar = np.linalg.pinv(A.todense())
-
-    #- sky inverse variance, but incomplete and not needed anyway
-    # skyvar=np.diagonal(skycovar)
-    # skyivar=(skyvar>0)/(skyvar+(skyvar==0))
-
-    # Use diagonal of skycovar convolved with mean resolution of all fibers
-    # first compute average resolution
-    mean_res_data=np.mean(frame.resolution_data,axis=0)
-    R = Resolution(mean_res_data)
-    # compute convolved sky and ivar
-    cskycovar=R.dot(skycovar).dot(R.T.todense())
-    cskyvar=np.diagonal(cskycovar)
-    cskyivar=(cskyvar>0)/(cskyvar+(cskyvar==0))
-
-    # convert cskyivar to 2D; today it is the same for all spectra,
-    # but that may not be the case in the future
-    cskyivar = np.tile(cskyivar, frame.nspec).reshape(frame.nspec, nwave)
-
-    # Convolved sky
-    cskyflux = np.zeros(frame.flux.shape)
-    for i in range(frame.nspec):
-        cskyflux[i] = frame.R[i].dot(skyflux)
+        #parameter_covar = np.linalg.pinv(A.todense())
+        parameter_covar = np.linalg.pinv(A)
     
+
+    log.info("compute mean resolution")
+    # we make an approximation for the variance to save CPU time
+    # we use the average resolution of all fibers in the frame:
+    mean_res_data=np.mean(frame.resolution_data,axis=0)
+    Rmean = Resolution(mean_res_data)
+    
+    log.info("compute convolved sky and ivar")
+    if fp_corr_deg == 0 :
+        
+        # The parameters are directly the unconvolved sky
+        # First convolve with average resolution :
+        convolved_sky_covar=Rmean.dot(parameter_covar).dot(Rmean.T.todense())
+        
+        # and keep only the diagonal
+        convolved_sky_var=np.diagonal(convolved_sky_covar)
+        
+        # inverse
+        convolved_sky_ivar=(convolved_sky_var>0)/(convolved_sky_var+(convolved_sky_var==0))
+        
+        # and simply consider it's the same for all spectra
+        cskyivar = np.tile(convolved_sky_ivar, frame.nspec).reshape(frame.nspec, nwave)
+
+        # The sky model for each fiber (simple convolution with resolution of each fiber)
+        cskyflux = np.zeros(frame.flux.shape)
+        for i in range(frame.nspec):
+            cskyflux[i] = frame.R[i].dot(parameters)
+    else :
+        
+        # More complex with varying sky across focal plane
+        
+        cskyflux = np.zeros(frame.flux.shape)
+        cskyivar = np.zeros(frame.flux.shape)
+        
+        log.info("compute convolved parameter covariance")
+        # The covariance of the parameters is composed of ncoef*ncoef blocks each of size nwave*nwave
+        # A block (p,k) is the covariance of the unconvolved spectra p and k , corresponding to the polynomial indices p and k
+        # We first sandwich each block with the average resolution.
+        convolved_parameter_covar=np.zeros((ncoef*ncoef,nwave))
+        for p in range(ncoef) :
+            for k in range(ncoef) :
+                convolved_parameter_covar[p+k*ncoef] = np.diagonal(Rmean.dot(parameter_covar[p*nwave:(p+1)*nwave,k*nwave:(k+1)*nwave]).dot(Rmean.T.todense()))
+        
+        # Now we compute the sky model variance for each fiber individually
+        # accounting for its focal plane coordinates
+        # so that a target fiber distant for a sky fiber will naturally have a larger
+        # sky model variance
+        log.info("compute sky and variance per fiber")        
+        for i in range(frame.nspec):
+            # compute monomials
+            M = []
+            xi=(frame.fibermap["X_TARGET"][i]-xm)/xs
+            yi=(frame.fibermap["Y_TARGET"][i]-ym)/ys
+            for dx in range(fp_corr_deg+1) :
+                for dy in range(fp_corr_deg+1-dx) :
+                    M.append((xi**dx)*(yi**dy))
+            M = np.array(M)
+            
+            unconvolved_fiber_sky_flux=np.zeros(nwave)
+            convolved_fiber_skyvar=np.zeros(nwave)
+            for p in range(ncoef) :
+                unconvolved_fiber_sky_flux += M[p]*parameters[p*nwave:(p+1)*nwave]
+                for k in range(ncoef) :
+                    convolved_fiber_skyvar += M[p]*M[k]*convolved_parameter_covar[p+k*ncoef]
+            
+            # convolve sky model with this fiber's resolution
+            cskyflux[i] = frame.R[i].dot(unconvolved_fiber_sky_flux)
+            
+            # save inverse of variance
+            cskyivar[i] = (convolved_fiber_skyvar>0)/(convolved_fiber_skyvar+(convolved_fiber_skyvar==0))
     
     
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
@@ -217,7 +371,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         tivar[bad]=0
         ndata = np.sum(tivar>0,axis=0)
         ok=np.where(ndata>1)[0]
-        print("ok.size=",ok.size)
+        
         chi2  = np.zeros(frame.wave.size)
         chi2[ok] = np.sum(tivar*(frame.flux[skyfibers]-cskyflux[skyfibers])**2,axis=0)[ok]/(ndata[ok]-1)
         chi2[ndata<=1] = 1. # default

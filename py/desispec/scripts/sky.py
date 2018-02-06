@@ -32,7 +32,9 @@ def parse(options=None):
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--no-extra-variance', action='store_true',
                         help = 'do not increase sky model variance based on chi2 on sky lines')
-     
+    parser.add_argument('--fp-corr-deg', type = int, default = 0, required = False,
+                        help = 'Focal plane variation degree')
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -61,7 +63,7 @@ def main(args) :
     apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance))
+    skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),fp_corr_deg=args.fp_corr_deg)
     
     # QA
     if (args.qafile is not None) or (args.qafig is not None):
