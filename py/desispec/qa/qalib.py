@@ -368,7 +368,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     for ii in range(nfibers):
         # Stats
         dof = np.sum(res_ivar[ii,:] > 0.)
-        chi2_prob[ii] = scipy.stats.chisqprob(chi2_fiber[ii], dof)
+        chi2_prob[ii] = scipy.stats.distributions.chi2.sf(chi2_fiber[ii], dof)
     # Bad models
     qadict['NBAD_PCHI'] = int(np.sum(chi2_prob < param['PCHI_RESID']))
     if qadict['NBAD_PCHI'] > 0:

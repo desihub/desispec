@@ -5,7 +5,8 @@ desispec Change Log
 0.17.3 (unreleased)
 -------------------
 
-* No changes yet.
+* Replace deprecated scipy.stats.chisqprob with
+  scipy.stats.distributions.chi2.sf for compatibility with scipy 1.0.
 
 0.17.2 (2018-01-30)
 -------------------

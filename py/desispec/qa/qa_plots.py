@@ -6,6 +6,7 @@ import os
 import numpy as np
 from scipy import signal
 import scipy
+import scipy.stats
 import pdb
 import copy
 
@@ -109,9 +110,9 @@ def frame_skyres(outfil, frame, skymodel, qaframe, quick_look=False):
     wavg_ivar = np.sum(res_ivar,0)
     chi2_wavg = np.sum(wavg_res**2 * wavg_ivar)
     dof_wavg = np.sum(wavg_ivar > 0.)
-    pchi2_wavg = scipy.stats.chisqprob(chi2_wavg, dof_wavg)
+    pchi2_wavg = scipy.stats.distributions.chi2.sf(chi2_wavg, dof_wavg)
     chi2_med = np.sum(med_res**2 * wavg_ivar)
-    pchi2_med = scipy.stats.chisqprob(chi2_med, dof_wavg)
+    pchi2_med = scipy.stats.distributions.chi2.sf(chi2_med, dof_wavg)
     '''
     skyfibers = np.array(qaframe.qa_data['SKYSUB']["METRICS"]["SKY_FIBERID"])
     subtract_sky(frame, skymodel)
