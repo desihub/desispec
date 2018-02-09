@@ -430,7 +430,7 @@ def get_nights(strip_path=True, specprod_dir=None, sub_folder='exposures'):
             else:
                 nights.append(nights_with_path[ii])
     # Return
-    return nights
+    return sorted(nights)
 
 
 

@@ -1,394 +1,321 @@
-
 """
-Read fibermap and cframe files for all exposures and update or create 
-new files that group the spectra by healpix pixel.
+Regroup spectra by healpix
 """
 
 from __future__ import absolute_import, division, print_function
-
-import os
-import argparse
-import time
-import sys
-import re
+import glob, os, time
+from collections import Counter
 
 import numpy as np
-import healpy as hp
-import fitsio
 
-from desiutil.log import get_logger
+import fitsio
+import healpy as hp
+
 import desimodel.footprint
 
-from .. import io as io
+from desispec import io
 
-from ..parallel import dist_uniform
-
-from .. import pipeline as pipe
-
-from ..spectra import Spectra
-
-
-
-def parse(options=None):
-    parser = argparse.ArgumentParser(description="Update or create "
-        "spectral group files.")
-
-    parser.add_argument("--nights", required=False, default=None,
-        help="comma separated (YYYYMMDD) or regex pattern")
-
-    parser.add_argument("--cache", required=False, default=False,
-        action="store_true", help="cache frame data for re-use")
-
-    parser.add_argument("--pipeline", required=False, default=False,
-        action="store_true", help="use pipeline planning and DB files "
-        "to obtain dependency information.")
-
-    parser.add_argument("--hpxnside", required=False, type=int, default=64,
-        help="In the case of not using the pipeline info, the HEALPix "
-        "NSIDE value to use.")
-
-    args = None
-    if options is None:
-        args = parser.parse_args()
+def get_exp2healpix_map(nights=None, specprod_dir=None, nside=64, comm=None):
+    '''
+    Returns table NIGHT EXPID SPECTRO HEALPIX NTARGETS 
+    
+    This could be replaced by a DB query when the production DB exists.
+    '''
+    if comm is None:
+        rank, size = 0, 1
     else:
-        args = parser.parse_args(options)
-    return args
+        rank, size = comm.rank, comm.size
 
+    if specprod_dir is None:
+        specprod_dir = io.specprod_root()
 
-def main(args, comm=None):
-
-    log = get_logger()
-
-    rank = 0
-    nproc = 1
-    if comm is not None:
-        rank = comm.rank
-        nproc = comm.size
-
-    # raw and production locations
-
-    rawdir = os.path.abspath(io.rawdata_root())
-    proddir = os.path.abspath(io.specprod_root())
-
-    if rank == 0:
-        log.info("Starting at {}".format(time.asctime()))
-        log.info("  using raw dir {}".format(rawdir))
-        log.info("  using spectro production dir {}".format(proddir))
-
-    # get the full graph and prune out just the objects we need
-
-    grph = None
-
-    if rank == 0:
-        #- TODO: this could be parallelized, or converted into a pure
-        #- geometric calculation without having to read fibermaps
-        if not args.pipeline:
-            # We have to rescan all cframe files on the fly...
-            # Put these into a "fake" dependency graph so that we
-            # can treat it the same as a real one later in the code.
-
-            grph = {}
-            proddir = os.path.abspath(io.specprod_root())
-            expdir = os.path.join(proddir, "exposures")
-            specdir = os.path.join(proddir, "spectra")
-
-            allnights = []
-            nightpat = re.compile(r"\d{8}")
-            for root, dirs, files in os.walk(expdir, topdown=True):
-                for d in dirs:
-                    nightmat = nightpat.match(d)
-                    if nightmat is not None:
-                        allnights.append(d)
-                break
-
-            nights = pipe.select_nights(allnights, args.nights)
-
-            for nt in nights:
-                expids = io.get_exposures(nt)
-
-                for ex in expids:
-                    cfiles = io.get_files("cframe", nt, ex)
-
-                    for cam, cf in cfiles.items():
-                        cfname = pipe.graph_name(nt, "cframe-{}-{:08d}".format(cam, ex))
-                        node = {}
-                        node["type"] = "cframe"
-                        node["in"] = []
-                        node["out"] = []
-                        grph[cfname] = node
-
-                        hdr = fitsio.read_header(cf)
-                        if hdr["FLAVOR"].strip() == "science":
-                            fmdata = fitsio.read(cf, 'FIBERMAP',
-                                    columns=('RA_TARGET', 'DEC_TARGET'))
-
-                            ra = fmdata["RA_TARGET"]
-                            dec = fmdata["DEC_TARGET"]
-                            ok = (ra == ra)  #- strip NaN
-                            ra = ra[ok]
-                            dec = dec[ok]
-                            pix = desimodel.footprint.radec2pix(
-                                                args.hpxnside, ra, dec)
-                            for p in np.unique(pix):
-                                if p >= 0:
-                                    sname = "spectra-{}-{}".format(args.hpxnside, p)
-                                    if sname not in grph:
-                                        node = {}
-                                        node["type"] = "spectra"
-                                        node["nside"] = args.hpxnside
-                                        node["pixel"] = p
-                                        node["in"] = []
-                                        node["out"] = ['zbest-{}-{}'.format(args.hpxnside, p), ]
-                                        grph[sname] = node
-                                    grph[sname]["in"].append(cfname)
-                                    grph[cfname]["out"].append(sname)
-
-        else:
-            grph = pipe.load_prod(nightstr=args.nights)
-            sgrph = pipe.graph_slice(grph, types=["spectra"], deps=True)
-            pipe.graph_db_check(sgrph)
-
-            #- The pipeline dependency graph associates all frames from an
-            #- exposure with the spectra, not just the overlapping frames,
-            #- so trim down to just the ones that are needed before reading
-            #- the entire frame files
-            log.info("Trimming extraneous frames")
-            for name, nd in sorted(grph.items()):
-                if nd["type"] != "spectra":
+    if nights is None and rank == 0:
+        nights = io.get_nights(specprod_dir=specprod_dir)
+    
+    if comm:
+        nights = comm.bcast(nights, root=0)
+    
+    #- Loop over cframe files and build mapping
+    rows = list()
+    night_expid_spectro = set()
+    for night in nights[rank::size]:
+        nightdir = os.path.join(specprod_dir, 'exposures', night)
+        for expid in io.get_exposures(night, specprod_dir=specprod_dir, raw=False):
+            tmpframe = io.findfile('cframe', night, expid, 'r0', specprod_dir=specprod_dir)
+            expdir = os.path.split(tmpframe)[0]
+            cframefiles = sorted(glob.glob(expdir + '/cframe*.fits'))
+            for filename in cframefiles:
+                #- parse 'path/night/expid/cframe-r0-12345678.fits'
+                camera = os.path.basename(filename).split('-')[1]
+                channel, spectro = camera[0], int(camera[1])
+            
+                #- if we already have don't this expid/spectrograph, skip
+                if (night, expid, spectro) in night_expid_spectro:
                     continue
 
-                keep = list()
-                discard = set()
-                for cf in nd['in']:
-                    #- Check if another frame from same spectro,expid has
-                    #- already been discarded
-                    night, cfname = pipe.graph_night_split(cf)
-                    spectrograph, expid = pipe.graph_name_split(cfname)[2:4]
-                    if (spectrograph, expid) in discard:
-                        log.debug('{} discarding {}'.format(name, cf))
-                        continue
-
-                    framefile = pipe.graph_path(cf)
-                    if not os.path.isfile(framefile) :
-                        log.debug('{} discarding {} because missing file'.format(name, cf))
-                        discard.add((spectrograph, expid))
-                        continue
-                    
-                    fibermap = fitsio.read(framefile, 'FIBERMAP',
-                                columns=('RA_TARGET', 'DEC_TARGET'))
-                    #- Strip NaN
-                    ii = fibermap['RA_TARGET'] == fibermap['RA_TARGET']
-                    fibermap = fibermap[ii]
-                    ra, dec = fibermap['RA_TARGET'], fibermap['DEC_TARGET']
-
-                    pix = desimodel.footprint.radec2pix(args.hpxnside, ra, dec)
-                    thispix = int(pipe.graph_name_split(name)[2])
-                    if thispix in pix:
-                        log.debug('{} keeping {}'.format(name, cf))
-                        keep.append(cf)
-                    else:
-                        log.debug('{} discarding {}'.format(name, cf))
-                        discard.add((spectrograph, expid))
-
-                nd['in'] = keep
-
-    #- TODO: parallelize this
-    #- Check for spectra files that have new frames
-    spectra_todo = list()
-    if rank == 0:
-        for name, nd in sorted(grph.items()):
-            if nd["type"] != "spectra":
-                continue
-            spectrafile = pipe.graph_path(name)
-            if not os.path.exists(spectrafile):
-                log.info('{} not yet done'.format(name))
-                spectra_todo.append(name)
-            else:
-                fm = fitsio.read(spectrafile, 'FIBERMAP')
-                frames_done = list()
-                for night, petal, expid in \
-                        set(zip(fm['NIGHT'],fm['PETAL_LOC'],fm['EXPID'])):
-                    for channel in ['b', 'r', 'z']:
-                        tmp = '{}_cframe-{}{}-{:08d}'.format(
-                                                      night,channel,petal,expid)
-                        frames_done.append(tmp)
-
-                frames_todo = set(nd['in']) - set(frames_done)
-
-                if len(frames_todo) == 0:
-                    log.info('All {} frames for {} already in spectra file; skipping'.format(
-                        len(nd['in']), name))
-                else:
-                    log.info('Adding {}/{} frames to {}'.format(
-                        len(frames_todo), len(nd['in']), name))
-                    nd['in'] = list(frames_todo)
-                    spectra_todo.append(name)
-
-        #- Only keep the graph entries with something to do
-        grph = pipe.graph_slice(grph, names=spectra_todo, deps=True)
-
-    #- Send graph to all ranks
-    if comm is not None:
-        grph = comm.bcast(grph, root=0)
-
-    # Get the properties of all spectra and cframes
-
-    allspec = []
-    spec_pixel = {}
-    spec_paths = {}
-    spec_frames = {}
-
-    allframe = []
-    frame_paths = {}
-    frame_nights = {}
-    frame_expids = {}
-    frame_bands = {}
-
-    nside = None
-
-    for name, nd in sorted(grph.items()):
-        if nd["type"] == "spectra":
-            allspec.append(name)
-            night, objname = pipe.graph_night_split(name)
-            stype, nsidestr, pixstr = pipe.graph_name_split(objname)
-            if nside is None:
-                nside = int(nsidestr)
-            spec_pixel[name] = int(pixstr)
-            spec_paths[name] = pipe.graph_path(name)
-            spec_frames[name] = nd["in"]
-            for cf in nd["in"]:
-                night, objname = pipe.graph_night_split(cf)
-                ctype, cband, cspec, cexpid = pipe.graph_name_split(objname)
-                allframe.append(cf)
-                frame_nights[cf] = night
-                frame_expids[cf] = cexpid
-                frame_bands[cf] = cband
-                frame_paths[cf] = pipe.graph_path(cf)
-
-    # Now sort the pixels based on their healpix value
-
-    sortspec = sorted(spec_pixel, key=spec_pixel.get)
-
-    nspec = len(sortspec)
-
-    # Distribute the full set of pixels
+                # print('Mapping {}'.format(os.path.basename(filename)))
+                night_expid_spectro.add((night, expid, spectro))
+            
+                columns = ['RA_TARGET', 'DEC_TARGET']
+                fibermap = fitsio.read(filename, 'FIBERMAP', columns=columns)
+                ra, dec = fibermap['RA_TARGET'], fibermap['DEC_TARGET']
+                ok = ~np.isnan(ra) & ~np.isnan(dec)
+                ra, dec = ra[ok], dec[ok]
+                allpix = desimodel.footprint.radec2pix(nside, ra, dec)
+            
+                for pix, ntargets in sorted(Counter(allpix).items()):
+                    rows.append((night, expid, spectro, pix, ntargets))
     
-    dist_pixel = dist_uniform(nspec, nproc)
-    if rank == 0:
-        log.info("Distributing {} spectral groups among {} processes".format(nspec, nproc))
-        sys.stdout.flush()
+    if comm:
+        rank_rows = comm.gather(rows, root=0)
+        rows = list()
+        for r in rank_rows:
+            rows.extend(r)
+    
+    exp2healpix = np.array(rows, dtype=[
+        ('NIGHT', 'i4'), ('EXPID', 'i8'), ('SPECTRO', 'i4'),
+        ('HEALPIX', 'i8'), ('NTARGETS', 'i8')])
 
-    if comm is not None:
-        comm.barrier()
+    return exp2healpix
 
-    # These are our pixels
-
-    if dist_pixel[rank][1] == 0:
-        specs = []
-    else:
-        specs = sortspec[dist_pixel[rank][0]:dist_pixel[rank][0]+dist_pixel[rank][1]]
-    nlocal = len(specs)
-
-    # This is the cache of frame data
-
-    framedata = {}
-
-    # Go through our local pixels...
-
-    for sp in specs:
-        # Read or initialize this spectral group
-        msg = "  ({:04d}) Begin spectral group {} at {}".format(rank, sp, time.asctime())
-        log.info(msg)
-        sys.stdout.flush()
-
-        specdata = None
-        if os.path.isfile(spec_paths[sp]):
-            # file exists, read in the current data
-            specdata = io.read_spectra(spec_paths[sp], single=True)
+#-----
+class FrameLite(object):
+    '''Lightweight Frame object for regrouping'''
+    def __init__(self, wave, flux, ivar, mask, rdat, fibermap, header, scores=None):
+        """TODO: document"""
+        self.wave = wave
+        self.flux = flux
+        self.ivar = ivar
+        self.mask = mask
+        self.rdat = rdat
+        self.fibermap = fibermap
+        self.header = header
+        self.scores = scores
+    
+    def __getitem__(self, index):
+        '''slice frame by targets...'''
+        if not isinstance(index, slice):
+            index = np.atleast_1d(index)
+        
+        if self.scores:
+            scores = self.scores[index]
         else:
-            meta = {}
-            meta["NSIDE"] = nside
-            meta["HPIX"] = spec_pixel[sp]
-            specdata = Spectra(meta=meta, single=True)
+            scores = None
 
-        if args.cache:
-            # Clean out any cached frame data we don't need
-            existing = list(framedata.keys())
-            ndrop = 0
-            for fr in existing:
-                if fr not in spec_frames[sp]:
-                    #log.info("frame {} not needed for spec {}, purging".format(fr, sp))
-                    ndrop += 1
-                    del framedata[fr]
-
-            # Read frame data if we don't have it
-            nadd = 0
-            for fr in spec_frames[sp]:
-                if fr not in framedata:
-                    nadd += 1
-                    #log.info("frame {} not in cache for spec {}, reading".format(fr, sp))
-                    if os.path.isfile(frame_paths[fr]):
-                        framedata[fr] = io.read_frame_as_spectra(frame_paths[fr], 
-                        frame_nights[fr], frame_expids[fr], frame_bands[fr])
-                    else:
-                        framedata[fr] = Spectra()
-
-            msg = "    ({:04d}) dropped {}; added {}; {} frames resident in memory".format(rank, ndrop, nadd, len(framedata))
-            log.info(msg)
-            sys.stdout.flush()
-
-        # Update spectral data
-
-        for fr in sorted(spec_frames[sp]):
-            fdata = None
-            if args.cache:
-                fdata = framedata[fr]
+        return FrameLite(self.wave, self.flux[index], self.ivar[index],
+            self.mask[index], self.rdat[index], self.fibermap[index],
+            self.header, scores)
+    
+    @classmethod
+    def read(cls, filename):
+        with fitsio.FITS(filename) as fx:
+            header = fx[0].read_header()
+            wave = fx['WAVELENGTH'].read()
+            flux = fx['FLUX'].read()
+            ivar = fx['IVAR'].read()
+            mask = fx['MASK'].read()
+            rdat = fx['RESOLUTION'].read()
+            fibermap = fx['FIBERMAP'].read()
+            if 'SCORES' in fx:
+                scores = fx['SCORES'].read()
             else:
-                if os.path.isfile(frame_paths[fr]):
-                    fdata = io.read_frame_as_spectra(frame_paths[fr], 
-                        frame_nights[fr], frame_expids[fr], frame_bands[fr])
-                else:
-                    log.warning('Missing {}'.format(frame_paths[fr]))
-                    fdata = Spectra()
-            # Get the targets that hit this pixel.
-            targets = []
-            fmap = fdata.fibermap
-            ra = np.array(fmap["RA_TARGET"], dtype=np.float64)
-            dec = np.array(fmap["DEC_TARGET"], dtype=np.float64)
-            bad = np.where(fmap["TARGETID"] < 0)[0]
-            ra[bad] = 0.0
-            dec[bad] = 0.0
-            # pix = hp.ang2pix(nside, ra, dec, nest=True, lonlat=True)
-            pix = desimodel.footprint.radec2pix(nside, ra, dec)
-            pix[bad] = -1
+                scores = None
 
-            ii = (specdata.meta['HPIX'] == pix)
-            pixtargets = fdata.fibermap['TARGETID'][ii]
+        #- Add extra fibermap columns
+        nspec = len(fibermap)
+        night = np.tile(header['NIGHT'], nspec).astype('i4')
+        expid = np.tile(header['EXPID'], nspec).astype('i8')
+        tileid = np.tile(header['TILEID'], nspec).astype('i8')
+        fibermap = np.lib.recfunctions.append_fields(
+            fibermap, ['NIGHT', 'EXPID', 'TILEID'], [night, expid, tileid],
+            usemask=False)
 
-            if len(pixtargets) > 0:
-                # update with data from this frame
-                log.debug('  ({:04d}) Adding {} targets from {} to {}'.format(
-                    rank, len(pixtargets), fr, sp))
+        return FrameLite(wave, flux, ivar, mask, rdat, fibermap, header, scores)
 
-                specdata.update(fdata.select(targets=pixtargets))
+class SpectraLite(object):
+    def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask={}, rdat={},
+                 fibermap=None, scores=None):
+        self.bands = bands.copy()
+        
+        _bands = set(bands)
+        assert set(wave.keys()) == _bands
+        assert set(flux.keys()) == _bands
+        assert set(ivar.keys()) == _bands
+        assert set(mask.keys()) == _bands
+        assert set(rdat.keys()) == _bands
+        
+        self.wave = wave.copy()
+        self.flux = flux.copy()
+        self.ivar = ivar.copy()
+        self.mask = mask.copy()
+        self.rdat = rdat.copy()
+        self.fibermap = fibermap
+        self.scores = scores
+    
+    def __add__(self, other):
+        assert self.bands == other.bands
+        for x in self.bands:
+            assert np.all(self.wave[x] == other.wave[x])
+        if self.scores is not None:
+            assert other.scores is not None
+        
+        bands = self.bands
+        wave = self.wave
+        flux = dict()
+        ivar = dict()
+        mask = dict()
+        rdat = dict()
+        for x in self.bands:
+            flux[x] = np.vstack([self.flux[x], other.flux[x]])
+            ivar[x] = np.vstack([self.ivar[x], other.ivar[x]])
+            mask[x] = np.vstack([self.mask[x], other.mask[x]])
+            rdat[x] = np.vstack([self.rdat[x], other.rdat[x]])
+        
+        fibermap = np.hstack([self.fibermap, other.fibermap])
+        if self.scores:
+            scores = np.hstack([self.scores, other.scores])
+        
+        return SpectraLite(bands, wave, flux, ivar, mask, rdat, fibermap, scores)
 
-            del fdata
+    def write(self, filename):
+        with fitsio.FITS(filename, mode='rw', clobber=True) as fx:
+            fx.write(self.fibermap, extname='FIBERMAP')
+            for x in sorted(self.bands):
+                X = x.upper()
+                fx.write(self.wave[x], extname=X+'_WAVELENGTH')
+                fx.write(self.flux[x], extname=X+'_FLUX')
+                fx.write(self.ivar[x], extname=X+'_IVAR')
+                fx.write(self.mask[x], extname=X+'_MASK')
+                fx.write(self.rdat[x], extname=X+'_RESOLUTION')
 
-        # Write out updated data
 
-        io.write_spectra(spec_paths[sp], specdata)
+def add_missing_frames(frames):
+    return frames
 
-        msg = "  ({:04d}) End spectral group {} at {}".format(rank, sp, time.asctime())
-        log.info(msg)
-        sys.stdout.flush()
+def frames2spectra(frames, pix, nside=64):
+    '''
+    frames[(night, expid, camera)] = FrameLite object for spectra
+    that are in healpix `pix`
+    '''
+    bands = ['b', 'r', 'z']
+    wave = dict()
+    flux = dict()
+    ivar = dict()
+    mask = dict()
+    rdat = dict()
+    fibermap = list()
+    scores = dict()
 
-    log.info("Rank {} done with {} spectra files at {}".format(
-        rank, len(specs), time.asctime()))
+    for x in bands:
+        keys = sorted(frames.keys())
+        xframes = [frames[k] for k in keys if frames[k].header['CAMERA'].startswith(x)]
+        assert len(xframes) != 0
 
-    if comm is not None:
-        comm.barrier()
-    if rank == 0:
-        log.info("Finishing at {}".format(time.asctime()))
+        wave[x] = xframes[0].wave
+        flux[x] = list()
+        ivar[x] = list()
+        mask[x] = list()
+        rdat[x] = list()
+        scores[x] = list()
+        for xf in xframes:
+            ra, dec = xf.fibermap['RA_TARGET'], xf.fibermap['DEC_TARGET']
+            ok = ~np.isnan(ra) & ~np.isnan(dec)
+            ra[~ok] = 0.0
+            dec[~ok] = 0.0
+            allpix = desimodel.footprint.radec2pix(nside, ra, dec)
+            ii = (allpix == pix) & ok
+            flux[x].append(xf.flux[ii])
+            ivar[x].append(xf.ivar[ii])
+            mask[x].append(xf.mask[ii])
+            rdat[x].append(xf.rdat[ii])
 
-    return
+            if x == bands[0]:
+                fibermap.append(xf.fibermap[ii])
+                if xf.scores is not None:
+                    scores[x].append(xf.scores[ii])
 
+        flux[x] = np.vstack(flux[x])
+        ivar[x] = np.vstack(ivar[x])
+        mask[x] = np.vstack(mask[x])
+        rdat[x] = np.vstack(rdat[x])
+        if x == bands[0]:
+            fibermap = np.hstack(fibermap)
+
+        if len(scores[x]) > 0:
+            scores[x] = np.hstack(scores[x])
+
+    if len(scores[bands[0]]) > 0:
+        scores = hp.vstack([scores[x] for x in bands])
+    else:
+        scores = None
+
+    return SpectraLite(bands, wave, flux, ivar, mask, rdat, fibermap, scores)
+
+def update_frame_cache(frames, framekeys):
+    '''
+    TODO: document
+    frames[(night, expid, camera)] dict of FrameLight objects
+    framekeys list of (night,expid,camera) wanted
+    '''
+
+    ndrop = 0
+    for key in list(frames.keys()):
+        if key not in framekeys:
+            ndrop += 1
+            del frames[key]
+
+    nkeep = len(frames)
+
+    nadd = 0
+    for key in framekeys:
+        if key not in frames.keys():
+            night, expid, camera = key
+            framefile = io.findfile('cframe', night, expid, camera)
+            # print('  Reading {}'.format(os.path.basename(framefile)))
+            nadd += 1
+            frames[key] = FrameLite.read(framefile)
+
+    print('Frame cache: {} kept, {} added, {} dropped, now have {}'.format(
+        nkeep, nadd, ndrop, len(frames)))
+
+#-------------------------------------------------------------------------
+if __name__ == '__main__':
+
+    #- TODO: argparse
+
+    #- Get table NIGHT EXPID SPECTRO HEALPIX NTARGETS 
+    exp2pix = get_exp2healpix_map()
+    assert len(exp2pix) > 0
+
+    #- TODO: evenly distribute pixels across MPI ranks
+
+    frames = dict()
+    for pix in sorted(set(exp2pix['HEALPIX'])):
+        iipix = np.where(exp2pix['HEALPIX'] == pix)[0]
+        ntargets = np.sum(exp2pix['NTARGETS'][iipix])
+        print('pix {} with {} targets on {} spectrograph exposures'.format(
+            pix, ntargets, len(iipix)))
+        framekeys = list()
+        for i in iipix:
+            night = exp2pix['NIGHT'][i]
+            expid = exp2pix['EXPID'][i]
+            spectro = exp2pix['SPECTRO'][i]
+            for band in ['b', 'r', 'z']:
+                camera = band + str(spectro)
+                framekeys.append((night, expid, camera))
+
+        update_frame_cache(frames, framekeys)
+
+        #- TODO: add support for missing frames
+        frames = add_missing_frames(frames)
+        
+        spectra = frames2spectra(frames, pix)
+        specfile = io.findfile('spectra', nside=64, groupname=pix)
+        spectra.write(os.path.basename(specfile))
+    
+        #--- DEBUG ---
+        # import IPython
+        # IPython.embed()
+        #--- DEBUG ---
+    
+    
