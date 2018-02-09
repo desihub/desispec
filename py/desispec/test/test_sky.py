@@ -70,7 +70,7 @@ class TestSky(unittest.TestCase):
         #- Setup data for a Resolution matrix
         spectra = self._get_spectra()
                         
-        sky = compute_sky(spectra,add_variance=False)
+        sky = compute_sky(spectra,add_variance=True)
         self.assertEqual(sky.flux.shape, spectra.flux.shape)
         self.assertEqual(sky.ivar.shape, spectra.ivar.shape)
         self.assertEqual(sky.mask.shape, spectra.mask.shape)
@@ -85,14 +85,14 @@ class TestSky(unittest.TestCase):
 
     def test_subtract_sky(self):
         spectra = self._get_spectra()
-        sky = compute_sky(spectra,add_variance=False)
+        sky = compute_sky(spectra,add_variance=True)
         subtract_sky(spectra, sky)
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-5, atol=1e-6))
 
     def test_subtract_sky_with_gradient(self):
         spectra = self._get_spectra(with_gradient=True)
-        sky = compute_sky(spectra,fp_corr_deg=1,add_variance=False)
+        sky = compute_sky(spectra,fp_corr_deg=1,add_variance=True)
         #import astropy.io.fits as pyfits
         #h=pyfits.HDUList([pyfits.PrimaryHDU(spectra.flux),pyfits.ImageHDU(sky.flux)])
         #h.writeto("toto.fits",overwrite=True)
