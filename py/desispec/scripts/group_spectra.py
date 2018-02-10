@@ -174,8 +174,8 @@ class FrameLite(object):
         #- Add extra fibermap columns NIGHT, EXPID, TILEID
         nspec = len(fibermap)
         night = np.tile(header['NIGHT'], nspec).astype('i4')
-        expid = np.tile(header['EXPID'], nspec).astype('i8')
-        tileid = np.tile(header['TILEID'], nspec).astype('i8')
+        expid = np.tile(header['EXPID'], nspec).astype('i4')
+        tileid = np.tile(header['TILEID'], nspec).astype('i4')
         fibermap = np.lib.recfunctions.append_fields(
             fibermap, ['NIGHT', 'EXPID', 'TILEID'], [night, expid, tileid],
             usemask=False)
@@ -187,8 +187,8 @@ class SpectraLite(object):
     '''
     Lightweight spectra I/O object for regrouping
     '''
-    def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask={}, rdat={},
-                 fibermap, scores=None):
+    def __init__(self, bands, wave, flux, ivar, mask, rdat, fibermap,
+            scores=None):
         '''
         Create a SpectraLite object
 
@@ -401,8 +401,9 @@ def frames2spectra(frames, pix, nside=64):
 
             if x == bands[0]:
                 fibermap.append(xf.fibermap[ii])
-                if xf.scores is not None:
-                    scores[x].append(xf.scores[ii])
+
+            if xf.scores is not None:
+                scores[x].append(xf.scores[ii])
 
         flux[x] = np.vstack(flux[x])
         ivar[x] = np.vstack(ivar[x])
@@ -414,8 +415,22 @@ def frames2spectra(frames, pix, nside=64):
         if len(scores[x]) > 0:
             scores[x] = np.hstack(scores[x])
 
+    #- Combine scores into a single table
+    #- Why doesn't np.vstack work for this? (says invalid type promotion)
     if len(scores[bands[0]]) > 0:
-        scores = hp.vstack([scores[x] for x in bands])
+        if len(bands) == 1:
+            scores = scores(bands[0])
+        else:
+            names = list()
+            data = list()
+            for x in bands[1:]:
+                names.extend(scores[x].dtype.names)
+                for colname in scores[x].dtype.names:
+                    data.append(scores[x][colname])
+
+            scores = np.lib.recfunctions.append_fields(
+                    scores[bands[0]], names, data)
+
     else:
         scores = None
 
