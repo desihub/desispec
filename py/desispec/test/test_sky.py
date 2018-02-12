@@ -55,7 +55,9 @@ class TestSky(unittest.TestCase):
         for i in range(self.nspec):
             R = Resolution(Rdata[i])
             if with_gradient :
-                scale = 1.+0.1*x[i]+0.2*y[i]
+                # (deg 1 angular) x (deg 1 chromatic) variation of sky spectrum
+                scale = 1.+(0.1*x[i]+0.2*y[i])*np.linspace(0.6,1.3,self.nwave)
+                
                 flux[i] = scale*R.dot(self.flux)
                 
             else :
@@ -90,13 +92,26 @@ class TestSky(unittest.TestCase):
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-5, atol=1e-6))
 
-    def test_subtract_sky_with_gradient(self):
+    def test_subtract_sky_with_gradient_using_compute_polynomial_times_sky(self):
         spectra = self._get_spectra(with_gradient=True)
-        sky = compute_sky(spectra,fp_corr_deg=1,add_variance=True)
-        #import astropy.io.fits as pyfits
-        #h=pyfits.HDUList([pyfits.PrimaryHDU(spectra.flux),pyfits.ImageHDU(sky.flux)])
-        #h.writeto("toto.fits",overwrite=True)
+        sky = compute_sky(spectra,angular_variation_deg=1,chromatic_variation_deg=1,add_variance=False)
         subtract_sky(spectra, sky)
+
+        import astropy.io.fits as pyfits
+        pyfits.writeto("flux1.fits",spectra.flux,overwrite=True)
+        pyfits.writeto("skyflux1.fits",sky.flux,overwrite=True)
+        
+        #- allow some slop in the sky subtraction
+        self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-4, atol=1e-4))
+
+    def test_subtract_sky_with_gradient_using_compute_non_uniform_sky(self):
+        spectra = self._get_spectra(with_gradient=True)
+        sky = compute_sky(spectra,angular_variation_deg=1,chromatic_variation_deg=-1,add_variance=False)
+        subtract_sky(spectra, sky)
+        
+        import astropy.io.fits as pyfits
+        pyfits.writeto("flux2.fits",spectra.flux,overwrite=True)
+        pyfits.writeto("skyflux2.fits",sky.flux,overwrite=True)
         
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-4, atol=1e-4))
