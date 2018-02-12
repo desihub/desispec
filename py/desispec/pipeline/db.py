@@ -22,6 +22,8 @@ from desiutil.log import get_logger
 
 from .. import io
 
+import fitsio
+
 from .defs import (task_states, task_int_to_state, task_state_to_int)
 
 
@@ -72,9 +74,14 @@ def all_tasks(night, nside):
         
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
-        fmdata = io.read_fibermap(fibermap)
+        
+        #fmdata = io.read_fibermap(fibermap)
+        #flavor = fmdata.meta["FLAVOR"]
+        
+        fmdata,header = fitsio.read(fibermap,header=True)
+        flavor = header["FLAVOR"]
 
-        flavor = fmdata.meta["FLAVOR"]
+        
 
         fmpix = dict()
         if (flavor != "arc") and (flavor != "flat"):
@@ -642,6 +649,9 @@ class DataBase:
         self.conn = None
         self.connstr = None
 
+        log = get_logger()
+        log.debug("opening db")
+        
         if self._path is None:
             # We are opening an in-memory DB
             self.conn = sqlite3.connect(":memory:")
@@ -655,11 +665,13 @@ class DataBase:
                 self.conn = sqlite3.connect(self.connstr, uri=True)
             except:
                 self.conn = sqlite3.connect(self._path)
-
+        
         self.conn.execute("pragma journal_mode=wal")
         self.conn.execute("pragma page_size=4096")
         self.conn.execute("pragma cache_size=4000")
-
+        
+        log.debug("done")
+        
         if create:
             self._initdb()
 
@@ -687,12 +699,18 @@ class DataBase:
         """
         states = None
         namelist = ",".join([ '"{}"'.format(x) for x in tasks ])
+        
+        log = get_logger()
+
+        log.debug("opening db")
         with self.conn as con:
             cur = con.cursor()
+            log.debug("selecting in db")
             cur.execute(\
                 'select name, state from {} where name in ({})'.format(tasktype,
                 namelist))
             st = cur.fetchall()
+            log.debug("done")
             states = { x[0] : task_int_to_state[x[1]] for x in st }
         return states
 
@@ -745,13 +763,13 @@ class DataBase:
         from .tasks.base import task_classes, task_type
 
         alltasks = all_tasks(night, nside)
-
-        for tt in task_types():
-            for tsk in alltasks[tt]:
-                with self.conn as con:
-                    con.execute("begin")
+ 
+        with self.conn as con:
+            con.execute("begin")
+            for tt in task_types():
+                for tsk in alltasks[tt]:
                     task_classes[tt].insert(self, tsk)
-
+        
         return
 
 
