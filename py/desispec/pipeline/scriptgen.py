@@ -92,7 +92,6 @@ def nersc_machine(name, queue):
     return props
 
 
-
 def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
     threads=1):
     with open(path, "w") as f:
@@ -314,8 +313,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
     if totalnodes > hostprops["maxnodes"]:
         # yes...
         maxprocs = hostprops["maxnodes"] * nodeprocs
-        #workers_per_job =
-
+        raise NotImplementedError("Job splitting not yet implemented")
 
     else:
         # no...
@@ -327,17 +325,39 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
     return ret
 
 
-# REFACTOR: These functions will take a list of tasks plus basic machine info
-# and generate one or more shell or slurm scripts to run the tasks.
-
 def batch_shell():
     pass
-
 
 def batch_nersc():
     pass
 
-
+#
+# def batch_nersc(tasktype, taskfile, machine, queue, runtime, nodeprocs=None, openmp=False, multiproc=False, shifterimg=None):
+#
+#     # compute job size
+#
+#     joblist = nersc_job_size(tasktype, tasklist, machine, queue, runtime,
+#         nodeprocs=nodeprocs)
+#
+#     for (nodes, tasks) in joblist:
+#
+#
+#
+# tasktype, tasklist, machine, queue, runtime,
+#     nodeprocs=None
+#
+#     # desi_pipe_exec
+#
+#     parser = argparse.ArgumentParser(description="Run pipeline tasks of a "
+#         "single type")
+#     parser.add_argument("--tasktype", required=True, default=None,
+#         help="The type of the input tasks.")
+#     parser.add_argument("--nodb", required=False, default=False,
+#         action="store_true", help="Do not use the production database.")
+#     parser.add_argument("--taskfile", required=False, default=None,
+#         help="Use a file containing the list of tasks.  If not specified, "
+#         "read list of tasks from STDIN")
+#
 
 
     #

@@ -75,7 +75,7 @@ class TaskPSFBoot(BaseTask):
         with db.conn as con:
             createstr = "create table psfboot (name text unique"
             for col in zip(self._cols, self._coltypes):
-                createstr = "{}, {} {}".format(createstr, col[0], col[1])
+                createstr = "{}, {}, {}".format(createstr, col[0], col[1])
             createstr = "{})".format(createstr)
             con.execute(createstr)
         return
@@ -87,8 +87,8 @@ class TaskPSFBoot(BaseTask):
         props = self.name_split(name)
         with db.conn as con:
             cur = con.cursor()
-            cur.execute("insert into psfboot values (\"{}\", {}, \"{}\", {}, "
-                "{})".format(name, props["night"], props["band"],
+            cur.execute('insert into psfboot values (\"{}\", {}, \"{}\", {}, '
+                '{})'.format(name, props["night"], props["band"],
                 props["spec"], task_state_to_int["waiting"]))
             con.commit()
         return
@@ -101,7 +101,7 @@ class TaskPSFBoot(BaseTask):
         with db.conn as con:
             cur = con.cursor()
             cur.execute(\
-                "select * from psfboot where name = \"{}\"".format(name))
+                'select * from psfboot where name = "{}"'.format(name))
             row = cur.fetchone()
             if row is None:
                 raise RuntimeError("task {} not in database".format(name))
@@ -118,8 +118,8 @@ class TaskPSFBoot(BaseTask):
         """
         with db.conn as con:
             cur = con.cursor()
-            cur.execute("insert into psfboot(state) values "
-                "({})".format(task_state_to_int(state)))
+            cur.execute('insert into psfboot(state) values '
+                '({})'.format(task_state_to_int(state)))
             con.commit()
         return
 
@@ -131,7 +131,7 @@ class TaskPSFBoot(BaseTask):
         with db.conn as con:
             cur = con.cursor()
             cur.execute(\
-                "select state from psfboot where name = \"{}\"".format(name))
+                'select state from psfboot where name = "{}"'.format(name))
             row = cur.fetchone()
             if row is None:
                 raise RuntimeError("task {} not in database".format(name))
@@ -204,6 +204,8 @@ class TaskPSFBoot(BaseTask):
         options.
         """
         from ._taskclass import task_classes
+
+        #FIXME: change this once the depencency list is a dictionary.
 
         options = OrderedDict()
 

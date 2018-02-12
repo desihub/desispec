@@ -86,9 +86,9 @@ Where supported commands are:
 
     def create(self):
         parser = argparse.ArgumentParser(description="Create a new production")
-        parser.add_argument("--redux", required=True, default=None,
+        parser.add_argument("--redux", required=False, default=None,
             help="value to use for DESI_SPECTRO_REDUX")
-        parser.add_argument("--prod", required=True, default=None,
+        parser.add_argument("--prod", required=False, default=None,
             help="value to use for SPECPROD")
         parser.add_argument("--nside", required=False, type=int, default=64,
             help="HEALPix nside value to use for spectral grouping.")
@@ -96,31 +96,29 @@ Where supported commands are:
 
         # Check production name
 
-        prodname = args.prod
-        if prodname is None:
-            if "SPECPROD" in os.environ:
-                prodname = os.environ["SPECPROD"]
-            else:
+        prodname = None
+        if "SPECPROD" in os.environ:
+            prodname = os.environ["SPECPROD"]
+        else:
+            prodname = args.prod
+            if prodname is None:
                 print("You must set SPECPROD in your environment or use the "
                     "--prod commandline option")
                 sys.exit(0)
-        else:
             os.environ["SPECPROD"] = prodname
 
         # Check spectro redux location
 
         proddir = None
-
-        specdir = args.redux
-        if specdir is None:
-            if "DESI_SPECTRO_REDUX" in os.environ:
-                specdir = os.environ["DESI_SPECTRO_REDUX"]
-                proddir = os.path.join(specdir, prodname)
-            else:
+        if "DESI_SPECTRO_REDUX" in os.environ:
+            specdir = os.environ["DESI_SPECTRO_REDUX"]
+            proddir = os.path.join(specdir, prodname)
+        else:
+            specdir = args.redux
+            if specdir is None:
                 print("You must set DESI_SPECTRO_REDUX in your environment or "
                     "use the --redux commandline option")
                 sys.exit(0)
-        else:
             specdir = os.path.abspath(specdir)
             proddir = os.path.join(specdir, prodname)
             os.environ["DESI_SPECTRO_REDUX"] = specdir

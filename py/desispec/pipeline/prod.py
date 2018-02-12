@@ -166,6 +166,7 @@ def update_prod(nightstr=None, hpxnside=64):
         hpxnside (int): The nside value to use for spectral grouping.
 
     """
+    from .tasks.base import task_classes, task_type
 
     rawdir = os.path.abspath(io.rawdata_root())
     proddir = os.path.abspath(io.specprod_root())
@@ -213,7 +214,6 @@ def update_prod(nightstr=None, hpxnside=64):
 
     optfile = os.path.join(rundir, prod_options_name)
     if not os.path.isfile(optfile):
-        from .tasks import task_classes
         opts = dict()
         for tt, tc in task_classes.items():
             tdict = { tt : tc.run_defaults() }
@@ -266,7 +266,6 @@ def update_prod(nightstr=None, hpxnside=64):
             cur.execute(\
                 "select expid from fibermap where night = \"{}\"".format(nt))
             exps = [ int(x[0]) for x in cur.fetchall() ]
-            print(exps, flush=True)
         for ex in exps:
             fdir = os.path.join(nexpdir, "{:08d}".format(ex))
             if not os.path.isdir(fdir):
