@@ -103,19 +103,15 @@ class TestSky(unittest.TestCase):
         
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-4, atol=1e-4))
-
+    '''
     def test_subtract_sky_with_gradient_using_compute_non_uniform_sky(self):
         spectra = self._get_spectra(with_gradient=True)
         sky = compute_sky(spectra,angular_variation_deg=1,chromatic_variation_deg=-1,add_variance=False)
         subtract_sky(spectra, sky)
         
-        import astropy.io.fits as pyfits
-        pyfits.writeto("flux2.fits",spectra.flux,overwrite=True)
-        pyfits.writeto("skyflux2.fits",sky.flux,overwrite=True)
-        
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-4, atol=1e-4))
-
+    '''
     def test_main(self):
         pass
         

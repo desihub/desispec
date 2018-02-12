@@ -47,7 +47,7 @@ def compute_sky(frame, nsig_clipping=4.,max_iterations=100,model_ivar=False,add_
         if chromatic_variation_deg < 0 :
             return compute_non_uniform_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg)
         else :
-            return compute_polynomial_times_sky(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg,chromatic_variation_deg=chromatic_variation_deg)
+            return compute_polynomial_times_sky_bis(frame, nsig_clipping=nsig_clipping,max_iterations=max_iterations,model_ivar=model_ivar,add_variance=add_variance,angular_variation_deg=angular_variation_deg,chromatic_variation_deg=chromatic_variation_deg)
     
    
 
@@ -753,7 +753,7 @@ def compute_polynomial_times_sky_bis(frame, nsig_clipping=4.,max_iterations=100,
         
         # diagonal sparse matrix with content = sqrt(ivar)*flat of a given fiber
         SD=scipy.sparse.lil_matrix((nwave,nwave))
-        #SD2=scipy.sparse.lil_matrix((nwave,nwave))
+        SD2=scipy.sparse.lil_matrix((nwave,nwave))
 
         # Set mean pol to 1
         Pol /= np.mean(Pol)
@@ -761,18 +761,17 @@ def compute_polynomial_times_sky_bis(frame, nsig_clipping=4.,max_iterations=100,
         # loop on fiber to handle resolution
         for fiber in range(nfibers) :
             if fiber%10==0 :
-                log.info("iter %d sky fiber %d/%d"%(iteration,fiber,nfibers))
+                log.info("iter %d sky fiber (1st fit) %d/%d"%(iteration,fiber,nfibers))
             R = Rsky[fiber]
 
             # diagonal sparse matrix with content = sqrt(ivar)
-            SD.setdiag(sqrtw[fiber]*Pol[fiber])
-            #SD2.setdiag(Pol[fiber])
+            SD.setdiag(sqrtw[fiber])
+            SD2.setdiag(Pol[fiber])
 
-            sqrtwPR = SD*R # each row r of R is multiplied by sqrtw[r]
-            #sqrtwPR = SD*R*SD2
-            A += (sqrtwPR.T*sqrtwPR).todense()
-            B += sqrtwPR.T*sqrtwflux[fiber]
-                        
+            sqrtwRP = SD.dot(R).dot(SD2) # each row r of R is multiplied by sqrtw[r]
+            A += (sqrtwRP.T*sqrtwRP).todense()
+            B += sqrtwRP.T*sqrtwflux[fiber]
+        
         log.info("iter %d solving"%iteration)
         w = A.diagonal()>0
         A_pos_def = A[w,:]
@@ -784,17 +783,24 @@ def compute_polynomial_times_sky_bis(frame, nsig_clipping=4.,max_iterations=100,
             log.info("cholesky failed, trying svd in iteration {}".format(iteration))
             parameters[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
         
-        for fiber in range(nfibers) :
-            fiber_convolved_sky_flux[fiber] = Rsky[fiber].dot(parameters)
         
         # Now evaluate the polynomial coefficients
         Ap=np.zeros((ncoef,ncoef))
         Bp=np.zeros(ncoef)
         for fiber in range(nfibers) :
+            if fiber%10==0 :
+                log.info("iter %d sky fiber  (2nd fit) %d/%d"%(iteration,fiber,nfibers))
+            R = Rsky[fiber]
+
+            # diagonal sparse matrix with content = sqrt(ivar)
+            SD.setdiag(sqrtw[fiber])
+            sqrtwR = SD.dot(R)
+            wRtR   = (sqrtwR.T*sqrtwR).todense()
             for i in range(ncoef) :
                 for j in range(ncoef) :
-                    Ap[i,j] += np.sum( current_ivar[fiber]*fiber_convolved_sky_flux[fiber]**2*skyfibers_monomials[i,fiber]*skyfibers_monomials[j,fiber] )
-                Bp[i] += np.sum( current_ivar[fiber]*fiber_convolved_sky_flux[fiber]*skyfibers_monomials[i,fiber]*flux[fiber] )
+                    Ap[i,j] += np.inner(skyfibers_monomials[j,fiber],wRtR.dot(skyfibers_monomials[i,fiber]))
+                Bp[i] += np.inner(sqrtwflux[fiber],sqrtwR.dot(skyfibers_monomials[i,fiber]))
+        
         Xp=cholesky_solve(Ap,Bp)
         Pol *= 0.
         for fiber in range(nfibers) :
@@ -803,12 +809,9 @@ def compute_polynomial_times_sky_bis(frame, nsig_clipping=4.,max_iterations=100,
         
                 
         log.info("iter %d compute chi2"%iteration)
-
         for fiber in range(nfibers) :
-            # the parameters are directly the unconvolve sky flux
-            # so we simply have to reconvolve it
-            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-Pol[fiber]*fiber_convolved_sky_flux[fiber])**2
-            
+            chi2[fiber]=current_ivar[fiber]*(flux[fiber]-Rsky[fiber].dot(Pol[fiber]*parameters))**2
+        
 
         
         log.info("rejecting")
@@ -898,7 +901,7 @@ def compute_polynomial_times_sky_bis(frame, nsig_clipping=4.,max_iterations=100,
             Pol[fiber] += Xp[c]*allfibers_monomials[c,fiber]
     
     for fiber in range(frame.nspec):
-        cskyflux[fiber] = Pol[fiber]*frame.R[fiber].dot(parameters)
+        cskyflux[fiber] = Pol[fiber]*frame.R[fiber].dot(Pol[fiber]*parameters)
         
     # look at chi2 per wavelength and increase sky variance to reach chi2/ndf=1
     if skyfibers.size > 1 and add_variance :
