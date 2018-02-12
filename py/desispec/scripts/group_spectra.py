@@ -313,7 +313,6 @@ class SpectraLite(object):
 
 def add_missing_frames(frames):
     '''TODO: test; document'''
-    return frames
 
     #- First figure out the number of wavelenghts per band
     wave = dict()
@@ -327,7 +326,7 @@ def add_missing_frames(frames):
 
     #- Now loop through all frames, filling in any missing bands
     bands = sorted(list(wave.keys()))
-    for (night, expid, camera), frame in frames.items():
+    for (night, expid, camera), frame in list(frames.items()):
         band = camera[0]
         spectro = camera[1:]
         for x in bands:
@@ -338,7 +337,7 @@ def add_missing_frames(frames):
             if (night, expid, xcam) in frames:
                 continue
 
-            print('Missing frame {}'.format((night, expid, xcam)))
+            print('Creating blank data for missing frame {}'.format((night, expid, xcam)))
             nwave = len(wave[x])
             nspec = frame.flux.shape[0]
             flux = np.zeros((nspec, nwave), dtype='f4')
@@ -346,9 +345,20 @@ def add_missing_frames(frames):
             mask = np.zeros((nspec, nwave), dtype='i8')
             rdat = np.zeros((nspec, ndiag[x], nwave), dtype='f4')
 
+            #- Copy the header and correct the camera keyword
+            header = fitsio.FITSHDR(frame.header)
+            header['camera'] = xcam
+
+            #- Make new blank scores, replacing trailing band _B/R/Z
+            dtype = list()
+            for name in frame.scores.dtype.names:
+                xname = name[0:-1] + x.upper()
+                dtype.append((xname, type(frame.scores[name][0])))
+            scores = np.zeros(nspec, dtype=dtype)
+
             frames[(night,expid,xcam)] = FrameLite(
                 wave[x], flux, ivar, mask, rdat,
-                frame.fibermap, frame.header, frame.scores)
+                frame.fibermap, header, scores)
 
 def frames2spectra(frames, pix, nside=64):
     '''
@@ -406,6 +416,7 @@ def frames2spectra(frames, pix, nside=64):
                 scores[x].append(xf.scores[ii])
 
         flux[x] = np.vstack(flux[x])
+
         ivar[x] = np.vstack(ivar[x])
         mask[x] = np.vstack(mask[x])
         rdat[x] = np.vstack(rdat[x])
@@ -413,7 +424,10 @@ def frames2spectra(frames, pix, nside=64):
             fibermap = np.hstack(fibermap)
 
         if len(scores[x]) > 0:
-            scores[x] = np.hstack(scores[x])
+            try:
+                scores[x] = np.hstack(scores[x])
+            except:
+                import IPython; IPython.embed()
 
     #- Combine scores into a single table
     #- Why doesn't np.vstack work for this? (says invalid type promotion)
@@ -531,7 +545,13 @@ if __name__ == '__main__':
             spectro = exp2pix['SPECTRO'][i]
             for band in ['b', 'r', 'z']:
                 camera = band + str(spectro)
-                framekeys.append((night, expid, camera))
+                framefile = io.findfile('cframe', night, expid, camera)
+                if os.path.exists(framefile):
+                    framekeys.append((night, expid, camera))
+                else:
+                    #- print warning if file is missing, but proceed;
+                    #- will use add_missing_frames later.
+                    print('WARNING: missing {}; will use blank data'.format(framefile))
 
         #- Identify any frames that are already in pre-existing output file
         specfile = io.findfile('spectra', nside=64, groupname=pix,
@@ -558,7 +578,7 @@ if __name__ == '__main__':
         update_frame_cache(frames, framekeys)
 
         #- TODO: add support for missing frames
-        frames = add_missing_frames(frames)
+        add_missing_frames(frames)
 
         #- convert individual FrameLite objects into SpectraLite
         newspectra = frames2spectra(frames, pix)
