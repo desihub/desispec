@@ -145,6 +145,10 @@ class BaseTask(object):
             props (dict): dictionary of properties for the task.
 
         """
+
+        log = get_logger()
+        log.debug("inserting {}".format(self.name_join(props)))
+        
         self._insert(db, props)
         return
 

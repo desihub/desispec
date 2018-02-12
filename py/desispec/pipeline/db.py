@@ -55,6 +55,11 @@ def all_tasks(night, nside):
     """
     import desimodel.footprint
 
+
+    log = get_logger()
+    
+    log.debug("io.get_exposures night={}".format(night))
+
     expid = io.get_exposures(night, raw=True)
 
     full = dict()
@@ -62,6 +67,9 @@ def all_tasks(night, nside):
         full[t] = list()
 
     for ex in sorted(expid):
+        
+        log.debug("read fibermap for exposure {}".format(ex))
+        
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
         fmdata = io.read_fibermap(fibermap)
@@ -112,7 +120,7 @@ def all_tasks(night, nside):
                 pixprops["flavor"] = flavor
                 full["pix"].append(pixprops)
 
-
+    log.debug("done")
     return full
 
 
