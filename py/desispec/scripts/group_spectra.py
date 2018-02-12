@@ -119,7 +119,7 @@ def main(args=None, comm=None):
         log.info('pix {} has {} frames to add'.format(pix, len(framekeys)))
         update_frame_cache(frames, framekeys)
 
-        #- TODO: add support for missing frames
+        #- add any missing frames
         add_missing_frames(frames)
 
         #- convert individual FrameLite objects into SpectraLite
