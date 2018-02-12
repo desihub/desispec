@@ -656,6 +656,10 @@ class DataBase:
             except:
                 self.conn = sqlite3.connect(self._path)
 
+        self.conn.execute("pragma journal_mode=wal")
+        self.conn.execute("pragma page_size=4096")
+        self.conn.execute("pragma cache_size=4000")
+
         if create:
             self._initdb()
 
@@ -744,7 +748,9 @@ class DataBase:
 
         for tt in task_types():
             for tsk in alltasks[tt]:
-                task_classes[tt].insert(self, tsk)
+                with self.conn as con:
+                    con.execute("begin")
+                    task_classes[tt].insert(self, tsk)
 
         return
 

@@ -89,13 +89,10 @@ class TaskPix(BaseTask):
         """See BaseTask.insert.
         """
         name = self.name_join(props)
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute('insert or replace into pix values ("{}", {}, "{}",'
-                '{}, {}, "{}", {})'.format(name, props["night"],
-                props["band"], props["spec"], props["expid"], props["flavor"],
-                task_state_to_int["waiting"]))
-            con.commit()
+        db.conn.execute('insert or replace into pix values ("{}", {}, '
+            '"{}", {}, {}, "{}", {})'.format(name, props["night"],
+            props["band"], props["spec"], props["expid"], props["flavor"],
+            task_state_to_int["waiting"]))
         return
 
 

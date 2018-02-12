@@ -332,7 +332,11 @@ def batch_nersc():
     pass
 
 #
-# def batch_nersc(tasktype, taskfile, machine, queue, runtime, nodeprocs=None, openmp=False, multiproc=False, shifterimg=None):
+# def batch_nersc(tasktype, taskfile, outpath, logroot, jobname, machine, queue, runtime, nodeprocs=None, openmp=False, multiproc=False, shifterimg=None):
+#
+#     # Get the location of the setup script from the production root.
+#
+#
 #
 #     # compute job size
 #
@@ -340,6 +344,9 @@ def batch_nersc():
 #         nodeprocs=nodeprocs)
 #
 #     for (nodes, tasks) in joblist:
+#         nersc_job(jobname, outpath, logroot, desisetup, commands, machine, queue,
+#             nodes, nodeproc, minutes, multisrun=False, openmp=False, multiproc=False,
+#             shifterimg=None)
 #
 #
 #

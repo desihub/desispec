@@ -84,12 +84,9 @@ class TaskFibermap(BaseTask):
         """See BaseTask.insert.
         """
         name = self.name_join(props)
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute('insert or replace into fibermap values ("{}", {}, '
+        db.conn.execute('insert or replace into fibermap values ("{}", {}, '
             '{}, "{}", {})'.format(name, props["night"], props["expid"],
             props["flavor"], task_state_to_int["waiting"]))
-            con.commit()
         return
 
 
