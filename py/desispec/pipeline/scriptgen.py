@@ -25,6 +25,8 @@ from .. import io
 from ..parallel import (dist_uniform, dist_discrete,
     stdouterr_redirected, use_mpi)
 
+from .prod import task_read, task_write
+
 
 def nersc_machine(name, queue):
     """Return the properties of the specified NERSC host.
@@ -39,7 +41,7 @@ def nersc_machine(name, queue):
 
     """
     props = dict()
-    if name == edison:
+    if name == "edison":
         props["sbatch"] = list()
         props["nodecores"] = 24
         props["corecpus"] = 2
@@ -234,7 +236,7 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
 
 
 def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
-    nodeprocs=None):
+    nodeprocs=None, db=None):
     """Compute the NERSC job parameters based on constraints.
 
     Given the list of tasks, query their estimated runtimes and determine
@@ -250,7 +252,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
             tasks for that job.
 
     """
-    from .tasks import task_classes, task_type
+    from .tasks.base import task_classes, task_type
 
     # Get the machine properties
     hostprops = nersc_machine(machine, queue)
@@ -328,43 +330,44 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
 def batch_shell():
     pass
 
-def batch_nersc():
-    pass
 
-#
-# def batch_nersc(tasktype, taskfile, outpath, logroot, jobname, machine, queue, runtime, nodeprocs=None, openmp=False, multiproc=False, shifterimg=None):
-#
-#     # Get the location of the setup script from the production root.
-#
-#
-#
-#     # compute job size
-#
-#     joblist = nersc_job_size(tasktype, tasklist, machine, queue, runtime,
-#         nodeprocs=nodeprocs)
-#
-#     for (nodes, tasks) in joblist:
-#         nersc_job(jobname, outpath, logroot, desisetup, commands, machine, queue,
-#             nodes, nodeproc, minutes, multisrun=False, openmp=False, multiproc=False,
-#             shifterimg=None)
-#
-#
-#
-# tasktype, tasklist, machine, queue, runtime,
-#     nodeprocs=None
-#
-#     # desi_pipe_exec
-#
-#     parser = argparse.ArgumentParser(description="Run pipeline tasks of a "
-#         "single type")
-#     parser.add_argument("--tasktype", required=True, default=None,
-#         help="The type of the input tasks.")
-#     parser.add_argument("--nodb", required=False, default=False,
-#         action="store_true", help="Do not use the production database.")
-#     parser.add_argument("--taskfile", required=False, default=None,
-#         help="Use a file containing the list of tasks.  If not specified, "
-#         "read list of tasks from STDIN")
-#
+def batch_nersc(tasktype, tasklist, outpath, logroot, jobname, machine, queue,
+    runtime, nodeprocs=None, openmp=False, multiproc=False, db=None,
+    shifterimg=None):
+    """Generate slurm script(s) to process a list of tasks.
+
+    Given a list of tasks and some constraints about the machine,
+    run time, etc, generate slurm scripts for use at NERSC.
+
+    """
+    from .tasks.base import task_classes, task_type
+
+    # Get the location of the setup script from the production root.
+
+    proddir = os.path.abspath(io.specprod_root())
+    desisetup = os.path.abspath(os.path.join(proddir, "setup.sh"))
+
+    # Compute job size.
+
+    joblist = nersc_job_size(tasktype, tasklist, machine, queue, runtime,
+        nodeprocs=nodeprocs)
+
+    dbstr = ""
+    if db is None:
+        dbstr = "--nodb"
+
+    jindx = 0
+    for (nodes, tasks) in joblist:
+        jobroot = "{}_{}".format(logroot, jindx)
+        taskfile = "{}.tasks".format(jobroot)
+        coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
+            .format(tasktype, taskfile, dbstr) ]
+        nersc_job(jobname, outpath, logroot, desisetup, coms, machine, queue,
+            nodes, nodeprocs, runtime, openmp=openmp, multiproc=multiproc,
+            shifterimg=shifterimg)
+        jindx += 1
+
+    return
 
 
     #

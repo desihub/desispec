@@ -86,12 +86,16 @@ Where supported commands are:
 
     def create(self):
         parser = argparse.ArgumentParser(description="Create a new production")
+
         parser.add_argument("--redux", required=False, default=None,
             help="value to use for DESI_SPECTRO_REDUX")
+
         parser.add_argument("--prod", required=False, default=None,
             help="value to use for SPECPROD")
+
         parser.add_argument("--nside", required=False, type=int, default=64,
             help="HEALPix nside value to use for spectral grouping.")
+
         args = parser.parse_args(sys.argv[2:])
 
         # Check production name
@@ -141,11 +145,14 @@ Where supported commands are:
 
     def update(self):
         parser = argparse.ArgumentParser(description="Update a production")
+
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
             "matching these patterns will be examined.")
+
         parser.add_argument("--nside", required=False, type=int, default=64,
             help="HEALPix nside value to use for spectral grouping.")
+
         args = parser.parse_args(sys.argv[2:])
 
         pipe.update_prod(nightstr=args.nights, hpxnside=args.nside)
@@ -158,16 +165,21 @@ Where supported commands are:
 
         parser = argparse.ArgumentParser(description="Get all tasks of a "
             "particular type for one or more nights")
+
         parser.add_argument("--tasktype", required=True, default=None,
             help="task type ({})".format(availtypes))
+
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
             "matching these patterns will be examined.")
+
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
             "in these states will be returned.")
+
         parser.add_argument("--taskfile", required=False, default=None,
             help="write tasks to this file (if not specified, write to STDOUT)")
+
         args = parser.parse_args(sys.argv[2:])
 
         states = None
@@ -204,11 +216,14 @@ Where supported commands are:
     def check(self):
         parser = argparse.ArgumentParser(description="Check the state of "
             "pipeline tasks")
+
         parser.add_argument("--taskfile", required=False, default=None,
             help="read tasks from this file (if not specified, read from "
             "STDIN)")
+
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
+
         args = parser.parse_args(sys.argv[2:])
 
         tasks = pipe.prod.task_read(args.taskfile)
@@ -233,16 +248,21 @@ Where supported commands are:
         parser = argparse.ArgumentParser(description="Print equivalent "
             "command-line jobs that would be run given the tasks and total"
             "number of processes")
+
         parser.add_argument("--tasktype", required=True, default=None,
             help="task type ({})".format(availtypes))
+
         parser.add_argument("--procs", required=True, type=int,
             help="The total number of processes to use for this list of tasks."
             "  This will be divided into groups of processes.")
+
         parser.add_argument("--taskfile", required=False, default=None,
             help="read tasks from this file (if not specified, read from "
             "STDIN)")
+
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
+
         parser.add_argument("--procs_per_node", required=False, type=int,
             default=0, help="The number of processes to use per node.  If not "
             "specified it uses '4', unless running on a NERSC machine where a "
@@ -276,19 +296,89 @@ Where supported commands are:
 
 
     def script(self):
-        availtypes = ",".join(pipe.db.task_types)
+        availtypes = ",".join(pipe.db.task_types())
 
         parser = argparse.ArgumentParser(description="Create a batch script "
-            "for the list of tasks")
+            "for the list of tasks.  If the --nersc option is not given, "
+            "create a shell script that optionally uses mpirun.")
+
         parser.add_argument("--tasktype", required=True, default=None,
             help="task type ({})".format(availtypes))
+
         parser.add_argument("--taskfile", required=False, default=None,
             help="read tasks from this file (if not specified, read from "
             "STDIN)")
 
+        parser.add_argument("--nersc", required=False, default=None,
+            help="write a script for this NERSC system (edison | cori-haswell "
+            "| cori-knl)")
+
+        parser.add_argument("--nersc_queue", required=False, default="regular",
+            help="write a script for this NERSC queue (debug | regular)")
+
+        parser.add_argument("--run_time", required=False, type=int,
+            default=30, help="Then maximum run time (in minutes) for a single "
+            " job.  If the list of tasks cannot be run in this time, multiple "
+            " job scripts will be written")
+
+        parser.add_argument("--procs_per_node", required=False, type=int,
+            default=0, help="The number of processes to use per node.  If not "
+            "specified it uses '4', unless running on a NERSC machine where a "
+            "default value is used for each machine.")
+
+        parser.add_argument("--mpi_procs", required=False, type=int, default=0,
+            help="The number of MPI processes to use for non-NERSC shell "
+            "scripts (default 0, disabled)")
+
+        parser.add_argument("--outdir", required=False, default=None,
+            help="put scripts and logs in this directory relative to the "
+            "production 'run' directory.")
+
+        parser.add_argument("--shifterimg", required=False, default=None,
+            help="The shifter image to use for NERSC jobs")
+
+        parser.add_argument("--nodb", required=False, default=False,
+            action="store_true", help="Do not use the production database.")
+
         args = parser.parse_args(sys.argv[2:])
 
-        # Call pipe.scriptgen.batch_nersc or batch_shell
+        proddir = os.path.abspath(io.specprod_root())
+
+        tasks = pipe.prod.task_read(args.taskfile)
+
+        outsubdir = args.outdir
+        if outsubdir is None:
+            outsubdir = io.get_pipe_scriptdir()
+
+        outdir = os.path.join(proddir, io.get_pipe_rundir(), outsubdir)
+
+        mstr = "shell"
+        if args.nersc is not None:
+            mstr = args.nersc
+
+        outstr = "{}_{}".format(args.tasktype, mstr)
+        outscript = os.path.join(outdir, "{}.slurm".format(outstr))
+        outlog = os.path.join(outdir, outstr)
+
+        (db, opts) = pipe.prod.load_prod("r")
+        if args.nodb:
+            db = None
+
+        if args.nersc is None:
+            # Not running at NERSC
+            pass
+
+        else:
+            # Running at NERSC
+
+            # FIXME: Add openmp / multiproc function to task classes and
+            # call them here.
+
+            pipe.scriptgen.batch_nersc(args.tasktype, tasks, outscript, outlog,
+                args.tasktype, args.nersc, args.nersc_queue, args.run_time,
+                nodeprocs=args.procs_per_node, openmp=False, multiproc=False,
+                db=db, shifterimg=args.shifterimg)
+
         return
 
 
