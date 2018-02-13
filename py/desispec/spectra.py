@@ -40,6 +40,7 @@ class Spectra(object):
         resolution_data: (optional) dictionary of arrays specifying the block 
             diagonal resolution matrix.  The object for each band must be in
             one of the formats supported by the Resolution class constructor.
+    Options:
         fibermap: extended fibermap to use.  If not specified, a fake one is
             created.
         meta (dict): Optional dictionary of arbitrary properties.
@@ -48,10 +49,11 @@ class Spectra(object):
             and each value is a dictionary containing string keys and values
             which are arrays of the same size as the flux array.
         single (bool): if True, store data in memory as single precision.
+        scores : QA scores table
 
     """
     def __init__(self, bands=[], wave={}, flux={}, ivar={}, mask=None, resolution_data=None,
-        fibermap=None, meta=None, extra=None, single=False):
+        fibermap=None, meta=None, extra=None, single=False, scores=None):
         
         self._bands = bands
         self._single = single
@@ -59,6 +61,7 @@ class Spectra(object):
         if single:
             self._ftype = np.float32
 
+        self.scores = scores
         self.meta = None
         if meta is None:
             self.meta = {}

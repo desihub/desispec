@@ -169,6 +169,7 @@ def read_spectra(infile, single=False):
     mask = None
     res = None
     extra = None
+    scores = None
 
     # For efficiency, go through the HDUs in disk-order.  Use the
     # extension name to determine where to put the data.  We don't
@@ -179,6 +180,8 @@ def read_spectra(infile, single=False):
         name = hdus[h].header["EXTNAME"]
         if name == "FIBERMAP":
             fmap = encode_table(Table(hdus[h].data, copy=True).as_array())
+        elif name == "SCORES":
+            scores = encode_table(Table(hdus[h].data, copy=True).as_array())
         else:
             # Find the band based on the name
             mat = re.match(r"(.*)_(.*)", name)
@@ -221,13 +224,13 @@ def read_spectra(infile, single=False):
     # they will be caught by the constructor.
 
     spec = Spectra(bands, wave, flux, ivar, mask=mask, resolution_data=res,
-        fibermap=fmap, meta=meta, extra=extra, single=single)
+        fibermap=fmap, meta=meta, extra=extra, single=single, scores=scores)
 
     hdus.close()
 
     return spec
 
-def read_frame_as_spectra(filename, night, expid, band, single=False):
+def read_frame_as_spectra(filename, night=None, expid=None, band=None, single=False):
     """
     Read a FITS file containing a Frame and return a Spectra.
 
@@ -237,6 +240,8 @@ def read_frame_as_spectra(filename, night, expid, band, single=False):
 
     Args:
         infile (str): path to read
+
+    Options:
         night (int): the night value to use for all rows of the fibermap.
         expid (int): the expid value to use for all rows of the fibermap.
         band (str): the name of this band.
@@ -251,7 +256,16 @@ def read_frame_as_spectra(filename, night, expid, band, single=False):
         raise RuntimeError("reading Frame files into Spectra only supported if a fibermap exists")
 
     nspec = len(fr.fibermap)
-   
+
+    if band is None:
+        band = fr.meta['camera'][0]
+
+    if night is None:
+        night = fr.meta['night']
+
+    if expid is None:
+        expid = fr.meta['expid']
+
     fmap = np.asarray(fr.fibermap.copy())
     fmap = add_columns(fmap,
                        ['NIGHT', 'EXPID', 'TILEID'],
@@ -276,7 +290,7 @@ def read_frame_as_spectra(filename, night, expid, band, single=False):
 
     spec = Spectra(bands, {band : fr.wave}, {band : fr.flux}, {band : fr.ivar}, 
         mask=mask, resolution_data=res, fibermap=fmap, meta=fr.meta, 
-        extra=extra, single=single)
+        extra=extra, single=single, scores=fr.scores)
 
     return spec
 
