@@ -357,7 +357,9 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
 
     # Get the options for this task type.
 
-    options = opts[tasktype]
+    options = dict()
+    if tasktype in opts:
+        options = opts[tasktype]
 
     # Get the tasks that still need to be done.
 
@@ -428,6 +430,9 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
     logdir = os.path.join(rundir, io.get_pipe_logdir())
 
     maxruntime = 0
+    print("{}".format(prefix))
+    sys.stdout.flush()
+
     for g in range(ngroup):
         first = group_firsttask[g]
         nt = group_ntask[g]
@@ -435,11 +440,11 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
             continue
         gruntime = np.sum(weights[first:first+nt])
         if gruntime > maxruntime:
-            gruntime = maxruntime
+            maxruntime = gruntime
         print("{}group {} estimated runtime is {} minutes".format(prefix,
             g, gruntime))
         sys.stdout.flush()
-        for t in range(group_firsttask, group_firsttask + group_ntask):
+        for t in range(first, first + nt):
             # For this task, determine the output log file.  If the task has
             # the "night" key in its name, then use that subdirectory.
             # Otherwise, if it has the "pixel" key, use the appropriate
@@ -450,7 +455,7 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
             tasklog = None
             if "night" in fields:
                 tasklogdir = os.path.join(logdir, io.get_pipe_nightdir(),
-                    fields["night"])
+                    "{:08d}".format(fields["night"]))
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
             elif "pixel" in fields:
@@ -459,17 +464,17 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
 
-            com = task_classes[tasktype].run_cli(name, opts, procs,
+            com = task_classes[tasktype].run_cli(runtasks[t], options, procs,
                 launch=launch, log=tasklog)
 
             print("{}  {}".format(prefix, com))
             sys.stdout.flush()
+
+        print("{}".format(prefix))
+        sys.stdout.flush()
 
     print("{}Total estimated runtime is {} minutes".format(prefix,
         maxruntime))
     sys.stdout.flush()
 
     return
-
-#
-# def batch_

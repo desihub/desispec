@@ -242,65 +242,14 @@ Where supported commands are:
         return
 
 
-    def dryrun(self):
+    def _parse_run_opts(self, parser):
+        """Internal function to parse options for running.
+
+        This provides a consistent set of run-time otpions for the
+        "dryrun", "script", and "run" commands.
+
+        """
         availtypes = ",".join(pipe.db.task_types())
-
-        parser = argparse.ArgumentParser(description="Print equivalent "
-            "command-line jobs that would be run given the tasks and total"
-            "number of processes")
-
-        parser.add_argument("--tasktype", required=True, default=None,
-            help="task type ({})".format(availtypes))
-
-        parser.add_argument("--procs", required=True, type=int,
-            help="The total number of processes to use for this list of tasks."
-            "  This will be divided into groups of processes.")
-
-        parser.add_argument("--taskfile", required=False, default=None,
-            help="read tasks from this file (if not specified, read from "
-            "STDIN)")
-
-        parser.add_argument("--nodb", required=False, default=False,
-            action="store_true", help="Do not use the production database.")
-
-        parser.add_argument("--procs_per_node", required=False, type=int,
-            default=0, help="The number of processes to use per node.  If not "
-            "specified it uses '4', unless running on a NERSC machine where a "
-            "default value is used for each machine.")
-
-        args = parser.parse_args(sys.argv[2:])
-
-        tasks = pipe.prod.task_read(args.taskfile)
-
-        procs_per_node = args.procs_per_node
-        if procs_per_node == 0:
-            procs_per_node = 4
-            if "NERSC_HOST" in os.environ:
-                if os.environ["NERSC_HOST"] == "edison":
-                    print("procs_per_node option not specified, using 24 "
-                        "for edison")
-                    procs_per_node = 24
-                elif os.environ["NERSC_HOST"] == "cori":
-                    print("procs_per_node option not specified, using 32 "
-                        "for cori, which may not be suitable for KNL nodes")
-                    procs_per_node = 32
-
-        (db, opts) = pipe.prod.load_prod("r")
-        if args.nodb:
-            db = None
-
-        pipe.run.dry_run(args.tasktype, tasks, opts, args.procs,
-            procs_per_node, db=None, launch="mpirun -np ", force=False)
-
-        return
-
-
-    def script(self):
-        availtypes = ",".join(pipe.db.task_types())
-
-        parser = argparse.ArgumentParser(description="Create a batch script "
-            "for the list of tasks.  If the --nersc option is not given, "
-            "create a shell script that optionally uses mpirun.")
 
         parser.add_argument("--tasktype", required=True, default=None,
             help="task type ({})".format(availtypes))
@@ -323,12 +272,12 @@ Where supported commands are:
 
         parser.add_argument("--procs_per_node", required=False, type=int,
             default=0, help="The number of processes to use per node.  If not "
-            "specified it uses '4', unless running on a NERSC machine where a "
+            "specified it uses '1', unless running on a NERSC machine where a "
             "default value is used for each machine.")
 
-        parser.add_argument("--mpi_procs", required=False, type=int, default=0,
+        parser.add_argument("--mpi_procs", required=False, type=int, default=1,
             help="The number of MPI processes to use for non-NERSC shell "
-            "scripts (default 0, disabled)")
+            "scripts (default 1)")
 
         parser.add_argument("--outdir", required=False, default=None,
             help="put scripts and logs in this directory relative to the "
@@ -341,6 +290,70 @@ Where supported commands are:
             action="store_true", help="Do not use the production database.")
 
         args = parser.parse_args(sys.argv[2:])
+
+        return args
+
+
+    def dryrun(self):
+
+        parser = argparse.ArgumentParser(description="Print equivalent "
+            "command-line jobs that would be run given the tasks and total"
+            "number of processes")
+
+        args = self._parse_run_opts(parser)
+
+        tasks = pipe.prod.task_read(args.taskfile)
+
+        (db, opts) = pipe.prod.load_prod("r")
+        if args.nodb:
+            db = None
+
+        ppn = args.procs_per_node
+
+        if args.nersc is None:
+            # Not running at NERSC
+            if ppn <= 0:
+                ppn = 1
+            pipe.run.dry_run(args.tasktype, tasks, opts, args.mpi_procs,
+                ppn, db=db, launch="mpirun -n", force=False)
+        else:
+            # Running at NERSC
+            hostprops = pipe.scriptgen.nersc_machine(args.nersc,
+                args.nersc_queue)
+            if ppn <= 0:
+                ppn = hostprops["nodecores"]
+
+            joblist = pipe.scriptgen.nersc_job_size(args.tasktype, tasks,
+                args.nersc, args.nersc_queue, args.run_time, nodeprocs=ppn,
+                db=db)
+
+            for (jobnodes, jobtasks) in joblist:
+                jobprocs = jobnodes * ppn
+                cpupercore = hostprops["corecpus"]
+                nodecores = hostprops["nodecores"]
+                nodethread = nodecores // ppn
+                nodedepth = cpupercore * nodethread
+
+                # FIXME: This is not correct, we need to pass other options
+                # to dry_run and let it compute the srun command for each
+                # worker group.
+
+                launch="srun -N {} -c {} -n".format(jobnodes, nodedepth)
+
+                pipe.run.dry_run(args.tasktype, jobtasks, opts, jobprocs,
+                    ppn, db=db, launch=launch, force=False)
+
+        return
+
+
+    def script(self):
+        availtypes = ",".join(pipe.db.task_types())
+
+        parser = argparse.ArgumentParser(description="Create a batch script "
+            "for the list of tasks.  If the --nersc option is not given, "
+            "create a shell script that optionally uses mpirun.")
+
+        args = self._parse_run_opts(parser)
 
         proddir = os.path.abspath(io.specprod_root())
 
@@ -357,12 +370,14 @@ Where supported commands are:
             mstr = args.nersc
 
         outstr = "{}_{}".format(args.tasktype, mstr)
-        outscript = os.path.join(outdir, "{}.slurm".format(outstr))
+        outscript = os.path.join(outdir, outstr)
         outlog = os.path.join(outdir, outstr)
 
         (db, opts) = pipe.prod.load_prod("r")
         if args.nodb:
             db = None
+
+        ppn = args.procs_per_node
 
         if args.nersc is None:
             # Not running at NERSC
@@ -374,10 +389,15 @@ Where supported commands are:
             # FIXME: Add openmp / multiproc function to task classes and
             # call them here.
 
+            if ppn <= 0:
+                hostprops = pipe.scriptgen.nersc_machine(args.nersc,
+                    args.nersc_queue)
+                ppn = hostprops["nodecores"]
+
             pipe.scriptgen.batch_nersc(args.tasktype, tasks, outscript, outlog,
                 args.tasktype, args.nersc, args.nersc_queue, args.run_time,
-                nodeprocs=args.procs_per_node, openmp=False, multiproc=False,
-                db=db, shifterimg=args.shifterimg)
+                nodeprocs=ppn, openmp=False, multiproc=False, db=db,
+                shifterimg=args.shifterimg)
 
         return
 

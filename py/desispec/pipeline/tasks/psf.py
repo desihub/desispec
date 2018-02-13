@@ -145,7 +145,8 @@ class TaskPSF(BaseTask):
     def _deps(self, name, db):
         """See BaseTask.deps.
         """
-        from ._taskclass import task_classes
+        from .base import task_classes, task_type
+
         props = self.name_split(name)
         boottask = task_classes["psfboot"].name_join(props)
         pixtask = task_classes["pix"].name_join(props)
@@ -199,7 +200,7 @@ class TaskPSF(BaseTask):
         This includes appending the filenames and incorporating runtime
         options.
         """
-        from ._taskclass import task_classes
+        from .base import task_classes, task_type
 
         options = OrderedDict()
 
@@ -208,9 +209,9 @@ class TaskPSF(BaseTask):
         deplist = self.deps(name)
         for dp in deplist:
             if re.search("psfboot", dp) is not None:
-                bootfile = task_classes["psfboot"].path(dp)
+                bootfile = task_classes["psfboot"].paths(dp)[0]
             if re.search("pix", dp) is not None:
-                pixfile = task_classes["pix"].path(dp)
+                pixfile = task_classes["pix"].paths(dp)[0]
         if (bootfile is None) or (pixfile is None):
             raise RuntimeError("dependency list must include bootstrap "
                 "and image files")
@@ -246,9 +247,9 @@ class TaskPSF(BaseTask):
     def _run(self, name, opts, comm):
         """See BaseTask.run.
         """
+        from ...scripts import specex
         optlist = self._option_list(name, opts)
 
         args = specex.parse(optarray)
         specex.main(args, comm=comm)
-
         return

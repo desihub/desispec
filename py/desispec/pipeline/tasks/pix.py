@@ -5,6 +5,9 @@
 
 from __future__ import absolute_import, division, print_function
 
+import os
+import re
+
 from collections import OrderedDict
 
 from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
@@ -25,7 +28,7 @@ class TaskPix(BaseTask):
         # do that first
         super(TaskPix, self).__init__()
         # then put int the specifics of this class
-        # _cols must have a state 
+        # _cols must have a state
         self._type = "pix"
         self._cols = [
             "night",
@@ -45,9 +48,9 @@ class TaskPix(BaseTask):
         ]
         # _name_fields must also be in _cols
         self._name_fields  = ["night","band","spec","expid"]
-        self._name_formats = ["d","s","d","08d"]
-        
-    
+        self._name_formats = ["08d","s","d","08d"]
+
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -56,7 +59,7 @@ class TaskPix(BaseTask):
         return [ findfile("pix", night=props["night"], expid=props["expid"],
             camera=camera, groupname=None, nside=None, band=props["band"],
             spectrograph=props["spec"]) ]
-    
+
     def _deps(self, name):
         """See BaseTask.deps.
         """
@@ -79,7 +82,7 @@ class TaskPix(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 0
+        return 30
 
 
     def _run_defaults(self):
@@ -88,13 +91,45 @@ class TaskPix(BaseTask):
         return dict()
 
 
+    def _option_list(self, name, opts):
+        """Build the full list of options.
+
+        This includes appending the filenames and incorporating runtime
+        options.
+        """
+        from .base import task_classes, task_type
+
+        deplist = self.deps(name)
+        rawfile = None
+        for dp in deplist:
+            if re.search("rawdata", dp) is not None:
+                rawfile = task_classes["rawdata"].paths(dp)[0]
+
+        options = OrderedDict()
+        options.update(opts)
+
+        options["infile"] = rawfile
+
+        outfile = self.paths(name)[0]
+        options["outdir"] = os.path.dirname(outfile)
+
+        return option_list(options)
+
+
     def _run_cli(self, name, opts, procs):
         """See BaseTask.run_cli.
         """
-        return ""
+        entry = "desi_preproc"
+        optlist = self._option_list(name, opts)
+        com = "{} {}".format(entry, " ".join(optlist))
+        return com
 
 
     def _run(self, name, opts, comm):
         """See BaseTask.run.
         """
+        from ...scripts import preproc
+        optlist = self._option_list(name, opts)
+        args = preproc.parse(optarray)
+        preproc.main(args)
         return

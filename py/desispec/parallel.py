@@ -249,7 +249,7 @@ def dist_discrete_all(worksizes, workers, power=1.0):
         for i in range(len(dist), workers):
             dist.append( (off, 0) )
 
-    return dist[id]
+    return dist
 
 
 def dist_discrete(worksizes, workers, workerid, power=1.0):

@@ -29,7 +29,7 @@ class TaskRawdata(BaseTask):
         # do that first
         super(TaskRawdata, self).__init__()
         # then put int the specifics of this class
-        # _cols must have a state 
+        # _cols must have a state
         self._type = "rawdata"
         self._cols = [
             "night",
@@ -46,16 +46,16 @@ class TaskRawdata(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["night","expid"]
         self._name_formats = ["d","08d"]
-        
-        
-    
+
+
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
         props = self.name_split(name)
-        return [ findfile("rawdata", night=props["night"],
+        return [ findfile("raw", night=props["night"],
             expid=props["expid"]) ]
-    
+
     def _deps(self, name):
         """See BaseTask.deps.
         """

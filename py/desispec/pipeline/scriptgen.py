@@ -278,7 +278,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
     # We want to sort the times so that we can use a simple greedy
     # "first-fit" algorithm.
 
-    tasktimes = sorted(tasktimes, key=lambda x: x[1]).reverse()
+    tasktimes = list(sorted(tasktimes, key=lambda x: x[1]))[::-1]
+
     mintime = tasktimes[-1][1]
     maxtime = tasktimes[0][1]
 
@@ -331,7 +332,7 @@ def batch_shell():
     pass
 
 
-def batch_nersc(tasktype, tasklist, outpath, logroot, jobname, machine, queue,
+def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
     runtime, nodeprocs=None, openmp=False, multiproc=False, db=None,
     shifterimg=None):
     """Generate slurm script(s) to process a list of tasks.
@@ -357,12 +358,24 @@ def batch_nersc(tasktype, tasklist, outpath, logroot, jobname, machine, queue,
         dbstr = "--nodb"
 
     jindx = 0
+    suffix = True
+    if len(joblist) == 1:
+        suffix = False
     for (nodes, tasks) in joblist:
-        jobroot = "{}_{}".format(logroot, jindx)
-        taskfile = "{}.tasks".format(jobroot)
+        joblogroot = None
+        joboutroot = None
+        if suffix:
+            joblogroot = "{}_{}".format(logroot, jindx)
+            joboutroot = "{}_{}".format(outroot, jindx)
+        else:
+            joblogroot = logroot
+            joboutroot = outroot
+        taskfile = "{}.tasks".format(joboutroot)
+        task_write(taskfile, tasks)
         coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
             .format(tasktype, taskfile, dbstr) ]
-        nersc_job(jobname, outpath, logroot, desisetup, coms, machine, queue,
+        outfile = "{}.slurm".format(joboutroot)
+        nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine, queue,
             nodes, nodeprocs, runtime, openmp=openmp, multiproc=multiproc,
             shifterimg=shifterimg)
         jindx += 1

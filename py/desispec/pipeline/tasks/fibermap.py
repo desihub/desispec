@@ -29,7 +29,7 @@ class TaskFibermap(BaseTask):
         # do that first
         super(TaskFibermap, self).__init__()
         # then put int the specifics of this class
-        # _cols must have a state 
+        # _cols must have a state
         self._type = "fibermap"
         self._cols = [
             "night",
@@ -45,17 +45,17 @@ class TaskFibermap(BaseTask):
         ]
         # _name_fields must also be in _cols
         self._name_fields  = ["night","expid"]
-        self._name_formats = ["d","08d"]
-        
-        
-    
+        self._name_formats = ["08d","08d"]
+
+
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
         props = self.name_split(name)
         return [ findfile("fibermap", night=props["night"],
             expid=props["expid"]) ]
-    
+
     def _deps(self, name):
         """See BaseTask.deps.
         """
@@ -71,7 +71,7 @@ class TaskFibermap(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 0
+        return 1
 
 
     def _run_defaults(self):

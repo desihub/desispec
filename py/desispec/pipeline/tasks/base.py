@@ -49,21 +49,26 @@ class BaseTask(object):
     This class should not be instantiated directly.
 
     """
-    
+
     def __init__(self):
         self._type = "base"
         self._cols = [] # database columns
         self._coltypes = []
         self._name_fields  = [] # name fields. note that name fields have to be included in cols
         self._name_formats = [] # name field formats
-        
+
     def _name_split(self, name):
         fields = name.split(task_name_sep)
         if (len(fields) != len(self._name_fields)+1) or (fields[0] != self._type):
             raise RuntimeError("name \"{}\" not valid for a {}".format(name,self._type))
         ret = dict()
-        for i,k in enumerate(self.name_fields) :
-            ret[k] = int(fields[i+1]) # first is the type, like fibermap-YYYYMMDD-EXPID
+        for i,k in enumerate(self._name_fields) :
+            # first part of the name is the type, like fibermap-YYYYMMDD-EXPID
+            if re.match(r".*d.*", self._name_formats[i]) is not None:
+                # This is an integer field
+                ret[k] = int(fields[i+1])
+            else:
+                ret[k] = fields[i+1]
         return ret
 
 
@@ -84,9 +89,9 @@ class BaseTask(object):
         ret=self._type
         for field,fieldformat in zip(self._name_fields,self._name_formats) :
             ret += format(task_name_sep)
-            ret += format(props[field],fieldformat)
+            ret += format(props[field], fieldformat)
         return ret
-    
+
     def name_join(self, props):
         """Construct a task name from its properties.
 
@@ -128,7 +133,7 @@ class BaseTask(object):
             createstr = "{})".format(createstr)
             con.execute(createstr)
         return
-    
+
 
     def create(self, db):
         """Initialize a database for this task type.
@@ -178,7 +183,7 @@ class BaseTask(object):
 
         log = get_logger()
         log.debug("inserting {}".format(self.name_join(props)))
-        
+
         self._insert(db, props)
         return
 
@@ -201,7 +206,7 @@ class BaseTask(object):
                 else :
                     ret[k] = row[i]
         return ret
-        
+
 
 
     def retrieve(self, db, name):
@@ -230,7 +235,7 @@ class BaseTask(object):
                 .format(self._type, task_state_to_int(state), name))
             con.commit()
         return
-    
+
     def _state_get(self, db, name):
         """See BaseTask.state_get.
         """
@@ -244,7 +249,7 @@ class BaseTask(object):
                 raise RuntimeError("task {} not in database".format(name))
             st = task_int_to_state(row[0])
         return st
-    
+
 
     def state_set(self, db, name, state):
         """Set the state of a task.
@@ -390,8 +395,7 @@ class BaseTask(object):
             str: a command line.
 
         """
-        taskrun = self._run_cli(name, opts, procs)
-        comstr = ""
+        comstr = self._run_cli(name, opts, procs)
         if launch is not None:
             comstr = "{} {} {}".format(launch, procs, comstr)
         if log is not None:
