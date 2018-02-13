@@ -26,6 +26,11 @@ class TaskFibermap(BaseTask):
 
     """
     def __init__(self):
+        # do that first
+        super(TaskFibermap, self).__init__()
+        # then put int the specifics of this class
+        # _cols must have a state 
+        self._type = "fibermap"
         self._cols = [
             "night",
             "expid",
@@ -38,103 +43,19 @@ class TaskFibermap(BaseTask):
             "text",
             "integer"
         ]
-        super(TaskFibermap, self).__init__()
-
-
-    def _name_split(self, name):
-        """See BaseTask.name_split.
-        """
-        fields = name.split(task_name_sep)
-        if (len(fields) != 3) or (fields[1] != "fibermap"):
-            raise RuntimeError("name \"{}\" not valid for a psf".format(name))
-        ret = dict()
-        ret["night"] = int(fields[0])
-        ret["expid"] = int(fields[2])
-        return ret
-
-
-    def _name_join(self, props):
-        """See BaseTask.name_join.
-        """
-        return "{:08d}{}fibermap{}{:08d}".format(props["night"],
-            task_name_sep, task_name_sep, props["expid"])
-
-
+        # _name_fields must also be in _cols
+        self._name_fields  = ["night","expid"]
+        self._name_formats = ["d","08d"]
+        
+        
+    
     def _paths(self, name):
         """See BaseTask.paths.
         """
         props = self.name_split(name)
         return [ findfile("fibermap", night=props["night"],
             expid=props["expid"]) ]
-
-
-    def _create(self, db):
-        """See BaseTask.create.
-        """
-        with db.conn as con:
-            createstr = "create table fibermap (name text unique"
-            for col in zip(self._cols, self._coltypes):
-                createstr = "{}, {} {}".format(createstr, col[0], col[1])
-            createstr = "{})".format(createstr)
-            con.execute(createstr)
-        return
-
-
-    def _insert(self, db, props):
-        """See BaseTask.insert.
-        """
-        name = self.name_join(props)
-        db.conn.execute('insert or replace into fibermap values ("{}", {}, '
-            '{}, "{}", {})'.format(name, props["night"], props["expid"],
-            props["flavor"], task_state_to_int["waiting"]))
-        return
-
-
-    def _retrieve(self, db, name):
-        """See BaseTask.retrieve.
-        """
-        ret = dict()
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute(\
-                'select * from fibermap where name = "{}"'.format(name))
-            row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            ret["name"] = name
-            ret["night"] = row[1]
-            ret["expid"] = row[2]
-            ret["flavor"] = row[3]
-            ret["state"] = task_int_to_state(row[4])
-        return ret
-
-
-    def _state_set(self, db, name, state):
-        """See BaseTask.state_set.
-        """
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute('update fibermap set state = {} where name = "{}"'\
-                .format(task_state_to_int(state), name))
-            con.commit()
-        return
-
-
-    def _state_get(self, db, name):
-        """See BaseTask.state_get.
-        """
-        st = None
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute(\
-                'select state from fibermap where name = "{}"'.format(name))
-            row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            st = task_int_to_state(row[0])
-        return st
-
-
+    
     def _deps(self, name):
         """See BaseTask.deps.
         """

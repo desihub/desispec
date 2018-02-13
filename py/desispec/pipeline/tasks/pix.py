@@ -22,6 +22,11 @@ class TaskPix(BaseTask):
     """Class containing the properties of one preprocessed pixel file.
     """
     def __init__(self):
+        # do that first
+        super(TaskPix, self).__init__()
+        # then put int the specifics of this class
+        # _cols must have a state 
+        self._type = "pix"
         self._cols = [
             "night",
             "band",
@@ -38,31 +43,11 @@ class TaskPix(BaseTask):
             "text",
             "integer"
         ]
-        super(TaskPix, self).__init__()
-
-
-    def _name_split(self, name):
-        """See BaseTask.name_split.
-        """
-        fields = name.split(task_name_sep)
-        if (len(fields) != 5) or (fields[1] != "pix"):
-            raise RuntimeError("name \"{}\" not valid for a pix".format(name))
-        ret = dict()
-        ret["night"] = int(fields[0])
-        ret["band"] = fields[2]
-        ret["spec"] = int(fields[3])
-        ret["expid"] = int(fields[4])
-        return ret
-
-
-    def _name_join(self, props):
-        """See BaseTask.name_join.
-        """
-        return "{:08d}{}pix{}{:s}{}{:d}{}{:08d}".format(props["night"],
-            task_name_sep, task_name_sep, props["band"], task_name_sep,
-            props["spec"], task_name_sep, props["expid"])
-
-
+        # _name_fields must also be in _cols
+        self._name_fields  = ["night","band","spec","expid"]
+        self._name_formats = ["d","s","d","08d"]
+        
+    
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -71,78 +56,7 @@ class TaskPix(BaseTask):
         return [ findfile("pix", night=props["night"], expid=props["expid"],
             camera=camera, groupname=None, nside=None, band=props["band"],
             spectrograph=props["spec"]) ]
-
-
-    def _create(self, db):
-        """See BaseTask.create.
-        """
-        with db.conn as con:
-            createstr = "create table pix (name text unique"
-            for col in zip(self._cols, self._coltypes):
-                createstr = "{}, {} {}".format(createstr, col[0], col[1])
-            createstr = "{})".format(createstr)
-            con.execute(createstr)
-        return
-
-
-    def _insert(self, db, props):
-        """See BaseTask.insert.
-        """
-        name = self.name_join(props)
-        db.conn.execute('insert or replace into pix values ("{}", {}, '
-            '"{}", {}, {}, "{}", {})'.format(name, props["night"],
-            props["band"], props["spec"], props["expid"], props["flavor"],
-            task_state_to_int["waiting"]))
-        return
-
-
-    def _retrieve(self, db, name):
-        """See BaseTask.retrieve.
-        """
-        ret = dict()
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute(\
-                'select * from pix where name = "{}"'.format(name))
-            row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            ret["name"] = name
-            ret["night"] = row[1]
-            ret["band"] = row[2]
-            ret["spec"] = row[3]
-            ret["expid"] = row[4]
-            ret["flavor"] = row[5]
-            ret["state"] = task_int_to_state(row[6])
-        return ret
-
-
-    def _state_set(self, db, name, state):
-        """See BaseTask.state_set.
-        """
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute('update pix set state = {} where name = "{}"'\
-                .format(task_state_to_int(state), name))
-            con.commit()
-        return
-
-
-    def _state_get(self, db, name):
-        """See BaseTask.state_get.
-        """
-        st = None
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute(\
-                'select state from pix where name = "{}"'.format(name))
-            row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            st = task_int_to_state(row[0])
-        return st
-
-
+    
     def _deps(self, name):
         """See BaseTask.deps.
         """

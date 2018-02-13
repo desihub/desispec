@@ -7,6 +7,7 @@ from __future__ import absolute_import, division, print_function
 
 import re
 import traceback
+from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
 
 from desiutil.log import get_logger
 
@@ -48,14 +49,22 @@ class BaseTask(object):
     This class should not be instantiated directly.
 
     """
+    
     def __init__(self):
-        pass
-
-
+        self._type = "base"
+        self._cols = [] # database columns
+        self._coltypes = []
+        self._name_fields  = [] # name fields. note that name fields have to be included in cols
+        self._name_formats = [] # name field formats
+        
     def _name_split(self, name):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
-        return None
+        fields = name.split(task_name_sep)
+        if (len(fields) != len(self._name_fields)+1) or (fields[0] != self._type):
+            raise RuntimeError("name \"{}\" not valid for a {}".format(name,self._type))
+        ret = dict()
+        for i,k in enumerate(self.name_fields) :
+            ret[k] = int(fields[i+1]) # first is the type, like fibermap-YYYYMMDD-EXPID
+        return ret
 
 
     def name_split(self, name):
@@ -72,11 +81,12 @@ class BaseTask(object):
 
 
     def _name_join(self, props):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
-        return None
-
-
+        ret=self._type
+        for field,fieldformat in zip(self._name_fields,self._name_formats) :
+            ret += format(task_name_sep)
+            ret += format(props[field],fieldformat)
+        return ret
+    
     def name_join(self, props):
         """Construct a task name from its properties.
 
@@ -108,12 +118,17 @@ class BaseTask(object):
         """
         return self._paths(name)
 
-
     def _create(self, db):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
+        """See BaseTask.create.
+        """
+        with db.conn as con:
+            createstr = "create table {} (name text unique".format(self._type)
+            for col in zip(self._cols, self._coltypes):
+                createstr = "{}, {} {}".format(createstr, col[0], col[1])
+            createstr = "{})".format(createstr)
+            con.execute(createstr)
         return
-
+    
 
     def create(self, db):
         """Initialize a database for this task type.
@@ -129,10 +144,22 @@ class BaseTask(object):
 
 
     def _insert(self, db, props):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
+        """See BaseTask.insert.
+        """
+        name = self.name_join(props)
+        cmd='insert or replace into {} values ("{}"'.format(self._type, name)
+        for k,ktype in zip(self._cols,self._coltypes) :
+            if k == "state" :
+                cmd+=', {}'.format(task_state_to_int["waiting"])
+            else :
+                if ktype=="text" :
+                    cmd+=', "{}"'.format(props[k])
+                else :
+                    cmd+=', {}'.format(props[k])
+        cmd+=")"
+        #print(cmd)
+        db.conn.execute(cmd)
         return
-
 
     def insert(self, db, props):
         """Insert a task into a database.
@@ -154,9 +181,24 @@ class BaseTask(object):
 
 
     def _retrieve(self, db, name):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
-        return None
+        """See BaseTask.retrieve.
+        """
+        ret = dict()
+        with db.conn as con:
+            cur = con.cursor()
+            cur.execute(\
+                'select * from {} where name = "{}"'.format(self._type,name))
+            row = cur.fetchone()
+            if row is None:
+                raise RuntimeError("task {} not in database".format(name))
+            ret["name"] = name
+            for i,k in enumerate(self._cols[1:]) :
+                if k == "state" :
+                    ret[k] = task_int_to_state(row[i])
+                else :
+                    ret[k] = row[i]
+        return ret
+        
 
 
     def retrieve(self, db, name):
@@ -177,10 +219,29 @@ class BaseTask(object):
 
 
     def _state_set(self, db, name, state):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
+        """See BaseTask.state_set.
+        """
+        with db.conn as con:
+            cur = con.cursor()
+            cur.execute('update {} set state = {} where name = "{}"'\
+                .format(self._type, task_state_to_int(state), name))
+            con.commit()
         return
-
+    
+    def _state_get(self, db, name):
+        """See BaseTask.state_get.
+        """
+        st = None
+        with db.conn as con:
+            cur = con.cursor()
+            cur.execute(\
+                'select state from {} where name = "{}"'.format(self._type,name))
+            row = cur.fetchone()
+            if row is None:
+                raise RuntimeError("task {} not in database".format(name))
+            st = task_int_to_state(row[0])
+        return st
+    
 
     def state_set(self, db, name, state):
         """Set the state of a task.
