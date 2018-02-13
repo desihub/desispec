@@ -208,7 +208,7 @@ class SpectraLite(object):
             scores: scores table, applies to all bands
         '''
 
-        self.bands = bands.copy()
+        self.bands = bands[:]
 
         #- All inputs should have the same bands
         _bands = set(bands)
