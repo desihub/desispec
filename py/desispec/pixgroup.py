@@ -280,7 +280,12 @@ class SpectraLite(object):
         '''
         Write this SpectraLite object to `filename`
         '''
-
+        
+        #- create directory if missing
+        dirname=os.path.dirname(filename)
+        if not os.path.isdir(dirname) :
+            os.makedirs(dirname)
+        
         tmpout = filename + '.tmp'
 
         #- work around c/fitsio bug that appends spaces to string column values
