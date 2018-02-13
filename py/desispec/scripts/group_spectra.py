@@ -19,7 +19,7 @@ def parse(options=None):
 
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
     parser.add_argument("--reduxdir", type=str,  help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
-    parser.add_argument("--night", type=int,  help="YEARMMDD to add")
+    parser.add_argument("--nights", type=str,  help="YEARMMDD to add")
     parser.add_argument("-o", "--outdir", type=str,  help="output directory")
     parser.add_argument("--mpi", action="store_true",
             help="Use MPI for parallelism")
@@ -53,8 +53,8 @@ def main(args=None, comm=None):
         rank = 0
         size = 1
 
-    if args.night:
-        nights = [args.night,]
+    if args.nights:
+        nights = [int(night) for night in args.nights.split(',')]
     else:
         nights = None
 

@@ -63,9 +63,8 @@ def get_frame_data(nspec=10, objtype=None):
     else:
         fibermap['OBJTYPE'] = objtype
 
-    frame = Frame(wave, flux, ivar, mask,resol_data,fibermap=fibermap)
-    frame.meta = {}
-    frame.meta['EXPTIME'] = 1.  # For flux tests
+    meta = dict(EXPTIME = 1.0)
+    frame = Frame(wave, flux, ivar, mask,resol_data,fibermap=fibermap, meta=meta)
     return frame
 
 

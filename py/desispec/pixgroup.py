@@ -269,7 +269,7 @@ class SpectraLite(object):
 
         #- Note: tables use np.hstack not np.vstack
         fibermap = np.hstack([self.fibermap, other.fibermap])
-        if self.scores:
+        if self.scores is not None:
             scores = np.hstack([self.scores, other.scores])
         else:
             scores = None
@@ -395,12 +395,15 @@ def add_missing_frames(frames):
 
             #- Make new blank scores, replacing trailing band _B/R/Z
             dtype = list()
-            for name in frame.scores.dtype.names:
-                if name.endswith('_'+band.upper()):
-                    xname = name[0:-1] + x.upper()
-                    dtype.append((xname, type(frame.scores[name][0])))
+            if frame.scores is not None:
+                for name in frame.scores.dtype.names:
+                    if name.endswith('_'+band.upper()):
+                        xname = name[0:-1] + x.upper()
+                        dtype.append((xname, type(frame.scores[name][0])))
 
-            scores = np.zeros(nspec, dtype=dtype)
+                scores = np.zeros(nspec, dtype=dtype)
+            else:
+                scores = None
 
             #- Add the blank FrameLite object
             frames[(night,expid,xcam)] = FrameLite(
