@@ -6,7 +6,12 @@ desispec Change Log
 -------------------
 
 * Replace deprecated scipy.stats.chisqprob with
-  scipy.stats.distributions.chi2.sf for compatibility with scipy 1.0.
+  scipy.stats.distributions.chi2.sf for compatibility with
+  scipy 1.0. (PR `#503`_)
+* Faster desi_group_spectra that also propagates SCORES table (PR `#505`_)
+
+.. _`#503`: https://github.com/desihub/desispec/pull/503
+.. _`#505`: https://github.com/desihub/desispec/pull/505
 
 0.17.2 (2018-01-30)
 -------------------
