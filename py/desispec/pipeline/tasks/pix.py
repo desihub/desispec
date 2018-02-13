@@ -62,10 +62,11 @@ class TaskPix(BaseTask):
         """
         from .base import task_classes
         props = self.name_split(name)
-        fmap = task_classes["fibermap"].name_join(props)
+        fmap  = task_classes["fibermap"].name_join(props)
+        rdata = task_classes["rawdata"].name_join(props)
 
         # FIXME: add raw data file here eventually.
-        deptasks = [ fmap ]
+        deptasks = [ fmap , rdata ]
         return deptasks
 
 
