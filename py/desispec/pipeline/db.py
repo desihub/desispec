@@ -109,22 +109,32 @@ def all_tasks(night, nside):
             #         allpix[fmp] = fmpix[fmp]
 
         fmprops = dict()
-        fmprops["night"] = int(night)
-        fmprops["expid"] = int(ex)
+        fmprops["night"]  = int(night)
+        fmprops["expid"]  = int(ex)
         fmprops["flavor"] = flavor
-
+        fmprops["state"]  = "done"
+        
         full["fibermap"].append(fmprops)
 
+        
+        rdprops = dict()
+        rdprops["night"]  = int(night)
+        rdprops["expid"]  = int(ex)
+        rdprops["flavor"] = flavor
+        rdprops["state"]  = "done"
+        
+        full["rawdata"].append(rdprops)
+        
         # Add the preprocessed pixel files
-
-        for band in ['b', 'r', 'z']:
-            for spec in range(10):
+        for band in ['b', 'r', 'z']: # need to open the rawdat file to see how many spectros and cameras are there
+            for spec in range(10): #
                 pixprops = dict()
                 pixprops["night"] = int(night)
                 pixprops["band"] = band
                 pixprops["spec"] = spec
                 pixprops["expid"] = int(ex)
                 pixprops["flavor"] = flavor
+                pixprops["state"] = "ready"
                 full["pix"].append(pixprops)
 
     log.debug("done")
