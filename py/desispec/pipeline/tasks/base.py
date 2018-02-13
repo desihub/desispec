@@ -150,7 +150,10 @@ class BaseTask(object):
         cmd='insert or replace into {} values ("{}"'.format(self._type, name)
         for k,ktype in zip(self._cols,self._coltypes) :
             if k == "state" :
-                cmd+=', {}'.format(task_state_to_int["waiting"])
+                if k in props :
+                    cmd+=', {}'.format(task_state_to_int[props["state"]])
+                else :
+                    cmd+=', {}'.format(task_state_to_int["waiting"])
             else :
                 if ktype=="text" :
                     cmd+=', "{}"'.format(props[k])
