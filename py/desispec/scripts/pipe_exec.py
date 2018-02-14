@@ -93,13 +93,13 @@ def main(args, comm=None):
 
     # run it!
 
-    (db, opts) = load_prod("w")
+    (db, opts) = pipe.load_prod("w")
     failed = None
     if args.nodb:
-        failed = run_task_list(args.tasktype, tasklist, opts, comm=comm,
+        failed = pipe.run_task_list(args.tasktype, tasklist, opts, comm=comm,
             db=None)
     else:
-        failed = run_task_list(args.tasktype, tasklist, opts, comm=comm, db=db)
+        failed = pipe.run_task_list(args.tasktype, tasklist, opts, comm=comm, db=db)
 
     t2 = datetime.datetime.now()
 

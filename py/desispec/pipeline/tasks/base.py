@@ -5,6 +5,7 @@
 
 from __future__ import absolute_import, division, print_function
 
+import sys
 import re
 import traceback
 from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
@@ -232,7 +233,7 @@ class BaseTask(object):
         with db.conn as con:
             cur = con.cursor()
             cur.execute('update {} set state = {} where name = "{}"'\
-                .format(self._type, task_state_to_int(state), name))
+                .format(self._type, task_state_to_int[state], name))
             con.commit()
         return
 
@@ -264,14 +265,8 @@ class BaseTask(object):
         """
         self._state_set(db, name, state)
         return
-
-
-    def _state_get(self, db, name):
-        raise NotImplementedError("You should not use a BaseTask object "
-            " directly")
-        return None
-
-
+        
+        
     def state_get(self, db, name):
         """Get the state of a task.
 

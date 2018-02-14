@@ -67,7 +67,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
             os.remove(logfile)
         # Mark task as in progress
         if db is not None:
-            task_classes[ttype].state_set(name, "running")
+            task_classes[ttype].state_set(db=db,name=name,state="running")
 
     failcount = 0
     if logfile is None:
@@ -182,6 +182,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     # Get the weights for each task.  Since this might trigger DB lookups, only
     # the root process does this.
 
+    weights = None
     if rank == 0:
         weights = [ task_classes[tasktype].run_time(x, procs_per_node, db=db) \
             for x in runtasks ]
@@ -256,7 +257,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
             tasklog = None
             if "night" in fields:
                 tasklogdir = os.path.join(logdir, io.get_pipe_nightdir(),
-                    fields["night"])
+                                          "{:08d}".format(fields["night"]))
                 # (this directory should have been made during the prod update)
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
@@ -273,7 +274,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
 
-            failedprocs = run_task(name, options, comm=comm_group,
+            failedprocs = run_task(runtasks[t], options, comm=comm_group,
                 logfile=tasklog, db=db)
 
             if failedprocs > 1:

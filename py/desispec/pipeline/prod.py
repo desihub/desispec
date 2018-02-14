@@ -291,7 +291,7 @@ def load_prod(mode):
     """
     proddir = os.path.abspath(io.specprod_root())
     dbpath = os.path.join(proddir, prod_db_name)
-    db = DataBase(dbpath, "r")
+    db = DataBase(dbpath, mode)
 
     rundir = io.get_pipe_rundir()
     optfile = os.path.join(rundir, prod_options_name)

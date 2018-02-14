@@ -82,9 +82,9 @@ class TaskPix(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 30
+        return 2
 
-
+    
     def _run_defaults(self):
         """See BaseTask.run_defaults.
         """
@@ -107,11 +107,13 @@ class TaskPix(BaseTask):
 
         options = OrderedDict()
         options.update(opts)
-
+        
+        props = self.name_split(name)
         options["infile"] = rawfile
-
+        options["cameras"] = "{}{}".format(props["band"],props["spec"])
+        
         outfile = self.paths(name)[0]
-        options["outdir"] = os.path.dirname(outfile)
+        options["pixfile"] = outfile
 
         return option_list(options)
 
