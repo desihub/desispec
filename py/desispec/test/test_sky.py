@@ -18,24 +18,24 @@ class TestSky(unittest.TestCase):
     #- Create unique test filename in a subdirectory
     def setUp(self):
         #- Create a fake sky
-        self.nspec = 40
+        self.nspec = 20
         self.wave = np.arange(4000, 4500)
         self.nwave = len(self.wave)
         self.flux = np.zeros(self.nwave)
         for i in range(0, self.nwave, 20):
             self.flux[i] = i
-            
         self.ivar = np.ones(self.flux.shape)
-                    
-    def _get_spectra(self,with_gradient=False):
+        self.add_variance = False
+        
+    def _get_spectra(self,with_gradient=False,allsky=False):
         #- Setup data for a Resolution matrix
-        sigma = 4.0
+        sigma2 = 4.0
         ndiag = 21
         xx = np.linspace(-(ndiag-1)/2.0, +(ndiag-1)/2.0, ndiag)
         Rdata = np.zeros( (self.nspec, ndiag, self.nwave) )
         for i in range(self.nspec):
             for j in range(self.nwave):
-                kernel = np.exp(-xx**2/(2*sigma))
+                kernel = np.exp(-(xx+float(i)/self.nspec*0.3)**2/(2*sigma2))
                 kernel /= sum(kernel)
                 Rdata[i,:,j] = kernel
                 
@@ -45,34 +45,32 @@ class TestSky(unittest.TestCase):
         
         fibermap = desispec.io.empty_fibermap(self.nspec, 1500)
         fibermap['OBJTYPE'][0::2] = 'SKY'
+        if allsky: fibermap['OBJTYPE'][:] = 'SKY'
+        
         x=fibermap["X_TARGET"]
         y=fibermap["Y_TARGET"]
         x = x-np.mean(x)
         y = y-np.mean(y)
         if np.std(x)>0 : x /= np.std(x)
         if np.std(y)>0 : y /= np.std(y)
-        
+        w = (self.wave-self.wave[0])/(self.wave[-1]-self.wave[0])*2.-1
         for i in range(self.nspec):
             R = Resolution(Rdata[i])
+                
             if with_gradient :
-                # (deg 1 angular) x (deg 1 chromatic) variation of sky spectrum
-                scale = 1.+(0.1*x[i]+0.2*y[i])*np.linspace(0.6,1.3,self.nwave)
-                
-                flux[i] = scale*R.dot(self.flux)
-                
+                scale = 1.+(0.1*x[i]+0.2*y[i])*(1+0.4*w)
+                #scale = 1.+(0.1*x[i]+0.2*y[i])
+                flux[i] = R.dot(scale*self.flux)
             else :
                 flux[i] = R.dot(self.flux)
-
         
-        
-
         return Frame(self.wave, flux, ivar, mask, Rdata, spectrograph=2, fibermap=fibermap)
                     
     def test_uniform_resolution(self):        
         #- Setup data for a Resolution matrix
         spectra = self._get_spectra()
                         
-        sky = compute_sky(spectra,add_variance=True)
+        sky = compute_sky(spectra,add_variance=self.add_variance)
         self.assertEqual(sky.flux.shape, spectra.flux.shape)
         self.assertEqual(sky.ivar.shape, spectra.ivar.shape)
         self.assertEqual(sky.mask.shape, spectra.mask.shape)
@@ -87,26 +85,23 @@ class TestSky(unittest.TestCase):
 
     def test_subtract_sky(self):
         spectra = self._get_spectra()
-        sky = compute_sky(spectra,add_variance=True)
+        sky = compute_sky(spectra,add_variance=self.add_variance)
         subtract_sky(spectra, sky)
         #- allow some slop in the sky subtraction
         self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-5, atol=1e-6))
 
     def test_subtract_sky_with_gradient_using_compute_polynomial_times_sky(self):
-        spectra = self._get_spectra(with_gradient=True)
-        sky = compute_sky(spectra,angular_variation_deg=1,chromatic_variation_deg=1,add_variance=False)
+        spectra = self._get_spectra(with_gradient=True,allsky=True)
+        sky = compute_sky(spectra,angular_variation_deg=1,chromatic_variation_deg=1,add_variance=self.add_variance)
         subtract_sky(spectra, sky)
-
-        import astropy.io.fits as pyfits
-        pyfits.writeto("flux1.fits",spectra.flux,overwrite=True)
-        pyfits.writeto("skyflux1.fits",sky.flux,overwrite=True)
         
         #- allow some slop in the sky subtraction
-        self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-4, atol=1e-4))
+        self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-4, atol=1e-4)) # this is not exact
+        
     '''
     def test_subtract_sky_with_gradient_using_compute_non_uniform_sky(self):
         spectra = self._get_spectra(with_gradient=True)
-        sky = compute_sky(spectra,angular_variation_deg=1,chromatic_variation_deg=-1,add_variance=False)
+        sky = compute_sky(spectra,angular_variation_deg=1,chromatic_variation_deg=-1,add_variance=self.add_variance)
         subtract_sky(spectra, sky)
         
         #- allow some slop in the sky subtraction
