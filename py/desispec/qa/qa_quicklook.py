@@ -59,7 +59,7 @@ class Get_RMS(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NOISE_AMP" 
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STAT" 
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STATUS" 
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -169,10 +169,10 @@ class Get_RMS(MonitoringAlg):
             rmsover=np.std(overscan_values)
 
 #            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"EXPNUM_WARN":expnum}
-            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"NOISE_STAT":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
         else:
 #            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum}
-            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_ROW":rms_row,"NOISE_STAT":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_ROW":rms_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
 
         if qlf:
             qlf_post(retval)  
@@ -198,7 +198,7 @@ class Count_Pixels(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NPIX_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NPIX_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NPIX_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -287,10 +287,10 @@ class Count_Pixels(MonitoringAlg):
                 npixhi_amps.append(npixhi_thisamp)
 
 #            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps}
-            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_STAT":npix_err}
+            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_STATUS":npix_err}
         else:
 #            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi}
-            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_STAT":npix_err}
+            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_STATUS":npix_err}
 
         if qlf:
             qlf_post(retval)      
@@ -317,7 +317,7 @@ class Integrate_Spec(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "INTEG_AVG"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "MAGDIFF_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "MAGDIFF_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -460,10 +460,10 @@ class Integrate_Spec(MonitoringAlg):
                     int_avg_amps[amp]=np.mean(integ_thisamp)
 
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_STAT":magdiff_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_STATUS":magdiff_err}
         else:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_STAT":magdiff_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_STATUS":magdiff_err}
 
         if qlf:
             qlf_post(retval) 
@@ -491,7 +491,7 @@ class Sky_Continuum(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "SKYCONT"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "SKYCONT_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "SKYCONT_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -618,10 +618,10 @@ class Sky_Continuum(MonitoringAlg):
             skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
 
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_STAT":skycont_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_STATUS":skycont_err}
         else: 
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STAT":skycont_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STATUS":skycont_err}
 
         if qlf:
             qlf_post(retval)    
@@ -650,7 +650,7 @@ class Sky_Peaks(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT_MED_SKY"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -737,7 +737,7 @@ class Sky_Peaks(MonitoringAlg):
 
 #        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec}
         sumcount_err='NORMAL'
-        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STAT":sumcount_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STATUS":sumcount_err}
 
         if qlf:
             qlf_post(retval)
@@ -765,7 +765,7 @@ class Calc_XWSigma(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "WSIGMA_MED_SKY"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1088,10 +1088,10 @@ class Calc_XWSigma(MonitoringAlg):
         shift_err='NORMAL'
         if amps:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWSIGMA_STAT":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWSIGMA_STATUS":shift_err}
         else:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA":xwsigma}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA_STAT":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA_STATUS":shift_err}
 
         #- http post if needed
         if qlf:
@@ -1121,7 +1121,7 @@ class Bias_From_Overscan(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "BIAS_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -1280,10 +1280,10 @@ class Bias_From_Overscan(MonitoringAlg):
             bias_amps=np.array(bias_overscan)
 
 #            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIAS_STAT":biasdiff_err}
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
         else:
 #            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
-            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIAS_STAT":biasdiff_err}
+            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
 
         #- http post if needed
         if qlf:
@@ -1312,7 +1312,7 @@ class CountSpectralBins(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NGOODFIB"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NGOODFIB_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NGOODFIB_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -1472,10 +1472,10 @@ class CountSpectralBins(MonitoringAlg):
             averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
 
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STAT":ngood_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STATUS":ngood_err}
         else:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STAT":ngood_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STATUS":ngood_err}
 
         retval["LEFT_MAX_FIBER"]=int(leftmax)
         retval["RIGHT_MIN_FIBER"]=int(rightmin)
@@ -1507,8 +1507,8 @@ class Sky_Residual(MonitoringAlg):
         from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDRMS"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "RESIDRMS_STAT"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "RESID"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "RESID_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -1610,9 +1610,9 @@ class Sky_Residual(MonitoringAlg):
 
         skyresid_err='NORMAL'
         retval["PARAMS"] = param
-        retval["METRICS"]["RESIDRMS_STAT"]=skyresid_err
+        retval["METRICS"]["RESID_STATUS"]=skyresid_err
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['RESIDRMS_REF']=kwargs["REFERENCE"]
+            retval['PARAMS']['RESID_REF']=kwargs["REFERENCE"]
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
@@ -1633,7 +1633,7 @@ class Calculate_SNR(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "ELG_FIDSNR"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1736,7 +1736,7 @@ class Calculate_SNR(MonitoringAlg):
             retval['PARAMS']['FIDSNR_TGT_REF']=kwargs["REFERENCE"]
 
         snrwarn='NORMAL'
-        retval["METRICS"]["FIDSNR_STAT"] = snrwarn
+        retval["METRICS"]["FIDSNR_STATUS"] = snrwarn
 
         #- http post if valid
         if qlf:
