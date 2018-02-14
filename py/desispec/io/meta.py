@@ -510,31 +510,11 @@ def get_pipe_scriptdir():
     return "scripts"
 
 
-def get_pipe_logdir():
+def get_pipe_nightlydir():
     """
-    Return the name of the subdirectory containing pipeline logs.
+    Return the name of the subdirectory containing nightly scripts.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "logs"
-
-
-def get_pipe_nightdir():
-    """
-    Return the name of the subdirectory containing per-night log files.
-
-    Returns (str):
-        The name of the subdirectory.
-    """
-    return "nights"
-
-
-def get_pipe_pixeldir():
-    """
-    Return the name of the subdirectory containing per-pixel log files.
-
-    Returns (str):
-        The name of the subdirectory.
-    """
-    return "pixels"
+    return "nightly"

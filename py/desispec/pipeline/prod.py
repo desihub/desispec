@@ -200,17 +200,9 @@ def update_prod(nightstr=None, hpxnside=64):
     if not os.path.isdir(scriptdir):
         os.makedirs(scriptdir)
 
-    logdir = os.path.join(rundir, io.get_pipe_logdir())
-    if not os.path.isdir(logdir):
-        os.makedirs(logdir)
-
-    nightlogdir = os.path.join(logdir, io.get_pipe_nightdir())
-    if not os.path.isdir(nightlogdir):
-        os.makedirs(nightlogdir)
-
-    pixlogdir = os.path.join(logdir, io.get_pipe_pixeldir())
-    if not os.path.isdir(pixlogdir):
-        os.makedirs(pixlogdir)
+    nightlydir = os.path.join(rundir, io.get_pipe_nightlydir())
+    if not os.path.isdir(nightlydir):
+        os.makedirs(nightlydir)
 
     optfile = os.path.join(rundir, prod_options_name)
     if not os.path.isfile(optfile):
@@ -253,9 +245,9 @@ def update_prod(nightstr=None, hpxnside=64):
         ndir = os.path.join(calpsf, nt)
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
-        nlog = os.path.join(nightlogdir, nt)
-        if not os.path.isdir(nlog):
-            os.makedirs(nlog)
+        nly = os.path.join(nightlydir, nt)
+        if not os.path.isdir(nly):
+            os.makedirs(nly)
 
         db.update(nt, hpxnside)
 
