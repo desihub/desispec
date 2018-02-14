@@ -56,7 +56,7 @@ class TaskFibermap(BaseTask):
         return [ findfile("fibermap", night=props["night"],
             expid=props["expid"]) ]
 
-    def _deps(self, name):
+    def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
         return list()

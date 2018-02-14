@@ -60,7 +60,7 @@ class TaskPix(BaseTask):
             camera=camera, groupname=None, nside=None, band=props["band"],
             spectrograph=props["spec"]) ]
 
-    def _deps(self, name):
+    def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
         from .base import task_classes

@@ -59,7 +59,7 @@ def all_tasks(night, nside):
 
 
     log = get_logger()
-    
+
     log.debug("io.get_exposures night={}".format(night))
 
     expid = io.get_exposures(night, raw=True)
@@ -69,19 +69,19 @@ def all_tasks(night, nside):
         full[t] = list()
 
     for ex in sorted(expid):
-        
+
         log.debug("read fibermap for exposure {}".format(ex))
-        
+
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
-        
+
         #fmdata = io.read_fibermap(fibermap)
         #flavor = fmdata.meta["FLAVOR"]
-        
+
         fmdata,header = fitsio.read(fibermap,header=True)
         flavor = header["FLAVOR"]
 
-        
+
 
         fmpix = dict()
         if (flavor != "arc") and (flavor != "flat"):
@@ -113,18 +113,18 @@ def all_tasks(night, nside):
         fmprops["expid"]  = int(ex)
         fmprops["flavor"] = flavor
         fmprops["state"]  = "done"
-        
+
         full["fibermap"].append(fmprops)
 
-        
+
         rdprops = dict()
         rdprops["night"]  = int(night)
         rdprops["expid"]  = int(ex)
         rdprops["flavor"] = flavor
         rdprops["state"]  = "done"
-        
+
         full["rawdata"].append(rdprops)
-        
+
         # Add the preprocessed pixel files
         for band in ['b', 'r', 'z']: # need to open the rawdat file to see how many spectros and cameras are there
             for spec in range(10): #
@@ -661,7 +661,7 @@ class DataBase:
 
         log = get_logger()
         log.debug("opening db")
-        
+
         if self._path is None:
             # We are opening an in-memory DB
             self.conn = sqlite3.connect(":memory:")
@@ -675,13 +675,13 @@ class DataBase:
                 self.conn = sqlite3.connect(self.connstr, uri=True)
             except:
                 self.conn = sqlite3.connect(self._path)
-        
+
         self.conn.execute("pragma journal_mode=wal")
         self.conn.execute("pragma page_size=4096")
         self.conn.execute("pragma cache_size=4000")
-        
+
         log.debug("done")
-        
+
         if create:
             self._initdb()
 
@@ -709,7 +709,7 @@ class DataBase:
         """
         states = None
         namelist = ",".join([ '"{}"'.format(x) for x in tasks ])
-        
+
         log = get_logger()
 
         log.debug("opening db")
@@ -773,19 +773,19 @@ class DataBase:
         from .tasks.base import task_classes, task_type
 
         alltasks = all_tasks(night, nside)
- 
+
         with self.conn as con:
             con.execute("begin")
             for tt in task_types():
                 for tsk in alltasks[tt]:
                     task_classes[tt].insert(self, tsk)
-        
+
         return
 
 
 
 
-def check_tasks(tasklist, db=None):
+def check_tasks(tasklist, db=None, inputs=None):
     """Check a list of tasks and return their state.
 
     If the database is specified, it is used to check the state of the tasks
@@ -793,7 +793,9 @@ def check_tasks(tasklist, db=None):
 
     Args:
         tasklist (list): list of tasks.
-        db (pipeline.db.DB): The optional database to update.
+        db (pipeline.db.DB): The optional database to use.
+        inputs (dict): optional dictionary containing the only input
+            dependencies that should be considered.
 
     Returns:
         dict: The current state of all tasks.
@@ -812,14 +814,17 @@ def check_tasks(tasklist, db=None):
 
             # Check dependencies
             ready = True
-            deps = task_classes[tasktype].deps(tsk)
-            for dp in deps:
-                deptype = task_type(dp)
-                depfiles = task_classes[deptype].paths(dp)
-                for odep in depfiles:
-                    if not os.path.isfile(odep):
-                        ready = False
-                        break
+            deps = task_classes[tasktype].deps(tsk, db=db, inputs=inputs)
+            for k, v in deps.items():
+                if not isinstance(v, list):
+                    v = [ v ]
+                for dp in v:
+                    deptype = task_type(dp)
+                    depfiles = task_classes[deptype].paths(dp)
+                    for odep in depfiles:
+                        if not os.path.isfile(odep):
+                            ready = False
+                            break
             if ready:
                 st = "ready"
                 done = True

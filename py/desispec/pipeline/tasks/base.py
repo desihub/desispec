@@ -284,13 +284,13 @@ class BaseTask(object):
         return self._state_get(db, name)
 
 
-    def _deps(self, name):
+    def _deps(self, name, db, inputs):
         raise NotImplementedError("You should not use a BaseTask object "
             " directly")
         return None
 
 
-    def deps(self, name):
+    def deps(self, name, db=None, inputs=None):
         """Get the dependencies for a task.
 
         This gets a list of other tasks which are required.
@@ -298,12 +298,17 @@ class BaseTask(object):
         Args:
             name (str): the task name.
             db (pipeline.DB): the optional database instance.
+            inputs (dict): optional dictionary containing the only input
+                dependencies that should be considered.
 
         Returns:
-            list: the list of dependency tasks.
+            dict: a dictionary of dependencies.  The keys are arbitrary and
+                the values can be either scalar task names or lists of tasks.
 
         """
-        return self._deps(name)
+        if (db is not None) and (inputs is not None):
+            raise RuntimeError("Cannot specify both a DB and an input dict")
+        return self._deps(name, db, inputs)
 
 
     def _run_max_procs(self, procs_per_node):
