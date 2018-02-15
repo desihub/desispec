@@ -662,6 +662,8 @@ class DataBase:
         log = get_logger()
         log.debug("opening db")
 
+        timeout=1000
+        
         if self._path is None:
             # We are opening an in-memory DB
             self.conn = sqlite3.connect(":memory:")
@@ -672,11 +674,11 @@ class DataBase:
                     self.connstr = 'file:{}?mode=ro'.format(self._path)
                 else:
                     self.connstr = 'file:{}?mode=rwc'.format(self._path)
-                self.conn = sqlite3.connect(self.connstr, uri=True)
+                self.conn = sqlite3.connect(self.connstr, uri=True,timeout=timeout)
             except:
-                self.conn = sqlite3.connect(self._path)
+                self.conn = sqlite3.connect(self._path,timeout=timeout)
 
-        self.conn.execute("pragma journal_mode=wal")
+        #self.conn.execute("pragma journal_mode=wal")
         self.conn.execute("pragma page_size=4096")
         self.conn.execute("pragma cache_size=4000")
 
