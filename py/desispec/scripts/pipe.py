@@ -293,6 +293,9 @@ Where supported commands are:
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
 
+        parser.add_argument("--debug", required=False, default=False,
+            action="store_true", help="debugging messages in job logs")
+
         args = parser.parse_args(sys.argv[2:])
 
         return args
@@ -389,7 +392,7 @@ Where supported commands are:
             pipe.scriptgen.batch_nersc(args.tasktype, tasks, outscript, outlog,
                 args.tasktype, args.nersc, args.nersc_queue, args.nersc_runtime,
                 nodeprocs=ppn, openmp=False, multiproc=False, db=db,
-                shifterimg=args.nersc_shifter)
+                                       shifterimg=args.shifterimg,debug=args.debug)
 
         return
 
