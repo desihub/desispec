@@ -468,22 +468,6 @@ def qaprod_root():
     return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'QA')
 
 
-def get_pipe_plandir(specprod_dir=None):
-    """
-    Return the directory path for pipeline planning files.
-
-    Args:
-        specprod_dir (str): Optional path to production directory.  If None,
-            the this is obtained from :func:`specprod_root`.
-
-    Returns (str):
-        the directory path for pipeline planning files.
-    """
-    if specprod_dir is None:
-        specprod_dir = specprod_root()
-    return os.path.join(os.path.abspath(specprod_dir), "plan")
-
-
 def get_pipe_rundir(specprod_dir=None):
     """
     Return the directory path for pipeline runtime files.
@@ -522,19 +506,19 @@ def get_pipe_logdir():
 
 def get_pipe_nightdir():
     """
-    Return the name of the subdirectory containing per-night log files.
+    Return the name of the subdirectory containing per-night files.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "nights"
+    return "night"
 
 
 def get_pipe_pixeldir():
     """
-    Return the name of the subdirectory containing per-pixel log files.
+    Return the name of the subdirectory containing per-pixel files.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "pixels"
+    return "healpix"

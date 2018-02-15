@@ -250,6 +250,7 @@ Where supported commands are:
 
         """
         availtypes = ",".join(pipe.db.task_types())
+        scrdir = io.get_pipe_scriptdir()
 
         parser.add_argument("--tasktype", required=True, default=None,
             help="task type ({})".format(availtypes))
@@ -279,7 +280,7 @@ Where supported commands are:
             help="The number of MPI processes to use for non-NERSC shell "
             "scripts (default 1)")
 
-        parser.add_argument("--outdir", required=False, default=None,
+        parser.add_argument("--outdir", required=False, default=scrdir,
             help="put scripts and logs in this directory relative to the "
             "production 'run' directory.")
 
@@ -360,8 +361,6 @@ Where supported commands are:
         tasks = pipe.prod.task_read(args.taskfile)
 
         outsubdir = args.outdir
-        if outsubdir is None:
-            outsubdir = io.get_pipe_scriptdir()
 
         outdir = os.path.join(proddir, io.get_pipe_rundir(), outsubdir)
 

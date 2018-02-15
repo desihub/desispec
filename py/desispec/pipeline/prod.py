@@ -204,6 +204,10 @@ def update_prod(nightstr=None, hpxnside=64):
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
 
+    nightscrdir = os.path.join(scriptdir, io.get_pipe_nightdir())
+    if not os.path.isdir(nightscrdir):
+        os.makedirs(nightscrdir)
+
     nightlogdir = os.path.join(logdir, io.get_pipe_nightdir())
     if not os.path.isdir(nightlogdir):
         os.makedirs(nightlogdir)
@@ -256,6 +260,9 @@ def update_prod(nightstr=None, hpxnside=64):
         nlog = os.path.join(nightlogdir, nt)
         if not os.path.isdir(nlog):
             os.makedirs(nlog)
+        nscr = os.path.join(nightscrdir, nt)
+        if not os.path.isdir(nscr):
+            os.makedirs(nscr)
 
         db.update(nt, hpxnside)
 
