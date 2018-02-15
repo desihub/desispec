@@ -391,8 +391,8 @@ Where supported commands are:
 
             pipe.scriptgen.batch_nersc(args.tasktype, tasks, outscript, outlog,
                 args.tasktype, args.nersc, args.nersc_queue, args.nersc_runtime,
-                nodeprocs=ppn, openmp=False, multiproc=False, db=db,
-                                       shifterimg=args.shifterimg,debug=args.debug)
+                                       nodeprocs=ppn, openmp=False, multiproc=False, db=db,
+                                       shifterimg=args.nersc_shifter,debug=args.debug)
 
         return
 
