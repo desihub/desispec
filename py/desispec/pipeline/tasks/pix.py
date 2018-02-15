@@ -131,6 +131,6 @@ class TaskPix(BaseTask):
         """
         from ...scripts import preproc
         optlist = self._option_list(name, opts)
-        args = preproc.parse(optarray)
+        args = preproc.parse(optlist)
         preproc.main(args)
         return
