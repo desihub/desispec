@@ -18,6 +18,7 @@ import warnings
 
 import numpy as np
 
+import desiutil.log
 from desiutil.log import get_logger
 
 
@@ -271,13 +272,22 @@ def stdouterr_redirected(to=None, comm=None):
         to (str): The output file name.
         comm (mpi4py.MPI.Comm): The optional MPI communicator.
     """
+    nproc = 1
+    rank = 0
+    if comm is not None:
+        nproc = comm.size
+        rank = comm.rank
 
     # The currently active POSIX file descriptors
     fd_out = sys.stdout.fileno()
     fd_err = sys.stderr.fileno()
 
-    # The DESI logger
-    log = get_logger()
+    # The DESI loggers.  This is the list of registered loggers.  We are going
+    # to redirect all of them and then restore them.  We will also check that
+    # the list of loggers has not changed after we return from running the
+    # decorated code.
+
+    desi_loggers = list(sorted(desiutil.log._desiutil_log_root.keys()))
 
     def _redirect(out_to, err_to):
 
@@ -310,21 +320,27 @@ def stdouterr_redirected(to=None, comm=None):
             sys.stderr = io.TextIOWrapper(os.fdopen(fd_err, 'wb'))
 
         # update DESI logging to use new stdout
-        while len(log.handlers) > 0:
-            h = log.handlers[0]
-            log.removeHandler(h)
-        # Add the current stdout.
-        ch = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter("%(levelname)s:%(filename)s:%(lineno)s:%(funcName)s: %(message)s")
-        ch.setFormatter(formatter)
-        log.addHandler(ch)
+        for loggername in desi_loggers:
+            logger = desiutil.log._desiutil_log_root[loggername]
+            hformat = None
+            while len(logger.handlers) > 0:
+                h = logger.handlers[0]
+                if hformat is None:
+                    hformat = h.formatter._fmt
+                logger.removeHandler(h)
+            # Add the current stdout.
+            ch = logging.StreamHandler(sys.stdout)
+            formatter = logging.Formatter(hformat, datefmt='%Y-%m-%dT%H:%M:%S')
+            ch.setFormatter(formatter)
+            logger.addHandler(ch)
 
     # redirect both stdout and stderr to the same file
 
     if to is None:
         to = "/dev/null"
 
-    if (comm is None) or (comm.rank == 0):
+    if rank == 0:
+        log = get_logger()
         log.debug("Begin log redirection to {} at {}".format(to, time.asctime()))
 
     # Save the original file descriptors so we can restore them later
@@ -333,9 +349,8 @@ def stdouterr_redirected(to=None, comm=None):
 
     try:
         pto = to
-        if comm is not None:
-            if to != "/dev/null":
-                pto = "{}_{}".format(to, comm.rank)
+        if to != "/dev/null":
+            pto = "{}_{}".format(to, rank)
 
         # open python file, which creates low-level POSIX file
         # descriptor.
@@ -352,23 +367,35 @@ def stdouterr_redirected(to=None, comm=None):
         file.close()
 
     finally:
+        # Check that the dictionary of loggers has not been extended during
+        # our redirection.
+        exit_loggers = list(sorted(desiutil.log._desiutil_log_root.keys()))
+        for el in exit_loggers:
+            if el not in desi_loggers:
+                raise RuntimeError("Some desi loggers were added during "
+                    "redirection")
+
         # restore old stdout and stderr
         _redirect(out_to=saved_fd_out, err_to=saved_fd_err)
 
         if comm is not None:
-            # concatenate per-process files
-            comm.barrier()
-            if comm.rank == 0:
-                with open(to, "w") as outfile:
-                    for p in range(comm.size):
-                        outfile.write("================= Process {} =================\n".format(p))
-                        fname = "{}_{}".format(to, p)
-                        with open(fname) as infile:
-                            outfile.write(infile.read())
-                        os.remove(fname)
             comm.barrier()
 
-        if (comm is None) or (comm.rank == 0):
+        # concatenate per-process files
+        if rank == 0:
+            with open(to, "w") as outfile:
+                for p in range(nproc):
+                    outfile.write("================= Process {} =================\n".format(p))
+                    fname = "{}_{}".format(to, p)
+                    with open(fname) as infile:
+                        outfile.write(infile.read())
+                    os.remove(fname)
+
+        if comm is not None:
+            comm.barrier()
+
+        if rank == 0:
+            log = get_logger()
             log.debug("End log redirection to {} at {}".format(to, time.asctime()))
 
         # flush python handles for good measure
