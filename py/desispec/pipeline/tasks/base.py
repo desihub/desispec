@@ -6,6 +6,7 @@
 from __future__ import absolute_import, division, print_function
 
 import sys
+import os
 import re
 import traceback
 from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
