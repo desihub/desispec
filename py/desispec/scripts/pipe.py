@@ -266,26 +266,29 @@ Where supported commands are:
         parser.add_argument("--nersc_queue", required=False, default="regular",
             help="write a script for this NERSC queue (debug | regular)")
 
-        parser.add_argument("--run_time", required=False, type=int,
+        parser.add_argument("--nersc_runtime", required=False, type=int,
             default=30, help="Then maximum run time (in minutes) for a single "
             " job.  If the list of tasks cannot be run in this time, multiple "
             " job scripts will be written")
 
-        parser.add_argument("--procs_per_node", required=False, type=int,
-            default=0, help="The number of processes to use per node.  If not "
-            "specified it uses '1', unless running on a NERSC machine where a "
-            "default value is used for each machine.")
+        parser.add_argument("--nersc_shifter", required=False, default=None,
+            help="The shifter image to use for NERSC jobs")
 
         parser.add_argument("--mpi_procs", required=False, type=int, default=1,
             help="The number of MPI processes to use for non-NERSC shell "
             "scripts (default 1)")
 
+        parser.add_argument("--mpi_run", required=False, type=str,
+            default="mpirun -np", help="The command to launch MPI programs "
+            "for non-NERSC shell scripts (default do not use MPI)")
+
+        parser.add_argument("--procs_per_node", required=False, type=int,
+            default=0, help="The number of processes to use per node.  If not "
+            "specified it uses a default value for each machine.")
+
         parser.add_argument("--outdir", required=False, default=scrdir,
             help="put scripts and logs in this directory relative to the "
             "production 'run' directory.")
-
-        parser.add_argument("--shifterimg", required=False, default=None,
-            help="The shifter image to use for NERSC jobs")
 
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
@@ -314,7 +317,7 @@ Where supported commands are:
         if args.nersc is None:
             # Not running at NERSC
             if ppn <= 0:
-                ppn = 1
+                ppn = args.mpi_procs
             pipe.run.dry_run(args.tasktype, tasks, opts, args.mpi_procs,
                 ppn, db=db, launch="mpirun -n", force=False)
         else:
@@ -325,22 +328,12 @@ Where supported commands are:
                 ppn = hostprops["nodecores"]
 
             joblist = pipe.scriptgen.nersc_job_size(args.tasktype, tasks,
-                args.nersc, args.nersc_queue, args.run_time, nodeprocs=ppn,
+                args.nersc, args.nersc_queue, args.nersc_runtime, nodeprocs=ppn,
                 db=db)
 
+            launch="srun -n"
             for (jobnodes, jobtasks) in joblist:
                 jobprocs = jobnodes * ppn
-                cpupercore = hostprops["corecpus"]
-                nodecores = hostprops["nodecores"]
-                nodethread = nodecores // ppn
-                nodedepth = cpupercore * nodethread
-
-                # FIXME: This is not correct, we need to pass other options
-                # to dry_run and let it compute the srun command for each
-                # worker group.
-
-                launch="srun -N {} -c {} -n".format(jobnodes, nodedepth)
-
                 pipe.run.dry_run(args.tasktype, jobtasks, opts, jobprocs,
                     ppn, db=db, launch=launch, force=False)
 
@@ -378,25 +371,25 @@ Where supported commands are:
 
         ppn = args.procs_per_node
 
+        # FIXME: Add openmp / multiproc function to task classes and
+        # call them here.
+
         if args.nersc is None:
             # Not running at NERSC
-            pass
+            pipe.scriptgen.batch_shell(args.tasktype, tasks, outscript, outlog,
+                mpirun=args.mpi_run, mpiprocs=args.mpi_procs, openmp=1, db=None)
 
         else:
             # Running at NERSC
-
-            # FIXME: Add openmp / multiproc function to task classes and
-            # call them here.
-
             if ppn <= 0:
                 hostprops = pipe.scriptgen.nersc_machine(args.nersc,
                     args.nersc_queue)
                 ppn = hostprops["nodecores"]
 
             pipe.scriptgen.batch_nersc(args.tasktype, tasks, outscript, outlog,
-                args.tasktype, args.nersc, args.nersc_queue, args.run_time,
+                args.tasktype, args.nersc, args.nersc_queue, args.nersc_runtime,
                 nodeprocs=ppn, openmp=False, multiproc=False, db=db,
-                shifterimg=args.shifterimg)
+                shifterimg=args.nersc_shifter)
 
         return
 

@@ -313,7 +313,7 @@ def run_task_list_db(tasktype, tasklist, comm=None):
 
 
 def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
-    launch="mpirun -np ", force=False):
+    launch="mpirun -np", force=False):
     """Compute the distribution of tasks and equivalent commands.
 
     This function takes similar arguments as run_task_list() except simulates
@@ -465,7 +465,7 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
 
-            com = task_classes[tasktype].run_cli(runtasks[t], options, procs,
+            com = task_classes[tasktype].run_cli(runtasks[t], options, taskproc,
                 launch=launch, log=tasklog)
 
             print("{}  {}".format(prefix, com))

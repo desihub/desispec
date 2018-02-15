@@ -95,14 +95,14 @@ def nersc_machine(name, queue):
 
 
 def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
-    threads=1):
+    openmp=1):
     with open(path, "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("export STARTTIME=${now}\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("source {}\n\n".format(desisetup))
-        f.write("export OMP_NUM_THREADS={}\n\n".format(threads))
+        f.write("export OMP_NUM_THREADS={}\n\n".format(openmp))
         run = ""
         if comrun != "":
             run = "{} {}".format(comrun, mpiprocs)
@@ -328,8 +328,42 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
     return ret
 
 
-def batch_shell():
-    pass
+def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
+    openmp=1, db=None):
+    """Generate slurm script(s) to process a list of tasks.
+
+    Given a list of tasks and some constraints about the machine,
+    run time, etc, generate shell scripts.
+
+    """
+    from .tasks.base import task_classes, task_type
+
+    # Get the location of the setup script from the production root.
+
+    proddir = os.path.abspath(io.specprod_root())
+    desisetup = os.path.abspath(os.path.join(proddir, "setup.sh"))
+
+    dbstr = ""
+    if db is None:
+        dbstr = "--nodb"
+
+    taskfile = "{}.tasks".format(outroot)
+    task_write(taskfile, tasklist)
+
+    coms = None
+    if mpiprocs > 1:
+        coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
+            .format(tasktype, taskfile, dbstr) ]
+    else:
+        coms = [ "desi_pipe_exec --tasktype {} --taskfile {} {}"\
+            .format(tasktype, taskfile, dbstr) ]
+
+    outfile = "{}.sh".format(outroot)
+
+    shell_job(outfile, logroot, desisetup, coms, comrun=mpirun,
+        mpiprocs=mpiprocs, openmp=openmp)
+
+    return
 
 
 def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
