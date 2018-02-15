@@ -1,5 +1,6 @@
 import unittest, os, sys, shutil, tempfile
 import numpy as np
+from astropy.io import fits
 
 if __name__ == '__main__':
     print('Run this instead:')
@@ -7,7 +8,7 @@ if __name__ == '__main__':
     sys.exit(1)
 
 from ..test.util import get_frame_data
-from ..io import findfile, write_frame, read_spectra
+from ..io import findfile, write_frame, read_spectra, specprod_root
 from ..scripts import group_spectra
 
 class TestPixGroup(unittest.TestCase):
@@ -62,6 +63,8 @@ class TestPixGroup(unittest.TestCase):
             shutil.rmtree(cls.testdir)
 
     def setUp(self):
+        os.environ['DESI_SPECTRO_REDUX'] = self.testdir
+        os.environ['SPECPROD'] = 'grouptest'
         os.makedirs(self.outdir)
 
     def tearDown(self):
@@ -109,6 +112,31 @@ class TestPixGroup(unittest.TestCase):
         num_nights = len(self.nights)
         nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
     
+        self.assertEqual(len(spectra.fibermap), nspec)
+        self.assertEqual(spectra.flux['b'].shape[0], nspec)
+
+        #- confirm that we can read the mask with memmap=True
+        with fits.open(specfile, memmap=True) as fx:
+            mask = fx['B_MASK'].data
+
+    def test_reduxdir(self):
+        #- Test using a non-standard redux directory
+        reduxdir = specprod_root()
+        cmd = 'desi_group_spectra -o {} --reduxdir {}'.format(
+                self.outdir, reduxdir)
+
+        #- Change SPECPROD and confirm that default location changed
+        os.environ['SPECPROD'] = 'blatfoo'
+        self.assertNotEqual(reduxdir, specprod_root())
+
+        args = group_spectra.parse(cmd.split()[1:])
+        group_spectra.main(args)
+
+        specfile = os.path.join(self.outdir, 'spectra-64-19456.fits')
+        spectra = read_spectra(specfile)
+        num_nights = len(self.nights)
+        nspec = self.nspec_per_frame * self.nframe_per_night * num_nights
+
         self.assertEqual(len(spectra.fibermap), nspec)
         self.assertEqual(spectra.flux['b'].shape[0], nspec)
 

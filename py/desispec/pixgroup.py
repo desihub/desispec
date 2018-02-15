@@ -296,17 +296,17 @@ class SpectraLite(object):
         fm.write(tmpout, format='fits', overwrite=True)
 
         #- then proceed with more efficient fitsio for everything else
-        with fitsio.FITS(tmpout, mode='rw', clobber=False) as fx:
-            # fx.write(self.fibermap, extname='FIBERMAP')
-            if self.scores is not None:
-                fx.write(self.scores, extname='SCORES')
-            for x in sorted(self.bands):
-                X = x.upper()
-                fx.write(self.wave[x], extname=X+'_WAVELENGTH')
-                fx.write(self.flux[x], extname=X+'_FLUX')
-                fx.write(self.ivar[x], extname=X+'_IVAR')
-                fx.write(self.mask[x], extname=X+'_MASK')
-                fx.write(self.rdat[x], extname=X+'_RESOLUTION')
+        #- See https://github.com/esheldon/fitsio/issues/150 for why
+        #- these are written one-by-one
+        if self.scores is not None:
+            fitsio.write(tmpout, self.scores, extname='SCORES')
+        for x in sorted(self.bands):
+            X = x.upper()
+            fitsio.write(tmpout, self.wave[x], extname=X+'_WAVELENGTH')
+            fitsio.write(tmpout, self.flux[x], extname=X+'_FLUX')
+            fitsio.write(tmpout, self.ivar[x], extname=X+'_IVAR')
+            fitsio.write(tmpout, self.mask[x], extname=X+'_MASK', compress='gzip')
+            fitsio.write(tmpout, self.rdat[x], extname=X+'_RESOLUTION')
 
         os.rename(tmpout, filename)
 
@@ -386,7 +386,7 @@ def add_missing_frames(frames):
             nspec = frame.flux.shape[0]
             flux = np.zeros((nspec, nwave), dtype='f4')
             ivar = np.zeros((nspec, nwave), dtype='f4')
-            mask = np.zeros((nspec, nwave), dtype='i8') + specmask.NODATA
+            mask = np.zeros((nspec, nwave), dtype='u4') + specmask.NODATA
             rdat = np.zeros((nspec, ndiag[x], nwave), dtype='f4')
 
             #- Copy the header and correct the camera keyword
@@ -500,7 +500,7 @@ def frames2spectra(frames, pix, nside=64):
 
     return SpectraLite(bands, wave, flux, ivar, mask, rdat, fibermap, scores)
 
-def update_frame_cache(frames, framekeys):
+def update_frame_cache(frames, framekeys, specprod_dir=None):
     '''
     Update a cache of FrameLite objects to match requested frameskeys
 
@@ -531,7 +531,8 @@ def update_frame_cache(frames, framekeys):
     for key in framekeys:
         if key not in frames.keys():
             night, expid, camera = key
-            framefile = io.findfile('cframe', night, expid, camera)
+            framefile = io.findfile('cframe', night, expid, camera,
+                    specprod_dir=specprod_dir)
             log.debug('  Reading {}'.format(os.path.basename(framefile)))
             nadd += 1
             frames[key] = FrameLite.read(framefile)
