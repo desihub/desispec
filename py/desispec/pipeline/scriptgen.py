@@ -95,14 +95,15 @@ def nersc_machine(name, queue):
 
 
 def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
-              threads=1,debug=False):
+              openmp=1,debug=False):
     with open(path, "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("export STARTTIME=${now}\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("source {}\n\n".format(desisetup))
-        f.write("export OMP_NUM_THREADS={}\n\n".format(threads))
+
+        f.write("export OMP_NUM_THREADS={}\n\n".format(openmp))
         if debug:
             f.write("export DESI_LOGLEVEL=DEBUG\n\n")
 
