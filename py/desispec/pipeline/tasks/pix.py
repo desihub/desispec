@@ -108,7 +108,7 @@ class TaskPix(BaseTask):
         options.update(opts)
 
         props = self.name_split(name)
-        options["infile"] = dp["rawdata"]
+        options["infile"] = task_classes["rawdata"].paths(dp["rawdata"])[0]
         options["cameras"] = "{}{}".format(props["band"],props["spec"])
 
         outfile = self.paths(name)[0]
