@@ -60,6 +60,7 @@ class TaskPix(BaseTask):
             camera=camera, groupname=None, nside=None, band=props["band"],
             spectrograph=props["spec"]) ]
 
+
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
@@ -68,8 +69,10 @@ class TaskPix(BaseTask):
         fmap  = task_classes["fibermap"].name_join(props)
         rdata = task_classes["rawdata"].name_join(props)
 
-        # FIXME: add raw data file here eventually.
-        deptasks = [ fmap , rdata ]
+        deptasks = {
+             "fibermap" : fmap,
+             "rawdata" : rdata
+        }
         return deptasks
 
 
@@ -84,7 +87,7 @@ class TaskPix(BaseTask):
         """
         return 2
 
-    
+
     def _run_defaults(self):
         """See BaseTask.run_defaults.
         """
@@ -99,19 +102,15 @@ class TaskPix(BaseTask):
         """
         from .base import task_classes, task_type
 
-        deplist = self.deps(name)
-        rawfile = None
-        for dp in deplist:
-            if re.search("rawdata", dp) is not None:
-                rawfile = task_classes["rawdata"].paths(dp)[0]
+        dp = self.deps(name)
 
         options = OrderedDict()
         options.update(opts)
-        
+
         props = self.name_split(name)
-        options["infile"] = rawfile
+        options["infile"] = dp["rawdata"]
         options["cameras"] = "{}{}".format(props["band"],props["spec"])
-        
+
         outfile = self.paths(name)[0]
         options["pixfile"] = outfile
 
