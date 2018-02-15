@@ -173,6 +173,8 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
             states = check_tasks(tasklist, db=db)
             runtasks = [ x for x in tasklist if (states[x] == "ready") or \
                 (states[x] == "fail") ]
+            
+        log.debug("Number of {} tasks ready to run {} (total is {})".format(tasktype,len(runtasks),len(tasklist)))
 
     if comm is not None:
         runtasks = comm.bcast(runtasks, root=0)
@@ -246,6 +248,9 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     group_failcount = 0
 
     if group_ntask > 0:
+
+        log.debug("rank #{} Group number of task {}, first task {}".format(rank,group_ntask,group_firsttask))
+
         for t in range(group_firsttask, group_firsttask + group_ntask):
             # For this task, determine the output log file.  If the task has
             # the "night" key in its name, then use that subdirectory.
@@ -288,6 +293,8 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     if comm_rank is not None:
         failcount = comm_rank.allreduce(failcount)
+
+    log.debug("rank #{} done".format(rank))
 
     return failcount
 
