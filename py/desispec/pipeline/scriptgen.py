@@ -95,14 +95,17 @@ def nersc_machine(name, queue):
 
 
 def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
-    openmp=1):
+              threads=1,debug=False):
     with open(path, "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
         f.write("export STARTTIME=${now}\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("source {}\n\n".format(desisetup))
-        f.write("export OMP_NUM_THREADS={}\n\n".format(openmp))
+        f.write("export OMP_NUM_THREADS={}\n\n".format(threads))
+        if debug:
+            f.write("export DESI_LOGLEVEL=DEBUG\n\n")
+
         run = ""
         if comrun != "":
             run = "{} {}".format(comrun, mpiprocs)
@@ -118,7 +121,7 @@ def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
 
 def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
     nodes, nodeproc, minutes, multisrun=False, openmp=False, multiproc=False,
-    shifterimg=None):
+    shifterimg=None,debug=False):
     """Create a SLURM script for use at NERSC.
 
     Args:
@@ -187,6 +190,10 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         else:
             f.write("export OMP_NUM_THREADS=1\n")
         f.write("\n")
+
+        if debug:
+            f.write("export DESI_LOGLEVEL=DEBUG\n\n")
+
 
         runstr = "srun"
         if multiproc:
@@ -368,7 +375,7 @@ def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
 
 def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
     runtime, nodeprocs=None, openmp=False, multiproc=False, db=None,
-    shifterimg=None):
+                shifterimg=None,debug=False):
     """Generate slurm script(s) to process a list of tasks.
 
     Given a list of tasks and some constraints about the machine,
@@ -411,7 +418,7 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
         outfile = "{}.slurm".format(joboutroot)
         nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine, queue,
             nodes, nodeprocs, runtime, openmp=openmp, multiproc=multiproc,
-            shifterimg=shifterimg)
+                  shifterimg=shifterimg,debug=debug)
         jindx += 1
 
     return
