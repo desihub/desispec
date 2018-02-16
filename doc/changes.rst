@@ -8,10 +8,18 @@ desispec Change Log
 * Replace deprecated scipy.stats.chisqprob with
   scipy.stats.distributions.chi2.sf for compatibility with
   scipy 1.0. (PR `#503`_)
-* Faster desi_group_spectra that also propagates SCORES table (PR `#505`_)
+* Faster desi_group_spectra that also propagates SCORES table
+  (PR `#505`_ and `#507`_ )
+* Add options for fitting spatially non-uniform sky (PR `#506`_)
+* Fix logger redirection (PR `#508`_)
+* Add hooks for MPI extraction timing benchmarks (PR `#509`_)
 
 .. _`#503`: https://github.com/desihub/desispec/pull/503
 .. _`#505`: https://github.com/desihub/desispec/pull/505
+.. _`#506`: https://github.com/desihub/desispec/pull/506
+.. _`#507`: https://github.com/desihub/desispec/pull/507
+.. _`#508`: https://github.com/desihub/desispec/pull/508
+.. _`#509`: https://github.com/desihub/desispec/pull/509
 
 0.17.2 (2018-01-30)
 -------------------
