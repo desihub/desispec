@@ -135,9 +135,9 @@ def dist_balanced(nwork, maxworkers):
             number may be less than this.
 
     Returns:
-        A list of tuples, one for each worker.  The first element 
-        of the tuple is the first item assigned to the worker, 
-        and the second element is the number of items assigned to 
+        A list of tuples, one for each worker.  The first element
+        of the tuple is the first item assigned to the worker,
+        and the second element is the number of items assigned to
         the worker.
     """
     workers = maxworkers
@@ -151,7 +151,7 @@ def dist_balanced(nwork, maxworkers):
             workers -= 1
             ntask = nwork // workers
             leftover = nwork % workers
-    
+
     ret = []
     for w in range(workers):
         wfirst = None
@@ -245,7 +245,7 @@ def dist_discrete(worksizes, workers, id, pow=1.0):
 
     if len(dist) < workers:
         # The load imbalance was really bad.  Just warn and assign the
-        # remaining workers zero items. 
+        # remaining workers zero items.
         warnings.warn("Load imbalance.  Some work items are so large that not all workers have items.", RuntimeWarning)
         for i in range(len(dist), workers):
             dist.append( (off, 0) )
@@ -282,12 +282,8 @@ def stdouterr_redirected(to=None, comm=None):
     fd_out = sys.stdout.fileno()
     fd_err = sys.stderr.fileno()
 
-    # The DESI loggers.  This is the list of registered loggers.  We are going
-    # to redirect all of them and then restore them.  We will also check that
-    # the list of loggers has not changed after we return from running the
-    # decorated code.
-
-    desi_loggers = list(sorted(desiutil.log._desiutil_log_root.keys()))
+    # The DESI loggers.
+    desi_loggers = desiutil.log._desiutil_log_root
 
     def _redirect(out_to, err_to):
 
@@ -320,8 +316,7 @@ def stdouterr_redirected(to=None, comm=None):
             sys.stderr = io.TextIOWrapper(os.fdopen(fd_err, 'wb'))
 
         # update DESI logging to use new stdout
-        for loggername in desi_loggers:
-            logger = desiutil.log._desiutil_log_root[loggername]
+        for name, logger in desi_loggers.items():
             hformat = None
             while len(logger.handlers) > 0:
                 h = logger.handlers[0]
@@ -367,14 +362,6 @@ def stdouterr_redirected(to=None, comm=None):
         file.close()
 
     finally:
-        # Check that the dictionary of loggers has not been extended during
-        # our redirection.
-        exit_loggers = list(sorted(desiutil.log._desiutil_log_root.keys()))
-        for el in exit_loggers:
-            if el not in desi_loggers:
-                raise RuntimeError("Some desi loggers were added during "
-                    "redirection")
-
         # restore old stdout and stderr
         _redirect(out_to=saved_fd_out, err_to=saved_fd_err)
 
@@ -452,4 +439,3 @@ def take_turns(comm, at_a_time, func, *args, **kwargs):
         comm_group.barrier()
 
     return ret
-
