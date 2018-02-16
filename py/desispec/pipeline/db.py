@@ -142,9 +142,6 @@ def all_tasks(night, nside):
 
 
 
-
-
-
 #
 #
 # def graph_night(rawnight, specs, fakepix, hpxnside=64):
@@ -633,6 +630,69 @@ def all_tasks(night, nside):
 
 
 
+def check_tasks(tasklist, db=None, inputs=None):
+    """Check a list of tasks and return their state.
+
+    If the database is specified, it is used to check the state of the tasks
+    and their dependencies.  Otherwise the filesystem is checked.
+
+    Args:
+        tasklist (list): list of tasks.
+        db (pipeline.db.DB): The optional database to use.
+        inputs (dict): optional dictionary containing the only input
+            dependencies that should be considered.
+
+    Returns:
+        dict: The current state of all tasks.
+
+    """
+    from .tasks.base import task_classes, task_type
+    states = dict()
+
+    if db is None:
+        # Check the filesystem to see which tasks are done.  Since we don't
+        # have a DB, we can only distinguish between "waiting", "ready", and
+        # "done" states.
+        for tsk in tasklist:
+            tasktype = task_type(tsk)
+            st = "waiting"
+
+            # Check dependencies
+            ready = True
+            deps = task_classes[tasktype].deps(tsk, db=db, inputs=inputs)
+            for k, v in deps.items():
+                if not isinstance(v, list):
+                    v = [ v ]
+                for dp in v:
+                    deptype = task_type(dp)
+                    depfiles = task_classes[deptype].paths(dp)
+                    for odep in depfiles:
+                        if not os.path.isfile(odep):
+                            ready = False
+                            break
+            if ready:
+                st = "ready"
+                done = True
+                # Check outputs
+                outfiles = task_classes[tasktype].paths(tsk)
+                st = "done"
+                for out in outfiles:
+                    if not os.path.isfile(out):
+                        done = False
+                        break
+                if done:
+                    st = "done"
+
+            states[tsk] = st
+    else:
+        states = db.get_states(tasklist)
+
+    return states
+
+
+
+
+
 class DataBase:
     """Class for tracking pipeline processing objects and state.
 
@@ -785,63 +845,24 @@ class DataBase:
         return
 
 
+    def sync(self, night):
+        """Synchronize DB based on raw data.
 
 
-def check_tasks(tasklist, db=None, inputs=None):
-    """Check a list of tasks and return their state.
 
-    If the database is specified, it is used to check the state of the tasks
-    and their dependencies.  Otherwise the filesystem is checked.
+        Args:
+            night (str): The night to scan for updates.
 
-    Args:
-        tasklist (list): list of tasks.
-        db (pipeline.db.DB): The optional database to use.
-        inputs (dict): optional dictionary containing the only input
-            dependencies that should be considered.
+            nside (int): The current NSIDE value used for pixel grouping.
+        """
+        from .tasks.base import task_classes, task_type
+        #
+        # alltasks = all_tasks(night, nside)
+        #
+        # with self.conn as con:
+        #     con.execute("begin")
+        #     for tt in task_types():
+        #         for tsk in alltasks[tt]:
+        #             task_classes[tt].insert(self, tsk)
 
-    Returns:
-        dict: The current state of all tasks.
-
-    """
-    from .tasks.base import task_classes, task_type
-    states = dict()
-
-    if db is None:
-        # Check the filesystem to see which tasks are done.  Since we don't
-        # have a DB, we can only distinguish between "waiting", "ready", and
-        # "done" states.
-        for tsk in tasklist:
-            tasktype = task_type(tsk)
-            st = "waiting"
-
-            # Check dependencies
-            ready = True
-            deps = task_classes[tasktype].deps(tsk, db=db, inputs=inputs)
-            for k, v in deps.items():
-                if not isinstance(v, list):
-                    v = [ v ]
-                for dp in v:
-                    deptype = task_type(dp)
-                    depfiles = task_classes[deptype].paths(dp)
-                    for odep in depfiles:
-                        if not os.path.isfile(odep):
-                            ready = False
-                            break
-            if ready:
-                st = "ready"
-                done = True
-                # Check outputs
-                outfiles = task_classes[tasktype].paths(tsk)
-                st = "done"
-                for out in outfiles:
-                    if not os.path.isfile(out):
-                        done = False
-                        break
-                if done:
-                    st = "done"
-
-            states[tsk] = st
-    else:
-        states = db.get_states(tasklist)
-
-    return states
+        return
