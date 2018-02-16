@@ -8,6 +8,7 @@ from __future__ import absolute_import, division, print_function
 import sys
 import os
 import re
+import time
 import traceback
 from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
 
@@ -199,6 +200,7 @@ class BaseTask(object):
             cur.execute(\
                 'select * from {} where name = "{}"'.format(self._type,name))
             row = cur.fetchone()
+            cur.close()
             if row is None:
                 raise RuntimeError("task {} not in database".format(name))
             ret["name"] = name
@@ -485,19 +487,39 @@ class BaseTask(object):
 
         failed = self.run(name, opts, comm)
 
+        
+        
+
         if rank == 0:
+            
+            
             if failed > 0:
                 self.state_set(db, name, "fail")
             else:
+                log = get_logger()
+                
                 outputs = self.paths(name)
+                
+                start = time.time()
+                
                 done = True
                 for out in outputs:
                     if not os.path.isfile(out):
                         done = False
                         failed = nproc
                         break
+                
+                stop = time.time()
+                log.debug("Checkout outputs took {} sec for {}".format(stop-start,name))
+                
+                start = time.time()
+                
                 if done:
                     self.state_set(db, name, "done")
                 else:
                     self.state_set(db, name, "fail")
+                
+                stop = time.time()
+                log.debug("Update to db took {} sec for {}".format(stop-start,name))
+        
         return failed
