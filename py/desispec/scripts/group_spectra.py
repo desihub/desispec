@@ -87,7 +87,8 @@ def main(args=None, comm=None):
             spectro = exp2pix['SPECTRO'][i]
             for band in ['b', 'r', 'z']:
                 camera = band + str(spectro)
-                framefile = io.findfile('cframe', night, expid, camera)
+                framefile = io.findfile('cframe', night, expid, camera,
+                        specprod_dir=args.reduxdir)
                 if os.path.exists(framefile):
                     framekeys.append((night, expid, camera))
                 else:
@@ -117,7 +118,7 @@ def main(args=None, comm=None):
 
         #- Load new frames to add
         log.info('pix {} has {} frames to add'.format(pix, len(framekeys)))
-        update_frame_cache(frames, framekeys)
+        update_frame_cache(frames, framekeys, specprod_dir=args.reduxdir)
 
         #- add any missing frames
         add_missing_frames(frames)
