@@ -32,7 +32,11 @@ def parse(options=None):
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--no-extra-variance', action='store_true',
                         help = 'do not increase sky model variance based on chi2 on sky lines')
-     
+    parser.add_argument('--angular-variation-deg', type = int, default = 0, required = False,
+                        help = 'Focal plane variation degree')
+    parser.add_argument('--chromatic-variation-deg', type = int, default = 0, required = False,
+                        help = 'wavelength degree for chromatic x angular variation. If -1, use independent focal plane polynomial corrections for each wavelength (i.e. many more parameters)')
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -61,7 +65,7 @@ def main(args) :
     apply_fiberflat(frame, fiberflat)
 
     # compute sky model
-    skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance))
+    skymodel = compute_sky(frame,add_variance=(not args.no_extra_variance),angular_variation_deg=args.angular_variation_deg,chromatic_variation_deg=args.chromatic_variation_deg)
     
     # QA
     if (args.qafile is not None) or (args.qafig is not None):
