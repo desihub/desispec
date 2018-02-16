@@ -659,10 +659,10 @@ class DataBase:
         self.conn = None
         self.connstr = None
 
-        log = get_logger()
-        log.debug("opening db")
+        #log = get_logger()
+        #log.debug("opening db")
 
-        timeout=1000
+        timeout=1000 # here it's a timeout in sec.
         
         if self._path is None:
             # We are opening an in-memory DB
@@ -681,8 +681,8 @@ class DataBase:
         #self.conn.execute("pragma journal_mode=wal")
         self.conn.execute("pragma page_size=4096")
         self.conn.execute("pragma cache_size=4000")
-
-        log.debug("done")
+        #self.conn.execute("pragma busy_timeout=1000000") # it's in millisec, same parameter as timeout param in connect
+        #log.debug("done")
 
         if create:
             self._initdb()
