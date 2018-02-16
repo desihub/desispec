@@ -52,13 +52,13 @@ class BaseTask(object):
     This class should not be instantiated directly.
 
     """
-
     def __init__(self):
         self._type = "base"
         self._cols = [] # database columns
         self._coltypes = []
         self._name_fields  = [] # name fields. note that name fields have to be included in cols
         self._name_formats = [] # name field formats
+
 
     def _name_split(self, name):
         fields = name.split(task_name_sep)
@@ -95,6 +95,7 @@ class BaseTask(object):
             ret += format(props[field], fieldformat)
         return ret
 
+
     def name_join(self, props):
         """Construct a task name from its properties.
 
@@ -125,6 +126,7 @@ class BaseTask(object):
 
         """
         return self._paths(name)
+
 
     def _create(self, db):
         """See BaseTask.create.
@@ -172,6 +174,7 @@ class BaseTask(object):
         db.conn.execute(cmd)
         return
 
+
     def insert(self, db, props):
         """Insert a task into a database.
 
@@ -200,7 +203,6 @@ class BaseTask(object):
             cur.execute(\
                 'select * from {} where name = "{}"'.format(self._type,name))
             row = cur.fetchone()
-            cur.close()
             if row is None:
                 raise RuntimeError("task {} not in database".format(name))
             ret["name"] = name
@@ -210,7 +212,6 @@ class BaseTask(object):
                 else :
                     ret[k] = row[i]
         return ret
-
 
 
     def retrieve(self, db, name):
@@ -235,10 +236,12 @@ class BaseTask(object):
         """
         with db.conn as con:
             cur = con.cursor()
+            cur.execute("begin transaction")
             cur.execute('update {} set state = {} where name = "{}"'\
                 .format(self._type, task_state_to_int[state], name))
-            con.commit()
+            cur.execute("commit")
         return
+
 
     def _state_get(self, db, name):
         """See BaseTask.state_get.
@@ -268,8 +271,8 @@ class BaseTask(object):
         """
         self._state_set(db, name, state)
         return
-        
-        
+
+
     def state_get(self, db, name):
         """Get the state of a task.
 
@@ -487,39 +490,39 @@ class BaseTask(object):
 
         failed = self.run(name, opts, comm)
 
-        
-        
+
+
 
         if rank == 0:
-            
-            
+
+
             if failed > 0:
                 self.state_set(db, name, "fail")
             else:
                 log = get_logger()
-                
+
                 outputs = self.paths(name)
-                
+
                 start = time.time()
-                
+
                 done = True
                 for out in outputs:
                     if not os.path.isfile(out):
                         done = False
                         failed = nproc
                         break
-                
+
                 stop = time.time()
                 log.debug("Checkout outputs took {} sec for {}".format(stop-start,name))
-                
+
                 start = time.time()
-                
+
                 if done:
                     self.state_set(db, name, "done")
                 else:
                     self.state_set(db, name, "fail")
-                
+
                 stop = time.time()
                 log.debug("Update to db took {} sec for {}".format(stop-start,name))
-        
+
         return failed

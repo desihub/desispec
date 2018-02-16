@@ -711,41 +711,52 @@ class DataBase:
         if (self._path is not None) and os.path.exists(self._path):
             create = False
 
-        self.mode = mode
-        if (mode == 'r') and create:
+        if self._mode == 'r' and create:
             raise RuntimeError("cannot open a non-existent DB in read-only "
                 " mode")
 
         self.conn = None
         self.connstr = None
 
-        #log = get_logger()
-        #log.debug("opening db")
+        # This timeout is in seconds
+        self.busytime = 1000
 
-        timeout=1000 # here it's a timeout in sec.
-        
+        # Journaling options
+        self.journalmode = "persist"
+        self.syncmode = "normal"
+
+        self._open()
+
+        if create:
+            self._initdb()
+        return
+
+
+    def _open(self):
         if self._path is None:
             # We are opening an in-memory DB
             self.conn = sqlite3.connect(":memory:")
         else:
             try:
                 # only python3 supports uri option
-                if (mode == 'r'):
+                if self._mode == 'r':
                     self.connstr = 'file:{}?mode=ro'.format(self._path)
                 else:
                     self.connstr = 'file:{}?mode=rwc'.format(self._path)
-                self.conn = sqlite3.connect(self.connstr, uri=True,timeout=timeout)
+                self.conn = sqlite3.connect(self.connstr, uri=True,
+                    timeout=self.busytime)
             except:
-                self.conn = sqlite3.connect(self._path,timeout=timeout)
+                self.conn = sqlite3.connect(self._path, timeout=self.busytime)
+        if self._mode == 'w':
+            # In read-write mode, set the journaling
+            self.conn.execute("pragma journal_mode={}".format(self.journalmode))
+            self.conn.execute("pragma synchronous={}".format(self.syncmode))
 
-        #self.conn.execute("pragma journal_mode=wal")
+        # Other tuning options
+        self.conn.execute("pragma temp_store=memory")
         self.conn.execute("pragma page_size=4096")
         self.conn.execute("pragma cache_size=4000")
-        #self.conn.execute("pragma busy_timeout=1000000") # it's in millisec, same parameter as timeout param in connect
-        #log.debug("done")
-
-        if create:
-            self._initdb()
+        return
 
 
     def _initdb(self):
@@ -837,10 +848,12 @@ class DataBase:
         alltasks = all_tasks(night, nside)
 
         with self.conn as con:
-            con.execute("begin")
+            cur = con.cursor()
+            cur.execute("begin transaction")
             for tt in task_types():
                 for tsk in alltasks[tt]:
                     task_classes[tt].insert(self, tsk)
+            cur.execute("commit")
 
         return
 
