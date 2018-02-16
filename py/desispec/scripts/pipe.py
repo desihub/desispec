@@ -93,6 +93,9 @@ Where supported commands are:
         parser.add_argument("--prod", required=False, default=None,
             help="value to use for SPECPROD")
 
+        parser.add_argument("--db", required=False, default=None,
+            help="value to use for DESI_SPECTRO_DB")
+
         parser.add_argument("--nside", required=False, type=int, default=64,
             help="HEALPix nside value to use for spectral grouping.")
 
@@ -127,6 +130,19 @@ Where supported commands are:
             proddir = os.path.join(specdir, prodname)
             os.environ["DESI_SPECTRO_REDUX"] = specdir
 
+        # Check spectro db location
+
+        dbpath = None
+        if "DESI_SPECTRO_DB" in os.environ:
+            dbpath = os.environ["DESI_SPECTRO_DB"]
+        else:
+            dbpath = args.db
+            if dbpath is None:
+                print("You must set DESI_SPECTRO_DB in your environment or "
+                    "use the --db commandline option")
+                sys.exit(0)
+            os.environ["DESI_SPECTRO_DB"] = dbpath
+
         pipe.update_prod(nightstr=None, hpxnside=args.nside)
 
         # create setup shell snippet
@@ -137,6 +153,8 @@ Where supported commands are:
             s.write("export DESI_SPECTRO_DATA={}\n".format(self.rawdir))
             s.write("export DESI_SPECTRO_REDUX={}\n".format(specdir))
             s.write("export SPECPROD={}\n".format(prodname))
+            s.write("export DESI_SPECTRO_DB={}\n".format(dbpath))
+
             s.write("\n")
             s.write("#export DESI_LOGLEVEL=\"DEBUG\"\n\n")
 
@@ -192,7 +210,7 @@ Where supported commands are:
                     print("Task state '{}' is not valid".format(s))
                     sys.exit(0)
 
-        dbpath = os.path.join(self.proddir, pipe.prod_db_name)
+        dbpath = io.get_pipe_database()
         db = pipe.db.DataBase(dbpath, "r")
 
         allnights = io.get_nights(strip_path=True)
@@ -230,7 +248,7 @@ Where supported commands are:
 
         db = None
         if not args.nodb:
-            dbpath = os.path.join(self.proddir, pipe.prod_db_name)
+            dbpath = io.get_pipe_database()
             db = pipe.db.DataBase(dbpath, "r")
 
         states = pipe.db.check_tasks(tasks, db=db)

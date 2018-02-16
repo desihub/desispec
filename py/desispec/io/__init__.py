@@ -21,7 +21,7 @@ from .frame import read_meta_frame, read_frame, write_frame
 from .image import read_image, write_image
 from .meta import (findfile, get_exposures, get_files, get_raw_files,
                    rawdata_root, specprod_root, validate_night, qaprod_root,
-                   get_pipe_rundir, get_pipe_scriptdir,
+                   get_pipe_rundir, get_pipe_scriptdir, get_pipe_database,
                    get_pipe_logdir, get_reduced_frames, get_pipe_pixeldir,
                    get_nights, get_pipe_nightdir, find_exposure_night)
 from .params import read_params

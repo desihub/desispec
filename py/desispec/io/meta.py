@@ -468,6 +468,20 @@ def qaprod_root():
     return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'QA')
 
 
+def get_pipe_database():
+    """Get the production database location based on the environment.
+
+    """
+    if "DESI_SPECTRO_DB" in os.environ:
+        # Use an alternate location for the DB
+        dbpath = os.environ["DESI_SPECTRO_DB"]
+    else:
+        proddir = specprod_root()
+        dbpath = os.path.join(proddir, "desi.db")
+        os.environ["DESI_SPECTRO_DB"] = dbpath
+    return dbpath
+
+
 def get_pipe_rundir(specprod_dir=None):
     """
     Return the directory path for pipeline runtime files.

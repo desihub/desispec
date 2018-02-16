@@ -30,7 +30,7 @@ from desiutil.log import get_logger
 
 from .. import io
 
-from .defs import prod_db_name, prod_options_name
+from .defs import prod_options_name
 
 from .db import DataBase
 
@@ -227,7 +227,7 @@ def update_prod(nightstr=None, hpxnside=64):
     # Load the database, this will create and initialize it if it does not
     # exist.
 
-    dbpath = os.path.join(proddir, prod_db_name)
+    dbpath = io.get_pipe_database()
     db = DataBase(dbpath, "w")
 
     # get list of available nights
@@ -296,8 +296,7 @@ def load_prod(mode):
             and the global options dictionary.
 
     """
-    proddir = os.path.abspath(io.specprod_root())
-    dbpath = os.path.join(proddir, prod_db_name)
+    dbpath = io.get_pipe_database()
     db = DataBase(dbpath, mode)
 
     rundir = io.get_pipe_rundir()

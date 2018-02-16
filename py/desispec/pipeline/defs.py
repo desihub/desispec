@@ -51,10 +51,6 @@ state_colors = {
 task_name_sep = "_"
 """The separator string used for building object names."""
 
-
-prod_db_name = "desi.db"
-"""The name of the sqlite database file."""
-
 prod_options_name = "options.yaml"
 """The name of the options file inside the run directory."""
 

@@ -12,7 +12,7 @@ from __future__ import absolute_import, division, print_function
 
 from . import tasks
 
-from .defs import (task_states, prod_db_name, prod_options_name,
+from .defs import (task_states, prod_options_name,
     task_state_to_int, task_int_to_state)
 
 from .db import (task_types, DataBase, check_tasks)

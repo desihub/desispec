@@ -690,9 +690,6 @@ def check_tasks(tasklist, db=None, inputs=None):
     return states
 
 
-
-
-
 class DataBase:
     """Class for tracking pipeline processing objects and state.
 
