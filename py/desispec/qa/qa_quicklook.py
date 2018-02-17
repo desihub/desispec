@@ -1700,6 +1700,9 @@ class Calculate_SNR(MonitoringAlg):
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
+        objlist = set(fibermap["OBJTYPE"])
+        if 'SKY' in objlist:
+            objlist.remove('SKY')
 
         #- select band for mag, using DECAM_R if present
         if param is None:
@@ -1712,7 +1715,6 @@ class Calculate_SNR(MonitoringAlg):
                 }
 
         fidboundary=None
-        qso_resid=kwargs["qso_resid"]
         if amps: 
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
             leftmax = dict_countbins["LEFT_MAX_FIBER"]
@@ -1721,7 +1723,7 @@ class Calculate_SNR(MonitoringAlg):
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
             fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
         #qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
-        qadict = qalib.SNRFit(frame,camera,param,fidboundary=fidboundary,qso_resid=qso_resid)
+        qadict = qalib.SNRFit(frame,camera,objlist,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
 
@@ -1749,7 +1751,7 @@ class Calculate_SNR(MonitoringAlg):
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
-            plot_SNR(retval,qafig,qso_resid)
+            plot_SNR(retval,qafig,objlist)
             log.debug("Output QA fig {}".format(qafig))
 
         return retval

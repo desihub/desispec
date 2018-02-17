@@ -738,7 +738,7 @@ def plot_residuals(qa_dict,outfile):
     #plt.tight_layout()
     fig.savefig(outfile)
     
-def plot_SNR(qa_dict,outfile,qso_resid):
+def plot_SNR(qa_dict,outfile,objlist):
     """
     Plot SNR
 
@@ -779,9 +779,11 @@ def plot_SNR(qa_dict,outfile,qso_resid):
 
     ra=[]
     dec=[]
-    object_list = np.array(['ELG','QSO','LRG','STAR'])
-    for T in object_list:
-        fibers = qa_dict['METRICS']['%s_FIBERID'%T]
+    for T in objlist:
+        if T == 'STD':
+            fibers = qa_dict['METRICS']['STAR_FIBERID']
+        else:
+            fibers = qa_dict['METRICS']['%s_FIBERID'%T]
         for c in range(len(fibers)):
             ras = qa_dict['METRICS']['RA'][fibers[c]]
             decs = qa_dict['METRICS']['DEC'][fibers[c]]
@@ -795,38 +797,11 @@ def plot_SNR(qa_dict,outfile,qso_resid):
     else:
         thisfilter='DECAM_Z'
 
-    elgid=np.where(object_list=='ELG')[0][0]
-    lrgid=np.where(object_list=='LRG')[0][0]
-    qsoid=np.where(object_list=='QSO')[0][0]
-    starid=np.where(object_list=='STAR')[0][0]
-
-    elg_snr_mag=qa_dict["METRICS"]["SNR_MAG_TGT"][elgid]
-    lrg_snr_mag=qa_dict["METRICS"]["SNR_MAG_TGT"][lrgid]
-    qso_snr_mag=qa_dict["METRICS"]["SNR_MAG_TGT"][qsoid]
-    star_snr_mag=qa_dict["METRICS"]["SNR_MAG_TGT"][starid]
-
-    elg_fit_values=qa_dict["METRICS"]["FITCOEFF_TGT"][elgid]
-    lrg_fit_values=qa_dict["METRICS"]["FITCOEFF_TGT"][lrgid]
-    qso_fit_values=qa_dict["METRICS"]["FITCOEFF_TGT"][qsoid]
-    star_fit_values=qa_dict["METRICS"]["FITCOEFF_TGT"][starid]
-    elg_mag=np.arange(np.min(elg_snr_mag[1]),np.max(elg_snr_mag[1]),0.1)
-    lrg_mag=np.arange(np.min(lrg_snr_mag[1]),np.max(lrg_snr_mag[1]),0.1)
-    qso_mag=np.arange(np.min(qso_snr_mag[1]),np.max(qso_snr_mag[1]),0.1)
-    star_mag=np.arange(np.min(star_snr_mag[1]),np.max(star_snr_mag[1]),0.1)
-    elg_fit=10**(elg_fit_values[0]+elg_fit_values[1]*elg_mag+elg_fit_values[2]*elg_mag**2)
-    lrg_fit=10**(lrg_fit_values[0]+lrg_fit_values[1]*lrg_mag+lrg_fit_values[2]*lrg_mag**2)
-    qso_fit=10**(qso_fit_values[0]+qso_fit_values[1]*qso_mag+qso_fit_values[2]*qso_mag**2)
-    star_fit=10**(star_fit_values[0]+star_fit_values[1]*star_mag+star_fit_values[2]*star_mag**2)
-
     fig=plt.figure()
     plt.suptitle("Signal/Noise after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
 
     gs=GridSpec(7,8)
     ax1=fig.add_subplot(gs[1:4,:4]) #- ax2 for amp ccd map below.
-    ax3=fig.add_subplot(gs[4:,:2])
-    ax4=fig.add_subplot(gs[4:,2:4])
-    ax5=fig.add_subplot(gs[4:,4:6])
-    ax6=fig.add_subplot(gs[4:,6:])
 
     hist_med=ax1.plot(index,med_snr,linewidth=1)
     ax1.set_xlabel('Fiber #',fontsize=10)
@@ -841,109 +816,74 @@ def plot_SNR(qa_dict,outfile,qso_resid):
     ax2.set_ylabel('DEC',fontsize=8)
     resid_plot=ax2.scatter(ra,dec,s=2,c=resid_snr,cmap=plt.cm.bwr)
     fig.colorbar(resid_plot,ticks=[np.min(resid_snr),0,np.max(resid_snr)])
+    
+    #    #- plot for amp zones
+    #    if "MEDIAN_AMP_SNR" in qa_dict["METRICS"]:
+    #        ax2=fig.add_subplot(gs[1:4,4:])
+    #        med_amp_snr=qa_dict["METRICS"]["MEDIAN_AMP_SNR"]
+    #        heatmap_med=ax2.pcolor(med_amp_snr.reshape(2,2),cmap=plt.cm.OrRd)
+    #        plt.title('Avg. Median S/N = {:.4f}'.format(avg_med_snr), fontsize=10)
+    #        ax2.set_xlabel("Avg. Median S/N (per Amp)",fontsize=10)
+    #        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
+    #        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+    #        ax2.annotate("Amp 1\n{:.3f}".format(med_amp_snr[0]),
+    #                 xy=(0.4,0.4), #- Full scale is 2
+    #                 fontsize=10
+    #                 )
+    #        ax2.annotate("Amp 2\n{:.3f}".format(med_amp_snr[1]),
+    #                 xy=(1.4,0.4),
+    #                 fontsize=10
+    #                 )
+    #        ax2.annotate("Amp 3\n{:.3f}".format(med_amp_snr[2]),
+    #                 xy=(0.4,1.4),
+    #                 fontsize=10
+    #                 )
+    #
+    #        ax2.annotate("Amp 4\n{:.3f}".format(med_amp_snr[3]),
+    #                 xy=(1.4,1.4),
+    #                 fontsize=10
+    #                 )
 
-#    #- plot for amp zones
-#    if "MEDIAN_AMP_SNR" in qa_dict["METRICS"]:
-#        ax2=fig.add_subplot(gs[1:4,4:])
-#        med_amp_snr=qa_dict["METRICS"]["MEDIAN_AMP_SNR"]
-#        heatmap_med=ax2.pcolor(med_amp_snr.reshape(2,2),cmap=plt.cm.OrRd)
-#        plt.title('Avg. Median S/N = {:.4f}'.format(avg_med_snr), fontsize=10)
-#        ax2.set_xlabel("Avg. Median S/N (per Amp)",fontsize=10)
-#        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-#        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-#        ax2.annotate("Amp 1\n{:.3f}".format(med_amp_snr[0]),
-#                 xy=(0.4,0.4), #- Full scale is 2
-#                 fontsize=10
-#                 )
-#        ax2.annotate("Amp 2\n{:.3f}".format(med_amp_snr[1]),
-#                 xy=(1.4,0.4),
-#                 fontsize=10
-#                 )
-#        ax2.annotate("Amp 3\n{:.3f}".format(med_amp_snr[2]),
-#                 xy=(0.4,1.4),
-#                 fontsize=10
-#                 )
-#
-#        ax2.annotate("Amp 4\n{:.3f}".format(med_amp_snr[3]),
-#                 xy=(1.4,1.4),
-#                 fontsize=10
-#                 )
+    a=np.arange(len(objlist))
+    for i in range(len(a)):
+        if i == 0:
+            ax=fig.add_subplot(gs[4:,:2])
+            p='b.'
+        elif i == 1:
+            ax=fig.add_subplot(gs[4:,2:4])
+            p='r.'
+        elif i == 2:
+            ax=fig.add_subplot(gs[4:,4:6])
+            p='g.'
+        else:
+            ax=fig.add_subplot(gs[4:,6:])
+            p='k.'
 
-    ax3.set_ylabel('Median S/N',fontsize=8)
-    ax3.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
-    ax3.set_title("ELG", fontsize=8)
-    elg_select=np.where((elg_snr_mag[1] != np.array(None)) & (~np.isnan(elg_snr_mag[1])) & (np.abs(elg_snr_mag[1])!=np.inf))[0] #- avoid nan, None, inf in magnitudes for plotting 
-    elg_snr_cut=[]
-    elg_mag_cut=[]
-    for x in range(len(elg_select)):
-        snr_cut=elg_snr_mag[0][elg_select[x]]
-        mag_cut=elg_snr_mag[1][elg_select[x]]
-        elg_snr_cut.append(snr_cut)
-        elg_mag_cut.append(mag_cut)
-    ax3.set_xlim(np.min(elg_mag_cut)-0.1,np.max(elg_mag_cut)+0.1)
-    ax3.set_ylim(np.min(elg_snr_cut)-0.1,np.max(elg_snr_cut)+0.1)
-    ax3.xaxis.set_ticks(np.arange(int(np.min(elg_mag_cut)),int(np.max(elg_mag_cut))+1,1.0))
-    ax3.tick_params(axis='x',labelsize=6,labelbottom='on')
-    ax3.tick_params(axis='y',labelsize=6,labelleft='on')
-    ax3.plot(elg_mag_cut,elg_snr_cut,'b.')
-    ax3.plot(elg_mag,elg_fit,'y')
+        objtype=list(objlist)[i]
+        objid=np.where(np.array(list(objlist))==objtype)[0][0]
+        obj_snr_mag=qa_dict["METRICS"]["SNR_MAG_TGT"][objid]
+        obj_fit_values=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
+        obj_mag=np.arange(np.min(obj_snr_mag[1]),np.max(obj_snr_mag[1]),0.1)
+        obj_fit=10**(obj_fit_values[0]+obj_fit_values[1]*obj_mag+obj_fit_values[2]*obj_mag**2)
 
-    ax4.set_ylabel('',fontsize=10)
-    ax4.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
-    ax4.set_title("LRG",fontsize=8)
-    lrg_select=np.where((lrg_snr_mag[1] != np.array(None)) & (~np.isnan(lrg_snr_mag[1])) & (np.abs(lrg_snr_mag[1])!=np.inf))[0]
-    lrg_snr_cut=[]
-    lrg_mag_cut=[]
-    for x in range(len(lrg_select)):
-        snr_cut=lrg_snr_mag[0][lrg_select[x]]
-        mag_cut=lrg_snr_mag[1][lrg_select[x]]
-        lrg_snr_cut.append(snr_cut)
-        lrg_mag_cut.append(mag_cut)
-    ax4.set_xlim(np.min(lrg_mag_cut)-0.1,np.max(lrg_mag_cut)+0.1)
-    ax4.set_ylim(np.min(lrg_snr_cut)-0.1,np.max(lrg_snr_cut)+0.1)
-    ax4.xaxis.set_ticks(np.arange(int(np.min(lrg_mag_cut)),int(np.max(lrg_mag_cut))+1,1.0))
-    ax4.tick_params(axis='x',labelsize=6,labelbottom='on')
-    ax4.tick_params(axis='y',labelsize=6,labelleft='on')
-    ax4.plot(lrg_mag_cut,lrg_snr_cut,'r.')
-    ax4.plot(lrg_mag,lrg_fit,'y')
-
-    ax5.set_ylabel('',fontsize=10)
-    ax5.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
-    ax5.set_title("QSO", fontsize=8)
-    qso_select=np.where((qso_snr_mag[1] != np.array(None)) & (~np.isnan(qso_snr_mag[1])) & (np.abs(qso_snr_mag[1])!=np.inf))[0]
-    qso_snr_cut=[]
-    qso_mag_cut=[]
-    for x in range(len(qso_select)):
-        snr_cut=qso_snr_mag[0][qso_select[x]]
-        mag_cut=qso_snr_mag[1][qso_select[x]]
-        qso_snr_cut.append(snr_cut)
-        qso_mag_cut.append(mag_cut)
-    ax5.set_xlim(np.min(qso_mag_cut)-0.1,np.max(qso_mag_cut)+0.1)
-    ax5.set_ylim(np.min(qso_snr_cut)-0.1,np.max(qso_snr_cut)+0.1)
-    ax5.xaxis.set_ticks(np.arange(int(np.min(qso_mag_cut)),int(np.max(qso_mag_cut))+1,2.0))
-    ax5.tick_params(axis='x',labelsize=6,labelbottom='on')
-    ax5.tick_params(axis='y',labelsize=6,labelleft='on')
-    ax5.plot(qso_mag_cut,qso_snr_cut,'g.')
-    ax5.plot(qso_mag,qso_fit,'y')
-
-    ax6.set_ylabel('',fontsize=10)
-    ax6.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
-    ax6.set_title("STD", fontsize=8)
-    star_select=np.where((star_snr_mag[1] != np.array(None)) & (~np.isnan(star_snr_mag[1])) & (np.abs(star_snr_mag[1])!=np.inf))[0]
-    star_snr_cut=[]
-    star_mag_cut=[]
-    for x in range(len(star_select)):
-        snr_cut=star_snr_mag[0][star_select[x]]
-        mag_cut=star_snr_mag[1][star_select[x]]
-        star_snr_cut.append(snr_cut)
-        star_mag_cut.append(mag_cut)
-    ax6.set_xlim(np.min(star_mag_cut)-0.1,np.max(star_mag_cut)+0.1)
-    ax6.set_ylim(np.min(star_snr_cut)-0.1,np.max(star_snr_cut)+0.1)
-    ax6.xaxis.set_ticks(np.arange(int(np.min(star_mag_cut)),int(np.max(star_mag_cut))+1,1.0))
-    ax6.tick_params(axis='x',labelsize=6,labelbottom='on')
-    ax6.tick_params(axis='y',labelsize=6,labelleft='on')
-    ax6.plot(star_mag_cut,star_snr_cut,'k.')
-    ax6.plot(star_mag,star_fit,'y')
-
+        ax.set_ylabel('Median S/N',fontsize=8)
+        ax.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
+        ax.set_title('{}'.format(objtype), fontsize=8)
+        select=np.where((obj_snr_mag[1] != np.array(None)) & (~np.isnan(obj_snr_mag[1])) & (np.abs(obj_snr_mag[1])!=np.inf))[0] #- avoid nan, None, inf in magnitudes for plotting 
+        obj_snr_cut=[]
+        obj_mag_cut=[]
+        for x in range(len(select)):
+            snr_cut=obj_snr_mag[0][select[x]]
+            mag_cut=obj_snr_mag[1][select[x]]
+            obj_snr_cut.append(snr_cut)
+            obj_mag_cut.append(mag_cut)
+        ax.set_xlim(np.min(obj_mag_cut)-0.1,np.max(obj_mag_cut)+0.1)
+        ax.set_ylim(np.min(obj_snr_cut)-0.1,np.max(obj_snr_cut)+0.1)
+        ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag_cut)),int(np.max(obj_mag_cut))+1,1.0))
+        ax.tick_params(axis='x',labelsize=6,labelbottom='on')
+        ax.tick_params(axis='y',labelsize=6,labelleft='on')
+        ax.plot(obj_mag_cut,obj_snr_cut,p)
+        ax.plot(obj_mag,obj_fit,'y')
+    
     plt.tight_layout()
     fig.savefig(outfile)

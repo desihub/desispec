@@ -525,7 +525,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     return qadict
 
-def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
+def SNRFit(frame,camera,objlist,params,fidboundary=None):
     """
     Signal vs. Noise With fitting
 
@@ -597,7 +597,6 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
     fitcoeff=[]
     fitcovar=[]
     snrmag=[]
-    objlist=["ELG","QSO","LRG","STD"]
     for T in objlist:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
