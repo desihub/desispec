@@ -594,7 +594,11 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
     dec=[]
     resid_snr=[]
     fidsnr_tgt=[]
-    for T in ["ELG","QSO","LRG","STD"]:
+    fitcoeff=[]
+    fitcovar=[]
+    snrmag=[]
+    objlist=["ELG","QSO","LRG","STD"]
+    for T in objlist:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
         mags=np.zeros(medsnr.shape)
@@ -624,9 +628,10 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
             #- and store results in METRICS
             out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
             #out=optimize.curve_fit(polyFun,x,y,p0=initialParams)
-            vs=out[0]
-            cov=out[1]
-            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            vs=list(out[0])
+            cov=list(out[1])
+            fitcoeff.append(vs)
+            fitcovar.append(cov)
             fidsnr_tgt.append(10**fitfunc(fmag,*out[0]))
             #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
         except ValueError:
@@ -635,7 +640,10 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
             vs.fill(np.nan)
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
-            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            vs=list(vs)
+            cov=list(cov)
+            fitcoeff.append(vs)
+            fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
@@ -643,32 +651,38 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
             vs.fill(np.nan)
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
-            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            vs=list(vs)
+            cov=list(cov)
+            fitcoeff.append(vs)
+            fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
         except scipy.optimize.OptimizeWarning:
             log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
             vs=out[0]
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
-            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            vs=list(vs)
+            cov=list(cov)
+            fitcoeff.append(vs)
+            fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
-            
+
         qadict["%s_FIBERID"%T]=fibers.tolist()
-        qadict["%s_SNR_MAG"%T]=snr_mag=np.array((medsnr,mags))
-        qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
+        snr_mag=[medsnr,mags]
+        snrmag.append(snr_mag)
 
         fit_snr=[]
-        fit=qadict["%s_FITRESULTS"%T]
-        if T == 'QSO' and qso_resid is False:
-            pass
-        else:
-            for m in range(len(mags)):
-                snr = 10**fitfunc(mags[m],fit[0][0],fit[0][1],fit[0][2])
-                fit_snr.append(snr)
-            for r in range(len(fit_snr)):
-                resid = snr_mag[0][r] - fit_snr[r]
-                resid_snr.append(resid)
+        for m in range(len(mags)):
+            snr = 10**fitfunc(mags[m],vs[0],vs[1],vs[2])
+            fit_snr.append(snr)
+        for r in range(len(fit_snr)):
+            resid = snr_mag[0][r] - fit_snr[r]
+            resid_snr.append(resid)
 
+    qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
+    qadict["SNR_MAG_TGT"]=snrmag
+    qadict["FITCOEFF_TGT"]=fitcoeff
+    qadict["FITCOVAR_TGT"]=fitcovar
     qadict["SNR_RESID"]=resid_snr
     qadict["FIDSNR_TGT"]=fidsnr_tgt
     qadict["RA"]=frame.fibermap['RA_TARGET']
