@@ -848,16 +848,12 @@ def plot_SNR(qa_dict,outfile,objlist):
     for i in range(len(a)):
         if i == 0:
             ax=fig.add_subplot(gs[4:,:2])
-            p='b.'
         elif i == 1:
             ax=fig.add_subplot(gs[4:,2:4])
-            p='r.'
         elif i == 2:
             ax=fig.add_subplot(gs[4:,4:6])
-            p='g.'
         else:
             ax=fig.add_subplot(gs[4:,6:])
-            p='k.'
 
         objtype=list(objlist)[i]
         objid=np.where(np.array(list(objlist))==objtype)[0][0]
@@ -882,7 +878,7 @@ def plot_SNR(qa_dict,outfile,objlist):
         ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag_cut)),int(np.max(obj_mag_cut))+1,1.0))
         ax.tick_params(axis='x',labelsize=6,labelbottom='on')
         ax.tick_params(axis='y',labelsize=6,labelleft='on')
-        ax.plot(obj_mag_cut,obj_snr_cut,p)
+        ax.plot(obj_mag_cut,obj_snr_cut,'b.')
         ax.plot(obj_mag,obj_fit,'y')
     
     plt.tight_layout()
