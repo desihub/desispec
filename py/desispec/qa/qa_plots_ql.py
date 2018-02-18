@@ -859,8 +859,6 @@ def plot_SNR(qa_dict,outfile,objlist):
         objid=np.where(np.array(list(objlist))==objtype)[0][0]
         obj_snr_mag=qa_dict["METRICS"]["SNR_MAG_TGT"][objid]
         obj_fit_values=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
-        obj_mag=np.arange(np.min(obj_snr_mag[1]),np.max(obj_snr_mag[1]),0.1)
-        obj_fit=10**(obj_fit_values[0]+obj_fit_values[1]*obj_mag+obj_fit_values[2]*obj_mag**2)
 
         ax.set_ylabel('Median S/N',fontsize=8)
         ax.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
@@ -873,13 +871,15 @@ def plot_SNR(qa_dict,outfile,objlist):
             mag_cut=obj_snr_mag[1][select[x]]
             obj_snr_cut.append(snr_cut)
             obj_mag_cut.append(mag_cut)
+        plot_mag=np.arange(np.min(obj_mag_cut),np.max(obj_mag_cut),0.1)
+        plot_fit=10**(obj_fit_values[0]+obj_fit_values[1]*plot_mag+obj_fit_values[2]*plot_mag**2)
         ax.set_xlim(np.min(obj_mag_cut)-0.1,np.max(obj_mag_cut)+0.1)
         ax.set_ylim(np.min(obj_snr_cut)-0.1,np.max(obj_snr_cut)+0.1)
         ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag_cut)),int(np.max(obj_mag_cut))+1,1.0))
         ax.tick_params(axis='x',labelsize=6,labelbottom='on')
         ax.tick_params(axis='y',labelsize=6,labelleft='on')
         ax.plot(obj_mag_cut,obj_snr_cut,'b.')
-        ax.plot(obj_mag,obj_fit,'y')
+        ax.plot(plot_mag,plot_fit,'y')
     
     plt.tight_layout()
     fig.savefig(outfile)

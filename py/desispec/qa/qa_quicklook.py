@@ -14,6 +14,7 @@ import datetime
 from astropy.time import Time
 from desispec.qa import qalib
 from desispec.io import qa
+from desispec.io.meta import findfile
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -51,6 +52,53 @@ def qlf_post(qadict):
     else:   
         log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
+def get_image(filetype,night,expid,camera):
+    '''
+    Make image object from file if in development mode
+    '''
+    import astropy.io.fits as fits
+    from desispec.image import Image as im
+
+    #- Find correct file for QA
+    imagefile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=os.environ['QL_SPEC_DATA'])
+
+    #- Create necessary input for desispec.image
+    image = fits.open(imagefile)
+    pix = image[0].data
+    ivar = image[1].data
+    mask = image[2].data
+    readnoise = image[3].data
+    meta = image[0].header
+
+    #- Create image object
+    imageobj = im(pix,ivar,mask=mask,readnoise=readnoise,camera=camera,meta=meta)
+
+    return imageobj
+
+def get_frame(filetype,night,expid,camera):
+    '''
+    Make frame object from file if in development mode
+    '''
+    import astropy.io.fits as fits
+    from desispec.frame import Frame as fr
+
+    #- Find correct file for QA
+    framefile = findfile(filetype,int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
+
+    #- Create necessary input for desispec.frame
+    frame = fits.open(framefile)
+    wave = frame[3].data
+    flux = frame[0].data
+    ivar = frame[1].data
+    fibermap = frame[5].data
+    fibers = fibermap['FIBER']
+    meta = frame[0].header
+
+    #- Create frame object
+    frameobj = fr(wave,flux,ivar,fibers=fibers,fibermap=fibermap,meta=meta)
+
+    return frameobj
+
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -77,7 +125,13 @@ class Get_RMS(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
 
-        input_image=args[0]
+        if kwargs["singleqa"] == 'Get_RMS':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            image = get_image('pix',night,expid,camera)
+        else:
+            image=args[0]
 
         if "paname" not in kwargs:
             paname=None
@@ -104,7 +158,7 @@ class Get_RMS(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
         retval={}
@@ -215,7 +269,13 @@ class Count_Pixels(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        input_image=args[0]
+        if kwargs["singleqa"] == 'Count_Pixels':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            image = get_image('pix',night,expid,camera)
+        else:
+            image=args[0]
 
         if "paname" not in kwargs:
             paname=None
@@ -242,7 +302,7 @@ class Count_Pixels(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         retval={}
@@ -335,8 +395,23 @@ class Integrate_Spec(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
+        dict_sountbins=None
+        if kwargs["singleqa"] == 'Integrate_Spec':
+            import yaml
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('sframe',night,expid,camera)
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+            with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
+                cdict = yaml.load(f)
+            dict_countbins = {'LEFT_MAX_FIBER' : cdict['LEFT_MAX_FIBER'], 'RIGHT_MIN_FIBER' : cdict['RIGHT_MIN_FIBER'], 'BOTTOM_MAX_WAVE_INDEX' : cdict['BOTTOM_MAX_WAVE_INDEX'], 'TOP_MIN_WAVE_INDEX' : cdict['TOP_MIN_WAVE_INDEX']}
+        else:
+            frame=args[0]
+            if "dict_countbins" in kwargs:
+                dict_countbins=kwargs["dict_countbins"]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
 
         if "paname" not in kwargs:
             paname=None
@@ -353,10 +428,6 @@ class Integrate_Spec(MonitoringAlg):
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
 
-        dict_countbins=None
-        if "dict_countbins" in kwargs:
-            dict_countbins=kwargs["dict_countbins"] 
-
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
         else: qlf=False
@@ -366,7 +437,7 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         retval={}
@@ -509,9 +580,24 @@ class Sky_Continuum(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
+        dict_countbins=None
+        if kwargs["singleqa"] == 'Sky_Continuum':
+            import yaml
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('fframe',night,expid,camera)
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+            with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
+                cdict = yaml.load(f)
+            dict_countbins = {'LEFT_MAX_FIBER' : cdict['LEFT_MAX_FIBER'], 'RIGHT_MIN_FIBER' : cdict['RIGHT_MIN_FIBER'], 'BOTTOM_MAX_WAVE_INDEX' : cdict['BOTTOM_MAX_WAVE_INDEX'], 'TOP_MIN_WAVE_INDEX' : cdict['TOP_MIN_WAVE_INDEX']}
+        else:
+            frame=args[0]
+            if "dict_countbins" in kwargs:
+                dict_countbins=kwargs["dict_countbins"]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
-        camera=input_frame.meta["CAMERA"]
+        camera=frame.meta["CAMERA"]
         
         wrange1=None
         wrange2=None
@@ -543,10 +629,6 @@ class Sky_Continuum(MonitoringAlg):
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
 
-        dict_countbins=None
-        if "dict_countbins" in kwargs:
-            dict_countbins=kwargs["dict_countbins"]
-
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
         else: qlf=False
@@ -556,7 +638,7 @@ class Sky_Continuum(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(fibermap,input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,
                paname=None,amps=False,dict_countbins=None,
@@ -668,8 +750,15 @@ class Sky_Peaks(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image, got {}".format(type(args[0])))
 
+        if kwargs["singleqa"] == 'Sky_Peaks':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('fframe',night,expid,camera)
+        else:
+            frame=args[0]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
 
         if "paname" not in kwargs:
             paname=None
@@ -701,7 +790,7 @@ class Sky_Peaks(MonitoringAlg):
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from desispec.qa.qalib import sky_peaks
@@ -783,8 +872,15 @@ class Calc_XWSigma(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
 
+        if kwargs["singleqa"] == 'Calc_XWSigma':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            image = get_image('pix',night,expid,camera)
+        else:
+            image=args[0]
+
         fibermap=kwargs['FiberMap'] 
-        input_image=args[0]
  
         if "paname" not in kwargs:
             paname=None
@@ -819,7 +915,7 @@ class Calc_XWSigma(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
  
-        return self.run_qa(fibermap,input_image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
  
     def run_qa(self,fibermap,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from scipy.optimize import curve_fit
@@ -1140,7 +1236,13 @@ class Bias_From_Overscan(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        input_raw=args[0]
+        if kwargs["singleqa"] == 'Bias_From_Ovescan':
+            import astropy.io.fits as fits
+            rawfile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=os.environ['QL_SPEC_DATA'])
+            raw = fits.open(rawfile)
+        else:
+            raw=args[0]
+
         camera=kwargs["camera"]
 
         paname=None
@@ -1167,7 +1269,7 @@ class Bias_From_Overscan(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_raw,camera,paname=paname,amps=amps, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(raw,camera,paname=paname,amps=amps, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,raw,camera,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
 
@@ -1332,8 +1434,15 @@ class CountSpectralBins(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
+        if kwargs["singleqa"] == 'CountSpectralBins':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('frame',night,expid,camera)
+        else:
+            frame=args[0]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
 
         paname=None
         if "paname" in kwargs:
@@ -1363,7 +1472,7 @@ class CountSpectralBins(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
 
     def run_qa(self,fibermap,frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
@@ -1529,8 +1638,23 @@ class Sky_Residual(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
+        dict_countbins=None
+        if kwargs["singleqa"] == 'Sky_Residual':
+            import yaml
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('sframe',night,expid,camera)
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+            with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
+                cdict = yaml.load(f)
+            dict_countbins = {'LEFT_MAX_FIBER' : cdict['LEFT_MAX_FIBER'], 'RIGHT_MIN_FIBER' : cdict['RIGHT_MIN_FIBER'], 'BOTTOM_MAX_WAVE_INDEX' : cdict['BOTTOM_MAX_WAVE_INDEX'], 'TOP_MIN_WAVE_INDEX' : cdict['TOP_MIN_WAVE_INDEX']}
+        else:
+            frame=args[0]
+            if "dict_countbins" in kwargs:
+                dict_countbins=kwargs["dict_countbins"]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0] #- should be sky subtracted
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
             from desispec.io.sky import read_sky
@@ -1546,10 +1670,6 @@ class Sky_Residual(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        dict_countbins=None
-        if "dict_countbins" in kwargs:
-            dict_countbins=kwargs["dict_countbins"]
-        
         paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
@@ -1567,7 +1687,7 @@ class Sky_Residual(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(fibermap,input_frame,paname=paname,skymodel=skymodel,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,skymodel=skymodel,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
 
     def run_qa(self,fibermap,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
@@ -1652,8 +1772,22 @@ class Calculate_SNR(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
+        dict_countbins=None
+        if kwargs["singleqa"] == 'Calculate_SNR':
+            import yaml
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('sframe',night,expid,camera)
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+            with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
+                cdict = yaml.load(f)
+            dict_countbins = {'LEFT_MAX_FIBER' : cdict['LEFT_MAX_FIBER'], 'RIGHT_MIN_FIBER' : cdict['RIGHT_MIN_FIBER'], 'BOTTOM_MAX_WAVE_INDEX' : cdict['BOTTOM_MAX_WAVE_INDEX'], 'TOP_MIN_WAVE_INDEX' : cdict['TOP_MIN_WAVE_INDEX']}
+        else:
+            frame=args[0]
+            if "dict_countbins" in kwargs:
+                dict_countbins=kwargs["dict_countbins"]
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
 
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
@@ -1661,10 +1795,6 @@ class Calculate_SNR(MonitoringAlg):
         amps=False
         if "amps" in kwargs:
             amps=kwargs["amps"]
-
-        dict_countbins=None
-        if "dict_countbins" in kwargs:
-            dict_countbins=kwargs["dict_countbins"]
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
@@ -1682,7 +1812,7 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
 
     def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False, param=None, refmetrics=None):
