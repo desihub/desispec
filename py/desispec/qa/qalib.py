@@ -597,6 +597,7 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
     fitcoeff=[]
     fitcovar=[]
     snrmag=[]
+    badfib=[]
     for T in objlist:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
@@ -611,18 +612,40 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
                 mags[ii]=magnitudes[fib][filters[fib]==thisfilter]
 
         try:
-	    #- Determine negative SNR fibers and remove
-            xs=mags.argsort()
-            x=mags[xs]
-            med_snr=medsnr[xs]
-            neg_snr=len(np.where(med_snr<=0.0)[0])
+	    #- Determine invalid SNR and mag values and remove
+            m=mags
+            s=medsnr
+            neg_snr=len(np.where(medsnr<=0.0)[0])
             neg_snr_tot.append(neg_snr)
-            if neg_snr > 0:
-                x=mags[xs][:-neg_snr]
-                y=np.log10(med_snr[:-neg_snr])
-            else:
-                x=mags[xs]
-                y=np.log10(med_snr)
+            neg_val=np.where(medsnr<=0.0)[0]
+            inf_mag=np.where(m == np.inf)[0]
+            nan_mag=np.where(np.isnan(m))[0]
+            none_mag=np.where(m == np.array(None))[0]
+            cut=[]
+            cuts=[neg_val,inf_mag,nan_mag,none_mag]
+            for cc in range(len(cuts)):
+                if len(cuts[cc]) > 0:
+                    for ci in range(len(cuts[cc])):
+                        cut.append(cuts[cc][ci])
+            if len(cut) > 0:
+                m=list(m)
+                s=list(s)
+                makecut=sorted(list(set(cut)))
+                for nn in range(len(makecut)):
+                    if len(makecut) > 0:
+                        m.remove(m[makecut[nn]])
+                        s.remove(s[makecut[nn]])
+                        for ni in range(len(makecut)):
+                            makecut[ni]-=1
+                            makecut.remove(makecut[0])
+                m=np.array(m)
+                s=np.array(s)
+                log.warning("In fit of {}, had to remove NANs from data for fitting!".format(T))
+            badfib.append(fibers[sorted(list(set(cut)))])
+            xs=m.argsort()
+            x=m[xs]
+            med_snr=s[xs]
+            y=np.log10(med_snr)
 	    #- Fit SNR vs. Mag. to fit function, evaluate at fiducial magnitude, 
             #- and store results in METRICS
             out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
@@ -633,17 +656,17 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
             fitcovar.append(cov)
             fidsnr_tgt.append(10**fitfunc(fmag,*out[0]))
             #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
-        except ValueError:
-            log.warning("In fit of {}, data contain NANs! can't fit".format(T))
-            vs=np.array(initialParams)
-            vs.fill(np.nan)
-            cov=np.empty((len(initialParams),len(initialParams)))
-            cov.fill(np.nan)
-            vs=list(vs)
-            cov=list(cov)
-            fitcoeff.append(vs)
-            fitcovar.append(cov)
-            fidsnr_tgt.append(np.nan)
+#        except ValueError:
+#            log.warning("In fit of {}, data contain NANs! can't fit".format(T))
+#            vs=np.array(initialParams)
+#            vs.fill(np.nan)
+#            cov=np.empty((len(initialParams),len(initialParams)))
+#            cov.fill(np.nan)
+#            vs=list(vs)
+#            cov=list(cov)
+#            fitcoeff.append(vs)
+#            fitcovar.append(cov)
+#            fidsnr_tgt.append(np.nan)
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
             vs=np.array(initialParams)
@@ -671,12 +694,18 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
         snrmag.append(snr_mag)
 
         fit_snr=[]
-        for m in range(len(mags)):
-            snr = 10**fitfunc(mags[m],vs[0],vs[1],vs[2])
+        for mm in range(len(x)):
+            snr = 10**fitfunc(x[mm],vs[0],vs[1],vs[2])
             fit_snr.append(snr)
-        for r in range(len(fit_snr)):
-            resid = snr_mag[0][r] - fit_snr[r]
+        for rr in range(len(fit_snr)):
+            resid = med_snr[rr] - fit_snr[rr]
             resid_snr.append(resid)
+
+    badfib = np.array(badfib)
+    badfibs = np.array([])
+    for ll in badfib:
+        badfibs = np.concatenate((badfibs,ll))
+    badfibs = list(map(int,badfibs))
 
     qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
     qadict["SNR_MAG_TGT"]=snrmag
@@ -687,7 +716,7 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
     qadict["RA"]=frame.fibermap['RA_TARGET']
     qadict["DEC"]=frame.fibermap['DEC_TARGET']
 
-    return qadict
+    return qadict,badfibs
 
 def gauss(x,a,mu,sigma):
     """

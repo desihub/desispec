@@ -738,7 +738,7 @@ def plot_residuals(qa_dict,outfile):
     #plt.tight_layout()
     fig.savefig(outfile)
     
-def plot_SNR(qa_dict,outfile,objlist):
+def plot_SNR(qa_dict,outfile,objlist,badfibs):
     """
     Plot SNR
 
@@ -779,11 +779,35 @@ def plot_SNR(qa_dict,outfile,objlist):
 
     ra=[]
     dec=[]
-    for T in objlist:
-        if T == 'STD':
+    mags=[]
+    snrs=[]
+    o=np.arange(len(objlist))
+    for t in range(len(o)):
+        otype=list(objlist)[t]
+        oid=np.where(np.array(list(objlist))==otype)[0][0]
+        mag=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][1]
+        snr=qa_dict["METRICS"]["SNR_MAG_TGT"][oid][0]
+        if otype == 'STD':
             fibers = qa_dict['METRICS']['STAR_FIBERID']
         else:
-            fibers = qa_dict['METRICS']['%s_FIBERID'%T]
+            fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
+        #- Remove invalid values for plotting
+        if len(badfibs) > 0:
+            fibers = np.array(fibers)
+            badfibs = np.array(badfibs)
+            for ff in range(len(badfibs)):
+                rm = np.where(fibers==badfibs[ff])[0]
+                if len(rm) == 1:
+                    badfibs=list(badfibs)
+                    fibers=list(fibers)
+                    fibers.remove(fibers[rm[0]])
+                    mag.remove(mag[rm[0]])
+                    snr.remove(snr[rm[0]])
+                    for fi in range(len(badfibs)):
+                        badfibs[fi]-=1
+                        badfibs.remove(badfibs[0])
+        mags.append(mag)
+        snrs.append(snr)
         for c in range(len(fibers)):
             ras = qa_dict['METRICS']['RA'][fibers[c]]
             decs = qa_dict['METRICS']['DEC'][fibers[c]]
@@ -844,8 +868,7 @@ def plot_SNR(qa_dict,outfile,objlist):
     #                 fontsize=10
     #                 )
 
-    a=np.arange(len(objlist))
-    for i in range(len(a)):
+    for i in range(len(o)):
         if i == 0:
             ax=fig.add_subplot(gs[4:,:2])
         elif i == 1:
@@ -857,28 +880,21 @@ def plot_SNR(qa_dict,outfile,objlist):
 
         objtype=list(objlist)[i]
         objid=np.where(np.array(list(objlist))==objtype)[0][0]
-        obj_snr_mag=qa_dict["METRICS"]["SNR_MAG_TGT"][objid]
+        obj_mag=mags[objid]
+        obj_snr=snrs[objid]
         obj_fit_values=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
 
         ax.set_ylabel('Median S/N',fontsize=8)
         ax.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
         ax.set_title('{}'.format(objtype), fontsize=8)
-        select=np.where((obj_snr_mag[1] != np.array(None)) & (~np.isnan(obj_snr_mag[1])) & (np.abs(obj_snr_mag[1])!=np.inf))[0] #- avoid nan, None, inf in magnitudes for plotting 
-        obj_snr_cut=[]
-        obj_mag_cut=[]
-        for x in range(len(select)):
-            snr_cut=obj_snr_mag[0][select[x]]
-            mag_cut=obj_snr_mag[1][select[x]]
-            obj_snr_cut.append(snr_cut)
-            obj_mag_cut.append(mag_cut)
-        plot_mag=np.arange(np.min(obj_mag_cut),np.max(obj_mag_cut),0.1)
+        plot_mag=np.arange(np.min(obj_mag),np.max(obj_mag),0.1)
         plot_fit=10**(obj_fit_values[0]+obj_fit_values[1]*plot_mag+obj_fit_values[2]*plot_mag**2)
-        ax.set_xlim(np.min(obj_mag_cut)-0.1,np.max(obj_mag_cut)+0.1)
-        ax.set_ylim(np.min(obj_snr_cut)-0.1,np.max(obj_snr_cut)+0.1)
-        ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag_cut)),int(np.max(obj_mag_cut))+1,1.0))
+        ax.set_xlim(np.min(obj_mag)-0.1,np.max(obj_mag)+0.1)
+        ax.set_ylim(np.min(obj_snr)-0.1,np.max(obj_snr)+0.1)
+        ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag)),int(np.max(obj_mag))+1,1.0))
         ax.tick_params(axis='x',labelsize=6,labelbottom='on')
         ax.tick_params(axis='y',labelsize=6,labelleft='on')
-        ax.plot(obj_mag_cut,obj_snr_cut,'b.')
+        ax.plot(obj_mag,obj_snr,'b.')
         ax.plot(plot_mag,plot_fit,'y')
     
     plt.tight_layout()
