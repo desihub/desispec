@@ -326,9 +326,9 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                     for qalg in range(len(qas[palg])):
                         if qas[palg][qalg] == singqa:
                             qa=pl[palg][1][qalg]
-                    if qa is None:
-                        log.critical("Unknown input... Valid QAs are: {}".format(qas))
-                        sys.exit()
+        if qa is None:
+            log.critical("Unknown input... Valid QAs are: {}".format(qas))
+            sys.exit()
 
         log.info("Starting to run step {}".format(pac["StepName"]))
         pargs=mapkeywords(pa.config["kwargs"],convdict)

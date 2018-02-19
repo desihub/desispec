@@ -952,16 +952,28 @@ class Calc_XWSigma(MonitoringAlg):
                     "XWSIGMA_WARN_RANGE":[-4.0, 4.0]
                     }
 
+        #- Ensure that the QA will run even if 500 spectra aren't present
+        if fibermap['FIBER'].shape[0] >= 500:
+            fibers = 500
+        else:
+            fibers = fibermap['FIBER'].shape[0]
+
         dw=2.
         dp=3
-        b_peaks=param['B_PEAKS']
-        r_peaks=param['R_PEAKS']
-        z_peaks=param['Z_PEAKS']
+        peak_wave=[]
+        peaks=param['{}_PEAKS'.format(camera[0].upper())]
+        for p in range(len(peaks)):
+            peak_lower = peaks[p] - dw
+            peak_upper = peaks[p] + dw
+            peak_wave.append(peak_lower)
+            peak_wave.append(peak_upper)
 
         if fibermap["OBJTYPE"][0] == 'ARC':
             import desispec.psf
             psf=desispec.psf.PSF(psf)
 
+        xfails=[]
+        wfails=[]
         xsigma=[]
         wsigma=[]
         xsigma_sky=[]
@@ -974,123 +986,37 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_amp3=[]
         xsigma_amp4=[]
         wsigma_amp4=[]
-        if fibermap['FIBER'].shape[0] >= 500:
-            fibers = 500
-        else:
-            fibers = fibermap['FIBER'].shape[0]
         for i in range(fibers):
-            if camera[0]=="b":
-                peak_wave=np.array([b_peaks[0]-dw,b_peaks[0]+dw,b_peaks[1]-dw,b_peaks[1]+dw,b_peaks[2]-dw,b_peaks[2]+dw])
- 
-                xpix=psf.x(ispec=i,wavelength=peak_wave)
-                ypix=psf.y(ispec=i,wavelength=peak_wave)
-                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
-                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
-                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
-                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
-                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
-                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
- 
-                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
+            xsig=[]
+            wsig=[]
+            #- Use psf information to convert wavelength to pixel values
+            xpix=psf.x(ispec=i,wavelength=peak_wave)
+            ypix=psf.y(ispec=i,wavelength=peak_wave)
+            for peak in range(len(peaks)):
+                #- Find x and y pixel values around sky lines
+                xpix_peak=np.arange(int(round(xpix[2*peak]))-dp,int(round(xpix[2*peak+1]))+dp+1,1)
+                ypix_peak=np.arange(int(round(ypix[2*peak])),int(round(ypix[2*peak+1])),1)
+                #- Fit gaussian to counts in pixels around sky line
+                #- If any values fail, store x/w, wavelength, and fiber
+                try:
+                    xpopt,xpcov=curve_fit(qalib.gauss,np.arange(len(xpix_peak)),image.pix[int(np.mean(ypix_peak)),xpix_peak])
+                except:
+                    xfail=[i,peaks[peak]]
+                    xfails.append(xfail)
+                    pass
+                try:
+                    wpopt,wpcov=curve_fit(qalib.gauss,np.arange(len(ypix_peak)),image.pix[ypix_peak,int(np.mean(xpix_peak))])
+                except:
+                    wfail=[i,peaks[peak]]
+                    wfails.append(wfail)
+                    pass
 
-                xsigma1=np.abs(xpopt1[2])
-                wsigma1=np.abs(wpopt1[2])
-                xsigma2=np.abs(xpopt2[2])
-                wsigma2=np.abs(wpopt2[2])
-                xsigma3=np.abs(xpopt3[2])
-                wsigma3=np.abs(wpopt3[2])
- 
-                xsig=np.array([xsigma1,xsigma2,xsigma3])
-                wsig=np.array([wsigma1,wsigma2,wsigma3])
-                xsigma_avg=np.mean(xsig)
-                wsigma_avg=np.mean(wsig)
-                xsigma.append(xsigma_avg)
-                wsigma.append(wsigma_avg)
- 
-            if camera[0]=="r":
-                peak_wave=np.array([r_peaks[0]-dw,r_peaks[0]+dw,r_peaks[1]-dw,r_peaks[1]+dw,r_peaks[2]-dw,r_peaks[2]+dw,r_peaks[3]-dw,r_peaks[3]+dw,r_peaks[4]-dw,r_peaks[4]+dw])
- 
-                xpix=psf.x(ispec=i,wavelength=peak_wave)
-                ypix=psf.y(ispec=i,wavelength=peak_wave)
-                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
-                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
-                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
-                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
-                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
-                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
-                xpix_peak4=np.arange(int(round(xpix[6]))-dp,int(round(xpix[7]))+dp+1,1)
-                ypix_peak4=np.arange(int(round(ypix[6])),int(round(ypix[7])),1)
-                xpix_peak5=np.arange(int(round(xpix[8]))-dp,int(round(xpix[9]))+dp+1,1)
-                ypix_peak5=np.arange(int(round(ypix[8])),int(round(ypix[9])),1)
+                #- Save sigmas from fits
+                xs=np.abs(xpopt[2])
+                ws=np.abs(wpopt[2])
+                xsig.append(xs)
+                wsig.append(ws)
 
-                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
-                xpopt4,xpcov4=curve_fit(qalib.gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
-                wpopt4,wpcov4=curve_fit(qalib.gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
-                xpopt5,xpcov5=curve_fit(qalib.gauss,np.arange(len(xpix_peak5)),image.pix[int(np.mean(ypix_peak5)),xpix_peak5])
-                wpopt5,wpcov5=curve_fit(qalib.gauss,np.arange(len(ypix_peak5)),image.pix[ypix_peak5,int(np.mean(xpix_peak5))])
-
-                xsigma1=np.abs(xpopt1[2])
-                wsigma1=np.abs(wpopt1[2])
-                xsigma2=np.abs(xpopt2[2])
-                wsigma2=np.abs(wpopt2[2])
-                xsigma3=np.abs(xpopt3[2])
-                wsigma3=np.abs(wpopt3[2])
-                xsigma4=np.abs(xpopt4[2])
-                wsigma4=np.abs(wpopt4[2])
-                xsigma5=np.abs(xpopt5[2])
-                wsigma5=np.abs(wpopt5[2]) 
-
-                xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4,xsigma5])
-                wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4,wsigma5])
-                xsigma_avg=np.mean(xsig)
-                wsigma_avg=np.mean(wsig)
-                xsigma.append(xsigma_avg)
-                wsigma.append(wsigma_avg)
-
-            if camera[0]=="z":
-                peak_wave=np.array([z_peaks[0]-dw,z_peaks[0]+dw,z_peaks[1]-dw,z_peaks[1]+dw,z_peaks[2]-dw,z_peaks[2]+dw,z_peaks[3]-dw,z_peaks[3]+dw])
- 
-                xpix=psf.x(ispec=i,wavelength=peak_wave)
-                ypix=psf.y(ispec=i,wavelength=peak_wave)
-                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
-                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
-                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
-                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
-                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
-                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
-                xpix_peak4=np.arange(int(round(xpix[6]))-dp,int(round(xpix[7]))+dp+1,1)
-                ypix_peak4=np.arange(int(round(ypix[6])),int(round(ypix[7])),1)
- 
-                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
-                xpopt4,xpcov4=curve_fit(qalib.gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
-                wpopt4,wpcov4=curve_fit(qalib.gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
-
-                xsigma1=np.abs(xpopt1[2])
-                wsigma1=np.abs(wpopt1[2])
-                xsigma2=np.abs(xpopt2[2])
-                wsigma2=np.abs(wpopt2[2])
-                xsigma3=np.abs(xpopt3[2])
-                wsigma3=np.abs(wpopt3[2])
-                xsigma4=np.abs(xpopt4[2])
-                wsigma4=np.abs(wpopt4[2])
-
-                xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4])
-                wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4])
                 xsigma_avg=np.mean(xsig)
                 wsigma_avg=np.mean(wsig)
                 xsigma.append(xsigma_avg)
@@ -1103,21 +1029,21 @@ class Calc_XWSigma(MonitoringAlg):
             if amps:
                 if fibermap['FIBER'][i]<240:
                     if camera[0]=="b":
-                        xsig_amp1=np.array([xsigma1])
-                        xsig_amp3=np.array([xsigma2,xsigma3])
-                        wsig_amp1=np.array([wsigma1])
-                        wsig_amp3=np.array([wsigma2,wsigma3])
+                        xsig_amp1=np.array([xsig[0]])
+                        xsig_amp3=np.array([xsig[1],xsig[2]])
+                        wsig_amp1=np.array([wsig[0]])
+                        wsig_amp3=np.array([wsig[1],wsig[2]])
                     if camera[0]=="r":
-                        xsig_amp1=np.array([xsigma1,xsigma2])
-                        xsig_amp3=np.array([xsigma3,xsigma4,xsigma5])
-                        wsig_amp1=np.array([wsigma1,wsigma2])
-                        wsig_amp3=np.array([wsigma3,wsigma4,wsigma5])
+                        xsig_amp1=np.array([xsig[0],xsig[1]])
+                        xsig_amp3=np.array([xsig[2],xsig[3],xsig[4]])
+                        wsig_amp1=np.array([wsig[0],wsig[1]])
+                        wsig_amp3=np.array([wsig[2],wsig[3],wsig[4]])
                     if camera[0]=="z":
-                        xsig_amp1=np.array([xsigma1,xsigma2,xsigma3])
-                        xsig_amp3=np.array([xsigma4])
-                        wsig_amp1=np.array([wsigma1,wsigma2,wsigma3])
-                        wsig_amp3=np.array([wsigma4])
-
+                        xsig_amp1=np.array([xsig[0],xsig[1],xsig[2]])
+                        xsig_amp3=np.array([xsig[3]])
+                        wsig_amp1=np.array([wsig[0],wsig[1],wsig[2]])
+                        wsig_amp3=np.array([wsig[3]])
+    
                     xsigma_amp1.append(xsig_amp1)
                     wsigma_amp1.append(wsig_amp1)
                     xsigma_amp3.append(xsig_amp3)
@@ -1125,21 +1051,21 @@ class Calc_XWSigma(MonitoringAlg):
 
                 if fibermap['FIBER'][i]>260:
                     if camera[0]=="b":
-                        xsig_amp2=np.array([xsigma1])
-                        xsig_amp4=np.array([xsigma2,xsigma3])
-                        wsig_amp2=np.array([wsigma1])
-                        wsig_amp4=np.array([wsigma2,wsigma3])
+                        xsig_amp2=np.array([xsig[0]])
+                        xsig_amp4=np.array([xsig[1],xsig[2]])
+                        wsig_amp2=np.array([wsig[0]])
+                        wsig_amp4=np.array([wsig[1],wsig[2]])
                     if camera[0]=="r":
-                        xsig_amp2=np.array([xsigma1,xsigma2])
-                        xsig_amp4=np.array([xsigma3,xsigma4,xsigma5])
-                        wsig_amp2=np.array([wsigma1,wsigma2])
-                        wsig_amp4=np.array([wsigma3,wsigma4,wsigma5])
+                        xsig_amp2=np.array([xsig[0],xsig[1]])
+                        xsig_amp4=np.array([xsig[2],xsig[3],xsig[4]])
+                        wsig_amp2=np.array([wsig[0],wsig[1]])
+                        wsig_amp4=np.array([wsig[2],wsig[3],wsig[4]])
                     if camera[0]=="z":
-                        xsig_amp2=np.array([xsigma1,xsigma2,xsigma3])
-                        xsig_amp4=np.array([xsigma4])
-                        wsig_amp2=np.array([wsigma1,wsigma2,wsigma3])
-                        wsig_amp4=np.array([wsigma4])
-
+                        xsig_amp2=np.array([xsig[0],xsig[1],xsig[2]])
+                        xsig_amp4=np.array([xsig[3]])
+                        wsig_amp2=np.array([wsig[0],wsig[1],wsig[2]])
+                        wsig_amp4=np.array([wsig[3]])
+    
                     xsigma_amp2.append(xsig_amp2)
                     wsigma_amp2.append(wsig_amp2)
                     xsigma_amp4.append(xsig_amp4)
@@ -1150,7 +1076,8 @@ class Calc_XWSigma(MonitoringAlg):
                     xsigma_amp4=np.zeros(len(xsigma))
                     wsigma_amp2=np.zeros(len(wsigma))
                     wsigma_amp4=np.zeros(len(wsigma))
- 
+
+        #- Calculate desired output metrics 
         xsigma=np.array(xsigma)
         wsigma=np.array(wsigma)
         xsigma_med=np.median(xsigma)
@@ -1177,6 +1104,8 @@ class Calc_XWSigma(MonitoringAlg):
         wshift_amp=[]
         shift_warn=[]
 
+        xwfails=[xfails,wfails]
+
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
             retval['PARAMS']['XWSIGMA_REF']=kwargs["REFERENCE"]
@@ -1184,10 +1113,10 @@ class Calc_XWSigma(MonitoringAlg):
         shift_err='NORMAL'
         if amps:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWSIGMA_STAT":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWFIT_FAIL":xwfails,"XWSIGMA_STAT":shift_err}
         else:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA":xwsigma}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA_STAT":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWFIT_FAIL":xwfails,"XWSIGMA_STAT":shift_err}
 
         #- http post if needed
         if qlf:
