@@ -792,20 +792,23 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs):
         else:
             fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
         #- Remove invalid values for plotting
-        if len(badfibs) > 0:
+        badobj = badfibs[oid]
+        if len(badobj) > 0:
             fibers = np.array(fibers)
             badfibs = np.array(badfibs)
-            for ff in range(len(badfibs)):
-                rm = np.where(fibers==badfibs[ff])[0]
+            remove = []
+            for ff in range(len(badobj)):
+                rm = np.where(fibers==badobj[ff])[0]
                 if len(rm) == 1:
-                    badfibs=list(badfibs)
-                    fibers=list(fibers)
-                    fibers.remove(fibers[rm[0]])
-                    mag.remove(mag[rm[0]])
-                    snr.remove(snr[rm[0]])
-                    for fi in range(len(badfibs)):
-                        badfibs[fi]-=1
-                        badfibs.remove(badfibs[0])
+                    remove.append(rm[0])
+            badfibs=list(badfibs)
+            fibers=list(fibers)
+            for rr in range(len(remove)):
+                fibers.remove(fibers[remove[rr]])
+                mag.remove(mag[remove[rr]])
+                snr.remove(snr[remove[rr]])
+                for ri in range(len(remove)):
+                     remove[ri]-=1
         mags.append(mag)
         snrs.append(snr)
         for c in range(len(fibers)):
