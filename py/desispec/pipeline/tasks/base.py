@@ -490,12 +490,7 @@ class BaseTask(object):
 
         failed = self.run(name, opts, comm)
 
-
-
-
         if rank == 0:
-
-
             if failed > 0:
                 self.state_set(db, name, "fail")
             else:

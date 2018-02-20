@@ -173,8 +173,8 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
             states = check_tasks(tasklist, db=db)
             runtasks = [ x for x in tasklist if (states[x] == "ready") or \
                 (states[x] == "fail") ]
-            
-        log.debug("Number of {} tasks ready to run {} (total is {})".format(tasktype,len(runtasks),len(tasklist)))
+
+        log.debug("Number of {} tasks ready to run is {} (total is {})".format(tasktype,len(runtasks),len(tasklist)))
 
     if comm is not None:
         runtasks = comm.bcast(runtasks, root=0)
