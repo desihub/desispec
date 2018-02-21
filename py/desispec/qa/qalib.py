@@ -696,7 +696,8 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
             snr = 10**fitfunc(x[mm],vs[0],vs[1],vs[2])
             fit_snr.append(snr)
         for rr in range(len(fit_snr)):
-            resid = med_snr[rr] - fit_snr[rr]
+            resid = (med_snr[rr] - fit_snr[rr]) / fit_snr[rr]
+#            resid = med_snr[rr] - fit_snr[rr]
             resid_snr.append(resid)
 
     qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
