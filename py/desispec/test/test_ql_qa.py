@@ -410,6 +410,9 @@ class TestQL_QA(unittest.TestCase):
         qargs["amps"]=False
         qargs["paname"]="abc"
         qargs["singleqa"]=None
+        qargs["param"]={'B_CONT': ["4000, 4500", "5250, 5550"],
+                     'R_CONT': ["5950, 6200", "6990, 7230"],
+                     'Z_CONT': ["8120, 8270", "9110, 9280"]}
         resl=qa(inp,**qargs)
         self.assertTrue(resl["METRICS"]["SKYFIBERID"]==[0,7,14,21,28]) #- as defined in the fibermap
         self.assertTrue(resl["METRICS"]["SKYCONT"]>0)
