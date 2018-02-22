@@ -599,23 +599,6 @@ class Sky_Continuum(MonitoringAlg):
         fibermap=kwargs['FiberMap']
         camera=frame.meta["CAMERA"]
         
-        wrange1=None
-        wrange2=None
-        if "wrange1" in kwargs:
-            wrange1=kwargs["wrange1"]
-        if "wrange2" in kwargs:
-            wrange2=kwargs["wrange2"]
-
-        if wrange1==None:
-            if camera[0]=="b": wrange1= "4000,4500"
-            if camera[0]=="r": wrange1= "5950,6200"
-            if camera[0]=="z": wrange1= "8120,8270"
-
-        if wrange2==None:
-            if camera[0]=="b": wrange2= "5250,5550"
-            if camera[0]=="r": wrange2= "6990,7230"
-            if camera[0]=="z": wrange2= "9110,9280"
-        paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
@@ -628,6 +611,20 @@ class Sky_Continuum(MonitoringAlg):
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
+
+        if "{}_CONT".format(camera[0].upper()) in param:
+            wrange1=param["{}_CONT".format(camera[0].upper())][0]
+            wrange2=param["{}_CONT".format(camera[0].upper())][1]
+        else:
+            if camera[0]=="b":
+                wrange1= "4000,4500"
+                wrange2= "5250,5550"
+            if camera[0]=="r":
+                wrange1= "5950,6200"
+                wrange2= "6990,7230"
+            if camera[0]=="z":
+                wrange1= "8120,8270"
+                wrange2= "9110,9280"
 
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
