@@ -460,7 +460,7 @@ class Integrate_Spec(MonitoringAlg):
 
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
-        
+
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
         mag_avg_tgt=[]
@@ -515,7 +515,7 @@ class Integrate_Spec(MonitoringAlg):
             fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
 
             int_avg_amps=np.zeros(4)
-           
+
             for amp in range(4):
                 wave=frame.wave[fidboundary[amp][1]]
                 select_thisamp=starfibers[(starfibers >= fidboundary[amp][0].start) & (starfibers < fidboundary[amp][0].stop)]
@@ -1731,6 +1731,9 @@ class Calculate_SNR(MonitoringAlg):
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
+        if "sigmacut" in kwargs: sigmacut=kwargs["sigmacut"]
+        else: sigmacut=None
+
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
         else: qlf=False
@@ -1741,10 +1744,10 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics, sigmacut=sigmacut)
 
 
-    def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False, param=None, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False, param=None, refmetrics=None, sigmacut=None):
 
         #- return values
         retval={}
@@ -1810,7 +1813,7 @@ class Calculate_SNR(MonitoringAlg):
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_SNR
-            plot_SNR(retval,qafig,objlist,badfibs)
+            plot_SNR(retval,qafig,objlist,badfibs,sigmacut)
             log.debug("Output QA fig {}".format(qafig))
 
         return retval

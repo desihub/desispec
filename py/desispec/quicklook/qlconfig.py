@@ -47,9 +47,9 @@ class Config(object):
         else: self.wavelength = None
         if "SkySub_QL" in self.algorithms.keys():
             if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
-                if "QSO_SNR_Residuals" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
-                    self.qso_snr_resid = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["QSO_SNR_Residuals"]
-                else: self.qso_snr_resid = None
+                if "Sigma_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
+                    self.sigmacut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Sigma_Cut"]
+                else: self.sigmacut = None
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
@@ -256,7 +256,15 @@ class Config(object):
                                 'param': params, 'qlf': self.qlf, 'SkyFile' : skyfile,
                                 'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa}
                 else:
-                    qaopts[qa]={'night' : self.night, 'expid' : self.expid,
+                    if qa == 'Calculate_SNR':
+                        qaopts[qa]={'night' : self.night, 'expid' : self.expid,
+                                'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
+                                'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
+                                'qafig': qaplot, 'FiberMap': self.fibermap, 
+                                'param': params, 'qlf': self.qlf, 'sigmacut' : self.sigmacut,
+                                'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa}
+                    else:
+                        qaopts[qa]={'night' : self.night, 'expid' : self.expid,
                                 'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
                                 'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
                                 'qafig': qaplot, 'FiberMap': self.fibermap, 

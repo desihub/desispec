@@ -738,7 +738,7 @@ def plot_residuals(qa_dict,outfile):
     #plt.tight_layout()
     fig.savefig(outfile)
     
-def plot_SNR(qa_dict,outfile,objlist,badfibs):
+def plot_SNR(qa_dict,outfile,objlist,badfibs,sigmacut):
     """
     Plot SNR
 
@@ -772,7 +772,8 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs):
     med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
-    resid_snr=qa_dict["METRICS"]["SNR_RESID"]
+    resids=qa_dict["METRICS"]["SNR_RESID"]
+    sigmacut=sigmacut
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
@@ -817,6 +818,15 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs):
             ra.append(ras)
             dec.append(decs)
 
+    if sigmacut is not None:
+        range_min = np.mean(resids) - sigmacut * np.std(resids)
+        range_max = np.mean(resids) + sigmacut * np.std(resids)
+        for ii in range(len(resids)):
+            if resids[ii] <= range_min:
+                resids[ii] = range_min
+            elif resids[ii] >= range_max:
+                resids[ii] = range_max
+
     if camera[0] == 'b':
         thisfilter='DECAM_G'
     elif camera[0] == 'r':
@@ -838,11 +848,11 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs):
     ax1.set_xlim(0)
 
     ax2=fig.add_subplot(gs[1:4,4:])
-    ax2.set_title('Residual SNR (Calculated SNR - SNR from fit)',fontsize=8)
+    ax2.set_title('Residual SNR: (calculated SNR - fit SNR) / fit SNR',fontsize=8)
     ax2.set_xlabel('RA',fontsize=8)
     ax2.set_ylabel('DEC',fontsize=8)
-    resid_plot=ax2.scatter(ra,dec,s=2,c=resid_snr,cmap=plt.cm.bwr)
-    fig.colorbar(resid_plot,ticks=[np.min(resid_snr),0,np.max(resid_snr)])
+    resid_plot=ax2.scatter(ra,dec,s=2,c=resids,cmap=plt.cm.bwr)
+    fig.colorbar(resid_plot,ticks=[np.min(resids),0,np.max(resids)])
     
     #    #- plot for amp zones
     #    if "MEDIAN_AMP_SNR" in qa_dict["METRICS"]:
