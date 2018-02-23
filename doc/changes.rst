@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.17.3 (unreleased)
+0.18.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.18.0 (2018-02-23)
 -------------------
 
 * Replace deprecated scipy.stats.chisqprob with
@@ -13,6 +18,7 @@ desispec Change Log
 * Add options for fitting spatially non-uniform sky (PR `#506`_)
 * Fix logger redirection (PR `#508`_)
 * Add hooks for MPI extraction timing benchmarks (PR `#509`_)
+* QuickLook metric renaming (PR `#512`_)
 
 .. _`#503`: https://github.com/desihub/desispec/pull/503
 .. _`#505`: https://github.com/desihub/desispec/pull/505
@@ -20,6 +26,7 @@ desispec Change Log
 .. _`#507`: https://github.com/desihub/desispec/pull/507
 .. _`#508`: https://github.com/desihub/desispec/pull/508
 .. _`#509`: https://github.com/desihub/desispec/pull/509
+.. _`#512`: https://github.com/desihub/desispec/pull/512
 
 0.17.2 (2018-01-30)
 -------------------
