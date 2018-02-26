@@ -374,14 +374,7 @@ Where supported commands are:
         return
 
 
-    def script(self):
-        availtypes = ",".join(pipe.db.task_types())
-
-        parser = argparse.ArgumentParser(description="Create a batch script "
-            "for the list of tasks.  If the --nersc option is not given, "
-            "create a shell script that optionally uses mpirun.")
-
-        args = self._parse_run_opts(parser)
+    def _gen_script(self, args):
 
         proddir = os.path.abspath(io.specprod_root())
 
@@ -408,9 +401,11 @@ Where supported commands are:
         # FIXME: Add openmp / multiproc function to task classes and
         # call them here.
 
+        scripts = None
+
         if args.nersc is None:
             # Not running at NERSC
-            pipe.scriptgen.batch_shell(args.tasktype, tasks, outscript, outlog,
+            scripts = pipe.scriptgen.batch_shell(args.tasktype, tasks, outscript, outlog,
                 mpirun=args.mpi_run, mpiprocs=args.mpi_procs, openmp=1, db=None)
 
         else:
@@ -420,29 +415,62 @@ Where supported commands are:
                     args.nersc_queue)
                 ppn = hostprops["nodecores"]
 
-            pipe.scriptgen.batch_nersc(args.tasktype, tasks, outscript, outlog,
-                args.tasktype, args.nersc, args.nersc_queue,
+            scripts = pipe.scriptgen.batch_nersc(args.tasktype, tasks,
+                outscript, outlog, args.tasktype, args.nersc, args.nersc_queue,
                 args.nersc_runtime, nodeprocs=ppn, openmp=False,
                 multiproc=False, db=db, shifterimg=args.nersc_shifter,
                 debug=args.debug)
+
+        return scripts
+
+
+    def script(self):
+        parser = argparse.ArgumentParser(description="Create a batch script "
+            "for the list of tasks.  If the --nersc option is not given, "
+            "create a shell script that optionally uses mpirun.")
+
+        args = self._parse_run_opts(parser)
+
+        scripts = self._gen_script(args)
 
         return
 
 
     def run(self):
-        # This will call the script generation and then actually submit
-        # the job(s), returning the job ID to the command line.
-        pass
+        parser = argparse.ArgumentParser(description="Create and run a batch "
+            "script for the list of tasks.  If the --nersc option is not "
+            "given, create a shell script that optionally uses mpirun.")
+
+        args = self._parse_run_opts(parser)
+
+        scripts = self._gen_script(args)
+
+        return
 
 
     def status(self):
-        # This will be an improved version of the old desi_pipe_status.
-        pass
+        parser = argparse.ArgumentParser(description="Explore status of "
+            "pipeline tasks")
 
+        parser.add_argument("--nodb", required=False, default=False,
+            action="store_true", help="Do not use the production database.")
 
+        args = parser.parse_args(sys.argv[2:])
 
+        db = None
+        if not args.nodb:
+            dbpath = io.get_pipe_database()
+            db = pipe.db.DataBase(dbpath, "r")
 
+        tasktypes = pipe.db.task_types()
 
+        states = pipe.db.check_tasks(tasks, db=db)
+
+        for tsk in tasks:
+            print("{} : {}".format(tsk, states[tsk]))
+        sys.stdout.flush()
+
+        return
 
 
 

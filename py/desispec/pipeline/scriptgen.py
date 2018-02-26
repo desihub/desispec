@@ -371,7 +371,7 @@ def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
     shell_job(outfile, logroot, desisetup, coms, comrun=mpirun,
         mpiprocs=mpiprocs, openmp=openmp)
 
-    return
+    return [ outfile ]
 
 
 def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
@@ -399,6 +399,8 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
     if db is None:
         dbstr = "--nodb"
 
+    scriptfiles = list()
+
     jindx = 0
     suffix = True
     if len(joblist) == 1:
@@ -420,9 +422,10 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
         nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine, queue,
             nodes, nodeprocs, runtime, openmp=openmp, multiproc=multiproc,
                   shifterimg=shifterimg,debug=debug)
+        scriptfiles.append(outfile)
         jindx += 1
 
-    return
+    return scriptfiles
 
 
     #
