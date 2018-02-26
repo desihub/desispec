@@ -701,7 +701,6 @@ def check_tasks(tasklist, db=None, inputs=None):
                 done = True
                 # Check outputs
                 outfiles = task_classes[tasktype].paths(tsk)
-                st = "done"
                 for out in outfiles:
                     if not os.path.isfile(out):
                         done = False
