@@ -546,7 +546,7 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None):
     if title is not None:
         ax.set_title(title)
 
-    mplt = ax.scatter(x, y, marker='o', s=9., c=metric, cmap=jet)
+    mplt = ax.scatter(x,y,marker='o', s=9., c=metric.reshape(x.shape), cmap=jet)
     #mplt.set_clim(vmin=med_mean-2*rms_mean, vmax=med_mean+2*rms_mean)
     cb = fig.colorbar(mplt)
     cb.set_label('Mean Flux')
