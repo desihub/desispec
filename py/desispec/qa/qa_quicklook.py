@@ -218,12 +218,9 @@ class Bias_From_Overscan(MonitoringAlg):
         biasdiff_err='NORMAL'
         if amps:
             bias_amps=np.array(bias_overscan)
-
-#            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
         else:
-#            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
-            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
+            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
 
         #- http post if needed
         if qlf:
@@ -360,12 +357,9 @@ class Get_RMS(MonitoringAlg):
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-
-#            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"EXPNUM_WARN":expnum}
-            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"NOISE_ROW":rms_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
         else:
-#            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum}
-            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_ROW":rms_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"NOISE_ROW":rms_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
 
         if qlf:
             qlf_post(retval)  
@@ -478,12 +472,9 @@ class Count_Pixels(MonitoringAlg):
                 npixlo_amps.append(npixlo_thisamp)
                 npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
                 npixhi_amps.append(npixhi_thisamp)
-
-#            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps}
-            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_STATUS":npix_err}
+            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_AMP": npixlo_amps,"NPIXHI_AMP": npixhi_amps,"NPIX_STATUS":npix_err}
         else:
-#            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi}
-            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_STATUS":npix_err}
+            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_STATUS":npix_err}
 
         if qlf:
             qlf_post(retval)      
@@ -957,8 +948,6 @@ class CountSpectralBins(MonitoringAlg):
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
             retval['PARAMS']['NGOODFIB_REF']=kwargs["REFERENCE"]
-
-        nbinshi_temp=[]
         
         countslo=qalib.countbins(frame.flux,threshold=param['CUTLO'])
         countsmed=qalib.countbins(frame.flux,threshold=param['CUTMED'])
@@ -1029,7 +1018,7 @@ class CountSpectralBins(MonitoringAlg):
             retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STATUS":ngood_err}
         else:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STATUS":ngood_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
 
         retval["LEFT_MAX_FIBER"]=int(leftmax)
         retval["RIGHT_MIN_FIBER"]=int(rightmin)
@@ -1159,6 +1148,8 @@ class Sky_Continuum(MonitoringAlg):
 
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
+        allfibermean=np.zeros(500)
+        allfibermean[skyfiber]=meancontfiber
 
         skycont_err = 'NORMAL'
         if amps:
@@ -1190,7 +1181,7 @@ class Sky_Continuum(MonitoringAlg):
             retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_STATUS":skycont_err}
         else: 
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STATUS":skycont_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":allfibermean, "SKYCONT_STATUS":skycont_err}
 
         if qlf:
             qlf_post(retval)    
@@ -1304,9 +1295,8 @@ class Sky_Peaks(MonitoringAlg):
         if "REFERENCE" in kwargs:
             retval['PARAMS']['PEAKCOUNT_REF']=kwargs["REFERENCE"]
 
-#        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec}
         sumcount_err='NORMAL'
-        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STATUS":sumcount_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS":rms_skyspec,"PEAKCOUNT_STATUS":sumcount_err}
 
         if qlf:
             qlf_post(retval)
@@ -1567,13 +1557,13 @@ class Integrate_Spec(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
-                "MAGDIFF_NORMAL_RANGE":[-0.5, 0.5],
-                "MAGDIFF_WARN_RANGE":[-1.0, 1.0]
+                "DELTAMAG_NORMAL_RANGE":[-0.5, 0.5],
+                "DELTAMAG_WARN_RANGE":[-1.0, 1.0]
                 }
 
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['MAGDIFF_TGT_REF']=kwargs["REFERENCE"]
+            retval['PARAMS']['DELTAMAG_TGT_REF']=kwargs["REFERENCE"]
 
         magdiff_avg_amp = [0.0]
 
@@ -1609,7 +1599,7 @@ class Integrate_Spec(MonitoringAlg):
             retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_STATUS":magdiff_err}
         else:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_STATUS":magdiff_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":int_stars,"STD_FIBERID":starfibers.tolist(),"DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
 
         if qlf:
             qlf_post(retval) 

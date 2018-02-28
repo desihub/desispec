@@ -38,9 +38,9 @@ def plot_countspectralbins(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
     
-    binslo=qa_dict["METRICS"]["NBINSLOW"]
+    binslo=qa_dict["METRICS"]["NBINSLO"]
     binsmed=qa_dict["METRICS"]["NBINSMED"]
-    binshi=qa_dict["METRICS"]["NBINSHIGH"]
+    binshi=qa_dict["METRICS"]["NBINSHI"]
 
     cutlo=qa_dict["PARAMS"]["CUTLO"]
     cuthi=qa_dict["PARAMS"]["CUTHI"]
@@ -174,10 +174,10 @@ def plot_countpix(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    countlo=qa_dict["METRICS"]["NPIX_LOW"]
+    countlo=qa_dict["METRICS"]["NPIX"]
     countlo_amp=np.array(qa_dict["METRICS"]["NPIX_AMP"])
-    counthi=qa_dict["METRICS"]["NPIX_HIGH"]
-    counthi_amp=np.array(qa_dict["METRICS"]["NPIX_HIGH_AMP"])
+    counthi=qa_dict["METRICS"]["NPIXHI"]
+    counthi_amp=np.array(qa_dict["METRICS"]["NPIXHI_AMP"])
 
     cutlo=qa_dict["PARAMS"]["CUTLO"]
     cuthi=qa_dict["PARAMS"]["CUTHI"]
@@ -409,7 +409,7 @@ def plot_RMS(qa_dict,outfile):
     """
     rms=qa_dict["METRICS"]["RMS"]
     rms_amp=qa_dict["METRICS"]["RMS_AMP"]
-    rms_over=qa_dict["METRICS"]["NOISE"]
+    rms_over=qa_dict["METRICS"]["NOISE_OVER"]
     rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
     # arm=qa_dict["ARM"]
     # spectrograph=qa_dict["SPECTROGRAPH"]
@@ -489,8 +489,7 @@ def plot_integral(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    std_integral=np.array(qa_dict["METRICS"]["INTEG"])
-    std_integral_avg=qa_dict["METRICS"]["INTEG_AVG"]
+    std_integral=np.array(qa_dict["METRICS"]["FIBER_MAG"])
     std_fiberid=qa_dict["METRICS"]["STD_FIBERID"]
 
     fig=plt.figure()
