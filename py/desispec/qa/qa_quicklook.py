@@ -887,10 +887,6 @@ class CountSpectralBins(MonitoringAlg):
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
         psf = None
         if "PSFFile" in kwargs: 
             psf=kwargs["PSFFile"]
@@ -908,10 +904,10 @@ class CountSpectralBins(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,input_frame,paname=paname,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
 
-    def run_qa(self,fibermap,frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,psf=None,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
 
         #- qa dictionary 
         retval={}
@@ -956,74 +952,8 @@ class CountSpectralBins(MonitoringAlg):
         goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than cuthi counts
         ngoodfibers=goodfibers.shape[0]
 
-        leftmax=None
-        rightmax=None
-        bottommax=None
-        topmin=None
-
         ngood_err='NORMAL'
-        if amps:
-            #- get the pixel boundary and fiducial boundary in flux-wavelength space
-
-            leftmax,rightmin,bottommax,topmin = qalib.fiducialregion(frame,psf)  
-            fidboundary=qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)          
-            countslo_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTLO'])
-            averagelo_amp1=np.mean(countslo_amp1)
-            countsmed_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTMED'])
-            averagemed_amp1=np.mean(countsmed_amp1)
-            countshi_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTHI'])
-            averagehi_amp1=np.mean(countshi_amp1)
-
-            countslo_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTLO'])
-            averagelo_amp3=np.mean(countslo_amp3)
-            countsmed_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTMED'])
-            averagemed_amp3=np.mean(countsmed_amp3)
-            countshi_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTHI'])
-            averagehi_amp3=np.mean(countshi_amp3)
-
-
-            if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
-
-                countslo_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTLO'])
-                averagelo_amp2=np.mean(countslo_amp2)
-                countsmed_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTMED'])
-                averagemed_amp2=np.mean(countsmed_amp2)
-                countshi_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTHI'])
-                averagehi_amp2=np.mean(countshi_amp2)
-
-            else:
-                averagelo_amp2=0.
-                averagemed_amp2=0.
-                averagehi_amp2=0.
-
-            if fidboundary[3][0].start is not None: #- to the right top of the CCD
-
-                countslo_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTLO'])
-                averagelo_amp4=np.mean(countslo_amp4)
-                countsmed_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTMED'])
-                averagemed_amp4=np.mean(countsmed_amp4)
-                countshi_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTHI'])
-                averagehi_amp4=np.mean(countshi_amp4)
-
-            else:
-                averagelo_amp4=0.
-                averagemed_amp4=0.
-                averagehi_amp4=0.
-
-            averagelo_amps=np.array([averagelo_amp1,averagelo_amp2,averagelo_amp3,averagelo_amp4])
-            averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
-            averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
-
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STATUS":ngood_err}
-        else:
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
-
-        retval["LEFT_MAX_FIBER"]=int(leftmax)
-        retval["RIGHT_MIN_FIBER"]=int(rightmin)
-        retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
-        retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
+        retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
 
         #- http post if needed
         if qlf:
@@ -1094,16 +1024,8 @@ class Sky_Continuum(MonitoringAlg):
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
-
-        dict_countbins=None
-        if "dict_countbins" in kwargs:
-            dict_countbins=kwargs["dict_countbins"]
 
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
@@ -1114,11 +1036,10 @@ class Sky_Continuum(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(fibermap,input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,
-               paname=None,amps=False,dict_countbins=None,
-               qafile=None,qafig=None, param=None, qlf=False,
+               paname=None, qafile=None,qafig=None, param=None, qlf=False,
                refmetrics=None):
 
         #- qa dictionary 
@@ -1152,36 +1073,7 @@ class Sky_Continuum(MonitoringAlg):
         allfibermean[skyfiber]=meancontfiber
 
         skycont_err = 'NORMAL'
-        if amps:
-            leftmax = dict_countbins["LEFT_MAX_FIBER"]
-            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
-            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
-            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
-
-            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-
-            k1=np.where(skyfiber < fidboundary[0][0].stop)[0]
-            maxsky_index=max(k1)
-
-            contamp1=np.mean(contfiberlow[:maxsky_index])
-            contamp3=np.mean(contfiberhigh[:maxsky_index])
-
-            if fidboundary[1][0].start >=fidboundary[0][0].stop:
-                k2=np.where(skyfiber > fidboundary[1][0].start)[0]
-                minsky_index=min(k2)
-                contamp2=np.mean(contfiberlow[minsky_index:])
-                contamp4=np.mean(contfiberhigh[minsky_index:])
-            else:
-                contamp2=0
-                contamp4=0
-
-            skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
-
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_STATUS":skycont_err}
-        else: 
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":allfibermean, "SKYCONT_STATUS":skycont_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":allfibermean, "SKYCONT_STATUS":skycont_err}
 
         if qlf:
             qlf_post(retval)    
@@ -1239,10 +1131,6 @@ class Sky_Peaks(MonitoringAlg):
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
 
@@ -1261,9 +1149,9 @@ class Sky_Peaks(MonitoringAlg):
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,input_frame,paname=paname,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from desispec.qa.qalib import sky_peaks
         retval={}
         retval["PANAME"] = paname
@@ -1286,7 +1174,7 @@ class Sky_Peaks(MonitoringAlg):
             param = desi_params['qa']['skypeaks']['PARAMS']
 
         # Run
-        nspec_counts, sky_counts = sky_peaks(param, frame, amps=amps)
+        nspec_counts, sky_counts = sky_peaks(param, frame)
         rms_nspec = qalib.getrms(nspec_counts)
         rms_skyspec = qalib.getrms(sky_counts)
         sumcount_med_sky=[]
@@ -1360,14 +1248,6 @@ class Sky_Residual(MonitoringAlg):
 
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
-
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        dict_countbins=None
-        if "dict_countbins" in kwargs:
-            dict_countbins=kwargs["dict_countbins"]
         
         paname=None
         if "paname" in kwargs:
@@ -1386,10 +1266,10 @@ class Sky_Residual(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(fibermap,input_frame,paname=paname,skymodel=skymodel,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,input_frame,paname=paname,skymodel=skymodel, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
 
-    def run_qa(self,fibermap,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,skymodel=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from desispec.sky import qa_skysub
 
         if skymodel is None:
@@ -1482,16 +1362,8 @@ class Integrate_Spec(MonitoringAlg):
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
-
-        dict_countbins=None
-        if "dict_countbins" in kwargs:
-            dict_countbins=kwargs["dict_countbins"] 
 
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
@@ -1502,9 +1374,9 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,input_frame,paname=paname, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         retval={}
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
@@ -1568,38 +1440,7 @@ class Integrate_Spec(MonitoringAlg):
         magdiff_avg_amp = [0.0]
 
         magdiff_err='NORMAL'
-        #- get the counts for each amp
-        if amps:
-
-            #- get the fiducial boundary
-            leftmax = dict_countbins["LEFT_MAX_FIBER"]
-            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
-            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
-            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
-
-            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-
-            int_avg_amps=np.zeros(4)
-           
-            for amp in range(4):
-                wave=frame.wave[fidboundary[amp][1]]
-                select_thisamp=starfibers[(starfibers >= fidboundary[amp][0].start) & (starfibers < fidboundary[amp][0].stop)]
-                stdflux_thisamp=frame.flux[select_thisamp,fidboundary[amp][1]]
-
-                if len(stdflux_thisamp)==0:
-                    continue
-                else:
-                    integ_thisamp=np.zeros(stdflux_thisamp.shape[0])
-
-                    for ii in range(stdflux_thisamp.shape[0]):
-                        integ_thisamp[ii]=qalib.integrate_spec(wave,stdflux_thisamp[ii])
-                    int_avg_amps[amp]=np.mean(integ_thisamp)
-
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_STATUS":magdiff_err}
-        else:
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":int_stars,"STD_FIBERID":starfibers.tolist(),"DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":int_stars,"STD_FIBERID":starfibers.tolist(),"DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
 
         if qlf:
             qlf_post(retval) 
