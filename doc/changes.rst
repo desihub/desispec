@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.19.0 (unreleased)
+0.19.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.19.0 (2018-03-01)
 -------------------
 
 * Update DB loading for desitarget 0.19.0 targets; make DB loading
