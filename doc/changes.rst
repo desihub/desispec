@@ -6,7 +6,9 @@ desispec Change Log
 -------------------
 
 * Update DB loading for desitarget 0.19.0 targets; make DB loading
-  API less specific to datachallenge directory structure.
+  API less specific to datachallenge directory structure (PR `#516`_).
+
+.. _`#516`: https://github.com/desihub/desispec/pull/516
 
 0.18.0 (2018-02-23)
 -------------------
