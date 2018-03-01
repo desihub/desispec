@@ -2,10 +2,11 @@
 desispec Change Log
 ===================
 
-0.18.1 (unreleased)
+0.19.0 (unreleased)
 -------------------
 
-* No changes yet.
+* Update DB loading for desitarget 0.19.0 targets; make DB loading
+  API less specific to datachallenge directory structure.
 
 0.18.0 (2018-02-23)
 -------------------
