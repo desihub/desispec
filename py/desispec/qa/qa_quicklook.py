@@ -580,16 +580,16 @@ class Calc_XWSigma(MonitoringAlg):
                     "B_PEAKS":[4047.7, 4359.6, 5087.2],
                     "R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
                     "Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
-                    "XWSIGMA_NORMAL_RANGE":[-2.0, 2.0],
-                    "XWSIGMA_WARN_RANGE":[-4.0, 4.0]
+                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0], #- Assumes both sigma and shift in same range. Change if needed
+                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
                     }
             else:
                 param = {
                     "B_PEAKS":[3914.4, 5199.3, 5578.9],
                     "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                     "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                    "XWSIGMA_NORMAL_RANGE":[-2.0, 2.0],
-                    "XWSIGMA_WARN_RANGE":[-4.0, 4.0]
+                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0],
+                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
                     }
 
         dw=2.
@@ -822,6 +822,12 @@ class Calc_XWSigma(MonitoringAlg):
             retval['PARAMS']['XWSIGMA_REF']=kwargs["REFERENCE"]
 
         shift_err='NORMAL'
+
+        #- Combine metrics for x and w
+        xwsigma=np.array(xsigma,wsigma)
+        xwsigma_med=np.array((xsigma_med,wsigma_med))
+        
+         
         if amps:
 #            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma}
             retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWSIGMA_STATUS":shift_err}
@@ -1437,10 +1443,10 @@ class Integrate_Spec(MonitoringAlg):
         if "REFERENCE" in kwargs:
             retval['PARAMS']['DELTAMAG_TGT_REF']=kwargs["REFERENCE"]
 
-        magdiff_avg_amp = [0.0]
-
         magdiff_err='NORMAL'
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":int_stars,"STD_FIBERID":starfibers.tolist(),"DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
+        fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
+        delta_mag=np.zeros(frame.nspec) #- placeholder
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fib_mag, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
 
         if qlf:
             qlf_post(retval) 
