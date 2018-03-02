@@ -59,7 +59,6 @@ class BaseTask(object):
         self._name_fields  = [] # name fields. note that name fields have to be included in cols
         self._name_formats = [] # name field formats
 
-
     def _name_split(self, name):
         fields = name.split(task_name_sep)
         if (len(fields) != len(self._name_fields)+1) or (fields[0] != self._type):
@@ -234,18 +233,24 @@ class BaseTask(object):
     def _state_set(self, db, name, state):
         """See BaseTask.state_set.
         """
+        log   = get_logger()
+        log.debug("starting for {}".format(name))
+        start = time.time()
         with db.conn as con:
             cur = con.cursor()
             cur.execute("begin transaction")
             cur.execute('update {} set state = {} where name = "{}"'\
                 .format(self._type, task_state_to_int[state], name))
             cur.execute("commit")
+        stop = time.time()
+        log.debug("took {} sec for {}".format(stop-start,name))
         return
 
 
     def _state_get(self, db, name):
         """See BaseTask.state_get.
         """
+
         st = None
         with db.conn as con:
             cur = con.cursor()
@@ -255,6 +260,7 @@ class BaseTask(object):
             if row is None:
                 raise RuntimeError("task {} not in database".format(name))
             st = task_int_to_state(row[0])
+
         return st
 
 
@@ -494,30 +500,15 @@ class BaseTask(object):
             if failed > 0:
                 self.state_set(db, name, "fail")
             else:
-                log = get_logger()
-
                 outputs = self.paths(name)
-
-                start = time.time()
-
                 done = True
                 for out in outputs:
                     if not os.path.isfile(out):
                         done = False
                         failed = nproc
                         break
-
-                stop = time.time()
-                log.debug("Checkout outputs took {} sec for {}".format(stop-start,name))
-
-                start = time.time()
-
                 if done:
                     self.state_set(db, name, "done")
                 else:
                     self.state_set(db, name, "fail")
-
-                stop = time.time()
-                log.debug("Update to db took {} sec for {}".format(stop-start,name))
-
         return failed
