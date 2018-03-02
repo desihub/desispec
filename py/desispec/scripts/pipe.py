@@ -51,6 +51,7 @@ Where supported commands are:
    create   Create a new production.
    env      Print current production location.
    update   Update an existing production.
+   getready Auto-Update of prod DB.
    tasks    Get all possible tasks for a given type and states.
    check    Check the status of tasks.
    cli      Return the equivalent command line entrypoint for tasks.
@@ -243,6 +244,12 @@ Where supported commands are:
 
         return
 
+
+    def getready(self):
+        dbpath = io.get_pipe_database()
+        db = pipe.db.DataBase(dbpath, "w")
+        db.getready()
+    
 
     def check(self):
         parser = argparse.ArgumentParser(description="Check the state of "
