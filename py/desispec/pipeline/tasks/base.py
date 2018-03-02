@@ -260,7 +260,7 @@ class BaseTask(object):
             row = cur.fetchone()
             if row is None:
                 raise RuntimeError("task {} not in database".format(name))
-            st = task_int_to_state(row[0])
+            st = task_int_to_state[row[0]]
 
         return st
 
