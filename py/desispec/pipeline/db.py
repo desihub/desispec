@@ -24,7 +24,7 @@ from .. import io
 
 import fitsio
 
-from .defs import (task_states, task_int_to_state, task_state_to_int)
+from .defs import (task_states, task_int_to_state, task_state_to_int, task_name_sep)
 
 
 def task_types():
@@ -79,8 +79,8 @@ def all_tasks(night, nside):
         #flavor = fmdata.meta["FLAVOR"]
 
         fmdata,header = fitsio.read(fibermap,header=True)
-        flavor = header["FLAVOR"]
-
+        flavor = header["FLAVOR"].strip().lower()
+        
 
 
         fmpix = dict()
@@ -136,7 +136,17 @@ def all_tasks(night, nside):
                 pixprops["flavor"] = flavor
                 pixprops["state"] = "ready"
                 full["pix"].append(pixprops)
-
+        
+                if flavor == "arc" :
+                    # Add the PSF files
+                    props = dict()
+                    props["night"] = int(night)
+                    props["band"] = band
+                    props["spec"] = spec
+                    props["expid"] = int(ex)
+                    props["state"] = "waiting" # see defs.task_states
+                    full["psf"].append(props)
+                
     log.debug("done")
     return full
 
@@ -852,10 +862,18 @@ class DataBase:
 
         with self.conn as con:
             
-            tasks_in_db = {}
-            
-            # first read what is already in db
             cur = con.cursor()
+            
+            # create possible missing tables 
+            cur.execute('select name FROM sqlite_master WHERE type="table"')
+            tables_in_db = [x for (x, ) in cur.fetchall()]
+            for tt in task_types():
+                if tt not in tables_in_db :
+                    log.info("creating new table {}".format(tt))
+                    task_classes[tt].create(self)
+            
+            # read what is already in db
+            tasks_in_db = {}
             for tt in task_types():
                 cur.execute(\
                             "select name from {} where night={}"\
@@ -864,15 +882,59 @@ class DataBase:
             
             cur.execute("begin transaction")
             for tt in task_types():
-                for tsk in alltasks[tt]:
+                log.debug("updating {} ...".format(tt))
+                for tsk in alltasks[tt]:                    
                     tname = task_classes[tt].name_join(tsk)
                     if tname not in tasks_in_db[tt] :
+                        log.debug("adding {}".format(tname))
                         task_classes[tt].insert(self, tsk)
-                    else :
-                        log.debug("{} already in db".format(tname))
+            
             cur.execute("commit")
             
         return
+
+    
+    def getready(self):
+        """Update DB, changing waiting to ready depending on status of dependencies .
+        
+        """
+        from .tasks.base import task_classes, task_type
+        
+        log = get_logger()
+        
+        
+        with self.conn as con:
+            
+            cur = con.cursor()
+            
+            for tt in task_types():
+                
+                # for each type of task, get the list of tasks in waiting mode
+                cur.execute('select name from {} where state={}'.format(tt,task_state_to_int["waiting"]))
+                tasks = [ x for (x, ) in cur.fetchall()]
+                
+                if len(tasks)>0 :
+                    log.debug("checking {} {} tasks ...".format(len(tasks),tt))
+                
+                for tsk in tasks : 
+                    # for each task in waiting mode, get the dependencies 
+                    deps = task_classes[tt].deps(tsk,db=self,inputs=None)
+                    ready = True
+                    for dep in deps : 
+                        # for each dependency, guess its type
+                        deptype  = dep.split(task_name_sep)[0]
+                        # based on the type and dependency name, read state from db
+                        depstate =  task_classes[deptype].state_get(db=self,name=dep)
+                        ready   &=  (depstate=="done") # ready if all dependencies are done
+                    if ready :
+                        # change state to ready
+                        log.debug("{} is ready to run".format(tsk))
+                        task_classes[tt].state_set(db=self,name=tsk,state="ready")
+             
+            
+        return
+
+
 
 
     def sync(self, night):
