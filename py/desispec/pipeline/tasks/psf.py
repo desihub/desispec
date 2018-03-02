@@ -15,6 +15,7 @@ from ...io import findfile
 
 from .base import BaseTask
 
+import sys
 
 # NOTE: only one class in this file should have a name that starts with "Task".
 
@@ -22,6 +23,10 @@ class TaskPSF(BaseTask):
     """Class containing the properties of one PSF task.
     """
     def __init__(self):
+        super(TaskPSF, self).__init__()
+        # then put int the specifics of this class
+        # _cols must have a state
+        self._type = "psf"
         self._cols = [
             "night",
             "band",
@@ -36,31 +41,10 @@ class TaskPSF(BaseTask):
             "integer",
             "integer"
         ]
-        super(TaskPSF, self).__init__()
-
-
-    def _name_split(self, name):
-        """See BaseTask.name_split.
-        """
-        fields = name.split(task_name_sep)
-        if (len(fields) != 5) or (fields[1] != "psf"):
-            raise RuntimeError("name \"{}\" not valid for a psf".format(name))
-        ret = dict()
-        ret["night"] = int(fields[0])
-        ret["band"] = fields[2]
-        ret["spec"] = int(fields[3])
-        ret["expid"] = int(fields[4])
-        return ret
-
-
-    def _name_join(self, props):
-        """See BaseTask.name_join.
-        """
-        return "{:08d}{}psf{}{:s}{}{:d}{}{:08d}".format(props["night"],
-            task_name_sep, task_name_sep, props["band"], task_name_sep,
-            props["spec"], task_name_sep, props["expid"])
-
-
+        # _name_fields must also be in _cols
+        self._name_fields  = ["night","band","spec","expid"]
+        self._name_formats = ["08d","s","d","08d"]
+        
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -71,89 +55,18 @@ class TaskPSF(BaseTask):
             spectrograph=props["spec"]) ]
 
 
-    def _create(self, db):
-        """See BaseTask.create.
-        """
-        with db.conn as con:
-            createstr = "create table psf (name text unique"
-            for col in zip(self._cols, self._coltypes):
-                createstr = "{}, {} {}".format(createstr, col[0], col[1])
-            createstr = "{})".format(createstr)
-            con.execute(createstr)
-        return
+    
 
-
-    def _insert(self, db, name, **kwargs):
-        """See BaseTask.insert.
-        """
-        props = self.name_split(name)
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute("insert into psf values (\"{}\", {}, \"{}\", {}, "
-                "{}, {})".format(name, props["night"], props["band"],
-                props["spec"], props["expid"], task_state_to_int["waiting"]))
-            con.commit()
-        return
-
-
-    def _retrieve(self, db, name):
-        """See BaseTask.retrieve.
-        """
-        ret = dict()
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute(\
-                "select * from psf where name = \"{}\"".format(name))
-            row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            ret["name"] = name
-            ret["night"] = row[1]
-            ret["band"] = row[2]
-            ret["spec"] = row[3]
-            ret["expid"] = row[4]
-            ret["state"] = task_int_to_state(row[5])
-        return ret
-
-
-    def _state_set(self, db, name, state):
-        """See BaseTask.state_set.
-        """
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute("insert into psf(state) values "
-                "({})".format(task_state_to_int(state)))
-            con.commit()
-        return
-
-
-    def _state_get(self, db, name):
-        """See BaseTask.state_get.
-        """
-        st = None
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute(\
-                "select state from psf where name = \"{}\"".format(name))
-            row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            st = task_int_to_state(row[0])
-        return st
-
-
-    def _deps(self, name, db):
+    
+    def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
         from .base import task_classes, task_type
 
         props = self.name_split(name)
-        boottask = task_classes["psfboot"].name_join(props)
+        #boottask = task_classes["psfboot"].name_join(props)
         pixtask = task_classes["pix"].name_join(props)
-        deptasks = [
-            boottask,
-            pixtask
-        ]
+        deptasks = [pixtask,]
         return deptasks
 
 
@@ -176,7 +89,15 @@ class TaskPSF(BaseTask):
         opts["trace-deg-wave"] = 7
         opts["trace-deg-x"] = 7
         opts["trace-prior-deg"] = 4
-
+        
+        envname="DESI_CCD_CALIBRATION_DATA"
+        if not envname in os.environ :
+            raise KeyError("need to set DESI_CCD_CALIBRATION_DATA env. variable")
+        
+        # default for now is the simulation directory
+        # think in the future to use another directory
+        opts["input-psf-dir"]   = "{}/SIM".format(os.environ[envname])
+                
         # to get the lampline location, look in our path for specex
         # and use that install prefix to find the data directory.
         # if that directory does not exist, use a default NERSC
@@ -204,21 +125,26 @@ class TaskPSF(BaseTask):
 
         options = OrderedDict()
 
-        bootfile = None
+        
         pixfile = None
         deplist = self.deps(name)
         for dp in deplist:
-            if re.search("psfboot", dp) is not None:
-                bootfile = task_classes["psfboot"].paths(dp)[0]
             if re.search("pix", dp) is not None:
                 pixfile = task_classes["pix"].paths(dp)[0]
-        if (bootfile is None) or (pixfile is None):
-            raise RuntimeError("dependency list must include bootstrap "
-                "and image files")
-        options["input-image"] = pixfile
-        options["input-psf"]   = bootfile
-        options["output-psf"]  = self.path(name)
+        if pixfile is None :
+            raise RuntimeError("dependency list must include input pix image file")
 
+        props = self.name_split(name)
+        inputpsf = "psf-{}{}.fits".format(tmp["band"],tmp["spec"])
+        
+        if "input-psf-dir" in opts :
+            inputpsf = os.path.join(opts["input-psf-dir"],inputpsf)
+            opts.pop("input-psf-dir")
+        
+        options["input-image"] = pixfile
+        options["output-psf"]  = self.path(name)
+        options["input-psf"]   = inputpsf
+        
         if len(opts) > 0:
             extarray = option_list(opts)
             options["extra"] = " ".join(extarray)
