@@ -156,7 +156,8 @@ class BaseTask(object):
         """See BaseTask.insert.
         """
         name = self.name_join(props)
-        cmd='insert or replace into {} values ("{}"'.format(self._type, name)
+        #cmd='insert or replace into {} values ("{}"'.format(self._type, name)
+        cmd='insert into {} values ("{}"'.format(self._type, name)
         for k,ktype in zip(self._cols,self._coltypes) :
             if k == "state" :
                 if k in props :
