@@ -841,17 +841,37 @@ class DataBase:
             nside (int): The current NSIDE value used for pixel grouping.
         """
         from .tasks.base import task_classes, task_type
-
+        
+        log = get_logger()
+        
         alltasks = all_tasks(night, nside)
 
+        
+        
+
+
         with self.conn as con:
+            
+            tasks_in_db = {}
+            
+            # first read what is already in db
             cur = con.cursor()
+            for tt in task_types():
+                cur.execute(\
+                            "select name from {} where night={}"\
+                            .format(tt, night))
+                tasks_in_db[tt] = [ x for (x, ) in cur.fetchall()]
+            
             cur.execute("begin transaction")
             for tt in task_types():
                 for tsk in alltasks[tt]:
-                    task_classes[tt].insert(self, tsk)
+                    tname = task_classes[tt].name_join(tsk)
+                    if tname not in tasks_in_db[tt] :
+                        task_classes[tt].insert(self, tsk)
+                    else :
+                        log.debug("{} already in db".format(tname))
             cur.execute("commit")
-
+            
         return
 
 
