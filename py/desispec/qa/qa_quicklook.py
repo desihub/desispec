@@ -339,6 +339,7 @@ class Get_RMS(MonitoringAlg):
             rms_amps.append(rms_thisamp)
             rms_over_amps.append(rms_thisover_thisamp)
         rmsover=np.max(rms_over_amps)
+        noise_row=np.array((rms_row,rms_row)) #-TODO This has to be recalculated in the overscan left and right in (2,nrow) format
 
         rmsdiff_err='NORMAL'
         if amps:
@@ -357,9 +358,9 @@ class Get_RMS(MonitoringAlg):
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"NOISE_ROW":rms_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"NOISE_ROW":noise_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
         else:
-            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"NOISE_ROW":rms_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
 
         if qlf:
             qlf_post(retval)  
@@ -797,7 +798,7 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_med=np.median(wsigma)
         xsigma_med_sky=np.median(xsigma_sky)
         wsigma_med_sky=np.median(wsigma_sky)
-        xwsigma=np.array([xsigma_med_sky,wsigma_med_sky])
+        #xwsigma=np.array([xsigma_med_sky,wsigma_med_sky])
         xamp1_med=np.median(xsigma_amp1)
         xamp2_med=np.median(xsigma_amp2)
         xamp3_med=np.median(xsigma_amp3)
@@ -809,8 +810,8 @@ class Calc_XWSigma(MonitoringAlg):
         xsigma_amp=np.array([xamp1_med,xamp2_med,xamp3_med,xamp4_med])
         wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
 
-        xshift=0.0
-        wshift=0.0
+        xshift_med=0.0
+        wshift_med=0.0
         xshift_fib=[]
         wshift_fib=[]
         xshift_amp=[]
@@ -824,16 +825,20 @@ class Calc_XWSigma(MonitoringAlg):
         shift_err='NORMAL'
 
         #- Combine metrics for x and w
-        xwsigma=np.array(xsigma,wsigma)
-        xwsigma_med=np.array((xsigma_med,wsigma_med))
+        xwsigma=np.array((xsigma,wsigma)) #- (2,nfib)
+        #xwsigma_med=np.array((xsigma_med,wsigma_med)) #- (2)
+        xwsigma_amp=np.array((xsigma_amp,wsigma_amp))
+       
+        xwshift=np.zeros((2,500)) #- 500 should change to nfib (read from top)
+        #xwshift_med=np.array((xshift_med,wshift_med))
+        xwshift_amp=np.array((xshift_amp, wshift_amp))
         
-        if amps:
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWSIGMA_STATUS":shift_err}
-        else:
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA":xwsigma}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA_STATUS":shift_err}
+        xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
 
+        if amps:
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
+        else:
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
         #- http post if needed
         if qlf:
             qlf_post(retval)    
@@ -1074,11 +1079,10 @@ class Sky_Continuum(MonitoringAlg):
 
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
-        allfibermean=np.zeros(500)
-        allfibermean[skyfiber]=meancontfiber
+
 
         skycont_err = 'NORMAL'
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":allfibermean, "SKYCONT_STATUS":skycont_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STATUS":skycont_err}
 
         if qlf:
             qlf_post(retval)    
