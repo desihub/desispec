@@ -136,9 +136,7 @@ class TaskPSF(BaseTask):
 
         props = self.name_split(name)
         inputpsf = "psf-{}{}.fits".format(props["band"],props["spec"])
-        
-        print("opts=",opts)
-        
+                
         if "input-psf-dir" in opts :
             inputpsf = os.path.join(opts["input-psf-dir"],inputpsf)
         
@@ -179,6 +177,6 @@ class TaskPSF(BaseTask):
         from ...scripts import specex
         optlist = self._option_list(name, opts)
 
-        args = specex.parse(optarray)
+        args = specex.parse(optlist)
         specex.main(args, comm=comm)
         return
