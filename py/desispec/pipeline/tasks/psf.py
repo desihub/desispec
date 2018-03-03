@@ -15,7 +15,7 @@ from ...io import findfile
 
 from .base import BaseTask
 
-import sys
+import sys,re,os
 
 # NOTE: only one class in this file should have a name that starts with "Task".
 
@@ -135,18 +135,21 @@ class TaskPSF(BaseTask):
             raise RuntimeError("dependency list must include input pix image file")
 
         props = self.name_split(name)
-        inputpsf = "psf-{}{}.fits".format(tmp["band"],tmp["spec"])
+        inputpsf = "psf-{}{}.fits".format(props["band"],props["spec"])
+        
+        print("opts=",opts)
         
         if "input-psf-dir" in opts :
             inputpsf = os.path.join(opts["input-psf-dir"],inputpsf)
-            opts.pop("input-psf-dir")
         
         options["input-image"] = pixfile
-        options["output-psf"]  = self.path(name)
+        options["output-psf"]  = self.paths(name)
         options["input-psf"]   = inputpsf
         
         if len(opts) > 0:
-            extarray = option_list(opts)
+            opts_wo_input_dir = opts.copy()
+            opts_wo_input_dir.pop("input-psf-dir")
+            extarray = option_list(opts_wo_input_dir)
             options["extra"] = " ".join(extarray)
 
         return option_list(options)
