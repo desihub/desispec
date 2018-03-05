@@ -891,6 +891,7 @@ class DataBase:
             # read what is already in db
             tasks_in_db = {}
             for tt in task_types():
+                if tt == "spectra" : continue
                 cur.execute(\
                             "select name from {} where night={}"\
                             .format(tt, night))

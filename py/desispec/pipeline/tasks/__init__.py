@@ -41,13 +41,8 @@ if base.task_classes is None:
         if tasknamemat is None:
             raise RuntimeError("task submodule name error")
         taskname = tasknamemat.group(1)
-
-        # FIXME: remove these lines to test other task types
-        if (taskname != "fibermap") and (taskname != "pix") \
-           and  (taskname != "rawdata") and  (taskname != "psf") \
-           and (taskname != "psfnight") :
-            continue
-
+        if taskname=="base": continue
+        
         # import the module
         __import__(modname)
         # search the classes in the module for the Task class.
