@@ -118,6 +118,6 @@ class TaskFiberflat(BaseTask):
         """
         from ...scripts import fiberflat
         optlist = self._option_list(name, opts)
-        args = extract.parse(optlist)
+        args = fiberflat.parse(optlist)
         fiberflat.main(args)
         return
