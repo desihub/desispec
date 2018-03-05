@@ -149,7 +149,7 @@ Where supported commands are:
 
         specdir = None
         if args.redux is not None:
-            specdir = args.redux
+            specdir = os.path.abspath(args.redux)
             os.environ["DESI_SPECTRO_REDUX"] = specdir
         elif "DESI_SPECTRO_REDUX" in os.environ:
             specdir = os.environ["DESI_SPECTRO_REDUX"]
@@ -306,7 +306,7 @@ Where supported commands are:
         dbpath = io.get_pipe_database()
         db = pipe.db.DataBase(dbpath, "w")
         db.getready()
-    
+
 
     def check(self):
         parser = argparse.ArgumentParser(description="Check the state of "

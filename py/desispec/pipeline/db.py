@@ -732,16 +732,6 @@ class DataBase:
         return
 
 
-    def _initdb(self):
-        """Create all initial DB tables.
-        """
-        # Create a table for every task type
-        from .tasks.base import task_classes, task_type
-        for tt, tc in task_classes.items():
-            tc.create(self)
-        return
-
-
     def get_states_type(self, tasktype, tasks):
         """Efficiently get the state of many tasks of a single type.
 
@@ -820,23 +810,13 @@ class DataBase:
 
         log = get_logger()
 
+        # Update DB tables, if needed
+        self.initdb()
+
         alltasks = all_tasks(night, nside)
 
-
-
-
-
         with self.conn as con:
-
             cur = con.cursor()
-
-            # create possible missing tables
-            cur.execute('select name FROM sqlite_master WHERE type="table"')
-            tables_in_db = [x for (x, ) in cur.fetchall()]
-            for tt in task_types():
-                if tt not in tables_in_db :
-                    log.info("creating new table {}".format(tt))
-                    task_classes[tt].create(self)
 
             # read what is already in db
             tasks_in_db = {}
@@ -854,7 +834,7 @@ class DataBase:
                     tname = task_classes[tt].name_join(tsk)
                     if tname not in tasks_in_db[tt] :
                         log.debug("adding {}".format(tname))
-                        task_classes[tt].insert(self, tsk)
+                        task_classes[tt].insert(cur, tsk)
 
             cur.execute("commit")
 
@@ -898,32 +878,6 @@ class DataBase:
                         log.debug("{} is ready to run".format(tsk))
                         task_classes[tt].state_set(db=self,name=tsk,state="ready")
 
-
-        return
-
-
-
-
-    def sync(self, night):
-        """Synchronize DB based on raw data.
-
-
-
-        Args:
-            night (str): The night to scan for updates.
-
-            nside (int): The current NSIDE value used for pixel grouping.
-        """
-        from .tasks.base import task_classes, task_type
-        #
-        # alltasks = all_tasks(night, nside)
-        #
-        # with self.conn as con:
-        #     con.execute("begin")
-        #     for tt in task_types():
-        #         for tsk in alltasks[tt]:
-        #             task_classes[tt].insert(self, tsk)
-
         return
 
 
@@ -963,7 +917,7 @@ class DataBaseSqlite(DataBase):
         self._open()
 
         if create:
-            self._initdb()
+            self.initdb()
         return
 
 
@@ -994,6 +948,24 @@ class DataBaseSqlite(DataBase):
         self.conn.execute("pragma temp_store=memory")
         self.conn.execute("pragma page_size=4096")
         self.conn.execute("pragma cache_size=4000")
+        return
+
+
+    def initdb(self):
+        """Create DB tables for all tasks if they do not exist.
+        """
+        # check existing tables
+        tables_in_db = None
+        with self.conn as cn:
+            cur = cn.cursor()
+            cur.execute('select name FROM sqlite_master WHERE type="table"')
+            tables_in_db = [x for (x, ) in cur.fetchall()]
+
+        # Create a table for every task type
+        from .tasks.base import task_classes, task_type
+        for tt, tc in task_classes.items():
+            if tt not in tables_in_db:
+                tc.create(self)
         return
 
 
@@ -1094,13 +1066,31 @@ class DataBasePostgres(DataBase):
 
         # If we are creating the prod, initialize the tables.
         if create:
-            self._initdb()
+            self.initdb()
         return
 
 
     @property
     def schema(self):
         return self._schema
+
+
+    def initdb(self):
+        """Create DB tables for all tasks if they do not exist.
+        """
+        # check existing tables
+        tables_in_db = None
+        with self.conn as cn:
+            cur = cn.cursor()
+            cur.execute('select tablename from pg_tables where schemaname =  "{}"'.format(self.schema))
+            tables_in_db = [x for (x, ) in cur.fetchall()]
+
+        # Create a table for every task type
+        from .tasks.base import task_classes, task_type
+        for tt, tc in task_classes.items():
+            if tt not in tables_in_db:
+                tc.create(self)
+        return
 
 
 def load_db(dbstring, mode="w", user=None):
@@ -1125,7 +1115,6 @@ def load_db(dbstring, mode="w", user=None):
         DataBase: a derived database class of the appropriate type.
 
     """
-    print("load_db: ",dbstring,flush=True)
     if re.search(r"postgresql:", dbstring) is not None:
         props = dbstring.split(":")
         host = props[1]
