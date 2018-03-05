@@ -146,7 +146,23 @@ def all_tasks(night, nside):
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
                     full["psf"].append(props)
-                
+                    
+                    # Add a PSF night file if does not exist
+                    exists=False
+                    for entry in full["psfnight"] :
+                        if entry["night"]==props["night"] \
+                           and entry["band"]==props["band"] \
+                           and entry["spec"]==props["spec"] :
+                            exists=True
+                            break
+                    if not exists :
+                         props = dict()
+                         props["night"] = int(night)
+                         props["band"] = band
+                         props["spec"] = spec
+                         props["state"] = "waiting" # see defs.task_states
+                         full["psfnight"].append(props)
+    
     log.debug("done")
     return full
 
