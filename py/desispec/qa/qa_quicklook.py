@@ -963,7 +963,73 @@ class CountSpectralBins(MonitoringAlg):
         ngoodfibers=goodfibers.shape[0]
 
         ngood_err='NORMAL'
-        retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
+
+        #- leaving the amps granularity needed for caching as defunct. If needed in future, this needs to be propagated through.
+        amps=False
+        leftmax=None
+        rightmax=None
+        bottommax=None
+        topmin=None
+
+        if amps:
+            #- get the pixel boundary and fiducial boundary in flux-wavelength space
+
+            leftmax,rightmin,bottommax,topmin = qalib.fiducialregion(frame,psf)  
+            fidboundary=qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)          
+            countslo_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTLO'])
+            averagelo_amp1=np.mean(countslo_amp1)
+            countsmed_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTMED'])
+            averagemed_amp1=np.mean(countsmed_amp1)
+            countshi_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTHI'])
+            averagehi_amp1=np.mean(countshi_amp1)
+
+            countslo_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTLO'])
+            averagelo_amp3=np.mean(countslo_amp3)
+            countsmed_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTMED'])
+            averagemed_amp3=np.mean(countsmed_amp3)
+            countshi_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTHI'])
+            averagehi_amp3=np.mean(countshi_amp3)
+
+
+            if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
+
+                countslo_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTLO'])
+                averagelo_amp2=np.mean(countslo_amp2)
+                countsmed_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTMED'])
+                averagemed_amp2=np.mean(countsmed_amp2)
+                countshi_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTHI'])
+                averagehi_amp2=np.mean(countshi_amp2)
+
+            else:
+                averagelo_amp2=0.
+                averagemed_amp2=0.
+                averagehi_amp2=0.
+
+            if fidboundary[3][0].start is not None: #- to the right top of the CCD
+
+                countslo_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTLO'])
+                averagelo_amp4=np.mean(countslo_amp4)
+                countsmed_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTMED'])
+                averagemed_amp4=np.mean(countsmed_amp4)
+                countshi_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTHI'])
+                averagehi_amp4=np.mean(countshi_amp4)
+
+            else:
+                averagelo_amp4=0.
+                averagemed_amp4=0.
+                averagehi_amp4=0.
+
+            averagelo_amps=np.array([averagelo_amp1,averagelo_amp2,averagelo_amp3,averagelo_amp4])
+            averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
+            averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
+
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi, "NBINSLO_AMP":averagelo_amps, "NBINSMED_AMP":averagemed_amps,"NBINSHI_AMP":averagehi_amps, "NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
+            retval["LEFT_MAX_FIBER"]=int(leftmax)
+            retval["RIGHT_MIN_FIBER"]=int(rightmin)
+            retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
+            retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
+        else:
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
 
         #- http post if needed
         if qlf:

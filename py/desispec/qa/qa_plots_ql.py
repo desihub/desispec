@@ -506,9 +506,9 @@ def plot_sky_peaks(qa_dict,outfile):
     paname=qa_dict["PANAME"]
     sumcount=qa_dict["METRICS"]["PEAKCOUNT"]
     fiber=np.arange(sumcount.shape[0])
-    skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_RMS_SKY"]
+    skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_RMS"]
     fig=plt.figure()
-    plt.suptitle("Counts and Amp RMS for Sky Fibers after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    plt.suptitle("Counts for Sky Fibers after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
 
     ax1=fig.add_subplot(111)
     hist_x=ax1.bar(fiber,sumcount,align='center')
