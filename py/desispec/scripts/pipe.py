@@ -92,8 +92,27 @@ Where supported commands are:
         parser.add_argument("--prod", required=False, default=None,
             help="value to use for SPECPROD")
 
-        parser.add_argument("--db", required=False, default=None,
-            help="value to use for DESI_SPECTRO_DB")
+        parser.add_argument("--db-sqlite", required=False, default=False,
+            action="store_true", help="Use SQLite database backend.")
+
+        parser.add_argument("--db-sqlite-path", type=str, required=False,
+            default=None, help="Override path to SQLite DB")
+
+        parser.add_argument("--db-postgres", required=False, default=False,
+            action="store_true", help="Use PostgreSQL database backend.  "
+            "You must correctly configure your ~/.pgpass file!")
+
+        parser.add_argument("--db-postgres-host", type=str, required=False,
+            default="nerscdb03.nersc.gov", help="Set PostgreSQL hostname")
+
+        parser.add_argument("--db-postgres-port", type=int, required=False,
+            default=5432, help="Set PostgreSQL port number")
+
+        parser.add_argument("--db-postgres-name", type=str, required=False,
+            default="desidev", help="Set PostgreSQL DB name")
+
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_admin", help="Set PostgreSQL user name")
 
         parser.add_argument("--nside", required=False, type=int, default=64,
             help="HEALPix nside value to use for spectral grouping.")
@@ -103,56 +122,90 @@ Where supported commands are:
         # Check raw data location
 
         rawdir = None
-        if "DESI_SPECTRO_DATA" in os.environ:
+        if args.data is not None:
+            rawdir = os.path.abspath(args.data)
+            os.environ["DESI_SPECTRO_DATA"] = rawdir
+        elif "DESI_SPECTRO_DATA" in os.environ:
             rawdir = os.environ["DESI_SPECTRO_DATA"]
         else:
-            rawdir = args.data
-            if rawdir is None:
-                print("You must set DESI_SPECTRO_DATA in your environment or "
-                    "use the --data commandline option")
-                sys.exit(0)
-            rawdir = os.path.abspath(rawdir)
-            os.environ["DESI_SPECTRO_DATA"] = rawdir
+            print("You must set DESI_SPECTRO_DATA in your environment or "
+                "use the --data commandline option")
+            sys.exit(0)
 
         # Check production name
 
         prodname = None
-        if "SPECPROD" in os.environ:
+        if args.prod is not None:
+            prodname = args.prod
+            os.environ["SPECPROD"] = prodname
+        elif "SPECPROD" in os.environ:
             prodname = os.environ["SPECPROD"]
         else:
-            prodname = args.prod
-            if prodname is None:
-                print("You must set SPECPROD in your environment or use the "
-                    "--prod commandline option")
-                sys.exit(0)
-            os.environ["SPECPROD"] = prodname
+            print("You must set SPECPROD in your environment or use the "
+                "--prod commandline option")
+            sys.exit(0)
 
         # Check spectro redux location
 
-        proddir = None
-        if "DESI_SPECTRO_REDUX" in os.environ:
-            specdir = os.environ["DESI_SPECTRO_REDUX"]
-            proddir = os.path.join(specdir, prodname)
-        else:
+        specdir = None
+        if args.redux is not None:
             specdir = args.redux
-            if specdir is None:
-                print("You must set DESI_SPECTRO_REDUX in your environment or "
-                    "use the --redux commandline option")
-                sys.exit(0)
-            specdir = os.path.abspath(specdir)
-            proddir = os.path.join(specdir, prodname)
             os.environ["DESI_SPECTRO_REDUX"] = specdir
+        elif "DESI_SPECTRO_REDUX" in os.environ:
+            specdir = os.environ["DESI_SPECTRO_REDUX"]
+        else:
+            print("You must set DESI_SPECTRO_REDUX in your environment or "
+                "use the --redux commandline option")
+            sys.exit(0)
 
-        # Check spectro db location
+        proddir = os.path.join(specdir, prodname)
+
+        # Construct our DB connection string
 
         dbpath = None
-        if "DESI_SPECTRO_DB" in os.environ:
-            dbpath = os.environ["DESI_SPECTRO_DB"]
-        else:
-            dbpath = args.db
-            if dbpath is None:
-                dbpath = os.path.join(proddir, "desi.db")
+        if args.db_postgres:
+            # We are creating a new postgres backend. Explicitly create the
+            # database, so that we can get the schema key.
+            db = pipe.DataBasePostgres(host=args.db_postgres_host,
+                port=args.db_postgres_port, dbname=args.db_postgres_name,
+                user=args.db_postgres_user, schema=None)
+
+            dbprops = [
+                "postgresql",
+                args.db_postgres_host,
+                "{}".format(args.db_postgres_port),
+                args.db_postgres_name,
+                args.db_postgres_user,
+                db.schema
+            ]
+            dbpath = ":".join(dbprops)
             os.environ["DESI_SPECTRO_DB"] = dbpath
+
+        elif args.db_sqlite:
+            # We are creating a new sqlite backend
+            if args.db_sqlite_path is not None:
+                # We are using a non-default path
+                dbpath = os.path.abspath(args.db_sqlite)
+            else:
+                # We are using sqlite with the default location
+                dbpath = os.path.join(proddir, "desi.db")
+                if not os.path.isdir(proddir):
+                    os.makedirs(proddir)
+
+            # Create the database
+            db = pipe.DataBaseSqlite(dbpath, "w")
+
+            os.environ["DESI_SPECTRO_DB"] = dbpath
+
+        elif "DESI_SPECTRO_DB" in os.environ:
+            # We are using an existing prod
+            dbpath = os.environ["DESI_SPECTRO_DB"]
+
+        else:
+            # Error- we have to get the DB info from somewhere
+            print("You must set DESI_SPECTRO_DB in your environment or "
+                "use the --db-sqlite or --db-postgres commandline options")
+            sys.exit(0)
 
         pipe.update_prod(nightstr=None, hpxnside=args.nside)
 
@@ -212,6 +265,10 @@ Where supported commands are:
         parser.add_argument("--taskfile", required=False, default=None,
             help="write tasks to this file (if not specified, write to STDOUT)")
 
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
         args = parser.parse_args(sys.argv[2:])
 
         states = None
@@ -225,7 +282,7 @@ Where supported commands are:
                     sys.exit(0)
 
         dbpath = io.get_pipe_database()
-        db = pipe.db.DataBase(dbpath, "r")
+        db = pipe.load_db(dbpath, mode="r", user=args.db_postgres_user)
 
         allnights = io.get_nights(strip_path=True)
         nights = pipe.prod.select_nights(allnights, args.nights)
@@ -262,6 +319,10 @@ Where supported commands are:
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
 
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
         args = parser.parse_args(sys.argv[2:])
 
         tasks = pipe.prod.task_read(args.taskfile)
@@ -269,7 +330,7 @@ Where supported commands are:
         db = None
         if not args.nodb:
             dbpath = io.get_pipe_database()
-            db = pipe.db.DataBase(dbpath, "r")
+            db = pipe.load_db(dbpath, mode="r", user=args.db_postgres_user)
 
         states = pipe.db.check_tasks(tasks, db=db)
 
@@ -330,6 +391,10 @@ Where supported commands are:
 
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
+
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
 
         parser.add_argument("--debug", required=False, default=False,
             action="store_true", help="debugging messages in job logs")

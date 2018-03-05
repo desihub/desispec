@@ -32,7 +32,7 @@ from .. import io
 
 from .defs import prod_options_name
 
-from .db import DataBase
+from .db import load_db
 
 
 def yaml_write(path, input):
@@ -228,7 +228,7 @@ def update_prod(nightstr=None, hpxnside=64):
     # exist.
 
     dbpath = io.get_pipe_database()
-    db = DataBase(dbpath, "w")
+    db = load_db(dbpath, "w")
 
     # get list of available nights
 
@@ -268,8 +268,8 @@ def update_prod(nightstr=None, hpxnside=64):
 
         # make per-exposure dirs
         exps = None
-        with db.conn as con:
-            cur = con.cursor()
+        with db.conn as cn:
+            cur = cn.cursor()
             cur.execute(\
                 "select expid from fibermap where night = \"{}\"".format(nt))
             exps = [ int(x[0]) for x in cur.fetchall() ]
@@ -281,7 +281,7 @@ def update_prod(nightstr=None, hpxnside=64):
     return
 
 
-def load_prod(mode):
+def load_prod(mode="w", user=None):
     """Load the database and options for a production.
 
     This loads the database from the production location defined by the usual
@@ -289,7 +289,9 @@ def load_prod(mode):
     the production.
 
     Args:
-        mode (str): open mode for database ("r" or "w").
+        mode (str): open mode for sqlite database ("r" or "w").
+        user (str): for postgresql, an alternate user name for opening the DB.
+            This can be used to connect as a user with read-only access.
 
     Returns:
         tuple: (pipeline.db.DataBase, dict) The database for the production
@@ -297,7 +299,7 @@ def load_prod(mode):
 
     """
     dbpath = io.get_pipe_database()
-    db = DataBase(dbpath, mode)
+    db = load_db(dbpath, mode=mode, user=user)
 
     rundir = io.get_pipe_rundir()
     optfile = os.path.join(rundir, prod_options_name)

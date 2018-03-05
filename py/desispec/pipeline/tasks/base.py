@@ -130,12 +130,13 @@ class BaseTask(object):
     def _create(self, db):
         """See BaseTask.create.
         """
-        with db.conn as con:
+        with db.conn as cn:
+            cur = cn.cursor()
             createstr = "create table {} (name text unique".format(self._type)
             for col in zip(self._cols, self._coltypes):
                 createstr = "{}, {} {}".format(createstr, col[0], col[1])
             createstr = "{})".format(createstr)
-            con.execute(createstr)
+            cur.execute(createstr)
         return
 
 
@@ -152,37 +153,59 @@ class BaseTask(object):
         return
 
 
-    def _insert(self, db, props):
+    def _insert(self, cursor, props):
         """See BaseTask.insert.
         """
         name = self.name_join(props)
+        colstr = '(name'
+        valstr = '("{}"'.format(name)
+        upstr = 'name="{}"'.format(name)
+
         #cmd='insert or replace into {} values ("{}"'.format(self._type, name)
-        cmd='insert into {} values ("{}"'.format(self._type, name)
-        for k,ktype in zip(self._cols,self._coltypes) :
-            if k == "state" :
-                if k in props :
-                    cmd+=', {}'.format(task_state_to_int[props["state"]])
-                else :
-                    cmd+=', {}'.format(task_state_to_int["waiting"])
-            else :
-                if ktype=="text" :
-                    cmd+=', "{}"'.format(props[k])
-                else :
-                    cmd+=', {}'.format(props[k])
-        cmd+=")"
-        #print(cmd)
-        db.conn.execute(cmd)
+        for k, ktype in zip(self._cols, self._coltypes):
+            colstr += ', {}'.format(k)
+            if k == "state":
+                if k in props:
+                    upstr += ', {}={}'.format(k, task_state_to_int[props["state"]])
+                    valstr += ', {}'.format(task_state_to_int[props["state"]])
+                else:
+                    upstr += ', {}={}'.format(k, task_state_to_int["waiting"])
+                    valstr += ', {}'.format(task_state_to_int["waiting"])
+            else:
+                if ktype == "text":
+                    upstr += ', {}="{}"'.format(k, props[k])
+                    valstr += ', "{}"'.format(props[k])
+                else:
+                    upstr += ', {}={}'.format(k, props[k])
+                    valstr += ', {}'.format(props[k])
+        colstr += ')'
+        valstr += ')'
+
+        # Check if we have this row already
+        cmd = "select exists(select 1 from {} where name = '{}')".format(self._type, name)
+        cursor.execute(cmd)
+        have_row = cursor.fetchone()[0]
+
+        if have_row:
+            # do update
+            cmd = 'update {} set {}'.format(self._type, upstr)
+            print(cmd, flush=True)
+            cursor.execute(cmd)
+        else:
+            cmd = 'insert into {} {} values {}'.format(self._type, colstr, valstr)
+            print(cmd, flush=True)
+            cursor.execute(cmd)
         return
 
 
-    def insert(self, db, props):
+    def insert(self, cursor, props):
         """Insert a task into a database.
 
         This uses the name and extra keywords to update one or more
         task-specific tables.
 
         Args:
-            db (pipeline.DB): the database instance.
+            cursor (DB cursor): the database cursor of an open connection.
             props (dict): dictionary of properties for the task.
 
         """
@@ -190,7 +213,7 @@ class BaseTask(object):
         log = get_logger()
         log.debug("inserting {}".format(self.name_join(props)))
 
-        self._insert(db, props)
+        self._insert(cursor, props)
         return
 
 
@@ -198,8 +221,8 @@ class BaseTask(object):
         """See BaseTask.retrieve.
         """
         ret = dict()
-        with db.conn as con:
-            cur = con.cursor()
+        with db.conn as cn:
+            cur = cn.cursor()
             cur.execute(\
                 'select * from {} where name = "{}"'.format(self._type,name))
             row = cur.fetchone()
@@ -234,11 +257,8 @@ class BaseTask(object):
     def _state_set(self, db, name, state):
         """See BaseTask.state_set.
         """
-        log   = get_logger()
-        log.debug("starting for {}".format(name))
-        start = time.time()
-        with db.conn as con:
-            cur = con.cursor()
+        with db.conn as cn:
+            cur = cn.cursor()
             cur.execute("begin transaction")
             cur.execute('update {} set state = {} where name = "{}"'\
                 .format(self._type, task_state_to_int[state], name))
@@ -253,8 +273,8 @@ class BaseTask(object):
         """
 
         st = None
-        with db.conn as con:
-            cur = con.cursor()
+        with db.conn as cn:
+            cur = cn.cursor()
             cur.execute(\
                 'select state from {} where name = "{}"'.format(self._type,name))
             row = cur.fetchone()

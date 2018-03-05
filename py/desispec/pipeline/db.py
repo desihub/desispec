@@ -13,10 +13,9 @@ from __future__ import absolute_import, division, print_function
 
 import os
 
-import numpy as np
+import re
 
-# For development / testing, we use sqlite directly
-import sqlite3
+import numpy as np
 
 from desiutil.log import get_logger
 
@@ -80,7 +79,7 @@ def all_tasks(night, nside):
 
         fmdata,header = fitsio.read(fibermap,header=True)
         flavor = header["FLAVOR"].strip().lower()
-        
+
 
 
         fmpix = dict()
@@ -136,7 +135,7 @@ def all_tasks(night, nside):
                 pixprops["flavor"] = flavor
                 pixprops["state"] = "ready"
                 full["pix"].append(pixprops)
-        
+
                 if flavor == "arc" :
                     # Add the PSF files
                     props = dict()
@@ -146,7 +145,7 @@ def all_tasks(night, nside):
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
                     full["psf"].append(props)
-                    
+
                     # Add a PSF night file if does not exist
                     exists=False
                     for entry in full["psfnight"] :
@@ -162,7 +161,7 @@ def all_tasks(night, nside):
                          props["spec"] = spec
                          props["state"] = "waiting" # see defs.task_states
                          full["psfnight"].append(props)
-    
+
     log.debug("done")
     return full
 
@@ -717,67 +716,9 @@ def check_tasks(tasklist, db=None, inputs=None):
 
 class DataBase:
     """Class for tracking pipeline processing objects and state.
-
-    Args:
-        path (str): the filesystem path of the database to open.  If None, then
-            a temporary database is created in memory.
-        mode (str): if "r", the database is open in read-only mode.  If "w",
-            the database is open in read-write mode and created if necessary.
-
     """
-    def __init__(self, path, mode):
-        self._path = path
-        self._mode = mode
-
-        create = True
-        if (self._path is not None) and os.path.exists(self._path):
-            create = False
-
-        if self._mode == 'r' and create:
-            raise RuntimeError("cannot open a non-existent DB in read-only "
-                " mode")
-
+    def __init__(self):
         self.conn = None
-        self.connstr = None
-
-        # This timeout is in seconds
-        self.busytime = 1000
-
-        # Journaling options
-        self.journalmode = "persist"
-        self.syncmode = "normal"
-
-        self._open()
-
-        if create:
-            self._initdb()
-        return
-
-
-    def _open(self):
-        if self._path is None:
-            # We are opening an in-memory DB
-            self.conn = sqlite3.connect(":memory:")
-        else:
-            try:
-                # only python3 supports uri option
-                if self._mode == 'r':
-                    self.connstr = 'file:{}?mode=ro'.format(self._path)
-                else:
-                    self.connstr = 'file:{}?mode=rwc'.format(self._path)
-                self.conn = sqlite3.connect(self.connstr, uri=True,
-                    timeout=self.busytime)
-            except:
-                self.conn = sqlite3.connect(self._path, timeout=self.busytime)
-        if self._mode == 'w':
-            # In read-write mode, set the journaling
-            self.conn.execute("pragma journal_mode={}".format(self.journalmode))
-            self.conn.execute("pragma synchronous={}".format(self.syncmode))
-
-        # Other tuning options
-        self.conn.execute("pragma temp_store=memory")
-        self.conn.execute("pragma page_size=4096")
-        self.conn.execute("pragma cache_size=4000")
         return
 
 
@@ -808,8 +749,8 @@ class DataBase:
         log = get_logger()
 
         log.debug("opening db")
-        with self.conn as con:
-            cur = con.cursor()
+        with self.conn as cn:
+            cur = cn.cursor()
             log.debug("selecting in db")
             cur.execute(\
                 'select name, state from {} where name in ({})'.format(tasktype,
@@ -866,27 +807,27 @@ class DataBase:
             nside (int): The current NSIDE value used for pixel grouping.
         """
         from .tasks.base import task_classes, task_type
-        
+
         log = get_logger()
-        
+
         alltasks = all_tasks(night, nside)
 
-        
-        
+
+
 
 
         with self.conn as con:
-            
+
             cur = con.cursor()
-            
-            # create possible missing tables 
+
+            # create possible missing tables
             cur.execute('select name FROM sqlite_master WHERE type="table"')
             tables_in_db = [x for (x, ) in cur.fetchall()]
             for tt in task_types():
                 if tt not in tables_in_db :
                     log.info("creating new table {}".format(tt))
                     task_classes[tt].create(self)
-            
+
             # read what is already in db
             tasks_in_db = {}
             for tt in task_types():
@@ -895,48 +836,48 @@ class DataBase:
                             "select name from {} where night={}"\
                             .format(tt, night))
                 tasks_in_db[tt] = [ x for (x, ) in cur.fetchall()]
-            
+
             cur.execute("begin transaction")
             for tt in task_types():
                 log.debug("updating {} ...".format(tt))
-                for tsk in alltasks[tt]:                    
+                for tsk in alltasks[tt]:
                     tname = task_classes[tt].name_join(tsk)
                     if tname not in tasks_in_db[tt] :
                         log.debug("adding {}".format(tname))
                         task_classes[tt].insert(self, tsk)
-            
+
             cur.execute("commit")
-            
+
         return
 
-    
+
     def getready(self):
         """Update DB, changing waiting to ready depending on status of dependencies .
-        
+
         """
         from .tasks.base import task_classes, task_type
-        
+
         log = get_logger()
-        
-        
+
+
         with self.conn as con:
-            
+
             cur = con.cursor()
-            
+
             for tt in task_types():
-                
+
                 # for each type of task, get the list of tasks in waiting mode
                 cur.execute('select name from {} where state={}'.format(tt,task_state_to_int["waiting"]))
                 tasks = [ x for (x, ) in cur.fetchall()]
-                
+
                 if len(tasks)>0 :
                     log.debug("checking {} {} tasks ...".format(len(tasks),tt))
-                
-                for tsk in tasks : 
-                    # for each task in waiting mode, get the dependencies 
+
+                for tsk in tasks :
+                    # for each task in waiting mode, get the dependencies
                     deps = task_classes[tt].deps(tsk,db=self,inputs=None)
                     ready = True
-                    for dep in deps : 
+                    for dep in deps :
                         # for each dependency, guess its type
                         deptype  = dep.split(task_name_sep)[0]
                         # based on the type and dependency name, read state from db
@@ -946,8 +887,8 @@ class DataBase:
                         # change state to ready
                         log.debug("{} is ready to run".format(tsk))
                         task_classes[tt].state_set(db=self,name=tsk,state="ready")
-             
-            
+
+
         return
 
 
@@ -974,3 +915,221 @@ class DataBase:
         #             task_classes[tt].insert(self, tsk)
 
         return
+
+
+class DataBaseSqlite(DataBase):
+    """Pipeline database using sqlite3 as the backend.
+
+    Args:
+        path (str): the filesystem path of the database to open.  If None, then
+            a temporary database is created in memory.
+        mode (str): if "r", the database is open in read-only mode.  If "w",
+            the database is open in read-write mode and created if necessary.
+
+    """
+    def __init__(self, path, mode):
+        super(DataBaseSqlite, self).__init__()
+
+        self._path = path
+        self._mode = mode
+
+        create = True
+        if (self._path is not None) and os.path.exists(self._path):
+            create = False
+
+        if self._mode == 'r' and create:
+            raise RuntimeError("cannot open a non-existent DB in read-only "
+                " mode")
+
+        self.connstr = None
+
+        # This timeout is in seconds
+        self._busytime = 1000
+
+        # Journaling options
+        self._journalmode = "persist"
+        self._syncmode = "normal"
+
+        self._open()
+
+        if create:
+            self._initdb()
+        return
+
+
+    def _open(self):
+        import sqlite3
+
+        if self._path is None:
+            # We are opening an in-memory DB
+            self.conn = sqlite3.connect(":memory:")
+        else:
+            try:
+                # only python3 supports uri option
+                if self._mode == 'r':
+                    self.connstr = 'file:{}?mode=ro'.format(self._path)
+                else:
+                    self.connstr = 'file:{}?mode=rwc'.format(self._path)
+                self.conn = sqlite3.connect(self.connstr, uri=True,
+                    timeout=self._busytime)
+            except:
+                self.conn = sqlite3.connect(self._path, timeout=self._busytime)
+        if self._mode == 'w':
+            # In read-write mode, set the journaling
+            self.conn.execute("pragma journal_mode={}"\
+                .format(self._journalmode))
+            self.conn.execute("pragma synchronous={}".format(self._syncmode))
+
+        # Other tuning options
+        self.conn.execute("pragma temp_store=memory")
+        self.conn.execute("pragma page_size=4096")
+        self.conn.execute("pragma cache_size=4000")
+        return
+
+
+class DataBasePostgres(DataBase):
+    """Pipeline database using PostgreSQL as the backend.
+
+    Args:
+        host (str): The database server.
+        port (int): The connection port.
+        dbname (str): The database to connect.
+        user (str): The user name for the connection.  The password should be
+            stored in the ~/.pgpass file.
+        schema (str): The schema within the database.  If this is specified,
+            then the database is assumed to exist.  Otherwise the schema is
+            computed from a hash of the production location and will be
+            created.
+
+    """
+    def __init__(self, host, port, dbname, user, schema=None):
+        super(DataBasePostgres, self).__init__()
+
+        self._schema = schema
+        self._user = user
+        self._dbname = dbname
+        self._host = host
+        self._port = port
+
+        self._proddir = os.path.abspath(io.specprod_root())
+
+        self._open()
+        return
+
+
+    def _compute_schema(self):
+        import hashlib
+        md = hashlib.md5()
+        md.update(self._proddir.encode())
+        return "pipe_{}".format(md.hexdigest())
+
+
+    def _open(self):
+        import psycopg2 as pg2
+
+        create = False
+        if self._schema is None:
+            create = True
+            self._schema = self._compute_schema()
+
+        # Open connection
+        self.conn = pg2.connect(host=self._host, port=self._port,
+            user=self._user, dbname=self._dbname)
+
+        # Check existence of the schema.  If we were not passed the schema
+        # in the constructor, it means that we are creating a new prod, so any
+        # existing schema should be wiped and recreated.
+
+        with self.conn as cn:
+            cur = cn.cursor()
+            # See if our schema already exists...
+            com = "select exists(select 1 from pg_namespace where nspname = '{}')".format(self._schema)
+            cur.execute(com)
+            have_schema = cur.fetchone()[0]
+            print("have_schema =",have_schema)
+
+            if create:
+                if have_schema:
+                    # We need to wipe it first
+                    com = "drop schema {} cascade".format(self._schema)
+                    print(com,flush=True)
+                    cur.execute(com)
+                com = "create schema {} authorization {}"\
+                    .format(self._schema, self._user)
+                print(com,flush=True)
+                cur.execute(com)
+                # Create a table of information about this prod
+                com = "create table {}.info (key text unique, val text)"\
+                    .format(self._schema)
+                print(com,flush=True)
+                cur.execute(com)
+                com = "insert into {}.info values ('{}', '{}')"\
+                    .format(self._schema, "path", self._proddir)
+                print(com,flush=True)
+                cur.execute(com)
+                if 'USER' in os.environ:
+                    com = "insert into {}.info values ('{}', '{}')"\
+                        .format(self._schema, "created_by", os.environ['USER'])
+                    print(com,flush=True)
+                    cur.execute(com)
+            else:
+                if not have_schema:
+                    raise RuntimeError("Postgres schema for production {} does"
+                        " not exist.  Make sure you create the production with"
+                        " postgres options and source the top-level setup.sh"
+                        " file.".format(self._proddir))
+            com = "set search_path to {}".format(self._schema)
+            print(com,flush=True)
+            cur.execute(com)
+
+        # If we are creating the prod, initialize the tables.
+        if create:
+            self._initdb()
+        return
+
+
+    @property
+    def schema(self):
+        return self._schema
+
+
+def load_db(dbstring, mode="w", user=None):
+    """Load a database from a connection string.
+
+    This instantiates either an sqlite or postgresql database using a string.
+    If this string begins with "postgresql:", then it is taken to be the
+    information needed to connect to a postgres server.  Otherwise it is
+    assumed to be a filesystem path to use with sqlite.  The mode is only
+    meaningful when using sqlite.  Postgres permissions are controlled through
+    the user permissions.
+
+    Args:
+        dbstring (str): either a filesystem path (sqlite) or a colon-separated
+            string of connection properties in the form
+            "postresql:<host>:<port>:<dbname>:<user>:<schema>".
+        mode (str): for sqlite, the mode.
+        user (str): for postgresql, an alternate user name for opening the DB.
+            This can be used to connect as a user with read-only access.
+
+    Returns:
+        DataBase: a derived database class of the appropriate type.
+
+    """
+    print("load_db: ",dbstring,flush=True)
+    if re.search(r"postgresql:", dbstring) is not None:
+        props = dbstring.split(":")
+        host = props[1]
+        port = int(props[2])
+        dbname = props[3]
+        username = props[4]
+        if user is not None:
+            username = user
+        schema = None
+        if len(props) > 5:
+            # Our DB string also contains the name of an existing
+            # schema.
+            schema = props[5]
+        return DataBasePostgres(host=host, port=port, dbname=dbname,
+            user=username, schema=schema)
+    else:
+        return DataBaseSqlite(dbstring, mode)
