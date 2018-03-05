@@ -472,7 +472,7 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
 
-            com = task_classes[tasktype].run_cli(runtasks[t], options, taskproc,
+            com = task_classes[tt].run_cli(runtasks[t], options, taskproc,
                 launch=launch, log=tasklog)
 
             print("{}  {}".format(prefix, com))
