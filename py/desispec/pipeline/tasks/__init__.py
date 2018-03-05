@@ -43,7 +43,9 @@ if base.task_classes is None:
         taskname = tasknamemat.group(1)
 
         # FIXME: remove these lines to test other task types
-        if (taskname != "fibermap") and (taskname != "pix") and  (taskname != "rawdata") and  (taskname != "psf") :
+        if (taskname != "fibermap") and (taskname != "pix") \
+           and  (taskname != "rawdata") and  (taskname != "psf") \
+           and (taskname != "psfnight") :
             continue
 
         # import the module
