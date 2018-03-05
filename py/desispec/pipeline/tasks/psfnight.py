@@ -81,7 +81,7 @@ class TaskPSFNight(BaseTask):
         from .base import task_classes, task_type
 
         options = OrderedDict()
-        options["output"] = self.paths(name)
+        options["output"] = self.paths(name)[0]
 
         # look for psf for this night on disk
         options["input"]  = []
