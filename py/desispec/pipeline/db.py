@@ -162,6 +162,16 @@ def all_tasks(night, nside):
                          props["state"] = "waiting" # see defs.task_states
                          full["psfnight"].append(props)
 
+                if flavor != "arc" :
+                    # Add extractions
+                    props = dict()
+                    props["night"] = int(night)
+                    props["band"] = band
+                    props["spec"] = spec
+                    props["expid"] = int(ex)
+                    props["state"] = "waiting" # see defs.task_states
+                    full["extract"].append(props)
+
     log.debug("done")
     return full
 
