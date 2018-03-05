@@ -257,6 +257,7 @@ class BaseTask(object):
     def _state_set(self, db, name, state):
         """See BaseTask.state_set.
         """
+        start = time.time()
         with db.conn as cn:
             cur = cn.cursor()
             cur.execute("begin transaction")
@@ -264,6 +265,7 @@ class BaseTask(object):
                 .format(self._type, task_state_to_int[state], name))
             cur.execute("commit")
         stop = time.time()
+        log  = get_logger()
         log.debug("took {} sec for {}".format(stop-start,name))
         return
 
