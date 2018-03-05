@@ -427,6 +427,9 @@ Where supported commands are:
                 args.nersc_runtime, nodeprocs=ppn, openmp=False,
                 multiproc=False, db=db, shifterimg=args.nersc_shifter,
                 debug=args.debug)
+        print("wrote the following script(s):")
+        for script in scripts :
+            print(script)
 
         return scripts
 
