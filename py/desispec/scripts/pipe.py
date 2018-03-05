@@ -185,7 +185,7 @@ Where supported commands are:
             # We are creating a new sqlite backend
             if args.db_sqlite_path is not None:
                 # We are using a non-default path
-                dbpath = os.path.abspath(args.db_sqlite)
+                dbpath = os.path.abspath(args.db_sqlite_path)
             else:
                 # We are using sqlite with the default location
                 dbpath = os.path.join(proddir, "desi.db")
