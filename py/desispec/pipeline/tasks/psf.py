@@ -152,25 +152,14 @@ class TaskPSF(BaseTask):
 
         return option_list(options)
 
-
-    def _cli_command(self, optlist, procs):
-        """Return the equivalent command-line interface from the full
-        option list (with files already appended).
+    def _run_cli(self, name, opts, procs):
+        """See BaseTask.run_cli.
         """
         entry = "desi_compute_psf"
         if procs > 1:
             entry = "desi_compute_psf_mpi"
-        optstr = " ".join(optlist)
-        return "{} {}".format(entry, optstr)
-
-
-    def _run_cli(self, name, opts, procs):
-        """See BaseTask.run_cli.
-        """
-        optlist = self._option_list(name, opts)
-        return self._cli_command(optlist, procs)
-
-
+        return "{} {}".format(entry, self._option_list(name, opts))
+        
     def _run(self, name, opts, comm):
         """See BaseTask.run.
         """
