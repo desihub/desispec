@@ -15,6 +15,7 @@ from ...io import findfile
 
 from .base import BaseTask
 
+import sys,re,os,glob
 
 # NOTE: only one class in this file should have a name that starts with "Task".
 
@@ -22,6 +23,10 @@ class TaskPSFNight(BaseTask):
     """Class containing the properties of one PSF combined night task.
     """
     def __init__(self):
+        super(TaskPSFNight, self).__init__()
+        # then put int the specifics of this class
+        # _cols must have a state
+        self._type = "psfnight"
         self._cols = [
             "night",
             "band",
@@ -34,30 +39,10 @@ class TaskPSFNight(BaseTask):
             "integer",
             "integer"
         ]
-        super(TaskPSFNight, self).__init__()
-
-
-    def _name_split(self, name):
-        """See BaseTask.name_split.
-        """
-        fields = name.split(task_name_sep)
-        if (len(fields) != 4) or (fields[1] != "PSFNight"):
-            raise RuntimeError("name \"{}\" not valid for a psfnight".format(name))
-        ret = dict()
-        ret["night"] = int(fields[0])
-        ret["band"] = fields[2]
-        ret["spec"] = int(fields[3])
-        return ret
-
-
-    def _name_join(self, props):
-        """See BaseTask.name_join.
-        """
-        return "{:08d}{}psfnight{}{:s}{}{:d}".format(props["night"],
-            task_name_sep, task_name_sep, props["band"], task_name_sep,
-            props["spec"])
-
-
+        # _name_fields must also be in _cols
+        self._name_fields  = ["night","band","spec"]
+        self._name_formats = ["08d","s","d"]
+        
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -67,170 +52,71 @@ class TaskPSFNight(BaseTask):
             camera=camera, groupname=None, nside=None, band=props["band"],
             spectrograph=props["spec"]) ]
 
-
-    def _create(self, db):
-        """See BaseTask.create.
-        """
-        with db.conn as con:
-            createstr = "create table psfnight (name text unique"
-            for col in zip(self._cols, self._coltypes):
-                createstr = "{}, {} {}".format(createstr, col[0], col[1])
-            createstr = "{})".format(createstr)
-            con.execute(createstr)
-        return
-
-
-    def _insert(self, db, name, **kwargs):
-        """See BaseTask.insert.
-        """
-        props = self.name_split(name)
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute("insert into psfnight values (\"{}\", {}, \"{}\", {}, "
-                "{})".format(name, props["night"], props["band"],
-                props["spec"], task_state_to_int("none")))
-            con.commit()
-        return
-
-
-    def _retrieve(self, db, name):
-        """See BaseTask.retrieve.
-        """
-        ret = dict()
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute(\
-                "select * from psfnight where name = \"{}\"".format(name))
-            row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            ret["name"] = name
-            ret["night"] = row[1]
-            ret["band"] = row[2]
-            ret["spec"] = row[3]
-            ret["state"] = task_int_to_state(row[4])
-        return ret
-
-
-    def _state_set(self, db, name, state):
-        """See BaseTask.state_set.
-        """
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute("insert into psfnight(state) values "
-                "({})".format(task_state_to_int(state)))
-            con.commit()
-        return
-
-
-    def _state_get(self, db, name):
-        """See BaseTask.state_get.
-        """
-        st = None
-        with db.conn as con:
-            cur = con.cursor()
-            cur.execute(\
-                "select state from psfnight where name = \"{}\"".format(name))
-            row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            st = task_int_to_state(row[0])
-        return st
-
-
-    def _deps(self, name):
+    def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
-        from ._taskclass import task_classes
-        props = self.name_split(name)
-        boottask = task_classes["psfnight"].name_join(props)
-        pixtask = task_classes["pix"].name_join(props)
-        deptasks = [
-            boottask,
-            pixtask
-        ]
-        return deptasks
-
-
-    def run_weight(self, db, name):
-        return 1
-
-
-    def run_max_nproc(self, db, name):
-        return 1
-
-
-    def run_time(self, db, name):
-        return 30
-
-
-    def run_defaults(self):
-        opts = {}
-        opts["trace-only"] = False
-        opts["legendre-degree"] = 5
-        opts["triplet-matching"] = True
-        return opts
-
-
-    def run(self, db, name, opts, comm=None):
-        """Run the PSF bootstrap.
-
-        This just uses the first arc for now.
-
-        Args:
-            db (pipeline.db.DB): The database.
-            name (str): the name of this task.
-            opts (dict): options to use for this task.
-            comm (mpi4py.MPI.Comm): optional MPI communicator.
+        return list()
+        
+    def _run_max_procs(self, procs_per_node):
+        """See BaseTask.run_max_procs.
         """
-        if comm is not None:
-            if comm.size > 1:
-                raise RuntimeError("PSF bootstrap should only be called with one process")
+        return 1
 
-        log = get_logger()
+    def _run_time(self, name, procs_per_node, db=None):
+        """See BaseTask.run_time.
+        """
+        return 1
 
-        node = grph[task]
-        night, obj = graph_night_split(task)
-        (temp, band, spec) = graph_name_split(obj)
-        cam = "{}{}".format(band, spec)
+    def _run_defaults(self):
+        """See BaseTask.run_defaults.
+        """
+        return {}
 
-        arcs = []
-        flats = []
-        for input in node["in"]:
-            inode = grph[input]
-            if inode["flavor"] == "arc":
-                arcs.append(input)
-            elif inode["flavor"] == "flat":
-                flats.append(input)
-        if len(arcs) == 0:
-            raise RuntimeError("no arc images found!")
-        if len(flats) == 0:
-            raise RuntimeError("no flat images found!")
-        firstarc = sorted(arcs)[0]
-        firstflat = sorted(flats)[0]
+    def _option_dict(self, name, opts):
+        """Build the full list of options.
 
-        arcpath = graph_path(firstarc)
-        flatpath = graph_path(firstflat)
-        outpath = graph_path(task)
+        This includes appending the filenames and incorporating runtime
+        options.
+        """
+        from .base import task_classes, task_type
 
-        #qapath = io.findfile("qa_bootcalib", night=night, camera=cam, band=band, spectrograph=spec)
+        options = OrderedDict()
+        options["output"] = self.paths(name)
 
-        # build list of options
-        options = {}
-        options["fiberflat"] = flatpath
-        options["arcfile"] = arcpath
-        #options["qafile"] = qapath
-        options["outfile"] = outpath
-        options.update(opts)
-        optarray = option_list(options)
+        # look for psf for this night on disk
+        options["input"]  = []
+        props = self.name_split(name)
+        camera = "{}{}".format(props["band"], props["spec"])
+        dummy_expid    = 99999999
+        template_input = findfile("psf", night=props["night"], expid=dummy_expid,
+                                  camera=camera,
+                                  band=props["band"],
+                                  spectrograph=props["spec"])
+        template_input = template_input.replace("{:08d}".format(dummy_expid),"*")
+        options["input"]  = glob.glob(template_input)
+        return options
 
-        # at debug level, log the equivalent commandline
-        com = ["RUN", "desi_bootcalib"]
-        com.extend(optarray)
-        log.info(" ".join(com))
+    def _option_list(self, name, opts):
+        """Build the full list of options.
 
-        args = bootcalib.parse(optarray)
+        This includes appending the filenames and incorporating runtime
+        options.
+        """
+        return option_list(self._option_dict(name,opts))
+        
+    def _run_cli(self, name, opts, procs):
+        """See BaseTask.run_cli.
+        """
+        optlist = self._option_list(name, opts)
+        com = "# command line for psfnight not implemented"
+        return com
 
-        bootcalib.main(args)
-
+    def _run(self, name, opts, comm):
+        """See BaseTask.run.
+        """
+        from ...scripts import specex
+        optdict = self._option_dict(name, opts)
+        specex.mean_psf(optdict["input"], optdict["output"])
+        
         return
+        
