@@ -304,7 +304,7 @@ Where supported commands are:
 
     def getready(self):
         dbpath = io.get_pipe_database()
-        db = pipe.db.DataBase(dbpath, "w")
+        db     = pipe.load_db(dbpath, mode="w")
         db.getready()
 
 
