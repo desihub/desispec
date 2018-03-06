@@ -69,6 +69,8 @@ def all_tasks(night, nside):
     for t in task_types():
         full[t] = list()
 
+    healpix_frames = []
+    
     for ex in sorted(expid):
 
         log.debug("read fibermap for exposure {}".format(ex))
@@ -90,25 +92,18 @@ def all_tasks(night, nside):
             # touched by fibers from each spectrograph.
             ra = np.array(fmdata["RA_TARGET"], dtype=np.float64)
             dec = np.array(fmdata["DEC_TARGET"], dtype=np.float64)
-            bad = np.where(fmdata["TARGETID"] < 0)[0]
-            ra[bad] = 0.0
-            dec[bad] = 0.0
-            pix = desimodel.footprint.radec2pix(nside, ra, dec)
-            pix[bad] = -1
-            # FIXME: how are we storing this info in the database?
-            # for fm in zip(fmdata["SPECTROID"], pix):
-            #     if fm[1] >= 0:
-            #         if fm[0] in specs:
-            #             if fm[1] in fmpix:
-            #                 fmpix[fm[1]] += 1
-            #             else:
-            #                 fmpix[fm[1]] = 1
-            # for fmp in fmpix:
-            #     if fmp in allpix:
-            #         allpix[fmp] += fmpix[fmp]
-            #     else:
-            #         allpix[fmp] = fmpix[fmp]
-
+            for spectro in np.unique( fmdata["SPECTROID"] ) :
+                ii=np.where(fmdata["SPECTROID"]==spectro)[0]
+                if ii.size == 0 : continue
+                pixels  = desimodel.footprint.radec2pix(nside, ra[ii], dec[ii])
+                for pixel in np.unique(pixels) :
+                    props = dict()
+                    props["expid"] = int(ex)
+                    props["spec"]  = spectro
+                    props["pixel"] = pixel
+                    props["ntargets"] = np.sum(pixels==pixel)
+                    healpix_frames.append(props)
+        
         fmprops = dict()
         fmprops["night"]  = int(night)
         fmprops["expid"]  = int(ex)
@@ -232,7 +227,7 @@ def all_tasks(night, nside):
 
 
     log.debug("done")
-    return full
+    return full , healpix_frames
 
 
 def check_tasks(tasklist, db=None, inputs=None):
@@ -436,9 +431,15 @@ class DataBase:
         # Update DB tables, if needed
         self.initdb()
 
-        alltasks = all_tasks(night, nside)
-
+        alltasks , healpix_frames = all_tasks(night, nside)
+        
+        
         with self.cursor() as cur:
+
+            # insert or ignore all healpix_frames
+            log.debug("updating healpix_frame ...")
+            for entry in healpix_frames :
+                cur.execute("insert into healpix_frame (expid,spec,pixel,ntargets,state) values({},{},{},{},{})".format(entry["expid"],entry["spec"],entry["pixel"],entry["ntargets"],0))
 
             # read what is already in db
             tasks_in_db = {}
@@ -534,6 +535,16 @@ class DataBase:
                         task_classes[tt].state_set(db=self,name=tsk,state="ready")
 
         return
+    
+    def create_healpix_frame_table(self) :
+        with self.cursor() as cur:
+            cmd = "create table healpix_frame (expid integer , spec integer , pixel integer , ntargets integer , state integer,  UNIQUE(expid,spec,pixel) ON CONFLICT IGNORE )"
+            cur.execute(cmd)
+        return
+    
+    
+
+    
 
 
 class DataBaseSqlite(DataBase):
@@ -638,6 +649,9 @@ class DataBaseSqlite(DataBase):
         for tt, tc in task_classes.items():
             if tt not in tables_in_db:
                 tc.create(self)
+        
+        if "healpix_frame" not in tables_in_db:
+            self.create_healpix_frame_table()
         return
 
 
@@ -777,6 +791,8 @@ class DataBasePostgres(DataBase):
         for tt, tc in task_classes.items():
             if tt not in tables_in_db:
                 tc.create(self)
+        
+        self.create_healpix_frame_table()
         return
 
 
