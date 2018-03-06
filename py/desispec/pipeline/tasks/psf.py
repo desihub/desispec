@@ -133,7 +133,7 @@ class TaskPSF(BaseTask):
             inputpsf = os.path.join(opts["input-psf-dir"],inputpsf)
             
         options["input-psf"]   = inputpsf
-        options["input-image"] = deps["input-image"]
+        options["input-image"] = task_classes["pix"].paths(deps["input-image"])[0]
         options["output-psf"]  = self.paths(name)
         
         

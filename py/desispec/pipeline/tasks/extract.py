@@ -101,9 +101,9 @@ class TaskExtract(BaseTask):
 
         deps = self.deps(name)
         options = {}
-        options["input"]    = deps["input"]
-        options["fibermap"] = deps["fibermap"]
-        options["psf"]      = deps["psf"]
+        options["input"]    = task_classes["extract"].paths(deps["input"])[0]
+        options["fibermap"] = task_classes["fibermap"].path(deps["fibermap"])[0]
+        options["psf"]      = task_classes["psfnight"].path(deps["psf"])[0]
         options["output"]   = self.paths(name)[0]
 
         # extract the wavelength range from the options, depending on the band

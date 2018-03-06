@@ -90,19 +90,10 @@ class TaskFiberflat(BaseTask):
 
         options = OrderedDict()
 
-        deplist = self.deps(name)
-        framefile = None
-        for dp in deplist:
-            if re.search("extract", dp) is not None:
-                framefile = task_classes["extract"].paths(dp)[0]
-        if framefile is None :
-            raise RuntimeError("dependency list must include input frame file")
-        
-        outfile = self.paths(name)[0]
-
+        deps = self.deps(name)
         options = {}
-        options["infile"]    = framefile
-        options["outfile"]   = outfile
+        options["infile"]    = task_classes["extract"].paths(deps["infile"])[0]
+        options["outfile"]   = self.paths(name)[0]
         options.update(opts)
         return option_list(options)
 
