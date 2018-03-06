@@ -1,0 +1,184 @@
+#
+# See top-level LICENSE.rst file for Copyright information
+#
+# -*- coding: utf-8 -*-
+
+from __future__ import absolute_import, division, print_function
+
+from collections import OrderedDict
+
+from ..defs import (task_name_sep, task_state_to_int, task_int_to_state)
+
+from ...util import option_list
+
+from ...io import findfile
+
+from .base import BaseTask
+
+import sys,re,os,copy
+
+from desiutil.log import get_logger
+
+# NOTE: only one class in this file should have a name that starts with "Task".
+
+class TaskStarFit(BaseTask):
+    """Class containing the properties of one extraction task.
+    """
+    def __init__(self):
+        super(TaskStarFit, self).__init__()
+        # then put int the specifics of this class
+        # _cols must have a state
+        self._type = "starfit"
+        self._cols = [
+            "night",
+            "spec",
+            "expid",
+            "state"
+        ]
+        self._coltypes = [
+            "integer",
+            "integer",
+            "integer",
+            "integer"
+        ]
+        # _name_fields must also be in _cols
+        self._name_fields  = ["night","spec","expid"]
+        self._name_formats = ["08d","d","08d"]
+        
+    def _paths(self, name):
+        """See BaseTask.paths.
+        """
+        props = self.name_split(name)
+        return [ findfile("stdstars", night=props["night"], expid=props["expid"],
+                          groupname=None, nside=None, camera=None, band=None,
+                          spectrograph=props["spec"]) ]
+    
+    def _deps(self, name, db, inputs):
+        """See BaseTask.deps.
+        """
+        from .base import task_classes
+        props = self.name_split(name)
+        
+        # we need at least the b-camera for the fit of standard stars
+        props_and_b       = props.copy()
+        props_and_b["band"] = "b"
+
+        deptasks = {
+            "b-frame" : task_classes["extract"].name_join(props_and_b) ,
+            "b-fiberflat" : task_classes["fiberflatnight"].name_join(props_and_b) ,
+            "b-sky" : task_classes["sky"].name_join(props_and_b)
+        }
+        return deptasks
+    
+    def _run_max_procs(self, procs_per_node):
+        """See BaseTask.run_max_procs.
+        """
+        return 1
+
+
+    def _run_time(self, name, procs_per_node, db=None):
+        """See BaseTask.run_time.
+        """
+        return 15 # less than 4 min on edison but can vary quite a bit
+
+
+    def _run_defaults(self):
+        """See BaseTask.run_defaults.
+        """
+        
+        log = get_logger()
+
+        opts = {}
+        starmodels = None
+        if "DESI_BASIS_TEMPLATE" in os.environ : 
+            filenames = glob.glob(os.environ["DESI_BASIS_TEMPLATE"]+"/star_templates_*.fits")
+            if len(filenames)>0 :
+                starmodels = filenames[0]
+        if starmodels is None and "DESI_ROOT" in os.environ:
+            tmp_filename = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v2.1/star_templates_v2.1.fits"
+            if os.path.isfile(tmp_filename) :
+                log.warning("$DESI_BASIS_TEMPLATE not set; using {}".format(tmp_filename))
+                starmodels = tmp_filename
+        if starmodels is None :
+            tmp_filename = "/project/projectdirs/desi/spectro/templates/star_templates/v2.1/star_templates_v2.1.fits"
+            if os.path.isfile(tmp_filename) :
+                log.warning("$DESI_BASIS_TEMPLATE and $DESI_ROOT not set; using {}".format(tmp_filename))
+                starmodels = tmp_filename
+        if starmodels is None :
+            log.error("could not find the stellar templates")
+            raise RuntimeError("could not find the stellar templates")
+        
+        opts["starmodels"] =  starmodels
+
+        opts["delta-color"] = 0.2
+        opts["color"] = "G-R"
+        
+
+        return opts
+            
+
+    def _option_list(self, name, opts):
+        """Build the full list of options.
+
+        This includes appending the filenames and incorporating runtime
+        options.
+        """
+        from .base import task_classes, task_type
+        
+        
+        log = get_logger()
+
+        deps = self.deps(name)
+        options = {}
+        options["outfile"]=self.paths(name)[0]
+        options["frames"]=[]
+        options["skymodels"]=[]
+        options["fiberflats"]=[]
+        
+
+        # frames skymodels fiberflats 
+        props = self.name_split(name)
+        for band in ["b","r","z"] :
+            props_and_band = props.copy()
+            props_and_band["band"] = band
+            
+            task  = task_classes["extract"].name_join(props_and_band)
+            frame_filename = task_classes["extract"].paths(task)[0]
+            
+            task  = task_classes["fiberflatnight"].name_join(props_and_band)
+            fiberflat_filename = task_classes["fiberflatnight"].paths(task)[0]
+            
+            task  = task_classes["sky"].name_join(props_and_band)
+            sky_filename = task_classes["sky"].paths(task)[0]
+            
+            # check all files exist
+            if os.path.isfile(frame_filename) \
+               and os.path.isfile(fiberflat_filename) \
+               and os.path.isfile(sky_filename) :
+               
+                options["frames"].append(frame_filename)
+                options["skymodels"].append(sky_filename)
+                options["fiberflats"].append(fiberflat_filename)
+            
+            else :
+                log.warning("missing band {} for {}".format(band,name))
+
+        options.update(opts)
+        return option_list(options)
+
+    def _run_cli(self, name, opts, procs):
+        """See BaseTask.run_cli.
+        """
+        entry = "desi_fit_stdstars"
+        optlist = self._option_list(name, opts)
+        com = "{} {}".format(entry, " ".join(optlist))
+        return com
+
+    def _run(self, name, opts, comm):
+        """See BaseTask.run.
+        """
+        from ...scripts import stdstars
+        optlist = self._option_list(name, opts)
+        args = stdstars.parse(optlist)
+        stdstars.main(args)
+        return

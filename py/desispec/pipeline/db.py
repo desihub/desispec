@@ -198,7 +198,7 @@ def all_tasks(night, nside):
                          full["fiberflatnight"].append(props)
 
                 if flavor != "arc" and flavor != "flat":
-                    # Add extractions
+                    # Add sky
                     props = dict()
                     props["night"] = int(night)
                     props["band"] = band
@@ -206,7 +206,22 @@ def all_tasks(night, nside):
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
                     full["sky"].append(props)
-                
+                    
+                    # Add starfit if does not exist
+                    exists=False
+                    for entry in full["starfit"] :
+                        if entry["night"]==props["night"] \
+                           and entry["expid"]==props["expid"] \
+                           and entry["spec"]==props["spec"] :
+                            exists=True
+                            break
+                    if not exists :
+                         props = dict()
+                         props["night"] = int(night)
+                         props["expid"] = int(ex)
+                         props["spec"] = spec
+                         props["state"] = "waiting" # see defs.task_states
+                         full["starfit"].append(props)
 
 
 
