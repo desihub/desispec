@@ -290,8 +290,7 @@ Where supported commands are:
         ntlist = ",".join(nights)
 
         tasks = list()
-        with db.conn as con:
-            cur = con.cursor()
+        with db.cursor() as cur:
             cur.execute(\
                 "select name, state from {} where night in ({})"\
                     .format(args.tasktype, ntlist))

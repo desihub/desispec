@@ -130,8 +130,7 @@ class BaseTask(object):
     def _create(self, db):
         """See BaseTask.create.
         """
-        with db.conn as cn:
-            cur = cn.cursor()
+        with db.cursor() as cur:
             createstr = "create table {} (name text unique".format(self._type)
             for col in zip(self._cols, self._coltypes):
                 createstr = "{}, {} {}".format(createstr, col[0], col[1])
@@ -205,8 +204,7 @@ class BaseTask(object):
         """See BaseTask.retrieve.
         """
         ret = dict()
-        with db.conn as cn:
-            cur = cn.cursor()
+        with db.cursor() as cur:
             cur.execute(\
                 "select * from {} where name = '{}'".format(self._type,name))
             row = cur.fetchone()
@@ -242,12 +240,9 @@ class BaseTask(object):
         """See BaseTask.state_set.
         """
         start = time.time()
-        with db.conn as cn:
-            cur = cn.cursor()
-            cur.execute("begin transaction")
+        with db.cursor() as cur:
             cur.execute("update {} set state = {} where name = '{}'"\
                 .format(self._type, task_state_to_int[state], name))
-            cur.execute("commit")
         stop = time.time()
         log  = get_logger()
         log.debug("took {} sec for {}".format(stop-start,name))
@@ -259,8 +254,7 @@ class BaseTask(object):
         """
 
         st = None
-        with db.conn as cn:
-            cur = cn.cursor()
+        with db.cursor() as cur:
             cur.execute(\
                 "select state from {} where name = '{}'"\
                 .format(self._type,name))

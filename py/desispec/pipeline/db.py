@@ -15,6 +15,8 @@ import os
 
 import re
 
+from contextlib import contextmanager
+
 import numpy as np
 
 from desiutil.log import get_logger
@@ -210,7 +212,7 @@ def all_tasks(night, nside):
                     full["fluxcalib"].append(props)
                     # Add cframe
                     full["cframe"].append(props)
-                    
+
                     # Add starfit if does not exist
                     exists=False
                     for entry in full["starfit"] :
@@ -785,7 +787,7 @@ class DataBase:
     """Class for tracking pipeline processing objects and state.
     """
     def __init__(self):
-        self.conn = None
+        self._conn = None
         return
 
 
@@ -804,10 +806,9 @@ class DataBase:
         namelist = ",".join([ "'{}'".format(x) for x in tasks ])
 
         log = get_logger()
-
         log.debug("opening db")
-        with self.conn as cn:
-            cur = cn.cursor()
+
+        with self.cursor() as cur:
             log.debug("selecting in db")
             cur.execute(\
                 'select name, state from {} where name in ({})'.format(tasktype,
@@ -864,12 +865,10 @@ class DataBase:
 
         """
         log = get_logger()
-
         log.debug("opening db")
-        with self.conn as cn:
-            cur = cn.cursor()
+
+        with self.cursor() as cur:
             log.debug("updating in db")
-            cur.execute('begin transaction')
             for tsk in tasks:
                 cur.execute("update {} set state = {} where name = '{}'".format(tasktype, task_state_to_int[tsk[1]], tsk[0]))
             log.debug("done")
@@ -928,8 +927,7 @@ class DataBase:
 
         alltasks = all_tasks(night, nside)
 
-        with self.conn as con:
-            cur = con.cursor()
+        with self.cursor() as cur:
 
             # read what is already in db
             tasks_in_db = {}
@@ -940,7 +938,6 @@ class DataBase:
                             .format(tt, night))
                 tasks_in_db[tt] = [ x for (x, ) in cur.fetchall()]
 
-            cur.execute("begin transaction")
             for tt in task_types():
                 log.debug("updating {} ...".format(tt))
                 for tsk in alltasks[tt]:
@@ -948,8 +945,6 @@ class DataBase:
                     if tname not in tasks_in_db[tt] :
                         log.debug("adding {}".format(tname))
                         task_classes[tt].insert(cur, tsk)
-
-            cur.execute("commit")
 
         return
 
@@ -969,8 +964,7 @@ class DataBase:
 
         tasks_in_db = None
         # Grab existing nightly tasks
-        with self.conn as cn:
-            cur = cn.cursor()
+        with self.cursor() as cur:
             tasks_in_db = {}
             for tt in task_types():
                 if tt == "spectra":
@@ -1002,10 +996,7 @@ class DataBase:
 
         log = get_logger()
 
-
-        with self.conn as con:
-
-            cur = con.cursor()
+        with self.cursor() as cur:
 
             for tt in task_types():
 
@@ -1058,7 +1049,7 @@ class DataBaseSqlite(DataBase):
             raise RuntimeError("cannot open a non-existent DB in read-only "
                 " mode")
 
-        self.connstr = None
+        self._connstr = None
 
         # This timeout is in seconds
         self._busytime = 1000
@@ -1079,29 +1070,47 @@ class DataBaseSqlite(DataBase):
 
         if self._path is None:
             # We are opening an in-memory DB
-            self.conn = sqlite3.connect(":memory:")
+            self._conn = sqlite3.connect(":memory:")
         else:
             try:
                 # only python3 supports uri option
                 if self._mode == 'r':
-                    self.connstr = 'file:{}?mode=ro'.format(self._path)
+                    self._connstr = 'file:{}?mode=ro'.format(self._path)
                 else:
-                    self.connstr = 'file:{}?mode=rwc'.format(self._path)
-                self.conn = sqlite3.connect(self.connstr, uri=True,
+                    self._connstr = 'file:{}?mode=rwc'.format(self._path)
+                self._conn = sqlite3.connect(self._connstr, uri=True,
                     timeout=self._busytime)
             except:
-                self.conn = sqlite3.connect(self._path, timeout=self._busytime)
+                self._conn = sqlite3.connect(self._path, timeout=self._busytime)
         if self._mode == 'w':
             # In read-write mode, set the journaling
-            self.conn.execute("pragma journal_mode={}"\
+            self._conn.execute("pragma journal_mode={}"\
                 .format(self._journalmode))
-            self.conn.execute("pragma synchronous={}".format(self._syncmode))
+            self._conn.execute("pragma synchronous={}".format(self._syncmode))
 
         # Other tuning options
-        self.conn.execute("pragma temp_store=memory")
-        self.conn.execute("pragma page_size=4096")
-        self.conn.execute("pragma cache_size=4000")
+        self._conn.execute("pragma temp_store=memory")
+        self._conn.execute("pragma page_size=4096")
+        self._conn.execute("pragma cache_size=4000")
         return
+
+
+    @contextmanager
+    def cursor(self):
+        import sqlite3
+        cur = self._conn.cursor()
+        cur.execute("begin transaction")
+        try:
+            yield cur
+        except sqlite3.DatabaseError as err:
+            log = get_logger()
+            log.error(err)
+            cur.execute("rollback")
+            raise err
+        else:
+            cur.execute("commit")
+        finally:
+            del cur
 
 
     def initdb(self):
@@ -1109,8 +1118,7 @@ class DataBaseSqlite(DataBase):
         """
         # check existing tables
         tables_in_db = None
-        with self.conn as cn:
-            cur = cn.cursor()
+        with self.cursor() as cur:
             cur.execute("select name FROM sqlite_master WHERE type='table'")
             tables_in_db = [x for (x, ) in cur.fetchall()]
 
@@ -1168,20 +1176,19 @@ class DataBasePostgres(DataBase):
             self._schema = self._compute_schema()
 
         # Open connection
-        self.conn = pg2.connect(host=self._host, port=self._port,
+        self._conn = pg2.connect(host=self._host, port=self._port,
             user=self._user, dbname=self._dbname)
 
         # Check existence of the schema.  If we were not passed the schema
         # in the constructor, it means that we are creating a new prod, so any
         # existing schema should be wiped and recreated.
 
-        with self.conn as cn:
+        with self._conn as cn:
             cur = cn.cursor()
             # See if our schema already exists...
             com = "select exists(select 1 from pg_namespace where nspname = '{}')".format(self._schema)
             cur.execute(com)
             have_schema = cur.fetchone()[0]
-            print("have_schema =",have_schema)
 
             if create:
                 if have_schema:
@@ -1213,9 +1220,6 @@ class DataBasePostgres(DataBase):
                         " not exist.  Make sure you create the production with"
                         " postgres options and source the top-level setup.sh"
                         " file.".format(self._proddir))
-            com = "set search_path to {}".format(self._schema)
-            print(com,flush=True)
-            cur.execute(com)
 
         # If we are creating the prod, initialize the tables.
         if create:
@@ -1228,13 +1232,32 @@ class DataBasePostgres(DataBase):
         return self._schema
 
 
+    @contextmanager
+    def cursor(self):
+        import psycopg2
+        cur = self._conn.cursor()
+        cur.execute("set search_path to {}".format(self._schema))
+        print("PG2 cursor search path set", flush=True)
+        cur.execute("begin transaction")
+        try:
+            yield cur
+        except psycopg2.DatabaseError as err:
+            log = get_logger()
+            log.error(err)
+            cur.execute("rollback")
+            raise err
+        else:
+            cur.execute("commit")
+        finally:
+            del cur
+
+
     def initdb(self):
         """Create DB tables for all tasks if they do not exist.
         """
         # check existing tables
         tables_in_db = None
-        with self.conn as cn:
-            cur = cn.cursor()
+        with self.cursor() as cur:
             cur.execute("select tablename from pg_tables where schemaname =  '{}'".format(self.schema))
             tables_in_db = [x for (x, ) in cur.fetchall()]
 
