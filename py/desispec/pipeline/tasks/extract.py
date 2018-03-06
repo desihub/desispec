@@ -57,15 +57,15 @@ class TaskExtract(BaseTask):
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
-        from .base import task_classes, task_type
-
+        from .base import task_classes
         props = self.name_split(name)
-        pix_task      = task_classes["pix"].name_join(props)
-        fibermap_task = task_classes["fibermap"].name_join(props)
-        psfnight_task = task_classes["psfnight"].name_join(props)
-        deptasks = [pix_task,fibermap_task,psfnight_task]
+        deptasks = {
+            "input" : task_classes["pix"].name_join(props),
+            "fibermap" : task_classes["fibermap"].name_join(props),
+            "psf" : task_classes["psfnight"].name_join(props)
+            }
         return deptasks
-
+    
     def _run_max_procs(self, procs_per_node):
         """See BaseTask.run_max_procs.
         """
@@ -99,34 +99,12 @@ class TaskExtract(BaseTask):
         """
         from .base import task_classes, task_type
 
-        options = OrderedDict()
-
-        deplist = self.deps(name)
-        pixfile  = None
-        fibermap = None
-        psfnight = None
-        for dp in deplist:
-            if re.search("pix", dp) is not None:
-                pixfile = task_classes["pix"].paths(dp)[0]
-            if re.search("fibermap", dp) is not None:
-                fibermap = task_classes["fibermap"].paths(dp)[0]
-            if re.search("psfnight", dp) is not None:
-                psfnight = task_classes["psfnight"].paths(dp)[0]
-        
-        if pixfile is None :
-            raise RuntimeError("dependency list must include input pix image file")
-        if fibermap is None :
-            raise RuntimeError("dependency list must include a fibermap")
-        if psfnight is None :
-            raise RuntimeError("dependency list must include a psfnight")
-        
-        outfile = self.paths(name)[0]
-
+        deps = self.deps(name)
         options = {}
-        options["input"]    = pixfile
-        options["fibermap"] = fibermap
-        options["psf"]      = psfnight
-        options["output"]   = outfile
+        options["input"]    = deps["input"]
+        options["fibermap"] = deps["fibermap"]
+        options["psf"]      = deps["psf"]
+        options["output"]   = self.paths(name)[0]
 
         # extract the wavelength range from the options, depending on the band
         props = self.name_split(name)

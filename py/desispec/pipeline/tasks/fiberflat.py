@@ -59,8 +59,9 @@ class TaskFiberflat(BaseTask):
         """
         from .base import task_classes
         props = self.name_split(name)
-        extract_task = task_classes["extract"].name_join(props)
-        deptasks = [extract_task]
+        deptasks = {
+            "infile" : task_classes["extract"].name_join(props)
+        }
         return deptasks
 
     def _run_max_procs(self, procs_per_node):

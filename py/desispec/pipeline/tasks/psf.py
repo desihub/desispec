@@ -61,12 +61,11 @@ class TaskPSF(BaseTask):
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
-        from .base import task_classes, task_type
-
+        from .base import task_classes
         props = self.name_split(name)
-        #boottask = task_classes["psfboot"].name_join(props)
-        pixtask = task_classes["pix"].name_join(props)
-        deptasks = [pixtask,]
+        deptasks = {
+            "input-image" : task_classes["pix"].name_join(props) 
+        }
         return deptasks
 
 
@@ -126,23 +125,17 @@ class TaskPSF(BaseTask):
         options = OrderedDict()
 
         
-        pixfile = None
-        deplist = self.deps(name)
-        for dp in deplist:
-            if re.search("pix", dp) is not None:
-                pixfile = task_classes["pix"].paths(dp)[0]
-        if pixfile is None :
-            raise RuntimeError("dependency list must include input pix image file")
-
+        deps  = self.deps(name)
         props = self.name_split(name)
+        
         inputpsf = "psf-{}{}.fits".format(props["band"],props["spec"])
-                
         if "input-psf-dir" in opts :
             inputpsf = os.path.join(opts["input-psf-dir"],inputpsf)
-        
-        options["input-image"] = pixfile
-        options["output-psf"]  = self.paths(name)
+            
         options["input-psf"]   = inputpsf
+        options["input-image"] = deps["input-image"]
+        options["output-psf"]  = self.paths(name)
+        
         
         if len(opts) > 0:
             opts_wo_input_dir = opts.copy()

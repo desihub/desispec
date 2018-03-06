@@ -35,7 +35,7 @@ class TaskSpectra(BaseTask):
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
-        return list()
+        return dict()
 
     def run_max_procs(self, procs_per_node):
         return 20
