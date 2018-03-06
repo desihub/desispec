@@ -171,7 +171,7 @@ def all_tasks(night, nside):
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
                     full["extract"].append(props)
-                
+
                 if flavor == "flat" :
                     # Add a fiberflat task
                     props = dict()
@@ -782,7 +782,7 @@ class DataBase:
 
         """
         states = None
-        namelist = ",".join([ '"{}"'.format(x) for x in tasks ])
+        namelist = ",".join([ "'{}'".format(x) for x in tasks ])
 
         log = get_logger()
 
@@ -844,9 +844,6 @@ class DataBase:
             Nothing.
 
         """
-        states = None
-        namelist = ",".join([ '"{}"'.format(x) for x in tasks ])
-
         log = get_logger()
 
         log.debug("opening db")
@@ -855,7 +852,7 @@ class DataBase:
             log.debug("updating in db")
             cur.execute('begin transaction')
             for tsk in tasks:
-                cur.execute('update {} set state = {} where name = "{}"'.format(tasktype, task_state_to_int[tsk[1]], tsk[0]))
+                cur.execute("update {} set state = {} where name = '{}'".format(tasktype, task_state_to_int[tsk[1]], tsk[0]))
             log.debug("done")
         return
 
@@ -920,7 +917,7 @@ class DataBase:
             for tt in task_types():
                 if tt == "spectra" : continue
                 cur.execute(\
-                            "select name from {} where night={}"\
+                            "select name from {} where night = {}"\
                             .format(tt, night))
                 tasks_in_db[tt] = [ x for (x, ) in cur.fetchall()]
 
@@ -994,7 +991,7 @@ class DataBase:
             for tt in task_types():
 
                 # for each type of task, get the list of tasks in waiting mode
-                cur.execute('select name from {} where state={}'.format(tt,task_state_to_int["waiting"]))
+                cur.execute('select name from {} where state = {}'.format(tt,task_state_to_int["waiting"]))
                 tasks = [ x for (x, ) in cur.fetchall()]
 
                 if len(tasks)>0 :
@@ -1002,7 +999,7 @@ class DataBase:
 
                 for tsk in tasks :
                     # for each task in waiting mode, get the dependencies
-                    deps = task_classes[tt].deps(tsk,db=self,inputs=None)
+                    deps = task_classes[tt].deps(tsk, db=self, inputs=None)
                     ready = True
                     for dep in deps.values() :
                         # for each dependency, guess its type
@@ -1095,7 +1092,7 @@ class DataBaseSqlite(DataBase):
         tables_in_db = None
         with self.conn as cn:
             cur = cn.cursor()
-            cur.execute('select name FROM sqlite_master WHERE type="table"')
+            cur.execute("select name FROM sqlite_master WHERE type='table'")
             tables_in_db = [x for (x, ) in cur.fetchall()]
 
         # Create a table for every task type
@@ -1219,7 +1216,7 @@ class DataBasePostgres(DataBase):
         tables_in_db = None
         with self.conn as cn:
             cur = cn.cursor()
-            cur.execute('select tablename from pg_tables where schemaname =  "{}"'.format(self.schema))
+            cur.execute("select tablename from pg_tables where schemaname =  '{}'".format(self.schema))
             tables_in_db = [x for (x, ) in cur.fetchall()]
 
         # Create a table for every task type

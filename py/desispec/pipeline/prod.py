@@ -271,7 +271,7 @@ def update_prod(nightstr=None, hpxnside=64):
         with db.conn as cn:
             cur = cn.cursor()
             cur.execute(\
-                "select expid from fibermap where night = \"{}\"".format(nt))
+                "select expid from fibermap where night = {}".format(nt))
             exps = [ int(x[0]) for x in cur.fetchall() ]
         for ex in exps:
             fdir = os.path.join(nexpdir, "{:08d}".format(ex))

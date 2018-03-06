@@ -158,7 +158,7 @@ class BaseTask(object):
         """
         name = self.name_join(props)
         colstr = '(name'
-        valstr = '("{}"'.format(name)
+        valstr = "('{}'".format(name)
 
         #cmd='insert or replace into {} values ("{}"'.format(self._type, name)
         for k, ktype in zip(self._cols, self._coltypes):
@@ -170,7 +170,7 @@ class BaseTask(object):
                     valstr += ', {}'.format(task_state_to_int["waiting"])
             else:
                 if ktype == "text":
-                    valstr += ', "{}"'.format(props[k])
+                    valstr += ", '{}'".format(props[k])
                 else:
                     valstr += ', {}'.format(props[k])
         colstr += ')'
@@ -208,7 +208,7 @@ class BaseTask(object):
         with db.conn as cn:
             cur = cn.cursor()
             cur.execute(\
-                'select * from {} where name = "{}"'.format(self._type,name))
+                "select * from {} where name = '{}'".format(self._type,name))
             row = cur.fetchone()
             if row is None:
                 raise RuntimeError("task {} not in database".format(name))
@@ -245,7 +245,7 @@ class BaseTask(object):
         with db.conn as cn:
             cur = cn.cursor()
             cur.execute("begin transaction")
-            cur.execute('update {} set state = {} where name = "{}"'\
+            cur.execute("update {} set state = {} where name = '{}'"\
                 .format(self._type, task_state_to_int[state], name))
             cur.execute("commit")
         stop = time.time()
@@ -262,7 +262,8 @@ class BaseTask(object):
         with db.conn as cn:
             cur = cn.cursor()
             cur.execute(\
-                'select state from {} where name = "{}"'.format(self._type,name))
+                "select state from {} where name = '{}'"\
+                .format(self._type,name))
             row = cur.fetchone()
             if row is None:
                 raise RuntimeError("task {} not in database".format(name))
