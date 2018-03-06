@@ -159,42 +159,26 @@ class BaseTask(object):
         name = self.name_join(props)
         colstr = '(name'
         valstr = '("{}"'.format(name)
-        upstr = 'name="{}"'.format(name)
 
         #cmd='insert or replace into {} values ("{}"'.format(self._type, name)
         for k, ktype in zip(self._cols, self._coltypes):
             colstr += ', {}'.format(k)
             if k == "state":
                 if k in props:
-                    upstr += ', {}={}'.format(k, task_state_to_int[props["state"]])
                     valstr += ', {}'.format(task_state_to_int[props["state"]])
                 else:
-                    upstr += ', {}={}'.format(k, task_state_to_int["waiting"])
                     valstr += ', {}'.format(task_state_to_int["waiting"])
             else:
                 if ktype == "text":
-                    upstr += ', {}="{}"'.format(k, props[k])
                     valstr += ', "{}"'.format(props[k])
                 else:
-                    upstr += ', {}={}'.format(k, props[k])
                     valstr += ', {}'.format(props[k])
         colstr += ')'
         valstr += ')'
 
-        # Check if we have this row already
-        cmd = "select exists(select 1 from {} where name = '{}')".format(self._type, name)
+        cmd = 'insert into {} {} values {}'.format(self._type, colstr, valstr)
+        print(cmd, flush=True)
         cursor.execute(cmd)
-        have_row = cursor.fetchone()[0]
-
-        if have_row:
-            # do update
-            cmd = 'update {} set {}'.format(self._type, upstr)
-            print(cmd, flush=True)
-            cursor.execute(cmd)
-        else:
-            cmd = 'insert into {} {} values {}'.format(self._type, colstr, valstr)
-            print(cmd, flush=True)
-            cursor.execute(cmd)
         return
 
 

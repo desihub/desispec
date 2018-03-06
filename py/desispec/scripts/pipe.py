@@ -341,6 +341,29 @@ Where supported commands are:
         return
 
 
+    def sync(self):
+        availtypes = ",".join(pipe.db.task_types())
+
+        parser = argparse.ArgumentParser(description="Synchronize DB state "
+            "based on the filesystem.")
+
+        parser.add_argument("--nights", required=False, default=None,
+            help="comma separated (YYYYMMDD) or regex pattern- only nights "
+            "matching these patterns will be examined.")
+
+        args = parser.parse_args(sys.argv[2:])
+
+        dbpath = io.get_pipe_database()
+        db = pipe.load_db(dbpath, mode="w")
+
+        allnights = io.get_nights(strip_path=True)
+        nights = pipe.prod.select_nights(allnights, args.nights)
+
+        for nt in nights:
+            db.sync(nt)
+        return
+
+
     def _parse_run_opts(self, parser):
         """Internal function to parse options for running.
 

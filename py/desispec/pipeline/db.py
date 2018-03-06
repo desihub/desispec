@@ -804,6 +804,65 @@ class DataBase:
         return states
 
 
+    def set_states_type(self, tasktype, tasks):
+        """Efficiently get the state of many tasks of a single type.
+
+        Args:
+            tasktype (str): the type of these tasks.
+            tasks (list): list of tuples containing the task name and the
+                state to set.
+
+        Returns:
+            Nothing.
+
+        """
+        states = None
+        namelist = ",".join([ '"{}"'.format(x) for x in tasks ])
+
+        log = get_logger()
+
+        log.debug("opening db")
+        with self.conn as cn:
+            cur = cn.cursor()
+            log.debug("updating in db")
+            cur.execute('begin transaction')
+            for tsk in tasks:
+                cur.execute('update {} set state = {} where name = "{}"'.format(tasktype, task_state_to_int[tsk[1]], tsk[0]))
+            log.debug("done")
+        return
+
+
+    def set_states(self, tasks):
+        """Efficiently set the state of many tasks at once.
+
+        Args:
+            tasks (list): list of tuples containing the task name and the
+                state to set.
+
+        Returns:
+            Nothing.
+
+        """
+        from .tasks.base import task_classes, task_type
+        # First find the type of each task.
+        ttypes = dict()
+        for tsk in tasks:
+            ttypes[tsk[0]] = task_type(tsk[0])
+
+        # Sort tasks into types
+        taskbytype = dict()
+        for t in task_types():
+            taskbytype[t] = list()
+        for tsk in tasks:
+            taskbytype[ttypes[tsk[0]]].append(tsk)
+
+        # Process each type
+        for t, tlist in taskbytype.items():
+            if len(tlist) > 0:
+                self.set_states_type(t, tlist)
+        return
+
+
     def update(self, night, nside):
         """Update DB based on raw data.
 
@@ -847,6 +906,44 @@ class DataBase:
                         task_classes[tt].insert(cur, tsk)
 
             cur.execute("commit")
+
+        return
+
+
+    def sync(self, night):
+        """Update states of tasks based on filesystem.
+
+        Go through all tasks in the DB for the given night and determine their
+        state on the filesystem.  Then update the DB state to match.
+
+        Args:
+            night (str): The night to scan for updates.
+
+        """
+        # Update DB tables, if needed
+        self.initdb()
+
+        tasks_in_db = None
+        # Grab existing nightly tasks
+        with self.conn as cn:
+            cur = cn.cursor()
+            tasks_in_db = {}
+            for tt in task_types():
+                if tt == "spectra":
+                    continue
+                cur.execute(\
+                            "select name from {} where night = {}"\
+                            .format(tt, night))
+                tasks_in_db[tt] = [ x for (x, ) in cur.fetchall() ]
+
+        # FIXME: for spectra and zbest tasks, we should use the extra tables
+        # to check only the files touched by this night's data.
+
+        # For each task type, check status WITHOUT the DB, then set state.
+        for tt in task_types():
+            tstates = check_tasks(tasks_in_db[tt], db=None)
+            st = [ (x, tstates[x]) for x in tasks_in_db[tt] ]
+            self.set_states_type(tt, st)
 
         return
 
