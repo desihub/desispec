@@ -134,7 +134,7 @@ def masked_median(images,masks=None) :
     the median is performed only on unmasked pixels.
 
     Args:
-       images : list of images of same shape
+       images : 3D numpy array : list of images of same shape
     Options:
        masks : list of mask images of same shape as the images. Only pixels with mask==0 are considered in the median.
 
