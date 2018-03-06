@@ -52,6 +52,7 @@ Where supported commands are:
    env      Print current production location.
    update   Update an existing production.
    getready Auto-Update of prod DB.
+   sync     Synchronize DB state based on the filesystem.
    tasks    Get all possible tasks for a given type and states.
    check    Check the status of tasks.
    cli      Return the equivalent command line entrypoint for tasks.
