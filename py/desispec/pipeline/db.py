@@ -181,6 +181,21 @@ def all_tasks(night, nside):
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
                     full["fiberflat"].append(props)
+                    # Add a fiberflat night file if does not exist
+                    exists=False
+                    for entry in full["fiberflatnight"] :
+                        if entry["night"]==props["night"] \
+                           and entry["band"]==props["band"] \
+                           and entry["spec"]==props["spec"] :
+                            exists=True
+                            break
+                    if not exists :
+                         props = dict()
+                         props["night"] = int(night)
+                         props["band"] = band
+                         props["spec"] = spec
+                         props["state"] = "waiting" # see defs.task_states
+                         full["fiberflatnight"].append(props)
 
     log.debug("done")
     return full
@@ -976,7 +991,7 @@ class DataBase:
                     # for each task in waiting mode, get the dependencies
                     deps = task_classes[tt].deps(tsk,db=self,inputs=None)
                     ready = True
-                    for dep in deps :
+                    for dep in deps.values() :
                         # for each dependency, guess its type
                         deptype  = dep.split(task_name_sep)[0]
                         # based on the type and dependency name, read state from db
