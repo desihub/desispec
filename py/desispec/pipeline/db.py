@@ -206,6 +206,10 @@ def all_tasks(night, nside):
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
                     full["sky"].append(props)
+                    # Add fluxcalib
+                    full["fluxcalib"].append(props)
+                    # Add cframe
+                    full["cframe"].append(props)
                     
                     # Add starfit if does not exist
                     exists=False
