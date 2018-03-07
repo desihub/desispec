@@ -473,6 +473,11 @@ class BaseTask(object):
 
         return failcount
 
+    def postprocessing(self, db, name):
+        """For successful runs, postprocessing on DB"""
+        pass
+        
+
 
     def run_and_update(self, db, name, opts, comm=None):
         """Run the task and update DB state.
@@ -511,6 +516,7 @@ class BaseTask(object):
                         break
                 if done:
                     self.state_set(db, name, "done")
+                    self.postprocessing(db,name)
                 else:
                     self.state_set(db, name, "fail")
         return failed
