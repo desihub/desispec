@@ -103,7 +103,28 @@ def all_tasks(night, nside):
                     props["pixel"] = pixel
                     props["ntargets"] = np.sum(pixels==pixel)
                     healpix_frames.append(props)
-        
+            # all spectro at once
+            pixels  = np.unique(desimodel.footprint.radec2pix(nside, ra, dec))
+            for pixel in pixels :
+                props = dict()
+                props["pixel"] = pixel
+                props["nside"] = nside
+                props["state"]  = "waiting"
+                exists=False
+                for entry in full["spectra"] :
+                    if entry["pixel"]==props["pixel"] :
+                        exists=True
+                        break
+                if not exists : full["spectra"].append(props)
+                exists=False
+                for entry in full["redshift"] :
+                    if entry["pixel"]==props["pixel"] :
+                        exists=True
+                        break
+                if not exists : full["redshift"].append(props)
+                
+                
+                
         fmprops = dict()
         fmprops["night"]  = int(night)
         fmprops["expid"]  = int(ex)
@@ -444,12 +465,9 @@ class DataBase:
             # read what is already in db
             tasks_in_db = {}
             for tt in task_types():
-                if tt == "spectra" : continue
-                cur.execute(\
-                            "select name from {} where night = {}"\
-                            .format(tt, night))
+                cur.execute("select name from {}".format(tt))
                 tasks_in_db[tt] = [ x for (x, ) in cur.fetchall()]
-
+                
             for tt in task_types():
                 log.debug("updating {} ...".format(tt))
                 for tsk in alltasks[tt]:
