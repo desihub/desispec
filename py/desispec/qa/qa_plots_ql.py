@@ -396,6 +396,7 @@ def plot_RMS(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_integral(qa_dict,outfile):
+    import matplotlib.ticker as ticker
     """
     Plot integral.
 
@@ -418,20 +419,20 @@ def plot_integral(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    std_integral=np.array(qa_dict["METRICS"]["FIBER_MAG"])
+    integral=np.array(qa_dict["METRICS"]["FIBER_MAG"])
     std_fiberid=qa_dict["METRICS"]["STD_FIBERID"]
 
     fig=plt.figure()
     plt.suptitle("Total integrals of STD spectra {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    index=np.arange(1,len(std_integral)+1)
+    index=np.arange(len(integral))
     ax1=fig.add_subplot(111)
-    hist_med=ax1.bar(index,std_integral,color='b',align='center')
-    ax1.set_xlabel('STD fiber ID',fontsize=10)
+    hist_med=ax1.bar(index,integral,color='b',align='center')
+    ax1.set_xlabel('Fibers',fontsize=10)
     ax1.set_ylabel('Integral (photon counts)',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
-    ax1.set_xticks(index)
-    ax1.set_xticklabels(std_fiberid)
+    ax1.xaxis.set_major_locator(ticker.AutoLocator())
+    #ax1.set_xticklabels(std_fiberid)
     
     plt.tight_layout()
     fig.savefig(outfile)

@@ -1469,7 +1469,7 @@ class Integrate_Spec(MonitoringAlg):
         flux=frame.flux
         wave=frame.wave
         integrals=np.zeros(flux.shape[0])
-
+        log.info(len(integrals))
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
         
@@ -1515,7 +1515,7 @@ class Integrate_Spec(MonitoringAlg):
         magdiff_err='NORMAL'
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
         delta_mag=np.zeros(frame.nspec) #- placeholder
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fib_mag, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
 
         if qlf:
             qlf_post(retval) 
