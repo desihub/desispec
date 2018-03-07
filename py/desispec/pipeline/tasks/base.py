@@ -236,37 +236,48 @@ class BaseTask(object):
         return self._retrieve(db, name)
 
 
-    def _state_set(self, db, name, state):
+    def _state_set(self, db, name, state, cur=None):
         """See BaseTask.state_set.
         """
         start = time.time()
-        with db.cursor() as cur:
-            cur.execute("update {} set state = {} where name = '{}'"\
-                .format(self._type, task_state_to_int[state], name))
+        
+        cmd="update {} set state = {} where name = '{}'"\
+            .format(self._type, task_state_to_int[state], name)
+        
+        if cur is None :
+            with db.cursor() as cur:
+                cur.execute(cmd)
+        else :
+            cur.execute(cmd)
+        
         stop = time.time()
         log  = get_logger()
         log.debug("took {} sec for {}".format(stop-start,name))
         return
 
 
-    def _state_get(self, db, name):
+    def _state_get(self, db, name, cur=None):
         """See BaseTask.state_get.
         """
-
+        
         st = None
-        with db.cursor() as cur:
-            cur.execute(\
-                "select state from {} where name = '{}'"\
-                .format(self._type,name))
+        cmd = "select state from {} where name = '{}'"\
+            .format(self._type,name)
+        if cur is None :
+            with db.cursor() as cur:
+                cur.execute(cmd)
+                row = cur.fetchone()
+        else :
+            cur.execute(cmd)
             row = cur.fetchone()
-            if row is None:
-                raise RuntimeError("task {} not in database".format(name))
-            st = task_int_to_state[row[0]]
 
+        if row is None:
+            raise RuntimeError("task {} not in database".format(name))
+        st = task_int_to_state[row[0]]
         return st
 
 
-    def state_set(self, db, name, state):
+    def state_set(self, db, name, state, cur=None):
         """Set the state of a task.
 
         This should not be called repeatedly if you are setting the state of
@@ -277,11 +288,11 @@ class BaseTask(object):
             name (str): the task name.
 
         """
-        self._state_set(db, name, state)
+        self._state_set(db, name, state, cur)
         return
 
 
-    def state_get(self, db, name):
+    def state_get(self, db, name, cur=None):
         """Get the state of a task.
 
         This should not be called repeatedly for many tasks- it is more
@@ -295,7 +306,7 @@ class BaseTask(object):
             str: the state.
 
         """
-        return self._state_get(db, name)
+        return self._state_get(db, name, cur)
 
 
     def _deps(self, name, db, inputs):
