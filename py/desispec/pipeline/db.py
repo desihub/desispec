@@ -536,6 +536,17 @@ class DataBase:
 
         return
     
+    def update_healpix_frame_state(self,props,state) :
+        with self.cursor() as cur:
+            if "expid" in props :
+                # update from a cframe
+                cmd = "update healpix_frame set state = {} where expid = {} and spec = {}".format(state,props["expid"],props["spec"])
+            else :
+                # update from a spectra or redshift task
+                cmd = "update healpix_frame set state = {} where pixel = {}".format(state,props["pixel"])
+            cur.execute(cmd)
+        return
+    
     def create_healpix_frame_table(self) :
         with self.cursor() as cur:
             cmd = "create table healpix_frame (expid integer , spec integer , pixel integer , ntargets integer , state integer,  UNIQUE(expid,spec,pixel) ON CONFLICT IGNORE )"
