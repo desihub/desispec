@@ -447,6 +447,8 @@ class BaseTask(object):
 
         """
         log = get_logger()
+        log.debug("DB={}".format(db))
+
         nproc = 1
         rank = 0
         if comm is not None:
@@ -456,7 +458,7 @@ class BaseTask(object):
         # at debug level, write out the equivalent commandline that was used
         if rank == 0:
             lstr = "(run by pipeline with {} procs)".format(nproc)
-            com = self.run_cli(name, opts, nproc, db)
+            com = self.run_cli(name, opts, nproc, db=db)
             log.debug("{}: {}".format(lstr, com))
 
         failed = 0

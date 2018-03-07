@@ -68,7 +68,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
         # Mark task as in progress
         if db is not None:
             task_classes[ttype].state_set(db=db,name=name,state="running")
-
+    
     failcount = 0
     if logfile is None:
         # No redirection
@@ -268,7 +268,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                     "{}.log".format(runtasks[t]))
             elif "pixel" in fields:
                 tasklogdir = os.path.join(logdir,
-                    io.healpix_subdirectory(fields["pixel"]))
+                    io.healpix_subdirectory(fields["nside"],fields["pixel"]))
                 # When creating this directory, there MIGHT be conflicts from
                 # multiple processes working on pixels in the same
                 # sub-directories...

@@ -13,6 +13,9 @@ from ...io import findfile
 
 from .base import BaseTask
 
+from desiutil.log import get_logger
+
+import os
 
 # NOTE: only one class in this file should have a name that starts with "Task".
 
@@ -67,6 +70,10 @@ class TaskSpectra(BaseTask):
     def _option_list(self, name, opts, db):
         
         # we do need db access for spectra
+        if db is None :
+            log = get_logger()
+            log.error("we do need db access for spectra")
+            raise RuntimeError("we do need db access for spectra")
         
         from .base import task_classes, task_type
         # get pixel
@@ -96,12 +103,25 @@ class TaskSpectra(BaseTask):
     def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
-        entry = "???"
+        log = get_logger()
+        log.debug("DB={}".format(db))
+        entry = "echo"
         optlist = self._option_list(name, opts, db)
         return "{} {}".format(entry, " ".join(optlist))
         
     def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
+        log = get_logger()
+        log.debug("DB={}".format(db))
+        ofilename = self.paths(name)[0]
+        log.warning("DOES NOTHING, NOT IMPLEMENTED, touch {}".format(ofilename))
+        os.makedirs(os.path.dirname(ofilename))
+        os.system("touch {}".format(ofilename))
         return
+    
+    def postprocessing(self, db, name):
+        """For successful runs, postprocessing on DB"""
+        props=self.name_split(name)
+        db.update_healpix_frame_state(props,state=2) # 2=spectra has been updated
 
