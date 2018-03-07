@@ -618,6 +618,7 @@ class TestIO(unittest.TestCase):
         from ..io.meta import findfile
         from ..io.download import download
         filename = findfile('sky',expid=2,night='20150510',camera='b0',spectrograph=0)
+        print(filename)
         paths = download(filename)
         self.assertEqual(paths[0],filename)
         self.assertTrue(os.path.exists(paths[0]))
