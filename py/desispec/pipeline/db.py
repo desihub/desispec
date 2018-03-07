@@ -551,13 +551,13 @@ class DataBase:
                         # for each dependency, guess its type
                         deptype  = dep.split(task_name_sep)[0]
                         # based on the type and dependency name, read state from db
-                        depstate =  task_classes[deptype].state_get(db=self,name=dep)
+                        depstate =  task_classes[deptype].state_get(db=self,name=dep,cur=cur)
                         ready   &=  (depstate=="done") # ready if all dependencies are done
                     if ready :
                         # change state to ready
                         log.debug("{} is ready to run".format(tsk))
-                        task_classes[tt].state_set(db=self,name=tsk,state="ready")
-
+                        task_classes[tt].state_set(db=self,name=tsk,state="ready",cur=cur)
+                        
             for tt in [ "spectra" , "redshift" ] :
                     
                 if tt == "spectra" :
@@ -565,10 +565,11 @@ class DataBase:
                 elif tt == "redshift" :
                     required_healpix_frame_state = 2 # means we have an updated spectra file
                 
-                cur.execute('select pixel from healpix_frame where state = {}'.format(required_healpix_frame_state))
-                pixels = [ x for (x, ) in cur.fetchall()]
-                for pixel in pixels :
-                    cur.execute('update name from {} where pixel = {}'.format(tt,task_state_to_int["waiting"]))
+                cur.execute('select nside,pixel from healpix_frame where state = {}'.format(required_healpix_frame_state))
+                entries = cur.fetchall()
+                for entry in entries :
+                    log.debug("pixel spectra {} is ready to run".format(entry[1]))
+                    cur.execute('update {} set state = {} where nside = {} and pixel = {}'.format(tt,task_state_to_int["ready"],entry[0],entry[1]))
                 
                     
 
