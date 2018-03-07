@@ -145,7 +145,7 @@ class TaskPSF(BaseTask):
 
         return option_list(options)
 
-    def _run_cli(self, name, opts, procs):
+    def _run_cli(self, name, opts, procs, db=None):
         """See BaseTask.run_cli.
         """
         entry = "desi_compute_psf"
@@ -153,7 +153,7 @@ class TaskPSF(BaseTask):
             entry = "desi_compute_psf_mpi"
         return "{} {}".format(entry, self._option_list(name, opts))
         
-    def _run(self, name, opts, comm):
+    def _run(self, name, opts, comm, db=None):
         """See BaseTask.run.
         """
         from ...scripts import specex

@@ -400,13 +400,13 @@ class BaseTask(object):
         return self._run_defaults()
 
 
-    def _run_cli(self, name, opts, procs):
+    def _run_cli(self, name, opts, procs, db=None):
         raise NotImplementedError("You should not use a BaseTask object "
             " directly")
         return None
 
 
-    def run_cli(self, name, opts, procs, launch=None, log=None):
+    def run_cli(self, name, opts, procs, launch=None, log=None, db=None):
         """Return the equivalent command-line interface.
 
         Args:
@@ -420,7 +420,7 @@ class BaseTask(object):
             str: a command line.
 
         """
-        comstr = self._run_cli(name, opts, procs)
+        comstr = self._run_cli(name, opts, procs, db)
         if launch is not None:
             comstr = "{} {} {}".format(launch, procs, comstr)
         if log is not None:
@@ -428,13 +428,13 @@ class BaseTask(object):
         return comstr
 
 
-    def _run(self, name, opts, comm):
+    def _run(self, name, opts, comm, db=None):
         raise NotImplementedError("You should not use a BaseTask object "
             " directly")
         return
 
 
-    def run(self, name, opts, comm=None):
+    def run(self, name, opts, comm=None, db=None):
         """Run the task.
 
         Args:
@@ -456,12 +456,12 @@ class BaseTask(object):
         # at debug level, write out the equivalent commandline that was used
         if rank == 0:
             lstr = "(run by pipeline with {} procs)".format(nproc)
-            com = self.run_cli(name, opts, nproc)
+            com = self.run_cli(name, opts, nproc, db)
             log.debug("{}: {}".format(lstr, com))
 
         failed = 0
         try:
-            self._run(name, opts, comm)
+            self._run(name, opts, comm, db)
         except:
             msg = "FAILED: task {} process {}".format(name, rank)
             log.error(msg)
@@ -512,7 +512,7 @@ class BaseTask(object):
             nproc = comm.size
             rank = comm.rank
 
-        failed = self.run(name, opts, comm)
+        failed = self.run(name, opts, comm, db)
 
         if rank == 0:
             if failed > 0:

@@ -104,14 +104,14 @@ class TaskPSFNight(BaseTask):
         """
         return option_list(self._option_dict(name,opts))
         
-    def _run_cli(self, name, opts, procs):
+    def _run_cli(self, name, opts, procs, db=None):
         """See BaseTask.run_cli.
         """
         optlist = self._option_list(name, opts)
         com = "# command line for psfnight not implemented"
         return com
 
-    def _run(self, name, opts, comm):
+    def _run(self, name, opts, comm, db=None):
         """See BaseTask.run.
         """
         from ...scripts import specex

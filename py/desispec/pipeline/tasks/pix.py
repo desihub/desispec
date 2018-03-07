@@ -114,7 +114,7 @@ class TaskPix(BaseTask):
         return option_list(options)
 
 
-    def _run_cli(self, name, opts, procs):
+    def _run_cli(self, name, opts, procs, db=None):
         """See BaseTask.run_cli.
         """
         entry = "desi_preproc"
@@ -123,7 +123,7 @@ class TaskPix(BaseTask):
         return com
 
 
-    def _run(self, name, opts, comm):
+    def _run(self, name, opts, comm, db=None):
         """See BaseTask.run.
         """
         from ...scripts import preproc

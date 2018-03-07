@@ -98,6 +98,7 @@ def all_tasks(night, nside):
                 pixels  = desimodel.footprint.radec2pix(nside, ra[ii], dec[ii])
                 for pixel in np.unique(pixels) :
                     props = dict()
+                    props["night"] = int(night)
                     props["expid"] = int(ex)
                     props["spec"]  = spectro
                     props["nside"] = nside
@@ -461,7 +462,7 @@ class DataBase:
             # insert or ignore all healpix_frames
             log.debug("updating healpix_frame ...")
             for entry in healpix_frames :
-                cur.execute("insert into healpix_frame (expid,spec,nside,pixel,ntargets,state) values({},{},{},{},{},{})".format(entry["expid"],entry["spec"],entry["nside"],entry["pixel"],entry["ntargets"],0))
+                cur.execute("insert into healpix_frame (night,expid,spec,nside,pixel,ntargets,state) values({},{},{},{},{},{},{})".format(entry["night"],entry["expid"],entry["spec"],entry["nside"],entry["pixel"],entry["ntargets"],0))
 
             # read what is already in db
             tasks_in_db = {}
@@ -586,9 +587,30 @@ class DataBase:
             cur.execute(cmd)
         return
     
+    def select_healpix_frame(self,props) :
+        res = []
+        with self.cursor() as cur:
+            cmd = "select * from healpix_frame where "
+            first=True
+            for k in props.keys() :
+                if not first : cmd += " and "
+                first=False
+                cmd += "{}={}".format(k,props[k])
+            ### I AM HERE
+            cur.execute(cmd)
+            entries = cur.fetchall()
+            # convert that to list of dictionnaries
+            for entry in entries :
+                tmp=dict()
+                for i,k in enumerate(["night","expid","spec","nside","pixel"]) :
+                    tmp[k] = entry[i]
+                res.append(tmp)
+        return res
+
+
     def create_healpix_frame_table(self) :
         with self.cursor() as cur:
-            cmd = "create table healpix_frame (expid integer , spec integer , nside integer , pixel integer , ntargets integer , state integer,  UNIQUE(expid,spec,nside,pixel) ON CONFLICT IGNORE )"
+            cmd = "create table healpix_frame (night integer, expid integer , spec integer , nside integer , pixel integer , ntargets integer , state integer,  UNIQUE(expid,spec,nside,pixel) ON CONFLICT IGNORE )"
             cur.execute(cmd)
         return
     

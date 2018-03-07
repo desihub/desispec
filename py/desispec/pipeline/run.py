@@ -468,12 +468,12 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
                     "{}.log".format(runtasks[t]))
             elif "pixel" in fields:
                 tasklogdir = os.path.join(logdir,
-                    io.healpix_subdirectory(fields["pixel"]))
+                    io.healpix_subdirectory(fields["nside"],fields["pixel"]))
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
 
             com = task_classes[tt].run_cli(runtasks[t], options, taskproc,
-                launch=launch, log=tasklog)
+                                           launch=launch, log=tasklog, db=db) # need to db for some tasks
 
             print("{}  {}".format(prefix, com))
             sys.stdout.flush()

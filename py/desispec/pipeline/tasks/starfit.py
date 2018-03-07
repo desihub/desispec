@@ -166,7 +166,7 @@ class TaskStarFit(BaseTask):
         options.update(opts)
         return option_list(options)
 
-    def _run_cli(self, name, opts, procs):
+    def _run_cli(self, name, opts, procs, db=None):
         """See BaseTask.run_cli.
         """
         entry = "desi_fit_stdstars"
@@ -174,7 +174,7 @@ class TaskStarFit(BaseTask):
         com = "{} {}".format(entry, " ".join(optlist))
         return com
 
-    def _run(self, name, opts, comm):
+    def _run(self, name, opts, comm, db=None):
         """See BaseTask.run.
         """
         from ...scripts import stdstars
