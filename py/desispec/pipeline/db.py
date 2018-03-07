@@ -569,7 +569,7 @@ class DataBase:
                 cur.execute('select nside,pixel from healpix_frame where state = {}'.format(required_healpix_frame_state))
                 entries = cur.fetchall()
                 for entry in entries :
-                    log.debug("pixel spectra {} is ready to run".format(entry[1]))
+                    log.debug("{} of pixel {} is ready to run".format(tt,entry[1]))
                     cur.execute('update {} set state = {} where nside = {} and pixel = {}'.format(tt,task_state_to_int["ready"],entry[0],entry[1]))
                 
                     
