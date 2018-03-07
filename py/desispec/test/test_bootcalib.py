@@ -17,6 +17,8 @@ from desiutil import funcfits as dufits
 
 from desispec.scripts import bootcalib as bootscript
 
+PY3 = sys.version_info.major > 2
+
 
 class TestBoot(unittest.TestCase):
 
@@ -95,7 +97,7 @@ class TestBoot(unittest.TestCase):
         #pdb.set_trace()
         np.testing.assert_allclose(np.median(gauss), 1.06, rtol=0.05)
 
-    @unittest.skipIf(sys.version_info[0] == 2, "Skipping arc line test that is only relevant to Python 3.")
+    @unittest.skipUnless(PY3, "Skipping arc line test that is only relevant to Python 3.")
     def test_parse_nist(self):
         """Test parsing of NIST arc line files.
         """
