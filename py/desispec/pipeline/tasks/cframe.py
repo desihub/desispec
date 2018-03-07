@@ -113,7 +113,7 @@ class TaskCFrame(BaseTask):
         optlist = self._option_list(name, opts)
         com = "{} {}".format(entry, " ".join(optlist))
         return com
-
+        
     def _run(self, name, opts, comm):
         """See BaseTask.run.
         """
@@ -122,3 +122,9 @@ class TaskCFrame(BaseTask):
         args = procexp.parse(optlist)
         procexp.main(args)
         return
+
+    def postprocessing(self, db, name):
+        """For successful runs, postprocessing on DB"""
+        props=self.name_split(name)
+        db.update_healpix_frame_state(props,state=1) # 1=has a cframe
+        
