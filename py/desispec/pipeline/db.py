@@ -100,6 +100,7 @@ def all_tasks(night, nside):
                     props = dict()
                     props["expid"] = int(ex)
                     props["spec"]  = spectro
+                    props["nside"] = nside
                     props["pixel"] = pixel
                     props["ntargets"] = np.sum(pixels==pixel)
                     healpix_frames.append(props)
@@ -460,7 +461,7 @@ class DataBase:
             # insert or ignore all healpix_frames
             log.debug("updating healpix_frame ...")
             for entry in healpix_frames :
-                cur.execute("insert into healpix_frame (expid,spec,pixel,ntargets,state) values({},{},{},{},{})".format(entry["expid"],entry["spec"],entry["pixel"],entry["ntargets"],0))
+                cur.execute("insert into healpix_frame (expid,spec,nside,pixel,ntargets,state) values({},{},{},{},{},{})".format(entry["expid"],entry["spec"],entry["nside"],entry["pixel"],entry["ntargets"],0))
 
             # read what is already in db
             tasks_in_db = {}
@@ -529,7 +530,9 @@ class DataBase:
         with self.cursor() as cur:
 
             for tt in task_types():
-
+                
+                if tt == "spectra" or tt == "redshift" : continue # ignore those, they are treated separatly
+                
                 # for each type of task, get the list of tasks in waiting mode
                 cur.execute('select name from {} where state = {}'.format(tt,task_state_to_int["waiting"]))
                 tasks = [ x for (x, ) in cur.fetchall()]
@@ -538,6 +541,9 @@ class DataBase:
                     log.debug("checking {} {} tasks ...".format(len(tasks),tt))
 
                 for tsk in tasks :
+
+                    
+
                     # for each task in waiting mode, get the dependencies
                     deps = task_classes[tt].deps(tsk, db=self, inputs=None)
                     ready = True
@@ -552,6 +558,20 @@ class DataBase:
                         log.debug("{} is ready to run".format(tsk))
                         task_classes[tt].state_set(db=self,name=tsk,state="ready")
 
+            for tt in [ "spectra" , "redshift" ] :
+                    
+                if tt == "spectra" :
+                    required_healpix_frame_state = 1 # means we have a cframe
+                elif tt == "redshift" :
+                    required_healpix_frame_state = 2 # means we have an updated spectra file
+                
+                cur.execute('select pixel from healpix_frame where state = {}'.format(required_healpix_frame_state))
+                pixels = [ x for (x, ) in cur.fetchall()]
+                for pixel in pixels :
+                    cur.execute('update name from {} where pixel = {}'.format(tt,task_state_to_int["waiting"]))
+                
+                    
+
         return
     
     def update_healpix_frame_state(self,props,state) :
@@ -561,13 +581,13 @@ class DataBase:
                 cmd = "update healpix_frame set state = {} where expid = {} and spec = {}".format(state,props["expid"],props["spec"])
             else :
                 # update from a spectra or redshift task
-                cmd = "update healpix_frame set state = {} where pixel = {}".format(state,props["pixel"])
+                cmd = "update healpix_frame set state = {} where nside = {} and pixel = {}".format(state,props["nside"],props["pixel"])
             cur.execute(cmd)
         return
     
     def create_healpix_frame_table(self) :
         with self.cursor() as cur:
-            cmd = "create table healpix_frame (expid integer , spec integer , pixel integer , ntargets integer , state integer,  UNIQUE(expid,spec,pixel) ON CONFLICT IGNORE )"
+            cmd = "create table healpix_frame (expid integer , spec integer , nside integer , pixel integer , ntargets integer , state integer,  UNIQUE(expid,spec,nside,pixel) ON CONFLICT IGNORE )"
             cur.execute(cmd)
         return
     
