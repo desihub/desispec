@@ -101,7 +101,7 @@ class TaskExtract(BaseTask):
 
         deps = self.deps(name)
         options = {}
-        options["input"]    = task_classes["extract"].paths(deps["input"])[0]
+        options["input"]    = task_classes["pix"].paths(deps["input"])[0]
         options["fibermap"] = task_classes["fibermap"].path(deps["fibermap"])[0]
         options["psf"]      = task_classes["psfnight"].path(deps["psf"])[0]
         options["output"]   = self.paths(name)[0]
