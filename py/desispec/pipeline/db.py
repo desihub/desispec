@@ -740,9 +740,11 @@ class DataBasePostgres(DataBase):
             then the database is assumed to exist.  Otherwise the schema is
             computed from a hash of the production location and will be
             created.
+        authorize (str): If creating the schema, this is the list of
+            additional roles that should be granted access.
 
     """
-    def __init__(self, host, port, dbname, user, schema=None):
+    def __init__(self, host, port, dbname, user, schema=None, authorize=None):
         super(DataBasePostgres, self).__init__()
 
         self._schema = schema
@@ -750,6 +752,7 @@ class DataBasePostgres(DataBase):
         self._dbname = dbname
         self._host = host
         self._port = port
+        self._authorize = authorize
 
         self._proddir = os.path.abspath(io.specprod_root())
 
@@ -797,6 +800,29 @@ class DataBasePostgres(DataBase):
                     .format(self._schema, self._user)
                 print(com,flush=True)
                 cur.execute(com)
+
+                if self._authorize is not None:
+                    com = "grant usage on schema {} to {}"\
+                        .format(self._schema, self._authorize)
+                    print(com,flush=True)
+                    cur.execute(com)
+
+                    com = "alter default privileges in schema {} grant select on tables to {}".format(self._schema, self._authorize)
+                    print(com,flush=True)
+                    cur.execute(com)
+
+                    com = "alter default privileges in schema {} grant select,usage on sequences to {}".format(self._schema, self._authorize)
+                    print(com,flush=True)
+                    cur.execute(com)
+
+                    com = "alter default privileges in schema {} grant execute on functions to {}".format(self._schema, self._authorize)
+                    print(com,flush=True)
+                    cur.execute(com)
+
+                    com = "alter default privileges in schema {} grant usage on types to {}".format(self._schema, self._authorize)
+                    print(com,flush=True)
+                    cur.execute(com)
+
                 # Create a table of information about this prod
                 com = "create table {}.info (key text unique, val text)"\
                     .format(self._schema)
@@ -833,8 +859,7 @@ class DataBasePostgres(DataBase):
     def cursor(self):
         import psycopg2
         cur = self._conn.cursor()
-        cur.execute("set search_path to {}".format(self._schema))
-        print("PG2 cursor search path set", flush=True)
+        cur.execute("set search_path to '{}'".format(self._schema))
         cur.execute("begin transaction")
         try:
             yield cur

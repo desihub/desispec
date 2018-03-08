@@ -115,6 +115,10 @@ Where supported commands are:
         parser.add_argument("--db-postgres-user", type=str, required=False,
             default="desidev_admin", help="Set PostgreSQL user name")
 
+        parser.add_argument("--db-postgres-authorized", type=str,
+            required=False, default="desidev_ro",
+            help="Additional PostgreSQL users / roles to authorize")
+
         parser.add_argument("--nside", required=False, type=int, default=64,
             help="HEALPix nside value to use for spectral grouping.")
 
@@ -169,7 +173,8 @@ Where supported commands are:
             # database, so that we can get the schema key.
             db = pipe.DataBasePostgres(host=args.db_postgres_host,
                 port=args.db_postgres_port, dbname=args.db_postgres_name,
-                user=args.db_postgres_user, schema=None)
+                user=args.db_postgres_user, schema=None,
+                authorize=args.db_postgres_authorized)
 
             dbprops = [
                 "postgresql",
@@ -291,6 +296,7 @@ Where supported commands are:
 
         tasks = list()
         with db.cursor() as cur:
+<<<<<<< HEAD
 
             if args.tasktype == "spectra" or args.tasktype == "redshift" :
                 cmd = "select name, state from {}".format(args.tasktype)
@@ -301,6 +307,11 @@ Where supported commands are:
             cur.execute(cmd)
             
 
+=======
+            com = "select name, state from {} where night in ({})"\
+                .format(args.tasktype, ntlist)
+            cur.execute(com)
+>>>>>>> Add support for authorizing additional DB roles for readonly access
             tasks = [ x for (x, y) in cur.fetchall() if \
                 pipe.task_int_to_state[y] in states ]
 
