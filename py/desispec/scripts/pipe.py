@@ -296,7 +296,6 @@ Where supported commands are:
 
         tasks = list()
         with db.cursor() as cur:
-<<<<<<< HEAD
 
             if args.tasktype == "spectra" or args.tasktype == "redshift" :
                 cmd = "select name, state from {}".format(args.tasktype)
@@ -305,13 +304,8 @@ Where supported commands are:
                     .format(args.tasktype, ntlist)
 
             cur.execute(cmd)
-            
 
-=======
-            com = "select name, state from {} where night in ({})"\
-                .format(args.tasktype, ntlist)
-            cur.execute(com)
->>>>>>> Add support for authorizing additional DB roles for readonly access
+
             tasks = [ x for (x, y) in cur.fetchall() if \
                 pipe.task_int_to_state[y] in states ]
 
