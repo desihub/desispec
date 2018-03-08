@@ -272,10 +272,13 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 # When creating this directory, there MIGHT be conflicts from
                 # multiple processes working on pixels in the same
                 # sub-directories...
-                if not os.path.isdir(os.path.dirname(tasklogdir)):
-                    os.makedirs(os.path.dirname(tasklogdir))
-                if not os.path.isdir(tasklogdir):
-                    os.makedirs(tasklogdir)
+                try :
+                    if not os.path.isdir(os.path.dirname(tasklogdir)):
+                        os.makedirs(os.path.dirname(tasklogdir))
+                    if not os.path.isdir(tasklogdir):
+                        os.makedirs(tasklogdir)
+                except FileExistsError:
+                    pass
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
 
