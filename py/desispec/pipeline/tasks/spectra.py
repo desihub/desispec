@@ -55,7 +55,7 @@ class TaskSpectra(BaseTask):
         return dict()
 
     def run_max_procs(self, procs_per_node):
-        return 20
+        return 1
 
     def run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
@@ -87,37 +87,33 @@ class TaskSpectra(BaseTask):
             for band in ["b","r","z"] :
                 entry_and_band = entry.copy()
                 entry_and_band["band"] = band
-                print ("DEBUGDEBUG",entry_and_band)
                 # this will match cframes with same expid and spectro
                 taskname = task_classes["cframe"].name_join(entry_and_band) 
                 filename = task_classes["cframe"].paths(taskname)[0]
-                print ("DEBUGDEBUG filename=",filename)
                 cframes.append(filename)
                 
         options = {}
-        options["infile"]  = cframes
+        options["infiles"] = cframes
         options["outfile"] = self.paths(name)[0]
-        
+        options["healpix"] = props["pixel"]
+        options["nside"]   = props["nside"]
+                
         return option_list(options)
     
     def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
-        log = get_logger()
-        log.debug("DB={}".format(db))
-        entry = "echo"
+        entry = "desi_update_spectra"
         optlist = self._option_list(name, opts, db)
         return "{} {}".format(entry, " ".join(optlist))
         
     def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
-        log = get_logger()
-        log.debug("DB={}".format(db))
-        ofilename = self.paths(name)[0]
-        log.warning("DOES NOTHING, NOT IMPLEMENTED, touch {}".format(ofilename))
-        os.makedirs(os.path.dirname(ofilename))
-        os.system("touch {}".format(ofilename))
+        from ...scripts import update_spectra
+        optlist = self._option_list(name, opts, db)
+        args = update_spectra.parse(optlist)
+        update_spectra.main(args)
         return
     
     def postprocessing(self, db, name):
