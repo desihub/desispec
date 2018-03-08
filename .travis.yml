@@ -101,7 +101,10 @@ matrix:
 
         # Check for sphinx doc build warnings.
         - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
+          env: PYTHON_VERSION=3.5
+               MAIN_CMD="sphinx-build"
+               SETUP_CMD="-E -T -d build/doctrees -D language=en doc build/sphinx"
+          # env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
                # CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                # PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
