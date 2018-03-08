@@ -447,8 +447,7 @@ class BaseTask(object):
 
         """
         log = get_logger()
-        log.debug("DB={}".format(db))
-
+        
         nproc = 1
         rank = 0
         if comm is not None:
