@@ -50,10 +50,13 @@ class TestBoot(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if os.path.exists(cls.testarc):
-            os.unlink(cls.testarc)
-        if os.path.exists(cls.testflat):
-            os.unlink(cls.testflat)
+        """We deliberately don't clean up the testarc and testflat files,
+        since they are useful for offline testing.
+        """
+        # if os.path.exists(cls.testarc):
+        #     os.unlink(cls.testarc)
+        # if os.path.exists(cls.testflat):
+        #     os.unlink(cls.testflat)
         if os.path.exists(cls.testout):
             os.unlink(cls.testout)
         if os.path.isfile(cls.qafile):

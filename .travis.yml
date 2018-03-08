@@ -55,7 +55,7 @@ env:
         # - NUMPY_VERSION=1.10
         # - SCIPY_VERSION=0.16
         - ASTROPY_VERSION=2.0.4
-        # - SPHINX_VERSION=1.5
+        - SPHINX_VERSION=1.6.6
         - DESIUTIL_VERSION=1.9.9
         - SPECLITE_VERSION=0.7
         - SPECTER_VERSION=0.8.1
@@ -69,7 +69,7 @@ env:
         # Additional conda channels to use.
         - CONDA_CHANNELS="openastronomy"
         # These packages will always be installed.
-        - CONDA_DEPENDENCIES="sqlalchemy"
+        - CONDA_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
         - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml healpy numba numpy fitsio"
         # These packages will always be installed.
@@ -103,7 +103,8 @@ matrix:
         - os: linux
           env: PYTHON_VERSION=3.5
                MAIN_CMD="sphinx-build"
-               SETUP_CMD="-E -T -d build/doctrees -D language=en doc build/sphinx"
+               SETUP_CMD="-E -T -W -d build/doctrees -D language=en doc build/sphinx"
+               CONDA_DEPENDENCIES="sphinx=${SPHINX_VERSION} sphinx_rtd_theme sqlalchemy"
           # env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
                # CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                # PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
@@ -122,10 +123,11 @@ matrix:
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
-        - os: linux
-          env: PYTHON_VERSION=3.5 SETUP_CMD='test'
-               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
-               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+        # Redundant with the coverage test
+        # - os: linux
+        #   env: PYTHON_VERSION=3.5 SETUP_CMD='test'
+        #        CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+        #        PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         - os: linux
           env: PYTHON_VERSION=3.6 SETUP_CMD='test'
