@@ -17,7 +17,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import sys
 import os
 import os.path
-
+from importlib import import_module
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -134,13 +134,13 @@ napoleon_include_private_with_doc = True
 # some external dependencies are not met at build time and break the
 # building process.
 autodoc_mock_imports = []
-try:
-    import astropy
-except ImportError:
-    autodoc_mock_imports += ['astropy']
-autodoc_mock_imports += ['desimodel', 'desiutil', 'healpy', 'matplotlib',
-                         'numpy', 'redrock', 'scipy', 'speclite', 'specter',
-                         'sqlalchemy', 'yaml']
+for missing in ('astropy', 'desimodel', 'desiutil', 'healpy', 'matplotlib',
+                'numpy', 'redrock', 'scipy', 'speclite', 'specter',
+                'sqlalchemy', 'yaml'):
+    try:
+        foo = import_module(missing)
+    except ImportError:
+        autodoc_mock_imports.append(missing)
 
 # -- Options for HTML output ----------------------------------------------
 
