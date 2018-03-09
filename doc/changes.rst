@@ -5,8 +5,10 @@ desispec Change Log
 0.19.1 (unreleased)
 -------------------
 
-* Replace ``clobber=True`` with ``overwrite=True`` when writing FITS files.
+* Astropy 2 compatibility (PR `#519`_).
 * Update Travis tests to recent versions.
+
+.. _`#519`: https://github.com/desihub/desispec/pull/519
 
 0.19.0 (2018-03-01)
 -------------------
