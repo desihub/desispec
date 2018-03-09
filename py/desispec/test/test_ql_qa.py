@@ -361,7 +361,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["amps"]=False
         qargs["paname"]="abc"
         resl=qa(inp,**qargs)
-        self.assertTrue(np.all(resl["METRICS"]["XSIGMA"])>0)
+        self.assertTrue(len(resl["METRICS"]["XWSIGMA_SHIFT"].ravel())==4)
 
     def testCountPixels(self):
         qa=QA.Count_Pixels('countpix',self.config)
@@ -373,7 +373,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["amps"]=False
         qargs["paname"]="abc"
         resl=qa(inp,**qargs)
-        self.assertTrue(resl['METRICS']['NPIX_LOW'] > resl['METRICS']['NPIX_HIGH'])
+        self.assertTrue(resl['METRICS']['NPIX'] > resl['METRICS']['NPIXHI'])
         #- test if amp QAs exist
         qargs["amps"] = True
         resl2=qa(inp,**qargs)
@@ -392,9 +392,8 @@ class TestQL_QA(unittest.TestCase):
         qargs["qafile"]=self.qafile
         qargs["qafig"]=self.qafig
         resl=qa(inp,**qargs)
-        self.assertTrue(np.all(resl["METRICS"]["NBINSMED"]-resl["METRICS"]["NBINSHIGH"])>=0)
-        self.assertTrue(np.all(resl["METRICS"]["NBINSLOW"]-resl["METRICS"]["NBINSMED"])>=0)
-        self.assertLess(resl["BOTTOM_MAX_WAVE_INDEX"],resl["TOP_MIN_WAVE_INDEX"])
+        self.assertTrue(np.all(resl["METRICS"]["NBINSMED"]-resl["METRICS"]["NBINSHI"])>=0)
+        self.assertTrue(np.all(resl["METRICS"]["NBINSLO"]-resl["METRICS"]["NBINSMED"])>=0)
 
     def testSkyCont(self):
         qa=QA.Sky_Continuum('skycont',self.config)
@@ -403,16 +402,10 @@ class TestQL_QA(unittest.TestCase):
         qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
-        qargs["amps"]=False
         qargs["paname"]="abc"
         resl=qa(inp,**qargs)
         self.assertTrue(resl["METRICS"]["SKYFIBERID"]==[0,7,14,21,28]) #- as defined in the fibermap
         self.assertTrue(resl["METRICS"]["SKYCONT"]>0)
-        #- Test for amp True Case
-        qargs["amps"]=True
-        qargs["dict_countbins"]=self.map2pix #- This is not the full dict but contains the map needed here.
-        resl2=qa(inp,**qargs)
-        self.assertTrue(np.all(resl2["METRICS"]["SKYCONT_AMP"])>0)
         
     def testSkyPeaks(self):
         qa=QA.Sky_Peaks('skypeaks',self.config)
@@ -421,9 +414,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
-        #qargs["amps"]=True
         qargs["paname"]="abc"
-        qargs["dict_countbins"]=self.map2pix
         resl=qa(inp,**qargs)
         #self.assertTrue(np.all(resl['METRICS']['PEAKCOUNT_RMS_AMP'])>=0.)
         self.assertTrue(resl['METRICS']['PEAKCOUNT_RMS']>0)
@@ -436,17 +427,11 @@ class TestQL_QA(unittest.TestCase):
         qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
-        qargs["amps"]=False
         qargs["paname"]="abc"
-        qargs["dict_countbins"]=self.map2pix
         resl=qa(inp,**qargs)
-        self.assertTrue(resl['METRICS']['INTEG_AVG'] >0)
-        self.assertTrue(len(resl["METRICS"]["INTEG"])==len(resl["METRICS"]["STD_FIBERID"]))
-        #- Test for amps
-        qargs["amps"]=True
-        qargs["dict_countbins"]=self.map2pix
+        self.assertTrue(len(resl["METRICS"]["FIBER_MAG"])==len(resl["METRICS"]["DELTAMAG"]))
         resl2=qa(inp,**qargs)
-        self.assertTrue(np.all(resl2["METRICS"]["INTEG_AVG_AMP"])>0)
+        self.assertTrue(len(resl2["METRICS"]["STD_FIBERID"])>0)
         
     def testSkyResidual(self):
         qa=QA.Sky_Residual('skyresid',self.config)
@@ -457,9 +442,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
-        qargs["amps"]=True
         qargs["paname"]="abc"
-        qargs["dict_countbins"]=self.map2pix
         resl=qa(inp,sky,**qargs)
         self.assertTrue(resl["METRICS"]["NREJ"]==self.skymodel.nrej)
         self.assertTrue(len(resl["METRICS"]["MED_RESID_WAVE"]) == self.nwave)
@@ -478,7 +461,6 @@ class TestQL_QA(unittest.TestCase):
         qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
-        qargs["amps"]=True
         qargs["paname"]="abc"
         qargs["qafile"]=self.qafile #- no LRG by construction.
         qargs["dict_countbins"]=self.map2pix

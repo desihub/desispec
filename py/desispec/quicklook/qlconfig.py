@@ -247,7 +247,7 @@ class Config(object):
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
                 if qa =='Calculate_SNR':
-                    qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps,
+                    qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
                             'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 
                             'param': params, 'qlf': self.qlf,
                             'refKey':self._qaRefKeys[qa],
