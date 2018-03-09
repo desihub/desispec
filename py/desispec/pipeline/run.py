@@ -275,6 +275,9 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 try :
                     if not os.path.isdir(os.path.dirname(tasklogdir)):
                         os.makedirs(os.path.dirname(tasklogdir))
+                except FileExistsError:
+                    pass
+                try :
                     if not os.path.isdir(tasklogdir):
                         os.makedirs(tasklogdir)
                 except FileExistsError:
