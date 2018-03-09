@@ -28,7 +28,7 @@ class TestIO(unittest.TestCase):
         cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
         cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
         # cls.testbrfile appears to be unused by this class.
-        cls.testbrfile = os.path.join(cls.testDir, 'desispec_test-br_io.yaml')
+        cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
         cls.origEnv = {'SPECPROD':None,
             "DESI_SPECTRO_DATA":None,
             "DESI_SPECTRO_REDUX":None}
