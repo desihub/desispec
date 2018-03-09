@@ -96,6 +96,11 @@ matrix:
     # OS X support is still experimental, so don't penalize failuures.
     allow_failures:
         - os: osx
+        - os: linux
+          env: PYTHON_VERSION=3.6 SETUP_CMD='test'
+               ASTROPY_VERSION=3.0
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
     include:
 
@@ -129,6 +134,12 @@ matrix:
 
         - os: linux
           env: PYTHON_VERSION=3.6 SETUP_CMD='test'
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+
+        - os: linux
+          env: PYTHON_VERSION=3.6 SETUP_CMD='test'
+               ASTROPY_VERSION=3.0
                CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
