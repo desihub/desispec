@@ -106,4 +106,5 @@ class TaskRedshift(BaseTask):
     def postprocessing(self, db, name):
         """For successful runs, postprocessing on DB"""
         props=self.name_split(name)
+        props["state"]=2 # selection, only those for which we had already updated the spectra
         db.update_healpix_frame_state(props,state=3) # 3=redshifts have been updated

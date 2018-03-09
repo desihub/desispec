@@ -119,5 +119,6 @@ class TaskSpectra(BaseTask):
     def postprocessing(self, db, name):
         """For successful runs, postprocessing on DB"""
         props=self.name_split(name)
+        props["state"]=1 # selection, only those for which we had a cframe
         db.update_healpix_frame_state(props,state=2) # 2=spectra has been updated
 
