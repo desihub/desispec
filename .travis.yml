@@ -100,14 +100,12 @@ matrix:
     include:
 
         # Check for sphinx doc build warnings.
+        # Note: this test is not a perfectly realistic test of ReadTheDocs
+        # builds, which operate in a much more bare-bones environment
         - os: linux
-          env: PYTHON_VERSION=3.5
-               MAIN_CMD="sphinx-build"
-               SETUP_CMD="-E -T -W -d build/doctrees -D language=en doc build/sphinx"
-               CONDA_DEPENDENCIES="sphinx=${SPHINX_VERSION} sphinx_rtd_theme sqlalchemy"
-          # env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
-               # CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
-               # PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+          env: PYTHON_VERSION=3.5 SETUP_CMD='build_sphinx --warning-is-error'
+               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # Coverage test.  Note that installing the coverage software can
         # change the set of packages installed by conda, so we do
