@@ -17,6 +17,8 @@ from desiutil import funcfits as dufits
 
 from desispec.scripts import bootcalib as bootscript
 
+PY3 = sys.version_info.major > 2
+
 
 class TestBoot(unittest.TestCase):
 
@@ -48,13 +50,15 @@ class TestBoot(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        """We deliberately don't clean up the testarc and testflat files,
+        since they are useful for offline testing.
+        """
         # if os.path.exists(cls.testarc):
         #     os.unlink(cls.testarc)
         # if os.path.exists(cls.testflat):
         #     os.unlink(cls.testflat)
         if os.path.exists(cls.testout):
             os.unlink(cls.testout)
-
         if os.path.isfile(cls.qafile):
             os.unlink(cls.qafile)
 
@@ -95,7 +99,7 @@ class TestBoot(unittest.TestCase):
         #pdb.set_trace()
         np.testing.assert_allclose(np.median(gauss), 1.06, rtol=0.05)
 
-    @unittest.skipIf(sys.version_info[0] == 2, "Skipping arc line test that is only relevant to Python 3.")
+    @unittest.skipUnless(PY3, "Skipping arc line test that is only relevant to Python 3.")
     def test_parse_nist(self):
         """Test parsing of NIST arc line files.
         """
@@ -238,6 +242,3 @@ def test_suite():
         python setup.py test -m <modulename>
     """
     return unittest.defaultTestLoader.loadTestsFromName(__name__)
-
-if __name__ == '__main__':
-    unittest.main()
