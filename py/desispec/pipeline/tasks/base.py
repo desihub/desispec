@@ -485,6 +485,24 @@ class BaseTask(object):
 
         return failcount
 
+    def getready(self, db, name, cur):
+        """Checks whether dependencies are ready"""
+        log  = get_logger()
+        deps = self.deps(name, db=db, inputs=None)
+        ready = True
+        for dep in deps.values() :
+            # for each dependency, guess its type
+            deptype  = dep.split(task_name_sep)[0]
+            # based on the type and dependency name, read state from db
+            depstate = task_classes[deptype].state_get(db=db,name=dep,cur=cur)
+            ready   &= (depstate=="done") # ready if all dependencies are done
+        if ready :
+            # change state to ready
+            log.debug("{} is ready to run".format(name))
+            self.state_set(db=db,name=name,state="ready",cur=cur)
+        
+
+
     def postprocessing(self, db, name):
         """For successful runs, postprocessing on DB"""
         pass
@@ -527,6 +545,8 @@ class BaseTask(object):
                         failed = nproc
                         break
                 if done:
+                    # need to run postprocessing AFTER setting state to done
+                    # because task state maybe tested in postprocessing.
                     self.state_set(db, name, "done")
                     self.postprocessing(db,name)
                 else:

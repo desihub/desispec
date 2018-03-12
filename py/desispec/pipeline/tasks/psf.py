@@ -13,7 +13,9 @@ from ...util import option_list
 
 from ...io import findfile
 
-from .base import BaseTask
+from .base import (BaseTask, task_classes)
+
+from desiutil.log import get_logger
 
 import sys,re,os
 
@@ -148,6 +150,7 @@ class TaskPSF(BaseTask):
     def _run_cli(self, name, opts, procs, db=None):
         """See BaseTask.run_cli.
         """
+        
         entry = "desi_compute_psf"
         if procs > 1:
             entry = "desi_compute_psf_mpi"
@@ -162,3 +165,17 @@ class TaskPSF(BaseTask):
         args = specex.parse(optlist)
         specex.main(args, comm=comm)
         return
+
+    def postprocessing(self, db, name):
+        """For successful runs, postprocessing on DB"""
+        # run getready on all psfnight with same night,band,spec
+        props = self.name_split(name)
+        log  = get_logger()
+        with db.cursor() as cur :
+            cmd = "select name from psfnight where night={} and band='{}' and spec={}".format(props["night"],props["band"],props["spec"])
+            cur.execute(cmd)
+            tasks = [ x for (x,) in cur.fetchall() ]
+            log.debug("checking psfnights {}".format(tasks))
+            for task in tasks :
+                task_classes["psfnight"].getready( db=db,name=task,cur=cur)
+        

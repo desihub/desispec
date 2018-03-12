@@ -13,9 +13,13 @@ from ...util import option_list
 
 from ...io import findfile
 
-from .base import BaseTask
+from .base import (BaseTask, task_classes)
+
+from desiutil.log import get_logger
 
 import sys,re,os,glob
+
+import numpy as np
 
 # NOTE: only one class in this file should have a name that starts with "Task".
 
@@ -120,3 +124,41 @@ class TaskPSFNight(BaseTask):
         
         return
         
+    def getready(self, db, name, cur):
+        """Checks whether dependencies are ready"""
+        log  = get_logger()
+        
+        # look for the state of psf with same night,band,spectro
+        props = self.name_split(name)
+        
+        cmd = "select state from psf where night={} and band='{}' and spec={}".format(props["night"],props["band"],props["spec"])
+        cur.execute(cmd)
+        states = np.array([ x for (x,) in cur.fetchall() ])
+        log.debug("states={}".format(states))
+        
+        # psfnight ready if all psf from the night have been processed, and at least one is done (failures are allowed)
+        n_done   = np.sum(states==task_state_to_int["done"])
+        n_failed = np.sum(states==task_state_to_int["fail"])
+        
+        ready    = (n_done > 0) & ( (n_done + n_failed) == states.size )
+        if ready :
+            # change state to ready
+            log.debug("{} is ready to run".format(name))
+            self.state_set(db=db,name=name,state="ready",cur=cur)
+        else :
+            log.debug("{} is not ready to run".format(name))
+    
+    def postprocessing(self, db, name):
+        """For successful runs, postprocessing on DB"""
+        # run getready for all extraction with same night,band,spec
+        props = self.name_split(name)
+        log  = get_logger()
+        with db.cursor() as cur :
+            cmd = "select name from extract where night={} and band='{}' and spec={}".format(props["night"],props["band"],props["spec"])
+            cur.execute(cmd)
+            tasks = [ x for (x,) in cur.fetchall() ]
+            log.debug("checking extractions {}".format(tasks))
+            for task in tasks :
+                task_classes["extract"].getready( db=db,name=task,cur=cur)
+    
+

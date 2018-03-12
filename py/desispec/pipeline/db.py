@@ -540,24 +540,9 @@ class DataBase:
 
                 if len(tasks)>0 :
                     log.debug("checking {} {} tasks ...".format(len(tasks),tt))
-
                 for tsk in tasks :
-
-                    
-
-                    # for each task in waiting mode, get the dependencies
-                    deps = task_classes[tt].deps(tsk, db=self, inputs=None)
-                    ready = True
-                    for dep in deps.values() :
-                        # for each dependency, guess its type
-                        deptype  = dep.split(task_name_sep)[0]
-                        # based on the type and dependency name, read state from db
-                        depstate =  task_classes[deptype].state_get(db=self,name=dep,cur=cur)
-                        ready   &=  (depstate=="done") # ready if all dependencies are done
-                    if ready :
-                        # change state to ready
-                        log.debug("{} is ready to run".format(tsk))
-                        task_classes[tt].state_set(db=self,name=tsk,state="ready",cur=cur)
+                    task_classes[tt].getready( db=self,name=tsk,cur=cur)
+                
                         
             for tt in [ "spectra" , "redshift" ] :
                     
