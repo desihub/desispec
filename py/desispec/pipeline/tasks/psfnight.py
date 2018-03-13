@@ -154,11 +154,12 @@ class TaskPSFNight(BaseTask):
         props = self.name_split(name)
         log  = get_logger()
         with db.cursor() as cur :
-            cmd = "select name from extract where night={} and band='{}' and spec={}".format(props["night"],props["band"],props["spec"])
+            tt  = "extract"
+            cmd = "select name from {} where night={} and band='{}' and spec={}".format(tt,props["night"],props["band"],props["spec"])
             cur.execute(cmd)
             tasks = [ x for (x,) in cur.fetchall() ]
-            log.debug("checking extractions {}".format(tasks))
+            log.debug("checking {}".format(tasks))
             for task in tasks :
-                task_classes["extract"].getready( db=db,name=task,cur=cur)
+                task_classes[tt].getready( db=db,name=task,cur=cur)
     
 
