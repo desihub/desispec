@@ -11,7 +11,7 @@ from ...util import option_list
 
 from ...io import findfile
 
-from .base import BaseTask
+from .base import (BaseTask, task_classes)
 
 from desiutil.log import get_logger
 
@@ -116,9 +116,10 @@ class TaskSpectra(BaseTask):
         update_spectra.main(args)
         return
     
-    def postprocessing(self, db, name):
+    def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         props=self.name_split(name)
         props["state"]=1 # selection, only those for which we had a cframe
-        db.update_healpix_frame_state(props,state=2) # 2=spectra has been updated
-
+        db.update_healpix_frame_state(props,state=2,cur=cur) # 2=spectra has been updated
+        # directly set the corresponding redshift to ready
+        cur.execute('update redshift set state={} where nside = {} and pixel = {}'.format(task_state_to_int["ready"],props["nside"],props["pixel"]))

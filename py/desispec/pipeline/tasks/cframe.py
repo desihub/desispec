@@ -13,7 +13,9 @@ from ...util import option_list
 
 from ...io import findfile
 
-from .base import BaseTask
+from .base import (BaseTask, task_classes)
+
+from desiutil.log import get_logger
 
 import sys,re,os,copy
 
@@ -123,9 +125,19 @@ class TaskCFrame(BaseTask):
         procexp.main(args)
         return
 
-    def postprocessing(self, db, name):
+    def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         props=self.name_split(name)
         props["state"]=0 # selection
-        db.update_healpix_frame_state(props,state=1) # 1=has a cframe
+        db.update_healpix_frame_state(props,state=1,cur=cur) # 1=has a cframe
         
+        log = get_logger()
+        # call getready on all spectra ... might be super inefficient
+        tt="spectra"
+        required_healpix_frame_state = 1 # means we have a cframe
+        cur.execute('select nside,pixel from healpix_frame where state = {} and expid = {} and spec = {}'.format(required_healpix_frame_state,props["expid"],props["spec"]))
+        entries = cur.fetchall()
+        log.debug("from {} set spectra to ready : {}".format(name,entries))
+        for entry in entries :
+            cur.execute('update {} set state = {} where nside = {} and pixel = {}'.format(tt,task_state_to_int["ready"],entry[0],entry[1]))
+
