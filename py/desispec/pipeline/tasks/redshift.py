@@ -8,6 +8,8 @@ from .base import BaseTask, task_classes, task_type
 from ...io import findfile
 from ...util import option_list
 from redrock.external.desi import rrdesi
+from desiutil.log import get_logger
+
 import os
 
 # NOTE: only one class in this file should have a name that starts with "Task".
@@ -103,8 +105,8 @@ class TaskRedshift(BaseTask):
         rrdesi(options=optlist, comm=comm)
         return
 
-    def postprocessing(self, db, name):
+    def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         props=self.name_split(name)
         props["state"]=2 # selection, only those for which we had already updated the spectra
-        db.update_healpix_frame_state(props,state=3) # 3=redshifts have been updated
+        db.update_healpix_frame_state(props,state=3,cur=cur) # 3=redshifts have been updated
