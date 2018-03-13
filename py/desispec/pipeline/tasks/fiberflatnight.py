@@ -132,25 +132,21 @@ class TaskFiberflatNight(BaseTask):
         
         ready    = (n_done > 0) & ( (n_done + n_failed) == states.size )
         if ready :
-            # change state to ready
-            log.debug("{} is ready to run".format(name))
             self.state_set(db=db,name=name,state="ready",cur=cur)
-        else :
-            log.debug("{} is not ready to run".format(name))
+        
     
-    def postprocessing(self, db, name):
+    def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         # run getready for all sky with same night,band,spec
         props = self.name_split(name)
         log  = get_logger()
-        with db.cursor() as cur :
-            tt  = "sky"
-            cmd = "select name from {} where night={} and band='{}' and spec={}".format(tt,props["night"],props["band"],props["spec"])
-            cur.execute(cmd)
-            tasks = [ x for (x,) in cur.fetchall() ]
-            log.debug("checking {}".format(tasks))
-            for task in tasks :
-                task_classes[tt].getready( db=db,name=task,cur=cur)
-    
+        tt  = "sky"
+        cmd = "select name from {} where night={} and band='{}' and spec={}".format(tt,props["night"],props["band"],props["spec"])
+        cur.execute(cmd)
+        tasks = [ x for (x,) in cur.fetchall() ]
+        log.debug("checking {}".format(tasks))
+        for task in tasks :
+            task_classes[tt].getready( db=db,name=task,cur=cur)
+
 
 

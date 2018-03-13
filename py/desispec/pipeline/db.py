@@ -561,14 +561,18 @@ class DataBase:
 
         return
     
-    def update_healpix_frame_state(self,props,state) :
-        with self.cursor() as cur:
-            if "expid" in props :
-                # update from a cframe
-                cmd = "update healpix_frame set state = {} where expid = {} and spec = {} and state = {}".format(state,props["expid"],props["spec"],props["state"])
-            else :
-                # update from a spectra or redshift task
-                cmd = "update healpix_frame set state = {} where nside = {} and pixel = {} and state = {}".format(state,props["nside"],props["pixel"],props["state"])
+    def update_healpix_frame_state(self,props,state,cur) :
+        if "expid" in props :
+            # update from a cframe
+            cmd = "update healpix_frame set state = {} where expid = {} and spec = {} and state = {}".format(state,props["expid"],props["spec"],props["state"])
+        else :
+            # update from a spectra or redshift task
+            cmd = "update healpix_frame set state = {} where nside = {} and pixel = {} and state = {}".format(state,props["nside"],props["pixel"],props["state"])
+            
+        if cur is None :
+            with self.cursor() as cur:
+                cur.execute(cmd)
+        else :
             cur.execute(cmd)
         return
     

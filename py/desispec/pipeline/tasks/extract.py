@@ -141,16 +141,15 @@ class TaskExtract(BaseTask):
             extract.main_mpi(args, comm=comm)
         return
 
-    def postprocessing(self, db, name):
+    def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         # run getready for all extraction with same night,band,spec
         props = self.name_split(name)
         log  = get_logger()
-        with db.cursor() as cur :
-            for tt in ["fiberflat","sky"] :
-                cmd = "select name from {} where night={} and expid={} and band='{}' and spec={}".format(tt,props["night"],props["expid"],props["band"],props["spec"])
-                cur.execute(cmd)
-                tasks = [ x for (x,) in cur.fetchall() ]
-                log.debug("checking {} {}".format(tt,tasks))
-                for task in tasks :
-                    task_classes[tt].getready( db=db,name=task,cur=cur)
+        for tt in ["fiberflat","sky"] :
+            cmd = "select name from {} where night={} and expid={} and band='{}' and spec={}".format(tt,props["night"],props["expid"],props["band"],props["spec"])
+            cur.execute(cmd)
+            tasks = [ x for (x,) in cur.fetchall() ]
+            log.debug("checking {} {}".format(tt,tasks))
+            for task in tasks :
+                task_classes[tt].getready( db=db,name=task,cur=cur)

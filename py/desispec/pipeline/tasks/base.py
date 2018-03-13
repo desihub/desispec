@@ -503,7 +503,7 @@ class BaseTask(object):
         
 
 
-    def postprocessing(self, db, name):
+    def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         pass
         
@@ -545,10 +545,14 @@ class BaseTask(object):
                         failed = nproc
                         break
                 if done:
-                    # need to run postprocessing AFTER setting state to done
-                    # because task state maybe tested in postprocessing.
-                    self.state_set(db, name, "done")
-                    self.postprocessing(db,name)
+                    with db.cursor() as cur:
+                        # need to run postprocessing AFTER setting state to done
+                        # because task state maybe tested in postprocessing.
+                        
+                        # do it in context to make sure done and postprocessing are in sync
+                        self.state_set(db, name, "done",cur)
+                        self.postprocessing(db,name,cur)
+                        
                 else:
                     self.state_set(db, name, "fail")
         return failed

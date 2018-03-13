@@ -166,17 +166,16 @@ class TaskPSF(BaseTask):
         specex.main(args, comm=comm)
         return
 
-    def postprocessing(self, db, name):
+    def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         # run getready on all psfnight with same night,band,spec
         props = self.name_split(name)
         log  = get_logger()
-        with db.cursor() as cur :
-            tt="psfnight"
-            cmd = "select name from {} where night={} and band='{}' and spec={}".format(tt,props["night"],props["band"],props["spec"])
-            cur.execute(cmd)
-            tasks = [ x for (x,) in cur.fetchall() ]
-            log.debug("checking {}".format(tasks))
-            for task in tasks :
-                task_classes[tt].getready( db=db,name=task,cur=cur)
+        tt="psfnight"
+        cmd = "select name from {} where night={} and band='{}' and spec={}".format(tt,props["night"],props["band"],props["spec"])
+        cur.execute(cmd)
+        tasks = [ x for (x,) in cur.fetchall() ]
+        log.debug("checking {}".format(tasks))
+        for task in tasks :
+            task_classes[tt].getready( db=db,name=task,cur=cur)
         
