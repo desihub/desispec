@@ -13,7 +13,9 @@ from ...util import option_list
 
 from ...io import findfile
 
-from .base import BaseTask
+from .base import (BaseTask, task_classes)
+
+from desiutil.log import get_logger
 
 import sys,re,os,copy
 
@@ -113,3 +115,17 @@ class TaskFiberflat(BaseTask):
         args = fiberflat.parse(optlist)
         fiberflat.main(args)
         return
+
+    def postprocessing(self, db, name):
+        """For successful runs, postprocessing on DB"""
+        # run getready on all fierflatnight with same night,band,spec
+        props = self.name_split(name)
+        log  = get_logger()
+        with db.cursor() as cur :
+            tt="fiberflatnight"
+            cmd = "select name from {} where night={} and band='{}' and spec={}".format(tt,props["night"],props["band"],props["spec"])
+            cur.execute(cmd)
+            tasks = [ x for (x,) in cur.fetchall() ]
+            log.debug("checking {}".format(tasks))
+            for task in tasks :
+                task_classes[tt].getready( db=db,name=task,cur=cur)
