@@ -70,7 +70,7 @@ def all_tasks(night, nside):
         full[t] = list()
 
     healpix_frames = []
-    
+
     for ex in sorted(expid):
 
         log.debug("read fibermap for exposure {}".format(ex))
@@ -124,9 +124,9 @@ def all_tasks(night, nside):
                         exists=True
                         break
                 if not exists : full["redshift"].append(props)
-                
-                
-                
+
+
+
         fmprops = dict()
         fmprops["night"]  = int(night)
         fmprops["expid"]  = int(ex)
@@ -455,8 +455,8 @@ class DataBase:
         self.initdb()
 
         alltasks , healpix_frames = all_tasks(night, nside)
-        
-        
+
+
         with self.cursor() as cur:
 
             # insert or ignore all healpix_frames
@@ -469,7 +469,7 @@ class DataBase:
             for tt in task_types():
                 cur.execute("select name from {}".format(tt))
                 tasks_in_db[tt] = [ x for (x, ) in cur.fetchall()]
-                
+
             for tt in task_types():
                 log.debug("updating {} ...".format(tt))
                 for tsk in alltasks[tt]:
@@ -531,9 +531,9 @@ class DataBase:
         with self.cursor() as cur:
 
             for tt in task_types():
-                
+
                 if tt == "spectra" or tt == "redshift" : continue # ignore those, they are treated separatly
-                
+
                 # for each type of task, get the list of tasks in waiting mode
                 cur.execute('select name from {} where state = {}'.format(tt,task_state_to_int["waiting"]))
                 tasks = [ x for (x, ) in cur.fetchall()]
@@ -542,25 +542,25 @@ class DataBase:
                     log.debug("checking {} {} tasks ...".format(len(tasks),tt))
                 for tsk in tasks :
                     task_classes[tt].getready( db=self,name=tsk,cur=cur)
-                
-                        
+
+
             for tt in [ "spectra" , "redshift" ] :
-                    
+
                 if tt == "spectra" :
                     required_healpix_frame_state = 1 # means we have a cframe
                 elif tt == "redshift" :
                     required_healpix_frame_state = 2 # means we have an updated spectra file
-                
+
                 cur.execute('select nside,pixel from healpix_frame where state = {}'.format(required_healpix_frame_state))
                 entries = cur.fetchall()
                 for entry in entries :
                     log.debug("{} of pixel {} is ready to run".format(tt,entry[1]))
                     cur.execute('update {} set state = {} where nside = {} and pixel = {}'.format(tt,task_state_to_int["ready"],entry[0],entry[1]))
-                
-                    
+
+
 
         return
-    
+
     def update_healpix_frame_state(self,props,state,cur) :
         if "expid" in props :
             # update from a cframe
@@ -568,14 +568,14 @@ class DataBase:
         else :
             # update from a spectra or redshift task
             cmd = "update healpix_frame set state = {} where nside = {} and pixel = {} and state = {}".format(state,props["nside"],props["pixel"],props["state"])
-            
+
         if cur is None :
             with self.cursor() as cur:
                 cur.execute(cmd)
         else :
             cur.execute(cmd)
         return
-    
+
     def select_healpix_frame(self,props) :
         res = []
         with self.cursor() as cur:
@@ -602,10 +602,6 @@ class DataBase:
             cmd = "create table healpix_frame (night integer, expid integer , spec integer , nside integer , pixel integer , ntargets integer , state integer,  UNIQUE(expid,spec,nside,pixel) ON CONFLICT IGNORE )"
             cur.execute(cmd)
         return
-    
-    
-
-    
 
 
 class DataBaseSqlite(DataBase):
@@ -640,8 +636,6 @@ class DataBaseSqlite(DataBase):
         # Journaling options
         self._journalmode = "persist"
         self._syncmode = "normal"
-
-        self._open()
 
         if create:
             self.initdb()
@@ -678,9 +672,16 @@ class DataBaseSqlite(DataBase):
         return
 
 
+    def _close(self):
+        del self._conn
+        self._conn = None
+        return
+
+
     @contextmanager
     def cursor(self):
         import sqlite3
+        self._open()
         cur = self._conn.cursor()
         cur.execute("begin transaction")
         try:
@@ -694,6 +695,7 @@ class DataBaseSqlite(DataBase):
             cur.execute("commit")
         finally:
             del cur
+            self._close()
 
 
     def initdb(self):
@@ -710,7 +712,7 @@ class DataBaseSqlite(DataBase):
         for tt, tc in task_classes.items():
             if tt not in tables_in_db:
                 tc.create(self)
-        
+
         if "healpix_frame" not in tables_in_db:
             self.create_healpix_frame_table()
         return
@@ -745,7 +747,13 @@ class DataBasePostgres(DataBase):
 
         self._proddir = os.path.abspath(io.specprod_root())
 
-        self._open()
+        create = False
+        if self._schema is None:
+            create = True
+            self._schema = self._compute_schema()
+
+        if create:
+            self.initdb()
         return
 
 
@@ -759,83 +767,16 @@ class DataBasePostgres(DataBase):
     def _open(self):
         import psycopg2 as pg2
 
-        create = False
-        if self._schema is None:
-            create = True
-            self._schema = self._compute_schema()
-
         # Open connection
         self._conn = pg2.connect(host=self._host, port=self._port,
             user=self._user, dbname=self._dbname)
 
-        # Check existence of the schema.  If we were not passed the schema
-        # in the constructor, it means that we are creating a new prod, so any
-        # existing schema should be wiped and recreated.
+        return
 
-        with self._conn as cn:
-            cur = cn.cursor()
-            # See if our schema already exists...
-            com = "select exists(select 1 from pg_namespace where nspname = '{}')".format(self._schema)
-            cur.execute(com)
-            have_schema = cur.fetchone()[0]
 
-            if create:
-                if have_schema:
-                    # We need to wipe it first
-                    com = "drop schema {} cascade".format(self._schema)
-                    print(com,flush=True)
-                    cur.execute(com)
-                com = "create schema {} authorization {}"\
-                    .format(self._schema, self._user)
-                print(com,flush=True)
-                cur.execute(com)
-
-                if self._authorize is not None:
-                    com = "grant usage on schema {} to {}"\
-                        .format(self._schema, self._authorize)
-                    print(com,flush=True)
-                    cur.execute(com)
-
-                    com = "alter default privileges in schema {} grant select on tables to {}".format(self._schema, self._authorize)
-                    print(com,flush=True)
-                    cur.execute(com)
-
-                    com = "alter default privileges in schema {} grant select,usage on sequences to {}".format(self._schema, self._authorize)
-                    print(com,flush=True)
-                    cur.execute(com)
-
-                    com = "alter default privileges in schema {} grant execute on functions to {}".format(self._schema, self._authorize)
-                    print(com,flush=True)
-                    cur.execute(com)
-
-                    com = "alter default privileges in schema {} grant usage on types to {}".format(self._schema, self._authorize)
-                    print(com,flush=True)
-                    cur.execute(com)
-
-                # Create a table of information about this prod
-                com = "create table {}.info (key text unique, val text)"\
-                    .format(self._schema)
-                print(com,flush=True)
-                cur.execute(com)
-                com = "insert into {}.info values ('{}', '{}')"\
-                    .format(self._schema, "path", self._proddir)
-                print(com,flush=True)
-                cur.execute(com)
-                if 'USER' in os.environ:
-                    com = "insert into {}.info values ('{}', '{}')"\
-                        .format(self._schema, "created_by", os.environ['USER'])
-                    print(com,flush=True)
-                    cur.execute(com)
-            else:
-                if not have_schema:
-                    raise RuntimeError("Postgres schema for production {} does"
-                        " not exist.  Make sure you create the production with"
-                        " postgres options and source the top-level setup.sh"
-                        " file.".format(self._proddir))
-
-        # If we are creating the prod, initialize the tables.
-        if create:
-            self.initdb()
+    def _close(self):
+        del self._conn
+        self._conn = None
         return
 
 
@@ -844,10 +785,23 @@ class DataBasePostgres(DataBase):
         return self._schema
 
 
+    def _have_schema(self, cur):
+        com = "select exists(select 1 from pg_namespace where nspname = '{}')".format(self._schema)
+        cur.execute(com)
+        return cur.fetchone()[0]
+
+
     @contextmanager
     def cursor(self):
         import psycopg2
+        self._open()
         cur = self._conn.cursor()
+        have_schema = self._have_schema(cur)
+        if not have_schema:
+            raise RuntimeError("Postgres schema for production {} does"
+                " not exist.  Make sure you create the production with"
+                " postgres options and source the top-level setup.sh"
+                " file.".format(self._proddir))
         cur.execute("set search_path to '{}'".format(self._schema))
         cur.execute("begin transaction")
         try:
@@ -861,11 +815,66 @@ class DataBasePostgres(DataBase):
             cur.execute("commit")
         finally:
             del cur
+            self._close()
 
 
     def initdb(self):
         """Create DB tables for all tasks if they do not exist.
         """
+        # Check existence of the schema.  If we were not passed the schema
+        # in the constructor, it means that we are creating a new prod, so any
+        # existing schema should be wiped and recreated.
+
+        with self.cursor() as cur:
+            # See if our schema already exists...
+            have_schema = self._have_schema(cur)
+            if have_schema:
+                # We need to wipe it first
+                com = "drop schema {} cascade".format(self._schema)
+                print(com,flush=True)
+                cur.execute(com)
+            com = "create schema {} authorization {}"\
+                .format(self._schema, self._user)
+            print(com,flush=True)
+            cur.execute(com)
+
+            if self._authorize is not None:
+                com = "grant usage on schema {} to {}"\
+                    .format(self._schema, self._authorize)
+                print(com,flush=True)
+                cur.execute(com)
+
+                com = "alter default privileges in schema {} grant select on tables to {}".format(self._schema, self._authorize)
+                print(com,flush=True)
+                cur.execute(com)
+
+                com = "alter default privileges in schema {} grant select,usage on sequences to {}".format(self._schema, self._authorize)
+                print(com,flush=True)
+                cur.execute(com)
+
+                com = "alter default privileges in schema {} grant execute on functions to {}".format(self._schema, self._authorize)
+                print(com,flush=True)
+                cur.execute(com)
+
+                com = "alter default privileges in schema {} grant usage on types to {}".format(self._schema, self._authorize)
+                print(com,flush=True)
+                cur.execute(com)
+
+            # Create a table of information about this prod
+            com = "create table {}.info (key text unique, val text)"\
+                .format(self._schema)
+            print(com,flush=True)
+            cur.execute(com)
+            com = "insert into {}.info values ('{}', '{}')"\
+                .format(self._schema, "path", self._proddir)
+            print(com,flush=True)
+            cur.execute(com)
+            if 'USER' in os.environ:
+                com = "insert into {}.info values ('{}', '{}')"\
+                    .format(self._schema, "created_by", os.environ['USER'])
+                print(com,flush=True)
+                cur.execute(com)
+
         # check existing tables
         tables_in_db = None
         with self.cursor() as cur:
@@ -877,8 +886,9 @@ class DataBasePostgres(DataBase):
         for tt, tc in task_classes.items():
             if tt not in tables_in_db:
                 tc.create(self)
-        
-        self.create_healpix_frame_table()
+
+        if "healpix_frame" not in tables_in_db:
+            self.create_healpix_frame_table()
         return
 
 
