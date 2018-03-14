@@ -377,7 +377,6 @@ Where supported commands are:
 
 
     def cleanup(self):
-
         parser = argparse.ArgumentParser(description="Clean up stale task "
             "states in the DB")
 
@@ -757,6 +756,63 @@ Where supported commands are:
     #             print("")
     #
     #     return
+
+    def top(self):
+        parser = argparse.ArgumentParser(description="Live overview of "
+            "the production state")
+
+        parser.add_argument("--refresh", required=False, type=int, default=10,
+            help="The number of seconds between DB queries")
+
+        args = parser.parse_args(sys.argv[2:])
+
+        import signal
+        import time
+        import numpy as np
+
+        def signal_handler(signal, frame):
+            sys.exit(0)
+        signal.signal(signal.SIGINT, signal_handler)
+
+        dbpath = io.get_pipe_database()
+        db = pipe.load_db(dbpath, mode="r")
+
+        tasktypes = pipe.tasks.base.default_task_chain
+
+        header_state = ""
+        for s in pipe.task_states:
+            header_state = "{} {:8s}|".format(header_state, s)
+
+        sep = "------------------------------------------------------------------------------"
+
+        header = "{}\n{:26s}|{}\n{}".format(sep, "         Task Type        ",
+            header_state, sep)
+
+        while True:
+            taskstates = {}
+            with db.cursor() as cur:
+                for t in tasktypes:
+                    taskstates[t] = {}
+                    cmd = "select state from {}".format(t)
+                    cur.execute(cmd)
+                    st = np.array([ int(x[0]) for x in cur.fetchall() ])
+                    for s in pipe.task_states:
+                        taskstates[t][s] = \
+                            np.sum(st == pipe.task_state_to_int[s])
+
+            print("\033c")
+            print(header)
+            for t in tasktypes:
+                line = "{:26s}|".format(t)
+                for s in pipe.task_states:
+                    line = "{}{:9d}|".format(line, taskstates[t][s])
+                print(line)
+            print(sep)
+            print(" (Use Ctrl-C to Quit) ")
+            sys.stdout.flush()
+            time.sleep(args.refresh)
+
+        return
 
 
 def main():

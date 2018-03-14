@@ -42,7 +42,7 @@ if base.task_classes is None:
             raise RuntimeError("task submodule name error")
         taskname = tasknamemat.group(1)
         if taskname=="base": continue
-        
+
         # import the module
         __import__(modname)
         # search the classes in the module for the Task class.
@@ -61,3 +61,6 @@ if base.task_classes is None:
                 .format(taskname))
         # add the class to the dictionary.
         base.task_classes[taskname] = taskclass()
+    base.default_task_chain = ["pix", "psf", "psfnight", "extract",
+        "fiberflat", "fiberflatnight", "sky", "starfit", "fluxcalib",
+        "cframe", "spectra", "redshift"]

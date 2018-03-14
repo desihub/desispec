@@ -16,6 +16,8 @@ from desiutil.log import get_logger
 
 task_classes = None
 
+default_task_chain = None
+
 
 def task_type(name):
     """Given a task name, find the type from the list of available ones.
