@@ -46,7 +46,7 @@ class TaskCFrame(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["night","band","spec","expid"]
         self._name_formats = ["08d","s","d","08d"]
-        
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -63,12 +63,12 @@ class TaskCFrame(BaseTask):
         props = self.name_split(name)
         deptasks = {
             "infile" : task_classes["extract"].name_join(props),
-            "fiberflat" : task_classes["fiberflatnight"].name_join(props), 
+            "fiberflat" : task_classes["fiberflatnight"].name_join(props),
             "sky" : task_classes["sky"].name_join(props),
             "calib" : task_classes["fluxcalib"].name_join(props)
         }
         return deptasks
-    
+
     def _run_max_procs(self, procs_per_node):
         """See BaseTask.run_max_procs.
         """
@@ -104,19 +104,19 @@ class TaskCFrame(BaseTask):
         options["sky"]    = task_classes["sky"].paths(deps["sky"])[0]
         options["calib"] = task_classes["fluxcalib"].paths(deps["calib"])[0]
         options["outfile"]    = self.paths(name)[0]
-    
+
         options.update(opts)
         return option_list(options)
 
-    def _run_cli(self, name, opts, procs, db=None):
+    def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         entry = "desi_process_exposure"
         optlist = self._option_list(name, opts)
         com = "{} {}".format(entry, " ".join(optlist))
         return com
-        
-    def _run(self, name, opts, comm, db=None):
+
+    def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
         from ...scripts import procexp
@@ -130,7 +130,7 @@ class TaskCFrame(BaseTask):
         props=self.name_split(name)
         props["state"]=0 # selection
         db.update_healpix_frame_state(props,state=1,cur=cur) # 1=has a cframe
-        
+
         log = get_logger()
         # call getready on all spectra ... might be super inefficient
         tt="spectra"
@@ -140,4 +140,3 @@ class TaskCFrame(BaseTask):
         log.debug("from {} set spectra to ready : {}".format(name,entries))
         for entry in entries :
             cur.execute('update {} set state = {} where nside = {} and pixel = {}'.format(tt,task_state_to_int["ready"],entry[0],entry[1]))
-

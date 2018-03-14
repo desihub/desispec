@@ -46,7 +46,7 @@ class TaskStarFit(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["night","spec","expid"]
         self._name_formats = ["08d","d","08d"]
-        
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -54,13 +54,13 @@ class TaskStarFit(BaseTask):
         return [ findfile("stdstars", night=props["night"], expid=props["expid"],
                           groupname=None, nside=None, camera=None, band=None,
                           spectrograph=props["spec"]) ]
-    
+
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
         """
         from .base import task_classes
         props = self.name_split(name)
-        
+
         # we need at least the b-camera for the fit of standard stars
         props_and_b       = props.copy()
         props_and_b["band"] = "b"
@@ -71,7 +71,7 @@ class TaskStarFit(BaseTask):
             "b-sky" : task_classes["sky"].name_join(props_and_b)
         }
         return deptasks
-    
+
     def _run_max_procs(self, procs_per_node):
         """See BaseTask.run_max_procs.
         """
@@ -87,12 +87,12 @@ class TaskStarFit(BaseTask):
     def _run_defaults(self):
         """See BaseTask.run_defaults.
         """
-        
+
         log = get_logger()
 
         opts = {}
         starmodels = None
-        if "DESI_BASIS_TEMPLATE" in os.environ : 
+        if "DESI_BASIS_TEMPLATE" in os.environ :
             filenames = glob.glob(os.environ["DESI_BASIS_TEMPLATE"]+"/star_templates_*.fits")
             if len(filenames)>0 :
                 starmodels = filenames[0]
@@ -109,15 +109,15 @@ class TaskStarFit(BaseTask):
         if starmodels is None :
             log.error("could not find the stellar templates")
             raise RuntimeError("could not find the stellar templates")
-        
+
         opts["starmodels"] =  starmodels
 
         opts["delta-color"] = 0.2
         opts["color"] = "G-R"
-        
+
 
         return opts
-            
+
 
     def _option_list(self, name, opts):
         """Build the full list of options.
@@ -126,8 +126,8 @@ class TaskStarFit(BaseTask):
         options.
         """
         from .base import task_classes, task_type
-        
-        
+
+
         log = get_logger()
 
         deps = self.deps(name)
@@ -136,39 +136,39 @@ class TaskStarFit(BaseTask):
         options["frames"]=[]
         options["skymodels"]=[]
         options["fiberflats"]=[]
-        
 
-        # frames skymodels fiberflats 
+
+        # frames skymodels fiberflats
         props = self.name_split(name)
         for band in ["b","r","z"] :
             props_and_band = props.copy()
             props_and_band["band"] = band
-            
+
             task  = task_classes["extract"].name_join(props_and_band)
             frame_filename = task_classes["extract"].paths(task)[0]
-            
+
             task  = task_classes["fiberflatnight"].name_join(props_and_band)
             fiberflat_filename = task_classes["fiberflatnight"].paths(task)[0]
-            
+
             task  = task_classes["sky"].name_join(props_and_band)
             sky_filename = task_classes["sky"].paths(task)[0]
-            
+
             # check all files exist
             if os.path.isfile(frame_filename) \
                and os.path.isfile(fiberflat_filename) \
                and os.path.isfile(sky_filename) :
-               
+
                 options["frames"].append(frame_filename)
                 options["skymodels"].append(sky_filename)
                 options["fiberflats"].append(fiberflat_filename)
-            
+
             else :
                 log.warning("missing band {} for {}".format(band,name))
 
         options.update(opts)
         return option_list(options)
 
-    def _run_cli(self, name, opts, procs, db=None):
+    def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         entry = "desi_fit_stdstars"
@@ -176,7 +176,7 @@ class TaskStarFit(BaseTask):
         com = "{} {}".format(entry, " ".join(optlist))
         return com
 
-    def _run(self, name, opts, comm, db=None):
+    def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
         from ...scripts import stdstars

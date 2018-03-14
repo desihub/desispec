@@ -376,6 +376,22 @@ Where supported commands are:
         return
 
 
+    def cleanup(self):
+
+        parser = argparse.ArgumentParser(description="Clean up stale task "
+            "states in the DB")
+
+        parser.add_argument("--failed", required=False, default=False,
+            action="store_true", help="Also clear failed states")
+
+        args = parser.parse_args(sys.argv[2:])
+
+        dbpath = io.get_pipe_database()
+        db = pipe.load_db(dbpath, mode="w")
+        db.cleanup(cleanfailed=args.failed)
+        return
+
+
     def _parse_run_opts(self, parser):
         """Internal function to parse options for running.
 
@@ -527,9 +543,9 @@ Where supported commands are:
                 args.nersc_runtime, nodeprocs=ppn, openmp=False,
                 multiproc=False, db=db, shifterimg=args.nersc_shifter,
                 debug=args.debug)
-        print("wrote the following script(s):")
+        print("script(s) written to:")
         for script in scripts :
-            print(script)
+            print("  {}".format(script))
 
         return scripts
 

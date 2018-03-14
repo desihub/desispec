@@ -99,7 +99,7 @@ class TaskFiberflat(BaseTask):
         options.update(opts)
         return option_list(options)
 
-    def _run_cli(self, name, opts, procs, db=None):
+    def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         entry = "desi_compute_fiberflat"
@@ -107,7 +107,7 @@ class TaskFiberflat(BaseTask):
         com = "{} {}".format(entry, " ".join(optlist))
         return com
 
-    def _run(self, name, opts, comm, db=None):
+    def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
         from ...scripts import fiberflat
@@ -128,4 +128,3 @@ class TaskFiberflat(BaseTask):
         log.debug("checking {}".format(tasks))
         for task in tasks :
             task_classes[tt].getready( db=db,name=task,cur=cur)
-

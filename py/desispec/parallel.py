@@ -391,7 +391,7 @@ def stdouterr_redirected(to=None, comm=None):
         # restore old stdout and stderr
         _redirect(out_to=saved_fd_out, err_to=saved_fd_err)
 
-        if comm is not None:
+        if nproc > 1:
             comm.barrier()
 
         # concatenate per-process files
@@ -404,7 +404,7 @@ def stdouterr_redirected(to=None, comm=None):
                         outfile.write(infile.read())
                     os.remove(fname)
 
-        if comm is not None:
+        if nproc > 1:
             comm.barrier()
 
         if rank == 0:

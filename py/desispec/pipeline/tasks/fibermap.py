@@ -80,13 +80,13 @@ class TaskFibermap(BaseTask):
         return dict()
 
 
-    def _run_cli(self, name, opts, procs, db=None):
+    def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         return ""
 
 
-    def _run(self, name, opts, comm, db=None):
+    def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
         return

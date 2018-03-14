@@ -240,16 +240,16 @@ class BaseTask(object):
         """See BaseTask.state_set.
         """
         start = time.time()
-        
+
         cmd="update {} set state = {} where name = '{}'"\
             .format(self._type, task_state_to_int[state], name)
-        
+
         if cur is None :
             with db.cursor() as cur:
                 cur.execute(cmd)
         else :
             cur.execute(cmd)
-        
+
         stop = time.time()
         log  = get_logger()
         log.debug("took {} sec for {}".format(stop-start,name))
@@ -259,7 +259,7 @@ class BaseTask(object):
     def _state_get(self, db, name, cur=None):
         """See BaseTask.state_get.
         """
-        
+
         st = None
         cmd = "select state from {} where name = '{}'"\
             .format(self._type,name)
@@ -400,7 +400,7 @@ class BaseTask(object):
         return self._run_defaults()
 
 
-    def _run_cli(self, name, opts, procs, db=None):
+    def _run_cli(self, name, opts, procs, db):
         raise NotImplementedError("You should not use a BaseTask object "
             " directly")
         return None
@@ -415,6 +415,7 @@ class BaseTask(object):
             procs (int): The number of processes to use.
             launch (str): optional launching command.
             log (str): optional log file for output.
+            db (pipeline.db.DB): The database.
 
         Returns:
             str: a command line.
@@ -428,7 +429,7 @@ class BaseTask(object):
         return comstr
 
 
-    def _run(self, name, opts, comm, db=None):
+    def _run(self, name, opts, comm, db):
         raise NotImplementedError("You should not use a BaseTask object "
             " directly")
         return
@@ -441,13 +442,14 @@ class BaseTask(object):
             name (str): the name of this task.
             opts (dict): options to use for this task.
             comm (mpi4py.MPI.Comm): optional MPI communicator.
+            db (pipeline.db.DB): The database.
 
         Returns:
             int: the number of processes that failed.
 
         """
         log = get_logger()
-        
+
         nproc = 1
         rank = 0
         if comm is not None:
@@ -500,13 +502,13 @@ class BaseTask(object):
             # change state to ready
             log.debug("{} is ready to run".format(name))
             self.state_set(db=db,name=name,state="ready",cur=cur)
-        
+
 
 
     def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         pass
-        
+
 
 
     def run_and_update(self, db, name, opts, comm=None):
@@ -531,7 +533,7 @@ class BaseTask(object):
             nproc = comm.size
             rank = comm.rank
 
-        failed = self.run(name, opts, comm, db)
+        failed = self.run(name, opts, comm=comm, db=db)
 
         if rank == 0:
             if failed > 0:
@@ -548,11 +550,11 @@ class BaseTask(object):
                     with db.cursor() as cur:
                         # need to run postprocessing AFTER setting state to done
                         # because task state maybe tested in postprocessing.
-                        
+
                         # do it in context to make sure done and postprocessing are in sync
                         self.state_set(db, name, "done",cur)
                         self.postprocessing(db,name,cur)
-                        
+
                 else:
                     self.state_set(db, name, "fail")
         return failed

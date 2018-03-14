@@ -46,7 +46,7 @@ class TaskSky(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["night","band","spec","expid"]
         self._name_formats = ["08d","s","d","08d"]
-        
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -66,7 +66,7 @@ class TaskSky(BaseTask):
             "fiberflat" : task_classes["fiberflatnight"].name_join(props)
         }
         return deptasks
-    
+
     def _run_max_procs(self, procs_per_node):
         """See BaseTask.run_max_procs.
         """
@@ -99,11 +99,11 @@ class TaskSky(BaseTask):
         options["infile"]    = task_classes["extract"].paths(deps["infile"])[0]
         options["fiberflat"] = task_classes["fiberflatnight"].paths(deps["fiberflat"])[0]
         options["outfile"]    = self.paths(name)[0]
-    
+
         options.update(opts)
         return option_list(options)
 
-    def _run_cli(self, name, opts, procs, db=None):
+    def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         entry = "desi_compute_sky"
@@ -111,7 +111,7 @@ class TaskSky(BaseTask):
         com = "{} {}".format(entry, " ".join(optlist))
         return com
 
-    def _run(self, name, opts, comm, db=None):
+    def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
         from ...scripts import sky

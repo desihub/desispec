@@ -46,7 +46,7 @@ class TaskExtract(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["night","band","spec","expid"]
         self._name_formats = ["08d","s","d","08d"]
-        
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -67,7 +67,7 @@ class TaskExtract(BaseTask):
             "psf" : task_classes["psfnight"].name_join(props)
             }
         return deptasks
-    
+
     def _run_max_procs(self, procs_per_node):
         """See BaseTask.run_max_procs.
         """
@@ -121,7 +121,7 @@ class TaskExtract(BaseTask):
         options.update(optscopy)
         return option_list(options)
 
-    def _run_cli(self, name, opts, procs, db=None):
+    def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         entry = "desi_extract_spectra"
@@ -129,7 +129,7 @@ class TaskExtract(BaseTask):
         com = "{} {}".format(entry, " ".join(optlist))
         return com
 
-    def _run(self, name, opts, comm, db=None):
+    def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
         from ...scripts import extract

@@ -46,7 +46,7 @@ class TaskFluxCalib(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["night","band","spec","expid"]
         self._name_formats = ["08d","s","d","08d"]
-        
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -63,12 +63,12 @@ class TaskFluxCalib(BaseTask):
         props = self.name_split(name)
         deptasks = {
             "infile" : task_classes["extract"].name_join(props),
-            "fiberflat" : task_classes["fiberflatnight"].name_join(props), 
+            "fiberflat" : task_classes["fiberflatnight"].name_join(props),
             "sky" : task_classes["sky"].name_join(props),
             "models" : task_classes["starfit"].name_join(props)
         }
         return deptasks
-    
+
     def _run_max_procs(self, procs_per_node):
         """See BaseTask.run_max_procs.
         """
@@ -103,11 +103,11 @@ class TaskFluxCalib(BaseTask):
         options["sky"]       = task_classes["sky"].paths(deps["sky"])[0]
         options["models"]    = task_classes["starfit"].paths(deps["models"])[0]
         options["outfile"]   = self.paths(name)[0]
-        
+
         options.update(opts)
         return option_list(options)
 
-    def _run_cli(self, name, opts, procs, db=None):
+    def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         entry = "desi_compute_fluxcalibration"
@@ -115,7 +115,7 @@ class TaskFluxCalib(BaseTask):
         com = "{} {}".format(entry, " ".join(optlist))
         return com
 
-    def _run(self, name, opts, comm, db=None):
+    def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
         from ...scripts import fluxcalibration
@@ -123,7 +123,7 @@ class TaskFluxCalib(BaseTask):
         args = fluxcalibration.parse(optlist)
         fluxcalibration.main(args)
         return
-    
+
     def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
         # run getready on all fierflatnight with same night,band,spec

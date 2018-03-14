@@ -451,18 +451,19 @@ class DataBase:
 
         log = get_logger()
 
-        # Update DB tables, if needed
-        self.initdb()
-
         alltasks , healpix_frames = all_tasks(night, nside)
 
-
         with self.cursor() as cur:
-
             # insert or ignore all healpix_frames
             log.debug("updating healpix_frame ...")
-            for entry in healpix_frames :
-                cur.execute("insert into healpix_frame (night,expid,spec,nside,pixel,ntargets,state) values({},{},{},{},{},{},{})".format(entry["night"],entry["expid"],entry["spec"],entry["nside"],entry["pixel"],entry["ntargets"],0))
+            for entry in healpix_frames:
+                # see if we already have this entry
+                cmd = "select exists(select 1 from healpix_frame where (expid = {} and spec = {} and nside = {} and pixel = {} ))".format(entry["expid"], entry["spec"], entry["nside"], entry["pixel"])
+                cur.execute(cmd)
+                have_row = cur.fetchone()[0]
+
+                if not have_row:
+                    cur.execute("insert into healpix_frame (night,expid,spec,nside,pixel,ntargets,state) values({},{},{},{},{},{},{})".format(entry["night"],entry["expid"],entry["spec"],entry["nside"],entry["pixel"],entry["ntargets"],0))
 
             # read what is already in db
             tasks_in_db = {}
@@ -491,9 +492,6 @@ class DataBase:
             night (str): The night to scan for updates.
 
         """
-        # Update DB tables, if needed
-        self.initdb()
-
         tasks_in_db = None
         # Grab existing nightly tasks
         with self.cursor() as cur:
@@ -515,6 +513,38 @@ class DataBase:
                 continue
             tstates = check_tasks(tasks_in_db[tt], db=None)
             st = [ (x, tstates[x]) for x in tasks_in_db[tt] ]
+            self.set_states_type(tt, st)
+
+        return
+
+
+    def cleanup(self, cleanfailed=False):
+        """Reset states of tasks.
+
+        Any tasks that are marked as "running" will have their state
+        reset to "ready".  This can be called if a job dies before
+        completing all tasks.
+
+        """
+        tasks_running = None
+        # Grab existing nightly tasks
+        with self.cursor() as cur:
+            tasks_running = {}
+            for tt in task_types():
+                if cleanfailed:
+                    cur.execute(\
+                        "select name from {} where state = {} or state = {}"\
+                        .format(tt, task_state_to_int["running"],
+                        task_state_to_int["fail"]))
+                else:
+                    cur.execute(\
+                        "select name from {} where state = {}"\
+                        .format(tt, task_state_to_int["running"]))
+                tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
+
+        # For each task type, check status WITHOUT the DB, then set state.
+        for tt in task_types():
+            st = [ (x, "ready") for x in tasks_running[tt] ]
             self.set_states_type(tt, st)
 
         return
@@ -557,8 +587,6 @@ class DataBase:
                     log.debug("{} of pixel {} is ready to run".format(tt,entry[1]))
                     cur.execute('update {} set state = {} where nside = {} and pixel = {}'.format(tt,task_state_to_int["ready"],entry[0],entry[1]))
 
-
-
         return
 
     def update_healpix_frame_state(self,props,state,cur) :
@@ -599,8 +627,9 @@ class DataBase:
 
     def create_healpix_frame_table(self) :
         with self.cursor() as cur:
-            cmd = "create table healpix_frame (night integer, expid integer , spec integer , nside integer , pixel integer , ntargets integer , state integer,  UNIQUE(expid,spec,nside,pixel) ON CONFLICT IGNORE )"
+            cmd = "create table healpix_frame (night integer, expid integer, spec integer, nside integer, pixel integer, ntargets integer, state integer, unique(expid, spec, nside, pixel))"
             cur.execute(cmd)
+
         return
 
 
@@ -766,10 +795,29 @@ class DataBasePostgres(DataBase):
 
     def _open(self):
         import psycopg2 as pg2
+        import time
+        import numpy.random
 
-        # Open connection
-        self._conn = pg2.connect(host=self._host, port=self._port,
-            user=self._user, dbname=self._dbname)
+        # Open connection.  If psycopg2 raises an exception, then sleep
+        # for a random time interval and keep trying.
+        maxtry = 10
+        ntry = 0
+        while True:
+            try:
+                self._conn = pg2.connect(host=self._host, port=self._port,
+                    user=self._user, dbname=self._dbname)
+            except psycopg2.OperationalError as err:
+                log = get_logger()
+                log.debug("PostgreSQL connection failed with '{}', will sleep and retry".format(err))
+                if ntry > maxtry:
+                    log.error(err)
+                    break
+                numpy.random.seed(int(time.time()))
+                sec = numpy.random.uniform() * 3.0
+                time.sleep(sec)
+                ntry += 1
+            else:
+                break
 
         return
 
@@ -792,16 +840,17 @@ class DataBasePostgres(DataBase):
 
 
     @contextmanager
-    def cursor(self):
+    def cursor(self, skipcheck=False):
         import psycopg2
         self._open()
         cur = self._conn.cursor()
-        have_schema = self._have_schema(cur)
-        if not have_schema:
-            raise RuntimeError("Postgres schema for production {} does"
-                " not exist.  Make sure you create the production with"
-                " postgres options and source the top-level setup.sh"
-                " file.".format(self._proddir))
+        if not skipcheck:
+            have_schema = self._have_schema(cur)
+            if not have_schema:
+                raise RuntimeError("Postgres schema for production {} does"
+                    " not exist.  Make sure you create the production with"
+                    " postgres options and source the top-level setup.sh"
+                    " file.".format(self._proddir))
         cur.execute("set search_path to '{}'".format(self._schema))
         cur.execute("begin transaction")
         try:
@@ -824,8 +873,8 @@ class DataBasePostgres(DataBase):
         # Check existence of the schema.  If we were not passed the schema
         # in the constructor, it means that we are creating a new prod, so any
         # existing schema should be wiped and recreated.
-
-        with self.cursor() as cur:
+        tables_in_db = None
+        with self.cursor(skipcheck=True) as cur:
             # See if our schema already exists...
             have_schema = self._have_schema(cur)
             if have_schema:
@@ -875,9 +924,7 @@ class DataBasePostgres(DataBase):
                 print(com,flush=True)
                 cur.execute(com)
 
-        # check existing tables
-        tables_in_db = None
-        with self.cursor() as cur:
+            # check existing tables
             cur.execute("select tablename from pg_tables where schemaname =  '{}'".format(self.schema))
             tables_in_db = [x for (x, ) in cur.fetchall()]
 
@@ -889,6 +936,7 @@ class DataBasePostgres(DataBase):
 
         if "healpix_frame" not in tables_in_db:
             self.create_healpix_frame_table()
+
         return
 
 

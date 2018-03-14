@@ -46,7 +46,7 @@ class TaskPSFNight(BaseTask):
         # _name_fields must also be in _cols
         self._name_fields  = ["night","band","spec"]
         self._name_formats = ["08d","s","d"]
-        
+
     def _paths(self, name):
         """See BaseTask.paths.
         """
@@ -60,7 +60,7 @@ class TaskPSFNight(BaseTask):
         """See BaseTask.deps.
         """
         return dict()
-        
+
     def _run_max_procs(self, procs_per_node):
         """See BaseTask.run_max_procs.
         """
@@ -107,39 +107,39 @@ class TaskPSFNight(BaseTask):
         options.
         """
         return option_list(self._option_dict(name,opts))
-        
-    def _run_cli(self, name, opts, procs, db=None):
+
+    def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
         optlist = self._option_list(name, opts)
         com = "# command line for psfnight not implemented"
         return com
 
-    def _run(self, name, opts, comm, db=None):
+    def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
         from ...scripts import specex
         optdict = self._option_dict(name, opts)
         specex.mean_psf(optdict["input"], optdict["output"])
-        
+
         return
-        
+
     def getready(self, db, name, cur):
         """Checks whether dependencies are ready"""
         log  = get_logger()
-        
+
         # look for the state of psf with same night,band,spectro
         props = self.name_split(name)
-        
+
         cmd = "select state from psf where night={} and band='{}' and spec={}".format(props["night"],props["band"],props["spec"])
         cur.execute(cmd)
         states = np.array([ x for (x,) in cur.fetchall() ])
         log.debug("states={}".format(states))
-        
+
         # psfnight ready if all psf from the night have been processed, and at least one is done (failures are allowed)
         n_done   = np.sum(states==task_state_to_int["done"])
         n_failed = np.sum(states==task_state_to_int["fail"])
-        
+
         ready    = (n_done > 0) & ( (n_done + n_failed) == states.size )
         if ready :
             self.state_set(db=db,name=name,state="ready",cur=cur)
@@ -156,5 +156,3 @@ class TaskPSFNight(BaseTask):
         log.debug("checking {}".format(tasks))
         for task in tasks :
             task_classes[tt].getready( db=db,name=task,cur=cur)
-    
-
