@@ -90,14 +90,11 @@ def sim(night, nspec=5, clobber=False):
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('newexp-random failed for {} exposure {}'.format(program, expid))
 
-        cmd = "pixsim --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
+        cmd = "pixsim --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
         inputs = [fibermap, simspec]
         outputs = list()
         outputs.append(fibermap.replace('fibermap-', 'simpix-'))
-        for camera in ['b0', 'r0', 'z0']:
-            pixfile = io.findfile('pix', night, expid, camera)
-            outputs.append(pixfile)
-            #outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
+        outputs.append(io.findfile('raw', night, expid))
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(program, expid))
 
@@ -133,9 +130,7 @@ def integration_test(night=None, nspec=5, clobber=False):
 
     # create production
 
-    # FIXME:  someday run PSF estimation too...
-    ### com = "desi_pipe --spectrographs 0 --fakeboot --fakepsf"
-    com = "desi_pipe --spectrographs 0 --fakeboot --fakepsf"
+    com = "desi_pipe create --db-sqlite"
     sp.check_call(com, shell=True)
 
     # raw and production locations
@@ -146,12 +141,17 @@ def integration_test(night=None, nspec=5, clobber=False):
     # Modify options file to restrict the spectral range
 
     optpath = os.path.join(proddir, "run", "options.yaml")
-    opts = pipe.yaml_read(optpath)
+    opts = pipe.prod.yaml_read(optpath)
     opts['extract']['specmin'] = 0
     opts['extract']['nspec'] = nspec
-    pipe.yaml_write(optpath, opts)
+    pipe.prod.yaml_write(optpath, opts)
 
-    # run the generated shell scripts
+    # Run preprocessing
+
+    com = "desi_pipe tasks --tasktype pix | grep -v DEBUG | desi_pipe script --tasktype pix"
+    script = sp.check_output(com, shell=True)
+    sp.check_call(script, shell=True)
+
 
     # FIXME:  someday run PSF estimation too...
 
@@ -166,75 +166,75 @@ def integration_test(night=None, nspec=5, clobber=False):
     # print("Running psfcombine script...")
     # com = os.path.join(proddir, "run", "scripts", "psfcombine_all.sh")
     # sp.check_call(["bash", com])
+    #
+    # com = os.path.join(proddir, "run", "scripts", "run_shell.sh")
+    # print("Running extraction through calibration: "+com)
+    # sp.check_call(["bash", com])
+    #
+    # com = os.path.join(proddir, "run", "scripts", "spectra.sh")
+    # print("Running spectral regrouping: "+com)
+    # sp.check_call(["bash", com])
+    #
+    # com = os.path.join(proddir, "run", "scripts", "redshift.sh")
+    # print("Running redshift script "+com)
+    # sp.check_call(["bash", com])
 
-    com = os.path.join(proddir, "run", "scripts", "run_shell.sh")
-    print("Running extraction through calibration: "+com)
-    sp.check_call(["bash", com])
-
-    com = os.path.join(proddir, "run", "scripts", "spectra.sh")
-    print("Running spectral regrouping: "+com)
-    sp.check_call(["bash", com])
-
-    com = os.path.join(proddir, "run", "scripts", "redshift.sh")
-    print("Running redshift script "+com)
-    sp.check_call(["bash", com])
-
-    # #-----
-    # #- Did it work?
-    # #- (this combination of fibermap, simspec, and zbest is a pain)
-    expid = 2
-    fmfile = io.findfile('fibermap', night=night, expid=expid)
-    fibermap = io.read_fibermap(fmfile)
-    simdir = os.path.dirname(fmfile)
-    simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
-    siminfo = fits.getdata(simspec, 'TRUTH')
-
-    from desimodel.footprint import radec2pix
-    nside=64
-    pixels = np.unique(radec2pix(nside, fibermap['RA_TARGET'], fibermap['DEC_TARGET']))
-
-    print()
-    print("--------------------------------------------------")
-    print("Pixel     True  z        ->  Class  z        zwarn")
-    # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
-    for pix in pixels:
-        zbest = io.read_zbest(io.findfile('zbest', groupname=pix))
-        for i in range(len(zbest.z)):
-            objtype = zbest.spectype[i]
-            z, zwarn = zbest.z[i], zbest.zwarn[i]
-
-            j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
-            truetype = siminfo['OBJTYPE'][j]
-            oiiflux = siminfo['OIIFLUX'][j]
-            truez = siminfo['REDSHIFT'][j]
-            dv = 3e5*(z-truez)/(1+truez)
-            if truetype == 'SKY' and zwarn > 0:
-                status = 'ok'
-            elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
-                status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
-            elif zwarn == 0:
-                if truetype == 'LRG' and objtype == 'GALAXY' and abs(dv) < 150:
-                    status = 'ok'
-                elif truetype == 'ELG' and objtype == 'GALAXY':
-                    if abs(dv) < 150:
-                        status = ok
-                    elif oiiflux < 8e-17:
-                        status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
-                    else:
-                        status = 'OOPS ([OII] flux {:.2g})'.format(oiiflux)
-                elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
-                    status = 'ok'
-                elif truetype in ('STD', 'FSTD') and objtype == 'STAR':
-                    status = 'ok'
-                else:
-                    status = 'OOPS'
-            else:
-                status = 'OOPS'
-            print('{0:<8d}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
-                pix, truetype, truez, objtype, z, zwarn, status))
-
-    print("--------------------------------------------------")
-
+    # # #-----
+    # # #- Did it work?
+    # # #- (this combination of fibermap, simspec, and zbest is a pain)
+    # expid = 2
+    # fmfile = io.findfile('fibermap', night=night, expid=expid)
+    # fibermap = io.read_fibermap(fmfile)
+    # simdir = os.path.dirname(fmfile)
+    # simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
+    # siminfo = fits.getdata(simspec, 'TRUTH')
+    #
+    # from desimodel.footprint import radec2pix
+    # nside=64
+    # pixels = np.unique(radec2pix(nside, fibermap['RA_TARGET'], fibermap['DEC_TARGET']))
+    #
+    # print()
+    # print("--------------------------------------------------")
+    # print("Pixel     True  z        ->  Class  z        zwarn")
+    # # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
+    # for pix in pixels:
+    #     zbest = io.read_zbest(io.findfile('zbest', groupname=pix))
+    #     for i in range(len(zbest.z)):
+    #         objtype = zbest.spectype[i]
+    #         z, zwarn = zbest.z[i], zbest.zwarn[i]
+    #
+    #         j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
+    #         truetype = siminfo['OBJTYPE'][j]
+    #         oiiflux = siminfo['OIIFLUX'][j]
+    #         truez = siminfo['REDSHIFT'][j]
+    #         dv = 3e5*(z-truez)/(1+truez)
+    #         if truetype == 'SKY' and zwarn > 0:
+    #             status = 'ok'
+    #         elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
+    #             status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
+    #         elif zwarn == 0:
+    #             if truetype == 'LRG' and objtype == 'GALAXY' and abs(dv) < 150:
+    #                 status = 'ok'
+    #             elif truetype == 'ELG' and objtype == 'GALAXY':
+    #                 if abs(dv) < 150:
+    #                     status = ok
+    #                 elif oiiflux < 8e-17:
+    #                     status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
+    #                 else:
+    #                     status = 'OOPS ([OII] flux {:.2g})'.format(oiiflux)
+    #             elif truetype == 'QSO' and objtype == 'QSO' and abs(dv) < 750:
+    #                 status = 'ok'
+    #             elif truetype in ('STD', 'FSTD') and objtype == 'STAR':
+    #                 status = 'ok'
+    #             else:
+    #                 status = 'OOPS'
+    #         else:
+    #             status = 'OOPS'
+    #         print('{0:<8d}  {1:4s} {2:8.5f}  -> {3:5s} {4:8.5f} {5:4d}  - {6}'.format(
+    #             pix, truetype, truez, objtype, z, zwarn, status))
+    #
+    # print("--------------------------------------------------")
+    #
 
 
 

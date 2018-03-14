@@ -497,7 +497,7 @@ class DataBase:
         with self.cursor() as cur:
             tasks_in_db = {}
             for tt in task_types():
-                if tt == "spectra":
+                if (tt == "spectra") or (tt == "redshift"):
                     continue
                 cur.execute(\
                             "select name from {} where night = {}"\
