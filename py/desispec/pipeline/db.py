@@ -509,7 +509,7 @@ class DataBase:
 
         # For each task type, check status WITHOUT the DB, then set state.
         for tt in task_types():
-            if tt == "spectra":
+            if (tt == "spectra") or (tt == "redshift"):
                 continue
             tstates = check_tasks(tasks_in_db[tt], db=None)
             st = [ (x, tstates[x]) for x in tasks_in_db[tt] ]
