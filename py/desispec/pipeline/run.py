@@ -299,6 +299,24 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     if comm_rank is not None:
         failcount = comm_rank.allreduce(failcount)
+    
+    if db is not None and rank == 0 :
+        # postprocess the successful tasks
+
+        log.debug("postprocess the successful tasks")
+
+        states = db.get_states(runtasks)
+
+        log.debug("states={}".format(states))
+        log.debug("runtasks={}".format(runtasks))
+        
+
+        with db.cursor() as cur :
+            for name in runtasks :
+                if states[name] == "done" :
+                    log.debug("postprocessing {}".format(name))
+                    task_classes[tasktype].postprocessing(db,name,cur)
+    
 
     log.debug("rank #{} done".format(rank))
 

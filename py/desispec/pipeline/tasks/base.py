@@ -549,14 +549,8 @@ class BaseTask(object):
                         failed = nproc
                         break
                 if done:
-                    with db.cursor() as cur:
-                        # need to run postprocessing AFTER setting state to done
-                        # because task state maybe tested in postprocessing.
-
-                        # do it in context to make sure done and postprocessing are in sync
-                        self.state_set(db, name, "done",cur)
-                        self.postprocessing(db,name,cur)
-
+                    self.state_set(db, name, "done")
+                    # post processing is now done by a single rank in run.run_task_list
                 else:
                     self.state_set(db, name, "fail")
         return failed
