@@ -87,27 +87,18 @@ class TaskStarFit(BaseTask):
     def _run_defaults(self):
         """See BaseTask.run_defaults.
         """
+        import glob
 
         log = get_logger()
 
         opts = {}
         starmodels = None
-        if "DESI_BASIS_TEMPLATE" in os.environ :
-            filenames = glob.glob(os.environ["DESI_BASIS_TEMPLATE"]+"/star_templates_*.fits")
-            if len(filenames)>0 :
+        if "DESI_BASIS_TEMPLATES" in os.environ:
+            filenames = glob.glob(os.environ["DESI_BASIS_TEMPLATES"]+"/star_templates_*.fits")
+            if len(filenames) > 0 :
                 starmodels = filenames[0]
-        if starmodels is None and "DESI_ROOT" in os.environ:
-            tmp_filename = os.environ["DESI_ROOT"]+"/spectro/templates/star_templates/v2.1/star_templates_v2.1.fits"
-            if os.path.isfile(tmp_filename) :
-                log.warning("$DESI_BASIS_TEMPLATE not set; using {}".format(tmp_filename))
-                starmodels = tmp_filename
-        if starmodels is None :
-            tmp_filename = "/project/projectdirs/desi/spectro/templates/star_templates/v2.1/star_templates_v2.1.fits"
-            if os.path.isfile(tmp_filename) :
-                log.warning("$DESI_BASIS_TEMPLATE and $DESI_ROOT not set; using {}".format(tmp_filename))
-                starmodels = tmp_filename
-        if starmodels is None :
-            log.error("could not find the stellar templates")
+        else:
+            log.error("DESI_BASIS_TEMPLATES not set!")
             raise RuntimeError("could not find the stellar templates")
 
         opts["starmodels"] =  starmodels

@@ -479,7 +479,7 @@ Where supported commands are:
             "scripts (default 1)")
 
         parser.add_argument("--mpi_run", required=False, type=str,
-            default="mpirun -np", help="The command to launch MPI programs "
+            default="", help="The command to launch MPI programs "
             "for non-NERSC shell scripts (default do not use MPI)")
 
         parser.add_argument("--procs_per_node", required=False, type=int,
@@ -578,8 +578,9 @@ Where supported commands are:
 
         if args.nersc is None:
             # Not running at NERSC
-            scripts = pipe.scriptgen.batch_shell(args.tasktype, tasks, outscript, outlog,
-                mpirun=args.mpi_run, mpiprocs=args.mpi_procs, openmp=1, db=None)
+            scripts = pipe.scriptgen.batch_shell(args.tasktype, tasks,
+                outscript, outlog, mpirun=args.mpi_run,
+                mpiprocs=args.mpi_procs, openmp=1, db=db)
 
         else:
             # Running at NERSC

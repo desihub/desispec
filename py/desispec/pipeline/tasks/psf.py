@@ -126,26 +126,36 @@ class TaskPSF(BaseTask):
 
         options = OrderedDict()
 
-
         deps  = self.deps(name)
         props = self.name_split(name)
 
         inputpsf = "psf-{}{}.fits".format(props["band"],props["spec"])
-        if "input-psf-dir" in opts :
-            inputpsf = os.path.join(opts["input-psf-dir"],inputpsf)
+
+        # make a copy, so we can remove some entries
+        opts_copy = opts.copy()
+
+        if "input-psf-dir" in opts_copy :
+            inputpsf = os.path.join(opts_copy["input-psf-dir"], inputpsf)
+            del opts_copy["input-psf-dir"]
 
         options["input-psf"]   = inputpsf
         options["input-image"] = task_classes["pix"].paths(deps["input-image"])[0]
         options["output-psf"]  = self.paths(name)
 
+        if "specmin" in opts_copy:
+            options["specmin"] = opts_copy["specmin"]
+            del opts_copy["specmin"]
 
-        if len(opts) > 0:
-            opts_wo_input_dir = opts.copy()
-            opts_wo_input_dir.pop("input-psf-dir")
-            extarray = option_list(opts_wo_input_dir)
+        if "nspec" in opts_copy:
+            options["nspec"] = opts_copy["nspec"]
+            del opts_copy["nspec"]
+
+        if len(opts_copy) > 0:
+            extarray = option_list(opts_copy)
             options["extra"] = " ".join(extarray)
 
         return option_list(options)
+
 
     def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
@@ -156,6 +166,7 @@ class TaskPSF(BaseTask):
             entry = "desi_compute_psf_mpi"
         return "{} {}".format(entry, self._option_list(name, opts))
 
+
     def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
@@ -165,6 +176,7 @@ class TaskPSF(BaseTask):
         args = specex.parse(optlist)
         specex.main(args, comm=comm)
         return
+
 
     def postprocessing(self, db, name, cur):
         """For successful runs, postprocessing on DB"""
