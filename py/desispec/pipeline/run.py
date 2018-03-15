@@ -266,7 +266,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
             elif "pixel" in fields:
-                tasklogdir = os.path.join(logdir,
+                tasklogdir = os.path.join(logdir, "healpix",
                     io.healpix_subdirectory(fields["nside"],fields["pixel"]))
                 # When creating this directory, there MIGHT be conflicts from
                 # multiple processes working on pixels in the same
