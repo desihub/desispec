@@ -141,7 +141,7 @@ class TaskPix(BaseTask):
         props = self.name_split(name)
         log  = get_logger()
         tt  = "psf"
-        cmd = "select name from {} where night={} and band='{}' and spec={} and expid={}".format(tt,props["night"],props["band"],props["spec"],props["expid"])
+        cmd = "select name from {} where night={} and band='{}' and spec={} and expid={} and state=0".format(tt,props["night"],props["band"],props["spec"],props["expid"])
         cur.execute(cmd)
         tasks = [ x for (x,) in cur.fetchall() ]
         log.debug("checking {}".format(tasks))

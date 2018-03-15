@@ -191,7 +191,7 @@ class TaskStarFit(BaseTask):
         props = self.name_split(name)
         log  = get_logger()
         tt="fluxcalib"
-        cmd = "select name from {} where night={} and expid={} and spec={}".format(tt,props["night"],props["expid"],props["spec"])
+        cmd = "select name from {} where night={} and expid={} and spec={} and state=0".format(tt,props["night"],props["expid"],props["spec"])
         cur.execute(cmd)
         tasks = [ x for (x,) in cur.fetchall() ]
         log.debug("checking {}".format(tasks))

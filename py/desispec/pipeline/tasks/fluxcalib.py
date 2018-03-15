@@ -130,7 +130,7 @@ class TaskFluxCalib(BaseTask):
         props = self.name_split(name)
         log  = get_logger()
         tt="cframe"
-        cmd = "select name from {} where night={} and expid={} and spec={} and band='{}'".format(tt,props["night"],props["expid"],props["spec"],props["band"])
+        cmd = "select name from {} where night={} and expid={} and spec={} and band='{}' and state=0".format(tt,props["night"],props["expid"],props["spec"],props["band"])
         cur.execute(cmd)
         tasks = [ x for (x,) in cur.fetchall() ]
         log.debug("checking {}".format(tasks))
