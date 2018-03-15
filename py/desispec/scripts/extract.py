@@ -55,7 +55,8 @@ def parse(options=None):
     parser.add_argument("-v", "--verbose", action="store_true", help="print more stuff")
     parser.add_argument("--mpi", action="store_true", help="Use MPI for parallelism")
     parser.add_argument("--decorrelate-fibers", action="store_true", help="Not recommended")
-
+    parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
+    
     args = None
     if options is None:
         args = parser.parse_args()
@@ -176,8 +177,9 @@ regularize: {regularize}
     frame.meta['BUNIT'] = 'electron/Angstrom' 
     
     #- Add scores to frame
-    compute_and_append_frame_scores(frame,suffix="RAW")
-
+    if not args.no_scores :
+        compute_and_append_frame_scores(frame,suffix="RAW")
+    
     #- Write output
     io.write_frame(args.output, frame)
 
