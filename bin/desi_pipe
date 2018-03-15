@@ -5,12 +5,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Create or update a DESI production
+Interact with a DESI production
 """
 
-import desispec.scripts.pipe_prod as pipe_prod
+from desispec.scripts.pipe import PipeUI
 
 if __name__ == '__main__':
-    args = pipe_prod.parse()
-    pipe_prod.main(args)
-
+    p = PipeUI()

@@ -45,8 +45,9 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     #-       specprod is just the environment variable $SPECPROD
     location = dict(
         raw = '{rawdata_dir}/{night}/desi-{expid:08d}.fits.fz',
-        pix = '{rawdata_dir}/{night}/pix-{camera}-{expid:08d}.fits',
+        pix = '{specprod_dir}/exposures/{night}/{expid:08d}/pix-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod_dir}/calib2d/{night}/fiberflat-{camera}-{expid:08d}.fits',
+        fiberflatnight = '{specprod_dir}/calib2d/{night}/fiberflatnight-{camera}.fits',
         frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',
         cframe = '{specprod_dir}/exposures/{night}/{expid:08d}/cframe-{camera}-{expid:08d}.fits',
         fframe = '{specprod_dir}/exposures/{night}/{expid:08d}/fframe-{camera}-{expid:08d}.fits',
@@ -187,7 +188,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     actual_inputs = {
         'specprod_dir':specprod_dir, 'specprod':specprod,
         'night':night, 'expid':expid, 'camera':camera, 'groupname':groupname,
-        'nside':nside, 'hpixdir':hpixdir, 'band':band, 
+        'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph,
         'hpixdir':hpixdir,
         }
@@ -214,20 +215,20 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
 def get_raw_files(filetype, night, expid, rawdata_dir=None):
     """Get files for a specified exposure.
 
-    Uses :func:`findfile` to determine the valid file names for the specified 
-    type.  Any camera identifiers not matching the regular expression 
+    Uses :func:`findfile` to determine the valid file names for the specified
+    type.  Any camera identifiers not matching the regular expression
     [brz][0-9] will be silently ignored.
 
     Args:
-        filetype(str): Type of files to get. Valid choices are 'raw', 'pix', 
+        filetype(str): Type of files to get. Valid choices are 'raw', 'pix',
             'fibermap'.
-        night(str): Date string for the requested night in the format 
+        night(str): Date string for the requested night in the format
             YYYYMMDD.
         expid(int): Exposure number to get files for.
         rawdata_dir(str): [optional] overrides $DESI_SPECTRO_DATA
 
     Returns:
-        dict: Dictionary of found file names using camera id strings as keys, 
+        dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', rawdata_dir=rawdata_dir)
@@ -246,21 +247,21 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
 def get_files(filetype, night, expid, specprod_dir=None, **kwargs):
     """Get files for a specified exposure.
 
-    Uses :func:`findfile` to determine the valid file names for the specified 
-    type.  Any camera identifiers not matching the regular expression 
+    Uses :func:`findfile` to determine the valid file names for the specified
+    type.  Any camera identifiers not matching the regular expression
     [brz][0-9] will be silently ignored.
 
     Args:
-        filetype(str): Type of files to get. Valid choices are 'frame', 
+        filetype(str): Type of files to get. Valid choices are 'frame',
             'cframe', 'psf', etc.
         night(str): Date string for the requested night in the format YYYYMMDD.
         expid(int): Exposure number to get files for.
-        specprod_dir(str): Path containing the exposures/ directory to use. If 
-            the value is None, then the value of :func:`specprod_root` is used 
+        specprod_dir(str): Path containing the exposures/ directory to use. If
+            the value is None, then the value of :func:`specprod_root` is used
             instead. Ignored when raw is True.
 
     Returns:
-        dict: Dictionary of found file names using camera id strings as keys, 
+        dict: Dictionary of found file names using camera id strings as keys,
             which are guaranteed to match the regular expression [brz][0-9].
     """
     glob_pattern = findfile(filetype, night, expid, camera='*', specprod_dir=specprod_dir)
@@ -468,20 +469,18 @@ def qaprod_root():
     return os.path.join(os.getenv('DESI_SPECTRO_REDUX'), os.getenv('SPECPROD'), 'QA')
 
 
-def get_pipe_plandir(specprod_dir=None):
-    """
-    Return the directory path for pipeline planning files.
+def get_pipe_database():
+    """Get the production database location based on the environment.
 
-    Args:
-        specprod_dir (str): Optional path to production directory.  If None,
-            the this is obtained from :func:`specprod_root`.
-
-    Returns (str):
-        the directory path for pipeline planning files.
     """
-    if specprod_dir is None:
-        specprod_dir = specprod_root()
-    return os.path.join(os.path.abspath(specprod_dir), "plan")
+    if "DESI_SPECTRO_DB" in os.environ:
+        # Use an alternate location for the DB
+        dbpath = os.environ["DESI_SPECTRO_DB"]
+    else:
+        proddir = specprod_root()
+        dbpath = os.path.join(proddir, "desi.db")
+        os.environ["DESI_SPECTRO_DB"] = dbpath
+    return dbpath
 
 
 def get_pipe_rundir(specprod_dir=None):
@@ -520,23 +519,21 @@ def get_pipe_logdir():
     return "logs"
 
 
-def get_pipe_faildir():
+def get_pipe_nightdir():
     """
-    Return the name of the subdirectory containing pipeline failures.
+    Return the name of the subdirectory containing per-night files.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "failed"
+    return "night"
 
 
-def get_pipe_redshiftdir():
+def get_pipe_pixeldir():
     """
-    Return the name of the subdirectory containing pipeline redshift
-    log files.
+    Return the name of the subdirectory containing per-pixel files.
 
     Returns (str):
         The name of the subdirectory.
     """
-    return "redshift"
-
+    return "healpix"

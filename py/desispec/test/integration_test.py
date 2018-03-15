@@ -10,6 +10,7 @@ import random
 import time
 import subprocess as sp
 import glob
+import shutil
 
 import numpy as np
 from astropy.io import fits
@@ -90,14 +91,11 @@ def sim(night, nspec=5, clobber=False):
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('newexp-random failed for {} exposure {}'.format(program, expid))
 
-        cmd = "pixsim --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
+        cmd = "pixsim --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, nspec=nspec, night=night)
         inputs = [fibermap, simspec]
         outputs = list()
         outputs.append(fibermap.replace('fibermap-', 'simpix-'))
-        for camera in ['b0', 'r0', 'z0']:
-            pixfile = io.findfile('pix', night, expid, camera)
-            outputs.append(pixfile)
-            #outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
+        outputs.append(io.findfile('raw', night, expid))
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(program, expid))
 
@@ -131,53 +129,112 @@ def integration_test(night=None, nspec=5, clobber=False):
     # simulate inputs
     sim(night, nspec=nspec, clobber=clobber)
 
-    # create production
-
-    # FIXME:  someday run PSF estimation too...
-    ### com = "desi_pipe --spectrographs 0 --fakeboot --fakepsf"
-    com = "desi_pipe --spectrographs 0 --fakeboot --fakepsf"
-    sp.check_call(com, shell=True)
-
     # raw and production locations
 
     rawdir = os.path.abspath(io.rawdata_root())
     proddir = os.path.abspath(io.specprod_root())
 
+    # create production
+
+    if os.path.isdir(proddir):
+        shutil.rmtree(proddir)
+
+    com = "desi_pipe create --db-sqlite"
+    sp.check_call(com, shell=True)
+
     # Modify options file to restrict the spectral range
 
     optpath = os.path.join(proddir, "run", "options.yaml")
-    opts = pipe.yaml_read(optpath)
+    opts = pipe.prod.yaml_read(optpath)
     opts['extract']['specmin'] = 0
     opts['extract']['nspec'] = nspec
-    pipe.yaml_write(optpath, opts)
+    opts['psf']['specmin'] = 0
+    opts['psf']['nspec'] = nspec
+    pipe.prod.yaml_write(optpath, opts)
 
-    # run the generated shell scripts
+    # Run preprocessing
 
-    # FIXME:  someday run PSF estimation too...
+    com = "desi_pipe tasks --tasktype pix | grep -v DEBUG | desi_pipe script --tasktype pix"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
 
-    # print("Running bootcalib script...")
-    # com = os.path.join(proddir, "run", "scripts", "bootcalib_all.sh")
-    # sp.check_call(["bash", com])
+    # Run psf estimation
 
-    # print("Running specex script...")
-    # com = os.path.join(proddir, "run", "scripts", "specex_all.sh")
-    # sp.check_call(["bash", com])
+    com = "desi_pipe tasks --tasktype psf | grep -v DEBUG | desi_pipe script --tasktype psf"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
 
-    # print("Running psfcombine script...")
-    # com = os.path.join(proddir, "run", "scripts", "psfcombine_all.sh")
-    # sp.check_call(["bash", com])
+    # Run psfnight combine
 
-    com = os.path.join(proddir, "run", "scripts", "run_shell.sh")
-    print("Running extraction through calibration: "+com)
-    sp.check_call(["bash", com])
+    com = "desi_pipe tasks --tasktype psfnight | grep -v DEBUG | desi_pipe script --tasktype psfnight"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
 
-    com = os.path.join(proddir, "run", "scripts", "spectra.sh")
-    print("Running spectral regrouping: "+com)
-    sp.check_call(["bash", com])
+    # Run extraction
 
-    com = os.path.join(proddir, "run", "scripts", "redshift.sh")
-    print("Running redshift script "+com)
-    sp.check_call(["bash", com])
+    com = "desi_pipe tasks --tasktype extract | grep -v DEBUG | desi_pipe script --tasktype extract"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
+
+    # Run fiberflat
+
+    com = "desi_pipe tasks --tasktype fiberflat | grep -v DEBUG | desi_pipe script --tasktype fiberflat"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
+
+    # Run fiberflat night
+
+    com = "desi_pipe tasks --tasktype fiberflatnight | grep -v DEBUG | desi_pipe script --tasktype fiberflatnight"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
+
+    # Run sky
+
+    com = "desi_pipe tasks --tasktype sky | grep -v DEBUG | desi_pipe script --tasktype sky"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
+
+    # Run starfit
+
+    com = "desi_pipe tasks --tasktype starfit | grep -v DEBUG | desi_pipe script --tasktype starfit"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
+
+    # Run fluxcalib
+
+    com = "desi_pipe tasks --tasktype fluxcalib | grep -v DEBUG | desi_pipe script --tasktype fluxcalib"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
+
+    # Run cframe
+
+    com = "desi_pipe tasks --tasktype cframe | grep -v DEBUG | desi_pipe script --tasktype cframe"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
+
+    # Run spectra
+
+    com = "desi_pipe tasks --tasktype spectra | grep -v DEBUG | desi_pipe script --tasktype spectra"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
+
+    # Run redshifts
+
+    com = "desi_pipe tasks --tasktype redshift | grep -v DEBUG | desi_pipe script --tasktype redshift"
+    script = sp.check_output(com, shell=True)
+    print("running {}".format(script))
+    sp.check_call(script, shell=True)
 
     # #-----
     # #- Did it work?
@@ -198,16 +255,19 @@ def integration_test(night=None, nspec=5, clobber=False):
     print("Pixel     True  z        ->  Class  z        zwarn")
     # print("3338p190  SKY   0.00000  ->  QSO    1.60853   12   - ok")
     for pix in pixels:
-        zbest = io.read_zbest(io.findfile('zbest', groupname=pix))
-        for i in range(len(zbest.z)):
-            objtype = zbest.spectype[i]
-            z, zwarn = zbest.z[i], zbest.zwarn[i]
+        zfile = io.findfile('zbest', groupname=pix)
+        zfx = fits.open(zfile, memmap=False)
+        zbest = zfx['ZBEST'].data
+        for i in range(len(zbest['Z'])):
+            objtype = zbest['SPECTYPE'][i]
+            z, zwarn = zbest['Z'][i], zbest['ZWARN'][i]
 
-            j = np.where(fibermap['TARGETID'] == zbest.targetid[i])[0][0]
+            j = np.where(fibermap['TARGETID'] == zbest['TARGETID'][i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
             oiiflux = siminfo['OIIFLUX'][j]
             truez = siminfo['REDSHIFT'][j]
             dv = 3e5*(z-truez)/(1+truez)
+            status = None
             if truetype == 'SKY' and zwarn > 0:
                 status = 'ok'
             elif truetype == 'ELG' and zwarn > 0 and oiiflux < 8e-17:
@@ -217,7 +277,7 @@ def integration_test(night=None, nspec=5, clobber=False):
                     status = 'ok'
                 elif truetype == 'ELG' and objtype == 'GALAXY':
                     if abs(dv) < 150:
-                        status = ok
+                        status = 'ok'
                     elif oiiflux < 8e-17:
                         status = 'ok ([OII] flux {:.2g})'.format(oiiflux)
                     else:
@@ -234,8 +294,6 @@ def integration_test(night=None, nspec=5, clobber=False):
                 pix, truetype, truez, objtype, z, zwarn, status))
 
     print("--------------------------------------------------")
-
-
 
 
 if __name__ == '__main__':
