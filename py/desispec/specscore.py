@@ -54,7 +54,7 @@ def compute_frame_scores(frame,band=None,suffix=None,flux_per_angstrom=None) :
     ii=(frame.wave>=tophat_wave[band][0])&(frame.wave<tophat_wave[band][1])
     if np.sum(ii)==0 :
         message="no intersection of frame wavelenght and tophat range {}".format(tophat_wave[band])
-        log.Error(message)
+        log.error(message)
         raise ValueError(message)
     
     scores = dict()
