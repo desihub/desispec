@@ -227,7 +227,7 @@ def main(args) :
             
             if degxy>0 and degyy>0 and degxy>degxx and degyy>degyx : # first along wavelength
                 if degxy>0 : degxy-=1
-                if degxy>0 : degyy-=1
+                if degyy>0 : degyy-=1
             else : # then along fiber
                 if degxx>0 : degxx-=1
                 if degyx>0 : degyx-=1
