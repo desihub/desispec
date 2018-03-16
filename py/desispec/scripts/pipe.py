@@ -49,16 +49,17 @@ class PipeUI(object):
 
 Where supported commands are:
    create   Create a new production.
+   tasks    Get all possible tasks for a given type and states.
+   check    Check the status of tasks.
+   dryrun   Return the equivalent command line entrypoint for tasks.
+   script   Generate a shell or slurm script.
+   run      Generate a script and run it.
    env      Print current production location.
    update   Update an existing production.
    getready Auto-Update of prod DB.
    sync     Synchronize DB state based on the filesystem.
-   tasks    Get all possible tasks for a given type and states.
-   check    Check the status of tasks.
-   cli      Return the equivalent command line entrypoint for tasks.
-   script   Generate a shell or slurm script.
-   run      Generate a script and run it.
    status   Overview of production.
+   top      Live display of production database.
 """)
         parser.add_argument("command", help="Subcommand to run")
         # parse_args defaults to [1:] for args, but you need to
@@ -82,7 +83,9 @@ Where supported commands are:
 
 
     def create(self):
-        parser = argparse.ArgumentParser(description="Create a new production")
+        parser = argparse.ArgumentParser(\
+            description="Create a new production",
+            usage="desi_pipe create [options] (use --help for details)")
 
         parser.add_argument("--root", required=False, default=None,
             help="value to use for DESI_ROOT")
@@ -286,7 +289,8 @@ Where supported commands are:
 
 
     def update(self):
-        parser = argparse.ArgumentParser(description="Update a production")
+        parser = argparse.ArgumentParser(description="Update a production",
+            usage="desi_pipe update [options] (use --help for details)")
 
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
@@ -306,7 +310,8 @@ Where supported commands are:
         availtypes = ",".join(pipe.db.task_types())
 
         parser = argparse.ArgumentParser(description="Get all tasks of a "
-            "particular type for one or more nights")
+            "particular type for one or more nights",
+            usage="desi_pipe tasks [options] (use --help for details)")
 
         parser.add_argument("--tasktype", required=True, default=None,
             help="task type ({})".format(availtypes))
@@ -372,8 +377,9 @@ Where supported commands are:
 
 
     def check(self):
-        parser = argparse.ArgumentParser(description="Check the state of "
-            "pipeline tasks")
+        parser = argparse.ArgumentParser(\
+            description="Check the state of pipeline tasks",
+            usage="desi_pipe check [options] (use --help for details)")
 
         parser.add_argument("--taskfile", required=False, default=None,
             help="read tasks from this file (if not specified, read from "
@@ -407,8 +413,9 @@ Where supported commands are:
     def sync(self):
         availtypes = ",".join(pipe.db.task_types())
 
-        parser = argparse.ArgumentParser(description="Synchronize DB state "
-            "based on the filesystem.")
+        parser = argparse.ArgumentParser(\
+            description="Synchronize DB state based on the filesystem.",
+            usage="desi_pipe sync [options] (use --help for details)")
 
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
@@ -428,8 +435,9 @@ Where supported commands are:
 
 
     def cleanup(self):
-        parser = argparse.ArgumentParser(description="Clean up stale task "
-            "states in the DB")
+        parser = argparse.ArgumentParser(\
+            description="Clean up stale task states in the DB",
+            usage="desi_pipe cleanup [options] (use --help for details)")
 
         parser.add_argument("--failed", required=False, default=False,
             action="store_true", help="Also clear failed states")
@@ -509,7 +517,8 @@ Where supported commands are:
 
         parser = argparse.ArgumentParser(description="Print equivalent "
             "command-line jobs that would be run given the tasks and total"
-            "number of processes")
+            "number of processes",
+            usage="desi_pipe dryrun [options] (use --help for details)")
 
         args = self._parse_run_opts(parser)
 
@@ -601,7 +610,8 @@ Where supported commands are:
     def script(self):
         parser = argparse.ArgumentParser(description="Create a batch script "
             "for the list of tasks.  If the --nersc option is not given, "
-            "create a shell script that optionally uses mpirun.")
+            "create a shell script that optionally uses mpirun.",
+            usage="desi_pipe script [options] (use --help for details)")
 
         args = self._parse_run_opts(parser)
 
@@ -614,7 +624,8 @@ Where supported commands are:
     def run(self):
         parser = argparse.ArgumentParser(description="Create and run a batch "
             "script for the list of tasks.  If the --nersc option is not "
-            "given, create a shell script that optionally uses mpirun.")
+            "given, create a shell script that optionally uses mpirun.",
+            usage="desi_pipe run [options] (use --help for details)")
 
         args = self._parse_run_opts(parser)
 
@@ -628,8 +639,9 @@ Where supported commands are:
 
 
     def status(self):
-        parser = argparse.ArgumentParser(description="Explore status of "
-            "pipeline tasks")
+        parser = argparse.ArgumentParser(\
+            description="Explore status of pipeline tasks",
+            usage="desi_pipe status [options] (use --help for details)")
 
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
@@ -812,8 +824,9 @@ Where supported commands are:
     #     return
 
     def top(self):
-        parser = argparse.ArgumentParser(description="Live overview of "
-            "the production state")
+        parser = argparse.ArgumentParser(\
+            description="Live overview of the production state",
+            usage="desi_pipe top [options] (use --help for details)")
 
         parser.add_argument("--refresh", required=False, type=int, default=10,
             help="The number of seconds between DB queries")

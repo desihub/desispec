@@ -68,7 +68,7 @@ def run_task(name, opts, comm=None, logfile=None, db=None):
         # Mark task as in progress
         if db is not None:
             task_classes[ttype].state_set(db=db,name=name,state="running")
-    
+
     failcount = 0
     if logfile is None:
         # No redirection
@@ -171,8 +171,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
         else:
             # Actually check which things need to be run.
             states = check_tasks(tasklist, db=db)
-            runtasks = [ x for x in tasklist if (states[x] == "ready") or \
-                (states[x] == "fail") ]
+            runtasks = [ x for x in tasklist if (states[x] == "ready") ]
 
         log.debug("Number of {} tasks ready to run is {} (total is {})".format(tasktype,len(runtasks),len(tasklist)))
 
@@ -267,7 +266,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
                 tasklog = os.path.join(tasklogdir,
                     "{}.log".format(runtasks[t]))
             elif "pixel" in fields:
-                tasklogdir = os.path.join(logdir,
+                tasklogdir = os.path.join(logdir, "healpix",
                     io.healpix_subdirectory(fields["nside"],fields["pixel"]))
                 # When creating this directory, there MIGHT be conflicts from
                 # multiple processes working on pixels in the same
@@ -299,7 +298,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     if comm_rank is not None:
         failcount = comm_rank.allreduce(failcount)
-    
+
     if db is not None and rank == 0 :
         # postprocess the successful tasks
 
@@ -309,14 +308,14 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
         log.debug("states={}".format(states))
         log.debug("runtasks={}".format(runtasks))
-        
+
 
         with db.cursor() as cur :
             for name in runtasks :
                 if states[name] == "done" :
                     log.debug("postprocessing {}".format(name))
                     task_classes[tasktype].postprocessing(db,name,cur)
-    
+
 
     log.debug("rank #{} done".format(rank))
 
@@ -403,8 +402,7 @@ def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
     else:
         # Actually check which things need to be run.
         states = check_tasks(tasklist, db=db)
-        runtasks = [ x for x in tasklist if (states[x] == "ready") or \
-            (states[x] == "fail") ]
+        runtasks = [ x for x in tasklist if (states[x] == "ready") ]
 
     ntask = len(runtasks)
     print("{}{} tasks out of {} are ready to run (or be re-run)".format(prefix,
