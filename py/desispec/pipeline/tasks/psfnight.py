@@ -149,7 +149,7 @@ class TaskPSFNight(BaseTask):
         # run getready for all extraction with same night,band,spec
         props = self.name_split(name)
         log  = get_logger()
-        tt  = "extract"
+        tt  = "traceshift"
         cmd = "select name from {} where night={} and band='{}' and spec={} and state=0".format(tt,props["night"],props["band"],props["spec"])
         cur.execute(cmd)
         tasks = [ x for (x,) in cur.fetchall() ]

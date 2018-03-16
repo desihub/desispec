@@ -21,14 +21,14 @@ import sys,re,os,copy
 
 # NOTE: only one class in this file should have a name that starts with "Task".
 
-class TaskExtract(BaseTask):
-    """Class containing the properties of one extraction task.
+class TaskTraceShift(BaseTask):
+    """Class containing the properties of one trace shift task.
     """
     def __init__(self):
-        super(TaskExtract, self).__init__()
+        super(TaskTraceShift, self).__init__()
         # then put int the specifics of this class
         # _cols must have a state
-        self._type = "extract"
+        self._type = "traceshift"
         self._cols = [
             "night",
             "band",
@@ -52,7 +52,7 @@ class TaskExtract(BaseTask):
         """
         props = self.name_split(name)
         camera = "{}{}".format(props["band"], props["spec"])
-        return [ findfile("frame", night=props["night"], expid=props["expid"],
+        return [ findfile("psf", night=props["night"], expid=props["expid"],
             camera=camera, groupname=None, nside=None, band=props["band"],
             spectrograph=props["spec"]) ]
 
@@ -62,16 +62,15 @@ class TaskExtract(BaseTask):
         from .base import task_classes
         props = self.name_split(name)
         deptasks = {
-            "input" : task_classes["pix"].name_join(props),
-            "fibermap" : task_classes["fibermap"].name_join(props),
-            "psf" : task_classes["traceshift"].name_join(props)
+            "image" : task_classes["pix"].name_join(props),
+            "psf" : task_classes["psfnight"].name_join(props)
             }
         return deptasks
 
     def _run_max_procs(self, procs_per_node):
         """See BaseTask.run_max_procs.
         """
-        return 20 # 20 bundles per camera
+        return 1 
 
 
     def _run_time(self, name, procs_per_node, db=None):
@@ -84,12 +83,11 @@ class TaskExtract(BaseTask):
         """See BaseTask.run_defaults.
         """
         opts = {}
-        opts["regularize"] = 0.0
-        opts["nwavestep"] = 50
-        opts["verbose"] = False
-        opts["wavelength_b"] = "3579.0,5939.0,0.8"
-        opts["wavelength_r"] = "5635.0,7731.0,0.8"
-        opts["wavelength_z"] = "7445.0,9824.0,0.8"
+        opts["degxx"] = 2
+        opts["degxy"] = 2
+        opts["degyx"] = 2
+        opts["degyy"] = 2
+        opts["auto"]  = True
         return opts
 
 
@@ -103,28 +101,17 @@ class TaskExtract(BaseTask):
 
         deps = self.deps(name)
         options = {}
-        options["input"]    = task_classes["pix"].paths(deps["input"])[0]
-        options["fibermap"] = task_classes["fibermap"].paths(deps["fibermap"])[0]
+        options["image"]    = task_classes["pix"].paths(deps["image"])[0]
         options["psf"]      = task_classes["psfnight"].paths(deps["psf"])[0]
-        options["output"]   = self.paths(name)[0]
+        options["outpsf"]   = self.paths(name)[0]
 
-        # extract the wavelength range from the options, depending on the band
-        props = self.name_split(name)
-        optscopy = copy.deepcopy(opts)
-        wkey = "wavelength_{}".format(props["band"])
-        wave = optscopy[wkey]
-        del optscopy["wavelength_b"]
-        del optscopy["wavelength_r"]
-        del optscopy["wavelength_z"]
-        optscopy["wavelength"] = wave
-
-        options.update(optscopy)
+        options.update(opts)
         return option_list(options)
 
     def _run_cli(self, name, opts, procs, db):
         """See BaseTask.run_cli.
         """
-        entry = "desi_extract_spectra"
+        entry = "desi_compute_trace_shifts"
         optlist = self._option_list(name, opts)
         com = "{} {}".format(entry, " ".join(optlist))
         return com
@@ -132,13 +119,13 @@ class TaskExtract(BaseTask):
     def _run(self, name, opts, comm, db):
         """See BaseTask.run.
         """
-        from ...scripts import extract
+        from ...scripts import trace_shifts
         optlist = self._option_list(name, opts)
-        args = extract.parse(optlist)
+        args = trace_shifts.parse(optlist)
         if comm is None :
-            extract.main(args)
+            trace_shifts.main(args)
         else :
-            extract.main_mpi(args, comm=comm)
+            trace_shifts.main_mpi(args, comm=comm)
         return
 
     def postprocessing(self, db, name, cur):
@@ -146,7 +133,7 @@ class TaskExtract(BaseTask):
         # run getready for all extraction with same night,band,spec
         props = self.name_split(name)
         log  = get_logger()
-        for tt in ["fiberflat","sky"] :
+        for tt in ["extract"] :
             cmd = "select name from {} where night={} and expid={} and band='{}' and spec={} and state=0".format(tt,props["night"],props["expid"],props["band"],props["spec"])
             cur.execute(cmd)
             tasks = [ x for (x,) in cur.fetchall() ]

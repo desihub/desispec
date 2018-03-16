@@ -7,6 +7,7 @@ import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
+from pkg_resources import resource_exists, resource_filename
 
 from desispec.io import read_image
 from desiutil.log import get_logger
@@ -31,7 +32,10 @@ Two methods are implemented.
     parser.add_argument('--lines', type = str, default = None, required=False,
                         help = 'path of lines ASCII file. Using this option changes the fit method.')
     parser.add_argument('--spectrum', type = str, default = None, required=False,
-                        help = 'path to a spectrum ASCII file (e.g. the DESIMODEL sky spectrum)')
+                        help = 'path to an spectrum ASCII file for external wavelength calibration')
+    parser.add_argument('--sky', action = 'store_true',
+                        help = 'use sky spectrum desispec/data/spec-sky.dat for external wavelength calibration')
+    
     parser.add_argument('--outpsf', type = str, default = None, required=True,
                         help = 'path of output PSF with shifted traces')
     parser.add_argument('--outoffsets', type = str, default = None, required=False,
@@ -46,6 +50,9 @@ Two methods are implemented.
                         help = 'polynomial degree for y shifts along y')
     parser.add_argument('--continuum', action='store_true',
                         help = 'only fit shifts along x for continuum input image')
+    parser.add_argument('--auto', action='store_true',
+                        help = 'choose best method (sky,continuum or just internal calib) from the FLAVOR keyword in the input image header')
+    
     parser.add_argument('--nfibers', type = int, default = None, required=False,
                         help = 'limit the number of fibers for debugging')
     parser.add_argument('--max-error', type = float, default = 0.05 , required=False,
@@ -98,8 +105,40 @@ def main(args) :
     else :
         log.info("We will do an internal calibration of trace coordinates without using the psf shape in a first step")
         
-        
-        
+    
+    internal_wavelength_calib    = (not args.continuum)
+    external_wavelength_calib   = args.sky | ( args.spectrum is not None )
+    
+    if args.auto :
+        log.debug("read flavor of input image {}".format(args.image))
+        hdus = pyfits.open(args.image)
+        if "FLAVOR" not in hdus[0].header :
+            log.error("no FLAVOR keyword in image header, cannot run with --auto option")
+            raise KeyError("no FLAVOR keyword in image header, cannot run with --auto option")
+        flavor = hdus[0].header["FLAVOR"].strip().lower()
+        hdus.close()
+        log.info("Input is a '{}' image".format(flavor))
+        if flavor == "flat" : 
+            internal_wavelength_calib = False
+            external_wavelength_calib = False
+        elif flavor == "arc" :
+            internal_wavelength_calib = True
+            external_wavelength_calib = False
+        else :
+            internal_wavelength_calib = True
+            external_wavelength_calib = True
+        log.info("wavelength calib, internal={}, external={}".format(internal_wavelength_calib,external_wavelength_calib))
+    
+    spectrum_filename = args.spectrum
+    if external_wavelength_calib and spectrum_filename is None :
+        srch_file = "data/spec-sky.dat"
+        if not resource_exists('desispec', srch_file):
+            log.error("Cannot find sky spectrum file {:s}".format(srch_file))
+            raise RuntimeError("Cannot find sky spectrum file {:s}".format(srch_file))
+        else :
+            spectrum_filename=resource_filename('desispec', srch_file)
+            log.info("Use external calibration from cross-correlation with {}".format(spectrum_filename))
+    
     if args.nfibers is not None :
         nfibers = args.nfibers # FOR DEBUGGING
 
@@ -129,7 +168,7 @@ def main(args) :
         
         # measure x shifts
         x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=7, deg=args.degxy)
-        if not args.continuum :
+        if internal_wavelength_calib :
             # measure y shifts
             x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=7)
         else :
@@ -188,7 +227,7 @@ def main(args) :
             
             if degxy>0 and degyy>0 and degxy>degxx and degyy>degyx : # first along wavelength
                 if degxy>0 : degxy-=1
-                if degxy>0 : degyy-=1
+                if degyy>0 : degyy-=1
             else : # then along fiber
                 if degxx>0 : degxx-=1
                 if degyx>0 : degyx-=1
@@ -227,15 +266,15 @@ def main(args) :
     
     
     # use an input spectrum as an external calibration of wavelength
-    if args.spectrum :
-         
+    if spectrum_filename  :
+        
         
         log.info("write and reread PSF to be sure predetermined shifts were propagated")
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.outpsf)
                 
         ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
-                                                  image=image,fibers=fibers,spectrum_filename=args.spectrum,degyy=args.degyy,width=7)
+                                                  image=image,fibers=fibers,spectrum_filename=spectrum_filename,degyy=args.degyy,width=7)
         
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         log.info("wrote modified PSF in %s"%args.outpsf)

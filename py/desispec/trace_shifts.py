@@ -360,10 +360,9 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
         if c[0]>0 :
             delta=-c[1]/(2.*c[0])
             sigma=np.sqrt(1./c[0] + error_floor**2)
-            if ndata>1 :
-                chi2pdf=(c[0]*delta**2+c[1]*delta+c[2])/(ndata+1)
-                if chi2pdf>1 : sigma *= np.sqrt(chi2pdf) 
-
+            # do not scale error bars using chi2pdf because the
+            # two spectra do not necessarily match
+            # (for instance dark vs bright time sky spectrum)                
         else :
             # something else went wrong
             delta=0.
@@ -767,7 +766,6 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
         eps=0.1
         x,yp=psf.xy(fiber_for_psf_evaluation,bin_wave+eps)
         dydw=(yp-y)/eps
-        
         if err*dydw<1 :
             dy=np.append(dy,-dwave*dydw)
             ey=np.append(ey,err*dydw)
