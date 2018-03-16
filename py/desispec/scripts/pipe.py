@@ -16,6 +16,7 @@ import argparse
 import re
 import glob
 import subprocess
+import numpy as np
 
 from .. import io
 
@@ -349,16 +350,22 @@ Where supported commands are:
         with db.cursor() as cur:
 
             if args.tasktype == "spectra" or args.tasktype == "redshift" :
-                cmd = "select name, state from {}".format(args.tasktype)
+                
+                cmd = "select pixel from healpix_frame where night in ({})".format(ntlist)
+                cur.execute(cmd)
+                pixels = np.unique([ x for (x,) in cur.fetchall() ]).tolist()
+                pixlist = ",".join([ str(p) for p in pixels])
+                cmd = "select name,state from {} where pixel in ({})".format( args.tasktype,pixlist)
+                cur.execute(cmd)
+                tasks = [ x for (x, y) in cur.fetchall() if \
+                          pipe.task_int_to_state[y] in states ]
+                
             else :
                 cmd = "select name, state from {} where night in ({})"\
                     .format(args.tasktype, ntlist)
-
-            cur.execute(cmd)
-
-
-            tasks = [ x for (x, y) in cur.fetchall() if \
-                pipe.task_int_to_state[y] in states ]
+                cur.execute(cmd)
+                tasks = [ x for (x, y) in cur.fetchall() if \
+                          pipe.task_int_to_state[y] in states ]
 
         pipe.prod.task_write(args.taskfile, tasks)
 
