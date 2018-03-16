@@ -189,6 +189,12 @@ Where supported commands are:
             sys.exit(0)
 
         proddir = os.path.join(specdir, prodname)
+        if os.path.exists(proddir):
+            print("Production {} exists.".format(proddir))
+            print("Either remove this directory if you want to start fresh")
+            print("or use 'desi_pipe update' to update a production.")
+            sys.stdout.flush()
+            sys.exit(0)
 
         # Check basis template location
 
@@ -284,6 +290,9 @@ Where supported commands are:
                     .format(os.environ["DESI_LOGLEVEL"]))
             else:
                 s.write("#export DESI_LOGLEVEL=\"DEBUG\"\n\n")
+
+        print("\nTo use this production, you should do:")
+        print("%> source {}\n".format(setupfile))
 
         return
 
