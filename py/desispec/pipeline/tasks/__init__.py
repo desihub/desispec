@@ -61,6 +61,6 @@ if base.task_classes is None:
                 .format(taskname))
         # add the class to the dictionary.
         base.task_classes[taskname] = taskclass()
-    base.default_task_chain = ["pix", "psf", "psfnight", "extract",
+    base.default_task_chain = ["pix", "psf", "psfnight", "traceshift", "extract",
         "fiberflat", "fiberflatnight", "sky", "starfit", "fluxcalib",
         "cframe", "spectra", "redshift"]

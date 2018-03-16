@@ -190,6 +190,11 @@ def all_tasks(night, nside):
                     props["spec"] = spec
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
+                    
+                    # Add traceshift
+                    full["traceshift"].append(props)
+                    
+                    # Add extractions
                     full["extract"].append(props)
 
                 if flavor == "flat" :
