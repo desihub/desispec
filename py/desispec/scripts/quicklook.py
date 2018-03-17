@@ -19,7 +19,7 @@ import desispec.io.image as imIO
 
 import os,sys
 import yaml
-
+import json
 import argparse
 
 def quietDesiLogger(loglvl=20):
@@ -107,6 +107,11 @@ def ql_main(args=None):
         if "yaml" in args.save:
             f=open(args.save,"w")
             yaml.dump(configdict,f)
+            
+            g=open('quicklook_output.json',"w")
+            json.dump(configdict,g,sort_keys=True,indent=4)
+            g.close()
+            
             log.info("Output saved for this configuration to {}".format(args.save))
             f.close()
         else:

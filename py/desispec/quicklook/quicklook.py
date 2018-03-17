@@ -330,6 +330,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
 # this will overwrite the file. above function returns same name for different QL executions
 # results will be erased.
         schemaMerger.writeToFile(destFile)
+        schemaMerger.writeTojsonFile(destFile)
         log.info("Wrote merged QA file {}".format(destFile))
     if isinstance(inp,tuple):
        return inp[0]

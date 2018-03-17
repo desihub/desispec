@@ -6,6 +6,8 @@
 from __future__ import absolute_import, division, print_function
 from desiutil.io import yamlify
 import yaml
+import json
+
 class QL_QAMerger:
     def __init__(self,night,expid,flavor,camera):
         self.__night=night
@@ -42,4 +44,7 @@ class QL_QAMerger:
     def writeToFile(self,fileName):
         with open(fileName,'w') as f:
             f.write(self.getYaml())
-    
+    def writeTojsonFile(self,fileName):
+        g=open(fileName.split('.yaml')[0]+'.json',"w")
+        json.dump(yamlify(self.__schema), g, sort_keys=True, indent=4)
+        g.close()   
