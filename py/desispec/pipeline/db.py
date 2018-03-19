@@ -386,7 +386,7 @@ class DataBase:
         return states
 
 
-    def set_states_type(self, tasktype, tasks):
+    def set_states_type(self, tasktype, tasks, postprocessing=True):
         """Efficiently get the state of many tasks of a single type.
 
         Args:
@@ -405,6 +405,8 @@ class DataBase:
             log.debug("updating in db")
             for tsk in tasks:
                 cur.execute("update {} set state = {} where name = '{}'".format(tasktype, task_state_to_int[tsk[1]], tsk[0]))
+                if postprocessing and tsk[1]=="done" :
+                    task_classes[tasktype].postprocessing(db=self,name=tsk[0],cur=cur)
             log.debug("done")
         return
 
