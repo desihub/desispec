@@ -99,6 +99,9 @@ Where supported commands are:
 
         parser.add_argument("--prod", required=False, default=None,
             help="value to use for SPECPROD")
+        
+        parser.add_argument("--force", action = "store_true",
+            help="force DB creation even if prod exists on disk (useful for simulations")
 
         parser.add_argument("--basis", required=False, default=None,
             help="value to use for DESI_BASIS_TEMPLATES")
@@ -190,13 +193,14 @@ Where supported commands are:
             sys.exit(0)
 
         proddir = os.path.join(specdir, prodname)
-        if os.path.exists(proddir):
+        if os.path.exists(proddir) and not args.force :
             print("Production {} exists.".format(proddir))
             print("Either remove this directory if you want to start fresh")
-            print("or use 'desi_pipe update' to update a production.")
+            print("or use 'desi_pipe update' to update a production")
+            print("or rerun with --force option.")
             sys.stdout.flush()
             sys.exit(0)
-
+            
         # Check basis template location
 
         basis = None
