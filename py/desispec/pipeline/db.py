@@ -313,20 +313,18 @@ def check_tasks(tasklist, db=None, inputs=None):
                             if not os.path.isfile(odep):
                                 ready = False
                                 break
+                if ready:
+                    st = "ready"
 
-            
-                            
-            if ready:
-                st = "ready"
-                done = True
-                # Check outputs
-                outfiles = task_classes[tasktype].paths(tsk)
-                for out in outfiles:
-                    if not os.path.isfile(out):
-                        done = False
-                        break
-                if done:
-                    st = "done"
+            done = True
+            # Check outputs
+            outfiles = task_classes[tasktype].paths(tsk)
+            for out in outfiles:
+                if not os.path.isfile(out):
+                    done = False
+                    break
+            if done:
+                st = "done"
 
             states[tsk] = st
     else:
@@ -534,13 +532,11 @@ class DataBase:
                             .format(tt, night))
                 tasks_in_db[tt] = [ x for (x, ) in cur.fetchall() ]
 
-        # FIXME: for spectra and zbest tasks, we should use the extra tables
-        # to check only the files touched by this night's data.
-
         # For each task type, check status WITHOUT the DB, then set state.
-        for tt in task_types():
+        for tt in tasks_in_db.keys() :
             if (tt == "spectra") or (tt == "redshift"):
                 continue
+            
             tstates = check_tasks(tasks_in_db[tt], db=None)
             st = [ (x, tstates[x]) for x in tasks_in_db[tt] ]
             self.set_states_type(tt, st)
