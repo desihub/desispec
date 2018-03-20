@@ -32,10 +32,14 @@ def write_image(outfile, image, meta=None):
 
     add_dependencies(hdr)
 
+    outdir = os.path.dirname(os.path.abspath(outfile))
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
+
     hx = fits.HDUList()
     hdu = fits.ImageHDU(image.pix.astype(np.float32), name='IMAGE', header=hdr)
     if 'CAMERA' not in hdu.header:
-        hdu.header.append( ('CAMERA', image.camera.lower(), 'Spectograph Camera') )
+        hdu.header.append( ('CAMERA', image.camera.lower(), 'Spectrograph Camera') )
 
     if 'RDNOISE' not in hdu.header and np.isscalar(image.readnoise):
         hdu.header.append( ('RDNOISE', image.readnoise, 'Read noise [RMS electrons/pixel]'))

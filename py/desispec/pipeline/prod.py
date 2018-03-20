@@ -176,7 +176,7 @@ def update_prod(nightstr=None, hpxnside=64):
     if not os.path.isdir(proddir):
         os.makedirs(proddir)
 
-    cal2d = os.path.join(proddir, "calib2d")
+    cal2d = os.path.join(proddir, "calibnight")
     if not os.path.isdir(cal2d):
         os.makedirs(cal2d)
 
