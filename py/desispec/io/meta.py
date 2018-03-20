@@ -45,7 +45,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     #-       specprod is just the environment variable $SPECPROD
     location = dict(
         raw = '{rawdata_dir}/{night}/desi-{expid:08d}.fits.fz',
-        pix = '{specprod_dir}/pix/{night}/{expid:08d}/pix-{camera}-{expid:08d}.fits',
+        preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
         frame = '{specprod_dir}/exposures/{night}/{expid:08d}/frame-{camera}-{expid:08d}.fits',

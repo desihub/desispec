@@ -24,15 +24,15 @@ import numpy as np
 
 # NOTE: only one class in this file should have a name that starts with "Task".
 
-class TaskPix(BaseTask):
+class TaskPreproc(BaseTask):
     """Class containing the properties of one preprocessed pixel file.
     """
     def __init__(self):
         # do that first
-        super(TaskPix, self).__init__()
+        super(TaskPreproc, self).__init__()
         # then put int the specifics of this class
         # _cols must have a state
-        self._type = "pix"
+        self._type = "preproc"
         self._cols = [
             "night",
             "band",
@@ -59,7 +59,7 @@ class TaskPix(BaseTask):
         """
         props = self.name_split(name)
         camera = "{}{}".format(props["band"], props["spec"])
-        return [ findfile("pix", night=props["night"], expid=props["expid"],
+        return [ findfile("preproc", night=props["night"], expid=props["expid"],
             camera=camera, groupname=None, nside=None, band=props["band"],
             spectrograph=props["spec"]) ]
 
@@ -112,7 +112,7 @@ class TaskPix(BaseTask):
         options["cameras"] = "{}{}".format(props["band"],props["spec"])
 
         outfile = self.paths(name)[0]
-        options["pixfile"] = outfile
+        options["outfile"] = outfile
 
         return option_list(options)
 

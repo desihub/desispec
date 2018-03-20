@@ -116,8 +116,8 @@ class Config(object):
             sframefile=None
 
         if self.conf["Flavor"] == 'arcs':
-            arcimg=findfile('pix',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir)
-            flatimg=findfile('pix',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,rawdata_dir=self.rawdata_dir)
+            arcimg=findfile('preproc',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir)
+            flatimg=findfile('preproc',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,rawdata_dir=self.rawdata_dir)
             bootfile=findfile('psfboot',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
             psfnightfile=findfile('psfnight',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
         else:

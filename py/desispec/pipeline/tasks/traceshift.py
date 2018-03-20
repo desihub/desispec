@@ -62,7 +62,7 @@ class TaskTraceShift(BaseTask):
         from .base import task_classes
         props = self.name_split(name)
         deptasks = {
-            "image" : task_classes["pix"].name_join(props),
+            "image" : task_classes["preproc"].name_join(props),
             "psf" : task_classes["psfnight"].name_join(props)
             }
         return deptasks
@@ -101,7 +101,7 @@ class TaskTraceShift(BaseTask):
 
         deps = self.deps(name)
         options = {}
-        options["image"]    = task_classes["pix"].paths(deps["image"])[0]
+        options["image"]    = task_classes["preproc"].paths(deps["image"])[0]
         options["psf"]      = task_classes["psfnight"].paths(deps["psf"])[0]
         options["outpsf"]   = self.paths(name)[0]
 
