@@ -195,7 +195,6 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         if debug:
             f.write("export DESI_LOGLEVEL=DEBUG\n\n")
 
-
         runstr = "srun"
         if multiproc:
             runstr = "{} --cpu_bind=no".format(runstr)
