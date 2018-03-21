@@ -247,20 +247,21 @@ class Bias_From_Overscan(MonitoringAlg):
                 "BIAS_WARN_RANGE:":[-2.0, 2.0]
                 }
 
-        #- Count data outside of 1, 2, 3, and 5 sigma
-        #- Need to look into this calculation (R.S.)
-        sig1_lo = np.percentile(full_data,(100.-param['PERCENTILES'][0])/2.)
-        sig1_hi = np.percentile(full_data,100.-sig1_lo)
-        sig2_lo = np.percentile(full_data,(100.-param['PERCENTILES'][1])/2.)
-        sig2_hi = np.percentile(full_data,100.-sig2_lo)
-        sig3_lo = np.percentile(full_data,(100.-param['PERCENTILES'][2])/2.)
-        sig3_hi = np.percentile(full_data,100.-sig3_lo)
+        #- Calculate upper and lower bounds of 1, 2, and 3 sigma
+        sig1_lo = np.percentile(full_data,50.-(param['PERCENTILES'][0]/2.))
+        sig1_hi = np.percentile(full_data,50.+(param['PERCENTILES'][0]/2.))
+        sig2_lo = np.percentile(full_data,50.-(param['PERCENTILES'][1]/2.))
+        sig2_hi = np.percentile(full_data,50.+(param['PERCENTILES'][1]/2.))
+        sig3_lo = np.percentile(full_data,50.-(param['PERCENTILES'][2]/2.))
+        sig3_hi = np.percentile(full_data,50.+(param['PERCENTILES'][2]/2.))
 
+        #- Find difference between upper and lower sigma bounds
         diff1sig = sig1_hi - sig1_lo
         diff2sig = sig2_hi - sig2_lo
         diff3sig = sig3_hi - sig3_lo
 
-        sig5_value = np.percentile(full_data,100.-99.99994)
+        #- Calculate number of pixels below 5 sigma
+        sig5_value = np.percentile(full_data,3e-5)
         data5sig = len(np.where(full_data <= sig5_value)[0])
 
         retval["PARAMS"] = param
