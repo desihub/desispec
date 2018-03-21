@@ -220,7 +220,7 @@ def get_raw_files(filetype, night, expid, rawdata_dir=None):
     [brz][0-9] will be silently ignored.
 
     Args:
-        filetype(str): Type of files to get. Valid choices are 'raw', 'pix',
+        filetype(str): Type of files to get. Valid choices are 'raw', 'preproc',
             'fibermap'.
         night(str): Date string for the requested night in the format
             YYYYMMDD.
