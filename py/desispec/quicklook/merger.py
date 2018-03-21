@@ -43,10 +43,14 @@ def reOrderDict(mergeDict):
              b_peaks = delKey(Camera, "B_PEAKS") 
              r_peaks = delKey(Camera, "R_PEAKS")
              z_peaks = delKey(Camera, "Z_PEAKS")
-             camera = delKey(Camera, "CAMERA")
             
-             Camera["GENERAL_INFO"]={"RA":[float("%.5f" % m) for m in ra], "DEC":[float("%.5f" % m) for m in dec], "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks, "CAMERA":camera }    
-    
+             try: ra = [float("%.5f" % m) for m in ra]
+             except: ra=None
+             
+             try: dec = [float("%.5f" % m) for m in dec]
+             except: dec=None
+             
+             Camera["GENERAL_INFO"]={"RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks}   
 ###################################
 
 class QL_QAMerger:
