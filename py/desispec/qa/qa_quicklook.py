@@ -57,12 +57,12 @@ def qlf_post(qadict):
     else:   
         log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
-def get_image(filetype,night,expid,camera):
+def get_image(filetype,night,expid,camera,rawdir):
     '''
     Make image object from file if in development mode
     '''
     #- Find correct file for QA
-    imagefile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=os.environ['QL_SPEC_DATA'])
+    imagefile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=rawdir)
 
     #- Create necessary input for desispec.image
     image = fits.open(imagefile)
@@ -77,12 +77,12 @@ def get_image(filetype,night,expid,camera):
 
     return imageobj
 
-def get_frame(filetype,night,expid,camera):
+def get_frame(filetype,night,expid,camera,specdir):
     '''
     Make frame object from file if in development mode
     '''
     #- Find correct file for QA
-    framefile = findfile(filetype,int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
+    framefile = findfile(filetype,int(night),int(expid),camera,specprod_dir=specdir)
 
     #- Create necessary input for desispec.frame
     frame = fits.open(framefile)
@@ -127,7 +127,7 @@ class Bias_From_Overscan(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Bias_From_Ovescan':
-            rawfile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=os.environ['QL_SPEC_DATA'])
+            rawfile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=kwargs["rawdir"])
             raw = fits.open(rawfile)
         else:
             raw=args[0]
@@ -325,7 +325,7 @@ class Get_RMS(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            image = get_image('pix',night,expid,camera)
+            image = get_image('pix',night,expid,camera,kwargs["rawdir"])
         else:
             image=args[0]
 
@@ -467,7 +467,7 @@ class Calc_XWSigma(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            image = get_image('pix',night,expid,camera)
+            image = get_image('pix',night,expid,camera,kwargs["rawdir"])
         else:
             image=args[0]
 
@@ -760,7 +760,7 @@ class Count_Pixels(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            image = get_image('pix',night,expid,camera)
+            image = get_image('pix',night,expid,camera,kwargs["rawdir"])
         else:
             image=args[0]
 
@@ -887,7 +887,7 @@ class CountSpectralBins(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('frame',night,expid,camera)
+            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
         else:
             frame=args[0]
 
@@ -1088,7 +1088,7 @@ class Sky_Continuum(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('fframe',night,expid,camera)
+            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
             reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
             with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
                 cdict = yaml.load(f)
@@ -1250,7 +1250,7 @@ class Sky_Peaks(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('fframe',night,expid,camera)
+            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
         else:
             frame=args[0]
 
@@ -1375,7 +1375,7 @@ class Sky_Residual(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera)
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
             reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
             with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
                 cdict = yaml.load(f)
@@ -1508,7 +1508,7 @@ class Integrate_Spec(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera)
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
             reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
             with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
                 cdict = yaml.load(f)
@@ -1689,7 +1689,7 @@ class Calculate_SNR(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera)
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
             reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
             with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
                 cdict = yaml.load(f)

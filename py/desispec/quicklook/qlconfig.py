@@ -247,29 +247,39 @@ class Config(object):
 
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
-                if self.singqa is not None and self.singqa == 'Sky_Residual':
-                    skyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
-                    qaopts[qa]={'night' : self.night, 'expid' : self.expid,
-                                'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
-                                'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
-                                'qafig': qaplot, 'FiberMap': self.fibermap,
-                                'param': params, 'qlf': self.qlf, 'SkyFile' : skyfile,
-                                'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa}
+                if self.singqa is not None:
+                    if self.singqa == 'Sky_Residual':
+                        skyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+                        qaopts[qa]={'night' : self.night, 'expid' : self.expid,
+                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
+                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
+                            'qafig': qaplot, 'FiberMap': self.fibermap,
+                            'param': params, 'qlf': self.qlf, 'SkyFile' : skyfile,
+                            'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa,
+                            'specdir' : self.specprod_dir}
+                    else:
+                        qaopts[qa]={'night' : self.night, 'expid' : self.expid,
+                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
+                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
+                            'qafig': qaplot, 'FiberMap': self.fibermap,
+                            'param': params, 'qlf': self.qlf,
+                            'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa,
+                            'rawdir' : self.rawdata_dir, 'specdir' : self.specprod_dir}
                 else:
                     if qa == 'Calculate_SNR':
                         qaopts[qa]={'night' : self.night, 'expid' : self.expid,
-                                'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
-                                'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
-                                'qafig': qaplot, 'FiberMap': self.fibermap, 
-                                'param': params, 'qlf': self.qlf, 'sigmacut' : self.sigmacut,
-                                'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa}
+                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
+                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
+                            'qafig': qaplot, 'FiberMap': self.fibermap, 
+                            'param': params, 'qlf': self.qlf, 'sigmacut' : self.sigmacut,
+                            'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa}
                     else:
                         qaopts[qa]={'night' : self.night, 'expid' : self.expid,
-                                'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
-                                'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
-                                'qafig': qaplot, 'FiberMap': self.fibermap, 
-                                'param': params, 'qlf': self.qlf,
-                                'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa}
+                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
+                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
+                            'qafig': qaplot, 'FiberMap': self.fibermap, 
+                            'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
+                            'singleqa' : self.singqa}
 
                 if self.reference != None:
                     for step in self.reference:
