@@ -34,12 +34,21 @@ def reOrderDict(mergeDict):
              ra  = delKey(Camera, "RA")
              dec = delKey(Camera, "DEC")
              sky_fiberid = delKey(Camera, "SKY_FIBERID")
-             delKey(Camera, "SKYFIBERID")
+             skyfiberid = delKey(Camera, "SKYFIBERID")
+             
+             if sky_fiberid is None:
+                 sky_fiberid = skyfiberid
+             
              elg_fiberid = delKey(Camera, "ELG_FIBERID")
              lrg_fiberid = delKey(Camera, "LRG_FIBERID") 
              qso_fiberid = delKey(Camera, "QSO_FIBERID") 
              star_fiberid = delKey(Camera, "STAR_FIBERID")
-             delKey(Camera, "STD_FIBERID")
+             
+             std_fiberid = delKey(Camera, "STD_FIBERID")
+             
+             if star_fiberid is None:
+                 star_fiberid = std_fiberid
+             
              b_peaks = delKey(Camera, "B_PEAKS") 
              r_peaks = delKey(Camera, "R_PEAKS")
              z_peaks = delKey(Camera, "Z_PEAKS")
