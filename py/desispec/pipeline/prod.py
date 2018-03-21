@@ -250,9 +250,6 @@ def update_prod(nightstr=None, hpxnside=64):
         ndir = os.path.join(cal2d, nt)
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
-        ndir = os.path.join(calpsf, nt)
-        if not os.path.isdir(ndir):
-            os.makedirs(ndir)
         nlog = os.path.join(nightlogdir, nt)
         if not os.path.isdir(nlog):
             os.makedirs(nlog)
