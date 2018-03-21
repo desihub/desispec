@@ -179,11 +179,7 @@ def update_prod(nightstr=None, hpxnside=64):
     cal2d = os.path.join(proddir, "calibnight")
     if not os.path.isdir(cal2d):
         os.makedirs(cal2d)
-
-    calpsf = os.path.join(cal2d, "psf")
-    if not os.path.isdir(calpsf):
-        os.makedirs(calpsf)
-
+    
     expdir = os.path.join(proddir, "exposures")
     if not os.path.isdir(expdir):
         os.makedirs(expdir)
