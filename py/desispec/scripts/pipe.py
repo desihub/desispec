@@ -69,7 +69,7 @@ Where supported commands are:
         if not hasattr(self, args.command):
             print("Unrecognized command")
             parser.print_help()
-            sys.exit(0)
+            sys.exit(1)
 
         # use dispatch pattern to invoke method with same name
         getattr(self, args.command)()
@@ -151,7 +151,7 @@ Where supported commands are:
         else:
             print("You must set DESI_ROOT in your environment or "
                 "use the --root commandline option")
-            sys.exit(0)
+            sys.exit(1)
 
         # Check raw data location
 
@@ -164,7 +164,7 @@ Where supported commands are:
         else:
             print("You must set DESI_SPECTRO_DATA in your environment or "
                 "use the --data commandline option")
-            sys.exit(0)
+            sys.exit(1)
 
         # Check production name
 
@@ -177,7 +177,7 @@ Where supported commands are:
         else:
             print("You must set SPECPROD in your environment or use the "
                 "--prod commandline option")
-            sys.exit(0)
+            sys.exit(1)
 
         # Check spectro redux location
 
@@ -190,7 +190,7 @@ Where supported commands are:
         else:
             print("You must set DESI_SPECTRO_REDUX in your environment or "
                 "use the --redux commandline option")
-            sys.exit(0)
+            sys.exit(1)
 
         proddir = os.path.join(specdir, prodname)
         if os.path.exists(proddir) and not args.force :
@@ -199,7 +199,7 @@ Where supported commands are:
             print("or use 'desi_pipe update' to update a production")
             print("or rerun with --force option.")
             sys.stdout.flush()
-            sys.exit(0)
+            sys.exit(1)
             
         # Check basis template location
 
@@ -212,7 +212,7 @@ Where supported commands are:
         else:
             print("You must set DESI_BASIS_TEMPLATES in your environment or "
                 "use the --basis commandline option")
-            sys.exit(0)
+            sys.exit(1)
 
         # Check calibration location
 
@@ -225,7 +225,7 @@ Where supported commands are:
         else:
             print("You must set DESI_CCD_CALIBRATION_DATA in your "
                 "environment or use the --calib commandline option")
-            sys.exit(0)
+            sys.exit(1)
 
         # Construct our DB connection string
 
@@ -273,7 +273,7 @@ Where supported commands are:
             # Error- we have to get the DB info from somewhere
             print("You must set DESI_SPECTRO_DB in your environment or "
                 "use the --db-sqlite or --db-postgres commandline options")
-            sys.exit(0)
+            sys.exit(1)
 
         pipe.update_prod(nightstr=None, hpxnside=args.nside)
 
@@ -355,7 +355,7 @@ Where supported commands are:
             for s in states:
                 if s not in pipe.task_states:
                     print("Task state '{}' is not valid".format(s))
-                    sys.exit(0)
+                    sys.exit(1)
 
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="r", user=args.db_postgres_user)
@@ -736,7 +736,7 @@ Where supported commands are:
     #     if args.step not in pipe.step_types:
     #         print("Unrecognized step name")
     #         parser.print_help()
-    #         sys.exit(0)
+    #         sys.exit(1)
     #
     #     self.load_state()
     #
@@ -787,7 +787,7 @@ Where supported commands are:
     #
     #     if args.task not in self.grph.keys():
     #         print("Task {} not found in graph.".format(args.task))
-    #         sys.exit(0)
+    #         sys.exit(1)
     #
     #     nd = self.grph[args.task]
     #     stat = nd["state"]
