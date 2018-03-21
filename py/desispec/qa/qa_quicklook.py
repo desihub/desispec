@@ -1759,11 +1759,11 @@ class Calculate_SNR(MonitoringAlg):
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
-        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
+        retval["EXPID"] = expid = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = frame.meta["NIGHT"]
+        retval["NIGHT"] = night = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
         ra = fibermap["RA_TARGET"]
@@ -1791,7 +1791,7 @@ class Calculate_SNR(MonitoringAlg):
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
             fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
         #qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
-        qadict,badfibs = qalib.SNRFit(frame,camera,objlist,param,fidboundary=fidboundary)
+        qadict,badfibs = qalib.SNRFit(frame,night,camera,expid,objlist,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
 

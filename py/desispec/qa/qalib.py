@@ -2,11 +2,14 @@
 simple low level library functions for offline and online qas
 """
 
+import os
+import yaml
 import numpy as np
 import scipy.stats
 from scipy import optimize
 from desiutil import stats as dustat
 from desiutil.log import get_logger
+from desispec.io.meta import findfile
 log=get_logger()
 
 def ampregion(image):
@@ -525,7 +528,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     return qadict
 
-def SNRFit(frame,camera,objlist,params,fidboundary=None):
+def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     """
     Signal vs. Noise With fitting
 
@@ -550,32 +553,7 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
     Returns a dictionary similar to SignalVsNoise
     """
 
-    if camera[0] == 'b':
-        thisfilter='DECAM_G' #- should probably come from param. Hard coding for now
-    elif camera[0] =='r':
-        thisfilter='DECAM_R'
-    else:
-        thisfilter='DECAM_Z'
-    if "Filter" in params:
-        thisfilter=params["Filter"]
-#    def polyFun(*O):
-#        x=O[0]
-#        sum=O[1]
-#        X=x
-#        for b in O[2:]:
-#            sum+=b*X
-#            X=X*x
-#        return sum
-    funcMap={"linear":lambda x,a,b:a+b*x,
-             "poly":lambda x,a,b,c:a+b*x+c*x**2
-         }
-
-    #- Set up polynomial fit of SNR vs. Mag.
-    fitfunc=funcMap["poly"]
-    initialParams=[20.0,-1.0,0.05]
-#    if "Func" in params:
-#        fitfunc=funcMap["Func"]
-#        initialParams=[20.0,-1.0,0.05]
+    #- Get imaging magnitudes and calculate S/N
     magnitudes=frame.fibermap['MAG']
     fmag=22.0
     if "FIDMAG" in params:
@@ -583,6 +561,76 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
     filters=frame.fibermap['FILTER']
     mediansnr=SN_ratio(frame.flux,frame.ivar)
     qadict={"MEDIAN_SNR":mediansnr}
+
+    if camera[0] == 'b':
+        thisfilter='DECAM_G' #- should probably come from param. Hard coding for now
+        filt=0 #- this will be used for basic flux calibration
+        wrange1= "4000,4500" #- need sky continuum ranges for this as well
+        wrange2= "5250,5550"
+    elif camera[0] =='r':
+        thisfilter='DECAM_R'
+        filt=1
+        wrange1= "5950,6200"
+        wrange2= "6990,7230"
+    else:
+        thisfilter='DECAM_Z'
+        filt=2
+        wrange1= "8120,8270"
+        wrange2= "9110,9280"
+    if "Filter" in params:
+        thisfilter=params["Filter"]
+
+    #- Use sframe flux from standard stars for basic flux calibration
+    #- Treating noise counts and sky continuum on same footing
+    #- This is a crude calibration that will be replaced once full calibration is available
+    #- Convert imaging magnitude to flux, take median sframe flux over sky continuum region, fit these and evaluate the fit at B+R**2 so this quantity can be applied to full snr fit (R.S.)
+    starfib=np.where(frame.fibermap['OBJTYPE']=='STD')[0]
+    starmag=np.zeros(starfib.shape)
+    for mm in range(len(starfib)):
+        starmag[mm]=magnitudes[starfib][mm][filt]
+    starflux=10**(-0.4*(starmag+48.6))
+    wminlow,wmaxlow=[float(w) for w in wrange1.split(',')]
+    wminhigh,wmaxhigh=[float(w) for w in wrange2.split(',')]
+    wavelow=np.arange(wminlow,wmaxlow)
+    wavehigh=np.arange(wminhigh,wmaxhigh)
+    starmed=[]
+    for kk in starfib:
+        lowmed=continuum(wavelow,frame.flux[kk])
+        highmed=continuum(wavehigh,frame.flux[kk])
+        med=np.mean([lowmed,highmed])
+        starmed.append(med)
+    lfit=lambda x,a,b:a+b*x
+    try:
+        cfile=findfile('ql_skycont_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
+        #- Get sky background and read noise from previous QAs
+        with open(cfile) as cf:
+            contfile=yaml.load(cf)
+        contval=contfile["METRICS"]["SKYCONT"]
+        rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
+        with open(rfile) as rf:
+            rmsfile=yaml.load(rf)
+        rmsval=rmsfile["METRICS"]["NOISE"]
+        backcount=contval+rmsval**2
+        #- Fit straight line to flux vs. counts
+        #- If fit fails, set generic value for noise term for now - will update this (R.S.)
+        calcoeff=optimize.curve_fit(lfit,starmed,starflux)[0]
+        #- br2 is the B+R**2 term in the S/N equation in flux units
+        br2=lfit(backcount,calcoeff[0],calcoeff[1])
+        if br2 >= 100.:
+            br2=2e-27
+    except:
+        br2=2e-27
+
+    #- Set up fit of SNR vs. Mag.
+    #- Using astronomical S/N equation, fitting only 'a'
+    funcMap={"linear":lambda x,a,b:a+b*x,
+             "poly":lambda x,a,b,c:a+b*x+c*x**2,
+             "astro":lambda x,a:(a*x)/np.sqrt(a*x+br2)
+            }
+
+    fitfunc=funcMap["astro"]
+    initialParams=[0.3]
+
     neg_snr_tot=[]
     #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 
     #- not happen for non-sky fibers with actual flux in them.  However, it does happen rarely 
@@ -641,30 +689,17 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
                 log.warning("In fit of {}, had to remove NANs from data for fitting!".format(T))
             badfibs.append(fibers[sorted(list(set(cut)))])
             xs=m.argsort()
-            x=m[xs]
+            x=10**(-0.4*(m[xs]+48.6))
             med_snr=s[xs]
-            y=np.log10(med_snr)
+            y=med_snr
 	    #- Fit SNR vs. Mag. to fit function, evaluate at fiducial magnitude, 
             #- and store results in METRICS
-            out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
-            #out=optimize.curve_fit(polyFun,x,y,p0=initialParams)
+            out=optimize.curve_fit(fitfunc,x,y)#,p0=initialParams)
             vs=list(out[0])
             cov=list(out[1])
             fitcoeff.append(vs)
             fitcovar.append(cov)
-            fidsnr_tgt.append(10**fitfunc(fmag,*out[0]))
-            #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
-#        except ValueError:
-#            log.warning("In fit of {}, data contain NANs! can't fit".format(T))
-#            vs=np.array(initialParams)
-#            vs.fill(np.nan)
-#            cov=np.empty((len(initialParams),len(initialParams)))
-#            cov.fill(np.nan)
-#            vs=list(vs)
-#            cov=list(cov)
-#            fitcoeff.append(vs)
-#            fitcovar.append(cov)
-#            fidsnr_tgt.append(np.nan)
+            fidsnr_tgt.append(fitfunc(fmag,*out[0]))
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
             vs=np.array(initialParams)
@@ -691,9 +726,10 @@ def SNRFit(frame,camera,objlist,params,fidboundary=None):
         snr_mag=[medsnr,mags]
         snrmag.append(snr_mag)
 
+        #- Calculate residual S/N for focal plane plots
         fit_snr=[]
         for mm in range(len(x)):
-            snr = 10**fitfunc(x[mm],vs[0],vs[1],vs[2])
+            snr = fitfunc(x[mm],vs[0])
             fit_snr.append(snr)
         for rr in range(len(fit_snr)):
             resid = (med_snr[rr] - fit_snr[rr]) / fit_snr[rr]

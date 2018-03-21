@@ -854,33 +854,6 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,sigmacut):
     resid_plot=ax2.scatter(ra,dec,s=2,c=resids,cmap=plt.cm.bwr)
     fig.colorbar(resid_plot,ticks=[np.min(resids),0,np.max(resids)])
     
-    #    #- plot for amp zones
-    #    if "MEDIAN_AMP_SNR" in qa_dict["METRICS"]:
-    #        ax2=fig.add_subplot(gs[1:4,4:])
-    #        med_amp_snr=qa_dict["METRICS"]["MEDIAN_AMP_SNR"]
-    #        heatmap_med=ax2.pcolor(med_amp_snr.reshape(2,2),cmap=plt.cm.OrRd)
-    #        plt.title('Avg. Median S/N = {:.4f}'.format(avg_med_snr), fontsize=10)
-    #        ax2.set_xlabel("Avg. Median S/N (per Amp)",fontsize=10)
-    #        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-    #        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
-    #        ax2.annotate("Amp 1\n{:.3f}".format(med_amp_snr[0]),
-    #                 xy=(0.4,0.4), #- Full scale is 2
-    #                 fontsize=10
-    #                 )
-    #        ax2.annotate("Amp 2\n{:.3f}".format(med_amp_snr[1]),
-    #                 xy=(1.4,0.4),
-    #                 fontsize=10
-    #                 )
-    #        ax2.annotate("Amp 3\n{:.3f}".format(med_amp_snr[2]),
-    #                 xy=(0.4,1.4),
-    #                 fontsize=10
-    #                 )
-    #
-    #        ax2.annotate("Amp 4\n{:.3f}".format(med_amp_snr[3]),
-    #                 xy=(1.4,1.4),
-    #                 fontsize=10
-    #                 )
-
     for i in range(len(o)):
         if i == 0:
             ax=fig.add_subplot(gs[4:,:2])
@@ -894,21 +867,27 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,sigmacut):
         objtype=list(objlist)[i]
         objid=np.where(np.array(list(objlist))==objtype)[0][0]
         obj_mag=mags[objid]
+#        obj_flux=10**(-0.4*(np.array(obj_mag)+48.6))
         obj_snr=snrs[objid]
-        obj_fit_values=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
+        logsnr2=np.log(np.array(obj_snr)**2)
+        fitval=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
 
-        ax.set_ylabel('Median S/N',fontsize=8)
+        ax.set_ylabel('Log(Median S/N**2)',fontsize=8)
         ax.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
         ax.set_title('{}'.format(objtype), fontsize=8)
-        plot_mag=np.arange(np.min(obj_mag),np.max(obj_mag),0.1)
-        plot_fit=10**(obj_fit_values[0]+obj_fit_values[1]*plot_mag+obj_fit_values[2]*plot_mag**2)
+#        plot_mag=np.arange(np.min(obj_mag),np.max(obj_mag),0.1)
+#        plot_fit=10**(obj_fit_values[0]+obj_fit_values[1]*plot_mag+obj_fit_values[2]*plot_mag**2)
+#        plot_flux=10**(-0.4*(plot_mag+48.6))
+#        plot_fit=(fitval[0]*plot_flux)/np.sqrt(fitval[0]*plot_flux+2e-27)
         ax.set_xlim(np.min(obj_mag)-0.1,np.max(obj_mag)+0.1)
-        ax.set_ylim(np.min(obj_snr)-0.1,np.max(obj_snr)+0.1)
+        ax.set_ylim(np.min(logsnr2)-0.1,np.max(logsnr2)+0.1)
         ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag)),int(np.max(obj_mag))+1,1.0))
         ax.tick_params(axis='x',labelsize=6,labelbottom='on')
         ax.tick_params(axis='y',labelsize=6,labelleft='on')
-        ax.plot(obj_mag,obj_snr,'b.')
-        ax.plot(plot_mag,plot_fit,'y')
+        ax.plot(obj_mag,logsnr2,'b.')
+#        ax.plot(plot_mag,plot_fit,'y')
+#        ax.plot(obj_flux,obj_snr,'b.')
+#        ax.plot(plot_flux,plot_fit,'y')
     
     plt.tight_layout()
     fig.savefig(outfile)
