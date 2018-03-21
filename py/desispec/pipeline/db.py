@@ -156,7 +156,7 @@ def all_tasks(night, nside):
 
         # Add the preprocessed pixel files
         for band in ['b', 'r', 'z']: # need to open the rawdat file to see how many spectros and cameras are there
-            for spec in range(10): #
+            for spec in np.unique( fmdata["SPECTROID"] ) :
                 pixprops = dict()
                 pixprops["night"] = int(night)
                 pixprops["band"] = band
