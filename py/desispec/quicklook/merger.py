@@ -1,7 +1,6 @@
 #
 # A class to merge quicklook qa outputs.
 #  
-#
 from __future__ import absolute_import, division, print_function
 from desiutil.io import yamlify
 import yaml
