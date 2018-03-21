@@ -176,14 +176,10 @@ def update_prod(nightstr=None, hpxnside=64):
     if not os.path.isdir(proddir):
         os.makedirs(proddir)
 
-    cal2d = os.path.join(proddir, "calib2d")
+    cal2d = os.path.join(proddir, "calibnight")
     if not os.path.isdir(cal2d):
         os.makedirs(cal2d)
-
-    calpsf = os.path.join(cal2d, "psf")
-    if not os.path.isdir(calpsf):
-        os.makedirs(calpsf)
-
+    
     expdir = os.path.join(proddir, "exposures")
     if not os.path.isdir(expdir):
         os.makedirs(expdir)
@@ -252,9 +248,6 @@ def update_prod(nightstr=None, hpxnside=64):
         if not os.path.isdir(nexpdir):
             os.makedirs(nexpdir)
         ndir = os.path.join(cal2d, nt)
-        if not os.path.isdir(ndir):
-            os.makedirs(ndir)
-        ndir = os.path.join(calpsf, nt)
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
         nlog = os.path.join(nightlogdir, nt)

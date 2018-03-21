@@ -164,7 +164,7 @@ def all_tasks(night, nside):
                 pixprops["expid"] = int(ex)
                 pixprops["flavor"] = flavor
                 pixprops["state"] = "ready"
-                full["pix"].append(pixprops)
+                full["preproc"].append(pixprops)
 
                 if flavor == "arc" :
                     # Add the PSF files

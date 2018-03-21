@@ -1677,7 +1677,7 @@ def write_line_list(filename,all_wv_soln,llist) :
 #####################################################################
 
 def script_bootcalib(arc_idx, flat_idx, cameras=None, channels=None, nproc=10):
-    """ Runs desi_bootcalib on a series of pix files
+    """ Runs desi_bootcalib on a series of preproc files
 
     Returns:
         script_bootcalib([0,1,2,3,4,5,6,7,8,9], [10,11,12,13,14])
@@ -1714,8 +1714,9 @@ def script_bootcalib(arc_idx, flat_idx, cameras=None, channels=None, nproc=10):
             if nrun == ntrial:
                 break
             # Names
-            afile = str('pix-{:s}{:s}-{:08d}.fits'.format(channels[lchannel], cameras[kcamera], arc_idx[iarc]))
-            ffile = str('pix-{:s}{:s}-{:08d}.fits'.format(channels[lchannel], cameras[kcamera], flat_idx[jflat]))
+            #- TODO: update to use desispec.io.findfile instead
+            afile = str('preproc-{:s}{:s}-{:08d}.fits'.format(channels[lchannel], cameras[kcamera], arc_idx[iarc]))
+            ffile = str('preproc-{:s}{:s}-{:08d}.fits'.format(channels[lchannel], cameras[kcamera], flat_idx[jflat]))
             ofile = str('boot_psf-{:s}{:s}-{:d}{:d}.fits'.format(channels[lchannel], cameras[kcamera],
                                                                  arc_idx[iarc], flat_idx[jflat]))
             qfile = str('qa_boot-{:s}{:s}-{:d}{:d}.pdf'.format(channels[lchannel], cameras[kcamera],

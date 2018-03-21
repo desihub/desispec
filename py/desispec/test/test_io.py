@@ -528,7 +528,7 @@ class TestIO(unittest.TestCase):
         for night in ['20150101', '20150102']:
             x1 = findfile('frame', camera='b0', night=night, expid=123)
             makepath(x1)
-            x2 = findfile('fiberflat', camera='b0', night=night, expid=123)
+            x2 = findfile('psfnight', camera='b0', night=night)
             makepath(x2)
         # Add a bad 'night'
         x1 = x1.replace('20150102', 'dummy')
@@ -542,7 +542,7 @@ class TestIO(unittest.TestCase):
         nights = get_nights(strip_path=False)
         self.assertTrue('/' in nights[0])
         # Calib
-        nights = get_nights(sub_folder='calib2d')
+        nights = get_nights(sub_folder='calibnight')
         self.assertTrue('20150102' in nights)
 
     def test_search_framefile(self):

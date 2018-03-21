@@ -992,7 +992,8 @@ class WorkerRedrock(Worker):
 
         outfile = graph_path(task)
         outdir = os.path.dirname(outfile)
-        details = os.path.join(outdir, "rrdetails_{}.h5".format(task))
+        details = io.findfile('redrock',
+            nside=node["nside"], groupname=node["pixel"], outdir=outdir)
 
         options = {}
         options["output"] = details

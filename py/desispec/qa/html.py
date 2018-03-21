@@ -86,7 +86,7 @@ def calib():
     init(f, 'Calibration QA')
 
     # Loop on Nights
-    nights = get_nights(sub_folder='calib2d')
+    nights = get_nights(sub_folder='calibnight')
     nights.sort()
     links = ''
     body = ''

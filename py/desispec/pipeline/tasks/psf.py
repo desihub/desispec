@@ -66,7 +66,7 @@ class TaskPSF(BaseTask):
         from .base import task_classes
         props = self.name_split(name)
         deptasks = {
-            "input-image" : task_classes["pix"].name_join(props)
+            "input-image" : task_classes["preproc"].name_join(props)
         }
         return deptasks
 
@@ -139,7 +139,7 @@ class TaskPSF(BaseTask):
             del opts_copy["input-psf-dir"]
 
         options["input-psf"]   = inputpsf
-        options["input-image"] = task_classes["pix"].paths(deps["input-image"])[0]
+        options["input-image"] = task_classes["preproc"].paths(deps["input-image"])[0]
         options["output-psf"]  = self.paths(name)
 
         if "specmin" in opts_copy:
