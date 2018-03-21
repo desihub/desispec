@@ -224,6 +224,7 @@ class Bias_From_Overscan(MonitoringAlg):
             bias_overscan.append(bias)
             data.append(isort)
 
+        #- Combine data from each row and take average
         row_data_bottom=[]
         row_data_top=[]
         for i in range(len(row_data_amp1)):
@@ -249,6 +250,8 @@ class Bias_From_Overscan(MonitoringAlg):
                 "BIAS_WARN_RANGE:":[-2.0, 2.0]
                 }
 
+        #- Count data outside of 1, 2, 3, and 5 sigma
+        #- Need to look into this calculation (R.S.)
         sig1_lo = np.percentile(full_data,(100.-param['PERCENTILES'][0])/2.)
         sig1_hi = np.percentile(full_data,100.-sig1_lo)
         sig2_lo = np.percentile(full_data,(100.-param['PERCENTILES'][1])/2.)
@@ -554,8 +557,11 @@ class Calc_XWSigma(MonitoringAlg):
         else:
             fibers = fibermap['FIBER'].shape[0]
 
+        #- dw and dp are wavelength/pixel ranges used as region to calculate Gaussian over peaks
+        #- hardcoded until a better method is found, perhaps configurable (R.S.)
         dw=2.
         dp=3
+        #- Get wavelength ranges around peaks
         peak_wave=[]
         peaks=param['{}_PEAKS'.format(camera[0].upper())]
         for p in range(len(peaks)):
@@ -621,7 +627,9 @@ class Calc_XWSigma(MonitoringAlg):
             if fibermap['OBJTYPE'][i]=='SKY':
                 xsigma_sky=xsigma
                 wsigma_sky=wsigma
- 
+
+            #- Excluding fibers 240-260 in case some fibers overlap amps
+            #- This shouldn't cause a significant loss of information 
             if amps:
                 if fibermap['FIBER'][i]<240:
                     if camera[0]=="b":
