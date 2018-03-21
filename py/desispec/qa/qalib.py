@@ -10,6 +10,8 @@ from scipy import optimize
 from desiutil import stats as dustat
 from desiutil.log import get_logger
 from desispec.io.meta import findfile
+from desispec.preproc import _parse_sec_keyword
+
 log=get_logger()
 
 def ampregion(image):
@@ -19,8 +21,6 @@ def ampregion(image):
     Args:
         image: desispec.image.Image object
     """
-    from desispec.preproc import _parse_sec_keyword
-
     pixboundary=[]
     for kk in ['1','2','3','4']: #- 4 amps
         #- get the amp region in pix
@@ -36,8 +36,6 @@ def fiducialregion(frame,psf):
         frame: desispec.frame.Frame object
         psf: desispec.psf.PSF like object
     """
-    from desispec.preproc import _parse_sec_keyword
-
     startspec=0 #- will be None if don't have fibers on the right of the CCD.
     endspec=499 #- will be None if don't have fibers on the right of the CCD
     startwave0=0 #- lower index for the starting fiber

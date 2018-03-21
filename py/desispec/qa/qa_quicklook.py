@@ -2,18 +2,24 @@
 Monitoring algorithms for Quicklook pipeline
 """
 
+import os,sys
+import datetime
 import numpy as np
 import scipy.ndimage
 import yaml
+import astropy.io.fits as fits
+import desispec.qa.qa_plots_ql as plot
 from desispec.quicklook.qas import MonitoringAlg, QASeverity
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
-import os,sys
-import datetime
 from astropy.time import Time
 from desispec.qa import qalib
-from desispec.io import qa
+from desispec.io import qa, read_params
 from desispec.io.meta import findfile
+from desispec.io.sky import read_sky
+from desispec.image import Image as im
+from desispec.frame import Frame as fr
+from desispec.preproc import _parse_sec_keyword
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -55,9 +61,6 @@ def get_image(filetype,night,expid,camera):
     '''
     Make image object from file if in development mode
     '''
-    import astropy.io.fits as fits
-    from desispec.image import Image as im
-
     #- Find correct file for QA
     imagefile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=os.environ['QL_SPEC_DATA'])
 
@@ -78,9 +81,6 @@ def get_frame(filetype,night,expid,camera):
     '''
     Make frame object from file if in development mode
     '''
-    import astropy.io.fits as fits
-    from desispec.frame import Frame as fr
-
     #- Find correct file for QA
     framefile = findfile(filetype,int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
 
@@ -127,7 +127,6 @@ class Bias_From_Overscan(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Bias_From_Ovescan':
-            import astropy.io.fits as fits
             rawfile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=os.environ['QL_SPEC_DATA'])
             raw = fits.open(rawfile)
         else:
@@ -195,8 +194,6 @@ class Bias_From_Overscan(MonitoringAlg):
         row_data_amp4=[]
         bias_overscan=[]        
         for kk in ['1','2','3','4']:
-            from desispec.preproc import _parse_sec_keyword
-            
             sel=_parse_sec_keyword(header['BIASSEC'+kk])
             #- Obtain counts/second in bias region
             pixdata=rawimage[sel]/header["EXPTIME"]
@@ -288,8 +285,7 @@ class Bias_From_Overscan(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_bias_overscan
-            plot_bias_overscan(retval,qafig)
+            plot.plot_bias_overscan(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
         
@@ -303,7 +299,6 @@ class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="RMS"
-        from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NOISE_AMP" 
@@ -391,7 +386,6 @@ class Get_RMS(MonitoringAlg):
         rms_over_amps=[]
         overscan_values=[]
         #- get amp/overcan boundary in pixels
-        from desispec.preproc import _parse_sec_keyword
         for kk in ['1','2','3','4']:
             thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
             thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
@@ -410,7 +404,6 @@ class Get_RMS(MonitoringAlg):
             rms_over_amps=[]
             overscan_values=[]
             #- get amp/overcan boundary in pixels
-            from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
@@ -435,8 +428,7 @@ class Get_RMS(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_RMS
-            plot_RMS(retval,qafig)            
+            plot.plot_RMS(retval,qafig)            
             log.debug("Output QA fig {}".format(qafig))
 
         return retval    
@@ -449,7 +441,6 @@ class Calc_XWSigma(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="XWSIGMA"
-        from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "WSIGMA_MED_SKY"
@@ -730,8 +721,7 @@ class Calc_XWSigma(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_XWSigma
-            plot_XWSigma(retval,qafig)
+            plot.plot_XWSigma(retval,qafig)
 
             log.debug("Output QA fig {}".format(qafig))
 
@@ -745,7 +735,6 @@ class Count_Pixels(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="COUNTPIX"
-        from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NPIX_AMP"
@@ -835,7 +824,6 @@ class Count_Pixels(MonitoringAlg):
             npixlo_amps=[]
             npixhi_amps=[]
             #- get amp boundary in pixels
-            from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 npixlo_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTLO'])
@@ -856,8 +844,7 @@ class Count_Pixels(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_countpix
-            plot_countpix(retval,qafig)
+            plot.plot_countpix(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
 
@@ -872,7 +859,6 @@ class CountSpectralBins(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="COUNTBINS"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NGOODFIB"
@@ -1061,8 +1047,7 @@ class CountSpectralBins(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_countspectralbins
-            plot_countspectralbins(retval,qafig)
+            plot.plot_countspectralbins(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
         
@@ -1076,7 +1061,6 @@ class Sky_Continuum(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="SKYCONT"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "SKYCONT"
@@ -1100,7 +1084,6 @@ class Sky_Continuum(MonitoringAlg):
 
         dict_countbins=None
         if kwargs["singleqa"] == 'Sky_Continuum':
-            import yaml
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
@@ -1176,7 +1159,6 @@ class Sky_Continuum(MonitoringAlg):
 
         if param is None:
             log.debug("Param is None. Using default param instead")
-            from desispec.io import read_params
             desi_params = read_params()
             param = {}
             for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_WARN_RANGE', 'SKYCONT_ALARM_RANGE']:
@@ -1228,8 +1210,7 @@ class Sky_Continuum(MonitoringAlg):
             log.debug("Output QA data is in {}".format(outfile))
 
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_sky_continuum
-            plot_sky_continuum(retval,qafig)
+            plot.plot_sky_continuum(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
         
@@ -1243,7 +1224,6 @@ class Sky_Peaks(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="SKYPEAK"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT_MED_SKY"
@@ -1325,7 +1305,6 @@ class Sky_Peaks(MonitoringAlg):
         # Parameters
         if param is None:
             log.info("Param is None. Using default param instead")
-            from desispec.io import read_params
             desi_params = read_params()
             param = desi_params['qa']['skypeaks']['PARAMS']
 
@@ -1350,8 +1329,7 @@ class Sky_Peaks(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_sky_peaks
-            plot_sky_peaks(retval,qafig)
+            plot.plot_sky_peaks(retval,qafig)
 
             log.debug("Output QA fig {}".format(qafig))
 
@@ -1368,7 +1346,6 @@ class Sky_Residual(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="RESIDUAL"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDRMS"
@@ -1387,7 +1364,6 @@ class Sky_Residual(MonitoringAlg):
 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
-        from desispec.io.sky import read_sky
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
@@ -1395,7 +1371,6 @@ class Sky_Residual(MonitoringAlg):
 
         dict_countbins=None
         if kwargs["singleqa"] == 'Sky_Residual':
-            import yaml
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
@@ -1412,7 +1387,6 @@ class Sky_Residual(MonitoringAlg):
         fibermap=kwargs['FiberMap']
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
-            from desispec.io.sky import read_sky
             skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
             log.debug("Using given sky file {} for subtraction".format(skyfile))
 
@@ -1493,8 +1467,7 @@ class Sky_Residual(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_residuals
-            plot_residuals(retval,qafig)
+            plot.plot_residuals(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
 
@@ -1508,7 +1481,6 @@ class Integrate_Spec(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="INTEG"
-        from desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "INTEG_AVG"
@@ -1532,7 +1504,6 @@ class Integrate_Spec(MonitoringAlg):
 
         dict_sountbins=None
         if kwargs["singleqa"] == 'Integrate_Spec':
-            import yaml
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
@@ -1678,8 +1649,7 @@ class Integrate_Spec(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_integral
-            plot_integral(retval,qafig)
+            plot.plot_integral(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
 
@@ -1692,7 +1662,6 @@ class Calculate_SNR(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="SNR"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "ELG_FIDSNR"
@@ -1709,7 +1678,6 @@ class Calculate_SNR(MonitoringAlg):
                               (np.asarray(parms["FIDSNR_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
-        from desispec.io.sky import read_sky
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
@@ -1717,7 +1685,6 @@ class Calculate_SNR(MonitoringAlg):
 
         dict_countbins=None
         if kwargs["singleqa"] == 'Calculate_SNR':
-            import yaml
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
@@ -1826,8 +1793,7 @@ class Calculate_SNR(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_SNR
-            plot_SNR(retval,qafig,objlist,badfibs,sigmacut)
+            plot.plot_SNR(retval,qafig,objlist,badfibs,sigmacut)
             log.debug("Output QA fig {}".format(qafig))
 
         return retval

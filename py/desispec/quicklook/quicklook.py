@@ -7,11 +7,22 @@ import threading,string
 import subprocess
 import importlib
 import yaml
+import astropy.io.fits as fits
+import desispec.io.fibermap as fibIO
+import desispec.io.sky as skyIO
+import desispec.io.fiberflat as ffIO
+import desispec.fiberflat as ff
+import desispec.io.image as imIO
+import desispec.image as im
+import desispec.io.frame as frIO
+import desispec.frame as dframe
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
 from desispec.io import qa as qawriter
-from desiutil.io import yamlify
 from desispec.quicklook.merger import QL_QAMerger
+from desispec.quicklook import procalgs
+from desispec.boxcar import do_boxcar
+from desiutil.io import yamlify
 
 def testconfig(outfilename="qlconfig.yaml"):
     """
@@ -390,18 +401,6 @@ def setup_pipeline(config):
     conversion dictionary from the configuration dictionary so that Pipeline steps (PA) can
     take them. This is required for runpipeline.
     """
-    import astropy.io.fits as fits
-    import desispec.io.fibermap as fibIO
-    import desispec.io.sky as skyIO
-    import desispec.io.fiberflat as ffIO
-    import desispec.fiberflat as ff
-    import desispec.io.image as imIO
-    import desispec.image as im
-    import desispec.io.frame as frIO
-    import desispec.frame as dframe
-    from desispec.quicklook import procalgs
-    from desispec.boxcar import do_boxcar
-
     qlog=qllogger.QLLogger()
     log=qlog.getlog()
     if config is None:
