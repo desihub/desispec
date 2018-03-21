@@ -105,10 +105,10 @@ def parse(stage, options=None):
     int_night = 0
     if status == 0:
         try:
-            int_night = int(night)
+            int_night = int(args.night)
         except ValueError:
             log.critical("Could not convert night \"{}\" to an integer!"\
-                .format(night))
+                .format(args.night))
             status = 3
 
     if status == 0:
@@ -121,7 +121,7 @@ def parse(stage, options=None):
             assert 0 < day < 32
         except AssertionError:
             log.critical("Value for night \"{}\" is not a valid calendar "
-                "date!".format(night))
+                "date!".format(args.night))
             status = 4
 
     if status == 0:
