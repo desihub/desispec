@@ -99,6 +99,9 @@ Where supported commands are:
 
         parser.add_argument("--prod", required=False, default=None,
             help="value to use for SPECPROD")
+        
+        parser.add_argument("--force", action = "store_true",
+            help="force DB creation even if prod exists on disk (useful for simulations")
 
         parser.add_argument("--basis", required=False, default=None,
             help="value to use for DESI_BASIS_TEMPLATES")
@@ -190,13 +193,14 @@ Where supported commands are:
             sys.exit(0)
 
         proddir = os.path.join(specdir, prodname)
-        if os.path.exists(proddir):
+        if os.path.exists(proddir) and not args.force :
             print("Production {} exists.".format(proddir))
             print("Either remove this directory if you want to start fresh")
-            print("or use 'desi_pipe update' to update a production.")
+            print("or use 'desi_pipe update' to update a production")
+            print("or rerun with --force option.")
             sys.stdout.flush()
             sys.exit(0)
-
+            
         # Check basis template location
 
         basis = None
@@ -364,7 +368,7 @@ Where supported commands are:
         with db.cursor() as cur:
 
             if args.tasktype == "spectra" or args.tasktype == "redshift" :
-                
+
                 cmd = "select pixel from healpix_frame where night in ({})".format(ntlist)
                 cur.execute(cmd)
                 pixels = np.unique([ x for (x,) in cur.fetchall() ]).tolist()
@@ -373,7 +377,7 @@ Where supported commands are:
                 cur.execute(cmd)
                 tasks = [ x for (x, y) in cur.fetchall() if \
                           pipe.task_int_to_state[y] in states ]
-                
+
             else :
                 cmd = "select name, state from {} where night in ({})"\
                     .format(args.tasktype, ntlist)
@@ -474,7 +478,6 @@ Where supported commands are:
 
         """
         availtypes = ",".join(pipe.db.task_types())
-        scrdir = io.get_pipe_scriptdir()
 
         parser.add_argument("--tasktype", required=True, default=None,
             help="task type ({})".format(availtypes))
@@ -510,9 +513,10 @@ Where supported commands are:
             default=0, help="The number of processes to use per node.  If not "
             "specified it uses a default value for each machine.")
 
-        parser.add_argument("--outdir", required=False, default=scrdir,
-            help="put scripts and logs in this directory relative to the "
-            "production 'run' directory.")
+        parser.add_argument("--outdir", required=False, default=None,
+            help="Put scripts and logs in this directory relative to the "
+            "production 'scripts' directory.  Default creates a directory"
+            " with the task type and a date stamp.")
 
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
@@ -575,20 +579,27 @@ Where supported commands are:
     def _gen_script(self, args):
 
         proddir = os.path.abspath(io.specprod_root())
+        scrdir = io.get_pipe_scriptdir()
 
         tasks = pipe.prod.task_read(args.taskfile)
 
         outsubdir = args.outdir
+        if outsubdir is None:
+            import datetime
+            now = datetime.datetime.now()
+            outsubdir = "{}_{:%Y%m%d-%H:%M:%S}".format(args.tasktype, now)
 
-        outdir = os.path.join(proddir, io.get_pipe_rundir(), outsubdir)
+        outdir = os.path.join(proddir, io.get_pipe_rundir(),
+            io.get_pipe_scriptdir(), outsubdir)
+        if not os.path.isdir(outdir):
+            os.makedirs(outdir)
 
-        mstr = "shell"
+        mstr = "run"
         if args.nersc is not None:
             mstr = args.nersc
 
-        outstr = "{}_{}".format(args.tasktype, mstr)
-        outscript = os.path.join(outdir, outstr)
-        outlog = os.path.join(outdir, outstr)
+        outscript = os.path.join(outdir, mstr)
+        outlog = os.path.join(outdir, mstr)
 
         (db, opts) = pipe.prod.load_prod("r")
         if args.nodb:

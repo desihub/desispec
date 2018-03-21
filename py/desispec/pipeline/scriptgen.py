@@ -195,7 +195,6 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         if debug:
             f.write("export DESI_LOGLEVEL=DEBUG\n\n")
 
-
         runstr = "srun"
         if multiproc:
             runstr = "{} --cpu_bind=no".format(runstr)
@@ -313,6 +312,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
 
     # Compute how many nodes we need
     nworker = len(workersum)
+
     totalprocs = nworker * taskproc
     totalnodes = totalprocs // nodeprocs
     if totalprocs % nodeprocs != 0:
@@ -324,7 +324,28 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
     if totalnodes > hostprops["maxnodes"]:
         # yes...
         maxprocs = hostprops["maxnodes"] * nodeprocs
-        raise NotImplementedError("Job splitting not yet implemented")
+        maxworker = maxprocs // taskproc
+        maxnodes = (maxworker * taskproc) // nodeprocs
+        outtasks = list()
+        jobworkers = 0
+        for w in range(nworker):
+            outtasks.extend([ x[0] for x in workertasks[w] ])
+            jobworkers += 1
+            if jobworkers >= maxworker:
+                jobprocs = jobworkers * taskproc
+                jobnodes = jobprocs // nodeprocs
+                if jobprocs % nodeprocs != 0:
+                    jobnodes += 1
+                ret.append( (jobnodes, outtasks) )
+                outtasks = list()
+                jobworkers = 0
+
+        if jobworkers > 0:
+            jobprocs = jobworkers * taskproc
+            jobnodes = jobprocs // nodeprocs
+            if jobprocs % nodeprocs != 0:
+                jobnodes += 1
+            ret.append( (jobnodes, outtasks) )
 
     else:
         # no...
@@ -426,132 +447,3 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
         jindx += 1
 
     return scriptfiles
-
-
-    #
-    # def step_props(first, last, specs, night):
-    #     """
-    #     Internal helper function used only in the desi_pipe
-    #     script to build names of scripts and directories.
-    #     """
-    #     specstr = ""
-    #     if specs is not None:
-    #         specstr = " --spectrographs {}".format(",".join([ "{}".format(x) for x in specs ]))
-    #
-    #     rundir = io.get_pipe_rundir()
-    #     scrdir = os.path.join(rundir, io.get_pipe_scriptdir())
-    #     logdir = os.path.join(rundir, io.get_pipe_logdir())
-    #
-    #     nstr = ""
-    #     scrstr = ""
-    #     if night is not None:
-    #         nstr = " --nights {}".format(night)
-    #         scrstr = "{}".format(night)
-    #
-    #     stepstr = ""
-    #     jobname = ""
-    #     if first == last:
-    #         stepstr = first
-    #         if scrstr != "":
-    #             stepstr = "{}_{}".format(first, scrstr)
-    #         jobname = first
-    #     else:
-    #         stepstr = "{}-{}".format(first, last)
-    #         if scrstr != "":
-    #             stepstr = "{}-{}_{}".format(first, last, scrstr)
-    #         jobname = "{}_{}".format(first, last)
-    #
-    #     return (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname)
-    #
-    #
-    # def compute_step(img, specdata, specredux, desiroot, setupfile,
-    #     first, last, specs, night, ntask, taskproc, tasktime, shell_mpi_run,
-    #     shell_maxcores, shell_threads, nersc_host, nersc_maxnodes,
-    #     nersc_nodecores, nersc_threads, nersc_mp, nersc_queue_thresh,
-    #     queue="debug"):
-    #     """
-    #     Internal helper function used only in the desi_pipe script to
-    #     generate the job scripts.
-    #     """
-    #
-    #     (rundir, scrdir, logdir, specstr, nstr, scrstr, stepstr, jobname) = \
-    #         step_props(first, last, specs, night)
-    #
-    #     totproc = ntask * taskproc
-    #
-    #     shell_maxprocs = shell_maxcores // shell_threads
-    #     shell_procs = shell_maxprocs
-    #     if totproc < shell_procs:
-    #         shell_procs = totproc
-    #
-    #     ntdir = scrdir
-    #     logntdir = logdir
-    #     if night is not None:
-    #         ntdir = os.path.join(scrdir, night)
-    #         if not os.path.isdir(ntdir):
-    #             os.makedirs(ntdir)
-    #         logntdir = os.path.join(logdir, night)
-    #         if not os.path.isdir(logntdir):
-    #             os.makedirs(logntdir)
-    #
-    #     shell_path = os.path.join(ntdir, "{}.sh".format(stepstr))
-    #     shell_log = os.path.join(logntdir, "{}_sh".format(stepstr))
-    #
-    #     #- no MPI for shell job version so that it can be run from interactive node
-    #     com = None
-    #     if shell_maxcores == 1:
-    #         com = ["desi_pipe_run --first {} --last {}{}{}".format(first, last, specstr, nstr)]
-    #     else:
-    #         com = ["desi_pipe_run_mpi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
-    #
-    #     pipe.shell_job(shell_path, shell_log, setupfile, com, comrun=shell_mpi_run,
-    #         mpiprocs=shell_procs, threads=shell_threads)
-    #
-    #     # Compute job size for NERSC runs
-    #
-    #     core_per_proc = 1
-    #     if nersc_threads > 1:
-    #         core_per_proc = nersc_threads
-    #     elif nersc_mp > 1:
-    #         core_per_proc = nersc_mp
-    #
-    #     nodeproc = nersc_nodecores // core_per_proc
-    #
-    #     (nodes, procs, time) = job_size(ntask, taskproc, tasktime, nodeproc, nersc_maxnodes)
-    #
-    #     if nodes > nersc_queue_thresh and queue == "debug":
-    #         print("{} nodes too big for debug queue; switching to regular".format(nodes))
-    #         queue = "regular"
-    #
-    #     if time > 30 and queue == "debug":
-    #         print("{} minutes too big for debug queue; switching to regular".format(time))
-    #         queue = "regular"
-    #
-    #     com = ["desi_pipe_run_mpi --first {} --last {}{}{}".format(first, last, specstr, nstr)]
-    #
-    #     # write normal slurm script
-    #
-    #     nersc_path = os.path.join(ntdir, "{}.slurm".format(stepstr))
-    #     nersc_log = os.path.join(logntdir, "{}_slurm".format(stepstr))
-    #
-    #     pipe.nersc_job(nersc_host, nersc_path, nersc_log, setupfile, com,
-    #         nodes=nodes, nodeproc=nodeproc, minutes=time, multisrun=False,
-    #         openmp=(nersc_threads > 1), multiproc=(nersc_mp > 1), queue=queue,
-    #         jobname=jobname)
-    #
-    #     nersc_shifter_path = ""
-    #     if img is not None:
-    #         # write shifter slurm script
-    #
-    #         nersc_shifter_path = os.path.join(ntdir,
-    #             "{}_shifter.slurm".format(stepstr))
-    #         nersc_shifter_log = os.path.join(logntdir,
-    #             "{}_shifter".format(stepstr))
-    #
-    #         pipe.nersc_shifter_job(nersc_host, nersc_shifter_path, img, specdata,
-    #             specredux, desiroot, nersc_shifter_log, setupfile, com,
-    #             nodes=nodes, nodeproc=nodeproc, minutes=time, multisrun=False,
-    #             openmp=(nersc_threads > 1), multiproc=(nersc_mp > 1), queue=queue,
-    #             jobname=jobname)
-    #
-    #     return (shell_path, nersc_path, nersc_shifter_path)

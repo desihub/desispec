@@ -73,29 +73,39 @@ def all_tasks(night, nside):
 
     for ex in sorted(expid):
 
-        log.debug("read fibermap for exposure {}".format(ex))
-
+        
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
+        
+        log.info("read {}".format(fibermap))
 
         #fmdata = io.read_fibermap(fibermap)
         #flavor = fmdata.meta["FLAVOR"]
 
         fmdata,header = fitsio.read(fibermap,header=True)
         flavor = header["FLAVOR"].strip().lower()
-
+        if flavor not in ["arc","flat","science"] :
+            log.error("Do not know what do to with fibermap flavor '{}' for file '{}".format(flavor,fibermap))
+            raise ValueError("Do not know what do to with fibermap flavor '{}' for file '{}".format(flavor,fibermap))
 
 
         fmpix = dict()
         if (flavor != "arc") and (flavor != "flat"):
+
+            
+            
             # This will be used to track which healpix pixels are
             # touched by fibers from each spectrograph.
             ra = np.array(fmdata["RA_TARGET"], dtype=np.float64)
             dec = np.array(fmdata["DEC_TARGET"], dtype=np.float64)
+            
+            # rm NaN (possible depending on versions of fiberassign)
+            valid_coordinates  = (np.isnan(ra)==False)&(np.isnan(dec)==False)
+            
             for spectro in np.unique( fmdata["SPECTROID"] ) :
-                ii=np.where(fmdata["SPECTROID"]==spectro)[0]
+                ii=np.where(fmdata["SPECTROID"][valid_coordinates]==spectro)[0]
                 if ii.size == 0 : continue
-                pixels  = desimodel.footprint.radec2pix(nside, ra[ii], dec[ii])
+                pixels  = desimodel.footprint.radec2pix(nside, ra[valid_coordinates][ii], dec[valid_coordinates][ii])
                 for pixel in np.unique(pixels) :
                     props = dict()
                     props["night"] = int(night)
@@ -106,7 +116,7 @@ def all_tasks(night, nside):
                     props["ntargets"] = np.sum(pixels==pixel)
                     healpix_frames.append(props)
             # all spectro at once
-            pixels  = np.unique(desimodel.footprint.radec2pix(nside, ra, dec))
+            pixels  = np.unique(desimodel.footprint.radec2pix(nside, ra[valid_coordinates], dec[valid_coordinates]))
             for pixel in pixels :
                 props = dict()
                 props["pixel"] = pixel
@@ -286,29 +296,35 @@ def check_tasks(tasklist, db=None, inputs=None):
             st = "waiting"
 
             # Check dependencies
-            ready = True
             deps = task_classes[tasktype].deps(tsk, db=db, inputs=inputs)
-            for k, v in deps.items():
-                if not isinstance(v, list):
-                    v = [ v ]
-                for dp in v:
-                    deptype = task_type(dp)
-                    depfiles = task_classes[deptype].paths(dp)
-                    for odep in depfiles:
-                        if not os.path.isfile(odep):
-                            ready = False
-                            break
-            if ready:
-                st = "ready"
-                done = True
-                # Check outputs
-                outfiles = task_classes[tasktype].paths(tsk)
-                for out in outfiles:
-                    if not os.path.isfile(out):
-                        done = False
-                        break
-                if done:
-                    st = "done"
+            
+            if len(deps)==0 :
+                # do not set state to ready of tasks with 0 dependencies
+                ready = False
+            else :
+                ready = True
+                for k, v in deps.items():
+                    if not isinstance(v, list):
+                        v = [ v ]
+                    for dp in v:
+                        deptype = task_type(dp)
+                        depfiles = task_classes[deptype].paths(dp)
+                        for odep in depfiles:
+                            if not os.path.isfile(odep):
+                                ready = False
+                                break
+                if ready:
+                    st = "ready"
+
+            done = True
+            # Check outputs
+            outfiles = task_classes[tasktype].paths(tsk)
+            for out in outfiles:
+                if not os.path.isfile(out):
+                    done = False
+                    break
+            if done:
+                st = "done"
 
             states[tsk] = st
     else:
@@ -386,7 +402,7 @@ class DataBase:
         return states
 
 
-    def set_states_type(self, tasktype, tasks):
+    def set_states_type(self, tasktype, tasks, postprocessing=True):
         """Efficiently get the state of many tasks of a single type.
 
         Args:
@@ -398,6 +414,9 @@ class DataBase:
             Nothing.
 
         """
+        
+        from .tasks.base import task_classes
+        
         log = get_logger()
         log.debug("opening db")
 
@@ -405,6 +424,8 @@ class DataBase:
             log.debug("updating in db")
             for tsk in tasks:
                 cur.execute("update {} set state = {} where name = '{}'".format(tasktype, task_state_to_int[tsk[1]], tsk[0]))
+                if postprocessing and tsk[1]=="done" :
+                    task_classes[tasktype].postprocessing(db=self,name=tsk[0],cur=cur)
             log.debug("done")
         return
 
@@ -497,6 +518,8 @@ class DataBase:
             night (str): The night to scan for updates.
 
         """
+        
+        
         tasks_in_db = None
         # Grab existing nightly tasks
         with self.cursor() as cur:
@@ -509,13 +532,11 @@ class DataBase:
                             .format(tt, night))
                 tasks_in_db[tt] = [ x for (x, ) in cur.fetchall() ]
 
-        # FIXME: for spectra and zbest tasks, we should use the extra tables
-        # to check only the files touched by this night's data.
-
         # For each task type, check status WITHOUT the DB, then set state.
-        for tt in task_types():
+        for tt in tasks_in_db.keys() :
             if (tt == "spectra") or (tt == "redshift"):
                 continue
+            
             tstates = check_tasks(tasks_in_db[tt], db=None)
             st = [ (x, tstates[x]) for x in tasks_in_db[tt] ]
             self.set_states_type(tt, st)
