@@ -89,8 +89,8 @@ def plot_countspectralbins(qa_dict,outfile):
     
         heatmap1=ax4.pcolor(binslo_amp.reshape(2,2),cmap=plt.cm.OrRd)
         ax4.set_xlabel("Avg. bins > counts: {:d} (per Amp)".format(cutlo),fontsize=8)
-        ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax4.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax4.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax4.tick_params(axis='y',labelsize=10,labelleft=False)
         ax4.annotate("Amp 1\n{:.1f}".format(binslo_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -109,8 +109,8 @@ def plot_countspectralbins(qa_dict,outfile):
                  )
         heatmap2=ax5.pcolor(binsmed_amp.reshape(2,2),cmap=plt.cm.OrRd)
         ax5.set_xlabel("Avg. bins > counts: {:d} (per Amp)".format(cutmed),fontsize=8)
-        ax5.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax5.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax5.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax5.tick_params(axis='y',labelsize=10,labelleft=False)
         ax5.annotate("Amp 1\n{:.1f}".format(binsmed_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -130,8 +130,8 @@ def plot_countspectralbins(qa_dict,outfile):
 
         heatmap3=ax6.pcolor(binshi_amp.reshape(2,2),cmap=plt.cm.OrRd)
         ax6.set_xlabel("Avg. bins > counts: {:d} (per Amp)".format(cuthi),fontsize=8)
-        ax6.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax6.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax6.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax6.tick_params(axis='y',labelsize=10,labelleft=False)
         ax6.annotate("Amp 1\n{:.1f}".format(binshi_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -188,8 +188,8 @@ def plot_countpix(qa_dict,outfile):
     heatmap1=ax1.pcolor(countlo_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('Total Pixels > {:d} sigma = {:f}'.format(cutlo,countlo), fontsize=10)
     ax1.set_xlabel("# pixels > {:d} sigma (per Amp)".format(cutlo),fontsize=10)
-    ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax1.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
+    ax1.tick_params(axis='y',labelsize=10,labelleft=False)
     ax1.annotate("Amp 1\n{:f}".format(countlo_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -210,8 +210,8 @@ def plot_countpix(qa_dict,outfile):
     heatmap2=ax2.pcolor(counthi_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('Total Pixels > {:d} sigma = {:f}'.format(cuthi,counthi), fontsize=10)
     ax2.set_xlabel("# pixels > {:d} sigma (per Amp)".format(cuthi),fontsize=10)
-    ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
+    ax2.tick_params(axis='y',labelsize=10,labelleft=False)
     ax2.annotate("Amp 1\n{:f}".format(counthi_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -261,8 +261,8 @@ def plot_bias_overscan(qa_dict,outfile):
     heatmap1=ax1.pcolor(bias_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('Bias = {:.4f}'.format(bias), fontsize=10)
     ax1.set_xlabel("Avg. bias value per Amp (photon counts)",fontsize=10)
-    ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax1.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
+    ax1.tick_params(axis='y',labelsize=10,labelleft=False)
     ax1.annotate("Amp 1\n{:.3f}".format(bias_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -340,8 +340,8 @@ def plot_XWSigma(qa_dict,outfile):
         heatmap3=ax3.pcolor(xsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
         plt.title('X Sigma = {:.4f}'.format(xsigma_med), fontsize=10)
         ax3.set_xlabel("X std. dev. per Amp (# of pixels)",fontsize=10)
-        ax3.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax3.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax3.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax3.tick_params(axis='y',labelsize=10,labelleft=False)
         ax3.annotate("Amp 1\n{:.3f}".format(xsigma_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -363,8 +363,8 @@ def plot_XWSigma(qa_dict,outfile):
         heatmap4=ax4.pcolor(wsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
         plt.title('W Sigma = {:.4f}'.format(wsigma_med), fontsize=10)
         ax4.set_xlabel("W std. dev. per Amp (# of pixels)",fontsize=10)
-        ax4.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax4.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax4.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax4.tick_params(axis='y',labelsize=10,labelleft=False)
         ax4.annotate("Amp 1\n{:.3f}".format(wsigma_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -424,8 +424,8 @@ def plot_RMS(qa_dict,outfile):
     heatmap1=ax1.pcolor(rms_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('RMS = {:.4f}'.format(rms), fontsize=10)
     ax1.set_xlabel("RMS per Amp (photon counts)",fontsize=10)
-    ax1.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax1.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
+    ax1.tick_params(axis='y',labelsize=10,labelleft=False)
     ax1.annotate("Amp 1\n{:.3f}".format(rms_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -446,8 +446,8 @@ def plot_RMS(qa_dict,outfile):
     heatmap2=ax2.pcolor(rms_over_amp.reshape(2,2),cmap=plt.cm.OrRd)
     plt.title('RMS Overscan = {:.4f}'.format(rms_over), fontsize=10)
     ax2.set_xlabel("RMS Overscan per Amp (photon counts)",fontsize=10)
-    ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-    ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+    ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
+    ax2.tick_params(axis='y',labelsize=10,labelleft=False)
     ax2.annotate("Amp 1\n{:.3f}".format(rms_over_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -512,8 +512,8 @@ def plot_integral(qa_dict,outfile):
         heatmap1=ax2.pcolor(std_integral_amp.reshape(2,2),cmap=plt.cm.OrRd)
         plt.title('Integral Average = {:.4f}'.format(std_integral_avg), fontsize=10)
         ax2.set_xlabel("Average integrals of STD spectra (photon counts)",fontsize=10)
-        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax2.tick_params(axis='y',labelsize=10,labelleft=False)
         ax2.annotate("Amp 1\n{:.1f}".format(std_integral_amp[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -583,8 +583,8 @@ def plot_sky_continuum(qa_dict,outfile):
         heatmap1=ax2.pcolor(skycont_amps.reshape(2,2),cmap=plt.cm.OrRd)
         plt.title('Sky Continuum = {:.4f}'.format(skycont), fontsize=10)
         ax2.set_xlabel("Avg. sky continuum per Amp (photon counts)",fontsize=10)
-        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax2.tick_params(axis='y',labelsize=10,labelleft=False)
         ax2.annotate("Amp 1\n{:.1f}".format(skycont_amps[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -647,8 +647,8 @@ def plot_sky_peaks(qa_dict,outfile):
         heatmap2=ax2.pcolor(sky_amp_rms.reshape(2,2),cmap=plt.cm.OrRd)
         plt.title('Sky peaks for sky fibers = {:.4f}'.format(skyfiber_rms), fontsize=10)
         ax2.set_xlabel("Sky Fiber RMS for peak wavelengths per Amp (photon counts)",fontsize=10)
-        ax2.tick_params(axis='x',labelsize=10,labelbottom='off')
-        ax2.tick_params(axis='y',labelsize=10,labelleft='off')
+        ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
+        ax2.tick_params(axis='y',labelsize=10,labelleft=False)
         ax2.annotate("Amp 1\n{:.1f}".format(sky_amp_rms[0]),
                  xy=(0.4,0.4),
                  fontsize=10
@@ -721,7 +721,7 @@ def plot_residuals(qa_dict,outfile):
     ax1.set_ylim(np.percentile(med_resid_wave,2.5),np.percentile(med_resid_wave,97.5))
     ax1.set_xlim(np.min(wavelength),np.max(wavelength))
     ax1.tick_params(axis='x',labelsize=10)
-    ax1.tick_params(axis='y',labelsize=10)   
+    ax1.tick_params(axis='y',labelsize=10)
 
     ax2=fig.add_subplot(gs[3:,:])
     index=range(med_resid_fiber.shape[0])
@@ -882,8 +882,8 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,sigmacut):
         ax.set_xlim(np.min(obj_mag)-0.1,np.max(obj_mag)+0.1)
         ax.set_ylim(np.min(logsnr2)-0.1,np.max(logsnr2)+0.1)
         ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag)),int(np.max(obj_mag))+1,1.0))
-        ax.tick_params(axis='x',labelsize=6,labelbottom='on')
-        ax.tick_params(axis='y',labelsize=6,labelleft='on')
+        ax.tick_params(axis='x',labelsize=6,labelbottom=True)
+        ax.tick_params(axis='y',labelsize=6,labelleft=True)
         ax.plot(obj_mag,logsnr2,'b.')
 #        ax.plot(plot_mag,plot_fit,'y')
 #        ax.plot(obj_flux,obj_snr,'b.')
