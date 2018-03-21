@@ -747,7 +747,11 @@ class DataBaseSqlite(DataBase):
             cur.execute("rollback")
             raise err
         else:
-            cur.execute("commit")
+            try:
+                cur.execute("commit")
+            except sqlite3.OperationalError:
+                #- sqlite3 in py3.5 can't commit a read-only finished transaction
+                pass
         finally:
             del cur
             self._close()
