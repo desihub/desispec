@@ -385,7 +385,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
 
     qadict['RESID'] = []
 
-    qadict["SKY_FIBERID"]=skyfibers.tolist()
+    qadict["SKYFIBERID"]=skyfibers.tolist()
     #- Residuals in wave and fiber axes
     if quick_look:
         qadict["MED_RESID_WAVE"]=np.median(res,axis=0)

@@ -466,7 +466,7 @@ def plot_sky_continuum(qa_dict,outfile):
     skycont_fiber=np.array(qa_dict["METRICS"]["SKYCONT_FIBER"])
     skycont=qa_dict["METRICS"]["SKYCONT"]
     index=np.arange(skycont_fiber.shape[0])
-    fiberid=qa_dict["METRICS"]["SKY_FIBERID"]
+    fiberid=qa_dict["METRICS"]["SKYFIBERID"]
     fig=plt.figure()
     plt.suptitle("Mean Sky Continuum after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     
@@ -559,7 +559,7 @@ def plot_residuals(qa_dict,outfile):
     ax0=fig.add_subplot(gs[:2,2:])
     ax0.set_axis_off()
     keys=["MED_RESID","NBAD_PCHI","NREJ","NSKY_FIB","RESID_PER"]
-    skyfiberid=qa_dict["METRICS"]["SKY_FIBERID"]
+    skyfiberid=qa_dict["METRICS"]["SKYFIBERID"]
     
     xl=0.05
     yl=0.9
