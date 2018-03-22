@@ -74,10 +74,10 @@ def all_tasks(night, nside):
 
     for ex in sorted(expid):
 
-        
+
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
-        
+
         log.info("read {}".format(fibermap))
 
         #fmdata = io.read_fibermap(fibermap)
@@ -93,16 +93,16 @@ def all_tasks(night, nside):
         fmpix = dict()
         if (flavor != "arc") and (flavor != "flat"):
 
-            
-            
+
+
             # This will be used to track which healpix pixels are
             # touched by fibers from each spectrograph.
             ra = np.array(fmdata["RA_TARGET"], dtype=np.float64)
             dec = np.array(fmdata["DEC_TARGET"], dtype=np.float64)
-            
+
             # rm NaN (possible depending on versions of fiberassign)
             valid_coordinates  = (np.isnan(ra)==False)&(np.isnan(dec)==False)
-            
+
             for spectro in np.unique( fmdata["SPECTROID"] ) :
                 ii=np.where(fmdata["SPECTROID"][valid_coordinates]==spectro)[0]
                 if ii.size == 0 : continue
@@ -201,10 +201,10 @@ def all_tasks(night, nside):
                     props["spec"] = spec
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
-                    
+
                     # Add traceshift
                     full["traceshift"].append(props)
-                    
+
                     # Add extractions
                     full["extract"].append(props)
 
@@ -298,7 +298,7 @@ def check_tasks(tasklist, db=None, inputs=None):
 
             # Check dependencies
             deps = task_classes[tasktype].deps(tsk, db=db, inputs=inputs)
-            
+
             if len(deps)==0 :
                 # do not set state to ready of tasks with 0 dependencies
                 ready = False
@@ -435,9 +435,9 @@ class DataBase:
             Nothing.
 
         """
-        
+
         from .tasks.base import task_classes
-        
+
         log = get_logger()
         log.debug("opening db")
 
@@ -539,8 +539,8 @@ class DataBase:
             night (str): The night to scan for updates.
 
         """
-        
-        
+
+
         tasks_in_db = None
         # Grab existing nightly tasks
         with self.cursor() as cur:
@@ -557,7 +557,7 @@ class DataBase:
         for tt in tasks_in_db.keys() :
             if (tt == "spectra") or (tt == "redshift"):
                 continue
-            
+
             tstates = check_tasks(tasks_in_db[tt], db=None)
             st = [ (x, tstates[x]) for x in tasks_in_db[tt] ]
             self.set_states_type(tt, st)
@@ -740,11 +740,10 @@ class DataBaseSqlite(DataBase):
             self._conn.execute("pragma journal_mode={}"\
                 .format(self._journalmode))
             self._conn.execute("pragma synchronous={}".format(self._syncmode))
-
-        # Other tuning options
-        self._conn.execute("pragma temp_store=memory")
-        self._conn.execute("pragma page_size=4096")
-        self._conn.execute("pragma cache_size=4000")
+            # Other tuning options
+            self._conn.execute("pragma temp_store=memory")
+            self._conn.execute("pragma page_size=4096")
+            self._conn.execute("pragma cache_size=4000")
         return
 
 

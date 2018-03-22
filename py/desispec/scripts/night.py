@@ -126,14 +126,14 @@ def parse(stage, options=None):
 
     if status == 0:
         try:
-            raw = rawdata_root()
+            raw = io.rawdata_root()
         except AssertionError:
             log.critical("Raw data location not set")
             status = 5
 
     if status == 0:
         try:
-            proddir = specprod_root()
+            proddir = io.specprod_root()
         except AssertionError:
             log.critical("Production location not set")
             status = 6
@@ -160,7 +160,7 @@ def main():
     if status != 0:
         return status
 
-    chaincom = ["desi_pipe", "chain", "--night", args.night]
+    chaincom = ["desi_pipe", "chain", "--night", "{}".format(args.night)]
 
     if stage == "start":
         ttstr = ",".join(["pix", "psf", "psfnight", "traceshift",
@@ -182,29 +182,55 @@ def main():
     else:
         return 2
 
-    argd = vars(args)
-    other = list(argd.keys())
-    for ot in other:
-        if ot == "night":
-            continue
-        if argd[ot] is None:
-            continue
-        if isinstance(argd[ot], bool):
-            chaincom.extend(["--{}".format(ot)])
-        else:
-            chaincom.extend(["--{}".format(ot), argd[ot]])
+    if args.nersc is not None:
+        chaincom.extend(["--nersc", args.nersc])
+        chaincom.extend(["--nersc_queue", args.nersc_queue])
+        chaincom.extend(["--nersc_runtime", "{}".format(args.nersc_runtime)])
+        if args.nersc_shifter is not None:
+            chaincom.extend(["--nersc_shifter", args.nersc_shifter])
+        if args.procs_per_node > 0:
+            chaincom.extend(["--procs_per_node",
+                "{}".format(args.procs_per_node)])
+    else:
+        if args.mpi_procs > 1:
+            chaincom.extend(["--mpi_procs", "{}".format(args.mpi_procs)])
+        if args.mpi_run != "":
+            chaincom.extend(["--mpi_run", args.mpi_run])
+
+    if args.db_postgres_user != "desidev_ro":
+        chaincom.extend(["--db-postgres-user", args.db_postgres_user])
+
+    if args.debug:
+        chaincom.extend(["--debug"])
 
     # Call desi_pipe chain
 
     log = get_logger()
     proddir = io.specprod_root()
+    scrdir = io.get_pipe_scriptdir()
+    ntdir = os.path.join(proddir, io.get_pipe_rundir(),
+        io.get_pipe_scriptdir(), io.get_pipe_nightdir())
+
+    if not os.path.isdir(ntdir):
+        os.makedirs(ntdir)
+
+    thisnight = os.path.join(ntdir, "{}".format(args.night))
+
+    if not os.path.isdir(thisnight):
+        os.makedirs(thisnight)
+
+    reldir = os.path.join(io.get_pipe_nightdir(), "{}".format(args.night))
+
+    chaincom.extend(["--outdir", reldir])
 
     log.info("Production {}:".format(proddir))
     log.info("  Running stage {} for night {}.".format(stage, args.night))
     log.info("  Chain command:  {}".format(" ".join(chaincom)))
     sys.stdout.flush()
 
-    jobs = sp.check_output(chaincom)
+    jobstr = sp.check_output(" ".join(chaincom), shell=True,
+        universal_newlines=True)
+    jobs = jobstr.split(",")
 
     if len(jobs) > 0:
         log.info("  Final job ID(s) are:  {}".format(":".join(jobs)))

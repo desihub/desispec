@@ -55,6 +55,7 @@ Where supported commands are:
    dryrun   Return the equivalent command line entrypoint for tasks.
    script   Generate a shell or slurm script.
    run      Generate a script and run it.
+   chain    Run all ready tasks for multiple pipeline steps.
    env      Print current production location.
    update   Update an existing production.
    getready Auto-Update of prod DB.
@@ -482,8 +483,6 @@ Where supported commands are:
         "dryrun", "script", and "run" commands.
 
         """
-        availtypes = ",".join(pipe.db.task_types())
-
         parser.add_argument("--nersc", required=False, default=None,
             help="write a script for this NERSC system (edison | cori-haswell "
             "| cori-knl)")
@@ -512,9 +511,9 @@ Where supported commands are:
             "specified it uses a default value for each machine.")
 
         parser.add_argument("--outdir", required=False, default=None,
-            help="Put scripts and logs in this directory relative to the "
-            "production 'scripts' directory.  Default creates a directory"
-            " with the task type and a date stamp.")
+            help="Put task scripts and logs in this directory relative to the "
+            "production 'scripts' directory.  Default puts task directory "
+            "in the main scripts directory.")
 
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
@@ -530,6 +529,7 @@ Where supported commands are:
 
 
     def dryrun(self):
+        availtypes = ",".join(pipe.db.task_types())
 
         parser = argparse.ArgumentParser(description="Print equivalent "
             "command-line jobs that would be run given the tasks and total"
@@ -584,16 +584,18 @@ Where supported commands are:
     def _gen_scripts(self, tasktype, tasks, args):
 
         proddir = os.path.abspath(io.specprod_root())
-        scrdir = io.get_pipe_scriptdir()
 
-        outsubdir = args.outdir
-        if outsubdir is None:
-            import datetime
-            now = datetime.datetime.now()
-            outsubdir = "{}_{:%Y%m%d-%H:%M:%S}".format(tasktype, now)
+        import datetime
+        now = datetime.datetime.now()
+        outtaskdir = "{}_{:%Y%m%d-%H:%M:%S}".format(tasktype, now)
 
-        outdir = os.path.join(proddir, io.get_pipe_rundir(),
-            io.get_pipe_scriptdir(), outsubdir)
+        if args.outdir is None:
+            outdir = os.path.join(proddir, io.get_pipe_rundir(),
+                io.get_pipe_scriptdir(), outtaskdir)
+        else:
+            outdir = os.path.join(proddir, io.get_pipe_rundir(),
+                io.get_pipe_scriptdir(), args.outdir, outtaskdir)
+
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -638,6 +640,8 @@ Where supported commands are:
 
 
     def script(self):
+        availtypes = ",".join(pipe.db.task_types())
+
         parser = argparse.ArgumentParser(description="Create batch script(s) "
             "for the list of tasks.  If the --nersc option is not given, "
             "create shell script(s) that optionally uses mpirun.  Prints"
@@ -678,7 +682,7 @@ Where supported commands are:
             # submit each job and collect the job IDs
             for scr in scripts:
                 sout = sp.check_output("sbatch {} {}".format(depstr, scr),
-                    shell=True)
+                    shell=True, universal_newlines=True)
                 jid = sout.split()[3]
                 jobids.append(jid)
         else:
@@ -692,6 +696,8 @@ Where supported commands are:
 
 
     def run(self):
+        availtypes = ",".join(pipe.db.task_types())
+
         parser = argparse.ArgumentParser(description="Create and run batch "
             "script(s) for the list of tasks.  If the --nersc option is not "
             "given, create shell script(s) that optionally uses mpirun.",
