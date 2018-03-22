@@ -172,6 +172,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     opts['extract']['nspec'] = nspec
     opts['psf']['specmin'] = 0
     opts['psf']['nspec'] = nspec
+    opts['traceshift']['nfibers'] = nspec
     pipe.prod.yaml_write(optpath, opts)
 
     # Run the pipeline tasks in order
