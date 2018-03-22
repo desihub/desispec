@@ -7,18 +7,18 @@ import yaml
 import json
 
 ###################################
-def delKey(d, k, val=None):
+def delKey(d, k, val=None, remove=True):
     
     try:
         for key, value in  d.iteritems():  # if it's a dictionary
            if key==k:
-              del d[key]
+              if remove: del d[key]
               val = value
-           val = delKey(value, k, val=val)
+           val = delKey(value, k, val=val, remove=remove)
     except: 
         try: 
           for i in range(len(d)):  # if it's a list
-             val = delKey(d[i], k, val=val)
+             val = delKey(d[i], k, val=val, remove=remove)
         except:
             return val
         
@@ -41,9 +41,9 @@ def reOrderDict(mergeDict):
              elg_fiberid = delKey(Camera, "ELG_FIBERID")
              lrg_fiberid = delKey(Camera, "LRG_FIBERID") 
              qso_fiberid = delKey(Camera, "QSO_FIBERID") 
-             star_fiberid = delKey(Camera, "STAR_FIBERID")
+             star_fiberid = delKey(Camera, "STAR_FIBERID", remove=False)
              
-             std_fiberid = delKey(Camera, "STD_FIBERID")
+             std_fiberid = delKey(Camera, "STD_FIBERID", remove=False)
              
              if star_fiberid is None:
                  star_fiberid = std_fiberid
