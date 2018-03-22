@@ -454,7 +454,7 @@ def plot_sky_continuum(qa_dict,outfile):
                  'SKYCONT_FIBER': [357.23814787655738,   358.14982775192709,   359.34380640332847,
                                     361.55526717275529, 360.46690568746544,   360.49561926858325,   
                                     359.08761654248656,   361.26910267767016],
-                 'SKYFIBERID': [4, 19, 30, 38, 54, 55, 57, 62]}}
+                 'SKY_FIBERID': [4, 19, 30, 38, 54, 55, 57, 62]}}
 
     Args:
         qa_dict: dictionary from sky continuum QA
@@ -466,7 +466,7 @@ def plot_sky_continuum(qa_dict,outfile):
     skycont_fiber=np.array(qa_dict["METRICS"]["SKYCONT_FIBER"])
     skycont=qa_dict["METRICS"]["SKYCONT"]
     index=np.arange(skycont_fiber.shape[0])
-    fiberid=qa_dict["METRICS"]["SKYFIBERID"]
+    fiberid=qa_dict["METRICS"]["SKY_FIBERID"]
     fig=plt.figure()
     plt.suptitle("Mean Sky Continuum after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     

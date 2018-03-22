@@ -1148,7 +1148,7 @@ class Sky_Continuum(MonitoringAlg):
 
 
         skycont_err = 'NORMAL'
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STATUS":skycont_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SKY_FIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STATUS":skycont_err}
 
         if qlf:
             qlf_post(retval)    
