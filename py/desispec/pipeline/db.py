@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function
 import os
 
 import re
+from collections import OrderedDict
 
 from contextlib import contextmanager
 
@@ -368,6 +369,26 @@ class DataBase:
             states = { x[0] : task_int_to_state[x[1]] for x in st }
         return states
 
+
+    def count_task_states(self, tasktype):
+        """Return a dictionary of how many tasks are in each state
+
+        Args:
+            tasktype (str): the type of these tasks.
+
+        Returns:
+            dict: keyed by state, values are number of tasks in that state0
+        """
+        state_count = OrderedDict()
+        for state in task_states:
+            state_count[state] = 0
+
+        with self.cursor() as cur:
+            cur.execute( 'select name, state from {}'.format(tasktype))
+            for name, intstate in cur.fetchall():
+                state_count[task_int_to_state[intstate]] += 1
+        
+        return state_count
 
     def get_states(self, tasks):
         """Efficiently get the state of many tasks at once.
