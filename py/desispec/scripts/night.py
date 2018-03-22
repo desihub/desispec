@@ -160,21 +160,24 @@ def main():
     if status != 0:
         return status
 
+    states = "waiting,ready"
+
     chaincom = ["desi_pipe", "chain", "--night", "{}".format(args.night)]
+    chaincom.extend(["--states", states])
 
     if stage == "start":
-        ttstr = ",".join(["pix", "psf", "psfnight", "traceshift",
+        ttstr = ",".join(["preproc", "psf", "psfnight", "traceshift",
             "extract", "fiberflat", "fiberflatnight"])
         chaincom.extend(["--tasktypes", ttstr])
 
     elif stage == "update":
-        ttstr = ",".join(["pix", "psf", "psfnight", "traceshift",
+        ttstr = ",".join(["preproc", "psf", "psfnight", "traceshift",
             "extract", "fiberflat", "fiberflatnight", "sky", "starfit",
             "fluxcalib", "cframe"])
         chaincom.extend(["--tasktypes", ttstr])
 
     elif stage == "end":
-        ttstr = ",".join(["pix", "psf", "psfnight", "traceshift",
+        ttstr = ",".join(["preproc", "psf", "psfnight", "traceshift",
             "extract", "fiberflat", "fiberflatnight", "sky", "starfit",
             "fluxcalib", "cframe", "spectra", "redshift"])
         chaincom.extend(["--tasktypes", ttstr])

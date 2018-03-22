@@ -751,6 +751,10 @@ Where supported commands are:
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
             "matching these patterns will be generated.")
 
+        parser.add_argument("--states", required=False, default=None,
+            help="comma separated list of states (see defs.py).  Only tasks "
+            "in these states will be scheduled.")
+
         parser = self._parse_run_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
@@ -763,7 +767,15 @@ Where supported commands are:
 
         # FIXME:  we should support task selection by exposure ID as well.
 
-        states = ['ready']
+        states = None
+        if args.states is None:
+            states = pipe.task_states
+        else:
+            states = args.states.split(",")
+            for s in states:
+                if s not in pipe.task_states:
+                    print("Task state '{}' is not valid".format(s))
+                    sys.exit(1)
 
         ttypes = args.tasktypes.split(',')
         tasktypes = list()

@@ -179,10 +179,14 @@ def update_prod(nightstr=None, hpxnside=64):
     cal2d = os.path.join(proddir, "calibnight")
     if not os.path.isdir(cal2d):
         os.makedirs(cal2d)
-    
+
     expdir = os.path.join(proddir, "exposures")
     if not os.path.isdir(expdir):
         os.makedirs(expdir)
+
+    predir = os.path.join(proddir, "preproc")
+    if not os.path.isdir(predir):
+        os.makedirs(predir)
 
     specdir = os.path.join(proddir, "spectra-{}".format(hpxnside))
     if not os.path.isdir(specdir):
@@ -247,6 +251,9 @@ def update_prod(nightstr=None, hpxnside=64):
         nexpdir = os.path.join(expdir, nt)
         if not os.path.isdir(nexpdir):
             os.makedirs(nexpdir)
+        npredir = os.path.join(predir, nt)
+        if not os.path.isdir(npredir):
+            os.makedirs(npredir)
         ndir = os.path.join(cal2d, nt)
         if not os.path.isdir(ndir):
             os.makedirs(ndir)
@@ -267,6 +274,9 @@ def update_prod(nightstr=None, hpxnside=64):
             exps = [ int(x[0]) for x in cur.fetchall() ]
         for ex in exps:
             fdir = os.path.join(nexpdir, "{:08d}".format(ex))
+            if not os.path.isdir(fdir):
+                os.makedirs(fdir)
+            fdir = os.path.join(npredir, "{:08d}".format(ex))
             if not os.path.isdir(fdir):
                 os.makedirs(fdir)
 
