@@ -1408,7 +1408,7 @@ class Integrate_Spec(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "INTEG_AVG"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "MAGDIFF_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "DELTAMAG_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1416,9 +1416,9 @@ class Integrate_Spec(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
-        if "MAGDIFF_WARN_RANGE" in parms and "MAGDIFF_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["MAGDIFF_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["MAGDIFF_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        if "DELTAMAG_WARN_RANGE" in parms and "DELTAMAG_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["DELTAMAG_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["DELTAMAG_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
