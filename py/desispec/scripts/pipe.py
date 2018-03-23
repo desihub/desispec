@@ -22,8 +22,6 @@ from .. import io
 
 from .. import pipeline as pipe
 
-from desiutil.log import get_logger
-
 class clr:
     HEADER = "\033[95m"
     OKBLUE = "\033[94m"
@@ -636,11 +634,9 @@ Where supported commands are:
                 args.nersc_runtime, nodeprocs=ppn, openmp=False,
                 multiproc=False, db=db, shifterimg=args.nersc_shifter,
                 debug=args.debug)
-        
-        log = get_logger()
-        log.info("Wrote script(s):")
+
         for script in scripts :
-            log.info(script)
+            print("wrote",script)
         
         return scripts
 
@@ -690,6 +686,7 @@ Where supported commands are:
             for d in deps:
                 depstr = "{}:{}".format(depstr, d)
 
+        
         jobids = list()
         if slurm:
             # submit each job and collect the job IDs
@@ -697,7 +694,7 @@ Where supported commands are:
                 sout = sp.check_output("sbatch {} {}".format(depstr, scr),
                     shell=True, universal_newlines=True)
                 jid = sout.split()[3]
-                log.info("Submitted job {} {}".format(jid,scr))
+                print("Submitted job {} {}".format(jid,scr))
                 jobids.append(jid)
         else:
             # run the scripts one at a time
@@ -750,6 +747,7 @@ Where supported commands are:
         if args.depjobs is not None:
             deps = args.depjobs.split(',')
 
+             
         if slurm:
             dbpath = io.get_pipe_database()
             db = pipe.load_db(dbpath, mode="w")
@@ -790,9 +788,9 @@ Where supported commands are:
 
         args = parser.parse_args(sys.argv[2:])
 
-        log = get_logger()
-        log.info("chain of tasks= {}".format(args.tasktypes))
-
+        
+        print("Chain of tasks= {}".format(args.tasktypes))
+        
         machprops = None
         if args.nersc is not None:
             machprops = pipe.scriptgen.nersc_machine(args.nersc,
@@ -807,7 +805,7 @@ Where supported commands are:
             states = args.states.split(",")
             for s in states:
                 if s not in pipe.task_states:
-                    log.error("Task state '{}' is not valid".format(s))
+                    print("Task state '{}' is not valid".format(s))
                     sys.exit(1)
         ttypes = args.tasktypes.split(',')
         tasktypes = list()
@@ -817,10 +815,10 @@ Where supported commands are:
 
         if machprops is not None:
             if len(tasktypes) > machprops["submitlimit"]:
-                log.error("Queue {} on machine {} limited to {} jobs."\
+                print("Queue {} on machine {} limited to {} jobs."\
                     .format(args.nersc_queue, args.nersc,
                     machprops["submitlimit"]))
-                log.error("Use a different queue or shorter chains of tasks.")
+                print("Use a different queue or shorter chains of tasks.")
                 sys.exit(1)
 
         slurm = False
@@ -833,7 +831,10 @@ Where supported commands are:
         allnights = io.get_nights(strip_path=True)
         nights = pipe.prod.select_nights(allnights, args.nights)
 
-        deps = args.depjobs
+        deps = None
+        if args.depjobs is not None:
+            deps = args.depjobs.split(',')
+
         for tt in tasktypes:
             # Get the tasks
             tasks = self._get_tasks(db, tt, states, nights)
