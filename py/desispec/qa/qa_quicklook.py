@@ -1767,7 +1767,7 @@ class Calculate_SNR(MonitoringAlg):
             topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
             fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
         #qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
-        qadict,badfibs = qalib.SNRFit(frame,night,camera,expid,objlist,param,fidboundary=fidboundary)
+        qadict,badfibs,fitsnr = qalib.SNRFit(frame,night,camera,expid,objlist,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
 
@@ -1794,7 +1794,7 @@ class Calculate_SNR(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            plot.plot_SNR(retval,qafig,objlist,badfibs,sigmacut)
+            plot.plot_SNR(retval,qafig,objlist,badfibs,fitsnr,sigmacut)
             log.debug("Output QA fig {}".format(qafig))
 
         return retval

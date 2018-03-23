@@ -620,7 +620,7 @@ def plot_residuals(qa_dict,outfile):
     #plt.tight_layout()
     fig.savefig(outfile)
     
-def plot_SNR(qa_dict,outfile,objlist,badfibs,sigmacut):
+def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,sigmacut):
     """
     Plot SNR
 
@@ -727,27 +727,22 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,sigmacut):
         objtype=list(objlist)[i]
         objid=np.where(np.array(list(objlist))==objtype)[0][0]
         obj_mag=mags[objid]
-#        obj_flux=10**(-0.4*(np.array(obj_mag)+48.6))
         obj_snr=snrs[objid]
+        plot_mag=sorted(obj_mag)
+        plot_fit=np.log(np.array(fitsnr[objid])**2)
         logsnr2=np.log(np.array(obj_snr)**2)
         fitval=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
 
         ax.set_ylabel('Log(Median S/N**2)',fontsize=8)
         ax.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
         ax.set_title('{}'.format(objtype), fontsize=8)
-#        plot_mag=np.arange(np.min(obj_mag),np.max(obj_mag),0.1)
-#        plot_fit=10**(obj_fit_values[0]+obj_fit_values[1]*plot_mag+obj_fit_values[2]*plot_mag**2)
-#        plot_flux=10**(-0.4*(plot_mag+48.6))
-#        plot_fit=(fitval[0]*plot_flux)/np.sqrt(fitval[0]*plot_flux+2e-27)
         ax.set_xlim(np.min(obj_mag)-0.1,np.max(obj_mag)+0.1)
         ax.set_ylim(np.min(logsnr2)-0.1,np.max(logsnr2)+0.1)
         ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag)),int(np.max(obj_mag))+1,1.0))
         ax.tick_params(axis='x',labelsize=6,labelbottom=True)
         ax.tick_params(axis='y',labelsize=6,labelleft=True)
         ax.plot(obj_mag,logsnr2,'b.')
-#        ax.plot(plot_mag,plot_fit,'y')
-#        ax.plot(obj_flux,obj_snr,'b.')
-#        ax.plot(plot_flux,plot_fit,'y')
+        ax.plot(plot_mag,plot_fit,'y')
     
     plt.tight_layout()
     fig.savefig(outfile)
