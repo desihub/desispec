@@ -22,6 +22,7 @@ from .. import io
 
 from .. import pipeline as pipe
 
+from desiutil.log import get_logger
 
 class clr:
     HEADER = "\033[95m"
@@ -635,7 +636,12 @@ Where supported commands are:
                 args.nersc_runtime, nodeprocs=ppn, openmp=False,
                 multiproc=False, db=db, shifterimg=args.nersc_shifter,
                 debug=args.debug)
-
+        
+        log = get_logger()
+        log.info("Wrote script(s):")
+        for script in scripts :
+            log.info(script)
+        
         return scripts
 
 
@@ -691,6 +697,7 @@ Where supported commands are:
                 sout = sp.check_output("sbatch {} {}".format(depstr, scr),
                     shell=True, universal_newlines=True)
                 jid = sout.split()[3]
+                log.info("Submitted job {} {}".format(jid,scr))
                 jobids.append(jid)
         else:
             # run the scripts one at a time
@@ -763,7 +770,7 @@ Where supported commands are:
             " by the --tasktypes option.",
             usage="desi_pipe chain [options] (use --help for details)")
 
-        parser.add_argument("--tasktypes", required=False, default=None,
+        parser.add_argument("--tasktypes", required=False, default=",".join(pipe.tasks.base.default_task_chain),
             help="comma separated list of slurm job IDs to specify as "
             "dependencies of this current job.")
 
@@ -783,6 +790,9 @@ Where supported commands are:
 
         args = parser.parse_args(sys.argv[2:])
 
+        log = get_logger()
+        log.info("chain of tasks= {}".format(args.tasktypes))
+
         machprops = None
         if args.nersc is not None:
             machprops = pipe.scriptgen.nersc_machine(args.nersc,
@@ -797,9 +807,8 @@ Where supported commands are:
             states = args.states.split(",")
             for s in states:
                 if s not in pipe.task_states:
-                    print("Task state '{}' is not valid".format(s))
+                    log.error("Task state '{}' is not valid".format(s))
                     sys.exit(1)
-
         ttypes = args.tasktypes.split(',')
         tasktypes = list()
         for tt in pipe.tasks.base.default_task_chain:
@@ -808,10 +817,10 @@ Where supported commands are:
 
         if machprops is not None:
             if len(tasktypes) > machprops["submitlimit"]:
-                print("Queue {} on machine {} limited to {} jobs."\
+                log.error("Queue {} on machine {} limited to {} jobs."\
                     .format(args.nersc_queue, args.nersc,
                     machprops["submitlimit"]))
-                print("Use a different queue or shorter chains of tasks.")
+                log.error("Use a different queue or shorter chains of tasks.")
                 sys.exit(1)
 
         slurm = False
