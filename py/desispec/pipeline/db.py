@@ -387,7 +387,7 @@ class DataBase:
             cur.execute( 'select name, state from {}'.format(tasktype))
             for name, intstate in cur.fetchall():
                 state_count[task_int_to_state[intstate]] += 1
-        
+
         return state_count
 
     def get_states(self, tasks):
@@ -539,8 +539,6 @@ class DataBase:
             night (str): The night to scan for updates.
 
         """
-
-
         tasks_in_db = None
         # Grab existing nightly tasks
         with self.cursor() as cur:
@@ -568,8 +566,8 @@ class DataBase:
     def cleanup(self, cleanfailed=False):
         """Reset states of tasks.
 
-        Any tasks that are marked as "running" will have their state
-        reset to "ready".  This can be called if a job dies before
+        Any tasks that are marked as "running" or "queued" will have their
+        state reset to "ready".  This can be called if a job dies before
         completing all tasks.
 
         """
@@ -580,13 +578,15 @@ class DataBase:
             for tt in task_types():
                 if cleanfailed:
                     cur.execute(\
-                        "select name from {} where state = {} or state = {}"\
+                        "select name from {} where state = {} or state = {} or state = {}"\
                         .format(tt, task_state_to_int["running"],
-                        task_state_to_int["fail"]))
+                        task_state_to_int["queued"],
+                        task_state_to_int["failed"]))
                 else:
                     cur.execute(\
-                        "select name from {} where state = {}"\
-                        .format(tt, task_state_to_int["running"]))
+                        "select name from {} where state = {} or state = {}"\
+                        .format(tt, task_state_to_int["running"],
+                        task_state_to_int["queued"]))
                 tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
 
         # For each task type, check status WITHOUT the DB, then set state.

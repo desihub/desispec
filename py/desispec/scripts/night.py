@@ -86,10 +86,6 @@ def parse(stage, options=None):
         default=0, help="The number of processes to use per node.  If not "
         "specified it uses a default value for each machine.")
 
-    parser.add_argument("--db-postgres-user", type=str, required=False,
-        default="desidev_ro", help="If using postgres, connect as this "
-        "user for read-only access")
-
     parser.add_argument("--debug", required=False, default=False,
         action="store_true", help="debugging messages in job logs")
 
@@ -160,32 +156,52 @@ def main():
     if status != 0:
         return status
 
+    # Perform a production update to get any new raw data
+
+    pipe.update_prod(nightstr=args.night)
+
+    # Call desi_pipe chain.
+    # FIXME: the functions in desi_pipe should be split off into functions
+    # that we can call here.
+
     states = "waiting,ready"
 
     chaincom = ["desi_pipe", "chain", "--night", "{}".format(args.night)]
     chaincom.extend(["--states", states])
 
+    ttlist = None
     if stage == "start":
-        ttstr = ",".join(["preproc", "psf", "psfnight", "traceshift",
-            "extract", "fiberflat", "fiberflatnight"])
+        ttlist = ["preproc", "psf", "psfnight", "traceshift",
+            "extract", "fiberflat", "fiberflatnight"]
+        ttstr = ",".join(ttlist)
         chaincom.extend(["--tasktypes", ttstr])
 
     elif stage == "update":
-        ttstr = ",".join(["preproc", "psf", "psfnight", "traceshift",
+        ttlist = ["preproc", "psf", "psfnight", "traceshift",
             "extract", "fiberflat", "fiberflatnight", "sky", "starfit",
-            "fluxcalib", "cframe"])
+            "fluxcalib", "cframe"]
+        ttstr = ",".join(ttlist)
         chaincom.extend(["--tasktypes", ttstr])
 
     elif stage == "end":
-        ttstr = ",".join(["preproc", "psf", "psfnight", "traceshift",
+        ttlist = ["preproc", "psf", "psfnight", "traceshift",
             "extract", "fiberflat", "fiberflatnight", "sky", "starfit",
-            "fluxcalib", "cframe", "spectra", "redshift"])
+            "fluxcalib", "cframe", "spectra", "redshift"]
+        ttstr = ",".join(ttlist)
         chaincom.extend(["--tasktypes", ttstr])
 
     else:
         return 2
 
     if args.nersc is not None:
+        machprops = pipe.scriptgen.nersc_machine(args.nersc, args.nersc_queue)
+        if len(ttlist) > machprops["submitlimit"]:
+            print("Queue {} on machine {} limited to {} jobs."\
+                .format(args.nersc_queue, args.nersc,
+                machprops["submitlimit"]))
+            print("Use a different queue or shorter chains of tasks.")
+            return 1
+
         chaincom.extend(["--nersc", args.nersc])
         chaincom.extend(["--nersc_queue", args.nersc_queue])
         chaincom.extend(["--nersc_runtime", "{}".format(args.nersc_runtime)])
@@ -199,9 +215,6 @@ def main():
             chaincom.extend(["--mpi_procs", "{}".format(args.mpi_procs)])
         if args.mpi_run != "":
             chaincom.extend(["--mpi_run", args.mpi_run])
-
-    if args.db_postgres_user != "desidev_ro":
-        chaincom.extend(["--db-postgres-user", args.db_postgres_user])
 
     if args.debug:
         chaincom.extend(["--debug"])

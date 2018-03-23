@@ -515,13 +515,6 @@ Where supported commands are:
             "production 'scripts' directory.  Default puts task directory "
             "in the main scripts directory.")
 
-        parser.add_argument("--nodb", required=False, default=False,
-            action="store_true", help="Do not use the production database.")
-
-        parser.add_argument("--db-postgres-user", type=str, required=False,
-            default="desidev_ro", help="If using postgres, connect as this "
-            "user for read-only access")
-
         parser.add_argument("--debug", required=False, default=False,
             action="store_true", help="debugging messages in job logs")
 
@@ -544,6 +537,13 @@ Where supported commands are:
             "STDIN)")
 
         parser = self._parse_run_opts(parser)
+
+        parser.add_argument("--nodb", required=False, default=False,
+            action="store_true", help="Do not use the production database.")
+
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
 
         args = parser.parse_args(sys.argv[2:])
 
@@ -581,7 +581,7 @@ Where supported commands are:
         return
 
 
-    def _gen_scripts(self, tasktype, tasks, args):
+    def _gen_scripts(self, tasktype, tasks, nodb, args):
 
         proddir = os.path.abspath(io.specprod_root())
 
@@ -607,7 +607,7 @@ Where supported commands are:
         outlog = os.path.join(outdir, mstr)
 
         (db, opts) = pipe.prod.load_prod("r")
-        if args.nodb:
+        if nodb:
             db = None
 
         ppn = args.procs_per_node
@@ -657,11 +657,18 @@ Where supported commands are:
 
         parser = self._parse_run_opts(parser)
 
+        parser.add_argument("--nodb", required=False, default=False,
+            action="store_true", help="Do not use the production database.")
+
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
         args = parser.parse_args(sys.argv[2:])
 
         tasks = pipe.prod.task_read(args.taskfile)
 
-        scripts = self._gen_scripts(args.tasktype, tasks, args)
+        scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
 
         print(",".join(scripts))
 
@@ -716,11 +723,18 @@ Where supported commands are:
 
         parser = self._parse_run_opts(parser)
 
+        parser.add_argument("--nodb", required=False, default=False,
+            action="store_true", help="Do not use the production database.")
+
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
         args = parser.parse_args(sys.argv[2:])
 
         tasks = pipe.prod.task_read(args.taskfile)
 
-        scripts = self._gen_scripts(args.tasktype, tasks, args)
+        scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
 
         deps = None
         slurm = False
@@ -728,6 +742,12 @@ Where supported commands are:
             slurm = True
         if args.depjobs is not None:
             deps = args.depjobs.split(',')
+
+        if slurm:
+            dbpath = io.get_pipe_database()
+            db = pipe.load_db(dbpath, mode="w")
+            st = [ (x, "queued") for x in tasks ]
+            db.set_states(st)
 
         jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
 
@@ -755,15 +775,18 @@ Where supported commands are:
             help="comma separated list of states (see defs.py).  Only tasks "
             "in these states will be scheduled.")
 
+        parser.add_argument("--depjobs", required=False, default=None,
+            help="comma separated list of slurm job IDs to specify as "
+            "dependencies of this current job.")
+
         parser = self._parse_run_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
 
-        dbpath = io.get_pipe_database()
-        db = pipe.load_db(dbpath, mode="r", user=args.db_postgres_user)
-
-        allnights = io.get_nights(strip_path=True)
-        nights = pipe.prod.select_nights(allnights, args.nights)
+        machprops = None
+        if args.nersc is not None:
+            machprops = pipe.scriptgen.nersc_machine(args.nersc,
+                args.nersc_queue)
 
         # FIXME:  we should support task selection by exposure ID as well.
 
@@ -783,16 +806,39 @@ Where supported commands are:
             if tt in ttypes:
                 tasktypes.append(tt)
 
+        if machprops is not None:
+            if len(tasktypes) > machprops["submitlimit"]:
+                print("Queue {} on machine {} limited to {} jobs."\
+                    .format(args.nersc_queue, args.nersc,
+                    machprops["submitlimit"]))
+                print("Use a different queue or shorter chains of tasks.")
+                sys.exit(1)
+
         slurm = False
         if args.nersc is not None:
             slurm = True
 
-        deps = None
+        dbpath = io.get_pipe_database()
+        db = pipe.load_db(dbpath, mode="w")
+
+        allnights = io.get_nights(strip_path=True)
+        nights = pipe.prod.select_nights(allnights, args.nights)
+
+        deps = args.depjobs
         for tt in tasktypes:
+            # Get the tasks
             tasks = self._get_tasks(db, tt, states, nights)
             if len(tasks) == 0:
                 continue
-            scripts = self._gen_scripts(tt, tasks, args)
+            # Generate the scripts
+            scripts = self._gen_scripts(tt, tasks, False, args)
+
+            # Set task state to "queued"
+            if slurm:
+                st = [ (x, "queued") for x in tasks ]
+                db.set_states(st)
+
+            # Run the jobs
             jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
             if len(jobids) > 0:
                 deps = jobids
@@ -995,6 +1041,13 @@ Where supported commands are:
         parser.add_argument("--refresh", required=False, type=int, default=10,
             help="The number of seconds between DB queries")
 
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
+        parser.add_argument("--once", required=False, action="store_true",
+            default=False, help="Print info once without clearing the terminal")
+
         args = parser.parse_args(sys.argv[2:])
 
         import signal
@@ -1006,7 +1059,7 @@ Where supported commands are:
         signal.signal(signal.SIGINT, signal_handler)
 
         dbpath = io.get_pipe_database()
-        db = pipe.load_db(dbpath, mode="r")
+        db = pipe.load_db(dbpath, mode="r", user=args.db_postgres_user)
 
         tasktypes = pipe.tasks.base.default_task_chain
 
@@ -1014,12 +1067,12 @@ Where supported commands are:
         for s in pipe.task_states:
             header_state = "{} {:8s}|".format(header_state, s)
 
-        sep = "------------------------------------------------------------------------------"
+        sep = "--------------------------+---------+---------+---------+---------+---------+---------+"
 
         header = "{}\n{:26s}|{}\n{}".format(sep, "         Task Type        ",
             header_state, sep)
 
-        while True:
+        def print_status(clear=False):
             taskstates = {}
             with db.cursor() as cur:
                 for t in tasktypes:
@@ -1030,8 +1083,8 @@ Where supported commands are:
                     for s in pipe.task_states:
                         taskstates[t][s] = \
                             np.sum(st == pipe.task_state_to_int[s])
-
-            print("\033c")
+            if clear:
+                print("\033c")
             print(header)
             for t in tasktypes:
                 line = "{:26s}|".format(t)
@@ -1039,9 +1092,16 @@ Where supported commands are:
                     line = "{}{:9d}|".format(line, taskstates[t][s])
                 print(line)
             print(sep)
-            print(" (Use Ctrl-C to Quit) ")
+            if clear:
+                print(" (Use Ctrl-C to Quit) ")
             sys.stdout.flush()
-            time.sleep(args.refresh)
+
+        if args.once:
+            print_status(clear=False)
+        else:
+            while True:
+                print_status(clear=True)
+                time.sleep(args.refresh)
 
         return
 
