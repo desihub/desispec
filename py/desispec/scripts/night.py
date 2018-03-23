@@ -193,16 +193,39 @@ def main():
     else:
         return 2
 
+    machine = None
+
     if args.nersc is not None:
-        machprops = pipe.scriptgen.nersc_machine(args.nersc, args.nersc_queue)
+        if args.nersc == "shell":
+            # override to use plain bash scripts
+            machine = "shell"
+        else:
+            machine = args.nersc
+    else:
+        if os.getenv("NERSC_HOST") == "edison":
+            machine = "edison"
+        elif os.getenv("NERSC_HOST") == "cori":
+            machine = "cori"
+        else:
+            print("NERSC_HOST environment variable not set, and --nersc "
+                "option not given")
+            return 1
+
+
+    if machine == "shell":
+        if args.mpi_procs > 1:
+            chaincom.extend(["--mpi_procs", "{}".format(args.mpi_procs)])
+        if args.mpi_run != "":
+            chaincom.extend(["--mpi_run", args.mpi_run])
+    else:
+        machprops = pipe.scriptgen.nersc_machine(machine, args.nersc_queue)
         if len(ttlist) > machprops["submitlimit"]:
             print("Queue {} on machine {} limited to {} jobs."\
-                .format(args.nersc_queue, args.nersc,
+                .format(args.nersc_queue, machine,
                 machprops["submitlimit"]))
             print("Use a different queue or shorter chains of tasks.")
             return 1
-
-        chaincom.extend(["--nersc", args.nersc])
+        chaincom.extend(["--nersc", machine])
         chaincom.extend(["--nersc_queue", args.nersc_queue])
         chaincom.extend(["--nersc_runtime", "{}".format(args.nersc_runtime)])
         if args.nersc_shifter is not None:
@@ -210,11 +233,6 @@ def main():
         if args.procs_per_node > 0:
             chaincom.extend(["--procs_per_node",
                 "{}".format(args.procs_per_node)])
-    else:
-        if args.mpi_procs > 1:
-            chaincom.extend(["--mpi_procs", "{}".format(args.mpi_procs)])
-        if args.mpi_run != "":
-            chaincom.extend(["--mpi_run", args.mpi_run])
 
     if args.debug:
         chaincom.extend(["--debug"])
