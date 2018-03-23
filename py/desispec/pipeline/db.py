@@ -589,10 +589,11 @@ class DataBase:
                         task_state_to_int["queued"]))
                 tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
 
-        # For each task type, check status WITHOUT the DB, then set state.
         for tt in task_types():
-            st = [ (x, "ready") for x in tasks_running[tt] ]
+            st = [ (x, "waiting") for x in tasks_running[tt] ]
             self.set_states_type(tt, st)
+
+        self.getready()
 
         return
 

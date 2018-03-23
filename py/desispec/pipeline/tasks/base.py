@@ -545,7 +545,7 @@ class BaseTask(object):
 
         if rank == 0:
             if failed > 0:
-                self.state_set(db, name, "fail")
+                self.state_set(db, name, "failed")
             else:
                 outputs = self.paths(name)
                 done = True
@@ -558,5 +558,5 @@ class BaseTask(object):
                     self.state_set(db, name, "done")
                     # post processing is now done by a single rank in run.run_task_list
                 else:
-                    self.state_set(db, name, "fail")
+                    self.state_set(db, name, "failed")
         return failed
