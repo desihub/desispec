@@ -108,10 +108,6 @@ def ql_main(args=None):
             f=open(args.save,"w")
             yaml.dump(configdict,f)
             
-            g=open('quicklook_output.json',"w")
-            json.dump(configdict,g,sort_keys=True,indent=4)
-            g.close()
-            
             log.info("Output saved for this configuration to {}".format(args.save))
             f.close()
         else:

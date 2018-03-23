@@ -272,7 +272,9 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
         try:
             hb.start("Running {}".format(step[0].name))
             oldinp=inp #-  copy for QAs that need to see earlier input
-            inp=pa(inp,**pargs)
+            
+            inp=pa(inp,**pargs) # this is where each pipleine step is run
+            
         except Exception as e:
             log.critical("Failed to run PA {} error was {}".format(step[0].name,e),exc_info=True)
             sys.exit("Failed to run PA {}".format(step[0].name))
@@ -330,8 +332,9 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
 # this will overwrite the file. above function returns same name for different QL executions
 # results will be erased.
         schemaMerger.writeToFile(destFile)
-        schemaMerger.writeTojsonFile(destFile)
         log.info("Wrote merged QA file {}".format(destFile))
+        schemaMerger.writeTojsonFile(destFile)
+        log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
     if isinstance(inp,tuple):
        return inp[0]
     else:
