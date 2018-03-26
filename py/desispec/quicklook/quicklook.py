@@ -472,8 +472,10 @@ def setup_pipeline(config):
     if config["Flavor"] == 'dark' or config["Flavor"] == 'bias':
         pass
     elif config["Flavor"] == 'arcs':
-        if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"])):
-            os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"]))
+        if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"],'{:08d}'.format(config["Expid"]))):
+            os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"],'{:08d}'.format(config["Expid"])))
+        if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'calibnight',config["Night"])):
+            os.mkdir(os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'calibnight',config["Night"])))
         pass
     elif config["Flavor"] == 'science' or config["Flavor"] == 'flat':
         #from specter.psf import load_psf
