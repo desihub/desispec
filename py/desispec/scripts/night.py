@@ -168,6 +168,7 @@ def main():
 
     chaincom = ["desi_pipe", "chain", "--night", "{}".format(args.night)]
     chaincom.extend(["--states", states])
+    chaincom.extend(["--nosubmitted"])
 
     ttlist = None
     if stage == "start":

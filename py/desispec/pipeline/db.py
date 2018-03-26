@@ -482,6 +482,104 @@ class DataBase:
         return
 
 
+    def get_submitted(self, tasks):
+        """Return the submitted flag for the list of tasks.
+
+        Args:
+            tasks (list): list of task names.
+
+        Returns:
+            (dict): the boolean submitted state of each task (True means that
+                the task has been submitted).
+
+        """
+        from .tasks.base import task_type
+        # First find the type of each task.
+        ttypes = dict()
+        for tsk in tasks:
+            tt = task_type(tsk)
+            if (tt == "spectra") or (tt == "redshift"):
+                raise RuntimeError("spectra and redshift tasks do not have submitted flag.")
+            ttypes[tsk] = tt
+
+        # Sort tasks into types
+        taskbytype = dict()
+        for t in task_types():
+            taskbytype[t] = list()
+        for tsk in tasks:
+            taskbytype[ttypes[tsk]].append(tsk)
+
+        # Process each type
+
+        submitted = dict()
+        for t, tlist in taskbytype.items():
+            if len(tlist) > 0:
+                namelist = ",".join([ "'{}'".format(x) for x in tlist ])
+                with self.cursor() as cur:
+                    cur.execute(\
+                        'select name, submitted from {} where name in ({})'.format(t, namelist))
+                    sb = cur.fetchall()
+                    submitted.update({ x[0] : x[1] for x in sb })
+        return submitted
+
+
+    def set_submitted_type(self, tasktype, tasks, unset=False):
+        """Flag a list of tasks of a single type as submitted.
+
+        Args:
+            tasktype (str): the type of these tasks.
+            tasks (list): list of task names.
+            unset (bool): if True, invert the behavior and unset the submitted
+                flag for these tasks.
+
+        Returns:
+            Nothing.
+
+        """
+        val = 1
+        if unset:
+            val = 0
+        with self.cursor() as cur:
+            for tsk in tasks:
+                cur.execute("update {} set submitted = {} where name = '{}'".format(tasktype, val, tsk))
+        return
+
+
+    def set_submitted(self, tasks, unset=False):
+        """Flag a list of tasks as submitted.
+
+        Args:
+            tasks (list): list of task names.
+            unset (bool): if True, invert the behavior and unset the submitted
+                flag for these tasks.
+
+        Returns:
+            Nothing.
+
+        """
+        from .tasks.base import task_type
+        # First find the type of each task.
+        ttypes = dict()
+        for tsk in tasks:
+            tt = task_type(tsk)
+            if (tt == "spectra") or (tt == "redshift"):
+                raise RuntimeError("spectra and redshift tasks do not have submitted flag.")
+            ttypes[tsk] = tt
+
+        # Sort tasks into types
+        taskbytype = dict()
+        for t in task_types():
+            taskbytype[t] = list()
+        for tsk in tasks:
+            taskbytype[ttypes[tsk]].append(tsk)
+
+        # Process each type
+        for t, tlist in taskbytype.items():
+            if len(tlist) > 0:
+                self.set_submitted_type(tlist, unset=unset)
+        return
+
+
     def update(self, night, nside):
         """Update DB based on raw data.
 
@@ -563,12 +661,16 @@ class DataBase:
         return
 
 
-    def cleanup(self, cleanfailed=False):
+    def cleanup(self, cleanfailed=False, cleansubmitted=False):
         """Reset states of tasks.
 
         Any tasks that are marked as "running" will have their
         state reset to "ready".  This can be called if a job dies before
         completing all tasks.
+
+        Args:
+            cleanfailed (bool): if True, also reset failed tasks to ready.
+            cleansubmitted (bool): if True, set submitted flag to False.
 
         """
         tasks_running = None
@@ -586,6 +688,9 @@ class DataBase:
                         "select name from {} where state = {}"\
                         .format(tt, task_state_to_int["running"]))
                 tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
+                if cleansubmitted:
+                    if (tt != "spectra") and (tt != "redshift"):
+                        cur.execute("update {} set submitted = 0".format(tt))
 
         for tt in task_types():
             st = [ (x, "waiting") for x in tasks_running[tt] ]

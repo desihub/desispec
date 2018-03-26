@@ -363,6 +363,9 @@ Where supported commands are:
             help="comma separated list of states (see defs.py).  Only tasks "
             "in these states will be returned.")
 
+        parser.add_argument("--nosubmitted", required=False, default=False,
+            action="store_true", help="Skip all tasks flagged as submitted")
+
         parser.add_argument("--taskfile", required=False, default=None,
             help="write tasks to this file (if not specified, write to STDOUT)")
 
@@ -389,6 +392,11 @@ Where supported commands are:
         nights = pipe.prod.select_nights(allnights, args.nights)
 
         tasks = self._get_tasks(db, args.tasktype, states, nights)
+
+        if args.nosubmitted:
+            if (args.tasktype != "spectra") and (args.tasktype != "redshift"):
+                sb = db.get_submitted(tasks)
+                tasks = [ x for x in tasks if not sb[x] ]
 
         pipe.prod.task_write(args.taskfile, tasks)
 
@@ -467,11 +475,14 @@ Where supported commands are:
         parser.add_argument("--failed", required=False, default=False,
             action="store_true", help="Also clear failed states")
 
+        parser.add_argument("--submitted", required=False, default=False,
+            action="store_true", help="Also clear submitted flag")
+
         args = parser.parse_args(sys.argv[2:])
 
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="w")
-        db.cleanup(cleanfailed=args.failed)
+        db.cleanup(cleanfailed=args.failed, cleansubmitted=args.submitted)
         return
 
 
@@ -635,9 +646,6 @@ Where supported commands are:
                 multiproc=False, db=db, shifterimg=args.nersc_shifter,
                 debug=args.debug)
 
-        for script in scripts :
-            print("wrote",script)
-
         return scripts
 
 
@@ -694,7 +702,6 @@ Where supported commands are:
                 sout = sp.check_output("sbatch {} {}".format(depstr, scr),
                     shell=True, universal_newlines=True)
                 jid = sout.split()[3]
-                print("Submitted job {} {}".format(jid,scr))
                 jobids.append(jid)
         else:
             # run the scripts one at a time
@@ -773,6 +780,9 @@ Where supported commands are:
             help="comma separated list of states (see defs.py).  Only tasks "
             "in these states will be scheduled.")
 
+        parser.add_argument("--nosubmitted", required=False, default=False,
+            action="store_true", help="Skip all tasks flagged as submitted")
+
         parser.add_argument("--depjobs", required=False, default=None,
             help="comma separated list of slurm job IDs to specify as "
             "dependencies of this current job.")
@@ -780,9 +790,6 @@ Where supported commands are:
         parser = self._parse_run_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
-
-
-        print("Chain of tasks= {}".format(args.tasktypes))
 
         machprops = None
         if args.nersc is not None:
@@ -829,14 +836,26 @@ Where supported commands are:
             deps = args.depjobs.split(',')
 
         for tt in tasktypes:
-            # Get the tasks
+            # Get the tasks.  We select by state and submitted status.
             tasks = self._get_tasks(db, tt, states, nights)
             if len(tasks) == 0:
                 continue
+
+            if args.nosubmitted:
+                if (tt != "spectra") and (tt != "redshift"):
+                    sb = db.get_submitted(tasks)
+                    tasks = [ x for x in tasks if not sb[x] ]
+                if len(tasks) == 0:
+                    continue
+
             # Generate the scripts
             scripts = self._gen_scripts(tt, tasks, False, args)
 
             # Run the jobs
+            if slurm:
+                if (tt != "spectra") and (tt != "redshift"):
+                    db.set_submitted_type(tt, tasks)
+
             jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
             if len(jobids) > 0:
                 deps = jobids
@@ -1064,14 +1083,16 @@ Where supported commands are:
         header_state = ""
         for s in pipe.task_states:
             header_state = "{} {:8s}|".format(header_state, s)
+        header_state = "{} {:8s}|".format(header_state, "submit")
 
-        sep = "--------------------------+---------+---------+---------+---------+---------+"
+        sep = "----------------+---------+---------+---------+---------+---------+---------+"
 
-        header = "{}\n{:26s}|{}\n{}".format(sep, "         Task Type        ",
+        header = "{}\n{:16s}|{}\n{}".format(sep, "   Task Type",
             header_state, sep)
 
         def print_status(clear=False):
             taskstates = {}
+            tasksub = {}
             with db.cursor() as cur:
                 for t in tasktypes:
                     taskstates[t] = {}
@@ -1081,13 +1102,22 @@ Where supported commands are:
                     for s in pipe.task_states:
                         taskstates[t][s] = \
                             np.sum(st == pipe.task_state_to_int[s])
+                    if (t != "spectra") and (t != "redshift"):
+                        cmd = "select submitted from {}".format(t)
+                        cur.execute(cmd)
+                        isub = [ int(x[0]) for x in cur.fetchall() ]
+                        tasksub[t] = np.sum(isub)
             if clear:
                 print("\033c")
             print(header)
             for t in tasktypes:
-                line = "{:26s}|".format(t)
+                line = "{:16s}|".format(t)
                 for s in pipe.task_states:
                     line = "{}{:9d}|".format(line, taskstates[t][s])
+                if t in tasksub:
+                    line = "{}{:9d}|".format(line, tasksub[t])
+                else:
+                    line = "{}{:9s}|".format(line, "       NA")
                 print(line)
             print(sep)
             if clear:
