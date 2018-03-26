@@ -57,12 +57,12 @@ def qlf_post(qadict):
     else:   
         log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
-def get_image(filetype,night,expid,camera,rawdir):
+def get_image(filetype,night,expid,camera,specdir):
     '''
     Make image object from file if in development mode
     '''
     #- Find correct file for QA
-    imagefile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=rawdir)
+    imagefile = findfile(filetype,int(night),int(expid),camera,specprod_dir=specdir)
 
     #- Create necessary input for desispec.image
     image = fits.open(imagefile)
@@ -322,7 +322,7 @@ class Get_RMS(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            image = get_image('pix',night,expid,camera,kwargs["rawdir"])
+            image = get_image('preproc',night,expid,camera,kwargs["specdir"])
         else:
             image=args[0]
 
@@ -462,7 +462,7 @@ class Calc_XWSigma(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            image = get_image('pix',night,expid,camera,kwargs["rawdir"])
+            image = get_image('preproc',night,expid,camera,kwargs["specdir"])
         else:
             image=args[0]
 
@@ -766,7 +766,7 @@ class Count_Pixels(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            image = get_image('pix',night,expid,camera,kwargs["rawdir"])
+            image = get_image('preproc',night,expid,camera,kwargs["specdir"])
         else:
             image=args[0]
 
