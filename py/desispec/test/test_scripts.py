@@ -76,45 +76,20 @@ class TestScripts(unittest.TestCase):
         self.assertEqual(options.night, '20170317')
         self.assertEqual(options.nightStatus, 'start')
 
+
     def test_night(self):
         """Test desispec.scripts.night.
         """
-        from ..scripts.night import validate_inputs, parse_night
+        from ..scripts.night import parse
         #
         # Test argument parser.
         #
-        with self.assertRaises(KeyError):
-            options = parse_night('foo')
-        options = parse_night('start', '20170317')
-        self.assertEqual(options.stage, 'start')
-        self.assertEqual(options.night, '20170317')
-        #
-        # Test validator.
-        #
-        class DummyOptions(object): pass
-        options = DummyOptions()
-        self.dummy_environment({'DESI_SPECTRO_DATA': 'data',
-                                'DESI_SPECTRO_REDUX': 'foo',
-                                'SPECPROD': 'bar'})
-        status = validate_inputs(options)
-        self.assertEqual(status, 1)
-        statuses = {'foobar': 2, '20170317': 0, '18580101': 3}
-        for n in statuses:
-            options.night = n
-            status = validate_inputs(options)
-            self.assertEqual(status, statuses[n])
-        self.clear_environment()
-        options.night = '20170317'
+        args, status = parse('start', options=['--night', 'foo'])
+        self.assertEqual(status, 3)
 
-        #- Test that a missing environment variable causes a validation failure
-        orig_DSR = os.getenv('DESI_SPECTRO_REDUX')
-        if 'DESI_SPECTRO_REDUX' in os.environ:
-            del os.environ['DESI_SPECTRO_REDUX']
+        args, status = parse('start', options=['--night', '20170317'])
+        self.assertEqual(args.night, '20170317')
 
-        status = validate_inputs(options)
-        self.assertEqual(status, 4)
-        if orig_DSR is not None:
-            os.environ['DESI_SPECTRO_REDUX'] = orig_DSR
 
 
 def test_suite():

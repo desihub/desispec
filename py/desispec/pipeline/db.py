@@ -74,10 +74,10 @@ def all_tasks(night, nside):
 
     for ex in sorted(expid):
 
-        
+
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
-        
+
         log.info("read {}".format(fibermap))
 
         #fmdata = io.read_fibermap(fibermap)
@@ -93,16 +93,16 @@ def all_tasks(night, nside):
         fmpix = dict()
         if (flavor != "arc") and (flavor != "flat"):
 
-            
-            
+
+
             # This will be used to track which healpix pixels are
             # touched by fibers from each spectrograph.
             ra = np.array(fmdata["RA_TARGET"], dtype=np.float64)
             dec = np.array(fmdata["DEC_TARGET"], dtype=np.float64)
-            
+
             # rm NaN (possible depending on versions of fiberassign)
             valid_coordinates  = (np.isnan(ra)==False)&(np.isnan(dec)==False)
-            
+
             for spectro in np.unique( fmdata["SPECTROID"] ) :
                 ii=np.where(fmdata["SPECTROID"][valid_coordinates]==spectro)[0]
                 if ii.size == 0 : continue
@@ -201,10 +201,10 @@ def all_tasks(night, nside):
                     props["spec"] = spec
                     props["expid"] = int(ex)
                     props["state"] = "waiting" # see defs.task_states
-                    
+
                     # Add traceshift
                     full["traceshift"].append(props)
-                    
+
                     # Add extractions
                     full["extract"].append(props)
 
@@ -298,7 +298,7 @@ def check_tasks(tasklist, db=None, inputs=None):
 
             # Check dependencies
             deps = task_classes[tasktype].deps(tsk, db=db, inputs=inputs)
-            
+
             if len(deps)==0 :
                 # do not set state to ready of tasks with 0 dependencies
                 ready = False
@@ -387,7 +387,7 @@ class DataBase:
             cur.execute( 'select name, state from {}'.format(tasktype))
             for name, intstate in cur.fetchall():
                 state_count[task_int_to_state[intstate]] += 1
-        
+
         return state_count
 
     def get_states(self, tasks):
@@ -435,9 +435,9 @@ class DataBase:
             Nothing.
 
         """
-        
+
         from .tasks.base import task_classes
-        
+
         log = get_logger()
         log.debug("opening db")
 
@@ -479,6 +479,104 @@ class DataBase:
         for t, tlist in taskbytype.items():
             if len(tlist) > 0:
                 self.set_states_type(t, tlist)
+        return
+
+
+    def get_submitted(self, tasks):
+        """Return the submitted flag for the list of tasks.
+
+        Args:
+            tasks (list): list of task names.
+
+        Returns:
+            (dict): the boolean submitted state of each task (True means that
+                the task has been submitted).
+
+        """
+        from .tasks.base import task_type
+        # First find the type of each task.
+        ttypes = dict()
+        for tsk in tasks:
+            tt = task_type(tsk)
+            if (tt == "spectra") or (tt == "redshift"):
+                raise RuntimeError("spectra and redshift tasks do not have submitted flag.")
+            ttypes[tsk] = tt
+
+        # Sort tasks into types
+        taskbytype = dict()
+        for t in task_types():
+            taskbytype[t] = list()
+        for tsk in tasks:
+            taskbytype[ttypes[tsk]].append(tsk)
+
+        # Process each type
+
+        submitted = dict()
+        for t, tlist in taskbytype.items():
+            if len(tlist) > 0:
+                namelist = ",".join([ "'{}'".format(x) for x in tlist ])
+                with self.cursor() as cur:
+                    cur.execute(\
+                        'select name, submitted from {} where name in ({})'.format(t, namelist))
+                    sb = cur.fetchall()
+                    submitted.update({ x[0] : x[1] for x in sb })
+        return submitted
+
+
+    def set_submitted_type(self, tasktype, tasks, unset=False):
+        """Flag a list of tasks of a single type as submitted.
+
+        Args:
+            tasktype (str): the type of these tasks.
+            tasks (list): list of task names.
+            unset (bool): if True, invert the behavior and unset the submitted
+                flag for these tasks.
+
+        Returns:
+            Nothing.
+
+        """
+        val = 1
+        if unset:
+            val = 0
+        with self.cursor() as cur:
+            for tsk in tasks:
+                cur.execute("update {} set submitted = {} where name = '{}'".format(tasktype, val, tsk))
+        return
+
+
+    def set_submitted(self, tasks, unset=False):
+        """Flag a list of tasks as submitted.
+
+        Args:
+            tasks (list): list of task names.
+            unset (bool): if True, invert the behavior and unset the submitted
+                flag for these tasks.
+
+        Returns:
+            Nothing.
+
+        """
+        from .tasks.base import task_type
+        # First find the type of each task.
+        ttypes = dict()
+        for tsk in tasks:
+            tt = task_type(tsk)
+            if (tt == "spectra") or (tt == "redshift"):
+                raise RuntimeError("spectra and redshift tasks do not have submitted flag.")
+            ttypes[tsk] = tt
+
+        # Sort tasks into types
+        taskbytype = dict()
+        for t in task_types():
+            taskbytype[t] = list()
+        for tsk in tasks:
+            taskbytype[ttypes[tsk]].append(tsk)
+
+        # Process each type
+        for t, tlist in taskbytype.items():
+            if len(tlist) > 0:
+                self.set_submitted_type(tlist, unset=unset)
         return
 
 
@@ -539,8 +637,6 @@ class DataBase:
             night (str): The night to scan for updates.
 
         """
-        
-        
         tasks_in_db = None
         # Grab existing nightly tasks
         with self.cursor() as cur:
@@ -557,7 +653,7 @@ class DataBase:
         for tt in tasks_in_db.keys() :
             if (tt == "spectra") or (tt == "redshift"):
                 continue
-            
+
             tstates = check_tasks(tasks_in_db[tt], db=None)
             st = [ (x, tstates[x]) for x in tasks_in_db[tt] ]
             self.set_states_type(tt, st)
@@ -565,12 +661,16 @@ class DataBase:
         return
 
 
-    def cleanup(self, cleanfailed=False):
+    def cleanup(self, cleanfailed=False, cleansubmitted=False):
         """Reset states of tasks.
 
-        Any tasks that are marked as "running" will have their state
-        reset to "ready".  This can be called if a job dies before
+        Any tasks that are marked as "running" will have their
+        state reset to "ready".  This can be called if a job dies before
         completing all tasks.
+
+        Args:
+            cleanfailed (bool): if True, also reset failed tasks to ready.
+            cleansubmitted (bool): if True, set submitted flag to False.
 
         """
         tasks_running = None
@@ -582,17 +682,21 @@ class DataBase:
                     cur.execute(\
                         "select name from {} where state = {} or state = {}"\
                         .format(tt, task_state_to_int["running"],
-                        task_state_to_int["fail"]))
+                        task_state_to_int["failed"]))
                 else:
                     cur.execute(\
                         "select name from {} where state = {}"\
                         .format(tt, task_state_to_int["running"]))
                 tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
+                if cleansubmitted:
+                    if (tt != "spectra") and (tt != "redshift"):
+                        cur.execute("update {} set submitted = 0".format(tt))
 
-        # For each task type, check status WITHOUT the DB, then set state.
         for tt in task_types():
-            st = [ (x, "ready") for x in tasks_running[tt] ]
+            st = [ (x, "waiting") for x in tasks_running[tt] ]
             self.set_states_type(tt, st)
+
+        self.getready()
 
         return
 
@@ -740,11 +844,10 @@ class DataBaseSqlite(DataBase):
             self._conn.execute("pragma journal_mode={}"\
                 .format(self._journalmode))
             self._conn.execute("pragma synchronous={}".format(self._syncmode))
-
-        # Other tuning options
-        self._conn.execute("pragma temp_store=memory")
-        self._conn.execute("pragma page_size=4096")
-        self._conn.execute("pragma cache_size=4000")
+            # Other tuning options
+            self._conn.execute("pragma temp_store=memory")
+            self._conn.execute("pragma page_size=4096")
+            self._conn.execute("pragma cache_size=4000")
         return
 
 

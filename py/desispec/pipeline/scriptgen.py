@@ -48,10 +48,12 @@ def nersc_machine(name, queue):
         if queue == "debug":
             props["maxnodes"] = 512
             props["maxtime"] = 30
+            props["submitlimit"] = 5
             props["sbatch"].append("#SBATCH --partition=debug")
         elif queue == "regular":
             props["maxnodes"] = 2048
             props["maxtime"] = 12 * 60
+            props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --partition=regular")
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
@@ -64,10 +66,12 @@ def nersc_machine(name, queue):
         if queue == "debug":
             props["maxnodes"] = 64
             props["maxtime"] = 30
+            props["submitlimit"] = 5
             props["sbatch"].append("#SBATCH --partition=debug")
         elif queue == "regular":
             props["maxnodes"] = 512
             props["maxtime"] = 12 * 60
+            props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --partition=regular")
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
@@ -81,10 +85,12 @@ def nersc_machine(name, queue):
         if queue == "debug":
             props["maxnodes"] = 512
             props["maxtime"] = 30
+            props["submitlimit"] = 5
             props["sbatch"].append("#SBATCH --partition=debug")
         elif queue == "regular":
             props["maxnodes"] = 4096
             props["maxtime"] = 12 * 60
+            props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --partition=regular")
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))

@@ -142,7 +142,7 @@ class BaseTask(object):
             createstr = "create table {} (name text unique".format(self._type)
             for col in zip(self._cols, self._coltypes):
                 createstr = "{}, {} {}".format(createstr, col[0], col[1])
-            createstr = "{})".format(createstr)
+            createstr = "{}, submitted integer)".format(createstr)
             cur.execute(createstr)
         return
 
@@ -180,8 +180,8 @@ class BaseTask(object):
                     valstr += ", '{}'".format(props[k])
                 else:
                     valstr += ', {}'.format(props[k])
-        colstr += ')'
-        valstr += ')'
+        colstr += ', submitted)'
+        valstr += ', 0)'
 
         cmd = 'insert into {} {} values {}'.format(self._type, colstr, valstr)
         print(cmd, flush=True)
@@ -545,7 +545,7 @@ class BaseTask(object):
 
         if rank == 0:
             if failed > 0:
-                self.state_set(db, name, "fail")
+                self.state_set(db, name, "failed")
             else:
                 outputs = self.paths(name)
                 done = True
@@ -558,5 +558,5 @@ class BaseTask(object):
                     self.state_set(db, name, "done")
                     # post processing is now done by a single rank in run.run_task_list
                 else:
-                    self.state_set(db, name, "fail")
+                    self.state_set(db, name, "failed")
         return failed

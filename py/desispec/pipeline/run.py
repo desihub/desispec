@@ -171,7 +171,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
         else:
             # Actually check which things need to be run.
             states = check_tasks(tasklist, db=db)
-            runtasks = [ x for x in tasklist if (states[x] == "ready") ]
+            runtasks = [ x for x in tasklist if states[x] == "ready" ]
 
         log.debug("Number of {} tasks ready to run is {} (total is {})".format(tasktype,len(runtasks),len(tasklist)))
 

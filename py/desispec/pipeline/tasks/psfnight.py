@@ -138,7 +138,7 @@ class TaskPSFNight(BaseTask):
 
         # psfnight ready if all psf from the night have been processed, and at least one is done (failures are allowed)
         n_done   = np.sum(states==task_state_to_int["done"])
-        n_failed = np.sum(states==task_state_to_int["fail"])
+        n_failed = np.sum(states==task_state_to_int["failed"])
 
         ready    = (n_done > 0) & ( (n_done + n_failed) == states.size )
         if ready :

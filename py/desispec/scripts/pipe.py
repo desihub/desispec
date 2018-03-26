@@ -22,7 +22,6 @@ from .. import io
 
 from .. import pipeline as pipe
 
-
 class clr:
     HEADER = "\033[95m"
     OKBLUE = "\033[94m"
@@ -55,6 +54,7 @@ Where supported commands are:
    dryrun   Return the equivalent command line entrypoint for tasks.
    script   Generate a shell or slurm script.
    run      Generate a script and run it.
+   chain    Run all ready tasks for multiple pipeline steps.
    env      Print current production location.
    update   Update an existing production.
    getready Auto-Update of prod DB.
@@ -99,7 +99,7 @@ Where supported commands are:
 
         parser.add_argument("--prod", required=False, default=None,
             help="value to use for SPECPROD")
-        
+
         parser.add_argument("--force", action = "store_true",
             help="force DB creation even if prod exists on disk (useful for simulations")
 
@@ -200,7 +200,7 @@ Where supported commands are:
             print("or rerun with --force option.")
             sys.stdout.flush()
             sys.exit(1)
-            
+
         # Check basis template location
 
         basis = None
@@ -320,6 +320,31 @@ Where supported commands are:
         return
 
 
+    def _get_tasks(self, db, tasktype, states, nights):
+        ntlist = ",".join(nights)
+        tasks = list()
+        with db.cursor() as cur:
+
+            if tasktype == "spectra" or tasktype == "redshift":
+
+                cmd = "select pixel from healpix_frame where night in ({})".format(ntlist)
+                cur.execute(cmd)
+                pixels = np.unique([ x for (x,) in cur.fetchall() ]).tolist()
+                pixlist = ",".join([ str(p) for p in pixels])
+                cmd = "select name,state from {} where pixel in ({})".format(tasktype, pixlist)
+                cur.execute(cmd)
+                tasks = [ x for (x, y) in cur.fetchall() if \
+                          pipe.task_int_to_state[y] in states ]
+
+            else :
+                cmd = "select name, state from {} where night in ({})"\
+                    .format(tasktype, ntlist)
+                cur.execute(cmd)
+                tasks = [ x for (x, y) in cur.fetchall() if \
+                          pipe.task_int_to_state[y] in states ]
+        return tasks
+
+
     def tasks(self):
         availtypes = ",".join(pipe.db.task_types())
 
@@ -337,6 +362,9 @@ Where supported commands are:
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
             "in these states will be returned.")
+
+        parser.add_argument("--nosubmitted", required=False, default=False,
+            action="store_true", help="Skip all tasks flagged as submitted")
 
         parser.add_argument("--taskfile", required=False, default=None,
             help="write tasks to this file (if not specified, write to STDOUT)")
@@ -362,28 +390,13 @@ Where supported commands are:
 
         allnights = io.get_nights(strip_path=True)
         nights = pipe.prod.select_nights(allnights, args.nights)
-        ntlist = ",".join(nights)
 
-        tasks = list()
-        with db.cursor() as cur:
+        tasks = self._get_tasks(db, args.tasktype, states, nights)
 
-            if args.tasktype == "spectra" or args.tasktype == "redshift" :
-
-                cmd = "select pixel from healpix_frame where night in ({})".format(ntlist)
-                cur.execute(cmd)
-                pixels = np.unique([ x for (x,) in cur.fetchall() ]).tolist()
-                pixlist = ",".join([ str(p) for p in pixels])
-                cmd = "select name,state from {} where pixel in ({})".format( args.tasktype,pixlist)
-                cur.execute(cmd)
-                tasks = [ x for (x, y) in cur.fetchall() if \
-                          pipe.task_int_to_state[y] in states ]
-
-            else :
-                cmd = "select name, state from {} where night in ({})"\
-                    .format(args.tasktype, ntlist)
-                cur.execute(cmd)
-                tasks = [ x for (x, y) in cur.fetchall() if \
-                          pipe.task_int_to_state[y] in states ]
+        if args.nosubmitted:
+            if (args.tasktype != "spectra") and (args.tasktype != "redshift"):
+                sb = db.get_submitted(tasks)
+                tasks = [ x for x in tasks if not sb[x] ]
 
         pipe.prod.task_write(args.taskfile, tasks)
 
@@ -462,11 +475,14 @@ Where supported commands are:
         parser.add_argument("--failed", required=False, default=False,
             action="store_true", help="Also clear failed states")
 
+        parser.add_argument("--submitted", required=False, default=False,
+            action="store_true", help="Also clear submitted flag")
+
         args = parser.parse_args(sys.argv[2:])
 
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="w")
-        db.cleanup(cleanfailed=args.failed)
+        db.cleanup(cleanfailed=args.failed, cleansubmitted=args.submitted)
         return
 
 
@@ -477,15 +493,6 @@ Where supported commands are:
         "dryrun", "script", and "run" commands.
 
         """
-        availtypes = ",".join(pipe.db.task_types())
-
-        parser.add_argument("--tasktype", required=True, default=None,
-            help="task type ({})".format(availtypes))
-
-        parser.add_argument("--taskfile", required=False, default=None,
-            help="read tasks from this file (if not specified, read from "
-            "STDIN)")
-
         parser.add_argument("--nersc", required=False, default=None,
             help="write a script for this NERSC system (edison | cori-haswell "
             "| cori-knl)")
@@ -514,9 +521,32 @@ Where supported commands are:
             "specified it uses a default value for each machine.")
 
         parser.add_argument("--outdir", required=False, default=None,
-            help="Put scripts and logs in this directory relative to the "
-            "production 'scripts' directory.  Default creates a directory"
-            " with the task type and a date stamp.")
+            help="Put task scripts and logs in this directory relative to the "
+            "production 'scripts' directory.  Default puts task directory "
+            "in the main scripts directory.")
+
+        parser.add_argument("--debug", required=False, default=False,
+            action="store_true", help="debugging messages in job logs")
+
+        return parser
+
+
+    def dryrun(self):
+        availtypes = ",".join(pipe.db.task_types())
+
+        parser = argparse.ArgumentParser(description="Print equivalent "
+            "command-line jobs that would be run given the tasks and total"
+            "number of processes",
+            usage="desi_pipe dryrun [options] (use --help for details)")
+
+        parser.add_argument("--tasktype", required=True, default=None,
+            help="task type ({})".format(availtypes))
+
+        parser.add_argument("--taskfile", required=False, default=None,
+            help="read tasks from this file (if not specified, read from "
+            "STDIN)")
+
+        parser = self._parse_run_opts(parser)
 
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
@@ -525,22 +555,7 @@ Where supported commands are:
             default="desidev_ro", help="If using postgres, connect as this "
             "user for read-only access")
 
-        parser.add_argument("--debug", required=False, default=False,
-            action="store_true", help="debugging messages in job logs")
-
         args = parser.parse_args(sys.argv[2:])
-
-        return args
-
-
-    def dryrun(self):
-
-        parser = argparse.ArgumentParser(description="Print equivalent "
-            "command-line jobs that would be run given the tasks and total"
-            "number of processes",
-            usage="desi_pipe dryrun [options] (use --help for details)")
-
-        args = self._parse_run_opts(parser)
 
         tasks = pipe.prod.task_read(args.taskfile)
 
@@ -576,21 +591,21 @@ Where supported commands are:
         return
 
 
-    def _gen_script(self, args):
+    def _gen_scripts(self, tasktype, tasks, nodb, args):
 
         proddir = os.path.abspath(io.specprod_root())
-        scrdir = io.get_pipe_scriptdir()
 
-        tasks = pipe.prod.task_read(args.taskfile)
+        import datetime
+        now = datetime.datetime.now()
+        outtaskdir = "{}_{:%Y%m%d-%H:%M:%S}".format(tasktype, now)
 
-        outsubdir = args.outdir
-        if outsubdir is None:
-            import datetime
-            now = datetime.datetime.now()
-            outsubdir = "{}_{:%Y%m%d-%H:%M:%S}".format(args.tasktype, now)
+        if args.outdir is None:
+            outdir = os.path.join(proddir, io.get_pipe_rundir(),
+                io.get_pipe_scriptdir(), outtaskdir)
+        else:
+            outdir = os.path.join(proddir, io.get_pipe_rundir(),
+                io.get_pipe_scriptdir(), args.outdir, outtaskdir)
 
-        outdir = os.path.join(proddir, io.get_pipe_rundir(),
-            io.get_pipe_scriptdir(), outsubdir)
         if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -602,7 +617,7 @@ Where supported commands are:
         outlog = os.path.join(outdir, mstr)
 
         (db, opts) = pipe.prod.load_prod("r")
-        if args.nodb:
+        if nodb:
             db = None
 
         ppn = args.procs_per_node
@@ -614,7 +629,7 @@ Where supported commands are:
 
         if args.nersc is None:
             # Not running at NERSC
-            scripts = pipe.scriptgen.batch_shell(args.tasktype, tasks,
+            scripts = pipe.scriptgen.batch_shell(tasktype, tasks,
                 outscript, outlog, mpirun=args.mpi_run,
                 mpiprocs=args.mpi_procs, openmp=1, db=db)
 
@@ -625,8 +640,8 @@ Where supported commands are:
                     args.nersc_queue)
                 ppn = hostprops["nodecores"]
 
-            scripts = pipe.scriptgen.batch_nersc(args.tasktype, tasks,
-                outscript, outlog, args.tasktype, args.nersc, args.nersc_queue,
+            scripts = pipe.scriptgen.batch_nersc(tasktype, tasks,
+                outscript, outlog, tasktype, args.nersc, args.nersc_queue,
                 args.nersc_runtime, nodeprocs=ppn, openmp=False,
                 multiproc=False, db=db, shifterimg=args.nersc_shifter,
                 debug=args.debug)
@@ -635,33 +650,222 @@ Where supported commands are:
 
 
     def script(self):
-        parser = argparse.ArgumentParser(description="Create a batch script "
+        availtypes = ",".join(pipe.db.task_types())
+
+        parser = argparse.ArgumentParser(description="Create batch script(s) "
             "for the list of tasks.  If the --nersc option is not given, "
-            "create a shell script that optionally uses mpirun.",
+            "create shell script(s) that optionally uses mpirun.  Prints"
+            " the list of generated scripts to STDOUT.",
             usage="desi_pipe script [options] (use --help for details)")
 
-        args = self._parse_run_opts(parser)
+        parser.add_argument("--tasktype", required=True, default=None,
+            help="task type ({})".format(availtypes))
 
-        scripts = self._gen_script(args)
+        parser.add_argument("--taskfile", required=False, default=None,
+            help="read tasks from this file (if not specified, read from "
+            "STDIN)")
+
+        parser = self._parse_run_opts(parser)
+
+        parser.add_argument("--nodb", required=False, default=False,
+            action="store_true", help="Do not use the production database.")
+
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
+        args = parser.parse_args(sys.argv[2:])
+
+        tasks = pipe.prod.task_read(args.taskfile)
+
+        scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
+
         print(",".join(scripts))
 
         return
 
 
+    def _run_scripts(self, scripts, deps=None, slurm=False):
+        import subprocess as sp
+
+        depstr = ""
+        if deps is not None:
+            depstr = "-d afterany"
+            for d in deps:
+                depstr = "{}:{}".format(depstr, d)
+
+
+        jobids = list()
+        if slurm:
+            # submit each job and collect the job IDs
+            for scr in scripts:
+                sout = sp.check_output("sbatch {} {}".format(depstr, scr),
+                    shell=True, universal_newlines=True)
+                jid = sout.split()[3]
+                print("submitted job {} script {}".format(jid,scr))
+                jobids.append(jid)
+        else:
+            # run the scripts one at a time
+            for scr in scripts:
+                rcode = sp.call(scr, shell=True)
+                if rcode != 0:
+                    print("WARNING:  script {} had return code = {}"\
+                          .format(scr, rcode))
+        return jobids
+
+
     def run(self):
-        parser = argparse.ArgumentParser(description="Create and run a batch "
-            "script for the list of tasks.  If the --nersc option is not "
-            "given, create a shell script that optionally uses mpirun.",
+        availtypes = ",".join(pipe.db.task_types())
+
+        parser = argparse.ArgumentParser(description="Create and run batch "
+            "script(s) for the list of tasks.  If the --nersc option is not "
+            "given, create shell script(s) that optionally uses mpirun.",
             usage="desi_pipe run [options] (use --help for details)")
 
-        args = self._parse_run_opts(parser)
+        parser.add_argument("--tasktype", required=True, default=None,
+            help="task type ({})".format(availtypes))
 
-        print("Not yet implemented")
-        sys.stdout.flush()
+        parser.add_argument("--taskfile", required=False, default=None,
+            help="read tasks from this file (if not specified, read from "
+            "STDIN)")
+
+        parser.add_argument("--depjobs", required=False, default=None,
+            help="comma separated list of slurm job IDs to specify as "
+            "dependencies of this current job.")
+
+        parser = self._parse_run_opts(parser)
+
+        parser.add_argument("--nodb", required=False, default=False,
+            action="store_true", help="Do not use the production database.")
+
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
+        args = parser.parse_args(sys.argv[2:])
+
+        tasks = pipe.prod.task_read(args.taskfile)
+
+        scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
+
+        deps = None
+        slurm = False
+        if args.nersc is not None:
+            slurm = True
+        if args.depjobs is not None:
+            deps = args.depjobs.split(',')
+
+        jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
+
+        if len(jobids) > 0:
+            print(",".join(jobids))
         return
 
-        scripts = self._gen_script(args)
 
+    def chain(self):
+        parser = argparse.ArgumentParser(description="Create a chain of jobs"
+            " using all ready tasks for each specified step.  The order of"
+            " the pipeline steps is fixed, regardless of the order specified"
+            " by the --tasktypes option.",
+            usage="desi_pipe chain [options] (use --help for details)")
+
+        parser.add_argument("--tasktypes", required=False, default=",".join(pipe.tasks.base.default_task_chain),
+            help="comma separated list of slurm job IDs to specify as "
+            "dependencies of this current job.")
+
+        parser.add_argument("--nights", required=False, default=None,
+            help="comma separated (YYYYMMDD) or regex pattern- only nights "
+            "matching these patterns will be generated.")
+
+        parser.add_argument("--states", required=False, default=None,
+            help="comma separated list of states (see defs.py).  Only tasks "
+            "in these states will be scheduled.")
+
+        parser.add_argument("--nosubmitted", required=False, default=False,
+            action="store_true", help="Skip all tasks flagged as submitted")
+
+        parser.add_argument("--depjobs", required=False, default=None,
+            help="comma separated list of slurm job IDs to specify as "
+            "dependencies of this current job.")
+
+        parser = self._parse_run_opts(parser)
+
+        args = parser.parse_args(sys.argv[2:])
+
+        print("Step(s) to run:",args.tasktypes)
+
+
+        machprops = None
+        if args.nersc is not None:
+            machprops = pipe.scriptgen.nersc_machine(args.nersc,
+                args.nersc_queue)
+
+        # FIXME:  we should support task selection by exposure ID as well.
+
+        states = None
+        if args.states is None:
+            states = pipe.task_states
+        else:
+            states = args.states.split(",")
+            for s in states:
+                if s not in pipe.task_states:
+                    print("Task state '{}' is not valid".format(s))
+                    sys.exit(1)
+        ttypes = args.tasktypes.split(',')
+        tasktypes = list()
+        for tt in pipe.tasks.base.default_task_chain:
+            if tt in ttypes:
+                tasktypes.append(tt)
+
+        if machprops is not None:
+            if len(tasktypes) > machprops["submitlimit"]:
+                print("Queue {} on machine {} limited to {} jobs."\
+                    .format(args.nersc_queue, args.nersc,
+                    machprops["submitlimit"]))
+                print("Use a different queue or shorter chains of tasks.")
+                sys.exit(1)
+
+        slurm = False
+        if args.nersc is not None:
+            slurm = True
+
+        dbpath = io.get_pipe_database()
+        db = pipe.load_db(dbpath, mode="w")
+
+        allnights = io.get_nights(strip_path=True)
+        nights = pipe.prod.select_nights(allnights, args.nights)
+
+        deps = None
+        if args.depjobs is not None:
+            deps = args.depjobs.split(',')
+
+        for tt in tasktypes:
+            # Get the tasks.  We select by state and submitted status.
+            tasks = self._get_tasks(db, tt, states, nights)
+            if len(tasks) == 0:
+                continue
+
+            if args.nosubmitted:
+                if (tt != "spectra") and (tt != "redshift"):
+                    sb = db.get_submitted(tasks)
+                    tasks = [ x for x in tasks if not sb[x] ]
+                if len(tasks) == 0:
+                    continue
+
+            # Generate the scripts
+            scripts = self._gen_scripts(tt, tasks, False, args)
+
+            # Run the jobs
+            if slurm:
+                if (tt != "spectra") and (tt != "redshift"):
+                    db.set_submitted_type(tt, tasks)
+
+            jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
+            if len(jobids) > 0:
+                deps = jobids
+
+        if deps is not None and len(deps) > 0:
+            print(",".join(deps))
         return
 
 
@@ -858,6 +1062,13 @@ Where supported commands are:
         parser.add_argument("--refresh", required=False, type=int, default=10,
             help="The number of seconds between DB queries")
 
+        parser.add_argument("--db-postgres-user", type=str, required=False,
+            default="desidev_ro", help="If using postgres, connect as this "
+            "user for read-only access")
+
+        parser.add_argument("--once", required=False, action="store_true",
+            default=False, help="Print info once without clearing the terminal")
+
         args = parser.parse_args(sys.argv[2:])
 
         import signal
@@ -869,21 +1080,23 @@ Where supported commands are:
         signal.signal(signal.SIGINT, signal_handler)
 
         dbpath = io.get_pipe_database()
-        db = pipe.load_db(dbpath, mode="r")
+        db = pipe.load_db(dbpath, mode="r", user=args.db_postgres_user)
 
         tasktypes = pipe.tasks.base.default_task_chain
 
         header_state = ""
         for s in pipe.task_states:
             header_state = "{} {:8s}|".format(header_state, s)
+        header_state = "{} {:8s}|".format(header_state, "submit")
 
-        sep = "------------------------------------------------------------------------------"
+        sep = "----------------+---------+---------+---------+---------+---------+---------+"
 
-        header = "{}\n{:26s}|{}\n{}".format(sep, "         Task Type        ",
+        header = "{}\n{:16s}|{}\n{}".format(sep, "   Task Type",
             header_state, sep)
 
-        while True:
+        def print_status(clear=False):
             taskstates = {}
+            tasksub = {}
             with db.cursor() as cur:
                 for t in tasktypes:
                     taskstates[t] = {}
@@ -893,18 +1106,34 @@ Where supported commands are:
                     for s in pipe.task_states:
                         taskstates[t][s] = \
                             np.sum(st == pipe.task_state_to_int[s])
-
-            print("\033c")
+                    if (t != "spectra") and (t != "redshift"):
+                        cmd = "select submitted from {}".format(t)
+                        cur.execute(cmd)
+                        isub = [ int(x[0]) for x in cur.fetchall() ]
+                        tasksub[t] = np.sum(isub)
+            if clear:
+                print("\033c")
             print(header)
             for t in tasktypes:
-                line = "{:26s}|".format(t)
+                line = "{:16s}|".format(t)
                 for s in pipe.task_states:
                     line = "{}{:9d}|".format(line, taskstates[t][s])
+                if t in tasksub:
+                    line = "{}{:9d}|".format(line, tasksub[t])
+                else:
+                    line = "{}{:9s}|".format(line, "       NA")
                 print(line)
             print(sep)
-            print(" (Use Ctrl-C to Quit) ")
+            if clear:
+                print(" (Use Ctrl-C to Quit) ")
             sys.stdout.flush()
-            time.sleep(args.refresh)
+
+        if args.once:
+            print_status(clear=False)
+        else:
+            while True:
+                print_status(clear=True)
+                time.sleep(args.refresh)
 
         return
 
