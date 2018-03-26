@@ -454,7 +454,7 @@ def plot_sky_continuum(qa_dict,outfile):
                  'SKYCONT_FIBER': [357.23814787655738,   358.14982775192709,   359.34380640332847,
                                     361.55526717275529, 360.46690568746544,   360.49561926858325,   
                                     359.08761654248656,   361.26910267767016],
-                 'SKYFIBERID': [4, 19, 30, 38, 54, 55, 57, 62]}}
+                 'SKY_FIBERID': [4, 19, 30, 38, 54, 55, 57, 62]}}
 
     Args:
         qa_dict: dictionary from sky continuum QA
@@ -559,7 +559,7 @@ def plot_residuals(qa_dict,outfile):
     ax0=fig.add_subplot(gs[:2,2:])
     ax0.set_axis_off()
     keys=["MED_RESID","NBAD_PCHI","NREJ","NSKY_FIB","RESID_PER"]
-    skyfiberid=qa_dict["METRICS"]["SKY_FIBERID"]
+    skyfiberid=qa_dict["METRICS"]["SKYFIBERID"]
     
     xl=0.05
     yl=0.9

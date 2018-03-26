@@ -136,7 +136,7 @@ def write_qa_brick(outfile, qabrick):
     # Simple yaml
     ydict = yamlify(qabrick.data)
     with open(outfile, 'w') as yamlf:
-        yamlf.write( yaml.dump(ydict))#, default_flow_style=True) )
+        yamlf.write(yaml.dump(ydict))#, default_flow_style=True) )
 
     return outfile
 
@@ -261,12 +261,18 @@ def write_qa_ql(outfile, qaresult):
        Returns:
            outfile : str
     """
-    import yaml
-    from desiutil.io import yamlify
+    #import yaml
+    #from desiutil.io import yamlify
     # Take in QL input and output to yaml
     qadict = yamlify(qaresult)
     f=open(outfile,"w")
     f.write(yaml.dump(qadict))
+    f.close()
+    
+    g=open(outfile.split('.yaml')[0]+'.json',"w")
+    json.dump(qadict, g, sort_keys=True, indent=4)
+    g.close()    
+    
     return outfile
 
 

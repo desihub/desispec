@@ -262,7 +262,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     qlog=qllogger.QLLogger()
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
-    schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'])
+    schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'], conf['Program'])
     QAresults=[] #- merged QA list for the whole pipeline. This will be reorganized for databasing after the pipeline executes
     for s,step in enumerate(pl):
         log.info("Starting to run step {}".format(paconf[s]["StepName"]))
@@ -272,7 +272,9 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
         try:
             hb.start("Running {}".format(step[0].name))
             oldinp=inp #-  copy for QAs that need to see earlier input
-            inp=pa(inp,**pargs)
+            
+            inp=pa(inp,**pargs) # this is where each pipleine step is run
+            
         except Exception as e:
             log.critical("Failed to run PA {} error was {}".format(step[0].name,e),exc_info=True)
             sys.exit("Failed to run PA {}".format(step[0].name))
@@ -331,6 +333,8 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
 # results will be erased.
         schemaMerger.writeToFile(destFile)
         log.info("Wrote merged QA file {}".format(destFile))
+        schemaMerger.writeTojsonFile(destFile)
+        log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
     if isinstance(inp,tuple):
        return inp[0]
     else:
