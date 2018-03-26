@@ -23,7 +23,7 @@ if sys.platform == "darwin":
 
 libspecexname = "libspecex.{}".format(modext)
 if "LIBSPECEX_DIR" in os.environ:
-    libspecexname = os.path.join(os.environ["LIBSPECEX_DIR"], 
+    libspecexname = os.path.join(os.environ["LIBSPECEX_DIR"],
         "libspecex.{}".format(modext))
 
 libspecex = None
@@ -72,7 +72,7 @@ def parse(options=None):
                         "specex_desi_psf_fit")
     parser.add_argument("--debug", action = 'store_true',
                         help="debug mode")
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -88,7 +88,7 @@ def main(args, comm=None):
     imgfile = args.input_image
     outfile = args.output_psf
     inpsffile = args.input_psf
-    
+
     optarray = []
     if args.extra is not None:
         optarray = args.extra.split()
@@ -96,13 +96,13 @@ def main(args, comm=None):
     specmin = int(args.specmin)
     nspec = int(args.nspec)
     bundlesize = int(args.bundlesize)
-    
+
     specmax = specmin + nspec
 
     # Now we divide our spectra into bundles
 
     checkbundles = set()
-    checkbundles.update(np.floor_divide(np.arange(specmin, specmax), 
+    checkbundles.update(np.floor_divide(np.arange(specmin, specmax),
         bundlesize*np.ones(nspec)).astype(int))
     bundles = sorted(checkbundles)
     nbundle = len(bundles)
@@ -117,7 +117,7 @@ def main(args, comm=None):
         if (b+1) * bundlesize > specmax:
             bnspec[b] = specmax - bspecmin[b]
         else:
-            bnspec[b] = bundlesize
+            bnspec[b] = (b+1) * bundlesize - bspecmin[b]
 
     # Now we assign bundles to processes
 
@@ -168,12 +168,14 @@ def main(args, comm=None):
         com = ['desi_psf_fit']
         com.extend(['-a', imgfile])
         com.extend(['--in-psf', inpsffile])
-        com.extend(['--out-psf', outbundlefits])        
+        com.extend(['--out-psf', outbundlefits])
         com.extend(['--first-bundle', "{}".format(b)])
         com.extend(['--last-bundle', "{}".format(b)])
+        com.extend(['--first-fiber', "{}".format(bspecmin[b])])
+        com.extend(['--last-fiber', "{}".format(bspecmin[b]+bnspec[b]-1)])
         if args.debug :
             com.extend(['--debug'])
-        
+
         com.extend(optarray)
 
         log.debug("proc {} calling {}".format(rank, " ".join(com)))
@@ -203,17 +205,17 @@ def main(args, comm=None):
 
     if rank == 0:
         outfits = "{}.fits".format(outroot)
-        
+
         inputs = [ "{}_{:02d}.fits".format(outroot, x) for x in bundles ]
-        
+
         merge_psf(inputs,outfits)
 
         if failcount == 0:
             # only remove the per-bundle files if the merge was good
             for f in inputs :
                 if os.path.isfile(f):
-                    os.remove(f)        
-    
+                    os.remove(f)
+
     if comm is not None:
         failcount = comm.bcast(failcount, root=0)
 
@@ -235,18 +237,18 @@ def compatible(head1, head2) :
 
 
 def merge_psf(inputs, output):
-    
+
     log = get_logger()
-    
+
     npsf = len(inputs)
     log.info("Will merge {} PSFs in {}".format(npsf,output))
-    
+
     # we will add/change data to the first PSF
     psf_hdulist=fits.open(inputs[0])
     for input_filename in inputs[1:] :
         log.info("merging {} into {}".format(input_filename,inputs[0]))
         other_psf_hdulist=fits.open(input_filename)
-        
+
         # look at what fibers where actually fit
         i=np.where(other_psf_hdulist["PSF"].data["PARAM"]=="STATUS")[0][0]
         status_of_fibers = \
@@ -259,13 +261,13 @@ def merge_psf(inputs, output):
                 input_filename))
             other_psf_hdulist.close()
             continue
-        
+
         # copy xtrace and ytrace
         psf_hdulist["XTRACE"].data[selected_fibers] = \
             other_psf_hdulist["XTRACE"].data[selected_fibers]
         psf_hdulist["YTRACE"].data[selected_fibers] = \
             other_psf_hdulist["YTRACE"].data[selected_fibers]
-        
+
         # copy parameters
         parameters = psf_hdulist["PSF"].data["PARAM"]
         for param in parameters :
@@ -273,7 +275,7 @@ def merge_psf(inputs, output):
             i1=np.where(other_psf_hdulist["PSF"].data["PARAM"]==param)[0][0]
             psf_hdulist["PSF"].data["COEFF"][i0][selected_fibers] = \
                 other_psf_hdulist["PSF"].data["COEFF"][i1][selected_fibers]
-        
+
         # copy bundle chi2
         i = np.where(other_psf_hdulist["PSF"].data["PARAM"]=="BUNDLE")[0][0]
         bundles = np.unique(other_psf_hdulist["PSF"].data["COEFF"][i]\
@@ -287,18 +289,18 @@ def merge_psf(inputs, output):
                     other_psf_hdulist["PSF"].header[key]
         # close file
         other_psf_hdulist.close()
-    
+
     # write
     psf_hdulist.writeto(output,clobber=True)
     log.info("Wrote PSF {}".format(output))
-    
+
     return
-    
+
 
 def mean_psf(inputs, output):
 
     log = get_logger()
-    
+
     npsf = len(inputs)
     log.info("Will compute the average of {} PSFs".format(npsf))
 
@@ -308,7 +310,7 @@ def mean_psf(inputs, output):
     ytrace=[]
     wavemins=[]
     wavemaxs=[]
-    
+
     hdulist=None
     bundle_rchi2=[]
     nbundles=None
@@ -320,14 +322,14 @@ def mean_psf(inputs, output):
         psf=fits.open(input)
         if refhead is None :
             hdulist = psf
-            refhead = psf["PSF"].header            
+            refhead = psf["PSF"].header
             nfibers = \
                 (psf["PSF"].header["FIBERMAX"]-psf["PSF"].header["FIBERMIN"])+1
             PSFVER=int(refhead["PSFVER"])
             if(PSFVER<3) :
                 log.error("ERROR NEED PSFVER>=3")
                 sys.exit(1)
-            
+
         else :
             if not compatible(psf["PSF"].header,refhead) :
                 log.error("psfs {} and {} are not compatible".format(inputs[0],
@@ -336,7 +338,7 @@ def mean_psf(inputs, output):
         tables.append(psf["PSF"].data)
         wavemins.append(psf["PSF"].header["WAVEMIN"])
         wavemaxs.append(psf["PSF"].header["WAVEMAX"])
-        
+
         if "XTRACE" in psf :
             xtrace.append(psf["XTRACE"].data)
         if "YTRACE" in psf :
@@ -358,26 +360,26 @@ def mean_psf(inputs, output):
     rchi2_threshold=median_bundle_rchi2+1.
     log.info("median chi2={} threshold={}".format(median_bundle_rchi2,
         rchi2_threshold))
-    
+
     WAVEMIN=refhead["WAVEMIN"]
     WAVEMAX=refhead["WAVEMAX"]
     FIBERMIN=int(refhead["FIBERMIN"])
     FIBERMAX=int(refhead["FIBERMAX"])
-    
-    
+
+
     fibers_in_bundle={}
     i=np.where(tables[0]["PARAM"]=="BUNDLE")[0][0]
     bundle_of_fibers=tables[0]["COEFF"][i][:,0].astype(int)
     bundles=np.unique(bundle_of_fibers)
     for b in bundles :
         fibers_in_bundle[b]=np.where(bundle_of_fibers==b)[0]
-    
+
     for b in bundles :
         print("{} : {}".format(b,fibers_in_bundle[b]))
-        
+
     for entry in range(tables[0].size) :
         PARAM=tables[0][entry]["PARAM"]
-        log.info("Averaging '{}' coefficients".format(PARAM))        
+        log.info("Averaging '{}' coefficients".format(PARAM))
         coeff=[tables[0][entry]["COEFF"]]
         npar=coeff[0][1].size
         for p in range(1,npsf) :
@@ -400,21 +402,21 @@ def mean_psf(inputs, output):
                 coeff.append(ocoeff)
 
         coeff=np.array(coeff)
-        
+
         output_rchi2=np.zeros((bundle_rchi2.shape[1]))
         output_coeff=np.zeros(tables[0][entry]["COEFF"].shape)
-        
+
         # now merge, using rchi2 as selection score
-        
+
         for bundle in fibers_in_bundle.keys() :
-            
+
             ok=np.where(bundle_rchi2[:,bundle]<rchi2_threshold)[0]
             #ok=np.array([0,1]) # debug
 
             if entry==0 :
                 log.info("for fiber bundle {}, {} valid PSFs".format(bundle,
                     ok.size))
-            
+
             if ok.size>=2 : # use median
                 log.info("bundle #{} : use median".format(bundle))
                 for f in fibers_in_bundle[bundle]  :
@@ -425,7 +427,7 @@ def mean_psf(inputs, output):
                 for f in fibers_in_bundle[bundle]  :
                     output_coeff[f]=coeff[ok[0],f]
                 output_rchi2[bundle]=bundle_rchi2[ok[0],bundle]
-                    
+
             else : # we have a problem here, take the smallest rchi2
                 log.info("bundle #{} : take smallest chi2 ".format(bundle))
                 i=np.argmin(bundle_rchi2[:,bundle])
@@ -446,29 +448,28 @@ def mean_psf(inputs, output):
             for p in range(xtrace.shape[0]) :
                 if wavemins[p]==WAVEMIN and wavemaxs[p]==WAVEMAX :
                     continue
-                
+
                 # need to reshape legpol
                 iu = np.linspace(-1,1,npar+3)
                 iwavemin = wavemins[p]
                 iwavemax = wavemaxs[p]
                 wave = (iu+1.)/2.*(iwavemax-iwavemin)+iwavemin
                 ou = (wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2.-1.
-                
+
                 for f in range(icoeff.shape[0]) :
                     val = legval(iu,xtrace[f])
                     xtrace[f] = legfit(ou,val,deg=npar-1)
                     val = legval(iu,ytrace[f])
                     ytrace[f] = legfit(ou,val,deg=npar-1)
-                 
+
             hdulist["xtrace"].data = np.median(np.array(xtrace),axis=0)
             hdulist["ytrace"].data = np.median(np.array(ytrace),axis=0)
 
         # alter other keys in header
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
-    
+
     # save output PSF
     hdulist.writeto(output, clobber=True)
     log.info("wrote {}".format(output))
 
     return
-

@@ -386,7 +386,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
 
     qadict['RESID'] = []
 
-    qadict["SKY_FIBERID"]=skyfibers.tolist()
+    qadict["SKYFIBERID"]=skyfibers.tolist()
     #- Residuals in wave and fiber axes
     if quick_look:
         qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
@@ -583,7 +583,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
         with open(rfile) as rf:
             rmsfile=yaml.load(rf)
-        rmsval=rmsfile["METRICS"]["NOISE"]
+        rmsval=rmsfile["METRICS"]["NOISE_OVER"]
         #- NOTE: the 1e-3 used here is because scipy doesn't converge with
         #- such small flux values (thus multiplying the flux and conversion
         #- factor of 1e-33 by 1e30, which does not change any output)

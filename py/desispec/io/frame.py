@@ -58,8 +58,8 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if units is not None:
         units = str(units)
         if 'BUNIT' in hdr and hdr['BUNIT'] != units:
-            log.warn('BUNIT {bunit} != units {units}; using {units}'.format(
-                    bunit=hdr['BUNIT'], units=units))
+            log.warning('BUNIT {bunit} != units {units}; using {units}'.format(
+                        bunit=hdr['BUNIT'], units=units))
         x.header['BUNIT'] = units
     hdus.append(x)
 
@@ -70,8 +70,8 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     if frame.resolution_data is not None:
         hdus.append( fits.ImageHDU(frame.resolution_data.astype('f4'), name='RESOLUTION' ) )
     elif frame.wsigma is not None:
-        log.debug("Using sigma widths from QUICKRESOLUTION") 
-        qrimg=fits.ImageHDU(frame.wsigma.astype('f4'), name='QUICKRESOLUTION' ) 
+        log.debug("Using sigma widths from QUICKRESOLUTION")
+        qrimg=fits.ImageHDU(frame.wsigma.astype('f4'), name='QUICKRESOLUTION' )
         qrimg.header["NDIAG"] =frame.ndiag
         hdus.append(qrimg)
     if fibermap is not None:
@@ -98,11 +98,11 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
             hdu=hdus['SCORES']
             for i in range(1,999):
                 key = 'TTYPE'+str(i)
-                if key in hdu.header:                    
+                if key in hdu.header:
                     value = hdu.header[key]
                     if value in frame.scores_comments.keys() :
                         hdu.header[key] = (value, frame.scores_comments[value])
-    
+
     hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
@@ -119,8 +119,8 @@ def read_meta_frame(filename, extname=0):
         meta: dict or astropy.fits.header
 
     """
-    fx = fits.open(filename, uint=True, memmap=False)
-    hdr = fx[extname].header
+    with fits.open(filename, uint=True, memmap=False) as fx:
+        hdr = fx[extname].header
     return hdr
 
 
@@ -165,7 +165,7 @@ def read_frame(filename, nspec=None):
         qr=fx['QUICKRESOLUTION'].header
         qndiag =qr['NDIAG']
         qwsigma=native_endian(fx['QUICKRESOLUTION'].data.astype('f4'))
-        
+
     if 'FIBERMAP' in fx:
         fibermap = fx['FIBERMAP'].data
     else:
@@ -178,7 +178,7 @@ def read_frame(filename, nspec=None):
 
     if 'SCORES' in fx:
         scores = fx['SCORES'].data
-        # I need to open the header to read the comments        
+        # I need to open the header to read the comments
         scores_comments = dict()
         head   = fx['SCORES'].header
         for i in range(1,len(scores.columns)+1) :
@@ -187,7 +187,7 @@ def read_frame(filename, nspec=None):
     else:
         scores = None
         scores_comments = None
-        
+
     fx.close()
 
     if nspec is not None:

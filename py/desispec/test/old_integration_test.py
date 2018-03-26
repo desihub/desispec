@@ -103,7 +103,7 @@ def integration_test(night=None, nspec=5, clobber=False):
         outputs = list()
         outputs.append(fibermap.replace('fibermap-', 'simpix-'))
         for camera in cameras:
-            pixfile = io.findfile('pix', night, expid, camera)
+            pixfile = io.findfile('preproc', night, expid, camera)
             outputs.append(pixfile)
             # outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
@@ -115,7 +115,7 @@ def integration_test(night=None, nspec=5, clobber=False):
     waverange = dict(b="3570,5940,1.0", r="5630,7740,1.0", z="7440,9830,1.0")
     for expid, program in enumerate(programs):
         for ic, channel in enumerate(channels):
-            pixfile = io.findfile('pix', night, expid, cameras[ic])
+            pixfile = io.findfile('preproc', night, expid, cameras[ic])
             fiberfile = io.findfile('fibermap', night, expid)
             psffile = '{}/data/specpsf/psf-{}.fits'.format(os.getenv('DESIMODEL'), channel)
             framefile = io.findfile('frame', night, expid, cameras[ic])

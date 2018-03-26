@@ -22,9 +22,9 @@ def plot_countspectralbins(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
     
-    binslo=qa_dict["METRICS"]["NBINSLOW"]
+    binslo=qa_dict["METRICS"]["NBINSLO"]
     binsmed=qa_dict["METRICS"]["NBINSMED"]
-    binshi=qa_dict["METRICS"]["NBINSHIGH"]
+    binshi=qa_dict["METRICS"]["NBINSHI"]
 
     cutlo=qa_dict["PARAMS"]["CUTLO"]
     cuthi=qa_dict["PARAMS"]["CUTHI"]
@@ -36,12 +36,9 @@ def plot_countspectralbins(qa_dict,outfile):
     plt.suptitle("Count spectral bins after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
 
     gs=GridSpec(7,6)
-    ax1=fig.add_subplot(gs[1:4,:2])
-    ax2=fig.add_subplot(gs[1:4,2:4])
-    ax3=fig.add_subplot(gs[1:4,4:])
-    ax4=fig.add_subplot(gs[4:,:2])
-    ax5=fig.add_subplot(gs[4:,2:4])
-    ax6=fig.add_subplot(gs[4:,4:])
+    ax1=fig.add_subplot(gs[:,:2])
+    ax2=fig.add_subplot(gs[:,2:4])
+    ax3=fig.add_subplot(gs[:,4:])
 
     hist_med=ax1.bar(index,binslo,color='b',align='center')
     ax1.set_xlabel('Fiber #',fontsize=10)
@@ -64,74 +61,6 @@ def plot_countspectralbins(qa_dict,outfile):
     ax3.tick_params(axis='y',labelsize=10)
     ax3.set_xlim(0)
 
-    #- plotting if amp is turned on
-    if "NBINSLOW_AMP" in qa_dict["METRICS"]:
-
-        binslo_amp=qa_dict["METRICS"]["NBINSLOW_AMP"]
-        binsmed_amp=qa_dict["METRICS"]["NBINSMED_AMP"]
-        binshi_amp=qa_dict["METRICS"]["NBINSHIGH_AMP"]
-    
-        heatmap1=ax4.pcolor(binslo_amp.reshape(2,2),cmap=plt.cm.OrRd)
-        ax4.set_xlabel("Avg. bins > counts: {:d} (per Amp)".format(cutlo),fontsize=8)
-        ax4.tick_params(axis='x',labelsize=10,labelbottom=False)
-        ax4.tick_params(axis='y',labelsize=10,labelleft=False)
-        ax4.annotate("Amp 1\n{:.1f}".format(binslo_amp[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-        ax4.annotate("Amp 2\n{:.1f}".format(binslo_amp[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-        ax4.annotate("Amp 3\n{:.1f}".format(binslo_amp[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-        ax4.annotate("Amp 4\n{:.1f}".format(binslo_amp[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
-        heatmap2=ax5.pcolor(binsmed_amp.reshape(2,2),cmap=plt.cm.OrRd)
-        ax5.set_xlabel("Avg. bins > counts: {:d} (per Amp)".format(cutmed),fontsize=8)
-        ax5.tick_params(axis='x',labelsize=10,labelbottom=False)
-        ax5.tick_params(axis='y',labelsize=10,labelleft=False)
-        ax5.annotate("Amp 1\n{:.1f}".format(binsmed_amp[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-        ax5.annotate("Amp 2\n{:.1f}".format(binsmed_amp[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-        ax5.annotate("Amp 3\n{:.1f}".format(binsmed_amp[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-        ax5.annotate("Amp 4\n{:.1f}".format(binsmed_amp[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
-
-        heatmap3=ax6.pcolor(binshi_amp.reshape(2,2),cmap=plt.cm.OrRd)
-        ax6.set_xlabel("Avg. bins > counts: {:d} (per Amp)".format(cuthi),fontsize=8)
-        ax6.tick_params(axis='x',labelsize=10,labelbottom=False)
-        ax6.tick_params(axis='y',labelsize=10,labelleft=False)
-        ax6.annotate("Amp 1\n{:.1f}".format(binshi_amp[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-        ax6.annotate("Amp 2\n{:.1f}".format(binshi_amp[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-        ax6.annotate("Amp 3\n{:.1f}".format(binshi_amp[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-        ax6.annotate("Amp 4\n{:.1f}".format(binshi_amp[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
     plt.tight_layout()
     fig.savefig(outfile)
 
@@ -146,10 +75,10 @@ def plot_countpix(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    countlo=qa_dict["METRICS"]["NPIX_LOW"]
+    countlo=qa_dict["METRICS"]["NPIX"]
     countlo_amp=np.array(qa_dict["METRICS"]["NPIX_AMP"])
-    counthi=qa_dict["METRICS"]["NPIX_HIGH"]
-    counthi_amp=np.array(qa_dict["METRICS"]["NPIX_HIGH_AMP"])
+    counthi=qa_dict["METRICS"]["NPIXHI"]
+    counthi_amp=np.array(qa_dict["METRICS"]["NPIXHI_AMP"])
 
     cutlo=qa_dict["PARAMS"]["CUTLO"]
     cuthi=qa_dict["PARAMS"]["CUTHI"]
@@ -254,10 +183,10 @@ def plot_XWSigma(qa_dict,outfile):
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
-    xsigma=qa_dict["METRICS"]["XSIGMA"]
-    wsigma=qa_dict["METRICS"]["WSIGMA"]
-    xsigma_med=qa_dict["METRICS"]["XSIGMA_MED"]
-    wsigma_med=qa_dict["METRICS"]["WSIGMA_MED"]
+    xsigma=qa_dict["METRICS"]["XWSIGMA"][0]
+    wsigma=qa_dict["METRICS"]["XWSIGMA"][1]
+    xsigma_med=qa_dict["METRICS"]["XWSIGMA_SHIFT"][0][0]
+    wsigma_med=qa_dict["METRICS"]["XWSIGMA_SHIFT"][0][1]
     xfiber=np.arange(xsigma.shape[0])
     wfiber=np.arange(wsigma.shape[0])
 
@@ -342,7 +271,7 @@ def plot_RMS(qa_dict,outfile):
     """
     rms=qa_dict["METRICS"]["RMS"]
     rms_amp=qa_dict["METRICS"]["RMS_AMP"]
-    rms_over=qa_dict["METRICS"]["NOISE"]
+    rms_over=qa_dict["METRICS"]["NOISE_OVER"]
     rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
     # arm=qa_dict["ARM"]
     # spectrograph=qa_dict["SPECTROGRAPH"]
@@ -400,6 +329,7 @@ def plot_RMS(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_integral(qa_dict,outfile):
+    import matplotlib.ticker as ticker
     """
     Plot integral.
 
@@ -410,48 +340,21 @@ def plot_integral(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera =qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    std_integral=np.array(qa_dict["METRICS"]["INTEG"])
-    std_integral_avg=qa_dict["METRICS"]["INTEG_AVG"]
+    integral=np.array(qa_dict["METRICS"]["FIBER_MAG"])
     std_fiberid=qa_dict["METRICS"]["STD_FIBERID"]
 
     fig=plt.figure()
     plt.suptitle("Total integrals of STD spectra {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    index=np.arange(1,len(std_integral)+1)
-    ax1=fig.add_subplot(211)
-    hist_med=ax1.bar(index,std_integral,color='b',align='center')
-    ax1.set_xlabel('STD fiber ID',fontsize=10)
+    index=np.arange(len(integral))
+    ax1=fig.add_subplot(111)
+    hist_med=ax1.bar(index,integral,color='b',align='center')
+    ax1.set_xlabel('Fibers',fontsize=10)
     ax1.set_ylabel('Integral (photon counts)',fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
-    ax1.set_xticks(index)
-    ax1.set_xticklabels(std_fiberid)
+    ax1.xaxis.set_major_locator(ticker.AutoLocator())
+    #ax1.set_xticklabels(std_fiberid)
     
-    if "INTEG_AVG_AMP" in qa_dict["METRICS"]:
-
-        std_integral_amp=np.array(qa_dict["METRICS"]["INTEG_AVG_AMP"])
-        ax2=fig.add_subplot(212)
-        heatmap1=ax2.pcolor(std_integral_amp.reshape(2,2),cmap=plt.cm.OrRd)
-        plt.title('Integral Average = {:.4f}'.format(std_integral_avg), fontsize=10)
-        ax2.set_xlabel("Average integrals of STD spectra (photon counts)",fontsize=10)
-        ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
-        ax2.tick_params(axis='y',labelsize=10,labelleft=False)
-        ax2.annotate("Amp 1\n{:.1f}".format(std_integral_amp[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 2\n{:.1f}".format(std_integral_amp[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 3\n{:.1f}".format(std_integral_amp[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 4\n{:.1f}".format(std_integral_amp[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
-
     plt.tight_layout()
     fig.savefig(outfile)
 
@@ -474,7 +377,7 @@ def plot_sky_continuum(qa_dict,outfile):
     fig=plt.figure()
     plt.suptitle("Mean Sky Continuum after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     
-    ax1=fig.add_subplot(211)
+    ax1=fig.add_subplot(111)
     hist_med=ax1.bar(index,skycont_fiber,color='b',align='center')
     ax1.set_xlabel('SKY fiber ID',fontsize=10)
     ax1.set_ylabel('Sky Continuum (photon counts)',fontsize=10)
@@ -483,31 +386,6 @@ def plot_sky_continuum(qa_dict,outfile):
     ax1.set_xticks(index)
     ax1.set_xticklabels(fiberid)
     ax1.set_xlim(0)
-    
-    if "SKYCONT_AMP" in qa_dict["METRICS"]:
-        skycont_amps=np.array(qa_dict["METRICS"]["SKYCONT_AMP"])
-        ax2=fig.add_subplot(212)
-        heatmap1=ax2.pcolor(skycont_amps.reshape(2,2),cmap=plt.cm.OrRd)
-        plt.title('Sky Continuum = {:.4f}'.format(skycont), fontsize=10)
-        ax2.set_xlabel("Avg. sky continuum per Amp (photon counts)",fontsize=10)
-        ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
-        ax2.tick_params(axis='y',labelsize=10,labelleft=False)
-        ax2.annotate("Amp 1\n{:.1f}".format(skycont_amps[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 2\n{:.1f}".format(skycont_amps[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 3\n{:.1f}".format(skycont_amps[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 4\n{:.1f}".format(skycont_amps[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
 
     plt.tight_layout()
     fig.savefig(outfile)
@@ -525,42 +403,17 @@ def plot_sky_peaks(qa_dict,outfile):
     paname=qa_dict["PANAME"]
     sumcount=qa_dict["METRICS"]["PEAKCOUNT"]
     fiber=np.arange(sumcount.shape[0])
-    skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_RMS_SKY"]
+    skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_RMS"]
     fig=plt.figure()
-    plt.suptitle("Counts and Amp RMS for Sky Fibers after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    plt.suptitle("Counts for Sky Fibers after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
 
-    ax1=fig.add_subplot(211)
+    ax1=fig.add_subplot(111)
     hist_x=ax1.bar(fiber,sumcount,align='center')
     ax1.set_xlabel("Fiber #",fontsize=10)
     ax1.set_ylabel("Summed counts over sky peaks (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10)
     ax1.tick_params(axis='y',labelsize=10)
     plt.xlim(0,len(fiber))
-
-    if "PEAKCOUNT_RMS_AMP" in qa_dict["METRICS"]:
-        sky_amp_rms=np.array(qa_dict["METRICS"]["PEAKCOUNT_RMS_AMP"])
-        ax2=fig.add_subplot(212)
-        heatmap2=ax2.pcolor(sky_amp_rms.reshape(2,2),cmap=plt.cm.OrRd)
-        plt.title('Sky peaks for sky fibers = {:.4f}'.format(skyfiber_rms), fontsize=10)
-        ax2.set_xlabel("Sky Fiber RMS for peak wavelengths per Amp (photon counts)",fontsize=10)
-        ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
-        ax2.tick_params(axis='y',labelsize=10,labelleft=False)
-        ax2.annotate("Amp 1\n{:.1f}".format(sky_amp_rms[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 2\n{:.1f}".format(sky_amp_rms[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 3\n{:.1f}".format(sky_amp_rms[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-        ax2.annotate("Amp 4\n{:.1f}".format(sky_amp_rms[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
 
     plt.tight_layout()
     fig.savefig(outfile)
@@ -588,7 +441,7 @@ def plot_residuals(qa_dict,outfile):
     ax0=fig.add_subplot(gs[:2,2:])
     ax0.set_axis_off()
     keys=["MED_RESID","NBAD_PCHI","NREJ","NSKY_FIB","RESID_PER"]
-    skyfiberid=qa_dict["METRICS"]["SKY_FIBERID"]
+    skyfiberid=qa_dict["METRICS"]["SKYFIBERID"]
     
     xl=0.05
     yl=0.9

@@ -1,0 +1,10 @@
+#!/usr/bin/env python
+
+'''
+Update healpix-grouped spectra from a set of input cframe files
+'''
+import desispec.scripts.update_spectra as update_spectra
+
+if __name__ == '__main__':
+    args = update_spectra.parse()
+    update_spectra.main(args)
