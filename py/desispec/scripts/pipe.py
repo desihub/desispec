@@ -702,6 +702,7 @@ Where supported commands are:
                 sout = sp.check_output("sbatch {} {}".format(depstr, scr),
                     shell=True, universal_newlines=True)
                 jid = sout.split()[3]
+                print("submitted job {} script {}".format(jid,scr))
                 jobids.append(jid)
         else:
             # run the scripts one at a time
@@ -790,6 +791,9 @@ Where supported commands are:
         parser = self._parse_run_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
+
+        print("Step(s) to run:",args.tasktypes)
+
 
         machprops = None
         if args.nersc is not None:
