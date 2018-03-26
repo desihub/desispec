@@ -9,6 +9,7 @@ from __future__ import absolute_import, division
 import argparse
 
 import os
+import sys
 from desispec import io
 from desiutil.log import get_logger
 log = get_logger()
@@ -18,8 +19,8 @@ def parse(options=None):
         description="Preprocess DESI raw data",
         epilog='''By default, all HDUs of the input file are processed and
 written to pix*.fits files in the current directory; use --outdir to override
-the output directory location.  --pixfile PIXFILE can be used to
-override a single output filename but if only a single
+the output directory location.  --outfile FILENAME can be used to
+override a single output filename but only if a single
 camera is given with --cameras.
 --bias/--pixflat/--mask can specify the calibration files
 to use, but also only if a single camera is specified.
@@ -29,7 +30,9 @@ to use, but also only if a single camera is specified.
     parser.add_argument('--outdir', type = str, default = None, required=False,
                         help = 'output directory')
     parser.add_argument('--pixfile', type = str, default = None, required=False,
-                        help = 'output preprocessed pixfile')
+                        help = 'DEPRECATED: use --outfile instead')
+    parser.add_argument('--outfile', type = str, default = None, required=False,
+                        help = 'output preprocessed image file')
     parser.add_argument('--cameras', type = str, default = None, required=False,
                         help = 'comma separated list of cameras')
     parser.add_argument('--bias', type = str, default = None, required=False,
@@ -108,8 +111,16 @@ def main(args=None):
         if len(args.cameras) > 1:
             raise ValueError('must use only one camera with --bias, --dark, --pixflat, --mask options')
 
-    if (args.pixfile is not None) and len(args.cameras) > 1:
-            raise ValueError('must use only one camera with --pixfile option')
+    if (args.pixfile is not None):
+        log.warning('--pixfile is deprecated; please use --outfile instead')
+        if args.outfile is None:
+            args.outfile = args.pixfile
+        else:
+            log.critical("Set --outfile not --pixfile and certainly not both")
+            sys.exit(1)
+
+    if (args.outfile is not None) and len(args.cameras) > 1:
+            raise ValueError('must use only one camera with --outfile option')
 
     if args.outdir is None:
         args.outdir = os.getcwd()
@@ -143,12 +154,12 @@ def main(args=None):
         if(args.zero_masked) :
             img.pix *= (img.mask==0)
 
-        if args.pixfile is None:
+        if args.outfile is None:
             night = img.meta['NIGHT']
             expid = img.meta['EXPID']
-            pixfile = io.findfile('pix', night=night, expid=expid, camera=camera,
+            outfile = io.findfile('preproc', night=night, expid=expid, camera=camera,
                                   outdir=args.outdir)
         else:
-            pixfile = args.pixfile
+            outfile = args.outfile
 
-        io.write_image(pixfile, img)
+        io.write_image(outfile, img)

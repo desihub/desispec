@@ -12,60 +12,134 @@ Tools for running the pipeline.
 from __future__ import absolute_import, division, print_function
 
 import os
-import stat
-import errno
 import sys
-import re
-import pickle
-import copy
-import traceback
-import time
-import logging
 
 import numpy as np
 
 from desiutil.log import get_logger
+
 from .. import io
-from ..parallel import (dist_uniform, dist_discrete,
+
+from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
     stdouterr_redirected, use_mpi)
 
-from .common import *
-from .graph import *
+from .prod import load_prod
 
-from .task import get_worker
-from .state import graph_db_check, graph_db_write
-from .plan import load_prod
+from .db import check_tasks
 
 
-def run_step(step, grph, opts, comm=None):
-    """
-    Run a whole single step of the pipeline.
+def run_task(name, opts, comm=None, logfile=None, db=None):
+    """Run a single task.
 
-    This function first takes the communicator and the maximum processes
-    per task and splits the communicator to form groups of processes of
-    the desired size.  It then takes the full dependency graph and extracts
-    all the tasks for a given step.  These tasks are then distributed among
-    the groups of processes.
+    Based on the name of the task, call the appropriate run function for that
+    task.  Log output to the specified file.  Run using the specified MPI
+    communicator and optionally update state to the specified database.
 
-    Each process group loops over its assigned tasks.  For each task, it
-    redirects stdout/stderr to a per-task file and calls run_task().  If
-    any process in the group throws an exception, then the traceback and
-    all information (graph and options) needed to re-run the task are written
-    to disk.
-
-    After all process groups have finished, the state of the full graph is
-    merged from all processes.  This way a failure of one process on one task
-    will be propagated as a failed task to all processes.
+    Note:  This function DOES NOT check the database or filesystem to see if
+    the task has been completed or if its dependencies exist.  It assumes that
+    some higher-level code has done that if necessary.
 
     Args:
-        step (str): the pipeline step to process.
-        grph (dict): the dependency graph.
-        opts (dict): the global options.
-        comm (mpi4py.Comm): the full communicator to use for whole step.
+        name (str): the name of this task.
+        opts (dict): options to use for this task.
+        comm (mpi4py.MPI.Comm): optional MPI communicator.
+        logfile (str): output log file.  If None, do not redirect output to a
+            file.
+        db (pipeline.db.DB): The optional database to update.
 
     Returns:
-        Nothing.
+        int: the total number of processes that failed.
+
     """
+    from .tasks.base import task_classes, task_type
+    log = get_logger()
+
+    ttype = task_type(name)
+
+    nproc = 1
+    rank = 0
+    if comm is not None:
+        nproc = comm.size
+        rank = comm.rank
+
+    if rank == 0:
+        if (logfile is not None) and os.path.isfile(logfile):
+            os.remove(logfile)
+        # Mark task as in progress
+        if db is not None:
+            task_classes[ttype].state_set(db=db,name=name,state="running")
+
+    failcount = 0
+    if logfile is None:
+        # No redirection
+        if db is None:
+            failcount = task_classes[ttype].run(name, opts, comm=comm)
+        else:
+            failcount = task_classes[ttype].run_and_update(db, name, opts,
+                comm=comm)
+    else:
+        with stdouterr_redirected(to=logfile, comm=comm):
+            if db is None:
+                failcount = task_classes[ttype].run(name, opts, comm=comm)
+            else:
+                failcount = task_classes[ttype].run_and_update(db, name, opts,
+                    comm=comm)
+
+    return failcount
+
+
+def run_task_simple(name, opts, comm=None):
+    """Run a single task with no DB or log redirection.
+
+    This a wrapper around run_task() for use without a database and with no
+    log redirection.  See documentation for that function.
+
+    Args:
+        name (str): the name of this task.
+        opts (dict): options to use for this task.
+        comm (mpi4py.MPI.Comm): optional MPI communicator.
+
+    Returns:
+        int: the total number of processes that failed.
+
+    """
+    return run_task(name, opts, comm=comm, logfile=None, db=None)
+
+
+def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
+    """Run a collection of tasks of the same type.
+
+    This function requires that the DESI environment variables are set to
+    point to the current production directory.
+
+    This function first takes the communicator and uses the maximum processes
+    per task to split the communicator and form groups of processes of
+    the desired size.  It then takes the list of tasks and uses their relative
+    run time estimates to assign tasks to the process groups.  Each process
+    group loops over its assigned tasks.
+
+    If the database is not specified, no state tracking will be done and the
+    filesystem will be checked as needed to determine the current state.
+
+    Only tasks that are ready to run (based on the filesystem checks or the
+    database) will actually be attempted.
+
+    Args:
+        tasktype (str): the pipeline step to process.
+        tasklist (list): the list of tasks.  All tasks should be of type
+            "tasktype" above.
+        opts (dict): the global options (for example, as read from the
+            production options.yaml file).
+        comm (mpi4py.Comm): the full communicator to use for whole set of tasks.
+        db (pipeline.db.DB): The optional database to update.
+        force (bool): If True, ignore database and filesystem state and just
+            run the tasks regardless.
+
+    Returns:
+        int: the number of tasks that failed.
+
+    """
+    from .tasks.base import task_classes, task_type
     log = get_logger()
 
     nproc = 1
@@ -74,46 +148,52 @@ def run_step(step, grph, opts, comm=None):
         nproc = comm.size
         rank = comm.rank
 
-    # Instantiate the worker for this step
+    # Compute the number of processes that share a node.
 
-    workername = opts["{}_worker".format(step)]
-    workeropts = opts["{}_worker_opts".format(step)]
-    worker = get_worker(step, workername, workeropts)
+    procs_per_node = 1
+    if comm is not None:
+        import mpi4py.MPI as MPI
+        nodecomm = comm.Split_type(MPI.COMM_TYPE_SHARED, 0)
+        procs_per_node = nodecomm.size
 
-    # Get the options for this step.
+    # Get the options for this task type.
 
-    options = opts[step]
+    options = opts[tasktype]
 
-    # Get the tasks that need to be done for this step.  Mark all completed
-    # tasks as done.
+    # Get the tasks that still need to be done.
 
-    tasks = None
+    runtasks = None
+
     if rank == 0:
-        # For this step, compute all the tasks that we need to do
-        alltasks = []
-        for name, nd in sorted(grph.items()):
-            if nd["type"] == step_file_types[step]:
-                alltasks.append(name)
+        if force:
+            # Run everything
+            runtasks = tasklist
+        else:
+            # Actually check which things need to be run.
+            states = check_tasks(tasklist, db=db)
+            runtasks = [ x for x in tasklist if (states[x] == "ready") ]
 
-        # For each task, prune if it is finished
-        tasks = []
-        for t in alltasks:
-            if "state" in grph[t]:
-                if grph[t]["state"] != "done":
-                    tasks.append(t)
-            else:
-                tasks.append(t)
+        log.debug("Number of {} tasks ready to run is {} (total is {})".format(tasktype,len(runtasks),len(tasklist)))
 
     if comm is not None:
-        tasks = comm.bcast(tasks, root=0)
-        grph = comm.bcast(grph, root=0)
+        runtasks = comm.bcast(runtasks, root=0)
 
-    ntask = len(tasks)
+    ntask = len(runtasks)
+
+    # Get the weights for each task.  Since this might trigger DB lookups, only
+    # the root process does this.
+
+    weights = None
+    if rank == 0:
+        weights = [ task_classes[tasktype].run_time(x, procs_per_node, db=db) \
+            for x in runtasks ]
+    if comm is not None:
+        weights = comm.bcast(weights, root=0)
 
     # Now every process has the full list of tasks.  Get the max
-    # number of processes from the worker.
+    # number of processes for this task type
 
-    taskproc = worker.max_nproc()
+    taskproc = task_classes[tasktype].run_max_procs(procs_per_node)
     if taskproc > nproc:
         taskproc = nproc
 
@@ -150,616 +230,281 @@ def run_step(step, grph, opts, comm=None):
             else:
                 group_ntask = 0
         else:
-            if step == "redshift":
-                # We load balance the spectra across process groups based
-                # on the number of targets per group.  All groups with
-                # < taskproc targets are weighted the same.
-
-                if ntask <= ngroup:
-                    # distribute uniform in this case
-                    group_firsttask, group_ntask = dist_uniform(ntask, ngroup, group)
-                else:
-                    spectrasizes = [ grph[x]["ntarget"] for x in tasks ]
-                    worksizes = [ taskproc if (x < taskproc) else x for x in spectrasizes ]
-
-                    if rank == 0:
-                        log.debug("redshift {} groups".format(ngroup))
-                        workstr = ""
-                        for w in worksizes:
-                            workstr = "{}{} ".format(workstr, w)
-                        log.debug("redshift work sizes = {}".format(workstr))
-
-                    group_firsttask, group_ntask = dist_discrete(worksizes, ngroup, group)
-
-                if group_rank == 0:
-                    worksum = np.sum(worksizes[group_firsttask:group_firsttask+group_ntask])
-                    log.debug("group {} has tasks {}-{} sum = {}".format(group, group_firsttask, group_firsttask+group_ntask-1, worksum))
-
+            if ntask <= ngroup:
+                # distribute uniform in this case
+                group_firsttask, group_ntask = dist_uniform(ntask, ngroup,
+                    group)
             else:
-                group_firsttask, group_ntask = dist_uniform(ntask, ngroup, group)
-
-    # Get logging and failure dumping locations
-
-    rundir = io.get_pipe_rundir()
-
-    faildir = os.path.join(rundir, io.get_pipe_faildir())
-    logdir = os.path.join(rundir, io.get_pipe_logdir())
+                group_firsttask, group_ntask = dist_discrete(weights, ngroup,
+                    group)
 
     # every group goes and does its tasks...
+
+    rundir = io.get_pipe_rundir()
+    logdir = os.path.join(rundir, io.get_pipe_logdir())
 
     failcount = 0
     group_failcount = 0
 
     if group_ntask > 0:
+
+        log.debug("rank #{} Group number of task {}, first task {}".format(rank,group_ntask,group_firsttask))
+
         for t in range(group_firsttask, group_firsttask + group_ntask):
+            # For this task, determine the output log file.  If the task has
+            # the "night" key in its name, then use that subdirectory.
+            # Otherwise, if it has the "pixel" key, use the appropriate
+            # subdirectory.
+            tt = task_type(runtasks[t])
+            fields = task_classes[tt].name_split(runtasks[t])
 
-            # slice out just the graph for this task
+            tasklog = None
+            if "night" in fields:
+                tasklogdir = os.path.join(logdir, io.get_pipe_nightdir(),
+                                          "{:08d}".format(fields["night"]))
+                # (this directory should have been made during the prod update)
+                tasklog = os.path.join(tasklogdir,
+                    "{}.log".format(runtasks[t]))
+            elif "pixel" in fields:
+                tasklogdir = os.path.join(logdir, "healpix",
+                    io.healpix_subdirectory(fields["nside"],fields["pixel"]))
+                # When creating this directory, there MIGHT be conflicts from
+                # multiple processes working on pixels in the same
+                # sub-directories...
+                try :
+                    if not os.path.isdir(os.path.dirname(tasklogdir)):
+                        os.makedirs(os.path.dirname(tasklogdir))
+                except FileExistsError:
+                    pass
+                try :
+                    if not os.path.isdir(tasklogdir):
+                        os.makedirs(tasklogdir)
+                except FileExistsError:
+                    pass
+                tasklog = os.path.join(tasklogdir,
+                    "{}.log".format(runtasks[t]))
 
-            (night, gname) = graph_night_split(tasks[t])
+            failedprocs = run_task(runtasks[t], options, comm=comm_group,
+                logfile=tasklog, db=db)
 
-            # check if all inputs exist
-
-            missing = 0
-            if group_rank == 0:
-                for iname in grph[tasks[t]]['in']:
-                    ind = grph[iname]
-                    fspath = graph_path(iname)
-                    if not os.path.exists(fspath):
-                        missing += 1
-                        if step=="psfcombine" :
-                            log.warning("step {} task {} missing input {}".format(step, tasks[t], fspath))
-                        else :
-                            log.error("skipping step {} task {} due to missing input {}".format(step, tasks[t], fspath))
-            if comm_group is not None:
-                missing = comm_group.bcast(missing, root=0)
-
-            if missing > 0 :
-                if step != "psfcombine"  or missing>1 :
-                    if group_rank == 0:
-                        group_failcount += 1
-                    continue
-                else :
-                    log.warning("will run step {} task {} even if 1 missing input".format(step, tasks[t]))
-            nfaildir = None
-            nlogdir = None
-            if step == "redshift":
-                ztype, nstr, pstr = graph_name_split(gname)
-                subdir = io.util.healpix_subdirectory(int(nstr), 
-                    int(pstr))
-                nfaildir = os.path.join(faildir, io.get_pipe_redshiftdir(), 
-                    subdir)
-                nlogdir = os.path.join(logdir, io.get_pipe_redshiftdir(), subdir)
-                if group_rank == 0:
-                    if not os.path.isdir(nfaildir):
-                        os.makedirs(nfaildir)
-                    if not os.path.isdir(nlogdir):
-                        os.makedirs(nlogdir)
-            else:
-                nfaildir = os.path.join(faildir, night)
-                nlogdir = os.path.join(logdir, night)
-
-            tgraph = graph_slice(grph, names=[tasks[t]], deps=True)
-            ffile = os.path.join(nfaildir, "{}_{}.yaml".format(step, tasks[t]))
-
-            # For this task, we will temporarily redirect stdout and stderr
-            # to a task-specific log file.
-
-            tasklog = os.path.join(nlogdir, "{}.log".format(gname))
-            if group_rank == 0:
-                if os.path.isfile(tasklog):
-                    os.remove(tasklog)
-            if comm_group is not None:
-                comm_group.barrier()
-
-            with stdouterr_redirected(to=tasklog, comm=comm_group):
-                try:
-                    # if the step previously failed, clear that file now
-                    if group_rank == 0:
-                        if os.path.isfile(ffile):
-                            os.remove(ffile)
-
-                    log.debug("running step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc))
-
-                    # All processes in comm_group will either return from this or ALL will
-                    # raise an exception
-                    worker.run(tgraph, tasks[t], options, comm=comm_group)
-
-                    # mark step as done in our group's graph
-                    grph[tasks[t]]["state"] = "done"
-
-                except:
-                    # The task threw an exception.  We want to dump all information
-                    # that will be needed to re-run the task.
-                    msg = "FAILED: step {} task {} (group {}/{} with {} processes)".format(step, tasks[t], (group+1), ngroup, taskproc)
-                    log.error(msg)
-                    exc_type, exc_value, exc_traceback = sys.exc_info()
-                    lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-                    log.error("".join(lines))
-                    if group_rank == 0:
-                        group_failcount += 1
-                        fyml = {}
-                        fyml["step"] = step
-                        fyml["task"] = tasks[t]
-                        fyml["worker"] = workername
-                        fyml["worker_opts"] = workeropts
-                        fyml["graph"] = tgraph
-                        fyml["opts"] = options
-                        fyml["procs"] = taskproc
-                        log.error("Dumping yaml graph to "+ffile)
-                        yaml_write(ffile, fyml)
-
-                    # mark the step as failed in our group"s local graph
-                    graph_set_recursive(grph, tasks[t], "fail")
-
-        if comm_group is not None:
-            group_failcount = comm_group.bcast(group_failcount, root=0)
-
-    # Now we take the graphs from all groups and merge their states
+            if failedprocs > 1:
+                group_failcount += 1
 
     failcount = group_failcount
 
-    if comm is not None:
-        if group_rank == 0:
-            graph_merge(grph, comm=comm_rank)
-            failcount = comm_rank.allreduce(failcount)
-        if comm_group is not None:
-            grph = comm_group.bcast(grph, root=0)
-            failcount = comm_group.bcast(failcount, root=0)
+    # Every process in each group has the fail count for the tasks assigned to
+    # its group.  To get the total onto all processes, we just have to do an
+    # allreduce across the rank communicator.
 
-    return grph, ntask, failcount
+    if comm_rank is not None:
+        failcount = comm_rank.allreduce(failcount)
+
+    if db is not None and rank == 0 :
+        # postprocess the successful tasks
+
+        log.debug("postprocess the successful tasks")
+
+        states = db.get_states(runtasks)
+
+        log.debug("states={}".format(states))
+        log.debug("runtasks={}".format(runtasks))
 
 
-def retry_task(failpath, newopts=None):
-    """
-    Attempt to re-run a failed task.
+        with db.cursor() as cur :
+            for name in runtasks :
+                if states[name] == "done" :
+                    log.debug("postprocessing {}".format(name))
+                    task_classes[tasktype].postprocessing(db,name,cur)
 
-    This takes the path to a yaml file containing the information about a
-    failed task (such a file is written by run_step() when a task fails).
-    This yaml file contains the truncated dependecy graph for the single
-    task, as well as the options that were used when running the task.
-    It also contains information about the number of processes that were
-    being used.
 
-    This function attempts to load mpi4py and use the MPI.COMM_WORLD
-    communicator to re-run the task.  If COMM_WORLD has a different number
-    of processes than were originally used, a warning is printed.  A
-    warning is also printed if the options are being overridden.
+    log.debug("rank #{} done".format(rank))
 
-    If the task completes successfully, the failed yaml file is deleted.
+    return failcount
+
+
+def run_task_list_db(tasktype, tasklist, comm=None):
+    """Run a list of tasks using the pipeline DB and options.
+
+    This is a wrapper around run_task_list which uses the production database
+    and global options file.
 
     Args:
-        failpath (str): the path to the failure yaml file.
-        newopts (dict): the dictionary of options to use in place of the
-            original ones.
+        tasktype (str): the pipeline step to process.
+        tasklist (list): the list of tasks.  All tasks should be of type
+            "tasktype" above.
+        comm (mpi4py.Comm): the full communicator to use for whole set of tasks.
+
+    Returns:
+        int: the number of tasks that failed.
+
+    """
+    (db, opts) = load_prod("w")
+    return run_task_list(tasktype, tasklist, opts, comm=comm, db=db)
+
+
+def dry_run(tasktype, tasklist, opts, procs, procs_per_node, db=None,
+    launch="mpirun -np", force=False):
+    """Compute the distribution of tasks and equivalent commands.
+
+    This function takes similar arguments as run_task_list() except simulates
+    the data distribution and commands that would be run if given the specified
+    number of processes and processes per node.
+
+    This can be used to debug issues with the runtime concurrency or the
+    actual options that will be passed to the underying main() entry points
+    for each task.
+
+    This function requires that the DESI environment variables are set to
+    point to the current production directory.
+
+    Only tasks that are ready to run (based on the filesystem checks or the
+    database) will actually be attempted.
+
+    NOTE: Since this function is just informative and for interactive use,
+    we print information directly to STDOUT rather than logging.
+
+    Args:
+        tasktype (str): the pipeline step to process.
+        tasklist (list): the list of tasks.  All tasks should be of type
+            "tasktype" above.
+        opts (dict): the global options (for example, as read from the
+            production options.yaml file).
+        procs (int): the number of processes to simulate.
+        procs_per_node (int): the number of processes per node to simulate.
+        db (pipeline.db.DB): The optional database to update.
+        launch (str): The launching command for a job.  This is just a
+            convenience and prepended to each command before the number of
+            processes.
+        force (bool): If True, ignore database and filesystem state and just
+            run the tasks regardless.
 
     Returns:
         Nothing.
+
     """
+    from .tasks.base import task_classes, task_type
 
-    log = get_logger()
+    prefix = "DRYRUN:  "
 
-    if not os.path.isfile(failpath):
-        raise RuntimeError("failure yaml file {} does not exist".format(failpath))
+    # Get the options for this task type.
 
-    fyml = yaml_read(failpath)
+    options = dict()
+    if tasktype in opts:
+        options = opts[tasktype]
 
-    step = fyml["step"]
-    name = fyml["task"]
-    workername = fyml["workername"]
-    workeropts = fyml["worker_opts"]
-    grph = fyml["graph"]
-    origopts = fyml["opts"]
-    nproc = fyml["procs"]
+    # Get the tasks that still need to be done.
 
-    comm = None
-    rank = 0
-    nworld = 1
+    runtasks = None
 
-    if use_mpi and (nproc > 1):
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        nworld = comm.size
-        rank = comm.rank
-    if nworld != nproc:
-        if rank == 0:
-            log.warning("WARNING: original task was run with {} processes, re-running with {} instead".format(nproc, nworld))
+    if force:
+        # Run everything
+        runtasks = tasklist
+    else:
+        # Actually check which things need to be run.
+        states = check_tasks(tasklist, db=db)
+        runtasks = [ x for x in tasklist if (states[x] == "ready") ]
 
-    opts = origopts
-    if newopts is not None:
-        log.warning("WARNING: overriding original options")
-        opts = newopts
+    ntask = len(runtasks)
+    print("{}{} tasks out of {} are ready to run (or be re-run)".format(prefix,
+        ntask, len(tasklist)))
+    sys.stdout.flush()
 
-    worker = get_worker(step, workername, workeropts)
+    # Get the weights for each task.
+
+    weights = [ task_classes[tasktype].run_time(x, procs_per_node, db=db) \
+            for x in runtasks ]
+
+    # Get the max number of processes for this task type
+
+    taskproc = task_classes[tasktype].run_max_procs(procs_per_node)
+    if taskproc > procs:
+        print("{}task type '{}' can use {} processes per task.  Limiting "
+            " this to {} as requested".format(prefix, tasktype, taskproc,
+            procs))
+        sys.stdout.flush()
+        taskproc = procs
+
+    # If we have multiple processes for each task, create groups
+
+    ngroup = procs
+    if taskproc > 1:
+        ngroup = int(procs / taskproc)
+
+    print("{}using {} groups of {} processes each".format(prefix,
+        ngroup, taskproc))
+    sys.stdout.flush()
+
+    if ngroup * taskproc < procs:
+        print("{}{} processes remain and will sit idle".format(prefix,
+            (procs - ngroup * taskproc)))
+        sys.stdout.flush()
+
+    # Now we divide up the tasks among the groups of processes as
+    # equally as possible.
+
+    group_firsttask = None
+    group_ntask = None
+
+    if ntask <= ngroup:
+        group_firsttask = [ x for x in range(ntask) ]
+        group_ntask = [ 1 for x in range(ntask) ]
+        if ntask < ngroup:
+            group_firsttask.extend([ 0 for x in range(ngroup - ntask) ])
+            group_ntask.extend([ 0 for x in range(ngroup - ntask) ])
+    else:
+        dist = dist_discrete_all(weights, ngroup)
+        group_firsttask = [ x[0] for x in dist ]
+        group_ntask = [ x[1] for x in dist ]
 
     rundir = io.get_pipe_rundir()
     logdir = os.path.join(rundir, io.get_pipe_logdir())
-    (night, gname) = graph_night_split(name)
 
-    nlogdir = os.path.join(logdir, night)
-
-    # For this task, we will temporarily redirect stdout and stderr
-    # to a task-specific log file.
-
-    tasklog = os.path.join(nlogdir, "{}.log".format(gname))
-    if rank == 0:
-        if os.path.isfile(tasklog):
-            os.remove(tasklog)
-    if comm is not None:
-        comm.barrier()
-
-    failcount = 0
-
-    with stdouterr_redirected(to=tasklog, comm=comm):
-        try:
-            log.debug("re-trying step {}, task {} with {} processes".format(step, name, nworld))
-            worker.run(grph, name, opts, comm=comm)
-        except:
-            msg = "FAILED: step {} task {} process {}".format(step, name, rank)
-            log.error(msg)
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
-            log.error(''.join(lines))
-            if group_rank == 0:
-                failcount= 1
-
-    if comm is not None:
-        failcount = comm.bcast(failcount, root=0)
-
-    if rank == 0:
-        if failcount > 0:
-            log.error("{} of {} processes raised an exception".format(failcount, nworld))
-        else:
-            # success, clear failure file now
-            if os.path.isfile(failpath):
-                os.remove(failpath)
-
-    return
-
-
-def run_steps(first, last, spectrographs=None, nightstr=None, comm=None):
-    """
-    Run multiple sequential pipeline steps.
-
-    This function first takes the communicator and the requested processes
-    per task and splits the communicator to form groups of processes of
-    the desired size.  It then takes the full dependency graph and extracts
-    all the tasks for a given step.  These tasks are then distributed among
-    the groups of processes.
-
-    Each process group loops over its assigned tasks.  For each task, it
-    redirects stdout/stderr to a per-task file and calls run_task().  If
-    any process in the group throws an exception, then the traceback and
-    all information (graph and options) needed to re-run the task are written
-    to disk.
-
-    After all process groups have finished, the state of the full graph is
-    merged from all processes.  This way a failure of one process on one task
-    will be propagated as a failed task to all processes.
-
-    Args:
-        first (str): the first pipeline step to run.
-        last (str): the last pipeline step to run.
-        spectrogrphs (str): comma-separated list of spectrographs to use.
-        nightstr (str): comma-separated list of regex patterns.
-        comm (mpi4py.Comm): the full communicator to use for whole step.
-
-    Returns:
-        Nothing.
-    """
-    log = get_logger()
-
-    rank = 0
-    nproc = 1
-    if comm is not None:
-        rank = comm.rank
-        nproc = comm.size
-
-    # get the full graph
-
-    grph = None
-    if rank == 0:
-        grph = load_prod(nightstr=nightstr, spectrographs=spectrographs)
-        graph_db_check(grph)
-    if comm is not None:
-        grph = comm.bcast(grph, root=0)
-
-    # read run options from disk
-
-    rundir = io.get_pipe_rundir()
-    optfile = os.path.join(rundir, "options.yaml")
-    opts = None
-    if rank == 0:
-        opts = yaml_read(optfile)
-    if comm is not None:
-        opts = comm.bcast(opts, root=0)
-
-    # compute the ordered list of steps to run
-
-    firststep = None
-    if first is None:
-        firststep = 0
-    else:
-        s = 0
-        for st in step_types:
-            if st == first:
-                firststep = s
-            s += 1
-
-    laststep = None
-    if last is None:
-        laststep = len(step_types)
-    else:
-        s = 1
-        for st in step_types:
-            if st == last:
-                laststep = s
-            s += 1
-
-    if rank == 0:
-        log.info("running steps {} to {}".format(step_types[firststep], step_types[laststep-1]))
-
-    # Mark our steps as in progress
-
-    for st in range(firststep, laststep):
-        for name, nd in grph.items():
-            if nd["type"] == step_file_types[step_types[st]]:
-                if nd["state"] != "done":
-                    nd["state"] = "running"
-
-    if rank == 0:
-        graph_db_write(grph)
-
-    # Run the steps.  Each step updates the graph in place to track
-    # the state of all nodes.
-
-    for st in range(firststep, laststep):
-
-        runfile = None
-        if rank == 0:
-            log.info("starting step {} at {}".format(step_types[st], time.asctime()))
-
-        grph, ntask, failtask = run_step(step_types[st], grph, opts, comm=comm)
-
-        if rank == 0:
-            log.info("completed step {} at {}".format(step_types[st], time.asctime()))
-            log.info("  {} total tasks, {} failures".format(ntask, failtask))
-            graph_db_write(grph)
-
-        if (ntask > 0) and (ntask == failtask):
-            if rank == 0:
-                log.info("step {}: all tasks failed, quiting at {}".format(step_types[st], time.asctime()))
-            break
-
-        if comm is not None:
-            comm.barrier()
-
-    if rank == 0:
-        log.info("finished steps {} to {}".format(step_types[firststep], step_types[laststep-1]))
-
-    return
-
-
-def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1, threads=1):
-    with open(path, "w") as f:
-        f.write("#!/bin/bash\n\n")
-        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
-        f.write("export STARTTIME=${now}\n")
-        f.write("log={}_${{now}}.log\n\n".format(logroot))
-        f.write("source {}\n\n".format(desisetup))
-        f.write("export OMP_NUM_THREADS={}\n\n".format(threads))
-        run = ""
-        if comrun != "":
-            run = "{} {}".format(comrun, mpiprocs)
-        for com in commands:
-            executable = com.split(" ")[0]
-            # f.write("which {}\n".format(executable))
-            f.write("echo logging to ${log}\n")
-            f.write("time {} {} >>${{log}} 2>&1\n\n".format(run, com))
-    mode = stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
-    os.chmod(path, mode)
-    return
-
-
-def nersc_job(host, path, logroot, desisetup, commands, nodes=1, \
-    nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
-    queue="debug", jobname="desipipe"):
-    hours = int(minutes/60)
-    fullmin = int(minutes - 60*hours)
-    timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
-
-    totalnodes = nodes
-    if multisrun:
-        # we are running every command as a separate srun
-        # and backgrounding them.  In this case, the nodes
-        # given are per command, so we need to compute the
-        # total.
-        totalnodes = nodes * len(commands)
-
-    with open(path, "w") as f:
-        f.write("#!/bin/bash -l\n\n")
-        if queue == "debug":
-            f.write("#SBATCH --partition=debug\n")
-        else:
-            f.write("#SBATCH --partition=regular\n")
-        if host == "cori":
-            f.write("#SBATCH --constraint=haswell\n")
-        elif host == "coriknl":
-            f.write("#SBATCH --constraint=knl,quad,cache\n")
-            f.write("#SBATCH --core-spec=4\n")
-        f.write("#SBATCH --account=desi\n")
-        f.write("#SBATCH --nodes={}\n".format(totalnodes))
-        f.write("#SBATCH --time={}\n".format(timestr))
-        f.write("#SBATCH --job-name={}\n".format(jobname))
-        f.write("#SBATCH --output={}_%j.log\n".format(logroot))
-
-        f.write("echo Starting slurm script at `date`\n\n")
-        f.write("source {}\n\n".format(desisetup))
-
-        f.write("# Set TMPDIR to be on the ramdisk\n")
-        f.write("export TMPDIR=/dev/shm\n\n")
-
-        if host == "edison":
-            f.write("cpu_per_core=2\n\n")
-            f.write("node_cores=24\n\n")
-        elif host == "cori":
-            f.write("cpu_per_core=2\n\n")
-            f.write("node_cores=32\n\n")
-        elif host == "coriknl":
-            f.write("cpu_per_core=4\n\n")
-            f.write("node_cores=64\n\n")
-        else:
-            raise RuntimeError("Unsupported NERSC host")
-
-        f.write("nodes={}\n".format(nodes))
-        f.write("node_proc={}\n".format(nodeproc))
-        f.write("node_thread=$(( node_cores / node_proc ))\n")
-        f.write("node_depth=$(( cpu_per_core * node_thread ))\n")
-
-        f.write("procs=$(( nodes * node_proc ))\n\n")
-        if openmp:
-            f.write("export OMP_NUM_THREADS=${node_thread}\n")
-            f.write("export OMP_PLACES=threads\n")
-            f.write("export OMP_PROC_BIND=spread\n")
-        else:
-            f.write("export OMP_NUM_THREADS=1\n")
-        f.write("\n")
-
-        runstr = "srun"
-        if multiproc:
-            runstr = "{} --cpu_bind=no".format(runstr)
-            f.write("export KMP_AFFINITY=disabled\n")
-            f.write("\n")
-        else:
-            runstr = "{} --cpu_bind=cores".format(runstr)
-        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_depth}}\"\n\n".format(runstr))
-
-        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
-        f.write("echo \"job datestamp = ${now}\"\n")
-        f.write("log={}_${{now}}.log\n\n".format(logroot))
-        f.write("envlog={}_${{now}}.env\n".format(logroot))
-        f.write("env > ${envlog}\n\n")
-        for com in commands:
-            comlist = com.split(" ")
-            executable = comlist.pop(0)
-            f.write("ex=`which {}`\n".format(executable))
-            f.write("app=\"${ex}.app\"\n")
-            f.write("if [ -x ${app} ]; then\n")
-            f.write("  if [ ${ex} -nt ${app} ]; then\n")
-            f.write("    app=${ex}\n")
-            f.write("  fi\n")
-            f.write("else\n")
-            f.write("  app=${ex}\n")
-            f.write("fi\n")
-            f.write("echo calling {} at `date`\n\n".format(executable))
-            f.write("export STARTTIME=`date +%Y%m%d-%H:%M:%S`\n")
-            f.write("echo ${{run}} ${{app}} {}\n".format(" ".join(comlist)))
-            f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(" ".join(comlist)))
-            if multisrun:
-                f.write(" &")
-            f.write("\n\n")
-        if multisrun:
-            f.write("wait\n\n")
-
-        f.write("echo done with slurm script at `date`\n")
-
-    return
-
-
-def nersc_shifter_job(host, path, img, specdata, specredux, desiroot, logroot, desisetup, commands, nodes=1, \
-    nodeproc=1, minutes=10, multisrun=False, openmp=False, multiproc=False, \
-    queue="debug", jobname="desipipe"):
-
-    hours = int(minutes/60)
-    fullmin = int(minutes - 60*hours)
-    timestr = "{:02d}:{:02d}:00".format(hours, fullmin)
-
-    totalnodes = nodes
-    if multisrun:
-        # we are running every command as a separate srun
-        # and backgrounding them.  In this case, the nodes
-        # given are per command, so we need to compute the
-        # total.
-        totalnodes = nodes * len(commands)
-
-    with open(path, "w") as f:
-        f.write("#!/bin/bash -l\n\n")
-        f.write("#SBATCH --image={}\n".format(img))
-        if queue == "debug":
-            f.write("#SBATCH --partition=debug\n")
-        else:
-            f.write("#SBATCH --partition=regular\n")
-        if host == "cori":
-            f.write("#SBATCH --constraint=haswell\n")
-        elif host == "coriknl":
-            f.write("#SBATCH --constraint=knl,quad,cache\n")
-            f.write("#SBATCH --core-spec=4\n")
-        f.write("#SBATCH --account=desi\n")
-        f.write("#SBATCH --nodes={}\n".format(totalnodes))
-        f.write("#SBATCH --time={}\n".format(timestr))
-        f.write("#SBATCH --job-name={}\n".format(jobname))
-        f.write("#SBATCH --output={}_%j.log\n".format(logroot))
-        f.write("#SBATCH --volume=\"{}:/desi/root;{}:/desi/spectro_data;{}:/desi/spectro_redux\"\n\n".format(desiroot, specdata, specredux))
-
-        f.write("echo Starting slurm script at `date`\n\n")
-        f.write("source {}\n\n".format(desisetup))
-
-        f.write("# Set TMPDIR to be on the ramdisk\n")
-        f.write("export TMPDIR=/dev/shm\n\n")
-
-        if host == "edison":
-            f.write("cpu_per_core=2\n\n")
-            f.write("node_cores=24\n\n")
-        elif host == "cori":
-            f.write("cpu_per_core=2\n\n")
-            f.write("node_cores=32\n\n")
-        elif host == "coriknl":
-            f.write("cpu_per_core=4\n\n")
-            f.write("node_cores=64\n\n")
-        else:
-            raise RuntimeError("Unsupported NERSC host")
-
-        f.write("nodes={}\n".format(nodes))
-        f.write("node_proc={}\n".format(nodeproc))
-        f.write("node_thread=$(( node_cores / node_proc ))\n")
-        f.write("node_depth=$(( cpu_per_core * node_thread ))\n")
-
-        f.write("procs=$(( nodes * node_proc ))\n\n")
-        if openmp:
-            f.write("export OMP_NUM_THREADS=${node_thread}\n")
-            f.write("export OMP_PLACES=threads\n")
-            f.write("export OMP_PROC_BIND=spread\n")
-        else:
-            f.write("export OMP_NUM_THREADS=1\n")
-        f.write("\n")
-
-        runstr = "srun"
-        if multiproc:
-            runstr = "{} --cpu_bind=no".format(runstr)
-            f.write("export KMP_AFFINITY=disabled\n")
-            f.write("\n")
-        else:
-            runstr = "{} --cpu_bind=cores".format(runstr)
-        f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c ${{node_depth}} shifter\"\n\n".format(runstr))
-
-        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
-        f.write("echo \"job datestamp = ${now}\"\n")
-        f.write("log={}_${{now}}.log\n\n".format(logroot))
-        f.write("envlog={}_${{now}}.env\n".format(logroot))
-        f.write("env > ${envlog}\n\n")
-        for com in commands:
-            comlist = com.split(" ")
-            executable = comlist.pop(0)
-            f.write("app={}\n".format(executable))
-            f.write("echo calling {} at `date`\n\n".format(executable))
-            f.write("export STARTTIME=`date +%Y%m%d-%H:%M:%S`\n")
-            f.write("echo ${{run}} ${{app}} {}\n".format(" ".join(comlist)))
-            f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(" ".join(comlist)))
-            if multisrun:
-                f.write(" &")
-            f.write("\n\n")
-        if multisrun:
-            f.write("wait\n\n")
-
-        f.write("echo done with slurm script at `date`\n")
+    maxruntime = 0
+    print("{}".format(prefix))
+    sys.stdout.flush()
+
+    for g in range(ngroup):
+        first = group_firsttask[g]
+        nt = group_ntask[g]
+        if nt == 0:
+            continue
+        gruntime = np.sum(weights[first:first+nt])
+        if gruntime > maxruntime:
+            maxruntime = gruntime
+        print("{}group {} estimated runtime is {} minutes".format(prefix,
+            g, gruntime))
+        sys.stdout.flush()
+        for t in range(first, first + nt):
+            # For this task, determine the output log file.  If the task has
+            # the "night" key in its name, then use that subdirectory.
+            # Otherwise, if it has the "pixel" key, use the appropriate
+            # subdirectory.
+            tt = task_type(runtasks[t])
+            fields = task_classes[tt].name_split(runtasks[t])
+
+            tasklog = None
+            if "night" in fields:
+                tasklogdir = os.path.join(logdir, io.get_pipe_nightdir(),
+                    "{:08d}".format(fields["night"]))
+                tasklog = os.path.join(tasklogdir,
+                    "{}.log".format(runtasks[t]))
+            elif "pixel" in fields:
+                tasklogdir = os.path.join(logdir,
+                    io.healpix_subdirectory(fields["nside"],fields["pixel"]))
+                tasklog = os.path.join(tasklogdir,
+                    "{}.log".format(runtasks[t]))
+
+            com = task_classes[tt].run_cli(runtasks[t], options, taskproc,
+                                           launch=launch, log=tasklog, db=db) # need to db for some tasks
+
+            print("{}  {}".format(prefix, com))
+            sys.stdout.flush()
+
+        print("{}".format(prefix))
+        sys.stdout.flush()
+
+    print("{}Total estimated runtime is {} minutes".format(prefix,
+        maxruntime))
+    sys.stdout.flush()
 
     return

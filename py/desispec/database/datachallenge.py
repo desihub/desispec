@@ -125,7 +125,6 @@ class Target(SchemaMixin, Base):
     mws_target = Column(BigInteger, nullable=False)
     hpxpixel = Column(BigInteger, nullable=False)
     subpriority = Column(Float, nullable=False)
-    obsconditions = Column(Integer, nullable=False)
 
     def __repr__(self):
         return ("<Target(brickid={0.brickid:d}, " +
@@ -159,7 +158,6 @@ class Target(SchemaMixin, Base):
                 "mws_target={0.mws_target:d}, " +
                 "hpxpixel={0.hpxpixel:d}, " +
                 "subpriority={0.subpriority:f}, " +
-                "obsconditions={0.obsconditions:d}" +
                 ")>").format(self)
 
 
@@ -384,28 +382,27 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
     return
 
 
-def load_zcat(datapath, run1d='dc17a2', q3c=False):
+def load_zcat(datapath=None, q3c=False):
     """Load zbest files into the zcat table.
 
     Parameters
     ----------
     datapath : :class:`str`
         Full path to the directory containing zbest files.
-    run1d : :class:`str`, optional
-        Particular reduction directory to read.
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     """
+    from ..io.meta import specprod_root
     from os.path import basename, dirname, join
     from re import compile
     from glob import glob
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    zbestpath = join(datapath, 'spectro', 'redux', run1d, 'spectra-64',
-                     '*', '*', 'zbest-64-*.fits')
-    # zbestpath = join(datapath, 'spectra-64',
-    #                  '*', '*', 'zbest-64-*.fits')
+    if datapath is None:
+        datapath = specprod_root()
+
+    zbestpath = join(datapath, 'spectra-64', '*', '*', 'zbest-64-*.fits')
     log.info("Using zbest file search path: %s.", zbestpath)
     zbest_files = glob(zbestpath)
     if len(zbest_files) == 0:
@@ -479,8 +476,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     from astropy.io import fits
     from desiutil.log import get_logger
     log = get_logger()
-    fiberpath = join(datapath, 'fiberassign',
-                     'tile_*.fits')
+    fiberpath = join(datapath, 'tile_*.fits')
     log.info("Using tile file search path: %s.", fiberpath)
     tile_files = glob(fiberpath)
     if len(tile_files) == 0:

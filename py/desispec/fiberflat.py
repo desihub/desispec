@@ -13,6 +13,7 @@ from desispec.linalg import cholesky_solve
 from desispec.linalg import cholesky_solve_and_invert
 from desispec.linalg import spline_fit
 from desispec.maskbits import specmask
+from desispec.preproc import masked_median
 from desispec import util
 import scipy,scipy.sparse
 import sys
@@ -440,6 +441,79 @@ def compute_fiberflat(frame, nsig_clipping=10., accuracy=5.e-4, minval=0.1, maxv
     return FiberFlat(wave, fiberflat, fiberflat_ivar, mask, mean_spectrum,
                      chi2pdf=chi2pdf)
 
+def average_fiberflat(fiberflats):
+    """Average several fiberflats 
+    Args:
+        fiberflats : list of `desispec.FiberFlat` object
+
+    returns a desispec.FiberFlat object
+    """
+    
+    log=get_logger()
+    log.info("starting")
+    
+    if len(fiberflats) == 0 :
+        message = "input fiberflat list is empty"
+        log.critical(message)
+        raise ValueError(message)
+    if len(fiberflats) == 1 :
+        log.warning("only one fiberflat to average??")
+        return fiberflats[0]
+
+    # check wavelength range 
+    for fflat in fiberflats[1:] :
+        if not np.allclose(fiberflats[0].wave, fflat.wave):
+            message = "fiberflats do not have the same wavelength arrays"
+            log.critical(message)
+            raise ValueError(message) 
+    wave = fiberflats[0].wave
+    
+    fiberflat = None
+    ivar      = None
+    if len(fiberflats) > 2 :
+        log.info("{} fiberflat to average, use masked median".format(len(fiberflats)))
+        tmp_fflat = []
+        tmp_ivar  = []
+        tmp_mask  = []
+        for tmp in fiberflats :
+            tmp_fflat.append(tmp.fiberflat)
+            tmp_ivar.append(tmp.ivar)
+            tmp_mask.append(tmp.mask)
+        fiberflat = masked_median(np.array(tmp_fflat),np.array(tmp_mask))
+        ivar      = np.sum(np.array(tmp_ivar),axis=0)
+        ivar     *= 2./np.pi # penalty for using a median instead of a mean
+    else :
+        log.info("{} fiberflat to average, use weighted mean".format(len(fiberflats)))
+        sw=None
+        swf=None
+        for tmp in fiberflats :
+            w   = (tmp.ivar)*(tmp.mask==0)
+            if sw is None :
+                sw   = w
+                swf  = w*tmp.fiberflat
+                mask = tmp.mask
+            else :
+                sw  += w
+                swf += w*tmp.fiberflat
+        fiberflat = swf/(sw+(sw==0))
+        ivar      = sw
+        
+    # combined mask
+    mask=None
+    for tmp in fiberflats :
+        if mask is None :
+            mask = tmp.mask
+        else :
+            ii=(mask>0)&(tmp.mask>0)
+            mask[ii] |= tmp.mask[ii]
+            mask[tmp.mask==0] = 0 # mask=0 on fiber and wave data point where at list one fiberflat has mask=0
+
+    return FiberFlat(wave,fiberflat,ivar,mask,
+                     header=fiberflats[0].header, 
+                     fibers=fiberflats[0].fibers,
+                     spectrograph=fiberflats[0].spectrograph)
+
+    
 
 def apply_fiberflat(frame, fiberflat):
     """Apply fiberflat to frame.  Modifies frame.flux and frame.ivar

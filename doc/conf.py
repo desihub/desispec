@@ -17,7 +17,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import sys
 import os
 import os.path
-
+from importlib import import_module
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -133,58 +133,14 @@ napoleon_include_private_with_doc = True
 # This value contains a list of modules to be mocked up. This is useful when
 # some external dependencies are not met at build time and break the
 # building process.
-autodoc_mock_imports = ['astropy',
-                        'astropy.io',
-                        'astropy.io.fits',
-                        'astropy.modeling',
-                        'astropy.stats',
-                        'astropy.table',
-                        'astropy.time',
-                        'astropy.units',
-                        'desimodel',
-                        'desimodel.footprint',
-                        'desiutil',
-                        'desiutil.bitmask',
-                        'desiutil.depend',
-                        'desiutil.io',
-                        'desiutil.log',
-                        'desiutil.plots',
-                        'healpy',
-                        'matplotlib',
-                        'matplotlib.patches',
-                        'matplotlib.backends',
-                        'matplotlib.backends.backend_pdf',
-                        'matplotlib.cm',
-                        'matplotlib.gridspec',
-                        'matplotlib.collections',
-                        # 'numpy',
-                        # 'numpy.polynomial',
-                        # 'numpy.polynomial.legendre',
-                        'scipy',
-                        'scipy.constants',
-                        'scipy.interpolate',
-                        'scipy.linalg',
-                        'scipy.ndimage',
-                        'scipy.optimize',
-                        'scipy.sparse',
-                        'scipy.sparse.linalg',
-                        'scipy.special',
-                        'scipy.stats',
-                        'speclite',
-                        'speclite.filters',
-                        'specter',
-                        'specter.psf',
-                        'specter.extract',
-                        # 'sqlalchemy',
-                        # 'sqlalchemy.exc',
-                        # 'sqlalchemy.ext',
-                        # 'sqlalchemy.ext.associationproxy',
-                        # 'sqlalchemy.ext.declarative',
-                        # 'sqlalchemy.orm',
-                        # 'sqlalchemy.orm.exc',
-                        # 'sqlalchemy.schema',
-                        'yaml',
-                        ]
+autodoc_mock_imports = []
+for missing in ('astropy', 'desimodel', 'desiutil', 'healpy', 'matplotlib',
+                'numpy', 'redrock', 'scipy', 'speclite', 'specter',
+                'sqlalchemy', 'yaml'):
+    try:
+        foo = import_module(missing)
+    except ImportError:
+        autodoc_mock_imports.append(missing)
 
 # -- Options for HTML output ----------------------------------------------
 

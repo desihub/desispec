@@ -271,12 +271,9 @@ class Bias_From_Overscan(MonitoringAlg):
         biasdiff_err='NORMAL'
         if amps:
             bias_amps=np.array(bias_overscan)
-
-#            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIAS_STAT":biasdiff_err}
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
         else:
-#            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row}
-            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"MEANBIAS_ROW":mean_row,"BIAS_STAT":biasdiff_err}
+            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
 
         #- http post if needed
         if qlf:
@@ -398,6 +395,7 @@ class Get_RMS(MonitoringAlg):
             rms_amps.append(rms_thisamp)
             rms_over_amps.append(rms_thisover_thisamp)
         rmsover=np.max(rms_over_amps)
+        noise_row=np.array((rms_row,rms_row)) #-TODO This has to be recalculated in the overscan left and right in (2,nrow) format
 
         rmsdiff_err='NORMAL'
         if amps:
@@ -415,12 +413,9 @@ class Get_RMS(MonitoringAlg):
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-
-#            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"EXPNUM_WARN":expnum}
-            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"RMS_ROW":rms_row,"NOISE_STAT":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"NOISE_ROW":noise_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
         else:
-#            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_ROW":rms_row,"EXPNUM_WARN":expnum}
-            retval["METRICS"]={"RMS":rmsccd,"NOISE":rmsover,"RMS_ROW":rms_row,"NOISE_STAT":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
 
         if qlf:
             qlf_post(retval)  
@@ -531,16 +526,16 @@ class Calc_XWSigma(MonitoringAlg):
                     "B_PEAKS":[4047.7, 4359.6, 5087.2],
                     "R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
                     "Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
-                    "XWSIGMA_NORMAL_RANGE":[-2.0, 2.0],
-                    "XWSIGMA_WARN_RANGE":[-4.0, 4.0]
+                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0], #- Assumes both sigma and shift in same range. Change if needed
+                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
                     }
             else:
                 param = {
                     "B_PEAKS":[3914.4, 5199.3, 5578.9],
                     "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                     "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                    "XWSIGMA_NORMAL_RANGE":[-2.0, 2.0],
-                    "XWSIGMA_WARN_RANGE":[-4.0, 4.0]
+                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0],
+                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
                     }
 
         #- Ensure that the QA will run even if 500 spectra aren't present
@@ -680,7 +675,7 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_med=np.median(wsigma)
         xsigma_med_sky=np.median(xsigma_sky)
         wsigma_med_sky=np.median(wsigma_sky)
-        xwsigma=np.array([xsigma_med_sky,wsigma_med_sky])
+        #xwsigma=np.array([xsigma_med_sky,wsigma_med_sky])
         xamp1_med=np.median(xsigma_amp1)
         xamp2_med=np.median(xsigma_amp2)
         xamp3_med=np.median(xsigma_amp3)
@@ -692,8 +687,8 @@ class Calc_XWSigma(MonitoringAlg):
         xsigma_amp=np.array([xamp1_med,xamp2_med,xamp3_med,xamp4_med])
         wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
 
-        xshift=0.0
-        wshift=0.0
+        xshift_med=0.0
+        wshift_med=0.0
         xshift_fib=[]
         wshift_fib=[]
         xshift_amp=[]
@@ -707,12 +702,22 @@ class Calc_XWSigma(MonitoringAlg):
             retval['PARAMS']['XWSIGMA_REF']=kwargs["REFERENCE"]
 
         shift_err='NORMAL'
+
+        #- Combine metrics for x and w
+        xwsigma=np.array((xsigma,wsigma)) #- (2,nfib)
+        #xwsigma_med=np.array((xsigma_med,wsigma_med)) #- (2)
+        xwsigma_amp=np.array((xsigma_amp,wsigma_amp))
+       
+        xwshift=np.zeros((2,500)) #- 500 should change to nfib (read from top)
+        #xwshift_med=np.array((xshift_med,wshift_med))
+        xwshift_amp=np.array((xshift_amp, wshift_amp))
+        
+        xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
+
         if amps:
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_AMP":xsigma_amp,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"XSHIFT_AMP":xshift_amp,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_AMP":wsigma_amp,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"WSHIFT_AMP":wshift_amp,"XWSIGMA":xwsigma,"XWFIT_FAIL":xwfails,"XWSIGMA_STAT":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
         else:
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWSIGMA":xwsigma}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XSIGMA":xsigma,"XSIGMA_MED":xsigma_med,"XSIGMA_MED_SKY":xsigma_med_sky,"XSHIFT":xshift,"XSHIFT_FIB":xshift_fib,"WSIGMA":wsigma,"WSIGMA_MED":wsigma_med,"WSIGMA_MED_SKY":wsigma_med_sky,"WSHIFT":wshift,"WSHIFT_FIB":wshift_fib,"XWFIT_FAIL":xwfails,"XWSIGMA_STAT":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
 
         #- http post if needed
         if qlf:
@@ -736,10 +741,11 @@ class Count_Pixels(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="COUNTPIX"
+        from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NPIX_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NPIX_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NPIX_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -825,31 +831,30 @@ class Count_Pixels(MonitoringAlg):
             npixlo_amps=[]
             npixhi_amps=[]
             #- get amp boundary in pixels
+            from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 npixlo_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTLO'])
                 npixlo_amps.append(npixlo_thisamp)
                 npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
                 npixhi_amps.append(npixhi_thisamp)
-
-#            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps}
-            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_AMP": npixlo_amps,"NPIX_HIGH_AMP": npixhi_amps,"NPIX_STAT":npix_err}
+            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_AMP": npixlo_amps,"NPIXHI_AMP": npixhi_amps,"NPIX_STATUS":npix_err}
         else:
-#            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi}
-            retval["METRICS"]={"NPIX_LOW":npixlo,"NPIX_HIGH":npixhi,"NPIX_STAT":npix_err}
+            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_STATUS":npix_err}
 
         if qlf:
-            qlf_post(retval)      
+            qlf_post(retval)
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            plot.plot_countpix(retval,qafig)
-            
+            from desispec.qa.qa_plots_ql import plot_countpix
+            plot_countpix(retval,qafig)
+
             log.debug("Output QA fig {}".format(qafig))
 
-        return retval    
+        return retval
 
     def get_default_config(self):
         return {}
@@ -900,10 +905,6 @@ class CountSpectralBins(MonitoringAlg):
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
         psf = None
         if "PSFFile" in kwargs: 
             psf=kwargs["PSFFile"]
@@ -921,10 +922,9 @@ class CountSpectralBins(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(fibermap,frame,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
-
-    def run_qa(self,fibermap,frame,paname=None,psf=None,amps=False,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,psf=None,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
 
         #- qa dictionary 
         retval={}
@@ -961,8 +961,6 @@ class CountSpectralBins(MonitoringAlg):
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
             retval['PARAMS']['NGOODFIB_REF']=kwargs["REFERENCE"]
-
-        nbinshi_temp=[]
         
         countslo=qalib.countbins(frame.flux,threshold=param['CUTLO'])
         countsmed=qalib.countbins(frame.flux,threshold=param['CUTMED'])
@@ -971,12 +969,15 @@ class CountSpectralBins(MonitoringAlg):
         goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than cuthi counts
         ngoodfibers=goodfibers.shape[0]
 
+        ngood_err='NORMAL'
+
+        #- leaving the amps granularity needed for caching as defunct. If needed in future, this needs to be propagated through.
+        amps=False
         leftmax=None
         rightmax=None
         bottommax=None
         topmin=None
 
-        ngood_err='NORMAL'
         if amps:
             #- get the pixel boundary and fiducial boundary in flux-wavelength space
 
@@ -1029,16 +1030,13 @@ class CountSpectralBins(MonitoringAlg):
             averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
             averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
 
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi, "NBINSLOW_AMP":averagelo_amps,"NBINSMED_AMP":averagemed_amps,"NBINSHIGH_AMP":averagehi_amps, "NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STAT":ngood_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi, "NBINSLO_AMP":averagelo_amps, "NBINSMED_AMP":averagemed_amps,"NBINSHI_AMP":averagehi_amps, "NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
+            retval["LEFT_MAX_FIBER"]=int(leftmax)
+            retval["RIGHT_MIN_FIBER"]=int(rightmin)
+            retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
+            retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
         else:
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLOW":countslo,"NBINSMED":countsmed,"NBINSHIGH":countshi,"NGOODFIB": ngoodfibers, "NBINSHI_TEMP":nbinshi_temp,"NGOODFIB_STAT":ngood_err}
-
-        retval["LEFT_MAX_FIBER"]=int(leftmax)
-        retval["RIGHT_MIN_FIBER"]=int(rightmin)
-        retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
-        retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
 
         #- http post if needed
         if qlf:
@@ -1083,20 +1081,14 @@ class Sky_Continuum(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
-        dict_countbins=None
         if kwargs["singleqa"] == 'Sky_Continuum':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
             reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
-            with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
-                cdict = yaml.load(f)
-            dict_countbins = {'LEFT_MAX_FIBER' : cdict['LEFT_MAX_FIBER'], 'RIGHT_MIN_FIBER' : cdict['RIGHT_MIN_FIBER'], 'BOTTOM_MAX_WAVE_INDEX' : cdict['BOTTOM_MAX_WAVE_INDEX'], 'TOP_MIN_WAVE_INDEX' : cdict['TOP_MIN_WAVE_INDEX']}
         else:
             frame=args[0]
-            if "dict_countbins" in kwargs:
-                dict_countbins=kwargs["dict_countbins"]
 
         fibermap=kwargs['FiberMap']
         camera=frame.meta["CAMERA"]
@@ -1106,10 +1098,6 @@ class Sky_Continuum(MonitoringAlg):
 
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
-
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
@@ -1137,11 +1125,11 @@ class Sky_Continuum(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(fibermap,frame,wrange1=wrange1,wrange2=wrange2,paname=paname,amps=amps, dict_countbins=dict_countbins,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+
+        return self.run_qa(fibermap,frame,wrange1=wrange1,wrange2=wrange2,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,
-               paname=None,amps=False,dict_countbins=None,
-               qafile=None,qafig=None, param=None, qlf=False,
+               paname=None,qafile=None,qafig=None,param=None,qlf=False,
                refmetrics=None):
 
         #- qa dictionary 
@@ -1171,37 +1159,9 @@ class Sky_Continuum(MonitoringAlg):
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
 
+
         skycont_err = 'NORMAL'
-        if amps:
-            leftmax = dict_countbins["LEFT_MAX_FIBER"]
-            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
-            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
-            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
-
-            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-
-            k1=np.where(skyfiber < fidboundary[0][0].stop)[0]
-            maxsky_index=max(k1)
-
-            contamp1=np.mean(contfiberlow[:maxsky_index])
-            contamp3=np.mean(contfiberhigh[:maxsky_index])
-
-            if fidboundary[1][0].start >=fidboundary[0][0].stop:
-                k2=np.where(skyfiber > fidboundary[1][0].start)[0]
-                minsky_index=min(k2)
-                contamp2=np.mean(contfiberlow[minsky_index:])
-                contamp4=np.mean(contfiberhigh[minsky_index:])
-            else:
-                contamp2=0
-                contamp4=0
-
-            skycont_amps=np.array((contamp1,contamp2,contamp3,contamp4)) #- in four amps regions
-
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_AMP":skycont_amps, "SKYCONT_STAT":skycont_err}
-        else: 
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STAT":skycont_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STATUS":skycont_err}
 
         if qlf:
             qlf_post(retval)    
@@ -1264,10 +1224,6 @@ class Sky_Peaks(MonitoringAlg):
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
 
@@ -1286,9 +1242,9 @@ class Sky_Peaks(MonitoringAlg):
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,frame,paname=paname,amps=amps,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from desispec.qa.qalib import sky_peaks
         retval={}
         retval["PANAME"] = paname
@@ -1310,7 +1266,7 @@ class Sky_Peaks(MonitoringAlg):
             param = desi_params['qa']['skypeaks']['PARAMS']
 
         # Run
-        nspec_counts, sky_counts = sky_peaks(param, frame, amps=amps)
+        nspec_counts, sky_counts = sky_peaks(param, frame)
         rms_nspec = qalib.getrms(nspec_counts)
         rms_skyspec = qalib.getrms(sky_counts)
         sumcount_med_sky=[]
@@ -1319,9 +1275,9 @@ class Sky_Peaks(MonitoringAlg):
         if "REFERENCE" in kwargs:
             retval['PARAMS']['PEAKCOUNT_REF']=kwargs["REFERENCE"]
 
-#        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec}
         sumcount_err='NORMAL'
-        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_RMS":rms_nspec,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS_SKY":rms_skyspec,"PEAKCOUNT_STAT":sumcount_err}
+
+        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS":rms_skyspec,"PEAKCOUNT_STATUS":sumcount_err}
 
         if qlf:
             qlf_post(retval)
@@ -1370,20 +1326,14 @@ class Sky_Residual(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        dict_countbins=None
         if kwargs["singleqa"] == 'Sky_Residual':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
             reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
-            with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
-                cdict = yaml.load(f)
-            dict_countbins = {'LEFT_MAX_FIBER' : cdict['LEFT_MAX_FIBER'], 'RIGHT_MIN_FIBER' : cdict['RIGHT_MIN_FIBER'], 'BOTTOM_MAX_WAVE_INDEX' : cdict['BOTTOM_MAX_WAVE_INDEX'], 'TOP_MIN_WAVE_INDEX' : cdict['TOP_MIN_WAVE_INDEX']}
         else:
             frame=args[0]
-            if "dict_countbins" in kwargs:
-                dict_countbins=kwargs["dict_countbins"]
 
         fibermap=kwargs['FiberMap']
         skymodel=args[1] #- should be skymodel evaluated
@@ -1395,11 +1345,7 @@ class Sky_Residual(MonitoringAlg):
 
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
-
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
+        
         paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
@@ -1417,10 +1363,10 @@ class Sky_Residual(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(fibermap,frame,paname=paname,skymodel=skymodel,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,skymodel=skymodel,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
 
-    def run_qa(self,fibermap,frame,paname=None,skymodel=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,skymodel=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
         from desispec.sky import qa_skysub
 
         if skymodel is None:
@@ -1485,7 +1431,7 @@ class Integrate_Spec(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "INTEG_AVG"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "MAGDIFF_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "DELTAMAG_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1493,9 +1439,9 @@ class Integrate_Spec(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
-        if "MAGDIFF_WARN_RANGE" in parms and "MAGDIFF_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["MAGDIFF_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["MAGDIFF_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        if "DELTAMAG_WARN_RANGE" in parms and "DELTAMAG_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["DELTAMAG_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["DELTAMAG_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -1503,20 +1449,14 @@ class Integrate_Spec(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
-        dict_sountbins=None
         if kwargs["singleqa"] == 'Integrate_Spec':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
             reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
-            with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
-                cdict = yaml.load(f)
-            dict_countbins = {'LEFT_MAX_FIBER' : cdict['LEFT_MAX_FIBER'], 'RIGHT_MIN_FIBER' : cdict['RIGHT_MIN_FIBER'], 'BOTTOM_MAX_WAVE_INDEX' : cdict['BOTTOM_MAX_WAVE_INDEX'], 'TOP_MIN_WAVE_INDEX' : cdict['TOP_MIN_WAVE_INDEX']}
         else:
             frame=args[0]
-            if "dict_countbins" in kwargs:
-                dict_countbins=kwargs["dict_countbins"]
 
         fibermap=kwargs['FiberMap']
 
@@ -1527,10 +1467,6 @@ class Integrate_Spec(MonitoringAlg):
 
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
-
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
@@ -1544,9 +1480,10 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(fibermap,frame,paname=paname,amps=amps, dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
+
+    def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
         retval={}
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
@@ -1564,7 +1501,7 @@ class Integrate_Spec(MonitoringAlg):
         flux=frame.flux
         wave=frame.wave
         integrals=np.zeros(flux.shape[0])
-
+        log.info(len(integrals))
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
 
@@ -1599,49 +1536,19 @@ class Integrate_Spec(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
-                "MAGDIFF_NORMAL_RANGE":[-0.5, 0.5],
-                "MAGDIFF_WARN_RANGE":[-1.0, 1.0]
+                "DELTAMAG_NORMAL_RANGE":[-0.5, 0.5],
+                "DELTAMAG_WARN_RANGE":[-1.0, 1.0]
                 }
 
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['MAGDIFF_TGT_REF']=kwargs["REFERENCE"]
-
-        magdiff_avg_amp = [0.0]
+            retval['PARAMS']['DELTAMAG_TGT_REF']=kwargs["REFERENCE"]
 
         magdiff_err='NORMAL'
-        #- get the counts for each amp
-        if amps:
+        fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
+        delta_mag=np.zeros(frame.nspec) #- placeholder
 
-            #- get the fiducial boundary
-            leftmax = dict_countbins["LEFT_MAX_FIBER"]
-            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
-            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
-            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
-
-            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-
-            int_avg_amps=np.zeros(4)
-
-            for amp in range(4):
-                wave=frame.wave[fidboundary[amp][1]]
-                select_thisamp=starfibers[(starfibers >= fidboundary[amp][0].start) & (starfibers < fidboundary[amp][0].stop)]
-                stdflux_thisamp=frame.flux[select_thisamp,fidboundary[amp][1]]
-
-                if len(stdflux_thisamp)==0:
-                    continue
-                else:
-                    integ_thisamp=np.zeros(stdflux_thisamp.shape[0])
-
-                    for ii in range(stdflux_thisamp.shape[0]):
-                        integ_thisamp[ii]=qalib.integrate_spec(wave,stdflux_thisamp[ii])
-                    int_avg_amps[amp]=np.mean(integ_thisamp)
-
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars, "INTEG_AVG":int_average,"INTEG_AVG_AMP":int_avg_amps, "STD_FIBERID": starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_AVG_AMP":magdiff_avg_amp,"MAGDIFF_STAT":magdiff_err}
-        else:
-#            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg}
-            retval["METRICS"]={"RA":ra,"DEC":dec, "INTEG":int_stars,"INTEG_AVG":int_average,"STD_FIBERID":starfibers.tolist(),"MAGDIFF_TGT":magdiff_avg,"MAGDIFF_STAT":magdiff_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
 
         if qlf:
             qlf_post(retval) 
@@ -1684,20 +1591,15 @@ class Calculate_SNR(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        dict_countbins=None
         if kwargs["singleqa"] == 'Calculate_SNR':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
             reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
-            with open(os.path.join(reduxpath,'ql-countbins-{}-{}.yaml'.format(camera,expid))) as f:
-                cdict = yaml.load(f)
-            dict_countbins = {'LEFT_MAX_FIBER' : cdict['LEFT_MAX_FIBER'], 'RIGHT_MIN_FIBER' : cdict['RIGHT_MIN_FIBER'], 'BOTTOM_MAX_WAVE_INDEX' : cdict['BOTTOM_MAX_WAVE_INDEX'], 'TOP_MIN_WAVE_INDEX' : cdict['TOP_MIN_WAVE_INDEX']}
         else:
             frame=args[0]
-            if "dict_countbins" in kwargs:
-                dict_countbins=kwargs["dict_countbins"]
+
         fibermap=kwargs['FiberMap']
 
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
@@ -1726,10 +1628,9 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics, sigmacut=sigmacut)
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics,sigmacut=sigmacut)
 
-
-    def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False, param=None, refmetrics=None, sigmacut=None):
+    def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None,sigmacut=None):
 
         #- return values
         retval={}
@@ -1759,14 +1660,7 @@ class Calculate_SNR(MonitoringAlg):
                 }
 
         fidboundary=None
-        if amps: 
-            #- get the pixel boundary and fiducial boundary in flux-wavelength space
-            leftmax = dict_countbins["LEFT_MAX_FIBER"]
-            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
-            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
-            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
-            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-        #qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
+
         qadict,badfibs,fitsnr = qalib.SNRFit(frame,night,camera,expid,objlist,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later

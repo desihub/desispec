@@ -4,7 +4,7 @@
 """
 from __future__ import absolute_import, division
 # The line above will help with 2to3 support.
-import unittest, os
+import unittest, os, sys
 import tempfile
 from datetime import datetime, timedelta
 from shutil import rmtree
@@ -14,6 +14,8 @@ from astropy.io import fits
 from astropy.table import Table
 from ..frame import Frame
 
+PY3 = sys.version_info.major > 2
+
 class TestIO(unittest.TestCase):
     """Test desispec.io.
     """
@@ -22,12 +24,11 @@ class TestIO(unittest.TestCase):
     def setUpClass(cls):
         """Create unique test filename in a subdirectory.
         """
-        from uuid import uuid1
-        cls.testfile = 'test-{uuid}/test-{uuid}.fits'.format(uuid=uuid1())
-        cls.testyfile = 'test-{uuid}/test-{uuid}.yaml'.format(uuid=uuid1())
-        cls.testbrfile = 'test-{uuid}/test-br-{uuid}.fits'.format(uuid=uuid1())
-        # cls.testDir = os.path.join(os.environ['HOME'],'desi_test_io')
         cls.testDir = tempfile.mkdtemp()
+        cls.testfile = os.path.join(cls.testDir, 'desispec_test_io.fits')
+        cls.testyfile = os.path.join(cls.testDir, 'desispec_test_io.yaml')
+        # cls.testbrfile appears to be unused by this class.
+        cls.testbrfile = os.path.join(cls.testDir, 'desispec_test_io-br.fits')
         cls.origEnv = {'SPECPROD':None,
             "DESI_SPECTRO_DATA":None,
             "DESI_SPECTRO_REDUX":None}
@@ -59,9 +60,6 @@ class TestIO(unittest.TestCase):
         for testfile in [cls.testfile, cls.testyfile, cls.testbrfile]:
             if os.path.exists(testfile):
                 os.remove(testfile)
-                testpath = os.path.normpath(os.path.dirname(testfile))
-                if testpath != '.':
-                    os.removedirs(testpath)
 
         for e in cls.origEnv:
             if cls.origEnv[e] is None:
@@ -299,6 +297,8 @@ class TestIO(unittest.TestCase):
         self.assertTrue(np.all(fm3['FIBER'] == np.arange(10)+495))
         self.assertTrue(np.all(fm3['SPECTROID'] == [0,0,0,0,0,1,1,1,1,1]))
 
+    # See https://github.com/astropy/astropy/issues/5267
+    # @unittest.skipIf(PY3, "Skipping due to known problem with round-tripping in Python 3.")
     def test_fibermap_rw(self):
         """Test reading and writing fibermap files.
         """
@@ -528,7 +528,7 @@ class TestIO(unittest.TestCase):
         for night in ['20150101', '20150102']:
             x1 = findfile('frame', camera='b0', night=night, expid=123)
             makepath(x1)
-            x2 = findfile('fiberflat', camera='b0', night=night, expid=123)
+            x2 = findfile('psfnight', camera='b0', night=night)
             makepath(x2)
         # Add a bad 'night'
         x1 = x1.replace('20150102', 'dummy')
@@ -542,7 +542,7 @@ class TestIO(unittest.TestCase):
         nights = get_nights(strip_path=False)
         self.assertTrue('/' in nights[0])
         # Calib
-        nights = get_nights(sub_folder='calib2d')
+        nights = get_nights(sub_folder='calibnight')
         self.assertTrue('20150102' in nights)
 
     def test_search_framefile(self):
@@ -552,8 +552,8 @@ class TestIO(unittest.TestCase):
         from ..io.meta import findfile
         from ..io.util import makepath
         # Setup paths
-        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
-        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        # os.environ['SPECPROD'] = self.testEnv['SPECPROD']
         # Generate a dummy frame file
         x = findfile('frame', camera='b0', night='20150101', expid=123)
         makepath(x)
@@ -570,8 +570,8 @@ class TestIO(unittest.TestCase):
         from ..io.meta import findfile
         from ..io.util import makepath
         # Setup paths
-        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
-        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        # os.environ['SPECPROD'] = self.testEnv['SPECPROD']
         # Generate a dummy frame file
         for expid, night in zip((123,150), ['20150101', '20150102']):
             x = findfile('cframe', camera='b0', night=night, expid=expid)
@@ -589,8 +589,8 @@ class TestIO(unittest.TestCase):
         from ..io.meta import findfile
         from ..io.util import makepath
         # Setup paths
-        os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
-        os.environ['SPECPROD'] = self.testEnv['SPECPROD']
+        # os.environ['DESI_SPECTRO_REDUX'] = self.testEnv['DESI_SPECTRO_REDUX']
+        # os.environ['SPECPROD'] = self.testEnv['SPECPROD']
         # Generate a dummy frame file
         for expid, night in zip((123, 150), ['20150101', '20150102']):
             x = findfile('cframe', camera='b0', night=night, expid=expid)

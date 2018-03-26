@@ -3,11 +3,19 @@
 #
 # -*- coding: utf-8 -*-
 """
-desispec.pipeline.task
+desispec.pipeline.workers
 ===========================
 
-Classes and functions for pipeline tasks
+Classes for executing pipeline tasks.
 """
+
+#
+# REFACTOR:
+# This whole file will be removed and all funtionality moved into the individual
+# task classes.
+#
+
+
 
 from __future__ import absolute_import, division, print_function
 
@@ -195,7 +203,7 @@ class WorkerSpecex(Worker):
         opts["trace-deg-wave"] = 7
         opts["trace-deg-x"] = 7
         opts["trace-prior-deg"] = 4
-        
+
         # to get the lampline location, look in our path for specex
         # and use that install prefix to find the data directory.
         # if that directory does not exist, use a default NERSC
@@ -240,11 +248,11 @@ class WorkerSpecex(Worker):
         pix = []
         inpsf = []
         for input in node["in"]:
-            
-            print("DEBUG  input , grph[input]=", input,grph[input]) 
+
+            print("DEBUG  input , grph[input]=", input,grph[input])
 
             inode = grph[input]
-            if inode["type"] == "psfboot": 
+            if inode["type"] == "psfboot":
                 inpsf.append(input)
             elif inode["type"] == "pix":
                 pix.append(input)
@@ -262,7 +270,7 @@ class WorkerSpecex(Worker):
         options["output-psf"]  = outfile
         #if log.getEffectiveLevel() == DEBUG:
         #    options["debug"] = True
-            
+
         if len(opts) > 0:
             extarray = option_list(opts)
             options["extra"] = " ".join(extarray)
@@ -293,7 +301,7 @@ class WorkerSpecexCombine(Worker):
         return 1
 
     def task_time(self):
-        return 2 # fast 
+        return 2 # fast
 
 
     def default_options(self):
@@ -518,7 +526,7 @@ class WorkerSky(Worker):
         return 1
 
     def task_time(self):
-        return 2 # less than 1 minute 
+        return 2 # less than 1 minute
 
     def default_options(self):
         opts = {}
@@ -598,7 +606,7 @@ class WorkerStdstars(Worker):
 
     def task_time(self):
         return 15 # less than 4 min on edison but can vary quite a bit
-        
+
 
     def default_options(self):
         log = get_logger()
@@ -984,7 +992,8 @@ class WorkerRedrock(Worker):
 
         outfile = graph_path(task)
         outdir = os.path.dirname(outfile)
-        details = os.path.join(outdir, "rrdetails_{}.h5".format(task))
+        details = io.findfile('redrock',
+            nside=node["nside"], groupname=node["pixel"], outdir=outdir)
 
         options = {}
         options["output"] = details
@@ -1013,7 +1022,7 @@ class WorkerRedrock(Worker):
             # all processes throw
             raise RuntimeError("some redshifts failed for task "
                 "{}".format(task))
-        
+
         return
 
 
