@@ -15,7 +15,6 @@ from __future__ import absolute_import, division, print_function
 task_states = [
     "waiting",
     "ready",
-    "queued",
     "running",
     "done",
     "failed"
@@ -25,26 +24,23 @@ task_states = [
 task_state_to_int = {
     "waiting" : 0,
     "ready" : 1,
-    "queued" : 2,
-    "running" : 3,
-    "done" : 4,
-    "failed" : 5
+    "running" : 2,
+    "done" : 3,
+    "failed" : 4
 }
 
 task_int_to_state = {
     0 : "waiting",
     1 : "ready",
-    2 : "queued",
-    3 : "running",
-    4 : "done",
-    5 : "fail"
+    2 : "running",
+    3 : "done",
+    4 : "fail"
 }
 
 
 state_colors = {
     "waiting": "#000000",
     "ready" : "#0000ff",
-    "queued": "#ffff00",
     "running": "#ffff00",
     "done": "#00ff00",
     "fail": "#ff0000",

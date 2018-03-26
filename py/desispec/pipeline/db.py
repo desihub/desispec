@@ -566,7 +566,7 @@ class DataBase:
     def cleanup(self, cleanfailed=False):
         """Reset states of tasks.
 
-        Any tasks that are marked as "running" or "queued" will have their
+        Any tasks that are marked as "running" will have their
         state reset to "ready".  This can be called if a job dies before
         completing all tasks.
 
@@ -578,15 +578,13 @@ class DataBase:
             for tt in task_types():
                 if cleanfailed:
                     cur.execute(\
-                        "select name from {} where state = {} or state = {} or state = {}"\
+                        "select name from {} where state = {} or state = {}"\
                         .format(tt, task_state_to_int["running"],
-                        task_state_to_int["queued"],
                         task_state_to_int["failed"]))
                 else:
                     cur.execute(\
-                        "select name from {} where state = {} or state = {}"\
-                        .format(tt, task_state_to_int["running"],
-                        task_state_to_int["queued"]))
+                        "select name from {} where state = {}"\
+                        .format(tt, task_state_to_int["running"]))
                 tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
 
         for tt in task_types():

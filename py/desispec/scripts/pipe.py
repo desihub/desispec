@@ -637,7 +637,7 @@ Where supported commands are:
 
         for script in scripts :
             print("wrote",script)
-        
+
         return scripts
 
 
@@ -686,7 +686,7 @@ Where supported commands are:
             for d in deps:
                 depstr = "{}:{}".format(depstr, d)
 
-        
+
         jobids = list()
         if slurm:
             # submit each job and collect the job IDs
@@ -747,13 +747,6 @@ Where supported commands are:
         if args.depjobs is not None:
             deps = args.depjobs.split(',')
 
-             
-        if slurm:
-            dbpath = io.get_pipe_database()
-            db = pipe.load_db(dbpath, mode="w")
-            st = [ (x, "queued") for x in tasks ]
-            db.set_states(st)
-
         jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
 
         if len(jobids) > 0:
@@ -788,9 +781,9 @@ Where supported commands are:
 
         args = parser.parse_args(sys.argv[2:])
 
-        
+
         print("Chain of tasks= {}".format(args.tasktypes))
-        
+
         machprops = None
         if args.nersc is not None:
             machprops = pipe.scriptgen.nersc_machine(args.nersc,
@@ -842,11 +835,6 @@ Where supported commands are:
                 continue
             # Generate the scripts
             scripts = self._gen_scripts(tt, tasks, False, args)
-
-            # Set task state to "queued"
-            if slurm:
-                st = [ (x, "queued") for x in tasks ]
-                db.set_states(st)
 
             # Run the jobs
             jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
@@ -1077,7 +1065,7 @@ Where supported commands are:
         for s in pipe.task_states:
             header_state = "{} {:8s}|".format(header_state, s)
 
-        sep = "--------------------------+---------+---------+---------+---------+---------+---------+"
+        sep = "--------------------------+---------+---------+---------+---------+---------+"
 
         header = "{}\n{:26s}|{}\n{}".format(sep, "         Task Type        ",
             header_state, sep)
