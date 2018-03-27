@@ -39,7 +39,7 @@ class TestQL_QA(unittest.TestCase):
 
     def tearDown(self):
         self.rawimage.close()
-        for filename in [self.framefile, self.rawfile, self.pixfile, self.xwfile, self.fibermapfile, self.skyfile, self.qafile, self.qafig]:
+        for filename in [self.framefile, self.rawfile, self.pixfile, self.xwfile, self.fibermapfile, self.skyfile, self.qafile, self.qajson, self.qafig]:
             if os.path.exists(filename):
                 os.remove(filename)
 
@@ -53,6 +53,7 @@ class TestQL_QA(unittest.TestCase):
         self.fibermapfile = 'test-fibermap-abcd.fits'
         self.skyfile = 'test-sky-abcd.fits'
         self.qafile = 'test_qa.yaml'
+        self.qajson = 'test_qa.json'
         self.qafig = 'test_qa.png'
 
         #- use specter psf for this test
