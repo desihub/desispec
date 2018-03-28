@@ -2,13 +2,35 @@
 desispec Change Log
 ===================
 
-0.19.1 (unreleased)
+0.20.0 (unreleased)
 -------------------
+
+Multiple non-backwards compatible changes:
 
 * Astropy 2 compatibility (PR `#519`_).
 * Update Travis tests to recent versions.
+* Integration test fixes (PR `#552`_).
+* Adds pipeline db count_task_states (PR `#552`_).
+* Standardize spectro filenames/locations (PR `#545`_ and `#559`_).
+* Complete rewrite of task pipelining (PR `#520`_, `#523`_, `#536`_, `#537`_,
+  `#538`_, `#540`_, `#543`_, `#544`_, `#547`_, )
+* QL format updates (`#517`_, `#554`_)
 
+.. _`#517`: https://github.com/desihub/desispec/pull/517
 .. _`#519`: https://github.com/desihub/desispec/pull/519
+.. _`#520`: https://github.com/desihub/desispec/pull/520
+.. _`#523`: https://github.com/desihub/desispec/pull/523
+.. _`#536`: https://github.com/desihub/desispec/pull/536
+.. _`#537`: https://github.com/desihub/desispec/pull/537
+.. _`#538`: https://github.com/desihub/desispec/pull/538
+.. _`#540`: https://github.com/desihub/desispec/pull/540
+.. _`#543`: https://github.com/desihub/desispec/pull/543
+.. _`#544`: https://github.com/desihub/desispec/pull/544
+.. _`#545`: https://github.com/desihub/desispec/pull/545
+.. _`#547`: https://github.com/desihub/desispec/pull/547
+.. _`#552`: https://github.com/desihub/desispec/pull/552
+.. _`#554`: https://github.com/desihub/desispec/pull/554
+.. _`#559`: https://github.com/desihub/desispec/pull/559
 
 0.19.0 (2018-03-01)
 -------------------
