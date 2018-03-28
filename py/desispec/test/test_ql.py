@@ -22,8 +22,9 @@ class TestQL(unittest.TestCase):
         cls.night = night = '20150105'
         cls.camera = camera = 'r0'
         cls.expid = expid = 314
-        cls.flatExpid = flatExpid = 313
-        cls.templateExpid = templateExpid = 312
+        cls.psfExpid = psfExpid = 313
+        cls.flatExpid = flatExpid = 312
+        cls.templateExpid = templateExpid = 311
         cls.nspec = nspec = 5
         cls.exptime = exptime = 100
 
@@ -79,7 +80,8 @@ class TestQL(unittest.TestCase):
         configdict = {'name': 'Test Configuration',
                       'Program': program,
                       'Flavor': flavor,
-                      'PSFType': 'psfboot',
+                      'PSFExpid': psfExpid,
+                      'PSFType': 'psf',
                       'FiberflatExpid': flatExpid,
                       'TemplateExpid': templateExpid,
                       'WritePixfile': False,
