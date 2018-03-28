@@ -19,7 +19,7 @@ class Config(object):
         amps: for outputing amps level QA
         Note:
         rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
-        """  
+        """
   
         #- load the config file and extract
         self.conf = yaml.load(open(configfile,"r"))
@@ -123,18 +123,18 @@ class Config(object):
             arcimg=findfile('preproc',night=self.night,expid=self.expid,camera=self.camera,specprod_dir=self.specprod_dir)
             flatimg=findfile('preproc',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,specprod_dir=self.specprod_dir)
             bootfile=findfile('psfboot',expid=self.expid,night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
-            psfnightfile=findfile('psfnight',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
+            psffile=findfile('psf',expid=self.expid,night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
         else:
             arcimg=None
             flatimg=None
             bootfile=None
-            psfnightfile=None
+            psffile=None
 
         paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
 
         paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
 
-        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile, 'usesigma': self.usesigma}
+        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
 
         if self.conf["Flavor"] == 'flat':
             fiberflatfile=findfile('fiberflat',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,specprod_dir=self.specprod_dir)
@@ -256,15 +256,15 @@ class Config(object):
                             'qafig': qaplot, 'FiberMap': self.fibermap,
                             'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa}
+                if qa == 'Calculate_SNR':
+                    qaopts[qa]['rescut']=self.rescut
+                    qaopts[qa]['sigmacut']=self.sigmacut
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir
                     if qa == 'Sky_Residual':
                         skyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
                         qaopts[qa]['SkyFile']=skyfile
-                    elif qa == 'Calculate_SNR':
-                        qaopts[qa]['rescut']=self.rescut
-                        qaopts[qa]['sigmacut']=self.sigmacut
 
                 if self.reference != None:
                     for step in self.reference:
@@ -411,6 +411,7 @@ class Config(object):
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
         self.fiberflatexpid = self.conf["FiberflatExpid"]
+        self.psfexpid = self.conf["PSFExpid"]
         self.psftype = self.conf["PSFType"]
         self.templateexpid = self.conf["TemplateExpid"]
 
@@ -421,7 +422,7 @@ class Config(object):
  
         self.fiberflat=findfile("fiberflat",night=self.night,expid=self.fiberflatexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) #- TODO: Assuming same night for calibration files (here and psf)
         
-        self.psf=findfile(self.psftype,night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)  
+        self.psf=findfile(self.psftype,night=self.night,expid=self.psfexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         #- Get reference metrics from template yaml file
         if self.flavor == 'arcs':

@@ -3,9 +3,11 @@ name: DESI Quicklook Dark Survey
 Program: dark
 Flavor: science
 #- Calibration files: Assuming the same night for psf and fiberflat
-PSFType: psfboot 
-#- FiberflatExpid used as expid for flat image files when running calibration
-FiberflatExpid: 3574
+#- PSFExpid used as expid for arc exposures
+PSFExpid: 0
+PSFType: psf
+#- FiberflatExpid used as expid for flat exposures
+FiberflatExpid: 1
 #- Writeout intermediate files
 WritePixfile: False
 WriteSkyModelfile: False

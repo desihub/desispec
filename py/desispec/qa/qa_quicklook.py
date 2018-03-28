@@ -557,6 +557,13 @@ class Calc_XWSigma(MonitoringAlg):
             peak_wave.append(peak_lower)
             peak_wave.append(peak_upper)
 
+        if camera[0] == 'b':
+            npeaks = 3
+        elif camera[0] == 'r':
+            npeaks = 5
+        elif camera[0] == 'z':
+            npeaks = 6
+
         if fibermap["OBJTYPE"][0] == 'ARC':
             import desispec.psf
             psf=desispec.psf.PSF(psf)
@@ -606,10 +613,12 @@ class Calc_XWSigma(MonitoringAlg):
                 xsig.append(xs)
                 wsig.append(ws)
 
-                xsigma_avg=np.mean(xsig)
-                wsigma_avg=np.mean(wsig)
-                xsigma.append(xsigma_avg)
-                wsigma.append(wsigma_avg)
+                if len(xsig) == npeaks:
+                    xsigma_avg=np.mean(xsig)
+                    xsigma.append(xsigma_avg)
+                if len(wsig) == npeaks:
+                    wsigma_avg=np.mean(wsig)
+                    wsigma.append(wsigma_avg)
  
             if fibermap['OBJTYPE'][i]=='SKY':
                 xsigma_sky=xsigma
