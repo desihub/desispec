@@ -77,6 +77,7 @@ zbestfiles = sorted(io.iterfiles(args.indir, 'zbest'))
 data = list()
 for zbestfile in zbestfiles:
     zbest = fitsio.read(zbestfile, 'ZBEST')
+    log.debug("{} {}".format(zbestfile, len(zbest)))
     if args.fibermap :
         fibermap = fitsio.read(zbestfile, 'FIBERMAP')
         # new zbest structured array with two more columns ...
@@ -93,7 +94,7 @@ for zbestfile in zbestfiles:
         nzbest["DEC"] = fibermap["DEC_TARGET"][tmp2]
         zbest=nzbest
     data.append(zbest)
-    log.debug("{} {}".format(zbestfile, len(zbest)))
+   
 
 zcat = np.hstack(data)
 
