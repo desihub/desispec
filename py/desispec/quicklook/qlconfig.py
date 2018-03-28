@@ -47,6 +47,9 @@ class Config(object):
         else: self.wavelength = None
         if "SkySub_QL" in self.algorithms.keys():
             if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
+                if "Residual_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
+                    self.rescut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Residual_Cut"]
+                else: self.rescut = None
                 if "Sigma_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
                     self.sigmacut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Sigma_Cut"]
                 else: self.sigmacut = None
@@ -247,39 +250,21 @@ class Config(object):
 
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
-                if self.singqa is not None:
-                    if self.singqa == 'Sky_Residual':
-                        skyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
-                        qaopts[qa]={'night' : self.night, 'expid' : self.expid,
+                qaopts[qa]={'night' : self.night, 'expid' : self.expid,
                             'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
                             'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
                             'qafig': qaplot, 'FiberMap': self.fibermap,
-                            'param': params, 'qlf': self.qlf, 'SkyFile' : skyfile,
-                            'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa,
-                            'specdir' : self.specprod_dir}
-                    else:
-                        qaopts[qa]={'night' : self.night, 'expid' : self.expid,
-                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
-                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
-                            'qafig': qaplot, 'FiberMap': self.fibermap,
-                            'param': params, 'qlf': self.qlf,
-                            'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa,
-                            'rawdir' : self.rawdata_dir, 'specdir' : self.specprod_dir}
-                else:
-                    if qa == 'Calculate_SNR':
-                        qaopts[qa]={'night' : self.night, 'expid' : self.expid,
-                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
-                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
-                            'qafig': qaplot, 'FiberMap': self.fibermap, 
-                            'param': params, 'qlf': self.qlf, 'sigmacut' : self.sigmacut,
-                            'refKey':self._qaRefKeys[qa], 'singleqa' : self.singqa}
-                    else:
-                        qaopts[qa]={'night' : self.night, 'expid' : self.expid,
-                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
-                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
-                            'qafig': qaplot, 'FiberMap': self.fibermap, 
                             'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa}
+                if self.singqa is not None:
+                    qaopts[qa]['rawdir']=self.rawdata_dir
+                    qaopts[qa]['specdir']=self.specprod_dir
+                    if qa == 'Sky_Residual':
+                        skyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+                        qaopts[qa]['SkyFile']=skyfile
+                    elif qa == 'Calculate_SNR':
+                        qaopts[qa]['rescut']=self.rescut
+                        qaopts[qa]['sigmacut']=self.sigmacut
 
                 if self.reference != None:
                     for step in self.reference:
@@ -501,12 +486,12 @@ def check_config(outconfig,singqa):
     """
     Given the expanded config, check for all possible file existence etc....
     """
-    qlog=qllogger.QLLogger(name="QLConfig")
-    log=qlog.getlog()
-    log.info("Checking if all the necessary files exist.")
-
-    calib_flavors=['arcs','dark','bias']
     if singqa is None:
+        qlog=qllogger.QLLogger(name="QLConfig")
+        log=qlog.getlog()
+        log.info("Checking if all the necessary files exist.")
+
+        calib_flavors=['arcs','dark','bias']
         if outconfig["Flavor"]=='science':
             files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
             for thisfile in files:

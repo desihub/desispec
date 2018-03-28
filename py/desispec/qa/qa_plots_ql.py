@@ -473,7 +473,7 @@ def plot_residuals(qa_dict,outfile):
     #plt.tight_layout()
     fig.savefig(outfile)
     
-def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,sigmacut):
+def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
     """
     Plot SNR
 
@@ -481,12 +481,10 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,sigmacut):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
         outfile: Name of figure.
     """
-
     med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
     resids=qa_dict["METRICS"]["SNR_RESID"]
-    sigmacut=sigmacut
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
@@ -531,7 +529,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,sigmacut):
             ra.append(ras)
             dec.append(decs)
 
-    if sigmacut is not None:
+    if rescut is None and sigmacut is not None:
         range_min = np.mean(resids) - sigmacut * np.std(resids)
         range_max = np.mean(resids) + sigmacut * np.std(resids)
         for ii in range(len(resids)):
@@ -550,32 +548,41 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,sigmacut):
     fig=plt.figure()
     plt.suptitle("Signal/Noise after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
 
-    gs=GridSpec(7,8)
-    ax1=fig.add_subplot(gs[1:4,:4]) #- ax2 for amp ccd map below.
+    rmneg=med_snr[med_snr>=0.]
+    rmind=index[med_snr>=0.]
+    logs=np.log(rmneg)
 
-    hist_med=ax1.plot(index,med_snr,linewidth=1)
-    ax1.set_xlabel('Fiber #',fontsize=10)
-    ax1.set_ylabel('Median S/N',fontsize=10)
-    ax1.tick_params(axis='x',labelsize=10)
-    ax1.tick_params(axis='y',labelsize=10)
+    ax1=fig.add_subplot(221)
+    hist_med=ax1.plot(rmind,logs,linewidth=1)
+    ax1.set_xlabel('Fiber #',fontsize=6)
+    ax1.set_ylabel('Log(Median S/N)',fontsize=8)
+    ax1.tick_params(axis='x',labelsize=6)
+    ax1.tick_params(axis='y',labelsize=6)
     ax1.set_xlim(0)
+    ax1.set_ylim(min(logs)-0.2,max(logs)+0.2)
 
-    ax2=fig.add_subplot(gs[1:4,4:])
+    ax2=fig.add_subplot(222)
     ax2.set_title('Residual SNR: (calculated SNR - fit SNR) / fit SNR',fontsize=8)
-    ax2.set_xlabel('RA',fontsize=8)
-    ax2.set_ylabel('DEC',fontsize=8)
-    resid_plot=ax2.scatter(ra,dec,s=2,c=resids,cmap=plt.cm.bwr)
-    fig.colorbar(resid_plot,ticks=[np.min(resids),0,np.max(resids)])
-    
+    ax2.set_xlabel('RA',fontsize=6)
+    ax2.set_ylabel('DEC',fontsize=6)
+    ax2.tick_params(axis='x',labelsize=6)
+    ax2.tick_params(axis='y',labelsize=6)
+    if rescut is not None:
+        resid_plot=ax2.scatter(ra,dec,s=2,c=resids,cmap=plt.cm.bwr,vmin=-rescut,vmax=rescut)
+        fig.colorbar(resid_plot,ticks=[-rescut,0.,rescut])
+    else:
+        resid_plot=ax2.scatter(ra,dec,s=2,c=resids,cmap=plt.cm.bwr)
+        fig.colorbar(resid_plot,ticks=[np.min(resids),0,np.max(resids)])
+
     for i in range(len(o)):
         if i == 0:
-            ax=fig.add_subplot(gs[4:,:2])
+            ax=fig.add_subplot(245)
         elif i == 1:
-            ax=fig.add_subplot(gs[4:,2:4])
+            ax=fig.add_subplot(246)
         elif i == 2:
-            ax=fig.add_subplot(gs[4:,4:6])
+            ax=fig.add_subplot(247)
         else:
-            ax=fig.add_subplot(gs[4:,6:])
+            ax=fig.add_subplot(248)
 
         objtype=list(objlist)[i]
         objid=np.where(np.array(list(objlist))==objtype)[0][0]
@@ -586,16 +593,16 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,sigmacut):
         logsnr2=np.log(np.array(obj_snr)**2)
         fitval=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
 
-        ax.set_ylabel('Log(Median S/N**2)',fontsize=8)
-        ax.set_xlabel('Magnitude ({})'.format(thisfilter),fontsize=8)
-        ax.set_title('{}'.format(objtype), fontsize=8)
-        ax.set_xlim(np.min(obj_mag)-0.1,np.max(obj_mag)+0.1)
-        ax.set_ylim(np.min(logsnr2)-0.1,np.max(logsnr2)+0.1)
-        ax.xaxis.set_ticks(np.arange(int(np.min(obj_mag)),int(np.max(obj_mag))+1,1.0))
-        ax.tick_params(axis='x',labelsize=6,labelbottom=True)
-        ax.tick_params(axis='y',labelsize=6,labelleft=True)
-        ax.plot(obj_mag,logsnr2,'b.')
-        ax.plot(plot_mag,plot_fit,'y')
+        if i == 0:
+            ax.set_ylabel('Log(Median S/N**2)',fontsize=8)
+        ax.set_xlabel('{} Mag ({})'.format(objtype,thisfilter),fontsize=6)
+        ax.set_xlim(16,24)
+        ax.set_ylim(min(logsnr2)-0.1,max(logsnr2)+0.1)
+        yticks=np.arange(int(np.rint(min(logsnr2))),int(np.rint(max(logsnr2)))+1,1)
+        ax.yaxis.set_ticks(yticks)
+        ax.tick_params(axis='x',labelsize=6)
+        ax.tick_params(axis='y',labelsize=6)
+        ax.plot(obj_mag,logsnr2,'b.',markersize=1)
+        ax.plot(plot_mag,plot_fit,'y',markersize=0.5)
     
-    plt.tight_layout()
     fig.savefig(outfile)
