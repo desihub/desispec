@@ -34,7 +34,7 @@ task_int_to_state = {
     1 : "ready",
     2 : "running",
     3 : "done",
-    4 : "fail"
+    4 : "failed"
 }
 
 
@@ -43,7 +43,7 @@ state_colors = {
     "ready" : "#0000ff",
     "running": "#ffff00",
     "done": "#00ff00",
-    "fail": "#ff0000",
+    "failed": "#ff0000",
 }
 """State colors used for visualization."""
 

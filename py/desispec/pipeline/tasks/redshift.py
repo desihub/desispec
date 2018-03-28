@@ -40,9 +40,11 @@ class TaskRedshift(BaseTask):
         """See BaseTask.paths.
         """
         props = self.name_split(name)
-        return [ findfile("zbest", night=None, expid=None,
-                          camera=None, groupname=props["pixel"], nside=props["nside"], band=None,
-                          spectrograph=None) ]
+        hpix = props["pixel"]
+        nside = props["nside"]
+        zbest = findfile("zbest", groupname=hpix, nside=nside)
+        redrock = findfile("redrock", groupname=hpix, nside=nside)
+        return [zbest, redrock]
     
     def _deps(self, name, db, inputs):
         """See BaseTask.deps.
@@ -73,13 +75,12 @@ class TaskRedshift(BaseTask):
         options.
         """
         
-        outfile = self.paths(name)[0]
-        outdir  = os.path.dirname(outfile)
-        details = os.path.join(outdir, "rrdetails_{}.h5".format(name))
+        zbestfile, redrockfile = self.paths(name)
+        outdir  = os.path.dirname(zbestfile)
         
         options = {}
-        options["output"] = details
-        options["zbest"] = outfile
+        options["output"] = redrockfile
+        options["zbest"] = zbestfile
         options.update(opts)
         
         optarray = option_list(options)

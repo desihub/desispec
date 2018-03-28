@@ -134,6 +134,14 @@ def integration_test(night=None, nspec=5, clobber=False):
         RuntimeError if any script fails
 
     """
+
+    import argparse
+    parser = argparse.ArgumentParser(usage = "{prog} [options]")
+    # parser.add_argument("-i", "--input", type=str,  help="input data")
+    # parser.add_argument("-o", "--output", type=str,  help="output data")
+    parser.add_argument("--skip-psf", action="store_true", help="Skip PSF fitting step")
+    args = parser.parse_args()
+
     log = logging.get_logger()
 
     # YEARMMDD string, rolls over at noon not midnight
@@ -175,9 +183,29 @@ def integration_test(night=None, nspec=5, clobber=False):
     opts['traceshift']['nfibers'] = nspec
     pipe.prod.yaml_write(optpath, opts)
 
+    if args.skip_psf:
+        #- Copy desimodel psf into this production instead of fitting psf
+        import shutil
+        for channel in ['b', 'r', 'z']:
+            refpsf = '{}/data/specpsf/psf-{}.fits'.format(
+                    os.getenv('DESIMODEL'), channel)
+            nightpsf = io.findfile('psfnight', night, camera=channel+'0')
+            shutil.copy(refpsf, nightpsf)
+            for expid in [0,1,2]:
+                exppsf = io.findfile('psf', night, expid, camera=channel+'0')
+                shutil.copy(refpsf, exppsf)
+
+        #- Resync database to current state
+        dbpath = io.get_pipe_database()
+        db = pipe.load_db(dbpath, mode="w")
+        db.sync(night)
+
     # Run the pipeline tasks in order
     from desispec.pipeline.tasks.base import default_task_chain
     for tasktype in default_task_chain:
+        #- if we skip psf/psfnight/traceshift, update state prior to extractions
+        if tasktype == 'traceshift' and args.skip_psf:
+            db.getready()
         run_pipeline_step(tasktype)
 
     # #-----

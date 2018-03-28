@@ -147,7 +147,7 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
             psf_fits["PSF"].data["WAVEMIN"][i]=wavemin
             psf_fits["PSF"].data["WAVEMAX"][i]=wavemax
             modified_y=True
-            
+
     if "XTRACE" in psf_fits :
         psf_fits["XTRACE"].data = xcoef
         psf_fits["XTRACE"].header["WAVEMIN"] = wavemin

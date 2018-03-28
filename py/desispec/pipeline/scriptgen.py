@@ -104,7 +104,7 @@ def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
               openmp=1,debug=False):
     with open(path, "w") as f:
         f.write("#!/bin/bash\n\n")
-        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write("now=`date +%Y%m%d-%H%M%S`\n")
         f.write("export STARTTIME=${now}\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("source {}\n\n".format(desisetup))
@@ -216,7 +216,7 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
             f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c "
                 "${{node_depth}} shifter\"\n\n".format(runstr))
 
-        f.write("now=`date +%Y%m%d-%H:%M:%S`\n")
+        f.write("now=`date +%Y%m%d-%H%M%S`\n")
         f.write("echo \"job datestamp = ${now}\"\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("envlog={}_${{now}}.env\n".format(logroot))

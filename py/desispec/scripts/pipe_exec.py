@@ -59,7 +59,7 @@ def main(args, comm=None):
     if rank == 0:
         if "STARTTIME" in os.environ:
             try:
-                t0 = datetime.datetime.strptime(os.getenv("STARTTIME"), "%Y%m%d-%H:%M:%S")
+                t0 = datetime.datetime.strptime(os.getenv("STARTTIME"), "%Y%m%d-%H%M%S")
                 dt = t1 - t0
                 minutes, seconds = dt.seconds//60, dt.seconds%60
                 log.info("Python startup time: {} min {} sec".format(minutes, seconds))
