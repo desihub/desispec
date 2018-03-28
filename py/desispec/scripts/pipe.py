@@ -597,7 +597,7 @@ Where supported commands are:
 
         import datetime
         now = datetime.datetime.now()
-        outtaskdir = "{}_{:%Y%m%d-%H:%M:%S}".format(tasktype, now)
+        outtaskdir = "{}_{:%Y%m%d-%H%M%S}".format(tasktype, now)
 
         if args.outdir is None:
             outdir = os.path.join(proddir, io.get_pipe_rundir(),

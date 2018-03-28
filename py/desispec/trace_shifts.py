@@ -69,6 +69,13 @@ def read_psf_and_traces(psf_filename) :
         wavemax=fits_file["XTRACE"].header["WAVEMAX"]
         wavemin2=fits_file["YTRACE"].header["WAVEMIN"]
         wavemax2=fits_file["YTRACE"].header["WAVEMAX"]
+    elif "XCOEFF" in fits_file :
+        xtrace=fits_file["XCOEFF"].data
+        ytrace=fits_file["YCOEFF"].data
+        wavemin=fits_file["XCOEFF"].header["WAVEMIN"]
+        wavemax=fits_file["XCOEFF"].header["WAVEMAX"]
+        wavemin2=fits_file["YCOEFF"].header["WAVEMIN"]
+        wavemax2=fits_file["YCOEFF"].header["WAVEMAX"]
     elif psftype == "GAUSS-HERMITE" :
         table=fits_file["PSF"].data        
         i=np.where(table["PARAM"]=="X")[0][0]
@@ -147,17 +154,27 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
             psf_fits["PSF"].data["WAVEMIN"][i]=wavemin
             psf_fits["PSF"].data["WAVEMAX"][i]=wavemax
             modified_y=True
-            
+
     if "XTRACE" in psf_fits :
         psf_fits["XTRACE"].data = xcoef
         psf_fits["XTRACE"].header["WAVEMIN"] = wavemin
         psf_fits["XTRACE"].header["WAVEMAX"] = wavemax
+        modified_x=True
+    elif "XCOEFF" in psf_fits :
+        psf_fits["XCOEFF"].data = xcoef
+        psf_fits["XCOEFF"].header["WAVEMIN"] = wavemin
+        psf_fits["XCOEFF"].header["WAVEMAX"] = wavemax
         modified_x=True
         
     if "YTRACE" in psf_fits :
         psf_fits["YTRACE"].data = ycoef
         psf_fits["YTRACE"].header["WAVEMIN"] = wavemin
         psf_fits["YTRACE"].header["WAVEMAX"] = wavemax
+        modified_y=True
+    elif "YCOEFF" in psf_fits :
+        psf_fits["YCOEFF"].data = ycoef
+        psf_fits["YCOEFF"].header["WAVEMIN"] = wavemin
+        psf_fits["YCOEFF"].header["WAVEMAX"] = wavemax
         modified_y=True
 
     if not modified_x :
