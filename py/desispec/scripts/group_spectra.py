@@ -20,6 +20,7 @@ def parse(options=None):
     parser = argparse.ArgumentParser(usage = "{prog} [options]")
     parser.add_argument("--reduxdir", type=str,  help="input redux dir; overrides $DESI_SPECTRO_REDUX/$SPECPROD")
     parser.add_argument("--nights", type=str,  help="YEARMMDD to add")
+    parser.add_argument("--nside", type=int,default=64,help="input spectra healpix nside")
     parser.add_argument("-o", "--outdir", type=str,  help="output directory")
     parser.add_argument("--mpi", action="store_true",
             help="Use MPI for parallelism")
@@ -97,7 +98,7 @@ def main(args=None, comm=None):
                     log.warning('missing {}; will use blank data'.format(framefile))
 
         #- Identify any frames that are already in pre-existing output file
-        specfile = io.findfile('spectra', nside=64, groupname=pix,
+        specfile = io.findfile('spectra', nside=args.nside, groupname=pix,
                 specprod_dir=args.reduxdir)
         if args.outdir:
             specfile = os.path.join(args.outdir, os.path.basename(specfile))
@@ -133,7 +134,8 @@ def main(args=None, comm=None):
             spectra = newspectra
 
         #- Write new spectra file
-        spectra.write(specfile)
+        header = dict(HPXNSIDE=args.nside, HPXPIXEL=pix, HPXNEST=True)
+        spectra.write(specfile, header=header)
     
     if rank == 0:
         dt = time.time() - t0
