@@ -9,10 +9,12 @@ from collections import Counter
 import numpy as np
 
 import fitsio
+from astropy.io import fits
 import healpy as hp
 
 import desimodel.footprint
 from desiutil.log import get_logger
+import desiutil.depend
 
 from . import io
 from .maskbits import specmask
@@ -119,7 +121,7 @@ class FrameLite(object):
     '''
     def __init__(self, wave, flux, ivar, mask, rdat, fibermap, header, scores=None):
         '''
-        Create a new FrameLight object
+        Create a new FrameLite object
 
         Args:
             wave: 1D array of wavlengths
@@ -276,7 +278,7 @@ class SpectraLite(object):
         
         return SpectraLite(bands, wave, flux, ivar, mask, rdat, fibermap, scores)
 
-    def write(self, filename):
+    def write(self, filename, header=None):
         '''
         Write this SpectraLite object to `filename`
         '''
@@ -292,10 +294,17 @@ class SpectraLite(object):
 
         #- work around c/fitsio bug that appends spaces to string column values
         #- by using astropy Table to write fibermap
+
         from astropy.table import Table
         fm = Table(self.fibermap)
         fm.meta['EXTNAME'] = 'FIBERMAP'
-        fm.write(tmpout, format='fits', overwrite=True)
+
+        header = io.fitsheader(header)
+        desiutil.depend.add_dependencies(header)
+        hdus = fits.HDUList()
+        hdus.append(fits.PrimaryHDU(None, header))
+        hdus.append(fits.convenience.table_to_hdu(fm))
+        hdus.writeto(tmpout, overwrite=True, checksum=True)
 
         #- then proceed with more efficient fitsio for everything else
         #- See https://github.com/esheldon/fitsio/issues/150 for why
@@ -304,9 +313,12 @@ class SpectraLite(object):
             fitsio.write(tmpout, self.scores, extname='SCORES')
         for x in sorted(self.bands):
             X = x.upper()
-            fitsio.write(tmpout, self.wave[x], extname=X+'_WAVELENGTH')
-            fitsio.write(tmpout, self.flux[x], extname=X+'_FLUX')
-            fitsio.write(tmpout, self.ivar[x], extname=X+'_IVAR')
+            fitsio.write(tmpout, self.wave[x], extname=X+'_WAVELENGTH',
+                    header=dict(BUNIT='Angstrom'))
+            fitsio.write(tmpout, self.flux[x], extname=X+'_FLUX',
+                    header=dict(BUNIT='1e-17 erg/(s cm2 Angstrom)'))
+            fitsio.write(tmpout, self.ivar[x], extname=X+'_IVAR',
+                header=dict(BUNIT='1e+34 (s2 cm4 Angstrom2) / erg2'))
             fitsio.write(tmpout, self.mask[x], extname=X+'_MASK', compress='gzip')
             fitsio.write(tmpout, self.rdat[x], extname=X+'_RESOLUTION')
 
