@@ -3,8 +3,10 @@ name: DESI Quicklook Grey Survey
 Program: grey
 Flavor: science
 #- Calibration files: Assuming the same night for psf and fiberflat
-PSFType: psfboot 
-#- FiberflatExpid used as expid for flat image files when running calibration
+#- PSFExpid used as expid for arc exposures
+PSFExpid: 0
+PSFType: psf
+#- FiberflatExpid used as expid for flat exposures
 FiberflatExpid: 1
 #- Writeout intermediate files
 WritePixfile: False
@@ -58,9 +60,9 @@ Algorithms:
                          SKYCONT_WARN_RANGE: [100.0, 400.0],
                          SKYCONT_ALARM_RANGE: [50.0, 600.0]}
             Sky_Peaks:
-                PARAMS: {B_PEAKS: [3914.4, 5199.3, 5201.8],
-                         R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
+                PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
+                         R_CONT: ["5950, 6200", "6990, 7230"],
+                         Z_CONT: ["8120, 8270", "9110, 9280"],
                          PEAKCOUNT_NORMAL_RANGE: [1000.0, 20000.0],
                          PEAKCOUNT_WARN_RANGE: [500.0, 40000.0]}
     SkySub_QL:
@@ -70,7 +72,10 @@ Algorithms:
             Integrate_Spec:
                 PARAMS: {MAGDIFF_WARN_RANGE: [-0.5, 0.5], MAGDIFF_ALARM_RANGE: [-1.0, 1.0]}
             Calculate_SNR:
-                #- Include QSOs in SNR Residuals over focal plane (bright QSOs bias this result)
-                QSO_SNR_Residuals: True
+                #- Set boundaries for SNR residual values
+                Residual_Cut: 0.2
+                #- If Residual_Cut is none:
+                #- Cut SNR residual values outside given range for plotting
+                Sigma_Cut: 2.0
                 PARAMS: {FIDSNR_WARN_RANGE: [6.5, 7.5], FIDSNR_ALARM_RANGE: [6.0, 8.0], FIDMAG: 22.}
 

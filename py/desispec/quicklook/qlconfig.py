@@ -10,7 +10,7 @@ class Config(object):
     expand_config will expand out to full format as needed by quicklook.setup
     """
 
-    def __init__(self, configfile, night, camera, expid, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False):
+    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False):
         """
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
         night: night for the data to process, eg.'20191015'
@@ -19,13 +19,14 @@ class Config(object):
         amps: for outputing amps level QA
         Note:
         rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
-        """  
+        """
   
         #- load the config file and extract
         self.conf = yaml.load(open(configfile,"r"))
         self.night = night
         self.expid = expid
         self.camera = camera
+        self.singqa = singqa
         self.amps = amps
         self.rawdata_dir = rawdata_dir 
         self.specprod_dir = specprod_dir
@@ -46,9 +47,12 @@ class Config(object):
         else: self.wavelength = None
         if "SkySub_QL" in self.algorithms.keys():
             if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
-                if "QSO_SNR_Residuals" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
-                    self.qso_snr_resid = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["QSO_SNR_Residuals"]
-                else: self.qso_snr_resid = None
+                if "Residual_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
+                    self.rescut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Residual_Cut"]
+                else: self.rescut = None
+                if "Sigma_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
+                    self.sigmacut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Sigma_Cut"]
+                else: self.sigmacut = None
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
@@ -116,21 +120,21 @@ class Config(object):
             sframefile=None
 
         if self.conf["Flavor"] == 'arcs':
-            arcimg=findfile('preproc',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir)
-            flatimg=findfile('preproc',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,rawdata_dir=self.rawdata_dir)
-            bootfile=findfile('psfboot',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
-            psfnightfile=findfile('psfnight',night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
+            arcimg=findfile('preproc',night=self.night,expid=self.expid,camera=self.camera,specprod_dir=self.specprod_dir)
+            flatimg=findfile('preproc',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,specprod_dir=self.specprod_dir)
+            bootfile=findfile('psfboot',expid=self.expid,night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
+            psffile=findfile('psf',expid=self.expid,night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
         else:
             arcimg=None
             flatimg=None
             bootfile=None
-            psfnightfile=None
+            psffile=None
 
         paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
 
         paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
 
-        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psfnightfile, 'usesigma': self.usesigma}
+        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
 
         if self.conf["Flavor"] == 'flat':
             fiberflatfile=findfile('fiberflat',night=self.night,expid=self.conf["FiberflatExpid"],camera=self.camera,specprod_dir=self.specprod_dir)
@@ -246,17 +250,21 @@ class Config(object):
 
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
-                if qa =='Calculate_SNR':
-                    qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
-                            'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 
-                            'param': params, 'qlf': self.qlf,
-                            'refKey':self._qaRefKeys[qa],
-                            'qso_resid':self.qso_snr_resid}
-                else:
-                    qaopts[qa]={'camera': self.camera, 'paname': PA, 'PSFFile': self.psf, 'amps': self.amps, 
-                            'qafile': self.dump_qa()[0][0][qa],'qafig': qaplot, 'FiberMap': self.fibermap, 
-                            'param': params, 'qlf': self.qlf,
-                            'refKey':self._qaRefKeys[qa]}
+                qaopts[qa]={'night' : self.night, 'expid' : self.expid,
+                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
+                            'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
+                            'qafig': qaplot, 'FiberMap': self.fibermap,
+                            'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
+                            'singleqa' : self.singqa}
+                if qa == 'Calculate_SNR':
+                    qaopts[qa]['rescut']=self.rescut
+                    qaopts[qa]['sigmacut']=self.sigmacut
+                if self.singqa is not None:
+                    qaopts[qa]['rawdir']=self.rawdata_dir
+                    qaopts[qa]['specdir']=self.specprod_dir
+                    if qa == 'Sky_Residual':
+                        skyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+                        qaopts[qa]['SkyFile']=skyfile
 
                 if self.reference != None:
                     for step in self.reference:
@@ -403,6 +411,7 @@ class Config(object):
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
         self.fiberflatexpid = self.conf["FiberflatExpid"]
+        self.psfexpid = self.conf["PSFExpid"]
         self.psftype = self.conf["PSFType"]
         self.templateexpid = self.conf["TemplateExpid"]
 
@@ -413,7 +422,7 @@ class Config(object):
  
         self.fiberflat=findfile("fiberflat",night=self.night,expid=self.fiberflatexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir) #- TODO: Assuming same night for calibration files (here and psf)
         
-        self.psf=findfile(self.psftype,night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)  
+        self.psf=findfile(self.psftype,night=self.night,expid=self.psfexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         #- Get reference metrics from template yaml file
         if self.flavor == 'arcs':
@@ -465,45 +474,47 @@ class Config(object):
 
         outconfig['PipeLine'] = pipeline
         outconfig['RawImage'] = self.rawfile
-        outconfig["OutputFile"] = self.outputfile
+        outconfig['OutputFile'] = self.outputfile
+        outconfig['singleqa'] = self.singqa
         outconfig['Timeout'] = self.timeout
 
         #- Check if all the files exist for this QL configuraion
-        check_config(outconfig)
+        check_config(outconfig,self.singqa)
 
         return outconfig
 
-def check_config(outconfig):
+def check_config(outconfig,singqa):
     """
     Given the expanded config, check for all possible file existence etc....
     """
-    qlog=qllogger.QLLogger(name="QLConfig")
-    log=qlog.getlog()
-    log.info("Checking if all the necessary files exist.")
+    if singqa is None:
+        qlog=qllogger.QLLogger(name="QLConfig")
+        log=qlog.getlog()
+        log.info("Checking if all the necessary files exist.")
 
-    calib_flavors=['arcs','dark','bias']
-    if outconfig["Flavor"]=='science':
-        files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
-        for thisfile in files:
-            if not os.path.exists(thisfile):
-                sys.exit("File does not exist: {}".format(thisfile))
-            else:
-                log.info("File check: Okay: {}".format(thisfile))
-    elif outconfig["Flavor"] in calib_flavors:
-        files = [outconfig["RawImage"], outconfig["FiberMap"]]
-        for thisfile in files:
-            if not os.path.exists(thisfile):
-                sys.exit("File does not exist: {}".format(thisfile))
-            else:
-                log.info("File check: Okay: {}".format(thisfile))
-    elif outconfig["Flavor"]=="flat":
-        files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["PSFFile"]]
-        for thisfile in files:
-            if not os.path.exists(thisfile):
-                sys.exit("File does not exist: {}".format(thisfile))
-            else:
-                log.info("File check: Okay: {}".format(thisfile))
-    log.info("All necessary files exist for {} configuration.".format(outconfig["Flavor"]))
+        calib_flavors=['arcs','dark','bias']
+        if outconfig["Flavor"]=='science':
+            files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
+            for thisfile in files:
+                if not os.path.exists(thisfile):
+                    sys.exit("File does not exist: {}".format(thisfile))
+                else:
+                    log.info("File check: Okay: {}".format(thisfile))
+        elif outconfig["Flavor"] in calib_flavors:
+            files = [outconfig["RawImage"], outconfig["FiberMap"]]
+            for thisfile in files:
+                if not os.path.exists(thisfile):
+                    sys.exit("File does not exist: {}".format(thisfile))
+                else:
+                    log.info("File check: Okay: {}".format(thisfile))
+        elif outconfig["Flavor"]=="flat":
+            files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["PSFFile"]]
+            for thisfile in files:
+                if not os.path.exists(thisfile):
+                    sys.exit("File does not exist: {}".format(thisfile))
+                else:
+                    log.info("File check: Okay: {}".format(thisfile))
+        log.info("All necessary files exist for {} configuration.".format(outconfig["Flavor"]))
 
     return 
 

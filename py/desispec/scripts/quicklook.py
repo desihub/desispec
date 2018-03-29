@@ -41,6 +41,7 @@ def parse():
     parser.add_argument("--save",type=str, required=False,help="save this full config to a file")
     parser.add_argument("--qlf",type=str,required=False,help="setup for QLF run", default=False)
     parser.add_argument("--mergeQA", default=False, action='store_true',help="output Merged QA file")
+    parser.add_argument("--singleQA",type=str,required=False,help="choose one QA to run",default=None,dest="singqa")
     parser.add_argument("--loglvl",default=20,type=int,help="log level for quicklook (0=verbose, 50=Critical)")
 
     args=parser.parse_args()
@@ -81,7 +82,7 @@ def ql_main(args=None):
         log.debug("Running Quicklook using configuration file {}".format(args.config))
         if os.path.exists(args.config):
             if "yaml" in args.config:
-                config=qlconfig.Config(args.config, args.night,args.camera, args.expid,rawdata_dir=rawdata_dir, specprod_dir=specprod_dir)
+                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir)
                 configdict=config.expand_config()
             else:
                 log.critical("Can't open config file {}".format(args.config))
@@ -148,8 +149,11 @@ def ql_main(args=None):
         else:
             finalname="fiberflat-{}-{:08d}.fits".format(camera,expid)
     else:
-        log.error("Result of pipeline is an unknown type {}. Don't know how to write".format(type(res)))
-        sys.exit("Unknown pipeline result type {}.".format(type(res)))
+        if args.singqa:
+            sys.exit()
+        else:
+            log.error("Result of pipeline is an unknown type {}. Don't know how to write".format(type(res)))
+            sys.exit("Unknown pipeline result type {}.".format(type(res)))
     log.info("Pipeline completed. Final result is in {}".format(finalname))
 
 if __name__=='__main__':

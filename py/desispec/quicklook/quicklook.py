@@ -7,11 +7,22 @@ import threading,string
 import subprocess
 import importlib
 import yaml
+import astropy.io.fits as fits
+import desispec.io.fibermap as fibIO
+import desispec.io.sky as skyIO
+import desispec.io.fiberflat as ffIO
+import desispec.fiberflat as ff
+import desispec.io.image as imIO
+import desispec.image as im
+import desispec.io.frame as frIO
+import desispec.frame as dframe
 from desispec.quicklook import qllogger
 from desispec.quicklook import qlheartbeat as QLHB
 from desispec.io import qa as qawriter
-from desiutil.io import yamlify
 from desispec.quicklook.merger import QL_QAMerger
+from desispec.quicklook import procalgs
+from desispec.boxcar import do_boxcar
+from desiutil.io import yamlify
 
 def testconfig(outfilename="qlconfig.yaml"):
     """
@@ -258,61 +269,105 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     hb=QLHB.QLHeartbeat(log,conf["Period"],conf["Timeout"])
 
     inp=convdict["rawimage"]
+    singqa=conf["singleqa"]
     paconf=conf["PipeLine"]
     qlog=qllogger.QLLogger()
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
     schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'], conf['Program'])
     QAresults=[] #- merged QA list for the whole pipeline. This will be reorganized for databasing after the pipeline executes
-    for s,step in enumerate(pl):
-        log.info("Starting to run step {}".format(paconf[s]["StepName"]))
-        pa=step[0]
-        pargs=mapkeywords(step[0].config["kwargs"],convdict)
-        schemaStep=schemaMerger.addPipelineStep(paconf[s]["StepName"])
-        try:
-            hb.start("Running {}".format(step[0].name))
-            oldinp=inp #-  copy for QAs that need to see earlier input
-            
-            inp=pa(inp,**pargs) # this is where each pipleine step is run
-            
-        except Exception as e:
-            log.critical("Failed to run PA {} error was {}".format(step[0].name,e),exc_info=True)
-            sys.exit("Failed to run PA {}".format(step[0].name))
-        qaresult={}
-        for qa in step[1]:
+    if singqa is None:
+        for s,step in enumerate(pl):
+            log.info("Starting to run step {}".format(paconf[s]["StepName"]))
+            pa=step[0]
+            pargs=mapkeywords(step[0].config["kwargs"],convdict)
+            schemaStep=schemaMerger.addPipelineStep(paconf[s]["StepName"])
             try:
-                qargs=mapkeywords(qa.config["kwargs"],convdict)
-                hb.start("Running {}".format(qa.name))
-                qargs["dict_countbins"]=passqadict #- pass this to all QA downstream
-
-                if qa.name=="RESIDUAL" or qa.name=="Sky_Residual":
-                    res=qa(inp[0],inp[1],**qargs)
-                    
-                else:
-                    if isinstance(inp,tuple):
-                        res=qa(inp[0],**qargs)
-                    else:
-                        res=qa(inp,**qargs)
-
-                if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         #TODO -must run this QA for now. change this later.
-                    passqadict=res
-                if "qafile" in qargs:
-                    qawriter.write_qa_ql(qargs["qafile"],res)
-                log.debug("{} {}".format(qa.name,inp))
-                qaresult[qa.name]=res
-                schemaStep.addParams(res['PARAMS'])
-                schemaStep.addMetrics(res['METRICS'])
+                hb.start("Running {}".format(step[0].name))
+                oldinp=inp #-  copy for QAs that need to see earlier input
+                inp=pa(inp,**pargs)
             except Exception as e:
-                log.warning("Failed to run QA {}. Got Exception {}".format(qa.name,e),exc_info=True)
+                log.critical("Failed to run PA {} error was {}".format(step[0].name,e),exc_info=True)
+                sys.exit("Failed to run PA {}".format(step[0].name))
+            qaresult={}
+            for qa in step[1]:
+                try:
+                    qargs=mapkeywords(qa.config["kwargs"],convdict)
+                    hb.start("Running {}".format(qa.name))
+                    qargs["dict_countbins"]=passqadict #- pass this to all QA downstream
+    
+                    if qa.name=="RESIDUAL" or qa.name=="Sky_Residual":
+                        res=qa(inp[0],inp[1],**qargs)
+                    else:
+                        if isinstance(inp,tuple):
+                            res=qa(inp[0],**qargs)
+                        else:
+                            res=qa(inp,**qargs)
+    
+                    if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         #TODO -must run this QA for now. change this later.
+                        passqadict=res
+                    if "qafile" in qargs:
+                        qawriter.write_qa_ql(qargs["qafile"],res)
+                    log.debug("{} {}".format(qa.name,inp))
+                    qaresult[qa.name]=res
+                    schemaStep.addParams(res['PARAMS'])
+                    schemaStep.addMetrics(res['METRICS'])
+                except Exception as e:
+                    log.warning("Failed to run QA {}. Got Exception {}".format(qa.name,e),exc_info=True)
+            if len(qaresult):
+                if conf["DumpIntermediates"]:
+                    f = open(paconf[s]["OutputFile"],"w")
+                    f.write(yaml.dump(yamlify(qaresult)))
+                    hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
+            else:
+                hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
+            QAresults.append([pa.name,qaresult])
+        hb.stop("Pipeline processing finished. Serializing result")
+    else:
+        import numpy as np
+        qa=None
+        qas=['Bias_From_Overscan',['Get_RMS','Calc_XWSigma','Count_Pixels'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        for palg in range(len(qas)):
+            if singqa in qas[palg]:
+                pa=pl[palg][0]
+                pac=paconf[palg]
+                if singqa == 'Bias_From_Overscan' or singqa == 'CountSpectralBins':
+                    qa = pl[palg][1][0]
+                else:
+                    for qalg in range(len(qas[palg])):
+                        if qas[palg][qalg] == singqa:
+                            qa=pl[palg][1][qalg]
+        if qa is None:
+            log.critical("Unknown input... Valid QAs are: {}".format(qas))
+            sys.exit()
+
+        log.info("Starting to run step {}".format(pac["StepName"]))
+        pargs=mapkeywords(pa.config["kwargs"],convdict)
+        schemaStep=schemaMerger.addPipelineStep(pac["StepName"])
+        qaresult={}
+        try:
+            qargs=mapkeywords(qa.config["kwargs"],convdict)
+            hb.start("Running {}".format(qa.name))
+            if singqa=="Sky_Residual":
+                res=qa(inp[0],inp[1],**qargs)
+            else:
+                if isinstance(inp,tuple):
+                    res=qa(inp[0],**qargs)
+                else:
+                    res=qa(inp,**qargs)
+            if singqa=="CountSpectralBins":
+                passqadict=res
+            if "qafile" in qargs:
+                qawriter.write_qa_ql(qargs["qafile"],res)
+            log.debug("{} {}".format(qa.name,inp))
+            schemaStep.addMetrics(res['METRICS'])
+        except Exception as e:
+            log.warning("Failed to run QA {}. Got Exception {}".format(qa.name,e),exc_info=True)
         if len(qaresult):
             if conf["DumpIntermediates"]:
-                f = open(paconf[s]["OutputFile"],"w")
+                f = open(pac["OutputFile"],"w")
                 f.write(yaml.dump(yamlify(qaresult)))
-                hb.stop("Step {} finished. Output is in {} ".format(paconf[s]["StepName"],paconf[s]["OutputFile"]))
-        else:
-            hb.stop("Step {} finished.".format(paconf[s]["StepName"]))
-        QAresults.append([pa.name,qaresult])
-    hb.stop("Pipeline processing finished. Serializing result")
+                log.info("{} finished".format(qa.name))
 
     #- merge QAs for this pipeline execution
     if mergeQA is True:
@@ -348,18 +403,6 @@ def setup_pipeline(config):
     conversion dictionary from the configuration dictionary so that Pipeline steps (PA) can
     take them. This is required for runpipeline.
     """
-    import astropy.io.fits as fits
-    import desispec.io.fibermap as fibIO
-    import desispec.io.sky as skyIO
-    import desispec.io.fiberflat as ffIO
-    import desispec.fiberflat as ff
-    import desispec.io.image as imIO
-    import desispec.image as im
-    import desispec.io.frame as frIO
-    import desispec.frame as dframe
-    from desispec.quicklook import procalgs
-    from desispec.boxcar import do_boxcar
-
     qlog=qllogger.QLLogger()
     log=qlog.getlog()
     if config is None:
@@ -429,8 +472,12 @@ def setup_pipeline(config):
     if config["Flavor"] == 'dark' or config["Flavor"] == 'bias':
         pass
     elif config["Flavor"] == 'arcs':
-        if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"])):
-            os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d','psf',config["Night"]))
+        if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"],'{:08d}'.format(config["Expid"]))):
+            if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures')):
+                os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures'))
+            if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"])):
+                os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"]))
+            os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"],'{:08d}'.format(config["Expid"])))
         pass
     elif config["Flavor"] == 'science' or config["Flavor"] == 'flat':
         #from specter.psf import load_psf

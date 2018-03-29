@@ -2,11 +2,16 @@
 simple low level library functions for offline and online qas
 """
 
+import os
+import yaml
 import numpy as np
 import scipy.stats
 from scipy import optimize
 from desiutil import stats as dustat
 from desiutil.log import get_logger
+from desispec.io.meta import findfile
+from desispec.preproc import _parse_sec_keyword
+
 log=get_logger()
 
 def ampregion(image):
@@ -16,8 +21,6 @@ def ampregion(image):
     Args:
         image: desispec.image.Image object
     """
-    from desispec.preproc import _parse_sec_keyword
-
     pixboundary=[]
     for kk in ['1','2','3','4']: #- 4 amps
         #- get the amp region in pix
@@ -33,8 +36,6 @@ def fiducialregion(frame,psf):
         frame: desispec.frame.Frame object
         psf: desispec.psf.PSF like object
     """
-    from desispec.preproc import _parse_sec_keyword
-
     startspec=0 #- will be None if don't have fibers on the right of the CCD.
     endspec=499 #- will be None if don't have fibers on the right of the CCD
     startwave0=0 #- lower index for the starting fiber
@@ -525,7 +526,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     return qadict
 
-def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
+def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     """
     Signal vs. Noise With fitting
 
@@ -550,6 +551,15 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
     Returns a dictionary similar to SignalVsNoise
     """
 
+    #- Get imaging magnitudes and calculate S/N
+    magnitudes=frame.fibermap['MAG']
+    fmag=22.0
+    if "FIDMAG" in params:
+        fmag=params["FIDMAG"]
+    filters=frame.fibermap['FILTER']
+    mediansnr=SN_ratio(frame.flux,frame.ivar)
+    qadict={"MEDIAN_SNR":mediansnr}
+
     if camera[0] == 'b':
         thisfilter='DECAM_G' #- should probably come from param. Hard coding for now
     elif camera[0] =='r':
@@ -558,31 +568,47 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
         thisfilter='DECAM_Z'
     if "Filter" in params:
         thisfilter=params["Filter"]
-#    def polyFun(*O):
-#        x=O[0]
-#        sum=O[1]
-#        X=x
-#        for b in O[2:]:
-#            sum+=b*X
-#            X=X*x
-#        return sum
-    funcMap={"linear":lambda x,a,b:a+b*x,
-             "poly":lambda x,a,b,c:a+b*x+c*x**2
-         }
 
-    #- Set up polynomial fit of SNR vs. Mag.
-    fitfunc=funcMap["poly"]
-    initialParams=[20.0,-1.0,0.05]
-#    if "Func" in params:
-#        fitfunc=funcMap["Func"]
-#        initialParams=[20.0,-1.0,0.05]
-    magnitudes=frame.fibermap['MAG']
-    fmag=22.0
-    if "FIDMAG" in params:
-        fmag=params["FIDMAG"]
-    filters=frame.fibermap['FILTER']
-    mediansnr=SN_ratio(frame.flux,frame.ivar)
-    qadict={"MEDIAN_SNR":mediansnr}
+    #- This is a very basic (and temporary!!) flux calibration
+    #- used to convert sky background and noise to proper flux units
+    #- NOTE: the B+R**2 term in the S/N equation is being multipled
+    #- by 1e-33 based on simple unit conversion analysis comparing
+    #- imaging magnitude converted to flux and integrated spectral counts
+    try:
+        #- Get sky background and read noise from previous QAs
+        cfile=findfile('ql_skycont_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
+        with open(cfile) as cf:
+            contfile=yaml.load(cf)
+        contval=contfile["METRICS"]["SKYCONT"]
+        rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
+        with open(rfile) as rf:
+            rmsfile=yaml.load(rf)
+        rmsval=rmsfile["METRICS"]["NOISE_OVER"]
+        #- NOTE: the 1e-3 used here is because scipy doesn't converge with
+        #- such small flux values (thus multiplying the flux and conversion
+        #- factor of 1e-33 by 1e30, which does not change any output)
+        br2=1e-3*(len(frame.wave)*(contval+rmsval**2))
+        #- Set up fit of SNR vs. Mag.
+        #- Using astronomical S/N equation, fitting only 'a'
+        funcMap={"linear":lambda x,a,b:a+b*x,
+                 "poly":lambda x,a,b,c:a+b*x+c*x**2,
+                 "astro":lambda x,a:(a*x)/np.sqrt(a*x+br2)
+                }
+    except:
+        br2=None
+        log.info("Was not able to calculate B+R**2 from prior knowledge, fitting this too...")
+        #- Fitting 'a' and 'B+R**2' because the necessary information wasn't available)
+        funcMap={"linear":lambda x,a,b:a+b*x,
+                 "poly":lambda x,a,b,c:a+b*x+c*x**2,
+                 "astro":lambda x,a,b:(a*x)/np.sqrt(a*x+b)
+                }
+
+    fitfunc=funcMap["astro"]
+    if br2 is None:
+        initialParams=[0.3,600.]
+    else:
+        initialParams=[0.3]
+
     neg_snr_tot=[]
     #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 
     #- not happen for non-sky fibers with actual flux in them.  However, it does happen rarely 
@@ -594,7 +620,12 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
     dec=[]
     resid_snr=[]
     fidsnr_tgt=[]
-    for T in ["ELG","QSO","LRG","STD"]:
+    fitcoeff=[]
+    fitcovar=[]
+    snrmag=[]
+    badfibs=[]
+    fitsnr=[]
+    for T in objlist:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
         medsnr=mediansnr[fibers]
         mags=np.zeros(medsnr.shape)
@@ -608,73 +639,93 @@ def SNRFit(frame,camera,params,fidboundary=None,qso_resid=None):
                 mags[ii]=magnitudes[fib][filters[fib]==thisfilter]
 
         try:
-	    #- Determine negative SNR fibers and remove
-            xs=mags.argsort()
-            x=mags[xs]
-            med_snr=medsnr[xs]
-            neg_snr=len(np.where(med_snr<=0.0)[0])
+	    #- Determine invalid SNR and mag values and remove
+            m=mags
+            s=medsnr
+            neg_snr=len(np.where(medsnr<=0.0)[0])
             neg_snr_tot.append(neg_snr)
-            if neg_snr > 0:
-                x=mags[xs][:-neg_snr]
-                y=np.log10(med_snr[:-neg_snr])
-            else:
-                x=mags[xs]
-                y=np.log10(med_snr)
+            neg_val=np.where(medsnr<=0.0)[0]
+            inf_mag=np.where(m == np.inf)[0]
+            nan_mag=np.where(np.isnan(m))[0]
+            none_mag=np.where(m == np.array(None))[0]
+            cut=[]
+            cuts=[neg_val,inf_mag,nan_mag,none_mag]
+            for cc in range(len(cuts)):
+                if len(cuts[cc]) > 0:
+                    for ci in range(len(cuts[cc])):
+                        cut.append(cuts[cc][ci])
+            if len(cut) > 0:
+                m=list(m)
+                s=list(s)
+                makecut=sorted(list(set(cut)))
+                for nn in range(len(makecut)):
+                    m.remove(m[makecut[nn]])
+                    s.remove(s[makecut[nn]])
+                    for ni in range(len(makecut)):
+                        makecut[ni]-=1
+                m=np.array(m)
+                s=np.array(s)
+                log.warning("In fit of {}, had to remove NANs from data for fitting!".format(T))
+            badfibs.append(fibers[sorted(list(set(cut)))])
+            xs=m.argsort()
+            #- Using AB magnitude system for conversion to flux
+            x=1e30*(10**(-0.4*(m[xs]+48.6)))
+            med_snr=s[xs]
+            y=med_snr
 	    #- Fit SNR vs. Mag. to fit function, evaluate at fiducial magnitude, 
             #- and store results in METRICS
             out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
-            #out=optimize.curve_fit(polyFun,x,y,p0=initialParams)
-            vs=out[0]
-            cov=out[1]
-            qadict["%s_FITRESULTS"%T]=[vs,cov]
-            fidsnr_tgt.append(10**fitfunc(fmag,*out[0]))
-            #qadict["%s_FIDMAG_SNR"%T]=10**polyFun(fmag)
-        except ValueError:
-            log.warning("In fit of {}, data contain NANs! can't fit".format(T))
-            vs=np.array(initialParams)
-            vs.fill(np.nan)
-            cov=np.empty((len(initialParams),len(initialParams)))
-            cov.fill(np.nan)
-            qadict["%s_FITRESULTS"%T]=[vs,cov]
-            fidsnr_tgt.append(np.nan)
+            vs=list(out[0])
+            cov=list(out[1])
+            fitcoeff.append(vs)
+            fitcovar.append(cov)
+            fidsnr_tgt.append(fitfunc(fmag,*out[0]))
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
             vs=np.array(initialParams)
             vs.fill(np.nan)
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
-            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            vs=list(vs)
+            cov=list(cov)
+            fitcoeff.append(vs)
+            fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
         except scipy.optimize.OptimizeWarning:
             log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
             vs=out[0]
             cov=np.empty((len(initialParams),len(initialParams)))
             cov.fill(np.nan)
-            qadict["%s_FITRESULTS"%T]=[vs,cov]
+            vs=list(vs)
+            cov=list(cov)
+            fitcoeff.append(vs)
+            fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
-            
+
         qadict["%s_FIBERID"%T]=fibers.tolist()
-        qadict["%s_SNR_MAG"%T]=snr_mag=np.array((medsnr,mags))
-        qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
+        snr_mag=[medsnr,mags]
+        snrmag.append(snr_mag)
 
+        #- Calculate residual S/N for focal plane plots
         fit_snr=[]
-        fit=qadict["%s_FITRESULTS"%T]
-        if T == 'QSO' and qso_resid is False:
-            pass
-        else:
-            for m in range(len(mags)):
-                snr = 10**fitfunc(mags[m],fit[0][0],fit[0][1],fit[0][2])
-                fit_snr.append(snr)
-            for r in range(len(fit_snr)):
-                resid = snr_mag[0][r] - fit_snr[r]
-                resid_snr.append(resid)
+        for mm in range(len(x)):
+            snr = fitfunc(x[mm],*vs)
+            fit_snr.append(snr)
+        for rr in range(len(fit_snr)):
+            resid = (med_snr[rr] - fit_snr[rr]) / fit_snr[rr]
+            resid_snr.append(resid)
+        fitsnr.append(fit_snr)
 
+    qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
+    qadict["SNR_MAG_TGT"]=snrmag
+    qadict["FITCOEFF_TGT"]=fitcoeff
+    qadict["FITCOVAR_TGT"]=fitcovar
     qadict["SNR_RESID"]=resid_snr
     qadict["FIDSNR_TGT"]=fidsnr_tgt
     qadict["RA"]=frame.fibermap['RA_TARGET']
     qadict["DEC"]=frame.fibermap['DEC_TARGET']
 
-    return qadict
+    return qadict,badfibs,fitsnr
 
 def gauss(x,a,mu,sigma):
     """

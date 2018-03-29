@@ -1,19 +1,25 @@
 """ 
 Monitoring algorithms for Quicklook pipeline
-
 """
 
+import os,sys
+import datetime
 import numpy as np
 import scipy.ndimage
 import yaml
+import astropy.io.fits as fits
+import desispec.qa.qa_plots_ql as plot
 from desispec.quicklook.qas import MonitoringAlg, QASeverity
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
-import os,sys
-import datetime
 from astropy.time import Time
 from desispec.qa import qalib
-from desispec.io import qa
+from desispec.io import qa, read_params
+from desispec.io.meta import findfile
+from desispec.io.sky import read_sky
+from desispec.image import Image as im
+from desispec.frame import Frame as fr
+from desispec.preproc import _parse_sec_keyword
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -51,6 +57,46 @@ def qlf_post(qadict):
     else:   
         log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
+def get_image(filetype,night,expid,camera,specdir):
+    '''
+    Make image object from file if in development mode
+    '''
+    #- Find correct file for QA
+    imagefile = findfile(filetype,int(night),int(expid),camera,specprod_dir=specdir)
+
+    #- Create necessary input for desispec.image
+    image = fits.open(imagefile)
+    pix = image[0].data
+    ivar = image[1].data
+    mask = image[2].data
+    readnoise = image[3].data
+    meta = image[0].header
+
+    #- Create image object
+    imageobj = im(pix,ivar,mask=mask,readnoise=readnoise,camera=camera,meta=meta)
+
+    return imageobj
+
+def get_frame(filetype,night,expid,camera,specdir):
+    '''
+    Make frame object from file if in development mode
+    '''
+    #- Find correct file for QA
+    framefile = findfile(filetype,int(night),int(expid),camera,specprod_dir=specdir)
+
+    #- Create necessary input for desispec.frame
+    frame = fits.open(framefile)
+    wave = frame[3].data
+    flux = frame[0].data
+    ivar = frame[1].data
+    fibermap = frame[5].data
+    fibers = fibermap['FIBER']
+    meta = frame[0].header
+
+    #- Create frame object
+    frameobj = fr(wave,flux,ivar,fibers=fibers,fibermap=fibermap,meta=meta)
+
+    return frameobj
 
 class Bias_From_Overscan(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -61,7 +107,7 @@ class Bias_From_Overscan(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "BIAS_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STAT"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -80,7 +126,12 @@ class Bias_From_Overscan(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        input_raw=args[0]
+        if kwargs["singleqa"] == 'Bias_From_Ovescan':
+            rawfile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=kwargs["rawdir"])
+            raw = fits.open(rawfile)
+        else:
+            raw=args[0]
+
         camera=kwargs["camera"]
 
         paname=None
@@ -107,7 +158,7 @@ class Bias_From_Overscan(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(input_raw,camera,paname=paname,amps=amps, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(raw,camera,paname=paname,amps=amps, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,raw,camera,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
 
@@ -143,8 +194,6 @@ class Bias_From_Overscan(MonitoringAlg):
         row_data_amp4=[]
         bias_overscan=[]        
         for kk in ['1','2','3','4']:
-            from desispec.preproc import _parse_sec_keyword
-            
             sel=_parse_sec_keyword(header['BIASSEC'+kk])
             #- Obtain counts/second in bias region
             pixdata=rawimage[sel]/header["EXPTIME"]
@@ -172,6 +221,7 @@ class Bias_From_Overscan(MonitoringAlg):
             bias_overscan.append(bias)
             data.append(isort)
 
+        #- Combine data from each row and take average
         row_data_bottom=[]
         row_data_top=[]
         for i in range(len(row_data_amp1)):
@@ -197,18 +247,21 @@ class Bias_From_Overscan(MonitoringAlg):
                 "BIAS_WARN_RANGE:":[-2.0, 2.0]
                 }
 
-        sig1_lo = np.percentile(full_data,(100.-param['PERCENTILES'][0])/2.)
-        sig1_hi = np.percentile(full_data,100.-sig1_lo)
-        sig2_lo = np.percentile(full_data,(100.-param['PERCENTILES'][1])/2.)
-        sig2_hi = np.percentile(full_data,100.-sig2_lo)
-        sig3_lo = np.percentile(full_data,(100.-param['PERCENTILES'][2])/2.)
-        sig3_hi = np.percentile(full_data,100.-sig3_lo)
+        #- Calculate upper and lower bounds of 1, 2, and 3 sigma
+        sig1_lo = np.percentile(full_data,50.-(param['PERCENTILES'][0]/2.))
+        sig1_hi = np.percentile(full_data,50.+(param['PERCENTILES'][0]/2.))
+        sig2_lo = np.percentile(full_data,50.-(param['PERCENTILES'][1]/2.))
+        sig2_hi = np.percentile(full_data,50.+(param['PERCENTILES'][1]/2.))
+        sig3_lo = np.percentile(full_data,50.-(param['PERCENTILES'][2]/2.))
+        sig3_hi = np.percentile(full_data,50.+(param['PERCENTILES'][2]/2.))
 
+        #- Find difference between upper and lower sigma bounds
         diff1sig = sig1_hi - sig1_lo
         diff2sig = sig2_hi - sig2_lo
         diff3sig = sig3_hi - sig3_lo
 
-        sig5_value = np.percentile(full_data,100.-99.99994)
+        #- Calculate number of pixels below 5 sigma
+        sig5_value = np.percentile(full_data,3e-5)
         data5sig = len(np.where(full_data <= sig5_value)[0])
 
         retval["PARAMS"] = param
@@ -230,8 +283,7 @@ class Bias_From_Overscan(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_bias_overscan
-            plot_bias_overscan(retval,qafig)
+            plot.plot_bias_overscan(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
         
@@ -245,11 +297,10 @@ class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="RMS"
-        from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NOISE_AMP" 
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STATUS" 
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STAT" 
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -267,7 +318,13 @@ class Get_RMS(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
 
-        input_image=args[0]
+        if kwargs["singleqa"] == 'Get_RMS':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+        else:
+            image=args[0]
 
         if "paname" not in kwargs:
             paname=None
@@ -294,7 +351,7 @@ class Get_RMS(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
         retval={}
@@ -327,7 +384,6 @@ class Get_RMS(MonitoringAlg):
         rms_over_amps=[]
         overscan_values=[]
         #- get amp/overcan boundary in pixels
-        from desispec.preproc import _parse_sec_keyword
         for kk in ['1','2','3','4']:
             thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
             thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
@@ -347,7 +403,6 @@ class Get_RMS(MonitoringAlg):
             rms_over_amps=[]
             overscan_values=[]
             #- get amp/overcan boundary in pixels
-            from desispec.preproc import _parse_sec_keyword
             for kk in ['1','2','3','4']:
                 thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
                 thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
@@ -369,14 +424,327 @@ class Get_RMS(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_RMS
-            plot_RMS(retval,qafig)            
+            plot.plot_RMS(retval,qafig)            
             log.debug("Output QA fig {}".format(qafig))
 
         return retval    
 
     def get_default_config(self):
         return {}
+
+
+class Calc_XWSigma(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="XWSIGMA"
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        key=kwargs['refKey'] if 'refKey' in kwargs else "WSIGMA_MED_SKY"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STAT"
+        kwargs["SAMI_RESULTKEY"]=key
+        kwargs["SAMI_QASTATUSKEY"]=status
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
+
+        if "XWSIGMA_WARN_RANGE" in parms and "XWSIGMA_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["XWSIGMA_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["XWSIGMA_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        MonitoringAlg.__init__(self,name,im,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
+
+        if kwargs["singleqa"] == 'Calc_XWSigma':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+        else:
+            image=args[0]
+
+        fibermap=kwargs['FiberMap'] 
+ 
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+ 
+        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
+        else: refmetrics=None
+
+        amps=False
+        if "amps" in kwargs:
+            amps=kwargs["amps"]
+
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+ 
+        psf = None
+        if "PSFFile" in kwargs:
+            psf=kwargs["PSFFile"]
+ 
+        fibermap = None
+        if "FiberMap" in kwargs:
+            fibermap=kwargs["FiberMap"]
+ 
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+ 
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+ 
+        return self.run_qa(fibermap,image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+ 
+    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+        from scipy.optimize import curve_fit
+
+        retval={}
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat() 
+        retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
+        retval["CAMERA"] = camera = image.meta["CAMERA"]
+        retval["PROGRAM"] = image.meta["PROGRAM"]
+        retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["NIGHT"] = image.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+
+        ra = fibermap["RA_TARGET"]
+        dec = fibermap["DEC_TARGET"]
+
+        if param is None:
+            log.debug("Param is None. Using default param instead")
+            if image.meta["FLAVOR"] == 'arc':
+                param = {
+                    "B_PEAKS":[4047.7, 4359.6, 5087.2],
+                    "R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
+                    "Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
+                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0], #- Assumes both sigma and shift in same range. Change if needed
+                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
+                    }
+            else:
+                param = {
+                    "B_PEAKS":[3914.4, 5199.3, 5578.9],
+                    "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                    "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
+                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0],
+                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
+                    }
+
+        #- Ensure that the QA will run even if 500 spectra aren't present
+        if fibermap['FIBER'].shape[0] >= 500:
+            fibers = 500
+        else:
+            fibers = fibermap['FIBER'].shape[0]
+
+        #- dw and dp are wavelength/pixel ranges used as region to calculate Gaussian over peaks
+        #- hardcoded until a better method is found, perhaps configurable (R.S.)
+        dw=2.
+        dp=3
+        #- Get wavelength ranges around peaks
+        peak_wave=[]
+        peaks=param['{}_PEAKS'.format(camera[0].upper())]
+        for p in range(len(peaks)):
+            peak_lower = peaks[p] - dw
+            peak_upper = peaks[p] + dw
+            peak_wave.append(peak_lower)
+            peak_wave.append(peak_upper)
+
+        if camera[0] == 'b':
+            npeaks = 3
+        elif camera[0] == 'r':
+            npeaks = 5
+        elif camera[0] == 'z':
+            npeaks = 6
+
+        if fibermap["OBJTYPE"][0] == 'ARC':
+            import desispec.psf
+            psf=desispec.psf.PSF(psf)
+
+        xfails=[]
+        wfails=[]
+        xsigma=[]
+        wsigma=[]
+        xsigma_sky=[]
+        wsigma_sky=[]
+        xsigma_amp1=[]
+        wsigma_amp1=[]
+        xsigma_amp2=[]
+        wsigma_amp2=[]
+        xsigma_amp3=[]
+        wsigma_amp3=[]
+        xsigma_amp4=[]
+        wsigma_amp4=[]
+        for i in range(fibers):
+            xsig=[]
+            wsig=[]
+            #- Use psf information to convert wavelength to pixel values
+            xpix=psf.x(ispec=i,wavelength=peak_wave)
+            ypix=psf.y(ispec=i,wavelength=peak_wave)
+            for peak in range(len(peaks)):
+                #- Find x and y pixel values around sky lines
+                xpix_peak=np.arange(int(round(xpix[2*peak]))-dp,int(round(xpix[2*peak+1]))+dp+1,1)
+                ypix_peak=np.arange(int(round(ypix[2*peak])),int(round(ypix[2*peak+1])),1)
+                #- Fit gaussian to counts in pixels around sky line
+                #- If any values fail, store x/w, wavelength, and fiber
+                try:
+                    xpopt,xpcov=curve_fit(qalib.gauss,np.arange(len(xpix_peak)),image.pix[int(np.mean(ypix_peak)),xpix_peak])
+                except:
+                    xfail=[i,peaks[peak]]
+                    xfails.append(xfail)
+                    pass
+                try:
+                    wpopt,wpcov=curve_fit(qalib.gauss,np.arange(len(ypix_peak)),image.pix[ypix_peak,int(np.mean(xpix_peak))])
+                except:
+                    wfail=[i,peaks[peak]]
+                    wfails.append(wfail)
+                    pass
+
+                #- Save sigmas from fits
+                xs=np.abs(xpopt[2])
+                ws=np.abs(wpopt[2])
+                xsig.append(xs)
+                wsig.append(ws)
+
+                if len(xsig) == npeaks:
+                    xsigma_avg=np.mean(xsig)
+                    xsigma.append(xsigma_avg)
+                if len(wsig) == npeaks:
+                    wsigma_avg=np.mean(wsig)
+                    wsigma.append(wsigma_avg)
+ 
+            if fibermap['OBJTYPE'][i]=='SKY':
+                xsigma_sky=xsigma
+                wsigma_sky=wsigma
+
+            #- Excluding fibers 240-260 in case some fibers overlap amps
+            #- This shouldn't cause a significant loss of information 
+            if amps:
+                if fibermap['FIBER'][i]<240:
+                    if camera[0]=="b":
+                        xsig_amp1=np.array([xsig[0]])
+                        xsig_amp3=np.array([xsig[1],xsig[2]])
+                        wsig_amp1=np.array([wsig[0]])
+                        wsig_amp3=np.array([wsig[1],wsig[2]])
+                    if camera[0]=="r":
+                        xsig_amp1=np.array([xsig[0],xsig[1]])
+                        xsig_amp3=np.array([xsig[2],xsig[3],xsig[4]])
+                        wsig_amp1=np.array([wsig[0],wsig[1]])
+                        wsig_amp3=np.array([wsig[2],wsig[3],wsig[4]])
+                    if camera[0]=="z":
+                        xsig_amp1=np.array([xsig[0],xsig[1],xsig[2]])
+                        xsig_amp3=np.array([xsig[3]])
+                        wsig_amp1=np.array([wsig[0],wsig[1],wsig[2]])
+                        wsig_amp3=np.array([wsig[3]])
+    
+                    xsigma_amp1.append(xsig_amp1)
+                    wsigma_amp1.append(wsig_amp1)
+                    xsigma_amp3.append(xsig_amp3)
+                    wsigma_amp3.append(wsig_amp3)
+
+                if fibermap['FIBER'][i]>260:
+                    if camera[0]=="b":
+                        xsig_amp2=np.array([xsig[0]])
+                        xsig_amp4=np.array([xsig[1],xsig[2]])
+                        wsig_amp2=np.array([wsig[0]])
+                        wsig_amp4=np.array([wsig[1],wsig[2]])
+                    if camera[0]=="r":
+                        xsig_amp2=np.array([xsig[0],xsig[1]])
+                        xsig_amp4=np.array([xsig[2],xsig[3],xsig[4]])
+                        wsig_amp2=np.array([wsig[0],wsig[1]])
+                        wsig_amp4=np.array([wsig[2],wsig[3],wsig[4]])
+                    if camera[0]=="z":
+                        xsig_amp2=np.array([xsig[0],xsig[1],xsig[2]])
+                        xsig_amp4=np.array([xsig[3]])
+                        wsig_amp2=np.array([wsig[0],wsig[1],wsig[2]])
+                        wsig_amp4=np.array([wsig[3]])
+    
+                    xsigma_amp2.append(xsig_amp2)
+                    wsigma_amp2.append(wsig_amp2)
+                    xsigma_amp4.append(xsig_amp4)
+                    wsigma_amp4.append(wsig_amp4)
+  
+                if fibermap['FIBER'].shape[0]<260:
+                    xsigma_amp2=np.zeros(len(xsigma))
+                    xsigma_amp4=np.zeros(len(xsigma))
+                    wsigma_amp2=np.zeros(len(wsigma))
+                    wsigma_amp4=np.zeros(len(wsigma))
+
+        #- Calculate desired output metrics 
+        xsigma=np.array(xsigma)
+        wsigma=np.array(wsigma)
+        xsigma_med=np.median(xsigma)
+        wsigma_med=np.median(wsigma)
+        xsigma_med_sky=np.median(xsigma_sky)
+        wsigma_med_sky=np.median(wsigma_sky)
+        #xwsigma=np.array([xsigma_med_sky,wsigma_med_sky])
+        xamp1_med=np.median(xsigma_amp1)
+        xamp2_med=np.median(xsigma_amp2)
+        xamp3_med=np.median(xsigma_amp3)
+        xamp4_med=np.median(xsigma_amp4)
+        wamp1_med=np.median(wsigma_amp1)
+        wamp2_med=np.median(wsigma_amp2)
+        wamp3_med=np.median(wsigma_amp3)
+        wamp4_med=np.median(wsigma_amp4)
+        xsigma_amp=np.array([xamp1_med,xamp2_med,xamp3_med,xamp4_med])
+        wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
+
+        xshift_med=0.0
+        wshift_med=0.0
+        xshift_fib=[]
+        wshift_fib=[]
+        xshift_amp=[]
+        wshift_amp=[]
+        shift_warn=[]
+
+        xwfails=[xfails,wfails]
+
+        retval["PARAMS"] = param
+        if "REFERENCE" in kwargs:
+            retval['PARAMS']['XWSIGMA_REF']=kwargs["REFERENCE"]
+
+        shift_err='NORMAL'
+
+        #- Combine metrics for x and w
+        xwsigma=np.array((xsigma,wsigma)) #- (2,nfib)
+        #xwsigma_med=np.array((xsigma_med,wsigma_med)) #- (2)
+        xwsigma_amp=np.array((xsigma_amp,wsigma_amp))
+       
+        xwshift=np.zeros((2,500)) #- 500 should change to nfib (read from top)
+        #xwshift_med=np.array((xshift_med,wshift_med))
+        xwshift_amp=np.array((xshift_amp, wshift_amp))
+        
+        xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
+
+        if amps:
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
+        else:
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
+
+        #- http post if needed
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            plot.plot_XWSigma(retval,qafig)
+
+            log.debug("Output QA fig {}".format(qafig))
+
+        return retval
+ 
+    def get_default_config(self):
+        return {}
+
 
 class Count_Pixels(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -403,7 +771,13 @@ class Count_Pixels(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        input_image=args[0]
+        if kwargs["singleqa"] == 'Count_Pixels':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+        else:
+            image=args[0]
 
         if "paname" not in kwargs:
             paname=None
@@ -430,7 +804,7 @@ class Count_Pixels(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(input_image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         retval={}
@@ -478,7 +852,7 @@ class Count_Pixels(MonitoringAlg):
             retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_STATUS":npix_err}
 
         if qlf:
-            qlf_post(retval)      
+            qlf_post(retval)
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
@@ -486,374 +860,11 @@ class Count_Pixels(MonitoringAlg):
         if qafig is not None:
             from desispec.qa.qa_plots_ql import plot_countpix
             plot_countpix(retval,qafig)
-            
-            log.debug("Output QA fig {}".format(qafig))
-
-        return retval    
-
-    def get_default_config(self):
-        return {}
-
-class Calc_XWSigma(MonitoringAlg):
-    def __init__(self,name,config,logger=None):
-        if name is None or name.strip() == "":
-            name="XWSIGMA"
-        from desispec.image import Image as im
-        kwargs=config['kwargs']
-        parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "WSIGMA_MED_SKY"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
-        if "ReferenceMetrics" in kwargs:
-            r=kwargs["ReferenceMetrics"]
-            if key in r:
-                kwargs["REFERENCE"]=r[key]
-
-        if "XWSIGMA_WARN_RANGE" in parms and "XWSIGMA_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["XWSIGMA_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["XWSIGMA_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
-        MonitoringAlg.__init__(self,name,im,config,logger)
-    def run(self,*args,**kwargs):
-        if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
-        if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
-
-        fibermap=kwargs['FiberMap'] 
-        input_image=args[0]
- 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
- 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
- 
-        psf = None
-        if "PSFFile" in kwargs:
-            psf=kwargs["PSFFile"]
- 
-        fibermap = None
-        if "FiberMap" in kwargs:
-            fibermap=kwargs["FiberMap"]
- 
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
- 
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
- 
-        return self.run_qa(fibermap,input_image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
- 
-    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
-        from scipy.optimize import curve_fit
-
-        retval={}
-        retval["PANAME"] = paname
-        retval["QATIME"] = datetime.datetime.now().isoformat() 
-        retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
-        retval["CAMERA"] = camera = image.meta["CAMERA"]
-        retval["PROGRAM"] = image.meta["PROGRAM"]
-        retval["FLAVOR"] = image.meta["FLAVOR"]
-        retval["NIGHT"] = image.meta["NIGHT"]
-        kwargs=self.config['kwargs']
-
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
-
-        if param is None:
-            log.debug("Param is None. Using default param instead")
-            if image.meta["FLAVOR"] == 'arc':
-                param = {
-                    "B_PEAKS":[4047.7, 4359.6, 5087.2],
-                    "R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
-                    "Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
-                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0], #- Assumes both sigma and shift in same range. Change if needed
-                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
-                    }
-            else:
-                param = {
-                    "B_PEAKS":[3914.4, 5199.3, 5578.9],
-                    "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                    "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0],
-                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
-                    }
-
-        dw=2.
-        dp=3
-        b_peaks=param['B_PEAKS']
-        r_peaks=param['R_PEAKS']
-        z_peaks=param['Z_PEAKS']
-
-        if fibermap["OBJTYPE"][0] == 'ARC':
-            import desispec.psf
-            psf=desispec.psf.PSF(psf)
-
-        xsigma=[]
-        wsigma=[]
-        xsigma_sky=[]
-        wsigma_sky=[]
-        xsigma_amp1=[]
-        wsigma_amp1=[]
-        xsigma_amp2=[]
-        wsigma_amp2=[]
-        xsigma_amp3=[]
-        wsigma_amp3=[]
-        xsigma_amp4=[]
-        wsigma_amp4=[]
-        if fibermap['FIBER'].shape[0] >= 500:
-            fibers = 500
-        else:
-            fibers = fibermap['FIBER'].shape[0]
-        for i in range(fibers):
-            if camera[0]=="b":
-                peak_wave=np.array([b_peaks[0]-dw,b_peaks[0]+dw,b_peaks[1]-dw,b_peaks[1]+dw,b_peaks[2]-dw,b_peaks[2]+dw])
- 
-                xpix=psf.x(ispec=i,wavelength=peak_wave)
-                ypix=psf.y(ispec=i,wavelength=peak_wave)
-                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
-                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
-                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
-                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
-                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
-                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
- 
-                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
-
-                xsigma1=np.abs(xpopt1[2])
-                wsigma1=np.abs(wpopt1[2])
-                xsigma2=np.abs(xpopt2[2])
-                wsigma2=np.abs(wpopt2[2])
-                xsigma3=np.abs(xpopt3[2])
-                wsigma3=np.abs(wpopt3[2])
- 
-                xsig=np.array([xsigma1,xsigma2,xsigma3])
-                wsig=np.array([wsigma1,wsigma2,wsigma3])
-                xsigma_avg=np.mean(xsig)
-                wsigma_avg=np.mean(wsig)
-                xsigma.append(xsigma_avg)
-                wsigma.append(wsigma_avg)
- 
-            if camera[0]=="r":
-                peak_wave=np.array([r_peaks[0]-dw,r_peaks[0]+dw,r_peaks[1]-dw,r_peaks[1]+dw,r_peaks[2]-dw,r_peaks[2]+dw,r_peaks[3]-dw,r_peaks[3]+dw,r_peaks[4]-dw,r_peaks[4]+dw])
- 
-                xpix=psf.x(ispec=i,wavelength=peak_wave)
-                ypix=psf.y(ispec=i,wavelength=peak_wave)
-                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
-                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
-                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
-                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
-                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
-                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
-                xpix_peak4=np.arange(int(round(xpix[6]))-dp,int(round(xpix[7]))+dp+1,1)
-                ypix_peak4=np.arange(int(round(ypix[6])),int(round(ypix[7])),1)
-                xpix_peak5=np.arange(int(round(xpix[8]))-dp,int(round(xpix[9]))+dp+1,1)
-                ypix_peak5=np.arange(int(round(ypix[8])),int(round(ypix[9])),1)
-
-                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
-                xpopt4,xpcov4=curve_fit(qalib.gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
-                wpopt4,wpcov4=curve_fit(qalib.gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
-                xpopt5,xpcov5=curve_fit(qalib.gauss,np.arange(len(xpix_peak5)),image.pix[int(np.mean(ypix_peak5)),xpix_peak5])
-                wpopt5,wpcov5=curve_fit(qalib.gauss,np.arange(len(ypix_peak5)),image.pix[ypix_peak5,int(np.mean(xpix_peak5))])
-
-                xsigma1=np.abs(xpopt1[2])
-                wsigma1=np.abs(wpopt1[2])
-                xsigma2=np.abs(xpopt2[2])
-                wsigma2=np.abs(wpopt2[2])
-                xsigma3=np.abs(xpopt3[2])
-                wsigma3=np.abs(wpopt3[2])
-                xsigma4=np.abs(xpopt4[2])
-                wsigma4=np.abs(wpopt4[2])
-                xsigma5=np.abs(xpopt5[2])
-                wsigma5=np.abs(wpopt5[2]) 
-
-                xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4,xsigma5])
-                wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4,wsigma5])
-                xsigma_avg=np.mean(xsig)
-                wsigma_avg=np.mean(wsig)
-                xsigma.append(xsigma_avg)
-                wsigma.append(wsigma_avg)
-
-            if camera[0]=="z":
-                peak_wave=np.array([z_peaks[0]-dw,z_peaks[0]+dw,z_peaks[1]-dw,z_peaks[1]+dw,z_peaks[2]-dw,z_peaks[2]+dw,z_peaks[3]-dw,z_peaks[3]+dw])
- 
-                xpix=psf.x(ispec=i,wavelength=peak_wave)
-                ypix=psf.y(ispec=i,wavelength=peak_wave)
-                xpix_peak1=np.arange(int(round(xpix[0]))-dp,int(round(xpix[1]))+dp+1,1)
-                ypix_peak1=np.arange(int(round(ypix[0])),int(round(ypix[1])),1)
-                xpix_peak2=np.arange(int(round(xpix[2]))-dp,int(round(xpix[3]))+dp+1,1)
-                ypix_peak2=np.arange(int(round(ypix[2])),int(round(ypix[3])),1)
-                xpix_peak3=np.arange(int(round(xpix[4]))-dp,int(round(xpix[5]))+dp+1,1)
-                ypix_peak3=np.arange(int(round(ypix[4])),int(round(ypix[5])),1)
-                xpix_peak4=np.arange(int(round(xpix[6]))-dp,int(round(xpix[7]))+dp+1,1)
-                ypix_peak4=np.arange(int(round(ypix[6])),int(round(ypix[7])),1)
- 
-                xpopt1,xpcov1=curve_fit(qalib.gauss,np.arange(len(xpix_peak1)),image.pix[int(np.mean(ypix_peak1)),xpix_peak1])
-                wpopt1,wpcov1=curve_fit(qalib.gauss,np.arange(len(ypix_peak1)),image.pix[ypix_peak1,int(np.mean(xpix_peak1))])
-                xpopt2,xpcov2=curve_fit(qalib.gauss,np.arange(len(xpix_peak2)),image.pix[int(np.mean(ypix_peak2)),xpix_peak2])
-                wpopt2,wpcov2=curve_fit(qalib.gauss,np.arange(len(ypix_peak2)),image.pix[ypix_peak2,int(np.mean(xpix_peak2))])
-                xpopt3,xpcov3=curve_fit(qalib.gauss,np.arange(len(xpix_peak3)),image.pix[int(np.mean(ypix_peak3)),xpix_peak3])
-                wpopt3,wpcov3=curve_fit(qalib.gauss,np.arange(len(ypix_peak3)),image.pix[ypix_peak3,int(np.mean(xpix_peak3))])
-                xpopt4,xpcov4=curve_fit(qalib.gauss,np.arange(len(xpix_peak4)),image.pix[int(np.mean(ypix_peak4)),xpix_peak4])
-                wpopt4,wpcov4=curve_fit(qalib.gauss,np.arange(len(ypix_peak4)),image.pix[ypix_peak4,int(np.mean(xpix_peak4))])
-
-                xsigma1=np.abs(xpopt1[2])
-                wsigma1=np.abs(wpopt1[2])
-                xsigma2=np.abs(xpopt2[2])
-                wsigma2=np.abs(wpopt2[2])
-                xsigma3=np.abs(xpopt3[2])
-                wsigma3=np.abs(wpopt3[2])
-                xsigma4=np.abs(xpopt4[2])
-                wsigma4=np.abs(wpopt4[2])
-
-                xsig=np.array([xsigma1,xsigma2,xsigma3,xsigma4])
-                wsig=np.array([wsigma1,wsigma2,wsigma3,wsigma4])
-                xsigma_avg=np.mean(xsig)
-                wsigma_avg=np.mean(wsig)
-                xsigma.append(xsigma_avg)
-                wsigma.append(wsigma_avg)
- 
-            if fibermap['OBJTYPE'][i]=='SKY':
-                xsigma_sky=xsigma
-                wsigma_sky=wsigma
- 
-            if amps:
-                if fibermap['FIBER'][i]<240:
-                    if camera[0]=="b":
-                        xsig_amp1=np.array([xsigma1])
-                        xsig_amp3=np.array([xsigma2,xsigma3])
-                        wsig_amp1=np.array([wsigma1])
-                        wsig_amp3=np.array([wsigma2,wsigma3])
-                    if camera[0]=="r":
-                        xsig_amp1=np.array([xsigma1,xsigma2])
-                        xsig_amp3=np.array([xsigma3,xsigma4,xsigma5])
-                        wsig_amp1=np.array([wsigma1,wsigma2])
-                        wsig_amp3=np.array([wsigma3,wsigma4,wsigma5])
-                    if camera[0]=="z":
-                        xsig_amp1=np.array([xsigma1,xsigma2,xsigma3])
-                        xsig_amp3=np.array([xsigma4])
-                        wsig_amp1=np.array([wsigma1,wsigma2,wsigma3])
-                        wsig_amp3=np.array([wsigma4])
-
-                    xsigma_amp1.append(xsig_amp1)
-                    wsigma_amp1.append(wsig_amp1)
-                    xsigma_amp3.append(xsig_amp3)
-                    wsigma_amp3.append(wsig_amp3)
-
-                if fibermap['FIBER'][i]>260:
-                    if camera[0]=="b":
-                        xsig_amp2=np.array([xsigma1])
-                        xsig_amp4=np.array([xsigma2,xsigma3])
-                        wsig_amp2=np.array([wsigma1])
-                        wsig_amp4=np.array([wsigma2,wsigma3])
-                    if camera[0]=="r":
-                        xsig_amp2=np.array([xsigma1,xsigma2])
-                        xsig_amp4=np.array([xsigma3,xsigma4,xsigma5])
-                        wsig_amp2=np.array([wsigma1,wsigma2])
-                        wsig_amp4=np.array([wsigma3,wsigma4,wsigma5])
-                    if camera[0]=="z":
-                        xsig_amp2=np.array([xsigma1,xsigma2,xsigma3])
-                        xsig_amp4=np.array([xsigma4])
-                        wsig_amp2=np.array([wsigma1,wsigma2,wsigma3])
-                        wsig_amp4=np.array([wsigma4])
-
-                    xsigma_amp2.append(xsig_amp2)
-                    wsigma_amp2.append(wsig_amp2)
-                    xsigma_amp4.append(xsig_amp4)
-                    wsigma_amp4.append(wsig_amp4)
-  
-                if fibermap['FIBER'].shape[0]<260:
-                    xsigma_amp2=np.zeros(len(xsigma))
-                    xsigma_amp4=np.zeros(len(xsigma))
-                    wsigma_amp2=np.zeros(len(wsigma))
-                    wsigma_amp4=np.zeros(len(wsigma))
- 
-        xsigma=np.array(xsigma)
-        wsigma=np.array(wsigma)
-        xsigma_med=np.median(xsigma)
-        wsigma_med=np.median(wsigma)
-        xsigma_med_sky=np.median(xsigma_sky)
-        wsigma_med_sky=np.median(wsigma_sky)
-        #xwsigma=np.array([xsigma_med_sky,wsigma_med_sky])
-        xamp1_med=np.median(xsigma_amp1)
-        xamp2_med=np.median(xsigma_amp2)
-        xamp3_med=np.median(xsigma_amp3)
-        xamp4_med=np.median(xsigma_amp4)
-        wamp1_med=np.median(wsigma_amp1)
-        wamp2_med=np.median(wsigma_amp2)
-        wamp3_med=np.median(wsigma_amp3)
-        wamp4_med=np.median(wsigma_amp4)
-        xsigma_amp=np.array([xamp1_med,xamp2_med,xamp3_med,xamp4_med])
-        wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
-
-        xshift_med=0.0
-        wshift_med=0.0
-        xshift_fib=[]
-        wshift_fib=[]
-        xshift_amp=[]
-        wshift_amp=[]
-        shift_warn=[]
-
-        retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['XWSIGMA_REF']=kwargs["REFERENCE"]
-
-        shift_err='NORMAL'
-
-        #- Combine metrics for x and w
-        xwsigma=np.array((xsigma,wsigma)) #- (2,nfib)
-        #xwsigma_med=np.array((xsigma_med,wsigma_med)) #- (2)
-        xwsigma_amp=np.array((xsigma_amp,wsigma_amp))
-       
-        xwshift=np.zeros((2,500)) #- 500 should change to nfib (read from top)
-        #xwshift_med=np.array((xshift_med,wshift_med))
-        xwshift_amp=np.array((xshift_amp, wshift_amp))
-        
-        xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
-
-        if amps:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
-        else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
-        #- http post if needed
-        if qlf:
-            qlf_post(retval)    
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_XWSigma
-            plot_XWSigma(retval,qafig)
 
             log.debug("Output QA fig {}".format(qafig))
 
         return retval
- 
+
     def get_default_config(self):
         return {}
 
@@ -863,11 +874,10 @@ class CountSpectralBins(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="COUNTBINS"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NGOODFIB"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NGOODFIB_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NGOODFIB_STAT"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -887,8 +897,15 @@ class CountSpectralBins(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
+        if kwargs["singleqa"] == 'CountSpectralBins':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+        else:
+            frame=args[0]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
 
         paname=None
         if "paname" in kwargs:
@@ -914,8 +931,7 @@ class CountSpectralBins(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(fibermap,input_frame,paname=paname,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
-
+        return self.run_qa(fibermap,frame,paname=paname,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,psf=None,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
 
@@ -1039,23 +1055,24 @@ class CountSpectralBins(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_countspectralbins
-            plot_countspectralbins(retval,qafig)
+            plot.plot_countspectralbins(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
         
         return retval
 
- 
+    def get_default_config(self):
+        return {}
+
+
 class Sky_Continuum(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="SKYCONT"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "SKYCONT"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "SKYCONT_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "SKYCONT_STAT"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1073,27 +1090,18 @@ class Sky_Continuum(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
+        if kwargs["singleqa"] == 'Sky_Continuum':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+        else:
+            frame=args[0]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
-        camera=input_frame.meta["CAMERA"]
+        camera=frame.meta["CAMERA"]
         
-        wrange1=None
-        wrange2=None
-        if "wrange1" in kwargs:
-            wrange1=kwargs["wrange1"]
-        if "wrange2" in kwargs:
-            wrange2=kwargs["wrange2"]
-
-        if wrange1==None:
-            if camera[0]=="b": wrange1= "4000,4500"
-            if camera[0]=="r": wrange1= "5950,6200"
-            if camera[0]=="z": wrange1= "8120,8270"
-
-        if wrange2==None:
-            if camera[0]=="b": wrange2= "5250,5550"
-            if camera[0]=="r": wrange2= "6990,7230"
-            if camera[0]=="z": wrange2= "9110,9280"
-        paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
@@ -1102,6 +1110,20 @@ class Sky_Continuum(MonitoringAlg):
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
+
+        if "{}_CONT".format(camera[0].upper()) in param:
+            wrange1=param["{}_CONT".format(camera[0].upper())][0]
+            wrange2=param["{}_CONT".format(camera[0].upper())][1]
+        else:
+            if camera[0]=="b":
+                wrange1= "4000,4500"
+                wrange2= "5250,5550"
+            if camera[0]=="r":
+                wrange1= "5950,6200"
+                wrange2= "6990,7230"
+            if camera[0]=="z":
+                wrange1= "8120,8270"
+                wrange2= "9110,9280"
 
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
@@ -1112,10 +1134,11 @@ class Sky_Continuum(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
-        return self.run_qa(fibermap,input_frame,wrange1=wrange1,wrange2=wrange2,paname=paname, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+
+        return self.run_qa(fibermap,frame,wrange1=wrange1,wrange2=wrange2,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,
-               paname=None, qafile=None,qafig=None, param=None, qlf=False,
+               paname=None,qafile=None,qafig=None,param=None,qlf=False,
                refmetrics=None):
 
         #- qa dictionary 
@@ -1134,7 +1157,6 @@ class Sky_Continuum(MonitoringAlg):
 
         if param is None:
             log.debug("Param is None. Using default param instead")
-            from desispec.io import read_params
             desi_params = read_params()
             param = {}
             for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_WARN_RANGE', 'SKYCONT_ALARM_RANGE']:
@@ -1158,8 +1180,7 @@ class Sky_Continuum(MonitoringAlg):
             log.debug("Output QA data is in {}".format(outfile))
 
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_sky_continuum
-            plot_sky_continuum(retval,qafig)
+            plot.plot_sky_continuum(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
         
@@ -1173,11 +1194,10 @@ class Sky_Peaks(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="SKYPEAK"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT_MED_SKY"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STAT"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1195,8 +1215,15 @@ class Sky_Peaks(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image, got {}".format(type(args[0])))
 
+        if kwargs["singleqa"] == 'Sky_Peaks':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
+        else:
+            frame=args[0]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
 
         if "paname" not in kwargs:
             paname=None
@@ -1224,7 +1251,7 @@ class Sky_Peaks(MonitoringAlg):
             qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,input_frame,paname=paname,psf=psf, qafile=qafile, qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from desispec.qa.qalib import sky_peaks
@@ -1244,7 +1271,6 @@ class Sky_Peaks(MonitoringAlg):
         # Parameters
         if param is None:
             log.info("Param is None. Using default param instead")
-            from desispec.io import read_params
             desi_params = read_params()
             param = desi_params['qa']['skypeaks']['PARAMS']
 
@@ -1259,6 +1285,7 @@ class Sky_Peaks(MonitoringAlg):
             retval['PARAMS']['PEAKCOUNT_REF']=kwargs["REFERENCE"]
 
         sumcount_err='NORMAL'
+
         retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS":rms_skyspec,"PEAKCOUNT_STATUS":sumcount_err}
 
         if qlf:
@@ -1268,8 +1295,7 @@ class Sky_Peaks(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_sky_peaks
-            plot_sky_peaks(retval,qafig)
+            plot.plot_sky_peaks(retval,qafig)
 
             log.debug("Output QA fig {}".format(qafig))
 
@@ -1286,11 +1312,10 @@ class Sky_Residual(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="RESIDUAL"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "RESID"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "RESID_STATUS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDRMS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "RESIDRMS_STAT"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -1305,17 +1330,23 @@ class Sky_Residual(MonitoringAlg):
 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
-        from desispec.io.sky import read_sky
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
+        if kwargs["singleqa"] == 'Sky_Residual':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+        else:
+            frame=args[0]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0] #- should be sky subtracted
         skymodel=args[1] #- should be skymodel evaluated
         if "SkyFile" in kwargs:
-            from desispec.io.sky import read_sky
             skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
             log.debug("Using given sky file {} for subtraction".format(skyfile))
 
@@ -1341,10 +1372,10 @@ class Sky_Residual(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
         
-        return self.run_qa(fibermap,input_frame,paname=paname,skymodel=skymodel, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,skymodel=skymodel,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
 
-    def run_qa(self,fibermap,frame,paname=None,skymodel=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,skymodel=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
         from desispec.sky import qa_skysub
 
         if skymodel is None:
@@ -1384,27 +1415,28 @@ class Sky_Residual(MonitoringAlg):
 
         skyresid_err='NORMAL'
         retval["PARAMS"] = param
-        retval["METRICS"]["RESID_STATUS"]=skyresid_err
+        retval["METRICS"]["RESIDRMS_STAT"]=skyresid_err
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['RESID_REF']=kwargs["REFERENCE"]
+            retval['PARAMS']['RESIDRMS_REF']=kwargs["REFERENCE"]
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_residuals
-            plot_residuals(retval,qafig)
+            plot.plot_residuals(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
 
         return retval
-        
-        
+
+    def get_default_config(self):
+        return {}
+
+
 class Integrate_Spec(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="INTEG"
-        from desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "INTEG_AVG"
@@ -1426,8 +1458,16 @@ class Integrate_Spec(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
+        if kwargs["singleqa"] == 'Integrate_Spec':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+        else:
+            frame=args[0]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
 
         if "paname" not in kwargs:
             paname=None
@@ -1449,9 +1489,10 @@ class Integrate_Spec(MonitoringAlg):
 
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
-        return self.run_qa(fibermap,input_frame,paname=paname, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,paname=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
+
+    def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
         retval={}
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
@@ -1472,7 +1513,7 @@ class Integrate_Spec(MonitoringAlg):
         log.info(len(integrals))
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
-        
+
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
         mag_avg_tgt=[]
@@ -1515,6 +1556,7 @@ class Integrate_Spec(MonitoringAlg):
         magdiff_err='NORMAL'
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
         delta_mag=np.zeros(frame.nspec) #- placeholder
+
         retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
 
         if qlf:
@@ -1524,8 +1566,7 @@ class Integrate_Spec(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_integral
-            plot_integral(retval,qafig)
+            plot.plot_integral(retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
 
@@ -1533,18 +1574,15 @@ class Integrate_Spec(MonitoringAlg):
 
     def get_default_config(self):
         return {}
-        
-        
-        
+ 
 class Calculate_SNR(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="SNR"
-        from  desispec.frame import Frame as fr
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "ELG_FIDSNR"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STAT"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1557,14 +1595,21 @@ class Calculate_SNR(MonitoringAlg):
                               (np.asarray(parms["FIDSNR_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
-        from desispec.io.sky import read_sky
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
+        if kwargs["singleqa"] == 'Calculate_SNR':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+        else:
+            frame=args[0]
+
         fibermap=kwargs['FiberMap']
-        input_frame=args[0]
 
         if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
         else: refmetrics=None
@@ -1573,15 +1618,17 @@ class Calculate_SNR(MonitoringAlg):
         if "amps" in kwargs:
             amps=kwargs["amps"]
 
-        dict_countbins=None
-        if "dict_countbins" in kwargs:
-            dict_countbins=kwargs["dict_countbins"]
-
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
+
         paname=None
         if "paname" in kwargs:
             paname=kwargs["paname"]
+
+        if "rescut" in kwargs: rescut=kwargs["rescut"]
+        else: rescut=None
+        if "sigmacut" in kwargs: sigmacut=kwargs["sigmacut"]
+        else: sigmacut=None
 
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
@@ -1593,24 +1640,26 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,input_frame,paname=paname,amps=amps,dict_countbins=dict_countbins, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics,rescut=rescut,sigmacut=sigmacut)
 
-
-    def run_qa(self,fibermap,frame,paname=None,amps=False,dict_countbins=None, qafile=None,qafig=None, qlf=False, param=None, refmetrics=None):
+    def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None,rescut=None,sigmacut=None):
 
         #- return values
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
-        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
+        retval["EXPID"] = expid = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = frame.meta["NIGHT"]
+        retval["NIGHT"] = night = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
+        objlist = set(fibermap["OBJTYPE"])
+        if 'SKY' in objlist:
+            objlist.remove('SKY')
 
         #- select band for mag, using DECAM_R if present
         if param is None:
@@ -1623,22 +1672,16 @@ class Calculate_SNR(MonitoringAlg):
                 }
 
         fidboundary=None
-        qso_resid=kwargs["qso_resid"]
-        if amps: 
-            #- get the pixel boundary and fiducial boundary in flux-wavelength space
-            leftmax = dict_countbins["LEFT_MAX_FIBER"]
-            rightmin = dict_countbins["RIGHT_MIN_FIBER"]
-            bottommax = dict_countbins["BOTTOM_MAX_WAVE_INDEX"]
-            topmin = dict_countbins["TOP_MIN_WAVE_INDEX"]
-            fidboundary = qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)
-        #qadict = qalib.SignalVsNoise(frame,param,fidboundary=fidboundary)
-        qadict = qalib.SNRFit(frame,camera,param,fidboundary=fidboundary,qso_resid=qso_resid)
+
+        qadict,badfibs,fitsnr = qalib.SNRFit(frame,night,camera,expid,objlist,param,fidboundary=fidboundary)
 
         #- Check for inf and nans in missing magnitudes for json support of QLF #TODO review this later
-        for mag in [qadict["ELG_SNR_MAG"][1],qadict["LRG_SNR_MAG"][1],qadict["QSO_SNR_MAG"][1],qadict["STAR_SNR_MAG"][1]]:
-            k=np.where(~np.isfinite(mag))[0]
-            if len(k) > 0:
-                log.warning("{} objects have no or unphysical magnitudes".format(len(k)))
+
+        for obj in range(len(qadict["SNR_MAG_TGT"])):
+            for mag in [qadict["SNR_MAG_TGT"][obj]]:
+                k=np.where(~np.isfinite(mag))[0]
+                if len(k) > 0:
+                    log.warning("{} objects have no or unphysical magnitudes".format(len(k)))
             mag=np.array(mag)
             mag[k]=26.  #- Putting 26, so as to make sure within reasonable range for plots.
         retval["METRICS"] = qadict
@@ -1647,7 +1690,7 @@ class Calculate_SNR(MonitoringAlg):
             retval['PARAMS']['FIDSNR_TGT_REF']=kwargs["REFERENCE"]
 
         snrwarn='NORMAL'
-        retval["METRICS"]["FIDSNR_STATUS"] = snrwarn
+        retval["METRICS"]["FIDSNR_STAT"] = snrwarn
 
         #- http post if valid
         if qlf:
@@ -1657,12 +1700,12 @@ class Calculate_SNR(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_SNR
-            plot_SNR(retval,qafig,qso_resid)
+            plot.plot_SNR(retval,qafig,objlist,badfibs,fitsnr,rescut,sigmacut)
             log.debug("Output QA fig {}".format(qafig))
 
         return retval
 
     def get_default_config(self):
         return {}
+
 
