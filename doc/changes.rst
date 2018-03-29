@@ -17,6 +17,7 @@ Multiple non-backwards compatible changes:
 * QL format updates (`#517`_, `#554`_)
 * module file set DESI_CCD_CALIBRATION_DATA (`#564`_).
 * Optionally include RA,DEC in merged zcatalog (`#562`_).
+* QL updates to S/N calculations (`#556`_).
 
 .. _`#517`: https://github.com/desihub/desispec/pull/517
 .. _`#519`: https://github.com/desihub/desispec/pull/519
@@ -32,6 +33,7 @@ Multiple non-backwards compatible changes:
 .. _`#547`: https://github.com/desihub/desispec/pull/547
 .. _`#552`: https://github.com/desihub/desispec/pull/552
 .. _`#554`: https://github.com/desihub/desispec/pull/554
+.. _`#556`: https://github.com/desihub/desispec/pull/556
 .. _`#559`: https://github.com/desihub/desispec/pull/559
 .. _`#562`: https://github.com/desihub/desispec/pull/562
 .. _`#564`: https://github.com/desihub/desispec/pull/564
