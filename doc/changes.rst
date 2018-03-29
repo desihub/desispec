@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.20.0 (unreleased)
+0.20.1 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.20.0 (2018-03-29)
 -------------------
 
 Multiple non-backwards compatible changes:
