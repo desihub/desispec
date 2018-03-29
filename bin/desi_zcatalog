@@ -54,6 +54,7 @@ parser.add_argument("-i", "--indir",   type=str,  help="input directory")
 parser.add_argument("-o", "--outfile", type=str,  help="output file")
 parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
 parser.add_argument("--match", type=str, nargs="*", help="match other tables (targets,truth...)")
+parser.add_argument("--fibermap", action = "store_true", help="add some columns from fibermap stored in zbest files")
 
 args = parser.parse_args()
 
@@ -76,8 +77,24 @@ zbestfiles = sorted(io.iterfiles(args.indir, 'zbest'))
 data = list()
 for zbestfile in zbestfiles:
     zbest = fitsio.read(zbestfile, 'ZBEST')
-    data.append(zbest)
     log.debug("{} {}".format(zbestfile, len(zbest)))
+    if args.fibermap :
+        fibermap = fitsio.read(zbestfile, 'FIBERMAP')
+        # new zbest structured array with two more columns ...
+        ndtype=np.dtype( zbest.dtype.descr + [("RA",str(fibermap["RA_TARGET"].dtype)),("DEC",str(fibermap["DEC_TARGET"].dtype))])
+        nzbest=np.zeros(zbest.shape,dtype=ndtype)
+        # copy 
+        for k in zbest.dtype.names : nzbest[k]=zbest[k]
+        # add RA and Dec
+        # we have to match the targetids and get a unique set of values
+        # because the fibermap can contain several entries for the same target
+        tmp1  = {tid : i for i,tid in enumerate(fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
+        tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
+        nzbest["RA"] = fibermap["RA_TARGET"][tmp2]
+        nzbest["DEC"] = fibermap["DEC_TARGET"][tmp2]
+        zbest=nzbest
+    data.append(zbest)
+   
 
 zcat = np.hstack(data)
 
