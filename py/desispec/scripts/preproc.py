@@ -25,13 +25,13 @@ camera is given with --cameras.
 --bias/--pixflat/--mask can specify the calibration files
 to use, but also only if a single camera is specified.
         ''')
-    parser.add_argument('--infile', type = str, default = None, required=True,
+    parser.add_argument('-i','--infile', type = str, default = None, required=True,
                         help = 'path of DESI raw data file')
     parser.add_argument('--outdir', type = str, default = None, required=False,
                         help = 'output directory')
     parser.add_argument('--pixfile', type = str, default = None, required=False,
                         help = 'DEPRECATED: use --outfile instead')
-    parser.add_argument('--outfile', type = str, default = None, required=False,
+    parser.add_argument('-o','--outfile', type = str, default = None, required=False,
                         help = 'output preprocessed image file')
     parser.add_argument('--cameras', type = str, default = None, required=False,
                         help = 'comma separated list of cameras')
