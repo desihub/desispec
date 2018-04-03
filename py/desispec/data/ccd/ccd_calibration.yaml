@@ -15,12 +15,29 @@
 #
 
 b1:
+  V1:
+   AMPLIFIERS: ABCD
+   DETECTOR: itl_4kx4k_02
+   DATE-OBS-BEGIN: '20180321'
+   DOSVER: winlight
+   FEEVER: v20160312
+# BLUE 17986
+# gains measured at Saclay
+# https://desi.lbl.gov/trac/attachment/wiki/Winlight/SpectrographMtgs/Weekly-2017-12-19/cryostats-Prod_SM01_20171219.pptx
+   GAINA: 1.25
+   GAINB: 1.25
+   GAINC: 1.25
+   GAIND: 1.25
+   SATURLEVA: 100000.0
+   SATURLEVB: 100000.0
+   SATURLEVC: 100000.0
+   SATURLEVD: 100000.0
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
     AMPLIFIERS: ABCD
     DETECTOR: itl_4kx4k_02
     DATE-OBS-BEGIN: '20161221'
-    DATE-OBS-END: None
+    DATE-OBS-END: '20171231'
     DOSVER: trunk
     FEEVER: v20160312
     EXPTIMEKEY: EXPREQ
@@ -55,6 +72,36 @@ b1:
       FEEVER: SIM
       DETECTOR: SIM 
 r1:
+  V1:
+    DETECTOR: lbnl_4kx4k_1102
+    DATE-OBS-BEGIN: '20180321'
+    DATE-OBS-END: None
+    DOSVER: winlight
+    FEEVER: v20160312
+    EXPTIMEKEY: EXPREQ
+# M1-21
+# gains measured at Saclay
+# https://desi.lbl.gov/trac/attachment/wiki/Winlight/SpectrographMtgs/Weekly-2017-12-19/cryostats-Prod_SM01_20171219.pptx
+# 
+# AMplifier orientation found by comparing with ds9 images
+# WINLIGHT_00007739.fits and SM01/SM1Red_20171214/OFF2_0s_20171214+143253.fits
+# Brighter columns are visible in the off images,
+# they can be matched from one image to another and used
+# to identify the amplifiers.
+# Saclay top right    = WINLIGHT bottom left = amp A : gain = 1.65 e/ADU 
+# Saclay top left     = WINLIGHT bottom right  = amp B : gain = 1.59 e/ADU
+# Saclay bottom left  = WINLIGHT top right = amp D : gain = 1.48 e/ADU
+# Saclay bottom right = WINLIGHT top left = amp C : gain = 1.54 e/ADU
+# Also consistent with overscan levels.
+    GAINA: 1.65
+    GAINB: 1.59
+    GAINC: 1.54
+    GAIND: 1.48
+    SATURLEVA: 100000.0
+    SATURLEVB: 100000.0
+    SATURLEVC: 100000.0
+    SATURLEVD: 100000.0
+
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
 # gain A not measured
@@ -97,6 +144,32 @@ r1:
       DETECTOR: SIM 
 
 z1:
+  V1:
+    DETECTOR: lbnl_4kx4k_1002
+    DATE-OBS-BEGIN: '20180321'
+    DATE-OBS-END: None
+    DOSVER: winlight
+    FEEVER: v20160312
+    EXPTIMEKEY: EXPREQ
+# NIR M1-20
+# gains measured at Saclay
+# https://desi.lbl.gov/trac/attachment/wiki/Winlight/SpectrographMtgs/Weekly-2017-12-19/cryostats-Prod_SM01_20171219.pptx
+# Comparison with ds9 of
+# WINLIGHT_00007739.fits
+# SM01/SM1Nir_20171216/off2_0s_20171218+154151.fits
+# (matching is less obvious than for RED. Hot columns have disappeared)
+# Saclay top right = WINLIGHT top left = amp C : gain = 1.5 e/ADU  
+# Saclay top left = WINLIGHT top right = amp D : gain = 1.7 e/ADU 
+# Saclay bottom right = WINLIGHT bottom left = amp A : gain = 1.6 e/ADU 
+# Saclay bottom left = WINLIGHT bottom right = amp B : gain = 1.6 e/ADU 
+    GAINA: 1.6
+    GAINB: 1.6
+    GAINC: 1.5
+    GAIND: 1.7
+    SATURLEVA: 100000.0
+    SATURLEVB: 100000.0
+    SATURLEVC: 100000.0
+    SATURLEVD: 100000.0
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
 # gains A and C not measured
