@@ -32,6 +32,20 @@ b1:
    SATURLEVB: 100000.0
    SATURLEVC: 100000.0
    SATURLEVD: 100000.0
+# crosstalk measured with 9 HgAr exposures from 20180403
+# see https://pc-elog.obs-hp.fr:8443/DESI+SM1-Spectrograph/10
+   CROSSTALKAB: 0.000163227
+   CROSSTALKAC: 4.0139e-05
+   CROSSTALKAD: 0.000109938
+   CROSSTALKBA: -9.96349e-05
+   CROSSTALKBC: 0.000129466
+   CROSSTALKBD: 5.03196e-05
+   CROSSTALKCA: -2.65922e-05
+   CROSSTALKCB: 5.12324e-05
+   CROSSTALKCD: 0.000245924
+   CROSSTALKDA: 5.97505e-05
+   CROSSTALKDB: 8.24003e-05
+   CROSSTALKDC: 5.50986e-05
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
     AMPLIFIERS: ABCD
@@ -101,7 +115,20 @@ r1:
     SATURLEVB: 100000.0
     SATURLEVC: 100000.0
     SATURLEVD: 100000.0
-
+# Measured with Ne exposures from  20180403
+# see https://pc-elog.obs-hp.fr:8443/DESI+SM1-Spectrograph/10
+    CROSSTALKAB: 6.79936e-05
+    CROSSTALKAC: -0.000126253
+    CROSSTALKAD: -5.47785e-05
+    CROSSTALKBA: 9.99938e-05
+    CROSSTALKBC: 2.50587e-05
+    CROSSTALKBD: -0.00016938
+    CROSSTALKCA: 6.13788e-05
+    CROSSTALKCB: 1.74468e-05
+    CROSSTALKCD: -1.29814e-05
+    CROSSTALKDA: 6.40643e-06
+    CROSSTALKDB: 7.89487e-06
+    CROSSTALKDC: 3.99623e-05
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
 # gain A not measured
@@ -170,6 +197,20 @@ z1:
     SATURLEVB: 100000.0
     SATURLEVC: 100000.0
     SATURLEVD: 100000.0
+# using exposures 7850-7858
+    CROSSTALKAB: 0.00254029
+    CROSSTALKAC: -4.75311e-06
+    CROSSTALKAD: 4.53622e-05
+    CROSSTALKBA: 0.00358496
+    CROSSTALKBC: 1.88491e-05
+    CROSSTALKBD: -3.93394e-05
+    CROSSTALKCA: 0.000191424
+    CROSSTALKCB: 0.000219017
+    CROSSTALKCD: 0.00107523
+    CROSSTALKDA: 0.000106366
+    CROSSTALKDB: 0.000165776
+    CROSSTALKDC: 0.00277474
+
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
 # gains A and C not measured
