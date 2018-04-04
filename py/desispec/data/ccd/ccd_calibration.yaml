@@ -24,6 +24,7 @@ b1:
 # BLUE 17986
 # gains measured at Saclay
 # https://desi.lbl.gov/trac/attachment/wiki/Winlight/SpectrographMtgs/Weekly-2017-12-19/cryostats-Prod_SM01_20171219.pptx
+# DESI-1964 NIR CCD ICS transfo: complicated ...
    GAINA: 1.25
    GAINB: 1.25
    GAINC: 1.25
@@ -96,7 +97,7 @@ r1:
 # M1-21
 # gains measured at Saclay
 # https://desi.lbl.gov/trac/attachment/wiki/Winlight/SpectrographMtgs/Weekly-2017-12-19/cryostats-Prod_SM01_20171219.pptx
-# 
+# DESI-1964 RED CCD ICS transfo: data = data [::-1,::-1]
 # AMplifier orientation found by comparing with ds9 images
 # WINLIGHT_00007739.fits and SM01/SM1Red_20171214/OFF2_0s_20171214+143253.fits
 # Brighter columns are visible in the off images,
@@ -181,18 +182,19 @@ z1:
 # NIR M1-20
 # gains measured at Saclay
 # https://desi.lbl.gov/trac/attachment/wiki/Winlight/SpectrographMtgs/Weekly-2017-12-19/cryostats-Prod_SM01_20171219.pptx
+# DESI-1964 NIR CCD ICS transfo: data = data[,::-1]
 # Comparison with ds9 of
 # WINLIGHT_00007739.fits
 # SM01/SM1Nir_20171216/off2_0s_20171218+154151.fits
 # (matching is less obvious than for RED. Hot columns have disappeared)
-# Saclay top right = WINLIGHT top left = amp C : gain = 1.5 e/ADU  
-# Saclay top left = WINLIGHT top right = amp D : gain = 1.7 e/ADU 
+# Saclay top right = WINLIGHT top left = amp C : gain = 1.7 e/ADU  
+# Saclay top left = WINLIGHT top right = amp D : gain = 1.5 e/ADU 
 # Saclay bottom right = WINLIGHT bottom left = amp A : gain = 1.6 e/ADU 
 # Saclay bottom left = WINLIGHT bottom right = amp B : gain = 1.6 e/ADU 
     GAINA: 1.6
     GAINB: 1.6
-    GAINC: 1.5
-    GAIND: 1.7
+    GAINC: 1.7
+    GAIND: 1.5
     SATURLEVA: 100000.0
     SATURLEVB: 100000.0
     SATURLEVC: 100000.0
