@@ -1159,7 +1159,7 @@ class Sky_Continuum(MonitoringAlg):
             log.debug("Param is None. Using default param instead")
             desi_params = read_params()
             param = {}
-            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_WARN_RANGE', 'SKYCONT_ALARM_RANGE']:
+            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_NORMAL_RANGE', 'SKYCONT_WARN_RANGE']:
                 param[key] = desi_params['qa']['skysub']['PARAMS'][key]
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
