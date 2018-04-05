@@ -33,20 +33,22 @@ b1:
    SATURLEVB: 100000.0
    SATURLEVC: 100000.0
    SATURLEVD: 100000.0
-# crosstalk measured with 9 HgAr exposures from 20180403
+# crosstalk measured with exposures from 20180403
+# desi_compute_crosstalk -i preproc-b1-000078{5,6}*-nocrosstalk.fits  --plot
 # see https://pc-elog.obs-hp.fr:8443/DESI+SM1-Spectrograph/10
-   CROSSTALKAB: 0.000163227
-   CROSSTALKAC: 4.0139e-05
-   CROSSTALKAD: 0.000109938
-   CROSSTALKBA: -9.96349e-05
-   CROSSTALKBC: 0.000129466
-   CROSSTALKBD: 5.03196e-05
-   CROSSTALKCA: -2.65922e-05
-   CROSSTALKCB: 5.12324e-05
-   CROSSTALKCD: 0.000245924
-   CROSSTALKDA: 5.97505e-05
-   CROSSTALKDB: 8.24003e-05
-   CROSSTALKDC: 5.50986e-05
+   CROSSTALKAB: 0.000181795
+   CROSSTALKAC: 3.78328e-05
+   CROSSTALKAD: 3.43764e-05
+   CROSSTALKBA: 0.000406345
+   CROSSTALKBC: 9.52678e-05
+   CROSSTALKBD: 2.82152e-06
+   CROSSTALKCA: 0.000120356
+   CROSSTALKCB: 4.05597e-05
+   CROSSTALKCD: -0.000154194
+   CROSSTALKDA: 6.90516e-05
+   CROSSTALKDB: 3.88298e-05
+   CROSSTALKDC: 5.5153e-05
+
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
     AMPLIFIERS: ABCD
@@ -116,20 +118,22 @@ r1:
     SATURLEVB: 100000.0
     SATURLEVC: 100000.0
     SATURLEVD: 100000.0
-# Measured with Ne exposures from  20180403
+# Measured with exposures from  20180403
 # see https://pc-elog.obs-hp.fr:8443/DESI+SM1-Spectrograph/10
-    CROSSTALKAB: 6.79936e-05
-    CROSSTALKAC: -0.000126253
-    CROSSTALKAD: -5.47785e-05
-    CROSSTALKBA: 9.99938e-05
-    CROSSTALKBC: 2.50587e-05
-    CROSSTALKBD: -0.00016938
-    CROSSTALKCA: 6.13788e-05
-    CROSSTALKCB: 1.74468e-05
-    CROSSTALKCD: -1.29814e-05
-    CROSSTALKDA: 6.40643e-06
-    CROSSTALKDB: 7.89487e-06
-    CROSSTALKDC: 3.99623e-05
+# desi_compute_crosstalk -i preproc-r1-000078{5,6}*-nocrosstalk.fits  --plot
+    CROSSTALKAB: 6.27242e-06
+    CROSSTALKAC: 1.7286e-05
+    CROSSTALKAD: -1.10615e-05
+    CROSSTALKBA: 9.9254e-06
+    CROSSTALKBC: -7.04047e-05
+    CROSSTALKBD: 9.12595e-05
+    CROSSTALKCA: 5.74163e-05
+    CROSSTALKCB: 1.62465e-05
+    CROSSTALKCD: -7.22978e-06
+    CROSSTALKDA: 4.73602e-05
+    CROSSTALKDB: 1.02292e-05
+    CROSSTALKDC: 2.79379e-06
+
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
 # gain A not measured
@@ -199,19 +203,22 @@ z1:
     SATURLEVB: 100000.0
     SATURLEVC: 100000.0
     SATURLEVD: 100000.0
-# using exposures 7850-7858
-    CROSSTALKAB: 0.00254029
-    CROSSTALKAC: -4.75311e-06
-    CROSSTALKAD: 4.53622e-05
-    CROSSTALKBA: 0.00358496
-    CROSSTALKBC: 1.88491e-05
-    CROSSTALKBD: -3.93394e-05
-    CROSSTALKCA: 0.000191424
-    CROSSTALKCB: 0.000219017
-    CROSSTALKCD: 0.00107523
-    CROSSTALKDA: 0.000106366
-    CROSSTALKDB: 0.000165776
-    CROSSTALKDC: 0.00277474
+# cannot use exposures with all fibers for AB CD terms
+# because, by chance, the traces of two adjacent AB or CD amps overlap
+# when folded for this camera ... but no sign of significant crosstalk
+# desi_compute_crosstalk -i preproc-z1-000078{5,6}*-nocrosstalk.fits  --plot
+    CROSSTALKAB: 0
+    CROSSTALKAC: 4.90966e-05
+    CROSSTALKAD: -7.77935e-07
+    CROSSTALKBA: 0
+    CROSSTALKBC: 2.3838e-05
+    CROSSTALKBD: 7.90737e-05
+    CROSSTALKCA: -3.52024e-06
+    CROSSTALKCB: -8.01027e-05
+    CROSSTALKCD: 0
+    CROSSTALKDA: 0
+    CROSSTALKDB: -2.44366e-05
+    CROSSTALKDC: 0
 
   V0:
 # gain and cross-talk  measurement described in EM1 spectrograph report
