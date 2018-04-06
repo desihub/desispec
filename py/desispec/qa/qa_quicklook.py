@@ -1100,7 +1100,6 @@ class Sky_Continuum(MonitoringAlg):
             frame=args[0]
 
         fibermap=kwargs['FiberMap']
-        camera=frame.meta["CAMERA"]
         
         if "paname" in kwargs:
             paname=kwargs["paname"]
@@ -1110,20 +1109,6 @@ class Sky_Continuum(MonitoringAlg):
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
-
-        if "{}_CONT".format(camera[0].upper()) in param:
-            wrange1=param["{}_CONT".format(camera[0].upper())][0]
-            wrange2=param["{}_CONT".format(camera[0].upper())][1]
-        else:
-            if camera[0]=="b":
-                wrange1= "4000,4500"
-                wrange2= "5250,5550"
-            if camera[0]=="r":
-                wrange1= "5950,6200"
-                wrange2= "6990,7230"
-            if camera[0]=="z":
-                wrange1= "8120,8270"
-                wrange2= "9110,9280"
 
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
@@ -1135,9 +1120,9 @@ class Sky_Continuum(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig=None
 
-        return self.run_qa(fibermap,frame,wrange1=wrange1,wrange2=wrange2,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,wrange1=None,wrange2=None,
+    def run_qa(self,fibermap,frame,
                paname=None,qafile=None,qafig=None,param=None,qlf=False,
                refmetrics=None):
 
@@ -1155,12 +1140,18 @@ class Sky_Continuum(MonitoringAlg):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
 
+        camera=frame.meta["CAMERA"]
+
         if param is None:
             log.debug("Param is None. Using default param instead")
             desi_params = read_params()
             param = {}
-            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_NORMAL_RANGE', 'SKYCONT_WARN_RANGE']:
+            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_ALARM_RANGE', 'SKYCONT_WARN_RANGE']: #- needs updating alarm/warn - normal/warn in desi_params.
                 param[key] = desi_params['qa']['skysub']['PARAMS'][key]
+
+        wrange1=param["{}_CONT".format(camera[0].upper())][0]
+        wrange2=param["{}_CONT".format(camera[0].upper())][1]
+
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
             retval['PARAMS']['SKYCONT_REF']=kwargs["REFERENCE"]
