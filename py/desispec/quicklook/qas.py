@@ -72,8 +72,7 @@ class MonitoringAlg:
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
             devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
             if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
-                self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation),
-                                                                                                                                                         thr,current))
+                self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
                 return res
             else: #they are of the same type
                 if devlist: # if results are a list

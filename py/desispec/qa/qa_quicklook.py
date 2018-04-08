@@ -107,7 +107,7 @@ class Bias_From_Overscan(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "BIAS_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -266,8 +266,8 @@ class Bias_From_Overscan(MonitoringAlg):
 
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['BIAS_AMP_REF']=kwargs["REFERENCE"]
-
+            retval['PARAMS']['REFERENCE']=kwargs["REFERENCE"]
+        
         biasdiff_err='NORMAL'
         if amps:
             bias_amps=np.array(bias_overscan)
