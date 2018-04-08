@@ -56,7 +56,7 @@ class TaskRedshift(BaseTask):
         return deptasks
 
     def run_max_procs(self, procs_per_node):
-        return 20
+        return procs_per_node
 
     def run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
