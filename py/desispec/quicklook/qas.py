@@ -67,6 +67,7 @@ class MonitoringAlg:
                     val=l[1]
             return val
         if self.__deviation is not None and "RANGES" in cargs:
+            self.m_log.info("QL Reference checking for QA {}".format(self.name))
             thr=cargs["RANGES"]
             metrics[QARESULTKEY]="ERROR"
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
@@ -89,6 +90,8 @@ class MonitoringAlg:
                 metrics[QARESULTKEY]='NORMAL'
             else:
                 metrics[QARESULTKEY]='WARNING'
+        else:
+            self.m_log.warning("No Reference checking for QA {}".format(self.name))
         return res
     def run(self,*argv,**kwargs):
         pass
