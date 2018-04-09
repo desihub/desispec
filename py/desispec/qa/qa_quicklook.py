@@ -847,7 +847,7 @@ class Count_Pixels(MonitoringAlg):
                 npixhi_amps.append(npixhi_thisamp)
             retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_AMP": npixlo_amps,"NPIXHI_AMP": npixhi_amps}
         else:
-            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_STATUS":npix_err}
+            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi}
 
         if qlf:
             qlf_post(retval)
