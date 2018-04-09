@@ -61,7 +61,7 @@ class MonitoringAlg:
         # if no interval contains the deviation, it will be set to QASeverity.ALARM
         # if RANGES or REFERENCE are not given in config, QA_STATUS will be set to UNKNOWN 
         def findThr(d,t):
-            val=QASeverity.ALARM
+            val=QASeverity.WARNING
             for l in t:
                 if d>=l[0][0] and d<l[0][1]:
                     val=l[1]
@@ -71,17 +71,24 @@ class MonitoringAlg:
             metrics[QARESULTKEY]="ERROR"
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
             devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
-            if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
-                self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
-                return res
-            else: #they are of the same type
-                if devlist: # if results are a list
-                    if len(thr)==1: # check all results against same thresholds
-                        metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
-                    else: # each result has its own thresholds
-                        metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
-                else: #result is a scalar
-                    metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
+            #if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
+            #    self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
+            #    return res
+            #else: #they are of the same type
+            if devlist: # if results are a list
+                if len(thr)==2: # check all results against same thresholds
+                    #- maximum deviation
+                    kk=np.argmax(np.abs(self.__deviation))
+                    metrics[QARESULTKEY]=findThr(self.__deviation[kk],thr)
+                    #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
+                #else: # each result has its own thresholds
+                #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
+            else: #result is a scalar
+                metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
+        if metrics[QARESULTKEY]==QASeverity.NORMAL:
+            metrics[QARESULTKEY]='NORMAL'
+        else:
+            metrics[QARESULTKEY]='WARNING'
         return res
     def run(self,*argv,**kwargs):
         pass

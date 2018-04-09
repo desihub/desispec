@@ -268,12 +268,12 @@ class Bias_From_Overscan(MonitoringAlg):
         if "REFERENCE" in kwargs:
             retval['PARAMS']['REFERENCE']=kwargs["REFERENCE"]
         
-        biasdiff_err='NORMAL'
+        #biasdiff_err='NORMAL'
         if amps:
             bias_amps=np.array(bias_overscan)
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
         else:
-            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row,"BIAS_STATUS":biasdiff_err}
+            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
 
         #- http post if needed
         if qlf:
