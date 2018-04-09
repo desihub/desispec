@@ -5,7 +5,9 @@ desispec Change Log
 0.20.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Pipeline fix to allow redrock to use a full node per healpix (PR `#585`_).
+
+.. _`#585`: https://github.com/desihub/desispec/pull/585
 
 0.20.0 (2018-03-29)
 -------------------
