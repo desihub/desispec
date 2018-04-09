@@ -23,7 +23,7 @@ class MonitoringAlg:
         self.m_log.debug("initializing Monitoring alg {}".format(name))
     def __call__(self,*args,**kwargs):
         res=self.run(*args,**kwargs)
-        res["QA_STATUS"]="UNKNOWN"
+        #res["QA_STATUS"]="UNKNOWN"
         cargs=self.config['kwargs']
         params=cargs['param']
         metrics=res["METRICS"] if 'METRICS' in res else None
@@ -85,10 +85,10 @@ class MonitoringAlg:
                 #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
             else: #result is a scalar
                 metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
-        if metrics[QARESULTKEY]==QASeverity.NORMAL:
-            metrics[QARESULTKEY]='NORMAL'
-        else:
-            metrics[QARESULTKEY]='WARNING'
+            if metrics[QARESULTKEY]==QASeverity.NORMAL:
+                metrics[QARESULTKEY]='NORMAL'
+            else:
+                metrics[QARESULTKEY]='WARNING'
         return res
     def run(self,*argv,**kwargs):
         pass

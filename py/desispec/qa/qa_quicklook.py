@@ -300,7 +300,7 @@ class Get_RMS(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NOISE_AMP" 
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STAT" 
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STATUS" 
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -376,7 +376,7 @@ class Get_RMS(MonitoringAlg):
 
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['NOISE_AMP_REF']=kwargs["REFERENCE"]
+            retval['PARAMS']['REFERENCE']=kwargs["REFERENCE"]
 
         expnum=[]
         rms_row=[]
@@ -397,7 +397,6 @@ class Get_RMS(MonitoringAlg):
         rmsover=np.max(rms_over_amps)
         noise_row=np.array((rms_row,rms_row)) #-TODO This has to be recalculated in the overscan left and right in (2,nrow) format
 
-        rmsdiff_err='NORMAL'
         if amps:
             rms_amps=[]
             rms_over_amps=[]
@@ -413,9 +412,9 @@ class Get_RMS(MonitoringAlg):
                 rms_over_amps.append(rms_thisover_thisamp)
                 overscan_values+=thisoverscan_values.tolist()
             rmsover=np.std(overscan_values)
-            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"NOISE_ROW":noise_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum}
         else:
-            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"NOISE_STATUS":rmsdiff_err,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum}
 
         if qlf:
             qlf_post(retval)  
@@ -828,13 +827,12 @@ class Count_Pixels(MonitoringAlg):
 
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['NPIX_AMP_REF']=kwargs["REFERENCE"]
+            retval['PARAMS']['REFERENCE']=kwargs["REFERENCE"]
 
         #- get the counts over entire CCD in counts per second
         npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
         npixhi=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
 
-        npix_err='NORMAL'
         #- get the counts for each amp
         if amps:
             npixlo_amps=[]
@@ -847,7 +845,7 @@ class Count_Pixels(MonitoringAlg):
                 npixlo_amps.append(npixlo_thisamp)
                 npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
                 npixhi_amps.append(npixhi_thisamp)
-            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_AMP": npixlo_amps,"NPIXHI_AMP": npixhi_amps,"NPIX_STATUS":npix_err}
+            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_AMP": npixlo_amps,"NPIXHI_AMP": npixhi_amps}
         else:
             retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_STATUS":npix_err}
 
