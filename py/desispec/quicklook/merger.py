@@ -60,7 +60,7 @@ def reOrderDict(mergeDict):
              except: dec=None
 
              #- Add imaging mag by hand to this to facilitate QLF implementation. Should come from calculation/headers... somewhere.
-             imaging_mag=[22.]*len(ra) #- same length as objects(ra)
+             imaging_mag=[22.]*500 #- should be nfibers. Get from somewhere or allow None for ra (look except above) in test_ql.py mergeQA test. 
              
              Camera["GENERAL_INFO"]={"RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks, "IMAGING_MAG": imaging_mag}   
 ###################################
