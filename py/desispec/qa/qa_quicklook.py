@@ -265,8 +265,8 @@ class Bias_From_Overscan(MonitoringAlg):
         data5sig = len(np.where(full_data <= sig5_value)[0])
 
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['REFERENCE']=kwargs["REFERENCE"]
+        #if "REFERENCE" in kwargs:
+        #    retval['PARAMS']['BIAS_AMP_REF']=kwargs["REFERENCE"]
         
         #biasdiff_err='NORMAL'
         if amps:
@@ -376,7 +376,7 @@ class Get_RMS(MonitoringAlg):
 
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['REFERENCE']=kwargs["REFERENCE"]
+            retval['PARAMS']['NOISE_AMP_REF']=kwargs["REFERENCE"]
 
         expnum=[]
         rms_row=[]
@@ -723,7 +723,7 @@ class Calc_XWSigma(MonitoringAlg):
         xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
 
         if amps:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}#,"XWSIGMA_STATUS":shift_err}
         else:
             retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
 
@@ -827,7 +827,7 @@ class Count_Pixels(MonitoringAlg):
 
         retval["PARAMS"] = param
         if "REFERENCE" in kwargs:
-            retval['PARAMS']['REFERENCE']=kwargs["REFERENCE"]
+            retval['PARAMS']['NPIX_AMP_REF']=kwargs["REFERENCE"]
 
         #- get the counts over entire CCD in counts per second
         npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
