@@ -265,10 +265,7 @@ class Bias_From_Overscan(MonitoringAlg):
         data5sig = len(np.where(full_data <= sig5_value)[0])
 
         retval["PARAMS"] = param
-        #if "REFERENCE" in kwargs:
-        #    retval['PARAMS']['BIAS_AMP_REF']=kwargs["REFERENCE"]
         
-        #biasdiff_err='NORMAL'
         if amps:
             bias_amps=np.array(bias_overscan)
             retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
@@ -375,8 +372,6 @@ class Get_RMS(MonitoringAlg):
                 }
 
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['NOISE_AMP_REF']=kwargs["REFERENCE"]
 
         expnum=[]
         rms_row=[]
@@ -439,7 +434,7 @@ class Calc_XWSigma(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "WSIGMA_MED_SKY"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -706,10 +701,6 @@ class Calc_XWSigma(MonitoringAlg):
         xwfails=[xfails,wfails]
 
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['XWSIGMA_REF']=kwargs["REFERENCE"]
-
-        shift_err='NORMAL'
 
         #- Combine metrics for x and w
         xwsigma=np.array((xsigma,wsigma)) #- (2,nfib)
@@ -723,9 +714,9 @@ class Calc_XWSigma(MonitoringAlg):
         xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
 
         if amps:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}#,"XWSIGMA_STATUS":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift,"XWSIGMA_STATUS":shift_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
 
         #- http post if needed
         if qlf:
@@ -826,8 +817,6 @@ class Count_Pixels(MonitoringAlg):
                  }
 
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['NPIX_AMP_REF']=kwargs["REFERENCE"]
 
         #- get the counts over entire CCD in counts per second
         npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
@@ -875,7 +864,7 @@ class CountSpectralBins(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NGOODFIB"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NGOODFIB_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NGOODFIB_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -966,8 +955,6 @@ class CountSpectralBins(MonitoringAlg):
                  }
 
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['NGOODFIB_REF']=kwargs["REFERENCE"]
         
         countslo=qalib.countbins(frame.flux,threshold=param['CUTLO'])
         countsmed=qalib.countbins(frame.flux,threshold=param['CUTMED'])
@@ -975,8 +962,6 @@ class CountSpectralBins(MonitoringAlg):
 
         goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than cuthi counts
         ngoodfibers=goodfibers.shape[0]
-
-        ngood_err='NORMAL'
 
         #- leaving the amps granularity needed for caching as defunct. If needed in future, this needs to be propagated through.
         amps=False
@@ -1037,13 +1022,13 @@ class CountSpectralBins(MonitoringAlg):
             averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
             averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
 
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi, "NBINSLO_AMP":averagelo_amps, "NBINSMED_AMP":averagemed_amps,"NBINSHI_AMP":averagehi_amps, "NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi, "NBINSLO_AMP":averagelo_amps, "NBINSMED_AMP":averagemed_amps,"NBINSHI_AMP":averagehi_amps, "NGOODFIB": ngoodfibers}
             retval["LEFT_MAX_FIBER"]=int(leftmax)
             retval["RIGHT_MIN_FIBER"]=int(rightmin)
             retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
             retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers,"NGOODFIB_STATUS":ngood_err}
+            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers}
 
         #- http post if needed
         if qlf:
@@ -1070,7 +1055,7 @@ class Sky_Continuum(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "SKYCONT"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "SKYCONT_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "SKYCONT_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1151,15 +1136,11 @@ class Sky_Continuum(MonitoringAlg):
         wrange2=param["{}_CONT".format(camera[0].upper())][1]
 
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['SKYCONT_REF']=kwargs["REFERENCE"]
 
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
 
-
-        skycont_err = 'NORMAL'
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "SKYCONT_STATUS":skycont_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
 
         if qlf:
             qlf_post(retval)    
@@ -1186,7 +1167,7 @@ class Sky_Peaks(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT_MED_SKY"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1270,12 +1251,8 @@ class Sky_Peaks(MonitoringAlg):
         sumcount_med_sky=[]
 
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['PEAKCOUNT_REF']=kwargs["REFERENCE"]
 
-        sumcount_err='NORMAL'
-
-        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS":rms_skyspec,"PEAKCOUNT_STATUS":sumcount_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS":rms_skyspec}
 
         if qlf:
             qlf_post(retval)
@@ -1304,7 +1281,7 @@ class Sky_Residual(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDRMS"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "RESIDRMS_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "RESID_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
 
@@ -1402,11 +1379,7 @@ class Sky_Residual(MonitoringAlg):
         if qlf:
             qlf_post(retval)    
 
-        skyresid_err='NORMAL'
         retval["PARAMS"] = param
-        retval["METRICS"]["RESIDRMS_STAT"]=skyresid_err
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['RESIDRMS_REF']=kwargs["REFERENCE"]
 
         if qafile is not None:
             outfile = qa.write_qa_ql(qafile,retval)
@@ -1539,14 +1512,11 @@ class Integrate_Spec(MonitoringAlg):
                 }
 
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['DELTAMAG_TGT_REF']=kwargs["REFERENCE"]
 
-        magdiff_err='NORMAL'
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
         delta_mag=np.zeros(frame.nspec) #- placeholder
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg,"DELTAMAG_STATUS":magdiff_err}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
 
         if qlf:
             qlf_post(retval) 
@@ -1571,7 +1541,7 @@ class Calculate_SNR(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "ELG_FIDSNR"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1675,11 +1645,6 @@ class Calculate_SNR(MonitoringAlg):
             mag[k]=26.  #- Putting 26, so as to make sure within reasonable range for plots.
         retval["METRICS"] = qadict
         retval["PARAMS"] = param
-        if "REFERENCE" in kwargs:
-            retval['PARAMS']['FIDSNR_TGT_REF']=kwargs["REFERENCE"]
-
-        snrwarn='NORMAL'
-        retval["METRICS"]["FIDSNR_STAT"] = snrwarn
 
         #- http post if valid
         if qlf:
