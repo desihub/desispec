@@ -1,10 +1,9 @@
 # Default Configurations for a Quicklook Pipeline setup for a flat exposure
-# This configuration ends after preprocessing as the arc configuration needs
-# a flat preproc file and the full flat configuration needs psf information.
 name: DESI Quicklook Flat Calibration
 Program: dark
 Flavor: flat_preproc
 #- Calibration files: Assuming the same night for psf and fiberflat
+#- PSFExpid used as expid for arc exposures
 PSFExpid: 0
 PSFType: psf
 #- FiberflatExpid used as expid for flat image files when running calibration
@@ -30,10 +29,10 @@ Algorithms:
     Initialize:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], DIFF_WARN_RANGE: [-1.0, 1.0], DIFF_ALARM_RANGE: [-2.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
     Preproc:
         QA: 
             Get_RMS:
-                PARAMS: {RMS_WARN_RANGE: [-1.0, 1.0], RMS_ALARM_RANGE: [-2.0, 2.0]}
+                PARAMS: {NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
             Count_Pixels:
                 PARAMS: {CUTHI: 500, CUTLO: 100, NPIX_WARN_RANGE: [200.0, 500.0], NPIX_ALARM_RANGE: [50.0, 650.0]}
