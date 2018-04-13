@@ -71,7 +71,7 @@ Algorithms:
             Sky_Residual:
                 PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, RESID_NORMAL_RANGE: [-5.0, 5.0], RESID_WARN_RANGE: [-10.0, 10.0]}
             Integrate_Spec:
-                PARAMS: {MAGDIFF_NORMAL_RANGE: [-0.5, 0.5], MAGDIFF_WARN_RANGE: [-1.0, 1.0]}
+                PARAMS: {DELTAMAG_NORMAL_RANGE: [-0.5, 0.5], DELTAMAG_WARN_RANGE: [-1.0, 1.0]}
             Calculate_SNR:
                 #- Set boundaries for SNR residual values
                 Residual_Cut: 0.2

@@ -35,7 +35,7 @@ Algorithms:
             Get_RMS:
                 PARAMS: {NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
             Count_Pixels:
-                PARAMS: {CUTHI: 10, CUTLO: 3, NPIX_WARN_RANGE: [200.0, 500.0], NPIX_ALARM_RANGE: [50.0, 650.0]}
+                PARAMS: {CUTHI: 10, CUTLO: 3, NPIX_NORMAL_RANGE: [200.0, 500.0], NPIX_WARN_RANGE: [50.0, 650.0]}
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5578.9],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
@@ -48,21 +48,22 @@ Algorithms:
             r: [5630,7740,0.8],
             z: [7650,9830,0.8]
             }
+        QuickResolution: True
         QA: 
             CountSpectralBins:
                 PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOODFIB_NORMAL_RANGE: [490, 500], NGOODFIB_WARN_RANGE: [480, 500]}
     ApplyFiberFlat_QL:
         QA: 
             Sky_Continuum:
-                PARAMS: {B_CONT: [(4000, 4500), (5250, 5550)],
-                         R_CONT: [(5950, 6200), (6990, 7230)],
-                         Z_CONT: [(8120, 8270), (9110, 9280)],
-                         SKYCONT_WARN_RANGE: [100.0, 400.0],
-                         SKYCONT_ALARM_RANGE: [50.0, 600.0]}
-            Sky_Peaks:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
                          R_CONT: ["5950, 6200", "6990, 7230"],
                          Z_CONT: ["8120, 8270", "9110, 9280"],
+                         SKYCONT_NORMAL_RANGE: [100.0, 400.0],
+                         SKYCONT_WARN_RANGE: [50.0, 600.0]}
+            Sky_Peaks:
+                PARAMS: {B_PEAKS: [3914.4, 5199.3, 5201.8],
+                         R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
                          PEAKCOUNT_NORMAL_RANGE: [1000.0, 20000.0],
                          PEAKCOUNT_WARN_RANGE: [500.0, 40000.0]}
     SkySub_QL:
@@ -70,12 +71,12 @@ Algorithms:
             Sky_Residual:
                 PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, RESID_NORMAL_RANGE: [-5.0, 5.0], RESID_WARN_RANGE: [-10.0, 10.0]}
             Integrate_Spec:
-                PARAMS: {MAGDIFF_WARN_RANGE: [-0.5, 0.5], MAGDIFF_ALARM_RANGE: [-1.0, 1.0]}
+                PARAMS: {DELTAMAG_NORMAL_RANGE: [-0.5, 0.5], DELTAMAG_WARN_RANGE: [-1.0, 1.0]}
             Calculate_SNR:
                 #- Set boundaries for SNR residual values
                 Residual_Cut: 0.2
                 #- If Residual_Cut is none:
                 #- Cut SNR residual values outside given range for plotting
-                Sigma_Cut: 2.0 
-                PARAMS: {FIDSNR_WARN_RANGE: [6.5, 7.5], FIDSNR_ALARM_RANGE: [6.0, 8.0], FIDMAG: 22.}
+                Sigma_Cut: 2.0
+                PARAMS: {FIDSNR_NORMAL_RANGE: [6.5, 7.5], FIDSNR_WARN_RANGE: [6.0, 8.0], FIDMAG: 22.}
 

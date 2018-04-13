@@ -37,20 +37,31 @@ class MonitoringAlg:
             QARESULTKEY=cargs["SAMI_QASTATUSKEY"]
         if "SAMI_RESULTKEY" in cargs:
             reskey=cargs["SAMI_RESULTKEY"]
-        if reskey in metrics and "REFERENCE" in params:
+        if reskey in metrics:
             current=metrics[reskey]
-            old=params["REFERENCE"]
-            currlist=isinstance(current,(np.ndarray,collections.Sequence))
-            oldlist=isinstance(old,(np.ndarray,collections.Sequence))
-            if currlist != oldlist: # different types
-                self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different types!".format(self.name,type(old),type(current)))
-            elif currlist: #both are lists
-                if len(old)==len(current):
-                    self.__deviation=[c-o for c,o in zip(current,old)]
+            if "REFERENCE" in cargs:
+                refval=cargs["REFERENCE"]
+            else: #- For absolute value checks
+                self.m_log.warning("No reference given. STATUS will be assigned for the Absolute Value. Confirm your ranges.")
+                #- check the data type
+                if isinstance(current,float) or isinstance(current,int):
+                    refval=0
                 else:
-                    self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,len(old),len(current)))
+                    refval=np.zeros(len(current)) #- 1D list or array
+            #- Update PARAMS ref key
+            res["PARAMS"][reskey+'_REF']=refval
+
+            currlist=isinstance(current,(np.ndarray,collections.Sequence))
+            reflist=isinstance(refval,(np.ndarray,collections.Sequence))
+            if currlist != reflist: # different types
+                self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different types!".format(self.name,type(refval),type(current)))
+            elif currlist: #both are lists
+                if len(refval)==len(current):
+                    self.__deviation=[c-r for c,r in zip(current,refval)]
+                else:
+                    self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,len(refval),len(current)))
             else: # both are scalars
-                self.__deviation=current-old
+                self.__deviation=current-refval
 
         # check RANGES given in config and set QA_STATUS keyword
         # it should be a sorted overlapping list of range tuples in the form [ ((interval),QASeverity),((-1.0,1.0),QASeverity.NORMAL),(-2.0,2.0),QAStatus.WARNING)]
@@ -67,22 +78,33 @@ class MonitoringAlg:
                     val=l[1]
             return val
         if self.__deviation is not None and "RANGES" in cargs:
+            self.m_log.info("QL Reference checking for QA {}".format(self.name))
             thr=cargs["RANGES"]
             metrics[QARESULTKEY]="ERROR"
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
             devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
-            if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
-                self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation),
-                                                                                                                                                         thr,current))
-                return res
-            else: #they are of the same type
-                if devlist: # if results are a list
-                    if len(thr)==1: # check all results against same thresholds
-                        metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
-                    else: # each result has its own thresholds
-                        metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
-                else: #result is a scalar
-                    metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
+            #if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
+            #    self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
+            #    return res
+            #else: #they are of the same type
+            if devlist: # if results are a list
+                if len(thr)==2: # check all results against same thresholds
+                    #- maximum deviation
+                    kk=np.argmax(np.abs(self.__deviation).flatten()) #- flatten for > 1D array
+                    metrics[QARESULTKEY]=findThr(np.array(self.__deviation).flatten()[kk],thr)
+                    #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
+                #else: # each result has its own thresholds
+                #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
+            else: #result is a scalar
+                metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
+            if metrics[QARESULTKEY]==QASeverity.NORMAL:
+                metrics[QARESULTKEY]='NORMAL'
+            elif metrics[QARESULTKEY]==QASeverity.WARNING:
+                metrics[QARESULTKEY]='WARNING'
+            else:
+                metrics[QARESULTKEY]='ALARM'
+        else:
+            self.m_log.warning("No Reference checking for QA {}".format(self.name))
         return res
     def run(self,*argv,**kwargs):
         pass
