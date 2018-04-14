@@ -1,7 +1,7 @@
 """
 Run integration tests from pixsim through redshifts
 
-python -m desispec.test.integration_test
+python -m desispec.test.old_integration_test
 """
 from __future__ import absolute_import, print_function
 import os
