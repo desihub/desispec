@@ -268,8 +268,9 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     Args:
         tasktype (str): the type of these tasks.
         tasklist (list): the list of tasks.
-        machine (str): the nersc machine name.
-        queue (str): the nersc queue name.
+        machine (str): the nersc machine name,
+            e.g. edison, cori-haswell, cori-knl
+        queue (str): the nersc queue name, e.g. regular or debug
         maxtime (int): the maximum run time in minutes.
         maxnodes (int): the maximum number of nodes.
         nodeprocs (int): the number of processes per node.
@@ -277,10 +278,9 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
             calculation.
 
     Returns:
-        list:  List of tuples (nodes, tasks) containing one entry per job.
-            Each entry specifies the number of nodes to use and the list of
-            tasks for that job.
-
+        list:  List of tuples (nodes, runtime, tasks) containing one entry
+            per job.  Each entry specifies the number of nodes to use, the
+            expected total runtime, and the list of tasks for that job.
     """
     from .tasks.base import task_classes, task_type
     log = get_logger()
