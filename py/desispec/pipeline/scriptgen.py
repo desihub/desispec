@@ -22,7 +22,7 @@ from desiutil.log import get_logger
 
 from .. import io
 
-from ..parallel import (dist_uniform, dist_discrete,
+from ..parallel import (dist_uniform, dist_discrete, dist_discrete_all,
     stdouterr_redirected, use_mpi)
 
 from .prod import task_read, task_write
@@ -248,31 +248,57 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
     return
 
 
-def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
+def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     nodeprocs=None, db=None):
     """Compute the NERSC job parameters based on constraints.
 
     Given the list of tasks, query their estimated runtimes and determine
-    the best job size to use.  If the job is too big to fit the constraints
+    the "best" job size to use.  If the job is too big to fit the constraints
     then split up the tasks into multiple jobs.
 
-    Args:
+    If maxtime or maxnodes is zero, then the defaults for the queue are used.
 
+    The default behavior is to create jobs that are as large as possible- i.e.
+    to run all tasks simultaneously in parallel.  In general, larger jobs with
+    a shorter run time will move through the queue faster.  If the job size
+    exceeds the maximum number of nodes, then the job size is fixed to this
+    maximum and the runtime is extended.  If the runtime exceeds maxtime, then
+    the job is split.
+
+    Args:
+        tasktype (str): the type of these tasks.
+        tasklist (list): the list of tasks.
+        machine (str): the nersc machine name,
+            e.g. edison, cori-haswell, cori-knl
+        queue (str): the nersc queue name, e.g. regular or debug
+        maxtime (int): the maximum run time in minutes.
+        maxnodes (int): the maximum number of nodes.
+        nodeprocs (int): the number of processes per node.
+        db (DataBase): the database to pass to the task runtime
+            calculation.
 
     Returns:
-        list:  List of tuples (nodes, tasks) containing one entry per job.
-            Each entry specifies the number of nodes to use and the list of
-            tasks for that job.
-
+        list:  List of tuples (nodes, runtime, tasks) containing one entry
+            per job.  Each entry specifies the number of nodes to use, the
+            expected total runtime, and the list of tasks for that job.
     """
     from .tasks.base import task_classes, task_type
+    log = get_logger()
 
     # Get the machine properties
     hostprops = nersc_machine(machine, queue)
 
-    if runtime > hostprops["maxtime"]:
-        raise RuntimeError("requested time '{}' is too long for {} "
-            "queue '{}'".format(runtime, machine, queue))
+    if maxtime <= 0:
+        maxtime = hostprops["maxtime"]
+    if maxtime > hostprops["maxtime"]:
+        raise RuntimeError("requested max time '{}' is too long for {} "
+            "queue '{}'".format(maxtime, machine, queue))
+
+    if maxnodes <= 0:
+        maxnodes = hostprops["maxnodes"]
+    if maxnodes > hostprops["maxnodes"]:
+        raise RuntimeError("requested max nodes '{}' is larger than {} "
+            "queue '{}'".format(maxtime, machine, queue))
 
     if nodeprocs is None:
         nodeprocs = hostprops["nodecores"]
@@ -281,6 +307,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
         raise RuntimeError("requested procs per node '{}' is more than the "
             "the number of cores per node on {}".format(nodeprocs, machine))
 
+    log.debug("maxtime = {}, maxnodes = {}, nodeprocs = {}".format(maxtime, maxnodes, nodeprocs))
+
     # Max number of procs to use per task.
     taskproc = task_classes[tasktype].run_max_procs(nodeprocs)
 
@@ -288,77 +316,90 @@ def nersc_job_size(tasktype, tasklist, machine, queue, runtime,
     tasktimes = [ (x, task_classes[tasktype].run_time(x, nodeprocs,
         db=db)) for x in tasklist ]
 
-    # We want to sort the times so that we can use a simple greedy
-    # "first-fit" algorithm.
-
+    # We want to sort the times so that we can use a simple algorithm.
     tasktimes = list(sorted(tasktimes, key=lambda x: x[1]))[::-1]
 
-    mintime = tasktimes[-1][1]
-    maxtime = tasktimes[0][1]
+    mintasktime = tasktimes[-1][1]
+    maxtasktime = tasktimes[0][1]
+    log.debug("taskproc = {}".format(taskproc))
+    log.debug("tasktimes range = {} ... {}".format(mintasktime, maxtasktime))
 
-    if maxtime > runtime:
+    if maxtasktime > maxtime:
         raise RuntimeError("The longest task ({} minutes) exceeds the "
-            " requested max runtime ({} minutes)".format(maxtime, runtime))
+            " requested max runtime ({} minutes)".format(maxtasktime,
+            maxtime))
 
-    workertasks = list()
-    workersum = list()
+    # Number of workers (as large as possible)
+    availproc = maxnodes * nodeprocs
+    maxworkers = availproc // taskproc
+    nworker = maxworkers
+    if nworker > len(tasklist):
+        nworker = len(tasklist)
+    log.debug("maxworkers = {}".format(maxworkers))
+    log.debug("nworker = {}".format(nworker))
 
-    workertasks.append([ tasktimes[0] ])
-    workersum.append(tasktimes[0][1])
-
-    for t in tasktimes[1:]:
-        if workersum[-1] + t[1] > runtime:
-            # move to the next worker
-            workertasks.append([ t ])
-            workersum.append(t[1])
-        else:
-            # add to this worker
-            workertasks[-1].append(t)
-            workersum[-1] += t[1]
-
-    # Compute how many nodes we need
-    nworker = len(workersum)
-
-    totalprocs = nworker * taskproc
-    totalnodes = totalprocs // nodeprocs
-    if totalprocs % nodeprocs != 0:
+    totalnodes = (nworker * taskproc) // nodeprocs
+    if totalnodes * nodeprocs < nworker * taskproc:
         totalnodes += 1
 
+    log.debug("totalnodes = {}".format(totalnodes))
+
+    # The returned list of jobs
     ret = list()
 
-    # Do we need to split this into multiple jobs?
-    if totalnodes > hostprops["maxnodes"]:
-        # yes...
-        maxprocs = hostprops["maxnodes"] * nodeprocs
-        maxworker = maxprocs // taskproc
-        maxnodes = (maxworker * taskproc) // nodeprocs
-        outtasks = list()
-        jobworkers = 0
-        for w in range(nworker):
-            outtasks.extend([ x[0] for x in workertasks[w] ])
-            jobworkers += 1
-            if jobworkers >= maxworker:
-                jobprocs = jobworkers * taskproc
-                jobnodes = jobprocs // nodeprocs
-                if jobprocs % nodeprocs != 0:
-                    jobnodes += 1
-                ret.append( (jobnodes, outtasks) )
-                outtasks = list()
-                jobworkers = 0
+    # Create jobs until we run out of tasks
+    alldone = False
+    while not alldone:
+        jobdone = False
+        reverse = False
+        workertasks = [ list() for w in range(nworker) ]
+        workersum = [ 0 for w in range(nworker) ]
+        # Distribute tasks until the job gets too big or we run out of
+        # tasks.
+        while not jobdone:
+            # Pass back and forth over the worker list, assigning tasks.
+            # Since the tasks are sorted by size, this should result in a
+            # rough load balancing.
+            for w in range(nworker):
+                if len(tasktimes) == 0:
+                    jobdone = True
+                    break
+                wrk = w
+                if reverse:
+                    wrk = nworker - 1 - w
+                if workersum[wrk] + tasktimes[0][1] > maxtime:
+                    jobdone = True
+                    break
+                else:
+                    curtask = tasktimes.pop(0)
+                    workertasks[wrk].append(curtask[0])
+                    workersum[wrk] += curtask[1]
+            reverse = not reverse
 
-        if jobworkers > 0:
-            jobprocs = jobworkers * taskproc
-            jobnodes = jobprocs // nodeprocs
-            if jobprocs % nodeprocs != 0:
-                jobnodes += 1
-            ret.append( (jobnodes, outtasks) )
+        # Process this job
+        runtime = np.max(workersum)
 
-    else:
-        # no...
+        # Did we run out of tasks during this job?
+        minrun = np.min(workersum)
+        if (minrun == 0) and (len(tasktimes) == 0):
+            # This was the last job of a multi-job situation, and some workers
+            # have no tasks.  Shrink the job size.
+            nempty = np.sum([ 1 for w in workersum if w == 0 ])
+            nworker = nworker - nempty
+            totalnodes = (nworker * taskproc) // nodeprocs
+            if totalnodes * nodeprocs < nworker * taskproc:
+                totalnodes += 1
+            log.debug("shrinking final job size to {} nodes".format(totalnodes))
+
         outtasks = list()
         for w in workertasks:
-            outtasks.extend([ x[0] for x in w ])
-        ret.append( (totalnodes, outtasks) )
+            outtasks.extend(w)
+
+        ret.append( (totalnodes, runtime, outtasks) )
+        log.debug("job will run on {} nodes for {} minutes on {} tasks".format(totalnodes, runtime, len(outtasks)))
+
+        if len(tasktimes) == 0:
+            alldone = True
 
     return ret
 
@@ -402,8 +443,8 @@ def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
 
 
 def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
-    runtime, nodeprocs=None, openmp=False, multiproc=False, db=None,
-                shifterimg=None,debug=False):
+    maxtime, maxnodes, nodeprocs=None, openmp=False, multiproc=False, db=None,
+    shifterimg=None, debug=False):
     """Generate slurm script(s) to process a list of tasks.
 
     Given a list of tasks and some constraints about the machine,
@@ -419,8 +460,8 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
 
     # Compute job size.
 
-    joblist = nersc_job_size(tasktype, tasklist, machine, queue, runtime,
-        nodeprocs=nodeprocs)
+    joblist = nersc_job_size(tasktype, tasklist, machine, queue, maxtime,
+        maxnodes, nodeprocs=nodeprocs)
 
     dbstr = ""
     if db is None:
@@ -432,7 +473,7 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
     suffix = True
     if len(joblist) == 1:
         suffix = False
-    for (nodes, tasks) in joblist:
+    for (nodes, runtime, tasks) in joblist:
         joblogroot = None
         joboutroot = None
         if suffix:
@@ -448,7 +489,7 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
         outfile = "{}.slurm".format(joboutroot)
         nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine, queue,
             nodes, nodeprocs, runtime, openmp=openmp, multiproc=multiproc,
-                  shifterimg=shifterimg,debug=debug)
+            shifterimg=shifterimg, debug=debug)
         scriptfiles.append(outfile)
         jindx += 1
 

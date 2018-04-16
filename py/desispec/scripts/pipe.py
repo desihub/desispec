@@ -500,10 +500,15 @@ Where supported commands are:
         parser.add_argument("--nersc_queue", required=False, default="regular",
             help="write a script for this NERSC queue (debug | regular)")
 
-        parser.add_argument("--nersc_runtime", required=False, type=int,
-            default=30, help="Then maximum run time (in minutes) for a single "
+        parser.add_argument("--nersc_maxtime", required=False, type=int,
+            default=0, help="Then maximum run time (in minutes) for a single "
             " job.  If the list of tasks cannot be run in this time, multiple "
-            " job scripts will be written")
+            " job scripts will be written.  Default is the maximum time for "
+            " the specified queue.")
+
+        parser.add_argument("--nersc_maxnodes", required=False, type=int,
+            default=0, help="The maximum number of nodes to use.  Default "
+            " is the maximum nodes for the specified queue.")
 
         parser.add_argument("--nersc_shifter", required=False, default=None,
             help="The shifter image to use for NERSC jobs")
@@ -579,11 +584,11 @@ Where supported commands are:
                 ppn = hostprops["nodecores"]
 
             joblist = pipe.scriptgen.nersc_job_size(args.tasktype, tasks,
-                args.nersc, args.nersc_queue, args.nersc_runtime, nodeprocs=ppn,
-                db=db)
+                args.nersc, args.nersc_queue, args.nersc_maxtime,
+                args.nersc_maxnodes, nodeprocs=ppn, db=db)
 
             launch="srun -n"
-            for (jobnodes, jobtasks) in joblist:
+            for (jobnodes, jobtime, jobtasks) in joblist:
                 jobprocs = jobnodes * ppn
                 pipe.run.dry_run(args.tasktype, jobtasks, opts, jobprocs,
                     ppn, db=db, launch=launch, force=False)
@@ -642,9 +647,9 @@ Where supported commands are:
 
             scripts = pipe.scriptgen.batch_nersc(tasktype, tasks,
                 outscript, outlog, tasktype, args.nersc, args.nersc_queue,
-                args.nersc_runtime, nodeprocs=ppn, openmp=False,
-                multiproc=False, db=db, shifterimg=args.nersc_shifter,
-                debug=args.debug)
+                args.nersc_maxtime, args.nersc_maxnodes, nodeprocs=ppn,
+                openmp=False, multiproc=False, db=db,
+                shifterimg=args.nersc_shifter, debug=args.debug)
 
         return scripts
 
