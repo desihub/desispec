@@ -124,7 +124,7 @@ def read_meta_frame(filename, extname=0):
     return hdr
 
 
-def read_frame(filename, nspec=None):
+def read_frame(filename, nspec=None, skip_resolution=False):
     """Reads a frame fits file and returns its data.
 
     Args:
@@ -132,6 +132,8 @@ def read_frame(filename, nspec=None):
             night = string YEARMMDD
             expid = integer exposure ID
             camera = b0, r1, .. z9
+        skip_resolution: bool, option
+            Speed up read time (>5x) by avoiding the Resolution matrix
 
     Returns:
         desispec.Frame object with attributes wave, flux, ivar, etc.
@@ -156,10 +158,18 @@ def read_frame(filename, nspec=None):
     else:
         mask = None   #- let the Frame object create the default mask
 
+    # Init
     resolution_data=None
     qwsigma=None
     qndiag=None
-    if 'RESOLUTION' in fx:
+    fibermap = None
+    chi2pix = None
+    scores = None
+    scores_comments = None
+
+    if skip_resolution:
+        pass
+    elif 'RESOLUTION' in fx:
         resolution_data = native_endian(fx['RESOLUTION'].data.astype('f8'))
     elif 'QUICKRESOLUTION' in fx:
         qr=fx['QUICKRESOLUTION'].header
@@ -205,7 +215,7 @@ def read_frame(filename, nspec=None):
     # return flux,ivar,wave,resolution_data, hdr
     frame = Frame(wave, flux, ivar, mask, resolution_data, meta=hdr, fibermap=fibermap, chi2pix=chi2pix,
                   scores=scores,scores_comments=scores_comments,
-                  wsigma=qwsigma,ndiag=qndiag)
+                  wsigma=qwsigma,ndiag=qndiag, suppress_res_warning=skip_resolution)
 
     # Vette
     diagnosis = frame.vet()
