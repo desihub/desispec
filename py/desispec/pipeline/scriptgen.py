@@ -102,6 +102,8 @@ def nersc_machine(name, queue):
 
 def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
               openmp=1,debug=False):
+    if len(commands) == 0:
+        raise RuntimeError("List of commands is empty")
     with open(path, "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H%M%S`\n")
@@ -135,6 +137,8 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
 
 
     """
+    if len(commands) == 0:
+        raise RuntimeError("List of commands is empty")
     hostprops = nersc_machine(machine, queue)
 
     if nodes > hostprops["maxnodes"]:
@@ -285,6 +289,9 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     from .tasks.base import task_classes, task_type
     log = get_logger()
 
+    if len(tasklist) == 0:
+        raise RuntimeError("List of tasks is empty")
+
     # Get the machine properties
     hostprops = nersc_machine(machine, queue)
 
@@ -414,6 +421,9 @@ def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
     """
     from .tasks.base import task_classes, task_type
 
+    if len(tasklist) == 0:
+        raise RuntimeError("List of tasks is empty")
+
     # Get the location of the setup script from the production root.
 
     proddir = os.path.abspath(io.specprod_root())
@@ -452,6 +462,9 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
 
     """
     from .tasks.base import task_classes, task_type
+
+    if len(tasklist) == 0:
+        raise RuntimeError("List of tasks is empty")
 
     # Get the location of the setup script from the production root.
 

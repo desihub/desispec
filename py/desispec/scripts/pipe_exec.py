@@ -110,4 +110,7 @@ def main(args, comm=None):
         log.info("Run time: {} min {} sec".format(minutes, seconds))
         sys.stdout.flush()
 
+    if failed > 0:
+        sys.exit(1)
+
     return
