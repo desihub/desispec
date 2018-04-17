@@ -698,8 +698,9 @@ class DataBase:
 
         def set_hpx_frame_1(row, spec, red, cur):
             self.update_healpix_frame_state(row, 1, cur)
-            task_classes["spectra"].state_set(
-                self, spec, "ready", cur)
+            # getready() will do this for us:
+            #task_classes["spectra"].state_set(
+            #    self, spec, "ready", cur)
             task_classes["redshift"].state_set(
                 self, red, "waiting", cur)
             return
@@ -708,8 +709,9 @@ class DataBase:
             self.update_healpix_frame_state(row, 2, cur)
             task_classes["spectra"].state_set(
                 self, spec, "done", cur)
-            task_classes["redshift"].state_set(
-                self, red, "ready", cur)
+            # getready() will do this:
+            #task_classes["redshift"].state_set(
+            #    self, red, "ready", cur)
             return
 
         def set_hpx_frame_3(row, spec, red, cur):
