@@ -136,7 +136,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
             run the tasks regardless.
 
     Returns:
-        int: the number of tasks that failed.
+        tuple: the number of ready tasks, and the number that failed.
 
     """
     from .tasks.base import task_classes, task_type
@@ -319,7 +319,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     log.debug("rank #{} done".format(rank))
 
-    return failcount
+    return ntask, failcount
 
 
 def run_task_list_db(tasktype, tasklist, comm=None):
@@ -335,7 +335,7 @@ def run_task_list_db(tasktype, tasklist, comm=None):
         comm (mpi4py.Comm): the full communicator to use for whole set of tasks.
 
     Returns:
-        int: the number of tasks that failed.
+        tuple: the number of ready tasks, and the number that failed.
 
     """
     (db, opts) = load_prod("w")
