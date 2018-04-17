@@ -40,6 +40,7 @@ class QA_MultiExp(object):
             specprod_dir = specprod_root()
         if qaprod_dir is None:
             qaprod_dir = qaprod_root()
+        #
         self.specprod_dir = specprod_dir
         self.qaprod_dir = qaprod_dir
         tmp = specprod_dir.split('/')
@@ -160,7 +161,7 @@ class QA_MultiExp(object):
                     qafile, _ = qafile_from_framefile(frame_fil)
                     if os.path.isfile(qafile) and (not clobber):
                         continue
-                    qaframe_from_frame(frame_fil, make_plots=make_plots)
+                    qaframe_from_frame(frame_fil, make_plots=make_plots, qa_dir=self.qaprod_dir)
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files to generate

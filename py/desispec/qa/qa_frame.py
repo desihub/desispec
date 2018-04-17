@@ -195,7 +195,8 @@ class QA_Frame(object):
         return ('{:s}: night={:s}, expid={:d}, camera={:s}, flavor={:s}'.format(
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
 
-def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_dir=None, clobber=True):
+def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qa_dir=None,
+                       output_dir=None, clobber=True):
     """  Generate a qaframe object from an input frame_file name (and night)
 
     Write QA to disk
@@ -203,6 +204,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
     Args:
         frame_file: str
         specprod_dir: str, optional
+        qa_dir: str, optional -- Location of QA
         make_plots: bool, optional
         output_dir: str, optional
 
@@ -237,7 +239,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
     spectro = int(frame_meta['CAMERA'][-1])
 
     # Filename
-    qafile, qatype = qafile_from_framefile(frame_file)
+    qafile, qatype = qafile_from_framefile(frame_file, qa_dir=qa_dir)
     qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
     # Flat QA
     if frame_meta['FLAVOR'] in ['flat']:
