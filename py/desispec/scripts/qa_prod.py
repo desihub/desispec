@@ -95,11 +95,11 @@ def main(args) :
         qa_prod.load_data()
         # Run
         qatype, metric = args.time_series.split('-')
-        outfile= qafig_path+'/QA_time_{:s}.png'.format(args.time_series)
+        outfile= qaprod_dir+'/QA_time_{:s}.png'.format(args.time_series)
         dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile, bright_dark=args.bright_dark)
 
     # HTML
     if args.html:
-        html.calib()
-        html.make_exposures()
-        html.toplevel()
+        html.calib(qaprod_dir=qaprod_dir)
+        html.make_exposures(qaprod_dir=qaprod_dir)
+        html.toplevel(qaprod_dir=qaprod_dir)

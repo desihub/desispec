@@ -76,11 +76,11 @@ def init(f, title):
     return links
 
 
-def calib():
+def calib(qaprod_dir=None):
     """ Generate HTML to orgainze calib HTML
     """
     # Organized HTML
-    html_file = meta.findfile('qa_calib_html')
+    html_file = meta.findfile('qa_calib_html', qaprod_dir=qaprod_dir)
     html_path,_ = os.path.split(html_file)
     f = open(html_file, 'w')
     init(f, 'Calibration QA')
@@ -106,7 +106,7 @@ def calib():
             # Link
             f.write('<li><a href="{:s}/qa-{:08d}.html">Exposure {:08d}</a></li>\n'.format(night, expid, expid))
             # Generate Exposure html
-            calib_exp(night, expid)
+            calib_exp(night, expid, qaprod_dir=qaprod_dir)
         f.write('</ul></h3>\n')
 
     # Finish
@@ -116,7 +116,7 @@ def calib():
     return links, body
 
 
-def calib_exp(night, expid):
+def calib_exp(night, expid, qaprod_dir=None):
     """ Geneate HTML for calib exposure PNGs
     Args:
         night:
@@ -126,7 +126,7 @@ def calib_exp(night, expid):
 
     """
     # File name
-    html_file = meta.findfile('qa_calib_exp_html', night=night, expid=expid)
+    html_file = meta.findfile('qa_calib_exp_html', night=night, expid=expid, qaprod_dir=qaprod_dir)
     html_path,_ = os.path.split(html_file)
     f = open(html_file, 'w')
     init(f, 'Calibration Exposure QA')
@@ -162,7 +162,7 @@ def calib_exp(night, expid):
     return links, body
 
 
-def make_exposures():
+def make_exposures(qaprod_dir=None):
     """ Generate HTML to organize exposure HTML
 
     Parameters
@@ -175,7 +175,7 @@ def make_exposures():
 
     """
     # Organized HTML
-    html_file = meta.findfile('qa_exposures_html')
+    html_file = meta.findfile('qa_exposures_html', qaprod_dir=qaprod_dir)
     html_path,_ = os.path.split(html_file)
     f = open(html_file, 'w')
     init(f, 'Exposures QA')
@@ -196,13 +196,13 @@ def make_exposures():
             # Link
             f.write('<li><a href="{:s}/{:08d}/qa-{:08d}.html">Exposure {:08d}</a></li>\n'.format(night, expid, expid, expid))
             # Generate Exposure html
-            make_exposure(night, expid)
+            make_exposure(night, expid, qaprod_dir=qaprod_dir)
         f.write('</ul></h3>\n')
 
     # Finish
     finish(f,body)
 
-def make_exposure(night, expid):
+def make_exposure(night, expid, qaprod_dir=None):
     """ Generate HTML for exposure PNGs
 
     Parameters
@@ -218,7 +218,7 @@ def make_exposure(night, expid):
 
     """
     # File name
-    html_file = meta.findfile('qa_exposure_html', night=night, expid=expid)
+    html_file = meta.findfile('qa_exposure_html', night=night, expid=expid, qaprod_dir=qaprod_dir)
     html_path,_ = os.path.split(html_file)
     f = open(html_file, 'w')
     init(f, 'Exposure QA')
@@ -255,7 +255,7 @@ def make_exposure(night, expid):
 
 
 
-def toplevel():
+def toplevel(qaprod_dir=None):
     """ Generate HTML to top level QA
     Mainly generates the highest level HTML file
     which has links to the Exposure and Calib QA.
@@ -275,13 +275,13 @@ def toplevel():
 
     """
     # Organized HTML
-    html_file = meta.findfile('qa_toplevel_html')
+    html_file = meta.findfile('qa_toplevel_html', qaprod_dir=qaprod_dir)
     html_path,_ = os.path.split(html_file)
     f = open(html_file, 'w')
     init(f, 'Top Level QA')
 
     # Calib?
-    calib2d_file = meta.findfile('qa_calib_html')
+    calib2d_file = meta.findfile('qa_calib_html', qaprod_dir=qaprod_dir)
     if os.path.exists(calib2d_file):
         # Truncate the path
         c2d_path, fname = os.path.split(calib2d_file)
@@ -290,7 +290,7 @@ def toplevel():
         # Full path
         #f.write('<h2><a href="{:s}">Calibration QA</a></h2>\n'.format(calib2d_file))
     # Exposures?
-    exposures_file = meta.findfile('qa_exposures_html')
+    exposures_file = meta.findfile('qa_exposures_html', qaprod_dir=qaprod_dir)
     if os.path.exists(exposures_file):
         # Truncated path
         exp_path, fname = os.path.split(exposures_file)
