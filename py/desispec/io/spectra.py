@@ -120,7 +120,6 @@ def write_spectra(outfile, spec, units=None):
                 all_hdus.append(hdu)
 
     if spec.scores is not None :
-        print("writing spec.scores")
         hdu = fits.convenience.table_to_hdu(spec.scores)
         hdu.header["EXTNAME"]="SCORES"
         all_hdus.append(hdu)
