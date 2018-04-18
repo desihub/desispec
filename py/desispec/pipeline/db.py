@@ -656,8 +656,10 @@ class DataBase:
             if tt == "cframe":
                 cfstates = tstates.copy()
 
-        # Now examine the spectra and redshift files along with the
-        # healpix_frame table and try to reconstruct the state.
+        # Now examine the spectra and redshift files.  If the files exist,
+        # we assume they are done and completely up to date.  If the files
+        # are not up to date, they must be manually deleted in order for the
+        # sync to correctly reconstruct the database state.
 
         pixrows = self.select_healpix_frame({"night" : night})
 
@@ -741,32 +743,16 @@ class DataBase:
                     set_hpx_frame_0(row, spec_name, red_name, cur)
                 else:
                     # The cframe exists...
-                    if row["state"] == 0:
-                        # This means that the cframe post-processing was not
-                        # run.
-                        set_hpx_frame_1(row, spec_name, red_name, cur)
-                    elif row["state"] == 1:
-                        # The cframe post-processing has been run, but the
-                        # regrouping has not yet run.
-                        set_hpx_frame_1(row, spec_name, red_name, cur)
-                    elif row["state"] == 2:
-                        # The regrouping has been run, but not redshifts
-                        if spec_exists[row["pixel"]]:
-                            set_hpx_frame_2(row, spec_name, red_name, cur)
-                        else:
-                            # The spectra file has been deleted on disk
-                            set_hpx_frame_1(row, spec_name, red_name, cur)
-                    elif row["state"] == 3:
-                        # The redshifts have been run
+                    if spec_exists[row["pixel"]]:
                         if red_exists[row["pixel"]]:
+                            # We are all done (state 3)
                             set_hpx_frame_3(row, spec_name, red_name, cur)
                         else:
-                            # The redshifts have been deleted on disk
-                            if spec_exists[row["pixel"]]:
-                                set_hpx_frame_2(row, spec_name, red_name, cur)
-                            else:
-                                # The spectra files were deleted too...
-                                set_hpx_frame_1(row, spec_name, red_name, cur)
+                            # We are only at state 2
+                            set_hpx_frame_2(row, spec_name, red_name, cur)
+                    else:
+                        # We are at just at state 1
+                        set_hpx_frame_1(row, spec_name, red_name, cur)
 
         # Update ready state of tasks
         self.getready()
