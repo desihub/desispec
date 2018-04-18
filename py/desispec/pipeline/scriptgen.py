@@ -111,6 +111,9 @@ def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("source {}\n\n".format(desisetup))
 
+        f.write("# Force the script to exit on errors from commands\n")
+        f.write("set -e\n\n")
+
         f.write("export OMP_NUM_THREADS={}\n\n".format(openmp))
         if debug:
             f.write("export DESI_LOGLEVEL=DEBUG\n\n")
@@ -181,6 +184,9 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
 
         f.write("echo Starting slurm script at `date`\n\n")
         f.write("source {}\n\n".format(desisetup))
+
+        f.write("# Force the script to exit on errors from commands\n")
+        f.write("set -e\n\n")
 
         f.write("# Set TMPDIR to be on the ramdisk\n")
         f.write("export TMPDIR=/dev/shm\n\n")
