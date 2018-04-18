@@ -119,6 +119,11 @@ def write_spectra(outfile, spec, units=None):
                 hdu.data = ex[1].astype("f4")
                 all_hdus.append(hdu)
 
+    if spec.scores is not None :
+        hdu = fits.convenience.table_to_hdu(spec.scores)
+        hdu.header["EXTNAME"]="SCORES"
+        all_hdus.append(hdu)
+
     try:
         all_hdus.writeto("{}.tmp".format(outfile), overwrite=True, checksum=True)
     except TypeError:
