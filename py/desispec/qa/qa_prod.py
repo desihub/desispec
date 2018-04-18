@@ -48,6 +48,6 @@ class QA_Prod(QA_MultiExp):
                                         expid = exposure, specprod_dir = self.specprod_dir)
                 self.mexp_dict[night][exposure] = frames_dict
         # Output file names
-        self.qaexp_outroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
+        self.qaexp_outroot = self.qaprod_dir+'/'+self.prod_name+'_qa'
 
 
