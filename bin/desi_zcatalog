@@ -55,6 +55,8 @@ parser.add_argument("-o", "--outfile", type=str,  help="output file")
 parser.add_argument("-v", "--verbose", action="store_true", help="some flag")
 parser.add_argument("--match", type=str, nargs="*", help="match other tables (targets,truth...)")
 parser.add_argument("--fibermap", action = "store_true", help="add some columns from fibermap stored in zbest files")
+parser.add_argument("--scores", action = "store_true", help="add some columns from scores hdu stored in spectra files matching zbest files")
+
 
 args = parser.parse_args()
 
@@ -92,6 +94,22 @@ for zbestfile in zbestfiles:
         tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
         nzbest["RA"] = fibermap["RA_TARGET"][tmp2]
         nzbest["DEC"] = fibermap["DEC_TARGET"][tmp2]
+        zbest=nzbest
+    if args.scores :
+        spectrafile = zbestfile.replace("zbest","spectra")
+        if not os.path.isfile(spectrafile) :
+            log.error("No spectra file '{}'. I won't try to guess another path for the spectra files.".format(spectrafile))
+            sys.exit(12)
+        spectrafile_fibermap = fitsio.read(spectrafile, 'FIBERMAP')
+        scores               = fitsio.read(spectrafile, 'SCORES')
+        ndtype=np.dtype( zbest.dtype.descr + scores.dtype.descr )
+        nzbest=np.zeros(zbest.shape,dtype=ndtype)
+        for k in zbest.dtype.names : nzbest[k]=zbest[k]
+        tmp1  = {tid : i for i,tid in enumerate(spectrafile_fibermap["TARGETID"])} # if several entries with same targetid, keeps last index
+        tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
+        for k in scores.dtype.names :
+            if k not in zbest.dtype.names :
+                nzbest[k] = scores[k][tmp2]
         zbest=nzbest
     data.append(zbest)
    
