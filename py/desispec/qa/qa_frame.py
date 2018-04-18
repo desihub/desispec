@@ -195,7 +195,8 @@ class QA_Frame(object):
         return ('{:s}: night={:s}, expid={:d}, camera={:s}, flavor={:s}'.format(
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
 
-def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_dir=None, clobber=True):
+def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_dir=None,
+                       output_dir=None, clobber=True):
     """  Generate a qaframe object from an input frame_file name (and night)
 
     Write QA to disk
@@ -203,6 +204,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
     Args:
         frame_file: str
         specprod_dir: str, optional
+        qa_dir: str, optional -- Location of QA
         make_plots: bool, optional
         output_dir: str, optional
 
@@ -237,13 +239,20 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
     spectro = int(frame_meta['CAMERA'][-1])
 
     # Filename
-    qafile, qatype = qafile_from_framefile(frame_file)
+    qafile, qatype = qafile_from_framefile(frame_file, qaprod_dir=qaprod_dir, output_dir=output_dir)
     qaframe = load_qa_frame(qafile, frame, flavor=frame.meta['FLAVOR'])
     # Flat QA
     if frame_meta['FLAVOR'] in ['flat']:
         fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
                                       specprod_dir=specprod_dir)
-        fiberflat = read_fiberflat(fiberflat_fil)
+        try: # Backwards compatibility
+            fiberflat = read_fiberflat(fiberflat_fil)
+        except FileNotFoundError:
+            fiberflat_fil = fiberflat_fil.replace('exposures', 'calib2d')
+            path, basen = os.path.split(fiberflat_fil)
+            path,_ = os.path.split(path)
+            fiberflat_fil = os.path.join(path, basen)
+            fiberflat = read_fiberflat(fiberflat_fil)
         qaframe.run_qa('FIBERFLAT', (frame, fiberflat), clobber=clobber)
         if make_plots:
             # Do it
@@ -255,9 +264,14 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, output_d
         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
         # Flat field first
         dummy_fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
-                                      specprod_dir=specprod_dir) # This is dummy
+                                            specprod_dir=specprod_dir) # This is dummy
         path,_ = os.path.split(dummy_fiberflat_fil)
         fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
+        # Backwards compatibility (for now)
+        if len(fiberflat_files) == 0:
+            path = path.replace('exposures', 'calib2d')
+            path,_ = os.path.split(path) # Remove night
+            fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
         # Sort and take the first (same as current pipeline)
         fiberflat_files.sort()
         fiberflat = read_fiberflat(fiberflat_files[0])

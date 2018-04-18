@@ -44,7 +44,7 @@ def get_skyres(cframes, sub_sky=False, flatten=True):
         # Return
         return twave, tflux, tres, tivar
 
-    cframe = read_frame(cframes)
+    cframe = read_frame(cframes, skip_resolution=True)
     if cframe.meta['FLAVOR'] in ['flat','arc']:
         raise ValueError("Bad flavor for exposure: {:s}".format(cframes))
 

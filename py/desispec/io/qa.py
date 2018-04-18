@@ -16,8 +16,16 @@ from desispec.io.util import makepath
 from desiutil.log import get_logger
 # log=get_logger()
 
-def qafile_from_framefile(frame_file, specprod_dir=None, output_dir=None):
-    # Load frame
+def qafile_from_framefile(frame_file, qaprod_dir=None, output_dir=None):
+    """ Derive the QA filename from an input frame file
+    Args:
+        frame_file: str
+        output_dir: str, optional   Over-ride default output path
+        qa_dir: str, optional   Over-ride default QA
+
+    Returns:
+
+    """
     frame_meta = read_meta_frame(frame_file)
     night = frame_meta['NIGHT'].strip()
     camera = frame_meta['CAMERA'].strip()
@@ -28,7 +36,7 @@ def qafile_from_framefile(frame_file, specprod_dir=None, output_dir=None):
         qatype = 'qa_data'
     # Name
     qafile = findfile(qatype, night=night, camera=camera, expid=expid,
-                      specprod_dir=specprod_dir, outdir=output_dir)
+                      outdir=output_dir, qaprod_dir=qaprod_dir)
     # Return
     return qafile, qatype
 

@@ -28,6 +28,7 @@ class QA_MultiExp(object):
         Args:
             specprod_dir(str): Path containing the exposures/ directory to use. If the value
                 is None, then the value of :func:`specprod_root` is used instead.
+            qaprod_dir(str): Path containing the root path for QA output
         Notes:
 
         Attributes:
@@ -40,6 +41,7 @@ class QA_MultiExp(object):
             specprod_dir = specprod_root()
         if qaprod_dir is None:
             qaprod_dir = qaprod_root()
+        #
         self.specprod_dir = specprod_dir
         self.qaprod_dir = qaprod_dir
         tmp = specprod_dir.split('/')
@@ -157,10 +159,10 @@ class QA_MultiExp(object):
                 # Object only??
                 for camera,frame_fil in self.mexp_dict[night][exposure].items():
                     # Load frame
-                    qafile, _ = qafile_from_framefile(frame_fil)
+                    qafile, _ = qafile_from_framefile(frame_fil, qaprod_dir=self.qaprod_dir)
                     if os.path.isfile(qafile) and (not clobber):
                         continue
-                    qaframe_from_frame(frame_fil, make_plots=make_plots)
+                    qaframe_from_frame(frame_fil, make_plots=make_plots, qaprod_dir=self.qaprod_dir)
 
     def slurp(self, make_frameqa=False, remove=True, **kwargs):
         """ Slurp all the individual QA files to generate
