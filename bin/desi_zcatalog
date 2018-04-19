@@ -81,7 +81,7 @@ for zbestfile in zbestfiles:
     if args.fibermap :
         fibermap = fitsio.read(zbestfile, 'FIBERMAP')
         # new zbest structured array with two more columns ...
-        ndtype=np.dtype( zbest.dtype.descr + [("RA",str(fibermap["RA_TARGET"].dtype)),("DEC",str(fibermap["DEC_TARGET"].dtype))])
+        ndtype=np.dtype( zbest.dtype.descr + [("RA",str(fibermap["RA_TARGET"].dtype)),("DEC",str(fibermap["DEC_TARGET"].dtype)),("MAG",str(fibermap["MAG"].dtype),fibermap["MAG"].shape[-1])])
         nzbest=np.zeros(zbest.shape,dtype=ndtype)
         # copy 
         for k in zbest.dtype.names : nzbest[k]=zbest[k]
@@ -92,6 +92,7 @@ for zbestfile in zbestfiles:
         tmp2  = [tmp1[tid] for tid in nzbest["TARGETID"]]
         nzbest["RA"] = fibermap["RA_TARGET"][tmp2]
         nzbest["DEC"] = fibermap["DEC_TARGET"][tmp2]
+        nzbest["MAG"][:,:] = fibermap["MAG"][tmp2,:]
         zbest=nzbest
     data.append(zbest)
    
