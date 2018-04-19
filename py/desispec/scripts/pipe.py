@@ -1123,7 +1123,7 @@ Where supported commands are:
                         cmd = "select submitted from {}".format(t)
                         cur.execute(cmd)
                         isub = [ int(x[0]) for x in cur.fetchall() ]
-                        tasksub[t] = np.sum(isub)
+                        tasksub[t] = np.sum(isub).astype(int)
             if clear:
                 print("\033c")
             print(header)
