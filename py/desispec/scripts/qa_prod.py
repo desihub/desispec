@@ -25,7 +25,7 @@ def parse(options=None):
                         help='Restrict to bright/dark (flag: 0=all; 1=bright; 2=dark; only used in time_series)')
     parser.add_argument('--html', default = False, action='store_true',
                         help = 'Generate HTML files?')
-    parser.add_argument('--qafig_path', type=str, default=None, help = 'Path to where QA figure files are generated.  Default is qaprod_dir')
+    parser.add_argument('--qaprod_dir', type=str, default=None, help = 'Path to where QA is generated.  Default is qaprod_dir')
 
     args = None
     if options is None:
@@ -47,12 +47,12 @@ def main(args) :
     log.info("starting")
     # Initialize
     specprod_dir = meta.specprod_root()
-    if args.qafig_path is None:
-        qafig_path = meta.qaprod_root()
+    if args.qaprod_dir is None:
+        qaprod_dir = meta.qaprod_root()
     else:
-        qafig_path = args.qafig_path
+        qaprod_dir = args.qaprod_dir
 
-    qa_prod = QA_Prod(specprod_dir)
+    qa_prod = QA_Prod(specprod_dir, qaprod_dir=qaprod_dir)
 
     # Remake Frame QA?
     if args.make_frameqa > 0:
@@ -95,11 +95,11 @@ def main(args) :
         qa_prod.load_data()
         # Run
         qatype, metric = args.time_series.split('-')
-        outfile= qafig_path+'/QA_time_{:s}.png'.format(args.time_series)
+        outfile= qaprod_dir+'/QA_time_{:s}.png'.format(args.time_series)
         dqqp.prod_time_series(qa_prod, qatype, metric, outfile=outfile, bright_dark=args.bright_dark)
 
     # HTML
     if args.html:
-        html.calib()
-        html.make_exposures()
-        html.toplevel()
+        html.calib(qaprod_dir=qaprod_dir)
+        html.make_exposures(qaprod_dir=qaprod_dir)
+        html.toplevel(qaprod_dir=qaprod_dir)

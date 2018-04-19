@@ -19,7 +19,7 @@ from .util import healpix_subdirectory
 
 def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     nside=64, band=None, spectrograph=None, rawdata_dir=None, specprod_dir=None,
-    download=False, outdir=None):
+    download=False, outdir=None, qaprod_dir=None):
     """Returns location where file should be
 
     Args:
@@ -37,6 +37,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     Options:
         rawdata_dir : overrides $DESI_SPECTRO_DATA
         specprod_dir : overrides $DESI_SPECTRO_REDUX/$SPECPROD/
+        qaprod_dir : defaults to $DESI_SPECTRO_REDUX/$SPECPROD/QA/ if not provided
         download : if not found locally, try to fetch remotely
         outdir : use this directory for output instead of canonical location
     """
@@ -55,22 +56,22 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         sky = '{specprod_dir}/exposures/{night}/{expid:08d}/sky-{camera}-{expid:08d}.fits',
         stdstars = '{specprod_dir}/exposures/{night}/{expid:08d}/stdstars-{spectrograph:d}-{expid:08d}.fits',
         calib = '{specprod_dir}/exposures/{night}/{expid:08d}/calib-{camera}-{expid:08d}.fits',
-        qa_data = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-{camera}-{expid:08d}.yaml',
-        qa_data_exp = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
-        qa_bootcalib = '{specprod_dir}/QA/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
-        qa_sky_fig = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-sky-{camera}-{expid:08d}.png',
-        qa_skychi_fig = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-skychi-{camera}-{expid:08d}.png',
-        qa_flux_fig = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-flux-{camera}-{expid:08d}.png',
-        qa_toplevel_html = '{specprod_dir}/QA/qa-toplevel.html',
-        qa_calib = '{specprod_dir}/QA/calib2d/{night}/qa-{camera}-{expid:08d}.yaml',
-        qa_calib_html = '{specprod_dir}/QA/calib2d/qa-calib2d.html',
-        qa_calib_exp = '{specprod_dir}/QA/calib2d/{night}/qa-{expid:08d}.yaml',
-        qa_calib_exp_html = '{specprod_dir}/QA/calib2d/{night}/qa-{expid:08d}.html',
-        qa_exposures_html = '{specprod_dir}/QA/exposures/qa-exposures.html',
-        qa_exposure_html = '{specprod_dir}/QA/exposures/{night}/{expid:08d}/qa-{expid:08d}.html',
-        qa_flat_fig = '{specprod_dir}/QA/calib2d/{night}/qa-flat-{camera}-{expid:08d}.png',
-        qa_ztruth = '{specprod_dir}/QA/exposures/{night}/qa-ztruth-{night}.yaml',
-        qa_ztruth_fig = '{specprod_dir}/QA/exposures/{night}/qa-ztruth-{night}.png',
+        qa_data = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{camera}-{expid:08d}.yaml',
+        qa_data_exp = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.yaml',
+        qa_bootcalib = '{qaprod_dir}/calib2d/psf/{night}/qa-psfboot-{camera}.pdf',
+        qa_sky_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-sky-{camera}-{expid:08d}.png',
+        qa_skychi_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-skychi-{camera}-{expid:08d}.png',
+        qa_flux_fig = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-flux-{camera}-{expid:08d}.png',
+        qa_toplevel_html = '{qaprod_dir}/qa-toplevel.html',
+        qa_calib = '{qaprod_dir}/calib2d/{night}/qa-{camera}-{expid:08d}.yaml',
+        qa_calib_html = '{qaprod_dir}/calib2d/qa-calib2d.html',
+        qa_calib_exp = '{qaprod_dir}/calib2d/{night}/qa-{expid:08d}.yaml',
+        qa_calib_exp_html = '{qaprod_dir}/calib2d/{night}/qa-{expid:08d}.html',
+        qa_exposures_html = '{qaprod_dir}/exposures/qa-exposures.html',
+        qa_exposure_html = '{qaprod_dir}/exposures/{night}/{expid:08d}/qa-{expid:08d}.html',
+        qa_flat_fig = '{qaprod_dir}/calib2d/{night}/qa-flat-{camera}-{expid:08d}.png',
+        qa_ztruth = '{qaprod_dir}/exposures/{night}/qa-ztruth-{night}.yaml',
+        qa_ztruth_fig = '{qaprod_dir}/exposures/{night}/qa-ztruth-{night}.png',
         ql_bootcalib_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-bootcalib-{camera}-{expid:08d}.png',
         ql_bootcalib_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-bootcalib-{camera}-{expid:08d}.yaml',
         ql_boxextract_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-boxextract-{camera}-{expid:08d}.png',
@@ -179,6 +180,9 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     if specprod_dir is None and 'specprod_dir' in required_inputs:
         specprod_dir = specprod_root()
 
+    if qaprod_dir is None and 'qaprod_dir' in required_inputs:
+        qaprod_dir = qaprod_root()
+
     if 'specprod' in required_inputs:
         #- Replace / with _ in $SPECPROD so we can use it in a filename
         specprod = os.getenv('SPECPROD').replace('/', '_')
@@ -186,7 +190,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         specprod = None
 
     actual_inputs = {
-        'specprod_dir':specprod_dir, 'specprod':specprod,
+        'specprod_dir':specprod_dir, 'specprod':specprod, 'qaprod_dir':qaprod_dir,
         'night':night, 'expid':expid, 'camera':camera, 'groupname':groupname,
         'nside':nside, 'hpixdir':hpixdir, 'band':band,
         'spectrograph':spectrograph,

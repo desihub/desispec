@@ -20,7 +20,7 @@ from desiutil.log import get_logger
 
 
 class QA_Prod(QA_MultiExp):
-    def __init__(self, specprod_dir=None):
+    def __init__(self, specprod_dir=None, **kwargs):
         """ Class to organize and execute QA for a DESI production
 
         Args:
@@ -37,7 +37,7 @@ class QA_Prod(QA_MultiExp):
             specprod_dir = specprod_root()
         self.specprod_dir = specprod_dir
         # Init
-        QA_MultiExp.__init__(self, specprod_dir=specprod_dir)
+        QA_MultiExp.__init__(self, specprod_dir=specprod_dir, **kwargs)
         # Load up exposures for the full production
         nights = get_nights(specprod_dir=self.specprod_dir)
         for night in nights:
@@ -48,6 +48,6 @@ class QA_Prod(QA_MultiExp):
                                         expid = exposure, specprod_dir = self.specprod_dir)
                 self.mexp_dict[night][exposure] = frames_dict
         # Output file names
-        self.qaexp_outroot = self.specprod_dir+'/QA/'+self.prod_name+'_qa'
+        self.qaexp_outroot = self.qaprod_dir+'/'+self.prod_name+'_qa'
 
 
