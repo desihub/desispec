@@ -16,6 +16,7 @@ import datetime
 import numpy as np
 import argparse
 import re
+import warnings
 
 import desispec.io as io
 
@@ -84,30 +85,56 @@ def main(args, comm=None):
 
     tasklist = None
     if args.taskfile is not None:
-        tasklist = pipe.prod.task_read(args.taskfile)
+        # One process reads the file and broadcasts
+        if rank == 0:
+            tasklist = pipe.prod.task_read(args.taskfile)
+        if comm is not None:
+            tasklist = comm.bcast(tasklist, root=0)
     else:
-        # Read from STDIN.
+        # Every process has the same STDIN contents.
         tasklist = list()
         for line in sys.stdin:
             tasklist.append(line.rstrip())
 
+    # Do we actually have any tasks?
+    if len(tasklist) == 0:
+        warnings.warn("Task list is empty", RuntimeWarning)
+
     # run it!
 
     (db, opts) = pipe.load_prod("w")
+
+    ready = None
     failed = None
     if args.nodb:
-        failed = pipe.run_task_list(args.tasktype, tasklist, opts, comm=comm,
-            db=None)
+        ready, failed = pipe.run_task_list(args.tasktype, tasklist, opts,
+                                           comm=comm, db=None)
     else:
-        failed = pipe.run_task_list(args.tasktype, tasklist, opts, comm=comm, db=db)
+        ready, failed = pipe.run_task_list(args.tasktype, tasklist, opts,
+                                           comm=comm, db=db)
 
     t2 = datetime.datetime.now()
 
     if rank == 0:
-        log.info("  {} tasks failed".format(failed))
+        log.info("  {} tasks were ready, and {} failed".format(ready, failed))
         dt = t2 - t1
         minutes, seconds = dt.seconds//60, dt.seconds%60
         log.info("Run time: {} min {} sec".format(minutes, seconds))
         sys.stdout.flush()
+
+    if comm is not None:
+        comm.barrier()
+
+    # Did we have any ready tasks?
+    if ready == 0:
+        if rank == 0:
+            warnings.warn("No tasks were ready", RuntimeWarning)
+        sys.exit(1)
+
+    # Did all of them fail?
+    if failed == ready:
+        if rank == 0:
+            warnings.warn("All tasks failed", RuntimeWarning)
+        sys.exit(1)
 
     return

@@ -102,12 +102,17 @@ def nersc_machine(name, queue):
 
 def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
               openmp=1,debug=False):
+    if len(commands) == 0:
+        raise RuntimeError("List of commands is empty")
     with open(path, "w") as f:
         f.write("#!/bin/bash\n\n")
         f.write("now=`date +%Y%m%d-%H%M%S`\n")
         f.write("export STARTTIME=${now}\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("source {}\n\n".format(desisetup))
+
+        f.write("# Force the script to exit on errors from commands\n")
+        f.write("set -e\n\n")
 
         f.write("export OMP_NUM_THREADS={}\n\n".format(openmp))
         if debug:
@@ -135,6 +140,8 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
 
 
     """
+    if len(commands) == 0:
+        raise RuntimeError("List of commands is empty")
     hostprops = nersc_machine(machine, queue)
 
     if nodes > hostprops["maxnodes"]:
@@ -177,6 +184,9 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
 
         f.write("echo Starting slurm script at `date`\n\n")
         f.write("source {}\n\n".format(desisetup))
+
+        f.write("# Force the script to exit on errors from commands\n")
+        f.write("set -e\n\n")
 
         f.write("# Set TMPDIR to be on the ramdisk\n")
         f.write("export TMPDIR=/dev/shm\n\n")
@@ -284,6 +294,9 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     """
     from .tasks.base import task_classes, task_type
     log = get_logger()
+
+    if len(tasklist) == 0:
+        raise RuntimeError("List of tasks is empty")
 
     # Get the machine properties
     hostprops = nersc_machine(machine, queue)
@@ -414,6 +427,9 @@ def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
     """
     from .tasks.base import task_classes, task_type
 
+    if len(tasklist) == 0:
+        raise RuntimeError("List of tasks is empty")
+
     # Get the location of the setup script from the production root.
 
     proddir = os.path.abspath(io.specprod_root())
@@ -452,6 +468,9 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
 
     """
     from .tasks.base import task_classes, task_type
+
+    if len(tasklist) == 0:
+        raise RuntimeError("List of tasks is empty")
 
     # Get the location of the setup script from the production root.
 

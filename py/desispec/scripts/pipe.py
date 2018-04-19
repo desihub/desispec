@@ -683,9 +683,12 @@ Where supported commands are:
 
         tasks = pipe.prod.task_read(args.taskfile)
 
-        scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
-
-        print(",".join(scripts))
+        if len(tasks) > 0:
+            scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
+            print(",".join(scripts))
+        else:
+            import warnings
+            warnings.warn("Input task list is empty", RuntimeWarning)
 
         return
 
@@ -695,10 +698,9 @@ Where supported commands are:
 
         depstr = ""
         if deps is not None:
-            depstr = "-d afterany"
+            depstr = "-d afterok"
             for d in deps:
                 depstr = "{}:{}".format(depstr, d)
-
 
         jobids = list()
         if slurm:
@@ -751,19 +753,20 @@ Where supported commands are:
 
         tasks = pipe.prod.task_read(args.taskfile)
 
-        scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
-
-        deps = None
-        slurm = False
-        if args.nersc is not None:
-            slurm = True
-        if args.depjobs is not None:
-            deps = args.depjobs.split(',')
-
-        jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
-
-        if len(jobids) > 0:
-            print(",".join(jobids))
+        if len(tasks) > 0:
+            scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
+            deps = None
+            slurm = False
+            if args.nersc is not None:
+                slurm = True
+            if args.depjobs is not None:
+                deps = args.depjobs.split(',')
+            jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
+            if len(jobids) > 0:
+                print(",".join(jobids))
+        else:
+            import warnings
+            warnings.warn("Input task list is empty", RuntimeWarning)
         return
 
 
@@ -798,7 +801,6 @@ Where supported commands are:
         args = parser.parse_args(sys.argv[2:])
 
         print("Step(s) to run:",args.tasktypes)
-
 
         machprops = None
         if args.nersc is not None:
@@ -840,22 +842,25 @@ Where supported commands are:
         allnights = io.get_nights(strip_path=True)
         nights = pipe.prod.select_nights(allnights, args.nights)
 
-        deps = None
+        outdeps = None
+        indeps = None
         if args.depjobs is not None:
-            deps = args.depjobs.split(',')
+            indeps = args.depjobs.split(',')
 
         for tt in tasktypes:
             # Get the tasks.  We select by state and submitted status.
             tasks = self._get_tasks(db, tt, states, nights)
-            if len(tasks) == 0:
-                continue
 
             if args.nosubmitted:
                 if (tt != "spectra") and (tt != "redshift"):
                     sb = db.get_submitted(tasks)
                     tasks = [ x for x in tasks if not sb[x] ]
-                if len(tasks) == 0:
-                    continue
+
+            if len(tasks) == 0:
+                import warnings
+                warnings.warn("Input task list for '{}' is empty".format(tt),
+                              RuntimeWarning)
+                break
 
             # Generate the scripts
             scripts = self._gen_scripts(tt, tasks, False, args)
@@ -865,12 +870,15 @@ Where supported commands are:
                 if (tt != "spectra") and (tt != "redshift"):
                     db.set_submitted_type(tt, tasks)
 
-            jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
-            if len(jobids) > 0:
-                deps = jobids
+            outdeps = self._run_scripts(scripts, deps=indeps, slurm=slurm)
+            if len(outdeps) > 0:
+                indeps = outdeps
+            else:
+                indeps = None
 
-        if deps is not None and len(deps) > 0:
-            print(",".join(deps))
+        if outdeps is not None and len(outdeps) > 0:
+            print(",".join(outdeps))
+
         return
 
 
