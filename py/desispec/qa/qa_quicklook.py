@@ -743,17 +743,17 @@ class Count_Pixels(MonitoringAlg):
         from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "NPIX_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NPIX_STATUS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "LITFRAC_AMP"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "COUNTPIX_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
                 kwargs["REFERENCE"]=r[key]
-        if "NPIX_WARN_RANGE" in parms and "NPIX_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["NPIX_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["NPIX_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        if "LITFRAC_WARN_RANGE" in parms and "LITFRAC_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["LITFRAC_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["LITFRAC_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -810,33 +810,28 @@ class Count_Pixels(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
-                 "CUTLO":3,   # low threshold for number of counts in sigmas
-                 "CUTHI":10,
-                 "NPIX_NORMAL_RANGE":[200.0, 500.0],
-                 "NPIX_WARN_RANGE":[50.0, 650.0]
+                 "CUTPIX":5,   # low threshold for number of counts in sigmas
+                 "LITFRAC_NORMAL_RANGE":[0.6, 0.8],
+                 "LITFRAC_WARN_RANGE":[0.5, 1.0]
                  }
 
         retval["PARAMS"] = param
 
-        #- get the counts over entire CCD in counts per second
-        npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
-        npixhi=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
-
         #- get the counts for each amp
-        if amps:
-            npixlo_amps=[]
-            npixhi_amps=[]
-            #- get amp boundary in pixels
-            from desispec.preproc import _parse_sec_keyword
-            for kk in ['1','2','3','4']:
-                ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                npixlo_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTLO'])
-                npixlo_amps.append(npixlo_thisamp)
-                npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
-                npixhi_amps.append(npixhi_thisamp)
-            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_AMP": npixlo_amps,"NPIXHI_AMP": npixhi_amps}
-        else:
-            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi}
+        npix_amps=[]
+        litfrac_amps=[]
+
+        #- get amp boundary in pixels
+        from desispec.preproc import _parse_sec_keyword
+        for kk in ['1','2','3','4']:
+            ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
+            rdnoise_thisamp=image.meta["RDNOISE"+kk])
+            npix_thisamp= image.pix[ampboundary][image.pix[ampboundary] > param['CUTPIX'] * rdnoise_thisamp].size #- no of pixels above threshold
+            npix_amps.append(npix_thisamp)
+            size_thisamp=image.pix[ampboundary].size
+            litfrac_thisamp=round(np.float(npix_thisamp)/size_thisamp) #- fraction of pixels getting light above threshold
+            litfrac_amps.append(litfrac_thisamp)
+        retval["METRICS"]={"NPIX_AMP": npix_amps, 'LITFRAC_AMP': litfrac_amps}
 
         if qlf:
             qlf_post(retval)
