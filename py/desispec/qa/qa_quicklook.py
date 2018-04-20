@@ -744,7 +744,7 @@ class Count_Pixels(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "LITFRAC_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "COUNTPIX_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "LITFRAC_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -811,8 +811,8 @@ class Count_Pixels(MonitoringAlg):
             log.debug("Param is None. Using default param instead")
             param = {
                  "CUTPIX":5,   # low threshold for number of counts in sigmas
-                 "LITFRAC_NORMAL_RANGE":[0.6, 0.8],
-                 "LITFRAC_WARN_RANGE":[0.5, 1.0]
+                 "LITFRAC_NORMAL_RANGE":[-0.1, 0.1],
+                 "LITFRAC_WARN_RANGE":[-0.2, 0.2]
                  }
 
         retval["PARAMS"] = param
@@ -825,11 +825,11 @@ class Count_Pixels(MonitoringAlg):
         from desispec.preproc import _parse_sec_keyword
         for kk in ['1','2','3','4']:
             ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-            rdnoise_thisamp=image.meta["RDNOISE"+kk])
+            rdnoise_thisamp=image.meta["RDNOISE"+kk]
             npix_thisamp= image.pix[ampboundary][image.pix[ampboundary] > param['CUTPIX'] * rdnoise_thisamp].size #- no of pixels above threshold
             npix_amps.append(npix_thisamp)
             size_thisamp=image.pix[ampboundary].size
-            litfrac_thisamp=round(np.float(npix_thisamp)/size_thisamp) #- fraction of pixels getting light above threshold
+            litfrac_thisamp=round(np.float(npix_thisamp)/size_thisamp,2) #- fraction of pixels getting light above threshold
             litfrac_amps.append(litfrac_thisamp)
         retval["METRICS"]={"NPIX_AMP": npix_amps, 'LITFRAC_AMP': litfrac_amps}
 
