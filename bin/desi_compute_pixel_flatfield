@@ -368,6 +368,11 @@ else :
     log.info("compute a median of the input images")
     image,ivar=median_image(args.images)
 
+if args.out_median is not None :
+    log.info("writing median image %s ..."%args.out_median)
+    h=pyfits.HDUList([pyfits.PrimaryHDU(image),pyfits.ImageHDU(ivar,name="IVAR")])
+    h.writeto(args.out_median,clobber=True)
+
 if args.psf :
     log.info("get trace coordinates from psf %s"%args.psf)
     x,y,dxdy,dydx=grid_from_psf(args.psf)
@@ -552,7 +557,7 @@ if args.divide_mean_transmission :
     ii=np.argsort(ximage)
     
     log.info("project this transmission on an image")
-    transimage=np.zeros(waveimage.shape)
+    transimage=np.zeros(ximage.shape)
     transimage[ii]=np.interp(ximage[ii],transx,trans)
     transimage=transimage.reshape(image.shape)
 
@@ -628,10 +633,6 @@ h[0].header["EXTNAME"]="FLAT"
 h[0].header["KERNSIG"]=args.sigma
 h.writeto(args.outfile,clobber=True)
 
-if args.out_median is not None :
-    log.info("writing median image %s ..."%args.out_median)
-    h=pyfits.HDUList([pyfits.PrimaryHDU(image),pyfits.ImageHDU(ivar,name="IVAR")])
-    h.writeto(args.out_median,clobber=True)
 
 log.info("done")
 
