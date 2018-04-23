@@ -6,6 +6,7 @@ import astropy.io.fits as pyfits
 import argparse
 import numpy as np
 import scipy.signal
+import scipy.interpolate
 import specter.psf
 from numpy.polynomial.legendre import legval
 
@@ -355,6 +356,7 @@ parser.add_argument('--divide-mean-transmission', action = 'store_true', help = 
 parser.add_argument('--output-waveimage', type = str , default = None , required = False, help = "save wavelength image for debugging")
 parser.add_argument('--output-ximage', type = str , default = None , required = False, help = "save x image for debugging")
 parser.add_argument('--output-specimage', type = str , default = None , required = False, help = "save single spectrum image for debugging")
+parser.add_argument('--output-transimage', type = str , default = None , required = False, help = "save single tranmission image for debugging")
 
 args        = parser.parse_args()
 log = get_logger()
@@ -416,82 +418,37 @@ if args.divide_mean_spectrum | args.divide_mean_transmission :
     hdulist.close()
     eps=1. # 1 A
     dydw=(legval(eps*2./(WAVEMAX-WAVEMIN),ytrace[ytrace.shape[0]//2])-legval(0,ytrace[ytrace.shape[0]//2]))/eps
-    #log.info("dydw = {} pixel/A".format(dydw))
-    wstep=200. # A
-    wave=np.linspace(WAVEMIN,WAVEMAX,(WAVEMAX-WAVEMIN)/wstep)
-
-    sw=np.zeros(image.shape).astype(float)
-    sww=np.zeros(image.shape).astype(float)
-    swx=np.zeros(image.shape).astype(float)
-    sk=int(wstep*dydw) # sigma is same size as step
-    hwk=3*sk
-    nk=2*hwk+1
-    xk=np.tile(np.arange(nk)-hwk,(nk,1)).astype(float)
-    yk=xk.T
-    kernel=np.exp(-(xk**2+yk**2)/2./sk**2)
-    kernel/=np.sum(kernel)
-    #log.info("kernel.shape = {}".format(kernel.shape))
-    fibers = np.linspace(0,xtrace.shape[0]-1,10).astype(int)
-
-    for spot_wave in wave :
-        for fiber in fibers : 
-            #log.info("fiber #{} wave #{}A".format(fiber,spot_wave))
-
-            xxc=xtrace[fiber][0]
-
-            xc=int(legval((spot_wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2-1,xtrace[fiber])-xmin)
-            yc=int(legval((spot_wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2-1,ytrace[fiber])-ymin)
-
-            xb=xc-hwk
-            xe=xc+hwk+1
-            yb=yc-hwk
-            ye=yc+hwk+1
-
-
-            if xb>=image.shape[1] : continue
-            if xe<=0 : continue                
-            if yb>=image.shape[0] : continue
-            if ye<=0 : continue
-
-            xbb=0
-            xee=kernel.shape[1]
-            ybb=0
-            yee=kernel.shape[0]   
-
-            if xb<0 : 
-                t = -xb
-                xb  += t
-                xbb += t
-            if xe>image.shape[1] :
-                t = xe-image.shape[1]
-                xe -= t
-                xee -= t
-            if yb<0 : 
-                t = -yb
-                yb  += t
-                ybb += t
-            if ye>image.shape[0] :
-                t = ye-image.shape[0]
-                ye -= t
-                yee -= t
-
-            if xe<=xb : continue
-            if ye<=yb : continue
-            if xee<=xbb : continue
-            if yee<=ybb : continue
-
-            sw[yb:ye,xb:xe]  += kernel[ybb:yee,xbb:xee]
-            sww[yb:ye,xb:xe] += spot_wave*kernel[ybb:yee,xbb:xee]
-            swx[yb:ye,xb:xe] += xxc*kernel[ybb:yee,xbb:xee]
-
-
-    waveimage=sww*(sw>0)/(sw*(sw>0)+(sw<=0))
-    ximage=swx*(sw>0)/(sw*(sw>0)+(sw<=0))        
-
-        
+    wstep=20. # A
+    wave    = np.linspace(WAVEMIN,WAVEMAX,(WAVEMAX-WAVEMIN)/wstep)
+    xslit   = xtrace[:,0] # XCCD of each fiber at wave=(WAVEMIN+WAVEMAX)/2. as coordinate system
+    nfibers = xtrace.shape[0]
+    
+    wave2d=[]
+    xslit2d=[]
+    xccd2d=[]
+    yccd2d=[]
+    for fiber in range(nfibers) : 
+        xccd = legval((wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2-1,xtrace[fiber])-xmin
+        yccd = legval((wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2-1,ytrace[fiber])-ymin
+        wave2d.append(wave)
+        xslit2d.append(np.ones(wave.size)*xslit[fiber])
+        xccd2d.append(xccd)
+        yccd2d.append(yccd)
+    wave2d  = np.hstack(wave2d)
+    xslit2d = np.hstack(xslit2d)
+    xccd2d  = np.hstack(xccd2d)
+    yccd2d  = np.hstack(yccd2d)
+    
+    tck=scipy.interpolate.bisplrep(xccd2d,yccd2d,wave2d)
+    waveimage = scipy.interpolate.bisplev(np.arange(image.shape[1]),np.arange(image.shape[0]), tck).T
+    tck=scipy.interpolate.bisplrep(xccd2d,yccd2d,xslit2d)
+    ximage = scipy.interpolate.bisplev(np.arange(image.shape[1]),np.arange(image.shape[0]), tck).T
+    
     if args.output_ximage is not None :
+        print("writing",args.output_ximage)
         pyfits.writeto(args.output_ximage,ximage,clobber=True)
     if args.output_waveimage is not None :
+        print("writing",args.output_waveimage)
         pyfits.writeto(args.output_waveimage,waveimage,clobber=True)
 
 if args.divide_mean_spectrum :    
@@ -560,6 +517,8 @@ if args.divide_mean_transmission :
     transimage=np.zeros(ximage.shape)
     transimage[ii]=np.interp(ximage[ii],transx,trans)
     transimage=transimage.reshape(image.shape)
+    if args.output_transimage is not None :
+        pyfits.writeto(args.output_transimage,transimage,clobber=True)
 
     log.info("divide image by transmission image")    
     mintrans=0.001*np.max(transimage)
