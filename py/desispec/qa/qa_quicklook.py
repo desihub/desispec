@@ -950,16 +950,16 @@ class CountSpectralBins(MonitoringAlg):
         retval["PARAMS"] = param
         #- get the effective readnoise for the fibers 
         #- readnoise per fib = readnoise per pix * sqrt(box car width)* sqrt(no. of bins in the amp) * binsize/pix size scale
-        nspec=fr.nspec
+        nspec=frame.nspec
         rdnoise_fib=np.zeros(nspec)
         if nspec > 250: #- upto 250 - amp 1 and 3, beyond that 2 and 4
-            rdnoise_fib[:250]=[(fr.meta['RDNOISE1']+fr.meta['RDNOISE3'])*np.sqrt(5.)*np.sqrt(fr.flux.shape[1]/2)*fr.meta['WAVESTEP']/0.5]*250
-            rdnoise_fib[250:]=[(fr.meta['RDNOISE2']+fr.meta['RDNOISE4'])*np.sqrt(5.)*np.sqrt(fr.flux.shape[1]/2)*fr.meta['WAVESTEP']/0.5]*(nspec-250)
+            rdnoise_fib[:250]=[(frame.meta['RDNOISE1']+frame.meta['RDNOISE3'])*np.sqrt(5.)*np.sqrt(frame.flux.shape[1]/2)*frame.meta['WAVESTEP']/0.5]*250
+            rdnoise_fib[250:]=[(frame.meta['RDNOISE2']+frame.meta['RDNOISE4'])*np.sqrt(5.)*np.sqrt(frame.flux.shape[1]/2)*frame.meta['WAVESTEP']/0.5]*(nspec-250)
 
         threshold=param['CUTBINS']*rdnoise_fib
         #- compare the flux sum to threshold
         
-        passfibers=np.where(fr.flux.sum(axis=1)>threshold)[0] 
+        passfibers=np.where(frame.flux.sum(axis=1)>threshold)[0] 
         ngoodfibers=passfibers.shape[0]
         good_fiber=np.array([0]*frame.nspec)
         good_fiber[passfibers]=1 #- assign 1 for good fiber

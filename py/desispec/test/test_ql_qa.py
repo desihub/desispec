@@ -393,11 +393,11 @@ class TestQL_QA(unittest.TestCase):
         qargs["amps"]=True
         qargs["paname"]="abc"
         qargs["qafile"]=self.qafile
-        qargs["qafig"]=self.qafig
+        qargs["qafig"]=None
         qargs["singleqa"]=None
         resl=qa(inp,**qargs)
-        self.assertTrue(np.all(resl["METRICS"]["NBINSMED"]-resl["METRICS"]["NBINSHI"])>=0)
-        self.assertTrue(np.all(resl["METRICS"]["NBINSLO"]-resl["METRICS"]["NBINSMED"])>=0)
+        self.assertTrue(resl["METRICS"]["GOOD_FIBER"].shape[0]==inp.nspec)
+        self.assertTrue((resl["METRICS"]["NGOODFIB"])<=inp.nspec)
 
     def testSkyCont(self):
         qa=QA.Sky_Continuum('skycont',self.config)
