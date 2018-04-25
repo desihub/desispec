@@ -22,19 +22,18 @@ def plot_countspectralbins(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
     
-    binslo=qa_dict["METRICS"]["NBINSLO"]
-    binsmed=qa_dict["METRICS"]["NBINSMED"]
-    binshi=qa_dict["METRICS"]["NBINSHI"]
-
-    cutlo=qa_dict["PARAMS"]["CUTLO"]
-    cuthi=qa_dict["PARAMS"]["CUTHI"]
-    cutmed=qa_dict["PARAMS"]["CUTMED"]
-
-    index=np.arange(binslo.shape[0])
+    thrcut=qa_dict["PARAMS"]["CUTBINS"]
 
     fig=plt.figure()
-    plt.suptitle("Count spectral bins after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-
+    plt.suptitle("Fiber flux check after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    goodfib=qa_dict["METRICS"]["GOOD_FIBER"]
+    ngoodfib=qa_dict["METRICS"]["NGOODFIB"]
+    plt.plot(goodfib)
+    plt.ylim(-0.1,1.1)
+    plt.xlabel('Fiber #',fontsize=10)
+    plt.text(-0.5,1,r"NGOODFIB=%i"%(ngoodfib),ha='left',
+ va='top',fontsize=10,alpha=2)
+    """
     gs=GridSpec(7,6)
     ax1=fig.add_subplot(gs[:,:2])
     ax2=fig.add_subplot(gs[:,2:4])
@@ -60,7 +59,7 @@ def plot_countspectralbins(qa_dict,outfile):
     ax3.tick_params(axis='x',labelsize=10)
     ax3.tick_params(axis='y',labelsize=10)
     ax3.set_xlim(0)
-
+    """
     plt.tight_layout()
     fig.savefig(outfile)
 

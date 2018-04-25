@@ -54,7 +54,7 @@ Algorithms:
             }
         QA:
             CountSpectralBins:
-                PARAMS: {CUTHI: 500, CUTLO: 100, CUTMED: 250, NGOODFIB_NORMAL_RANGE: [490, 500], NGOODFIB_WARN_RANGE: [480, 500]}
+                PARAMS: {CUTBINS: 5, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
     ResolutionFit:
         NBINS: 5
         QA: {
