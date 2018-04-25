@@ -377,11 +377,10 @@ class TestQL_QA(unittest.TestCase):
         qargs["paname"]="abc"
         qargs["singleqa"]=None
         resl=qa(inp,**qargs)
-        self.assertTrue(resl['METRICS']['NPIX'] > resl['METRICS']['NPIXHI'])
         #- test if amp QAs exist
         qargs["amps"] = True
         resl2=qa(inp,**qargs)
-        self.assertTrue(len(resl2['METRICS']['NPIX_AMP'])==4)
+        self.assertTrue(len(resl2['METRICS']['LITFRAC_AMP'])==4)
 
     def testCountSpectralBins(self):
         qa=QA.CountSpectralBins('countbins',self.config)
