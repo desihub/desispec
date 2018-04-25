@@ -70,6 +70,8 @@ class TestQL_QA(unittest.TestCase):
         hdr = dict()
         hdr['CAMERA'] = 'z1'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
+        hdr['PROGRAM'] = 'dark'
+        hdr['EXPTIME'] = 100
 
         #- Dimensions per amp
         ny = self.ny = 500
@@ -177,7 +179,8 @@ class TestQL_QA(unittest.TestCase):
         ivar=np.ones_like(flux)
         resolution_data=np.ones((nspec,13,nwave))
         self.frame=desispec.frame.Frame(wave,flux,ivar,resolution_data=resolution_data,fibermap=self.fibermap)
-        self.frame.meta = dict(CAMERA=self.camera,PROGRAM='dark',FLAVOR='science',NIGHT=self.night,EXPID=self.expid,EXPTIME=100,CCDSEC1=self.ccdsec1,CCDSEC2=self.ccdsec2,CCDSEC3=self.ccdsec3,CCDSEC4=self.ccdsec4)
+        self.frame.meta =  hdr
+        self.frame.meta['WAVESTEP']=0.5
         desispec.io.write_frame(self.framefile, self.frame)
 
         #- make a skymodel

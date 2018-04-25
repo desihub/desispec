@@ -957,8 +957,7 @@ class CountSpectralBins(MonitoringAlg):
             rdnoise_fib[250:]=[(frame.meta['RDNOISE2']+frame.meta['RDNOISE4'])*np.sqrt(5.)*np.sqrt(frame.flux.shape[1]/2)*frame.meta['WAVESTEP']/0.5]*(nspec-250)
         else:
             rdnoise_fib=[(frame.meta['RDNOISE1']+frame.meta['RDNOISE3'])*np.sqrt(5.)*np.sqrt(frame.flux.shape[1]/2)*frame.meta['WAVESTEP']/0.5]*nspec
-
-        threshold=param['CUTBINS']*rdnoise_fib
+        threshold=[param['CUTBINS']*ii for ii in rdnoise_fib]
         #- compare the flux sum to threshold
         
         passfibers=np.where(frame.flux.sum(axis=1)>threshold)[0] 
