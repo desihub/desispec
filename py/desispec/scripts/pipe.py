@@ -851,7 +851,7 @@ Where supported commands are:
             if tt in ttypes:
                 tasktypes.append(tt)
 
-        if machprops is not None:
+        if (machprops is not None) and (not args.pack):
             if len(tasktypes) > machprops["submitlimit"]:
                 print("Queue {} on machine {} limited to {} jobs."\
                     .format(args.nersc_queue, args.nersc,
