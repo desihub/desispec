@@ -417,21 +417,22 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     return ret
 
 
-def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
+def batch_shell(tasks_by_type, outroot, logroot, mpirun="", mpiprocs=1,
     openmp=1, db=None):
-    """Generate slurm script(s) to process a list of tasks.
+    """Generate slurm script(s) to process lists of tasks.
 
-    Given a list of tasks and some constraints about the machine,
-    run time, etc, generate shell scripts.
+    Given sets of task lists, generate a script that process each in order.
+
+    Args:
+        tasks_by_type (OrderedDict): Ordered dictionary of the tasks for each
+            type to be written to a single job script.
+        outroot (str): root output script name.
+        logroot (str):
 
     """
     from .tasks.base import task_classes, task_type
 
-    if len(tasklist) == 0:
-        raise RuntimeError("List of tasks is empty")
-
     # Get the location of the setup script from the production root.
-
     proddir = os.path.abspath(io.specprod_root())
     desisetup = os.path.abspath(os.path.join(proddir, "setup.sh"))
 
@@ -439,16 +440,21 @@ def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
     if db is None:
         dbstr = "--nodb"
 
-    taskfile = "{}.tasks".format(outroot)
-    task_write(taskfile, tasklist)
+    coms = list()
 
-    coms = None
-    if mpiprocs > 1:
-        coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
-            .format(tasktype, taskfile, dbstr) ]
-    else:
-        coms = [ "desi_pipe_exec --tasktype {} --taskfile {} {}"\
-            .format(tasktype, taskfile, dbstr) ]
+    for t, tasklist in tasks_by_type.items():
+        if len(tasklist) == 0:
+            raise RuntimeError("{} task list is empty".format(t))
+
+        taskfile = "{}_{}.tasks".format(outroot)
+        task_write(taskfile, tasklist)
+
+        if mpiprocs > 1:
+            coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
+                .format(t, taskfile, dbstr) ]
+        else:
+            coms = [ "desi_pipe_exec --tasktype {} --taskfile {} {}"\
+                .format(t, taskfile, dbstr) ]
 
     outfile = "{}.sh".format(outroot)
 
@@ -458,7 +464,7 @@ def batch_shell(tasktype, tasklist, outroot, logroot, mpirun="", mpiprocs=1,
     return [ outfile ]
 
 
-def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
+def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
     maxtime, maxnodes, nodeprocs=None, openmp=False, multiproc=False, db=None,
     shifterimg=None, debug=False):
     """Generate slurm script(s) to process a list of tasks.
@@ -466,21 +472,33 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
     Given a list of tasks and some constraints about the machine,
     run time, etc, generate slurm scripts for use at NERSC.
 
+    tasks_by_types (OrderedDict): Ordered dictionary of the tasks for each
+        type to be written to a single job script.
+
     """
     from .tasks.base import task_classes, task_type
 
-    if len(tasklist) == 0:
-        raise RuntimeError("List of tasks is empty")
-
     # Get the location of the setup script from the production root.
-
     proddir = os.path.abspath(io.specprod_root())
     desisetup = os.path.abspath(os.path.join(proddir, "setup.sh"))
 
-    # Compute job size.
+    joblist = dict()
 
-    joblist = nersc_job_size(tasktype, tasklist, machine, queue, maxtime,
-        maxnodes, nodeprocs=nodeprocs)
+    # How many pipeline steps are we trying to pack?
+    npacked = len(tasks_by_type)
+
+    for t, tasklist in tasks_by_type.items():
+        if len(tasklist) == 0:
+            raise RuntimeError("{} task list is empty".format(t))
+        # Compute job size for this task type
+        joblist[t] = nersc_job_size(t, tasklist, machine, queue, maxtime,
+            maxnodes, nodeprocs=nodeprocs)
+        # If we are packing multiple pipeline steps, but one of those steps
+        # is already too large to fit within queue constraints, then this
+        # makes no sense.
+        if (len(joblist[t]) > 1) and (npacked > 1):
+            raise RuntimeError("Cannot batch multiple pipeline steps, "
+                               "each with multiple jobs")
 
     dbstr = ""
     if db is None:
@@ -488,28 +506,65 @@ def batch_nersc(tasktype, tasklist, outroot, logroot, jobname, machine, queue,
 
     scriptfiles = list()
 
-    jindx = 0
-    suffix = True
-    if len(joblist) == 1:
-        suffix = False
-    for (nodes, runtime, tasks) in joblist:
-        joblogroot = None
-        joboutroot = None
-        if suffix:
-            joblogroot = "{}_{}".format(logroot, jindx)
-            joboutroot = "{}_{}".format(outroot, jindx)
-        else:
-            joblogroot = logroot
-            joboutroot = outroot
-        taskfile = "{}.tasks".format(joboutroot)
-        task_write(taskfile, tasks)
-        coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
-            .format(tasktype, taskfile, dbstr) ]
-        outfile = "{}.slurm".format(joboutroot)
-        nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine, queue,
-            nodes, nodeprocs, runtime, openmp=openmp, multiproc=multiproc,
-            shifterimg=shifterimg, debug=debug)
+    if npacked == 1:
+        # We have a single pipeline step which might be split into multiple
+        # job scripts.
+        jindx = 0
+        suffix = True
+        if len(joblist) == 1:
+            suffix = False
+        tasktype = tasks_by_type.keys()[0]
+        for (nodes, runtime, tasks) in joblist[tasktype]:
+            joblogroot = None
+            joboutroot = None
+            if suffix:
+                joblogroot = "{}_{}".format(logroot, jindx)
+                joboutroot = "{}_{}".format(outroot, jindx)
+            else:
+                joblogroot = logroot
+                joboutroot = outroot
+            taskfile = "{}.tasks".format(joboutroot)
+            task_write(taskfile, tasks)
+            coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
+                .format(tasktype, taskfile, dbstr) ]
+            outfile = "{}.slurm".format(joboutroot)
+            nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine,
+                      queue, nodes, nodeprocs, runtime, openmp=openmp,
+                      multiproc=multiproc, shifterimg=shifterimg, debug=debug)
+            scriptfiles.append(outfile)
+            jindx += 1
+
+    else:
+        # We are packing multiple pipeline steps into a *single* job script.
+        # We have already verified that each step fits within the machine
+        # and queue constraints.
+
+        # We use the largest job size.
+        fullnodes = 0
+        fullruntime = 0
+        for t in tasks_by_type.keys():
+            for (nodes, runtime, tasks) in joblist[t]:
+                if nodes > fullnodes:
+                    fullnodes = nodes
+                fullruntime += runtime
+
+        # Verify that this total does not exceed the machine limits
+        hostprops = nersc_machine(machine, queue)
+        if fullruntime > hostprops["maxtime"]:
+            raise RuntimeError("Packed pipeline jobs exceed time limit")
+
+        coms = list()
+        for t, tasklist in tasks_by_type.items():
+            (nodes, runtime, tasks) = joblist[t][0]:
+            taskfile = "{}_{}.tasks".format(outroot, t)
+            task_write(taskfile, tasks)
+            coms.append("desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
+                .format(t, taskfile, dbstr))
+
+        outfile = "{}.slurm".format(outroot)
+        nersc_job(jobname, outfile, logroot, desisetup, coms, machine,
+                  queue, fullnodes, nodeprocs, fullruntime, openmp=openmp,
+                  multiproc=multiproc, shifterimg=shifterimg, debug=debug)
         scriptfiles.append(outfile)
-        jindx += 1
 
     return scriptfiles
