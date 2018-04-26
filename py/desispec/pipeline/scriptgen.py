@@ -180,9 +180,9 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         f.write("#SBATCH --nodes={}\n".format(totalnodes))
         f.write("#SBATCH --time={}\n".format(timestr))
         f.write("#SBATCH --job-name={}\n".format(jobname))
-        f.write("#SBATCH --output={}_%j.log\n".format(logroot))
+        f.write("#SBATCH --output={}_%j.log\n\n".format(logroot))
 
-        f.write("echo Starting slurm script at `date`\n\n")
+        f.write("echo Starting slurm script at ${now}\n\n")
         f.write("source {}\n\n".format(desisetup))
 
         f.write("# Force the script to exit on errors from commands\n")
@@ -244,7 +244,7 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
             f.write("  app=${ex}\n")
             f.write("fi\n")
             f.write("echo calling {} at `date`\n\n".format(executable))
-            f.write("export STARTTIME=`date +%Y%m%d-%H:%M:%S`\n")
+            f.write("export STARTTIME=`date +%Y%m%d-%H%M%S`\n")
             f.write("echo ${{run}} ${{app}} {}\n".format(" ".join(comlist)))
             f.write("time ${{run}} ${{app}} {} >>${{log}} 2>&1".format(" ".join(comlist)))
             if multisrun:
@@ -513,7 +513,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
         suffix = True
         if len(joblist) == 1:
             suffix = False
-        tasktype = tasks_by_type.keys()[0]
+        tasktype = list(tasks_by_type.keys())[0]
         for (nodes, runtime, tasks) in joblist[tasktype]:
             joblogroot = None
             joboutroot = None
@@ -555,7 +555,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
 
         coms = list()
         for t, tasklist in tasks_by_type.items():
-            (nodes, runtime, tasks) = joblist[t][0]:
+            (nodes, runtime, tasks) = joblist[t][0]
             taskfile = "{}_{}.tasks".format(outroot, t)
             task_write(taskfile, tasks)
             coms.append("desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\

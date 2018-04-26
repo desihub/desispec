@@ -15,6 +15,8 @@ import os
 import argparse
 import re
 import glob
+from collections import OrderedDict
+
 import subprocess
 import numpy as np
 
@@ -605,12 +607,16 @@ Where supported commands are:
 
 
     def _gen_scripts(self, tasks_by_type, nodb, args):
+        ttypes = list(tasks_by_type.keys())
+        jobname = ttypes[0]
+        if len(ttypes) > 1:
+            jobname = "{}-{}".format(ttypes[0], ttypes[-1])
 
         proddir = os.path.abspath(io.specprod_root())
 
         import datetime
         now = datetime.datetime.now()
-        outtaskdir = "{}_{:%Y%m%d-%H%M%S}".format(tasktype, now)
+        outtaskdir = "{}_{:%Y%m%d-%H%M%S}".format(jobname, now)
 
         if args.outdir is None:
             outdir = os.path.join(proddir, io.get_pipe_rundir(),
@@ -652,11 +658,6 @@ Where supported commands are:
                 hostprops = pipe.scriptgen.nersc_machine(args.nersc,
                     args.nersc_queue)
                 ppn = hostprops["nodecores"]
-
-            ttypes = list(tasks_by_type.keys())
-            jobname = ttypes[0]
-            if len(ttypes > 1):
-                jobname = "{}-{}".format(ttypes[0], ttypes[-1])
 
             scripts = pipe.scriptgen.batch_nersc(tasks_by_type,
                 outscript, outlog, jobname, args.nersc, args.nersc_queue,
@@ -740,12 +741,12 @@ Where supported commands are:
             "given, create shell script(s) that optionally uses mpirun.",
             usage="desi_pipe run [options] (use --help for details)")
 
-        parser.add_argument("--tasktype", required=True, default=None,
-            help="task type ({})".format(availtypes))
-
         parser.add_argument("--taskfile", required=False, default=None,
-            help="read tasks from this file (if not specified, read from "
-            "STDIN)")
+            help="Read tasks from this file (if not specified, read from "
+            "STDIN).  Tasks of all types will be packed into a single job!")
+
+        parser.add_argument("--nosubmitted", required=False, default=False,
+            action="store_true", help="Skip all tasks flagged as submitted")
 
         parser.add_argument("--depjobs", required=False, default=None,
             help="comma separated list of slurm job IDs to specify as "
@@ -756,23 +757,33 @@ Where supported commands are:
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
 
-        parser.add_argument("--db-postgres-user", type=str, required=False,
-            default="desidev_ro", help="If using postgres, connect as this "
-            "user for read-only access")
-
         args = parser.parse_args(sys.argv[2:])
 
         tasks = pipe.prod.task_read(args.taskfile)
 
         if len(tasks) > 0:
             tasks_by_type = pipe.db.task_sort(tasks)
+            tasktypes = list(tasks_by_type.keys())
+            # We are packing everything into one job
             scripts = self._gen_scripts(tasks_by_type, args.nodb, args)
+
             deps = None
             slurm = False
             if args.nersc is not None:
                 slurm = True
             if args.depjobs is not None:
                 deps = args.depjobs.split(',')
+
+            # Run the jobs
+            if not args.nodb:
+                # We can use the DB, mark tasks as submitted.
+                if slurm:
+                    dbpath = io.get_pipe_database()
+                    db = pipe.load_db(dbpath, mode="w")
+                    for tt in tasktypes:
+                        if (tt != "spectra") and (tt != "redshift"):
+                            db.set_submitted_type(tt, tasks_by_type[tt])
+
             jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
             if len(jobids) > 0:
                 print(",".join(jobids))
@@ -887,16 +898,16 @@ Where supported commands are:
         else:
             # Generate individual scripts
             tscripts = dict()
-            for tt, tasks in tasks_by_type:
+            for tt in tasktypes:
                 onetype = OrderedDict()
-                onetype[tt] = tasks
+                onetype[tt] = tasks_by_type[tt]
                 tscripts[tt] = self._gen_scripts(onetype, False, args)
 
         # Run the jobs
         if slurm:
-            for tt, tasks in tasks_by_type:
+            for tt in tasktypes:
                 if (tt != "spectra") and (tt != "redshift"):
-                    db.set_submitted_type(tt, tasks)
+                    db.set_submitted_type(tt, tasks_by_type[tt])
 
         outdeps = None
         if args.pack:
@@ -905,7 +916,7 @@ Where supported commands are:
         else:
             # Loop over task types submitting jobs and tracking dependencies.
             for tt in tasktypes:
-                outdeps = self._run_scripts(scripts, deps=indeps,
+                outdeps = self._run_scripts(tscripts[tt], deps=indeps,
                     slurm=slurm)
                 if len(outdeps) > 0:
                     indeps = outdeps

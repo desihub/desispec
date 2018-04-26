@@ -15,7 +15,7 @@ from . import tasks
 from .defs import (task_states, prod_options_name,
     task_state_to_int, task_int_to_state)
 
-from .db import (task_types, DataBaseSqlite, DataBasePostgres, check_tasks,
+from .db import (all_task_types, DataBaseSqlite, DataBasePostgres, check_tasks,
     load_db)
 
 from .prod import (update_prod, load_prod)
