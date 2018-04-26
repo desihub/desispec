@@ -124,6 +124,7 @@ def main(args=None):
 
     if args.outdir is None:
         args.outdir = os.getcwd()
+        log.warning('--outdir not specified; using {}'.format(args.outdir))
 
     ccd_calibration_filename = None
 
