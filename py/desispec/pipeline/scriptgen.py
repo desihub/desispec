@@ -182,7 +182,7 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         f.write("#SBATCH --job-name={}\n".format(jobname))
         f.write("#SBATCH --output={}_%j.log\n\n".format(logroot))
 
-        f.write("echo Starting slurm script at ${now}\n\n")
+        f.write("echo Starting slurm script at `date`\n\n")
         f.write("source {}\n\n".format(desisetup))
 
         f.write("# Force the script to exit on errors from commands\n")
@@ -419,15 +419,22 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
 def batch_shell(tasks_by_type, outroot, logroot, mpirun="", mpiprocs=1,
     openmp=1, db=None):
-    """Generate slurm script(s) to process lists of tasks.
+    """Generate bash script(s) to process lists of tasks.
 
-    Given sets of task lists, generate a script that process each in order.
+    Given sets of task lists, generate a script that processes each in order.
 
     Args:
         tasks_by_type (OrderedDict): Ordered dictionary of the tasks for each
             type to be written to a single job script.
         outroot (str): root output script name.
-        logroot (str):
+        logroot (str): root output log name.
+        mpirun (str): optional command to use for launching MPI programs.
+        mpiprocs (int): if mpirun is specified, use this number of processes.
+        openmp (int): value to set for OMP_NUM_THREADS.
+        db (DataBase): the pipeline database handle.
+
+    Returns:
+        (list): list of generated script files.
 
     """
     from .tasks.base import task_classes, task_type
@@ -467,13 +474,31 @@ def batch_shell(tasks_by_type, outroot, logroot, mpirun="", mpiprocs=1,
 def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
     maxtime, maxnodes, nodeprocs=None, openmp=False, multiproc=False, db=None,
     shifterimg=None, debug=False):
-    """Generate slurm script(s) to process a list of tasks.
+    """Generate slurm script(s) to process lists of tasks.
 
-    Given a list of tasks and some constraints about the machine,
-    run time, etc, generate slurm scripts for use at NERSC.
+    Given sets of task lists and constraints about the machine, generate slurm
+    scripts for use at NERSC.
 
-    tasks_by_types (OrderedDict): Ordered dictionary of the tasks for each
-        type to be written to a single job script.
+    Args:
+        tasks_by_type (OrderedDict): Ordered dictionary of the tasks for each
+            type to be written to a single job script.
+        outroot (str): root output script name.
+        logroot (str): root output log name.
+        jobname (str): the name of the job.
+        machine (str): the NERSC machine name.
+        queue (str): the name of the queue
+        maxtime (int): the maximum run time in minutes.
+        maxnodes (int): the maximum number of nodes to use.
+        nodeprocs (int): the number of processes to use per node.
+        openmp (bool): if True, set OMP_NUM_THREADS to the correct value.
+        multiproc (bool): if True, use OMP_NUM_THREADS=1 and disable core
+            binding of processes.
+        db (DataBase): the pipeline database handle.
+        shifter (str): the name of the shifter image to use.
+        debug (bool): if True, set DESI log level to DEBUG in the script.
+
+    Returns:
+        (list): list of generated slurm files.
 
     """
     from .tasks.base import task_classes, task_type
