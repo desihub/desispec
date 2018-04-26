@@ -98,16 +98,27 @@ def integration_test(night=None, nspec=5, clobber=False):
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim newexp failed for {} exposure {}'.format(program, expid))
 
-        cmd = "pixsim --preproc --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, **params)
+        cmd = "pixsim --nspec {nspec} --night {night} --expid {expid}".format(expid=expid, **params)
         inputs = [fibermap, simspec]
-        outputs = list()
-        outputs.append(fibermap.replace('fibermap-', 'simpix-'))
-        for camera in cameras:
-            pixfile = io.findfile('preproc', night, expid, camera)
-            outputs.append(pixfile)
-            # outputs.append(os.path.join(os.path.dirname(pixfile), os.path.basename(pixfile).replace('pix-', 'simpix-')))
+        outputs = [fibermap.replace('fibermap-', 'simpix-'), ]
         if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
             raise RuntimeError('pixsim failed for {} exposure {}'.format(program, expid))
+
+    #-----
+    #- Preproc
+
+    for expid, program in enumerate(programs):
+        rawfile = io.findfile('desi', night, expid)
+        outdir = os.path.dirname(io.findfile('preproc', night, expid, 'b0'))
+        cmd = "desi_preproc --infile {} --outdir {}".format(rawfile, outdir)
+
+        inputs = [rawfile,]
+        outputs = list()
+        for camera in cameras:
+            outputs.append(io.findfile('preproc', night, expid, camera))
+
+        if runcmd(cmd, inputs=inputs, outputs=outputs, clobber=clobber) != 0:
+            raise RuntimeError('preproc failed for expid {}'.format(expid))
 
     #-----
     #- Extract
