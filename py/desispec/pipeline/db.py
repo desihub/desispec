@@ -72,7 +72,7 @@ def task_sort(tasks):
     return ret
 
 
-def all_tasks(night, nside):
+def all_tasks(night, nside, expid=None):
     """Get all possible tasks for a single night.
 
     This uses the filesystem to query the raw data for a particular night and
@@ -83,6 +83,7 @@ def all_tasks(night, nside):
     Args:
         night (str): The night to scan for tasks.
         nside (int): The HEALPix NSIDE value to use.
+        expid (int): Only get tasks for this single exposure.
 
     Returns:
         dict: a dictionary whose keys are the task types and where each value
@@ -96,7 +97,7 @@ def all_tasks(night, nside):
 
     log.debug("io.get_exposures night={}".format(night))
 
-    expid = io.get_exposures(night, raw=True)
+    expids = io.get_exposures(night, raw=True)
 
     full = dict()
     for t in all_task_types():
@@ -104,7 +105,13 @@ def all_tasks(night, nside):
 
     healpix_frames = []
 
-    for ex in sorted(expid):
+    if expid is not None:
+        if expid not in expids:
+            raise RuntimeError("exposure ID {} not valid for night {}"\
+                               .format(expid, night))
+        expids = [ expid ]
+
+    for ex in sorted(expids):
 
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
@@ -180,7 +187,9 @@ def all_tasks(night, nside):
         full["rawdata"].append(rdprops)
 
         # Add the preprocessed pixel files
-        for band in ['b', 'r', 'z']: # need to open the rawdat file to see how many spectros and cameras are there
+        for band in ['b', 'r', 'z']:
+            # need to open the rawdata file to see how many spectros
+            # and cameras are there
             for spec in np.unique( fmdata["SPECTROID"] ) :
                 pixprops = dict()
                 pixprops["night"] = int(night)
@@ -569,7 +578,7 @@ class DataBase:
         return
 
 
-    def update(self, night, nside):
+    def update(self, night, nside, expid=None):
         """Update DB based on raw data.
 
         This will use the usual io.meta functions to find raw exposures.  For
@@ -578,14 +587,15 @@ class DataBase:
 
         Args:
             night (str): The night to scan for updates.
-
             nside (int): The current NSIDE value used for pixel grouping.
+            expid (int): Only update the DB for this exposure.
+
         """
         from .tasks.base import task_classes, task_type
 
         log = get_logger()
 
-        alltasks , healpix_frames = all_tasks(night, nside)
+        alltasks , healpix_frames = all_tasks(night, nside, expid=expid)
 
         with self.cursor() as cur:
             # insert or ignore all healpix_frames
@@ -752,7 +762,7 @@ class DataBase:
                         set_hpx_frame_1(row, spec_name, red_name, cur)
 
         # Update ready state of tasks
-        self.getready()
+        self.getready(night)
 
         return
 
@@ -792,13 +802,18 @@ class DataBase:
             st = [ (x, "waiting") for x in tasks_running[tt] ]
             self.set_states_type(tt, st)
 
-        self.getready()
+        nights = io.get_nights()
+        for nt in nights:
+            self.getready(nt)
 
         return
 
 
-    def getready(self):
+    def getready(self, night):
         """Update DB, changing waiting to ready depending on status of dependencies .
+
+        Args:
+            night (str): The night to process.
 
         """
         from .tasks.base import task_classes, task_type
@@ -812,13 +827,15 @@ class DataBase:
         with self.cursor() as cur:
             for tt in ttypes:
                 # for each type of task, get the list of tasks in waiting mode
-                cur.execute('select name from {} where state = {}'.format(tt,task_state_to_int["waiting"]))
+                cur.execute('select name from {} where state = {} and night "
+                            '= {}'.format(tt, task_state_to_int["waiting"],
+                            night))
                 tasks = [ x for (x, ) in cur.fetchall()]
 
                 if len(tasks) > 0:
                     log.debug("checking {} {} tasks ...".format(len(tasks),tt))
                 for tsk in tasks:
-                    task_classes[tt].getready( db=self,name=tsk,cur=cur)
+                    task_classes[tt].getready(db=self, name=tsk, cur=cur)
 
             for tt in [ "spectra" , "redshift" ]:
                 if tt == "spectra":

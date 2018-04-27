@@ -152,7 +152,7 @@ def select_nights(allnights, nightstr):
     return nights
 
 
-def update_prod(nightstr=None, hpxnside=64):
+def update_prod(nightstr=None, hpxnside=64, expid=None):
     """Create or update a production directory tree.
 
     For a given production, create the directory hierarchy and the starting
@@ -164,6 +164,8 @@ def update_prod(nightstr=None, hpxnside=64):
     Args:
         nightstr (str): comma-separated list of regex patterns.
         hpxnside (int): The nside value to use for spectral grouping.
+        expid (int): Only update a single exposure.  If this is specified,
+            then nightstr must contain only a single night.
 
     """
     from .tasks.base import task_classes, task_type
@@ -230,7 +232,7 @@ def update_prod(nightstr=None, hpxnside=64):
     dbpath = io.get_pipe_database()
     db = load_db(dbpath, "w")
 
-    # get list of available nights
+    # Get list of available nights
 
     allnights = []
     nightpat = re.compile(r"\d{8}")
@@ -244,6 +246,9 @@ def update_prod(nightstr=None, hpxnside=64):
     # Select the requested nights
 
     nights = select_nights(allnights, nightstr)
+    if (expid is not None) and (len(nights) > 1):
+        raise RuntimeError("If updating a production for one exposure, only "
+                           "a single night should be specified.")
 
     # Create per-night directories and update the DB for each night.
 
@@ -264,13 +269,18 @@ def update_prod(nightstr=None, hpxnside=64):
         if not os.path.isdir(nscr):
             os.makedirs(nscr)
 
-        db.update(nt, hpxnside)
+        db.update(nt, hpxnside, expid)
 
         # make per-exposure dirs
         exps = None
         with db.cursor() as cur:
-            cur.execute(\
-                "select expid from fibermap where night = {}".format(nt))
+            if expid is None:
+                cur.execute(\
+                    "select expid from fibermap where night = {}".format(nt))
+            else:
+                # This query is essential a check that the expid is valid.
+                cur.execute("select expid from fibermap where night = {} "
+                            "and expid = {}".format(nt, expid))
             exps = [ int(x[0]) for x in cur.fetchall() ]
         for ex in exps:
             fdir = os.path.join(nexpdir, "{:08d}".format(ex))
