@@ -104,19 +104,21 @@ def main(args, comm=None):
 
     (db, opts) = pipe.load_prod("w")
 
+    ntask = len(tasklist)
     ready = None
+    done = None
     failed = None
     if args.nodb:
-        ready, failed = pipe.run_task_list(args.tasktype, tasklist, opts,
+        ready, done, failed = pipe.run_task_list(args.tasktype, tasklist, opts,
                                            comm=comm, db=None)
     else:
-        ready, failed = pipe.run_task_list(args.tasktype, tasklist, opts,
+        ready, done, failed = pipe.run_task_list(args.tasktype, tasklist, opts,
                                            comm=comm, db=db)
 
     t2 = datetime.datetime.now()
 
     if rank == 0:
-        log.info("  {} tasks were ready, and {} failed".format(ready, failed))
+        log.info("  {} tasks already done, {} tasks were ready, and {} failed".format(done, ready, failed))
         dt = t2 - t1
         minutes, seconds = dt.seconds//60, dt.seconds%60
         log.info("Run time: {} min {} sec".format(minutes, seconds))
@@ -125,16 +127,28 @@ def main(args, comm=None):
     if comm is not None:
         comm.barrier()
 
-    # Did we have any ready tasks?
-    if ready == 0:
-        if rank == 0:
-            warnings.warn("No tasks were ready", RuntimeWarning)
-        sys.exit(1)
-
-    # Did all of them fail?
-    if failed == ready:
-        if rank == 0:
-            warnings.warn("All tasks failed", RuntimeWarning)
-        sys.exit(1)
+    # Did we have any ready tasks that were not already done?
+    # Note: if there were no ready tasks, but some were already
+    # done, then we want to exit with a "0" error code.  This will
+    # allow the calling script to continue with other pipeline steps
+    # and / or allow other dependent jobs run.
+    if done == 0:
+        # nothing is done
+        if ready == 0:
+            if rank == 0:
+                warnings.warn("No tasks were ready or done", RuntimeWarning)
+            sys.exit(1)
+        if failed == ready:
+            # all tasks failed
+            if rank == 0:
+                warnings.warn("All tasks that were run failed", RuntimeWarning)
+            sys.exit(1)
+    else:
+        # At least some tasks were done- we return zero so that future
+        # jobs can run.
+        if (ready > 0) and (failed == ready):
+            if rank == 0:
+                warnings.warn("All tasks that were run failed", RuntimeWarning)
+            sys.exit(1)
 
     return

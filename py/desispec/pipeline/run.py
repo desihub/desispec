@@ -163,22 +163,28 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
     # Get the tasks that still need to be done.
 
     runtasks = None
+    ntask = None
+    ndone = None
 
     if rank == 0:
         if force:
             # Run everything
             runtasks = tasklist
+            ntask = len(runtasks)
+            ndone = 0
         else:
             # Actually check which things need to be run.
             states = check_tasks(tasklist, db=db)
             runtasks = [ x for x in tasklist if states[x] == "ready" ]
+            ntask = len(runtasks)
+            ndone = len([ x for x in tasklist if states[x] == "done" ])
 
         log.debug("Number of {} tasks ready to run is {} (total is {})".format(tasktype,len(runtasks),len(tasklist)))
 
     if comm is not None:
         runtasks = comm.bcast(runtasks, root=0)
-
-    ntask = len(runtasks)
+        ntask = comm.bcast(ntask, root=0)
+        ndone = comm.bcast(ndone, root=0)
 
     # Get the weights for each task.  Since this might trigger DB lookups, only
     # the root process does this.
@@ -319,7 +325,7 @@ def run_task_list(tasktype, tasklist, opts, comm=None, db=None, force=False):
 
     log.debug("rank #{} done".format(rank))
 
-    return ntask, failcount
+    return ntask, ndone, failcount
 
 
 def run_task_list_db(tasktype, tasklist, comm=None):
