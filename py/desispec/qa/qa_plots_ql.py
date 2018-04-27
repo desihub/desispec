@@ -25,7 +25,7 @@ def plot_countspectralbins(qa_dict,outfile):
     thrcut=qa_dict["PARAMS"]["CUTBINS"]
 
     fig=plt.figure()
-    plt.suptitle("Fiber flux check after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    plt.suptitle("Fiber level check for flux after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     goodfib=qa_dict["METRICS"]["GOOD_FIBER"]
     ngoodfib=qa_dict["METRICS"]["NGOODFIB"]
     plt.plot(goodfib)
@@ -80,7 +80,7 @@ def plot_countpix(qa_dict,outfile):
     cutthres=qa_dict["PARAMS"]["CUTPIX"]
 
     fig=plt.figure()
-    plt.suptitle("Count pixels after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    plt.suptitle("Fraction of pixels lit after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     #ax1=fig.add_subplot(211)
     #heatmap1=ax1.pcolor(npix_amp.reshape(2,2),cmap=plt.cm.OrRd)
     ##plt.title('Total Pixels > {:d} sigma = {:f}'.format(cutthres,countlo), fontsize=10)
@@ -105,7 +105,7 @@ def plot_countpix(qa_dict,outfile):
     #             )
     ax2=fig.add_subplot(111)
     heatmap2=ax2.pcolor(litfrac.reshape(2,2),cmap=plt.cm.OrRd)
-    ax2.set_xlabel("Pixels fraction over {:d} sigma read noise(per Amp)".format(cutthres),fontsize=10)
+    ax2.set_xlabel("Fraction over {:d} sigma read noise(per Amp)".format(cutthres),fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax2.tick_params(axis='y',labelsize=10,labelleft=False)
     ax2.annotate("Amp 1\n{:f}".format(litfrac[0]),
