@@ -15,6 +15,8 @@ import os
 import argparse
 import re
 import glob
+from collections import OrderedDict
+
 import subprocess
 import numpy as np
 
@@ -346,14 +348,14 @@ Where supported commands are:
 
 
     def tasks(self):
-        availtypes = ",".join(pipe.db.task_types())
+        availtypes = ",".join(pipe.db.all_task_types())
 
         parser = argparse.ArgumentParser(description="Get all tasks of a "
             "particular type for one or more nights",
             usage="desi_pipe tasks [options] (use --help for details)")
 
-        parser.add_argument("--tasktype", required=True, default=None,
-            help="task type ({})".format(availtypes))
+        parser.add_argument("--tasktypes", required=True, default=None,
+            help="comma separated list of task types ({})".format(availtypes))
 
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
@@ -391,14 +393,22 @@ Where supported commands are:
         allnights = io.get_nights(strip_path=True)
         nights = pipe.prod.select_nights(allnights, args.nights)
 
-        tasks = self._get_tasks(db, args.tasktype, states, nights)
+        ttypes = args.tasktypes.split(',')
+        tasktypes = list()
+        for tt in pipe.tasks.base.default_task_chain:
+            if tt in ttypes:
+                tasktypes.append(tt)
 
-        if args.nosubmitted:
-            if (args.tasktype != "spectra") and (args.tasktype != "redshift"):
-                sb = db.get_submitted(tasks)
-                tasks = [ x for x in tasks if not sb[x] ]
+        all_tasks = list()
+        for tt in tasktypes:
+            tasks = self._get_tasks(db, tt, states, nights)
+            if args.nosubmitted:
+                if (tt != "spectra") and (tt != "redshift"):
+                    sb = db.get_submitted(tasks)
+                    tasks = [ x for x in tasks if not sb[x] ]
+            all_tasks.extend(tasks)
 
-        pipe.prod.task_write(args.taskfile, tasks)
+        pipe.prod.task_write(args.taskfile, all_tasks)
 
         return
 
@@ -444,7 +454,7 @@ Where supported commands are:
 
 
     def sync(self):
-        availtypes = ",".join(pipe.db.task_types())
+        availtypes = ",".join(pipe.db.all_task_types())
 
         parser = argparse.ArgumentParser(\
             description="Synchronize DB state based on the filesystem.",
@@ -537,15 +547,12 @@ Where supported commands are:
 
 
     def dryrun(self):
-        availtypes = ",".join(pipe.db.task_types())
+        availtypes = ",".join(pipe.db.all_task_types())
 
         parser = argparse.ArgumentParser(description="Print equivalent "
             "command-line jobs that would be run given the tasks and total"
             "number of processes",
             usage="desi_pipe dryrun [options] (use --help for details)")
-
-        parser.add_argument("--tasktype", required=True, default=None,
-            help="task type ({})".format(availtypes))
 
         parser.add_argument("--taskfile", required=False, default=None,
             help="read tasks from this file (if not specified, read from "
@@ -563,6 +570,7 @@ Where supported commands are:
         args = parser.parse_args(sys.argv[2:])
 
         tasks = pipe.prod.task_read(args.taskfile)
+        tasks_by_type = pipe.db.task_sort(tasks)
 
         (db, opts) = pipe.prod.load_prod("r")
         if args.nodb:
@@ -574,8 +582,9 @@ Where supported commands are:
             # Not running at NERSC
             if ppn <= 0:
                 ppn = args.mpi_procs
-            pipe.run.dry_run(args.tasktype, tasks, opts, args.mpi_procs,
-                ppn, db=db, launch="mpirun -n", force=False)
+            for tt, tlist in tasks_by_type.items():
+                pipe.run.dry_run(tt, tlist, opts, args.mpi_procs,
+                    ppn, db=db, launch="mpirun -n", force=False)
         else:
             # Running at NERSC
             hostprops = pipe.scriptgen.nersc_machine(args.nersc,
@@ -583,26 +592,31 @@ Where supported commands are:
             if ppn <= 0:
                 ppn = hostprops["nodecores"]
 
-            joblist = pipe.scriptgen.nersc_job_size(args.tasktype, tasks,
-                args.nersc, args.nersc_queue, args.nersc_maxtime,
-                args.nersc_maxnodes, nodeprocs=ppn, db=db)
+            for tt, tlist in tasks_by_type.items():
+                joblist = pipe.scriptgen.nersc_job_size(tt, tlist,
+                    args.nersc, args.nersc_queue, args.nersc_maxtime,
+                    args.nersc_maxnodes, nodeprocs=ppn, db=db)
 
-            launch="srun -n"
-            for (jobnodes, jobtime, jobtasks) in joblist:
-                jobprocs = jobnodes * ppn
-                pipe.run.dry_run(args.tasktype, jobtasks, opts, jobprocs,
-                    ppn, db=db, launch=launch, force=False)
+                launch="srun -n"
+                for (jobnodes, jobtime, jobtasks) in joblist:
+                    jobprocs = jobnodes * ppn
+                    pipe.run.dry_run(tt, jobtasks, opts, jobprocs,
+                        ppn, db=db, launch=launch, force=False)
 
         return
 
 
-    def _gen_scripts(self, tasktype, tasks, nodb, args):
+    def _gen_scripts(self, tasks_by_type, nodb, args):
+        ttypes = list(tasks_by_type.keys())
+        jobname = ttypes[0]
+        if len(ttypes) > 1:
+            jobname = "{}-{}".format(ttypes[0], ttypes[-1])
 
         proddir = os.path.abspath(io.specprod_root())
 
         import datetime
         now = datetime.datetime.now()
-        outtaskdir = "{}_{:%Y%m%d-%H%M%S}".format(tasktype, now)
+        outtaskdir = "{}_{:%Y%m%d-%H%M%S}".format(jobname, now)
 
         if args.outdir is None:
             outdir = os.path.join(proddir, io.get_pipe_rundir(),
@@ -634,7 +648,7 @@ Where supported commands are:
 
         if args.nersc is None:
             # Not running at NERSC
-            scripts = pipe.scriptgen.batch_shell(tasktype, tasks,
+            scripts = pipe.scriptgen.batch_shell(tasks_by_type,
                 outscript, outlog, mpirun=args.mpi_run,
                 mpiprocs=args.mpi_procs, openmp=1, db=db)
 
@@ -645,8 +659,8 @@ Where supported commands are:
                     args.nersc_queue)
                 ppn = hostprops["nodecores"]
 
-            scripts = pipe.scriptgen.batch_nersc(tasktype, tasks,
-                outscript, outlog, tasktype, args.nersc, args.nersc_queue,
+            scripts = pipe.scriptgen.batch_nersc(tasks_by_type,
+                outscript, outlog, jobname, args.nersc, args.nersc_queue,
                 args.nersc_maxtime, args.nersc_maxnodes, nodeprocs=ppn,
                 openmp=False, multiproc=False, db=db,
                 shifterimg=args.nersc_shifter, debug=args.debug)
@@ -655,16 +669,13 @@ Where supported commands are:
 
 
     def script(self):
-        availtypes = ",".join(pipe.db.task_types())
+        availtypes = ",".join(pipe.db.all_task_types())
 
         parser = argparse.ArgumentParser(description="Create batch script(s) "
             "for the list of tasks.  If the --nersc option is not given, "
             "create shell script(s) that optionally uses mpirun.  Prints"
             " the list of generated scripts to STDOUT.",
             usage="desi_pipe script [options] (use --help for details)")
-
-        parser.add_argument("--tasktype", required=True, default=None,
-            help="task type ({})".format(availtypes))
 
         parser.add_argument("--taskfile", required=False, default=None,
             help="read tasks from this file (if not specified, read from "
@@ -684,7 +695,8 @@ Where supported commands are:
         tasks = pipe.prod.task_read(args.taskfile)
 
         if len(tasks) > 0:
-            scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
+            tasks_by_type = pipe.db.task_sort(tasks)
+            scripts = self._gen_scripts(tasks_by_type, args.nodb, args)
             print(",".join(scripts))
         else:
             import warnings
@@ -722,19 +734,19 @@ Where supported commands are:
 
 
     def run(self):
-        availtypes = ",".join(pipe.db.task_types())
+        availtypes = ",".join(pipe.db.all_task_types())
 
         parser = argparse.ArgumentParser(description="Create and run batch "
             "script(s) for the list of tasks.  If the --nersc option is not "
             "given, create shell script(s) that optionally uses mpirun.",
             usage="desi_pipe run [options] (use --help for details)")
 
-        parser.add_argument("--tasktype", required=True, default=None,
-            help="task type ({})".format(availtypes))
-
         parser.add_argument("--taskfile", required=False, default=None,
-            help="read tasks from this file (if not specified, read from "
-            "STDIN)")
+            help="Read tasks from this file (if not specified, read from "
+            "STDIN).  Tasks of all types will be packed into a single job!")
+
+        parser.add_argument("--nosubmitted", required=False, default=False,
+            action="store_true", help="Skip all tasks flagged as submitted")
 
         parser.add_argument("--depjobs", required=False, default=None,
             help="comma separated list of slurm job IDs to specify as "
@@ -745,22 +757,33 @@ Where supported commands are:
         parser.add_argument("--nodb", required=False, default=False,
             action="store_true", help="Do not use the production database.")
 
-        parser.add_argument("--db-postgres-user", type=str, required=False,
-            default="desidev_ro", help="If using postgres, connect as this "
-            "user for read-only access")
-
         args = parser.parse_args(sys.argv[2:])
 
         tasks = pipe.prod.task_read(args.taskfile)
 
         if len(tasks) > 0:
-            scripts = self._gen_scripts(args.tasktype, tasks, args.nodb, args)
+            tasks_by_type = pipe.db.task_sort(tasks)
+            tasktypes = list(tasks_by_type.keys())
+            # We are packing everything into one job
+            scripts = self._gen_scripts(tasks_by_type, args.nodb, args)
+
             deps = None
             slurm = False
             if args.nersc is not None:
                 slurm = True
             if args.depjobs is not None:
                 deps = args.depjobs.split(',')
+
+            # Run the jobs
+            if not args.nodb:
+                # We can use the DB, mark tasks as submitted.
+                if slurm:
+                    dbpath = io.get_pipe_database()
+                    db = pipe.load_db(dbpath, mode="w")
+                    for tt in tasktypes:
+                        if (tt != "spectra") and (tt != "redshift"):
+                            db.set_submitted_type(tt, tasks_by_type[tt])
+
             jobids = self._run_scripts(scripts, deps=deps, slurm=slurm)
             if len(jobids) > 0:
                 print(",".join(jobids))
@@ -788,6 +811,10 @@ Where supported commands are:
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
             "in these states will be scheduled.")
+
+        parser.add_argument("--pack", required=False, default=False,
+            action="store_true", help="Pack the chain of pipeline steps "
+            "into a single job script.")
 
         parser.add_argument("--nosubmitted", required=False, default=False,
             action="store_true", help="Skip all tasks flagged as submitted")
@@ -824,7 +851,7 @@ Where supported commands are:
             if tt in ttypes:
                 tasktypes.append(tt)
 
-        if machprops is not None:
+        if (machprops is not None) and (not args.pack):
             if len(tasktypes) > machprops["submitlimit"]:
                 print("Queue {} on machine {} limited to {} jobs."\
                     .format(args.nersc_queue, args.nersc,
@@ -847,10 +874,10 @@ Where supported commands are:
         if args.depjobs is not None:
             indeps = args.depjobs.split(',')
 
+        tasks_by_type = OrderedDict()
         for tt in tasktypes:
             # Get the tasks.  We select by state and submitted status.
             tasks = self._get_tasks(db, tt, states, nights)
-
             if args.nosubmitted:
                 if (tt != "spectra") and (tt != "redshift"):
                     sb = db.get_submitted(tasks)
@@ -861,20 +888,40 @@ Where supported commands are:
                 warnings.warn("Input task list for '{}' is empty".format(tt),
                               RuntimeWarning)
                 break
+            tasks_by_type[tt] = tasks
 
-            # Generate the scripts
-            scripts = self._gen_scripts(tt, tasks, False, args)
+        scripts = None
+        tscripts = None
+        if args.pack:
+            # We are packing everything into one job
+            scripts = self._gen_scripts(tasks_by_type, False, args)
+        else:
+            # Generate individual scripts
+            tscripts = dict()
+            for tt in tasktypes:
+                onetype = OrderedDict()
+                onetype[tt] = tasks_by_type[tt]
+                tscripts[tt] = self._gen_scripts(onetype, False, args)
 
-            # Run the jobs
-            if slurm:
+        # Run the jobs
+        if slurm:
+            for tt in tasktypes:
                 if (tt != "spectra") and (tt != "redshift"):
-                    db.set_submitted_type(tt, tasks)
+                    db.set_submitted_type(tt, tasks_by_type[tt])
 
+        outdeps = None
+        if args.pack:
+            # Submit one job
             outdeps = self._run_scripts(scripts, deps=indeps, slurm=slurm)
-            if len(outdeps) > 0:
-                indeps = outdeps
-            else:
-                indeps = None
+        else:
+            # Loop over task types submitting jobs and tracking dependencies.
+            for tt in tasktypes:
+                outdeps = self._run_scripts(tscripts[tt], deps=indeps,
+                    slurm=slurm)
+                if len(outdeps) > 0:
+                    indeps = outdeps
+                else:
+                    indeps = None
 
         if outdeps is not None and len(outdeps) > 0:
             print(",".join(outdeps))
@@ -897,7 +944,7 @@ Where supported commands are:
             dbpath = io.get_pipe_database()
             db = pipe.db.DataBase(dbpath, "r")
 
-        tasktypes = pipe.db.task_types()
+        tasktypes = pipe.db.all_task_types()
 
         states = pipe.db.check_tasks(tasks, db=db)
 

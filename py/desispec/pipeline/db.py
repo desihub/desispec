@@ -29,7 +29,7 @@ import fitsio
 from .defs import (task_states, task_int_to_state, task_state_to_int, task_name_sep)
 
 
-def task_types():
+def all_task_types():
     """Get the list of possible task types that are supported.
 
     Returns:
@@ -41,6 +41,35 @@ def task_types():
     ttypes = ["fibermap", "rawdata"]
     ttypes.extend(tasks.base.default_task_chain)
     return ttypes
+
+
+def task_sort(tasks):
+    """Sort a list of tasks by type.
+
+    This takes a list of arbitrary tasks and sorts them by type.  The result
+    is placed in an ordered dictionary of lists in run order.
+
+    Args:
+        tasks (list): the list of input tasks.
+
+    Returns:
+        (OrderedDict): ordered dictionary of tasks sorted by type.
+
+    """
+    from .tasks.base import task_classes, task_type
+    sort = dict()
+    ttypes = all_task_types()
+    for tp in ttypes:
+        sort[tp] = list()
+
+    for tsk in tasks:
+        sort[task_type(tsk)].append(tsk)
+
+    ret = OrderedDict()
+    for tp in ttypes:
+        if len(sort[tp]) > 0:
+            ret[tp] = sort[tp]
+    return ret
 
 
 def all_tasks(night, nside):
@@ -70,7 +99,7 @@ def all_tasks(night, nside):
     expid = io.get_exposures(night, raw=True)
 
     full = dict()
-    for t in task_types():
+    for t in all_task_types():
         full[t] = list()
 
     healpix_frames = []
@@ -383,6 +412,7 @@ class DataBase:
 
         return state_count
 
+
     def get_states(self, tasks):
         """Efficiently get the state of many tasks at once.
 
@@ -394,24 +424,14 @@ class DataBase:
 
         """
         from .tasks.base import task_classes, task_type
-        # First find the type of each task.
-        ttypes = dict()
-        for tsk in tasks:
-            ttypes[tsk] = task_type(tsk)
 
-        # Sort tasks into types, so that we can build one query per type.
-        taskbytype = dict()
-        for t in task_types():
-            taskbytype[t] = list()
-        for tsk in tasks:
-            taskbytype[ttypes[tsk]].append(tsk)
+        # Sort by type
+        taskbytype = task_sort(tasks)
 
-        # Query the list of tasks of each type
-
+        # Get state of each type
         states = dict()
         for t, tlist in taskbytype.items():
-            if len(tlist) > 0:
-                states.update(self.get_states_type(t, tlist))
+            states.update(self.get_states_type(t, tlist))
 
         return states
 
@@ -462,7 +482,7 @@ class DataBase:
 
         # Sort tasks into types
         taskbytype = dict()
-        for t in task_types():
+        for t in all_task_types():
             taskbytype[t] = list()
         for tsk in tasks:
             taskbytype[ttypes[tsk[0]]].append(tsk)
@@ -486,32 +506,20 @@ class DataBase:
 
         """
         from .tasks.base import task_type
-        # First find the type of each task.
-        ttypes = dict()
-        for tsk in tasks:
-            tt = task_type(tsk)
-            if (tt == "spectra") or (tt == "redshift"):
-                raise RuntimeError("spectra and redshift tasks do not have submitted flag.")
-            ttypes[tsk] = tt
-
-        # Sort tasks into types
-        taskbytype = dict()
-        for t in task_types():
-            taskbytype[t] = list()
-        for tsk in tasks:
-            taskbytype[ttypes[tsk]].append(tsk)
+        # Sort by type
+        taskbytype = task_sort(tasks)
 
         # Process each type
-
         submitted = dict()
         for t, tlist in taskbytype.items():
-            if len(tlist) > 0:
-                namelist = ",".join([ "'{}'".format(x) for x in tlist ])
-                with self.cursor() as cur:
-                    cur.execute(\
-                        'select name, submitted from {} where name in ({})'.format(t, namelist))
-                    sb = cur.fetchall()
-                    submitted.update({ x[0] : x[1] for x in sb })
+            if (t == "spectra") or (t == "redshift"):
+                raise RuntimeError("spectra and redshift tasks do not have submitted flag.")
+            namelist = ",".join([ "'{}'".format(x) for x in tlist ])
+            with self.cursor() as cur:
+                cur.execute(\
+                    'select name, submitted from {} where name in ({})'.format(t, namelist))
+                sb = cur.fetchall()
+                submitted.update({ x[0] : x[1] for x in sb })
         return submitted
 
 
@@ -550,25 +558,14 @@ class DataBase:
 
         """
         from .tasks.base import task_type
-        # First find the type of each task.
-        ttypes = dict()
-        for tsk in tasks:
-            tt = task_type(tsk)
-            if (tt == "spectra") or (tt == "redshift"):
-                raise RuntimeError("spectra and redshift tasks do not have submitted flag.")
-            ttypes[tsk] = tt
-
-        # Sort tasks into types
-        taskbytype = dict()
-        for t in task_types():
-            taskbytype[t] = list()
-        for tsk in tasks:
-            taskbytype[ttypes[tsk]].append(tsk)
+        # Sort by type
+        taskbytype = task_sort(tasks)
 
         # Process each type
         for t, tlist in taskbytype.items():
-            if len(tlist) > 0:
-                self.set_submitted_type(tlist, unset=unset)
+            if (t == "spectra") or (t == "redshift"):
+                raise RuntimeError("spectra and redshift tasks do not have submitted flag.")
+            self.set_submitted_type(tlist, unset=unset)
         return
 
 
@@ -604,11 +601,11 @@ class DataBase:
 
             # read what is already in db
             tasks_in_db = {}
-            for tt in task_types():
+            for tt in all_task_types():
                 cur.execute("select name from {}".format(tt))
                 tasks_in_db[tt] = [ x for (x, ) in cur.fetchall()]
 
-            for tt in task_types():
+            for tt in all_task_types():
                 log.debug("updating {} ...".format(tt))
                 for tsk in alltasks[tt]:
                     tname = task_classes[tt].name_join(tsk)
@@ -634,7 +631,7 @@ class DataBase:
 
         # Get the list of task types excluding spectra and redshifts,
         # which will be handled separately.
-        ttypes = [ t for t in task_types() if (t != "spectra") \
+        ttypes = [ t for t in all_task_types() if (t != "spectra") \
             and (t != "redshift") ]
 
         tasks_in_db = None
@@ -776,7 +773,7 @@ class DataBase:
         # Grab existing nightly tasks
         with self.cursor() as cur:
             tasks_running = {}
-            for tt in task_types():
+            for tt in all_task_types():
                 if cleanfailed:
                     cur.execute(\
                         "select name from {} where state = {} or state = {}"\
@@ -791,7 +788,7 @@ class DataBase:
                     if (tt != "spectra") and (tt != "redshift"):
                         cur.execute("update {} set submitted = 0".format(tt))
 
-        for tt in task_types():
+        for tt in all_task_types():
             st = [ (x, "waiting") for x in tasks_running[tt] ]
             self.set_states_type(tt, st)
 
@@ -809,7 +806,7 @@ class DataBase:
 
         # Get the list of task types excluding spectra and redshifts,
         # which will be handled separately.
-        ttypes = [ t for t in task_types() if (t != "spectra") \
+        ttypes = [ t for t in all_task_types() if (t != "spectra") \
             and (t != "redshift") ]
 
         with self.cursor() as cur:
@@ -839,6 +836,7 @@ class DataBase:
 
         return
 
+
     def update_healpix_frame_state(self, props, state, cur):
         if "expid" in props :
             # update from a cframe
@@ -853,6 +851,7 @@ class DataBase:
         else :
             cur.execute(cmd)
         return
+
 
     def select_healpix_frame(self, props):
         res = []
