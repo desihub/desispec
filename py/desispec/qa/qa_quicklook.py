@@ -831,7 +831,8 @@ class Count_Pixels(MonitoringAlg):
             size_thisamp=image.pix[ampboundary].size
             litfrac_thisamp=round(np.float(npix_thisamp)/size_thisamp,2) #- fraction of pixels getting light above threshold
             litfrac_amps.append(litfrac_thisamp)
-        retval["METRICS"]={"NPIX_AMP": npix_amps, 'LITFRAC_AMP': litfrac_amps}
+	#        retval["METRICS"]={"NPIX_AMP",npix_amps,'LITFRAC_AMP': litfrac_amps}
+        retval["METRICS"]={"LITFRAC_AMP": litfrac_amps}	
 
         if qlf:
             qlf_post(retval)
