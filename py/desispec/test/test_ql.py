@@ -99,7 +99,7 @@ class TestQL(unittest.TestCase):
                                      'Preproc':{
                                          'QA':{
                                              'Get_RMS':{'PARAMS':{'RMS_WARN_RANGE':[-1.0,1.0],'RMS_ALARM_RANGE':[-2.0,2.0]}},
-                                             'Count_Pixels':{'PARAMS':{'CUTHI':500,'CUTLO':100,'NPIX_WARN_RANGE':[200.0,500.0],'NPIX_ALARM_RANGE':[50.0,650.0]}}}}}
+                                             'Count_Pixels':{'PARAMS':{'CUTPIX':500,'LITFRAC_NORMAL_RANGE':[200.0,500.0],'LITFRAC_WARN_RANGE':[50.0,650.0]}}}}}
                       }
         with open('{}/test_config.yaml'.format(testDir),'w') as config:
             yaml.dump(configdict,config)
