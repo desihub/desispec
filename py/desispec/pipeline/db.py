@@ -827,9 +827,7 @@ class DataBase:
         with self.cursor() as cur:
             for tt in ttypes:
                 # for each type of task, get the list of tasks in waiting mode
-                cur.execute('select name from {} where state = {} and night "
-                            '= {}'.format(tt, task_state_to_int["waiting"],
-                            night))
+                cur.execute('select name from {} where state = {} and night = {}'.format(tt, task_state_to_int["waiting"], night))
                 tasks = [ x for (x, ) in cur.fetchall()]
 
                 if len(tasks) > 0:

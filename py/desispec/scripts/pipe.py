@@ -331,7 +331,7 @@ Where supported commands are:
 
     def _get_tasks(self, db, tasktype, states, nights, expid=None):
         ntlist = ",".join(nights)
-        if (expid is not None) and (len(ntlist) > 1):
+        if (expid is not None) and (len(nights) > 1):
             raise RuntimeError("Only one night should be specified when "
                                "getting tasks for a single exposure.")
 
@@ -354,8 +354,7 @@ Where supported commands are:
                     cmd = "select name, state from {} where night in ({})"\
                         .format(tasktype, ntlist)
                 else:
-                    cmd = "select name, state from {} where night = {} "
-                        "and expid = {}".format(tasktype, ntlist[0], expid)
+                    cmd = "select name, state from {} where night = {} and expid = {}".format(tasktype, nights[0], expid)
                 cur.execute(cmd)
                 tasks = [ x for (x, y) in cur.fetchall() if \
                           pipe.task_int_to_state[y] in states ]

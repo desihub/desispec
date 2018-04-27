@@ -453,7 +453,7 @@ def batch_shell(tasks_by_type, outroot, logroot, mpirun="", mpiprocs=1,
         if len(tasklist) == 0:
             raise RuntimeError("{} task list is empty".format(t))
 
-        taskfile = "{}_{}.tasks".format(outroot)
+        taskfile = "{}_{}.tasks".format(outroot, t)
         task_write(taskfile, tasklist)
 
         if mpiprocs > 1:
