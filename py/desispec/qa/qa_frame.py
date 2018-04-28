@@ -262,19 +262,24 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
     # SkySub QA
     if qatype == 'qa_data':
         sky_fil = meta.findfile('sky', night=night, camera=camera, expid=expid, specprod_dir=specprod_dir)
-        # Flat field first
-        dummy_fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
+
+        fiberflat_fil = meta.findfile('fiberflatnight', night=night, camera=camera)
+        if not os.path.exists(fiberflat_fil):
+            # Backwards compatibility (for now)
+            dummy_fiberflat_fil = meta.findfile('fiberflat', night=night, camera=camera, expid=expid,
                                             specprod_dir=specprod_dir) # This is dummy
-        path,_ = os.path.split(dummy_fiberflat_fil)
-        fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
-        # Backwards compatibility (for now)
-        if len(fiberflat_files) == 0:
-            path = path.replace('exposures', 'calib2d')
-            path,_ = os.path.split(path) # Remove night
-            fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
-        # Sort and take the first (same as current pipeline)
-        fiberflat_files.sort()
-        fiberflat = read_fiberflat(fiberflat_files[0])
+            path = os.path.dirname(os.path.dirname(dummy_fiberflat_fil))
+            fiberflat_files = glob.glob(os.path.join(path,'*','fiberflat-'+camera+'*.fits'))
+            if len(fiberflat_files) == 0:
+                path = path.replace('exposures', 'calib2d')
+                path,_ = os.path.split(path) # Remove night
+                fiberflat_files = glob.glob(os.path.join(path,'fiberflat-'+camera+'*.fits'))
+
+            # Sort and take the first (same as old pipeline)
+            fiberflat_files.sort()
+            fiberflat_fil = fiberflat_files[0]
+
+        fiberflat = read_fiberflat(fiberflat_fil)
         apply_fiberflat(frame, fiberflat)
         # Load sky model and run
         try:
