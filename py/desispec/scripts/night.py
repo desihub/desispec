@@ -66,7 +66,7 @@ def parse(stage, options=None):
     parser.add_argument("--nersc_queue", required=False, default="regular",
         help="use this NERSC queue (debug | regular)")
 
-    parser.add_argument("--nersc_runtime", required=False, type=int,
+    parser.add_argument("--nersc_maxtime", required=False, type=int,
         default=30, help="Then maximum run time (in minutes) for a single "
         " NERSC job.  If the list of tasks cannot be run in this time,"
         " multiple job scripts will be written")
@@ -206,7 +206,7 @@ def main():
         if os.getenv("NERSC_HOST") == "edison":
             machine = "edison"
         elif os.getenv("NERSC_HOST") == "cori":
-            machine = "cori"
+            machine = "cori-haswell"
         else:
             print("NERSC_HOST environment variable not set, and --nersc "
                 "option not given")
@@ -228,7 +228,7 @@ def main():
             return 1
         chaincom.extend(["--nersc", machine])
         chaincom.extend(["--nersc_queue", args.nersc_queue])
-        chaincom.extend(["--nersc_runtime", "{}".format(args.nersc_runtime)])
+        chaincom.extend(["--nersc_maxtime", "{}".format(args.nersc_maxtime)])
         if args.nersc_shifter is not None:
             chaincom.extend(["--nersc_shifter", args.nersc_shifter])
         if args.procs_per_node > 0:
