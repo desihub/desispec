@@ -97,9 +97,9 @@ class MonitoringAlg:
                 #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
             else: #result is a scalar
                 metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
-            if metrics[QARESULTKEY]==QASeverity.NORMAL:
+            if metrics[QARESULTKEY]=='QASeverity.NORMAL':
                 metrics[QARESULTKEY]='NORMAL'
-            elif metrics[QARESULTKEY]==QASeverity.WARNING:
+            elif metrics[QARESULTKEY]=='QASeverity.WARNING':
                 metrics[QARESULTKEY]='WARNING'
             else:
                 metrics[QARESULTKEY]='ALARM'

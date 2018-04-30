@@ -743,17 +743,17 @@ class Count_Pixels(MonitoringAlg):
         from desispec.image import Image as im
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "NPIX_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NPIX_STATUS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "LITFRAC_AMP"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "LITFRAC_STATUS"
         kwargs["SAMI_RESULTKEY"]=key
         kwargs["SAMI_QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
                 kwargs["REFERENCE"]=r[key]
-        if "NPIX_WARN_RANGE" in parms and "NPIX_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["NPIX_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["NPIX_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        if "LITFRAC_WARN_RANGE" in parms and "LITFRAC_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["LITFRAC_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["LITFRAC_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -810,33 +810,29 @@ class Count_Pixels(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
-                 "CUTLO":3,   # low threshold for number of counts in sigmas
-                 "CUTHI":10,
-                 "NPIX_NORMAL_RANGE":[200.0, 500.0],
-                 "NPIX_WARN_RANGE":[50.0, 650.0]
+                 "CUTPIX":5,   # low threshold for number of counts in sigmas
+                 "LITFRAC_NORMAL_RANGE":[-0.1, 0.1],
+                 "LITFRAC_WARN_RANGE":[-0.2, 0.2]
                  }
 
         retval["PARAMS"] = param
 
-        #- get the counts over entire CCD in counts per second
-        npixlo=qalib.countpix(image.pix,nsig=param['CUTLO']) #- above 3 sigma in counts
-        npixhi=qalib.countpix(image.pix,nsig=param['CUTHI']) #- above 10 sigma in counts
-
         #- get the counts for each amp
-        if amps:
-            npixlo_amps=[]
-            npixhi_amps=[]
-            #- get amp boundary in pixels
-            from desispec.preproc import _parse_sec_keyword
-            for kk in ['1','2','3','4']:
-                ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                npixlo_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTLO'])
-                npixlo_amps.append(npixlo_thisamp)
-                npixhi_thisamp=qalib.countpix(image.pix[ampboundary]/image.meta["EXPTIME"],nsig=param['CUTHI'])
-                npixhi_amps.append(npixhi_thisamp)
-            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi,"NPIX_AMP": npixlo_amps,"NPIXHI_AMP": npixhi_amps}
-        else:
-            retval["METRICS"]={"NPIX":npixlo,"NPIXHI":npixhi}
+        npix_amps=[]
+        litfrac_amps=[]
+
+        #- get amp boundary in pixels
+        from desispec.preproc import _parse_sec_keyword
+        for kk in ['1','2','3','4']:
+            ampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
+            rdnoise_thisamp=image.meta["RDNOISE"+kk]
+            npix_thisamp= image.pix[ampboundary][image.pix[ampboundary] > param['CUTPIX'] * rdnoise_thisamp].size #- no of pixels above threshold
+            npix_amps.append(npix_thisamp)
+            size_thisamp=image.pix[ampboundary].size
+            litfrac_thisamp=round(np.float(npix_thisamp)/size_thisamp,2) #- fraction of pixels getting light above threshold
+            litfrac_amps.append(litfrac_thisamp)
+	#        retval["METRICS"]={"NPIX_AMP",npix_amps,'LITFRAC_AMP': litfrac_amps}
+        retval["METRICS"]={"LITFRAC_AMP": litfrac_amps}	
 
         if qlf:
             qlf_post(retval)
@@ -947,21 +943,28 @@ class CountSpectralBins(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
-                 "CUTLO":100,   # low threshold for number of counts
-                 "CUTMED":250,
-                 "CUTHI":500,
+                 "CUTBINS":5,   #- threshold for number of counts in units of readnoise(scaled to bins)
                  "NGOODFIB_NORMAL_RANGE":[490, 500],
                  "NGOODFIB_WARN_RANGE":[480, 500]
                  }
 
         retval["PARAMS"] = param
+        #- get the effective readnoise for the fibers 
+        #- readnoise per fib = readnoise per pix * sqrt(box car width)* sqrt(no. of bins in the amp) * binsize/pix size scale
+        nspec=frame.nspec
+        rdnoise_fib=np.zeros(nspec)
+        if nspec > 250: #- upto 250 - amp 1 and 3, beyond that 2 and 4
+            rdnoise_fib[:250]=[(frame.meta['RDNOISE1']+frame.meta['RDNOISE3'])*np.sqrt(5.)*np.sqrt(frame.flux.shape[1]/2)*frame.meta['WAVESTEP']/0.5]*250
+            rdnoise_fib[250:]=[(frame.meta['RDNOISE2']+frame.meta['RDNOISE4'])*np.sqrt(5.)*np.sqrt(frame.flux.shape[1]/2)*frame.meta['WAVESTEP']/0.5]*(nspec-250)
+        else:
+            rdnoise_fib=[(frame.meta['RDNOISE1']+frame.meta['RDNOISE3'])*np.sqrt(5.)*np.sqrt(frame.flux.shape[1]/2)*frame.meta['WAVESTEP']/0.5]*nspec
+        threshold=[param['CUTBINS']*ii for ii in rdnoise_fib]
+        #- compare the flux sum to threshold
         
-        countslo=qalib.countbins(frame.flux,threshold=param['CUTLO'])
-        countsmed=qalib.countbins(frame.flux,threshold=param['CUTMED'])
-        countshi=qalib.countbins(frame.flux,threshold=param['CUTHI'])
-
-        goodfibers=np.where(countshi>0)[0] #- fibers with at least one bin higher than cuthi counts
-        ngoodfibers=goodfibers.shape[0]
+        passfibers=np.where(frame.flux.sum(axis=1)>threshold)[0] 
+        ngoodfibers=passfibers.shape[0]
+        good_fiber=np.array([0]*frame.nspec)
+        good_fiber[passfibers]=1 #- assign 1 for good fiber
 
         #- leaving the amps granularity needed for caching as defunct. If needed in future, this needs to be propagated through.
         amps=False
@@ -970,65 +973,14 @@ class CountSpectralBins(MonitoringAlg):
         bottommax=None
         topmin=None
 
-        if amps:
-            #- get the pixel boundary and fiducial boundary in flux-wavelength space
-
-            leftmax,rightmin,bottommax,topmin = qalib.fiducialregion(frame,psf)  
-            fidboundary=qalib.slice_fidboundary(frame,leftmax,rightmin,bottommax,topmin)          
-            countslo_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTLO'])
-            averagelo_amp1=np.mean(countslo_amp1)
-            countsmed_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTMED'])
-            averagemed_amp1=np.mean(countsmed_amp1)
-            countshi_amp1=qalib.countbins(frame.flux[fidboundary[0]],threshold=param['CUTHI'])
-            averagehi_amp1=np.mean(countshi_amp1)
-
-            countslo_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTLO'])
-            averagelo_amp3=np.mean(countslo_amp3)
-            countsmed_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTMED'])
-            averagemed_amp3=np.mean(countsmed_amp3)
-            countshi_amp3=qalib.countbins(frame.flux[fidboundary[2]],threshold=param['CUTHI'])
-            averagehi_amp3=np.mean(countshi_amp3)
-
-
-            if fidboundary[1][0].start is not None: #- to the right bottom of the CCD
-
-                countslo_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTLO'])
-                averagelo_amp2=np.mean(countslo_amp2)
-                countsmed_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTMED'])
-                averagemed_amp2=np.mean(countsmed_amp2)
-                countshi_amp2=qalib.countbins(frame.flux[fidboundary[1]],threshold=param['CUTHI'])
-                averagehi_amp2=np.mean(countshi_amp2)
-
-            else:
-                averagelo_amp2=0.
-                averagemed_amp2=0.
-                averagehi_amp2=0.
-
-            if fidboundary[3][0].start is not None: #- to the right top of the CCD
-
-                countslo_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTLO'])
-                averagelo_amp4=np.mean(countslo_amp4)
-                countsmed_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTMED'])
-                averagemed_amp4=np.mean(countsmed_amp4)
-                countshi_amp4=qalib.countbins(frame.flux[fidboundary[3]],threshold=param['CUTHI'])
-                averagehi_amp4=np.mean(countshi_amp4)
-
-            else:
-                averagelo_amp4=0.
-                averagemed_amp4=0.
-                averagehi_amp4=0.
-
-            averagelo_amps=np.array([averagelo_amp1,averagelo_amp2,averagelo_amp3,averagelo_amp4])
-            averagemed_amps=np.array([averagemed_amp1,averagemed_amp2,averagemed_amp3,averagemed_amp4])
-            averagehi_amps=np.array([averagehi_amp1,averagehi_amp2,averagehi_amp3,averagehi_amp4])
-
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi, "NBINSLO_AMP":averagelo_amps, "NBINSMED_AMP":averagemed_amps,"NBINSHI_AMP":averagehi_amps, "NGOODFIB": ngoodfibers}
+        if amps: #- leaving this for now
+            leftmax,rightmin,bottommax,topmin = qalib.fiducialregion(frame,psf)
             retval["LEFT_MAX_FIBER"]=int(leftmax)
             retval["RIGHT_MIN_FIBER"]=int(rightmin)
             retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
             retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
-        else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "NBINSLO":countslo,"NBINSMED":countsmed,"NBINSHI":countshi,"NGOODFIB": ngoodfibers}
+
+        retval["METRICS"]={"RA":ra,"DEC":dec, "NGOODFIB": ngoodfibers, "GOOD_FIBER": good_fiber}
 
         #- http post if needed
         if qlf:

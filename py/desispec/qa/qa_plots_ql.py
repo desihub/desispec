@@ -22,19 +22,18 @@ def plot_countspectralbins(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
     
-    binslo=qa_dict["METRICS"]["NBINSLO"]
-    binsmed=qa_dict["METRICS"]["NBINSMED"]
-    binshi=qa_dict["METRICS"]["NBINSHI"]
-
-    cutlo=qa_dict["PARAMS"]["CUTLO"]
-    cuthi=qa_dict["PARAMS"]["CUTHI"]
-    cutmed=qa_dict["PARAMS"]["CUTMED"]
-
-    index=np.arange(binslo.shape[0])
+    thrcut=qa_dict["PARAMS"]["CUTBINS"]
 
     fig=plt.figure()
-    plt.suptitle("Count spectral bins after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-
+    plt.suptitle("Fiber level check for flux after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    goodfib=qa_dict["METRICS"]["GOOD_FIBER"]
+    ngoodfib=qa_dict["METRICS"]["NGOODFIB"]
+    plt.plot(goodfib)
+    plt.ylim(-0.1,1.1)
+    plt.xlabel('Fiber #',fontsize=10)
+    plt.text(-0.5,1,r"NGOODFIB=%i"%(ngoodfib),ha='left',
+ va='top',fontsize=10,alpha=2)
+    """
     gs=GridSpec(7,6)
     ax1=fig.add_subplot(gs[:,:2])
     ax2=fig.add_subplot(gs[:,2:4])
@@ -60,7 +59,7 @@ def plot_countspectralbins(qa_dict,outfile):
     ax3.tick_params(axis='x',labelsize=10)
     ax3.tick_params(axis='y',labelsize=10)
     ax3.set_xlim(0)
-
+    """
     plt.tight_layout()
     fig.savefig(outfile)
 
@@ -75,57 +74,53 @@ def plot_countpix(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    countlo=qa_dict["METRICS"]["NPIX"]
-    countlo_amp=np.array(qa_dict["METRICS"]["NPIX_AMP"])
-    counthi=qa_dict["METRICS"]["NPIXHI"]
-    counthi_amp=np.array(qa_dict["METRICS"]["NPIXHI_AMP"])
+    #npix_amp=np.array(qa_dict["METRICS"]["NPIX_AMP"])
+    litfrac=np.array(qa_dict["METRICS"]["LITFRAC_AMP"])
 
-    cutlo=qa_dict["PARAMS"]["CUTLO"]
-    cuthi=qa_dict["PARAMS"]["CUTHI"]
+    cutthres=qa_dict["PARAMS"]["CUTPIX"]
 
     fig=plt.figure()
-    plt.suptitle("Count pixels after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    ax1=fig.add_subplot(211)
-    heatmap1=ax1.pcolor(countlo_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Total Pixels > {:d} sigma = {:f}'.format(cutlo,countlo), fontsize=10)
-    ax1.set_xlabel("# pixels > {:d} sigma (per Amp)".format(cutlo),fontsize=10)
-    ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
-    ax1.tick_params(axis='y',labelsize=10,labelleft=False)
-    ax1.annotate("Amp 1\n{:f}".format(countlo_amp[0]),
-                 xy=(0.4,0.4),
-                 fontsize=10
-                 )
-    ax1.annotate("Amp 2\n{:f}".format(countlo_amp[1]),
-                 xy=(1.4,0.4),
-                 fontsize=10
-                 )
-    ax1.annotate("Amp 3\n{:f}".format(countlo_amp[2]),
-                 xy=(0.4,1.4),
-                 fontsize=10
-                 )
-    ax1.annotate("Amp 4\n{:f}".format(countlo_amp[3]),
-                 xy=(1.4,1.4),
-                 fontsize=10
-                 )
-    ax2=fig.add_subplot(212)
-    heatmap2=ax2.pcolor(counthi_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Total Pixels > {:d} sigma = {:f}'.format(cuthi,counthi), fontsize=10)
-    ax2.set_xlabel("# pixels > {:d} sigma (per Amp)".format(cuthi),fontsize=10)
+    plt.suptitle("Fraction of pixels lit after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
+    #ax1=fig.add_subplot(211)
+    #heatmap1=ax1.pcolor(npix_amp.reshape(2,2),cmap=plt.cm.OrRd)
+    ##plt.title('Total Pixels > {:d} sigma = {:f}'.format(cutthres,countlo), fontsize=10)
+    #ax1.set_xlabel("# pixels > {:d} sigma (per Amp)".format(cutthres),fontsize=10)
+    #ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
+    #ax1.tick_params(axis='y',labelsize=10,labelleft=False)
+    # ax1.annotate("Amp 1\n{:f}".format(npix_amp[0]),
+    #             xy=(0.4,0.4),
+    #             fontsize=10
+    #             )
+    #ax1.annotate("Amp 2\n{:f}".format(npix_amp[1]),
+    #             xy=(1.4,0.4),
+    #             fontsize=10
+    #             )
+    #ax1.annotate("Amp 3\n{:f}".format(npix_amp[2]),
+    #             xy=(0.4,1.4),
+    #             fontsize=10
+    #             )
+    #ax1.annotate("Amp 4\n{:f}".format(npix_amp[3]),
+    #             xy=(1.4,1.4),
+    #             fontsize=10
+    #             )
+    ax2=fig.add_subplot(111)
+    heatmap2=ax2.pcolor(litfrac.reshape(2,2),cmap=plt.cm.OrRd)
+    ax2.set_xlabel("Fraction over {:d} sigma read noise(per Amp)".format(cutthres),fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax2.tick_params(axis='y',labelsize=10,labelleft=False)
-    ax2.annotate("Amp 1\n{:f}".format(counthi_amp[0]),
+    ax2.annotate("Amp 1\n{:f}".format(litfrac[0]),
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 2\n{:f}".format(counthi_amp[1]),
+    ax2.annotate("Amp 2\n{:f}".format(litfrac[1]),
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 3\n{:f}".format(counthi_amp[2]),
+    ax2.annotate("Amp 3\n{:f}".format(litfrac[2]),
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax2.annotate("Amp 4\n{:f}".format(counthi_amp[3]),
+    ax2.annotate("Amp 4\n{:f}".format(litfrac[3]),
                  xy=(1.4,1.4),
                  fontsize=10
                  )

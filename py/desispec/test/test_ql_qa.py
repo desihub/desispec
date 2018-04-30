@@ -70,6 +70,8 @@ class TestQL_QA(unittest.TestCase):
         hdr = dict()
         hdr['CAMERA'] = 'z1'
         hdr['DATE-OBS'] = '2018-09-23T08:17:03.988'
+        hdr['PROGRAM'] = 'dark'
+        hdr['EXPTIME'] = 100
 
         #- Dimensions per amp
         ny = self.ny = 500
@@ -177,7 +179,8 @@ class TestQL_QA(unittest.TestCase):
         ivar=np.ones_like(flux)
         resolution_data=np.ones((nspec,13,nwave))
         self.frame=desispec.frame.Frame(wave,flux,ivar,resolution_data=resolution_data,fibermap=self.fibermap)
-        self.frame.meta = dict(CAMERA=self.camera,PROGRAM='dark',FLAVOR='science',NIGHT=self.night,EXPID=self.expid,EXPTIME=100,CCDSEC1=self.ccdsec1,CCDSEC2=self.ccdsec2,CCDSEC3=self.ccdsec3,CCDSEC4=self.ccdsec4)
+        self.frame.meta =  hdr
+        self.frame.meta['WAVESTEP']=0.5
         desispec.io.write_frame(self.framefile, self.frame)
 
         #- make a skymodel
@@ -377,11 +380,10 @@ class TestQL_QA(unittest.TestCase):
         qargs["paname"]="abc"
         qargs["singleqa"]=None
         resl=qa(inp,**qargs)
-        self.assertTrue(resl['METRICS']['NPIX'] > resl['METRICS']['NPIXHI'])
         #- test if amp QAs exist
         qargs["amps"] = True
         resl2=qa(inp,**qargs)
-        self.assertTrue(len(resl2['METRICS']['NPIX_AMP'])==4)
+        self.assertTrue(len(resl2['METRICS']['LITFRAC_AMP'])==4)
 
     def testCountSpectralBins(self):
         qa=QA.CountSpectralBins('countbins',self.config)
@@ -394,11 +396,11 @@ class TestQL_QA(unittest.TestCase):
         qargs["amps"]=True
         qargs["paname"]="abc"
         qargs["qafile"]=self.qafile
-        qargs["qafig"]=self.qafig
+        qargs["qafig"]=None
         qargs["singleqa"]=None
         resl=qa(inp,**qargs)
-        self.assertTrue(np.all(resl["METRICS"]["NBINSMED"]-resl["METRICS"]["NBINSHI"])>=0)
-        self.assertTrue(np.all(resl["METRICS"]["NBINSLO"]-resl["METRICS"]["NBINSMED"])>=0)
+        self.assertTrue(resl["METRICS"]["GOOD_FIBER"].shape[0]==inp.nspec)
+        self.assertTrue((resl["METRICS"]["NGOODFIB"])<=inp.nspec)
 
     def testSkyCont(self):
         qa=QA.Sky_Continuum('skycont',self.config)
