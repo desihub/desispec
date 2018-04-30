@@ -1013,8 +1013,6 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
             sws2.append(np.sum(tivar[:,ii]*skymodel.flux[:,ii]**2,axis=1))
         
         nlines=len(sw)
-
-        throughput_correction_value = default_throughput_correction*np.ones(frame.flux.shape[0])
         
         for fiber in range(frame.flux.shape[0]) :
 
@@ -1091,12 +1089,12 @@ def subtract_sky(frame, skymodel, throughput_correction = False, default_through
             
             if mcoeferr>0.01 :
                 log.warning("throughput corr error = %5.4f is too large for fiber #%03d, do not apply correction"%(mcoeferr,fiber))
-                continue
-            
-            throughput_correction_value[fiber] = mcoef
+                throughput_correction_value = default_throughput_correction
+            else :
+                throughput_correction_value = mcoef
         
-        # apply this correction to the sky model even if we have not fit it (default can be 1 or 0)
-        skymodel.flux[fiber] *= throughput_correction_value[fiber]
+            # apply this correction to the sky model even if we have not fit it (default can be 1 or 0)
+            skymodel.flux[fiber] *= throughput_correction_value
     
     frame.flux -= skymodel.flux
     frame.ivar = util.combine_ivar(frame.ivar, skymodel.ivar)
