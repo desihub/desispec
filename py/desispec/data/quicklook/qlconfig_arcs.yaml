@@ -4,10 +4,10 @@ Program: dark
 Flavor: arcs
 #- Calibration files: Assuming the same night for psf and fiberflat
 #- PSFExpid used as expid for arc exposures
-PSFExpid: 3891
-PSFType: psf
+PSFExpid: 0
+PSFType: psfboot
 #- FiberflatExpid used as expid for flat exposures
-FiberflatExpid: 3894
+FiberflatExpid: 1
 #- Writeout intermediate files
 WritePixfile: True
 WriteSkyModelfile: False

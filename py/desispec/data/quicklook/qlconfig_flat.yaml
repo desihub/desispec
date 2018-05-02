@@ -4,10 +4,9 @@ Program: dark
 Flavor: flat
 #- Calibration files: Assuming the same night for psf and fiberflat
 PSFType: psfboot
-PSFExpid: 3891
-
+PSFExpid: 0
 #- FiberflatExpid used as expid for flat image files when running calibration
-FiberflatExpid: 3894
+FiberflatExpid: 1
 #- Writeout intermediate files
 WritePixfile: False
 WriteSkyModelfile: False
