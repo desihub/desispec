@@ -56,6 +56,8 @@ def parse(options=None):
     parser.add_argument("--mpi", action="store_true", help="Use MPI for parallelism")
     parser.add_argument("--decorrelate-fibers", action="store_true", help="Not recommended")
     parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
+    parser.add_argument("--psferr", type=float, default=0.1, required=False, 
+                        help="fractional PSF model error used to compute chi2 and mask pixels")
     
     args = None
     if options is None:
@@ -146,7 +148,7 @@ regularize: {regularize}
     results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
                  regularize=args.regularize, ndecorr=args.decorrelate_fibers,
                  bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                 full_output=True, nsubbundles=args.nsubbundles)
+                   full_output=True, nsubbundles=args.nsubbundles,psferr=args.psferr)
     flux = results['flux']
     ivar = results['ivar']
     Rdata = results['resolution_data']
