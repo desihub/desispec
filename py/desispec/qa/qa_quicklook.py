@@ -656,13 +656,7 @@ class Calc_XWSigma(MonitoringAlg):
             peak_upper = peaks[p] + dw
             peak_wave.append(peak_lower)
             peak_wave.append(peak_upper)
-
-        if camera[0] == 'b':
-            npeaks = 3
-        elif camera[0] == 'r':
-            npeaks = 5
-        elif camera[0] == 'z':
-            npeaks = 6
+        npeaks=len(peaks)
 
         if fibermap["OBJTYPE"][0] == 'ARC':
             import desispec.psf
