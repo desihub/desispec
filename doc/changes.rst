@@ -2,7 +2,7 @@
 desispec Change Log
 ===================
 
-0.20.1 (unreleased)
+0.21.0 (unreleased)
 -------------------
 
 * Add ability to load Frame without reading Resolution matrix
@@ -14,12 +14,15 @@ desispec Change Log
 * Better sync of pixel tasks and DB sync bugfixes (PR `#590`_).
 * Improved handling of errors in case of full job failure (PR `#592`_).
 * Allow running multiple task types in a single job (PR `#601`_).
+* Override PSF file psferr to avoid masking bright lines.
+  Requires specter > 0.8.1 (PR `#606`_).
 
 .. _`#585`: https://github.com/desihub/desispec/pull/585
 .. _`#588`: https://github.com/desihub/desispec/pull/588
 .. _`#590`: https://github.com/desihub/desispec/pull/590
 .. _`#592`: https://github.com/desihub/desispec/pull/592
 .. _`#601`: https://github.com/desihub/desispec/pull/601
+.. _`#606`: https://github.com/desihub/desispec/pull/606
 
 0.20.0 (2018-03-29)
 -------------------
