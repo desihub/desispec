@@ -56,8 +56,8 @@ def parse(options=None):
     parser.add_argument("--mpi", action="store_true", help="Use MPI for parallelism")
     parser.add_argument("--decorrelate-fibers", action="store_true", help="Not recommended")
     parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
-    parser.add_argument("--psferr", type=float, default=0.1, required=False, 
-                        help="fractional PSF model error used to compute chi2 and mask pixels")
+    parser.add_argument("--psferr", type=float, default=None, required=False, 
+                        help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
     
     args = None
     if options is None:
