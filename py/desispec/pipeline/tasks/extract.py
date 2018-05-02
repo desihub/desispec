@@ -90,6 +90,7 @@ class TaskExtract(BaseTask):
         opts["wavelength_b"] = "3579.0,5939.0,0.8"
         opts["wavelength_r"] = "5635.0,7731.0,0.8"
         opts["wavelength_z"] = "7445.0,9824.0,0.8"
+        opts["psferr"] = 0.05
         return opts
 
 
