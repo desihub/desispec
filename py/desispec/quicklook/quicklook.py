@@ -386,8 +386,9 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                           specprod_dir=specprod_dir)
 # this will overwrite the file. above function returns same name for different QL executions
 # results will be erased.
-        schemaMerger.writeToFile(destFile)
-        log.info("Wrote merged QA file {}".format(destFile))
+        # Sarah E.: disabled the functionality of writing yamls  
+        #schemaMerger.writeToFile(destFile)
+        #log.info("Wrote merged QA file {}".format(destFile))
         schemaMerger.writeTojsonFile(destFile)
         log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
     if isinstance(inp,tuple):

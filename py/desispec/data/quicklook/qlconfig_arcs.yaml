@@ -4,15 +4,15 @@ Program: dark
 Flavor: arcs
 #- Calibration files: Assuming the same night for psf and fiberflat
 #- PSFExpid used as expid for arc exposures
-PSFExpid: 0
-PSFType: psfboot
+PSFExpid: 3891
+PSFType: psf
 #- FiberflatExpid used as expid for flat exposures
-FiberflatExpid: 1
+FiberflatExpid: 3894
 #- Writeout intermediate files
 WritePixfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
-WriteStaticPlots: False
+WriteStaticPlots: True
 #- Exposure ID for Reference Template
 TemplateExpid: 0
 #- Debuglevel 
@@ -26,14 +26,19 @@ Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
 Pipeline: [Initialize, Preproc, BootCalibration, BoxcarExtract, ResolutionFit]
 Algorithms:
+
     Initialize:
         QA: 
-            Bias_From_Overscan:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+            Check_HDUs:
+                PARAMS: {}
     Preproc:
         QA: 
+            Bias_From_Overscan:
+                PARAMS: { DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+        
             Get_RMS:
-                PARAMS: {NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
+      
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
     BootCalibration:
@@ -59,5 +64,3 @@ Algorithms:
         NBINS: 5
         QA: {
           }
-          
-          

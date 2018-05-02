@@ -266,7 +266,7 @@ def plot_RMS(qa_dict,outfile):
     """
     rms=qa_dict["METRICS"]["RMS"]
     rms_amp=qa_dict["METRICS"]["RMS_AMP"]
-    rms_over=qa_dict["METRICS"]["NOISE_OVER"]
+    #rms_over=qa_dict["METRICS"]["NOISE_OVER"]
     rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
     # arm=qa_dict["ARM"]
     # spectrograph=qa_dict["SPECTROGRAPH"]
@@ -301,7 +301,7 @@ def plot_RMS(qa_dict,outfile):
                  )
     ax2=fig.add_subplot(212)
     heatmap2=ax2.pcolor(rms_over_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('RMS Overscan = {:.4f}'.format(rms_over), fontsize=10)
+    #plt.title('RMS Overscan = {:.4f}'.format(rms_over), fontsize=10)
     ax2.set_xlabel("RMS Overscan per Amp (photon counts)",fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax2.tick_params(axis='y',labelsize=10,labelleft=False)

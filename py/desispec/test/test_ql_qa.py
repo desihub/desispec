@@ -104,7 +104,8 @@ class TestQL_QA(unittest.TestCase):
         offset = {'1':100.0, '2':100.5, '3':50.3, '4':200.4}
         gain = {'1':1.0, '2':1.5, '3':0.8, '4':1.2}
         rdnoise = {'1':2.0, '2':2.2, '3':2.4, '4':2.6}
-        
+        obsrdn = {'1':3.4, '2':3.3, '3':3.6, '4':3.3}
+
         quad = {
             '1': np.s_[0:ny, 0:nx], '2': np.s_[0:ny, nx:nx+nx],
             '3': np.s_[ny:ny+ny, 0:nx], '4': np.s_[ny:ny+ny, nx:nx+nx],
@@ -114,7 +115,8 @@ class TestQL_QA(unittest.TestCase):
 
             hdr['GAIN'+amp] = gain[amp]
             hdr['RDNOISE'+amp] = rdnoise[amp]
-            
+            hdr['OBSRDN'+amp] = obsrdn[amp]
+
             xy = _parse_sec_keyword(hdr['BIASSEC'+amp])
             shape = [xy[0].stop-xy[0].start, xy[1].stop-xy[1].start]
             rawimage[xy] += offset[amp]

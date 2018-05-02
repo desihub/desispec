@@ -4,21 +4,21 @@ Program: dark
 Flavor: science
 #- Calibration files: Assuming the same night for psf and fiberflat
 #- PSFExpid used as expid for arc exposures
-PSFExpid: 0
+PSFExpid: 3891
 PSFType: psf
 #- FiberflatExpid used as expid for flat exposures
-FiberflatExpid: 1
+FiberflatExpid: 3894
 #- Writeout intermediate files
 WritePixfile: False
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
-WriteStaticPlots: False
+WriteStaticPlots: True
 #- Exposure ID for Reference Template
 TemplateExpid: 2
 #- Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file
-UseResolution: False
+UseResolution: True
 #- Heartbeat Period in seconds
 Period: 5.0
 #- Time out in seconds
@@ -28,14 +28,19 @@ Pipeline: [Initialize, Preproc, BoxcarExtract, ApplyFiberFlat_QL, SkySub_QL]
 Algorithms:
     Initialize:
         QA: 
-            Bias_From_Overscan:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+            Check_HDUs:
+                PARAMS: {}
     Preproc:
         QA: 
+            Bias_From_Overscan:
+                PARAMS: { DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+        
             Get_RMS:
-                PARAMS: {NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
+                
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
+
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5578.9],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
@@ -79,4 +84,3 @@ Algorithms:
                 #- Cut SNR residual values outside given range for plotting
                 Sigma_Cut: 2.0
                 PARAMS: {FIDSNR_NORMAL_RANGE: [6.5, 7.5], FIDSNR_WARN_RANGE: [6.0, 8.0], FIDMAG: 22.}
-
