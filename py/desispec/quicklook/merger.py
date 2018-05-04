@@ -74,6 +74,8 @@ def reOrderDict(mergeDict):
              try: dec = [float("%.5f" % m) for m in dec]
              except: dec=None
              
+             
+             
              Camera["GENERAL_INFO"]={"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"DESISPEC_VERSION":desispec_ver,"RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks}   
 
 

@@ -191,17 +191,22 @@ class Check_HDUs(MonitoringAlg):
         if header["EXPID"] != kwargs['expid'] : 
                 raise qlexceptions.ParameterException("EXPOSURE NUMBER DOES NOT MATCH THE ONE IN THE HEADER")
                 EXPNUMstat = "ALARM"
-
-        retval["PARAMS"] = param   
+        
+        param['EXPTIME'] = header["EXPTIME"]
+        param['DESISPEC_VERSION'] = header['DEPVER07']
+        
         
         if header["FLAVOR"] != "science" :
             
-           retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat,'EXPTIME':header["EXPTIME"],'DESISPEC_VERSION':header['DEPVER07']}
+           retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
 
         else :
-           retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat,'EXPTIME':header["EXPTIME"], 'SEEING':header["SEEING"],'AIRMASS':header["AIRMASS"],'DESISPEC_VERSION':header['DEPVER07']}
+           retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
+           param['SEEING'] = header["SEEING"]
+           param['AIRMASS'] = header["AIRMASS"]
 
           
+        retval["PARAMS"] = param   
         
         if 'INHERIT' in header and header['INHERIT']:
             h0 = raw[0].header
