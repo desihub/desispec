@@ -33,10 +33,10 @@ class MonitoringAlg:
         deviation=None
         reskey="RESULT"
         QARESULTKEY="QA_STATUS"
-        if "SAMI_QASTATUSKEY" in cargs:
-            QARESULTKEY=cargs["SAMI_QASTATUSKEY"]
-        if "SAMI_RESULTKEY" in cargs:
-            reskey=cargs["SAMI_RESULTKEY"]
+        if "QASTATUSKEY" in cargs:
+            QARESULTKEY=cargs["QASTATUSKEY"]
+        if "RESULTKEY" in cargs:
+            reskey=cargs["RESULTKEY"]
         if reskey in metrics:
             current=metrics[reskey]
             if "REFERENCE" in cargs:

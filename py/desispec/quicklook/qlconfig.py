@@ -56,7 +56,7 @@ class Config(object):
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
-        self._qaRefKeys={"Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
 
     @property
     def mode(self):
@@ -357,24 +357,28 @@ class Config(object):
         Specify the filenames: yaml and png for the given qa output
         """
         if self.conf["Flavor"] == 'arcs':
-            filemap={'Bias_From_Overscan': 'ql_getbias_arc',
+            filemap={'Check_HDUs':'ql_checkHDUs',
+                     'Bias_From_Overscan': 'ql_getbias_arc',
                      'Get_RMS' : 'ql_getrms_arc',
                      'Count_Pixels': 'ql_countpix_arc',
                      'Calc_XWSigma': 'ql_xwsigma_arc',
                      'CountSpectralBins': 'ql_countbins_arc'
                      }
         elif self.conf["Flavor"] == 'bias':
-            filemap={'Bias_From_Overscan': 'ql_getbias_bias',
+            filemap={'Check_HDUs':'ql_checkHDUs',
+                     'Bias_From_Overscan': 'ql_getbias_bias',
                      'Get_RMS' : 'ql_getrms_bias',
                      'Count_Pixels': 'ql_countpix_bias'
                      }
         elif self.conf["Flavor"] == 'dark':
-            filemap={'Bias_From_Overscan': 'ql_getbias_dark',
+            filemap={'Check_HDUs':'ql_checkHDUs',
+                     'Bias_From_Overscan': 'ql_getbias_dark',
                      'Get_RMS' : 'ql_getrms_dark',
                      'Count_Pixels': 'ql_countpix_dark'
                      }
         else:
-            filemap={'Bias_From_Overscan': 'ql_getbias',
+            filemap={'Check_HDUs':'ql_checkHDUs',
+                     'Bias_From_Overscan': 'ql_getbias',
                      'Get_RMS' : 'ql_getrms',
                      'Count_Pixels': 'ql_countpix',
                      'Calc_XWSigma': 'ql_xwsigma',

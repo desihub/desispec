@@ -28,11 +28,16 @@ Pipeline: [Initialize, Preproc]
 Algorithms:
     Initialize:
         QA: 
-            Bias_From_Overscan:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+
+            Check_HDUs:
+                PARAMS: {}
     Preproc:
         QA: 
+            Bias_From_Overscan:
+                PARAMS: { DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+        
             Get_RMS:
-                PARAMS: {NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
+                
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}

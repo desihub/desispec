@@ -98,35 +98,33 @@ def get_frame(filetype,night,expid,camera,specdir):
 
     return frameobj
 
-class Bias_From_Overscan(MonitoringAlg):
+
+class Check_HDUs(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="BIAS_OVERSCAN"
+            name="CheckHDUs"
         import astropy
         rawtype=astropy.io.fits.hdu.hdulist.HDUList
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "BIAS_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        key=kwargs['refKey'] if 'refKey' in kwargs else ""
+        status=kwargs['statKey'] if 'statKey' in kwargs else "HDU_STATUS"
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
 
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
-        if "BIAS_WARN_RANGE" in parms and "BIAS_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["BIAS_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["BIAS_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
         MonitoringAlg.__init__(self,name,rawtype,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
-
-        if kwargs["singleqa"] == 'Bias_From_Ovescan':
+        
+        if kwargs["singleqa"] == 'Check_HDUs':
             rawfile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=kwargs["rawdir"])
             raw = fits.open(rawfile)
         else:
@@ -164,7 +162,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
         rawimage=raw[camera.upper()].data
         header=raw[camera.upper()].header
-
+        
         retval={}
         retval["EXPID"]= '{0:08d}'.format(header["EXPID"])
         retval["CAMERA"] = camera
@@ -177,100 +175,172 @@ class Bias_From_Overscan(MonitoringAlg):
             retval["PROGRAM"] = header["PROGRAM"]
         retval["NIGHT"] = header["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        #SE: why this was repeated here again? 
+        #rawimage=raw[camera.upper()].data
+        #header=raw[camera.upper()].header
 
-        rawimage=raw[camera.upper()].data
-        header=raw[camera.upper()].header
+        HDUstat = "NORMAL" 
+        EXPNUMstat = "NORMAL"    
+        
+        
+        if camera != header["CAMERA"]:
+                raise qlexceptions.ParameterException("Missing camera "+camera)
+                HDUstat = 'ALARM'
+        
+        if header["EXPID"] != kwargs['expid'] : 
+                raise qlexceptions.ParameterException("EXPOSURE NUMBER DOES NOT MATCH THE ONE IN THE HEADER")
+                EXPNUMstat = "ALARM"
+        
+        
+        param['DESISPEC_VERSION'] = header['DEPVER07']
+        param['EXPTIME'] = header["EXPTIME"]
+        
+        if header["FLAVOR"] != "science" :
+            
+           retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
 
+        else :
+           retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
+           param['SEEING'] = header["SEEING"]
+           param['AIRMASS'] = header["AIRMASS"]
+           
+          
+        retval["PARAMS"] = param   
+        
         if 'INHERIT' in header and header['INHERIT']:
             h0 = raw[0].header
             for key in h0:
                 if key not in header:
                     header[key] = h0[key]
+        
+        return retval
 
-        data=[]
-        row_data_amp1=[]
-        row_data_amp2=[]
-        row_data_amp3=[]
-        row_data_amp4=[]
-        bias_overscan=[]        
-        for kk in ['1','2','3','4']:
-            sel=_parse_sec_keyword(header['BIASSEC'+kk])
-            #- Obtain counts/second in bias region
-            pixdata=rawimage[sel]/header["EXPTIME"]
-            if kk == '1':
-                for i in range(pixdata.shape[0]):
-                    row_amp1=pixdata[i]
-                    row_data_amp1.append(row_amp1)
-            if kk == '2':
-                for i in range(pixdata.shape[0]):
-                    row_amp2=pixdata[i]
-                    row_data_amp2.append(row_amp2)
-            if kk == '3':
-                for i in range(pixdata.shape[0]):
-                    row_amp3=pixdata[i]
-                    row_data_amp3.append(row_amp3)
-            if kk == '4':
-                for i in range(pixdata.shape[0]):
-                    row_amp4=pixdata[i]
-                    row_data_amp4.append(row_amp4)
-            #- Compute statistics of the bias region that only reject
-            #  the 0.5% of smallest and largest values. (from sdssproc) 
-            isort=np.sort(pixdata.ravel())
-            nn=isort.shape[0]
-            bias=np.mean(isort[int(0.005*nn) : int(0.995*nn)])
-            bias_overscan.append(bias)
-            data.append(isort)
+    def get_default_config(self):
+        return {}
 
-        #- Combine data from each row and take average
-        row_data_bottom=[]
-        row_data_top=[]
-        for i in range(len(row_data_amp1)):
-            row_data_lower=np.concatenate((row_data_amp1[i],row_data_amp2[i]))
-            row_data_upper=np.concatenate((row_data_amp3[i],row_data_amp4[i]))
-            row_data_bottom.append(row_data_lower)
-            row_data_top.append(row_data_upper)
-        row_data=np.concatenate((row_data_bottom,row_data_top))
 
-        mean_row=[]
-        for i in range(len(row_data)):
-            mean=np.mean(row_data[i])
-            mean_row.append(mean)
 
-        full_data=np.concatenate((data[0],data[1],data[2],data[3])).ravel()
-        bias=np.mean(bias_overscan)
+
+
+class Bias_From_Overscan(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="BIAS_OVERSCAN"
+        #import astropy
+        #rawtype=astropy.io.fits.hdu.hdulist.HDUList
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        key=kwargs['refKey'] if 'refKey' in kwargs else "BIAS_AMP"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STATUS"
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
+
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
+
+        if "BIAS_WARN_RANGE" in parms and "BIAS_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["BIAS_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["BIAS_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
+
+        MonitoringAlg.__init__(self,name,im,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
+        if kwargs["singleqa"] == 'Bias_From_Ovescan':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+
+            image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+            image.meta = image[0].header
+           
+        else:
+            image=args[0]
+            
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+
+        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
+        else: refmetrics=None
+
+        amps=False
+        if "amps" in kwargs:
+            amps=kwargs["amps"]
+
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig=None
+
+        return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+
+    def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
+
+    
+        retval={}
+        retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
+        retval["PANAME"] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["CAMERA"] = image.meta["CAMERA"]
+        retval["PROGRAM"] = image.meta["PROGRAM"]
+        retval["NIGHT"] = image.meta["NIGHT"]
+        retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["EXPTIME"] = image.meta["EXPTIME"]
+        kwargs=self.config['kwargs']
+
+        if retval["FLAVOR"] == 'arc':
+            pass
+        else:
+            retval["PROGRAM"] = image.meta["PROGRAM"]
+        retval["NIGHT"] = image.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+
+        
+          
+        #header = image.meta
+        if 'INHERIT' in image.meta and image.meta['INHERIT']:
+
+            h0 = image.meta
+            #h0 = header
+            for key in h0:
+                if key not in image.meta:
+                    image.meta[key] = h0[key]
+
+        bias_overscan = [image.meta['OVERSCN1'],image.meta['OVERSCN2'],image.meta['OVERSCN3'],image.meta['OVERSCN4']]
+        
+        bias = np.mean(bias_overscan)
 
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
-                "PERCENTILES":[68.2,95.4,99.7],
+                
                 "BIAS_NORMAL_RANGE":[-1.0, 1.0],
                 "BIAS_WARN_RANGE:":[-2.0, 2.0]
                 }
-
-        #- Calculate upper and lower bounds of 1, 2, and 3 sigma
-        sig1_lo = np.percentile(full_data,50.-(param['PERCENTILES'][0]/2.))
-        sig1_hi = np.percentile(full_data,50.+(param['PERCENTILES'][0]/2.))
-        sig2_lo = np.percentile(full_data,50.-(param['PERCENTILES'][1]/2.))
-        sig2_hi = np.percentile(full_data,50.+(param['PERCENTILES'][1]/2.))
-        sig3_lo = np.percentile(full_data,50.-(param['PERCENTILES'][2]/2.))
-        sig3_hi = np.percentile(full_data,50.+(param['PERCENTILES'][2]/2.))
-
-        #- Find difference between upper and lower sigma bounds
-        diff1sig = sig1_hi - sig1_lo
-        diff2sig = sig2_hi - sig2_lo
-        diff3sig = sig3_hi - sig3_lo
-
-        #- Calculate number of pixels below 5 sigma
-        sig5_value = np.percentile(full_data,3e-5)
-        data5sig = len(np.where(full_data <= sig5_value)[0])
-
         retval["PARAMS"] = param
         
         if amps:
             bias_amps=np.array(bias_overscan)
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
+            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps}
         else:
-            retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
+            #retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
+            retval["METRICS"]={'BIAS':bias}
 
         #- http post if needed
         if qlf:
@@ -290,6 +360,7 @@ class Bias_From_Overscan(MonitoringAlg):
         return {}
 
 
+
 class Get_RMS(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -298,12 +369,14 @@ class Get_RMS(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NOISE_AMP" 
         status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STATUS" 
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
+        
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
                 kwargs["REFERENCE"]=r[key]
+                
         if "NOISE_WARN_RANGE" in parms and "NOISE_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["NOISE_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["NOISE_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
@@ -313,7 +386,7 @@ class Get_RMS(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Get_RMS':
             night = kwargs['night']
@@ -362,54 +435,94 @@ class Get_RMS(MonitoringAlg):
         kwargs=self.config['kwargs']
 
         # return rms values in rms/sqrt(exptime)
-        rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
-
+        #rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
+        rmsccd = np.mean([image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']])
+        
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
+                "PERCENTILES":[68.2,95.4,99.7],
                 "NOISE_NORMAL_RANGE":[-1.0, 1.0],
                 "NOISE_WARN_RANGE":[-2.0, 2.0]
                 }
 
         retval["PARAMS"] = param
 
-        expnum=[]
-        rms_row=[]
-        rms_amps=[]
-        rms_over_amps=[]
-        overscan_values=[]
-        #- get amp/overcan boundary in pixels
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        # SE: this section is moved from BIAS_FROM_OVERSCAN to header
+
+        data=[]
+        row_data_amp1=[]
+        row_data_amp2=[]
+        row_data_amp3=[]
+        row_data_amp4=[]
+        #bias_overscan=[]        
         for kk in ['1','2','3','4']:
-            thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-            thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
-            for i in range(image.pix[thisoverscanboundary].shape[0]):
-                rmsrow = qalib.getrms(image.pix[thisoverscanboundary][i]/np.sqrt(image.meta["EXPTIME"]))
-                rms_row.append(rmsrow)
-            rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
-            rms_thisamp=qalib.getrms(image.pix[thisampboundary]/np.sqrt(image.meta["EXPTIME"]))
-            rms_amps.append(rms_thisamp)
-            rms_over_amps.append(rms_thisover_thisamp)
-        rmsover=np.max(rms_over_amps)
-        noise_row=np.array((rms_row,rms_row)) #-TODO This has to be recalculated in the overscan left and right in (2,nrow) format
+            sel=_parse_sec_keyword(image.meta['BIASSEC'+kk])
+            #- Obtain counts/second in bias region
+#            pixdata=image[sel]/header["EXPTIME"]
+            pixdata=image.pix[sel]/image.meta["EXPTIME"]
+            if kk == '1':
+                for i in range(pixdata.shape[0]):
+                    row_amp1=pixdata[i]
+                    row_data_amp1.append(row_amp1)
+            if kk == '2':
+                for i in range(pixdata.shape[0]):
+                    row_amp2=pixdata[i]
+                    row_data_amp2.append(row_amp2)
+            if kk == '3':
+                for i in range(pixdata.shape[0]):
+                    row_amp3=pixdata[i]
+                    row_data_amp3.append(row_amp3)
+            if kk == '4':
+                for i in range(pixdata.shape[0]):
+                    row_amp4=pixdata[i]
+                    row_data_amp4.append(row_amp4)
+            #- Compute statistics of the bias region that only reject
+            #  the 0.5% of smallest and largest values. (from sdssproc) 
+            isort=np.sort(pixdata.ravel())
+            nn=isort.shape[0]
+            bias=np.mean(isort[int(0.005*nn) : int(0.995*nn)])
+            #bias_overscan.append(bias)
+            data.append(isort)
+
+        #- Combine data from each row and take average
+        row_data_bottom=[]
+        row_data_top=[]
+        for i in range(len(row_data_amp1)):
+            row_data_lower=np.concatenate((row_data_amp1[i],row_data_amp2[i]))
+            row_data_upper=np.concatenate((row_data_amp3[i],row_data_amp4[i]))
+            row_data_bottom.append(row_data_lower)
+            row_data_top.append(row_data_upper)
+        row_data=np.concatenate((row_data_bottom,row_data_top))
+        full_data=np.concatenate((data[0],data[1],data[2],data[3])).ravel()
+
+        #- Calculate upper and lower bounds of 1, 2, and 3 sigma  
+        sig1_lo = np.percentile(full_data,50.-(param['PERCENTILES'][0]/2.))
+        sig1_hi = np.percentile(full_data,50.+(param['PERCENTILES'][0]/2.))
+        sig2_lo = np.percentile(full_data,50.-(param['PERCENTILES'][1]/2.))
+        sig2_hi = np.percentile(full_data,50.+(param['PERCENTILES'][1]/2.))
+        sig3_lo = np.percentile(full_data,50.-(param['PERCENTILES'][2]/2.))
+        sig3_hi = np.percentile(full_data,50.+(param['PERCENTILES'][2]/2.))
+
+        #- Find difference between upper and lower sigma bounds
+        diff1sig = sig1_hi - sig1_lo
+        diff2sig = sig2_hi - sig2_lo
+        diff3sig = sig3_hi - sig3_lo
+
+        #- Calculate number of pixels below 5 sigma
+        sig5_value = np.percentile(full_data,3e-5)
+        data5sig = len(np.where(full_data <= sig5_value)[0])
+       
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
         if amps:
-            rms_amps=[]
-            rms_over_amps=[]
-            overscan_values=[]
-            #- get amp/overcan boundary in pixels
-            for kk in ['1','2','3','4']:
-                thisampboundary=_parse_sec_keyword(image.meta["CCDSEC"+kk])
-                thisoverscanboundary=_parse_sec_keyword(image.meta["BIASSEC"+kk])
-                rms_thisover_thisamp=qalib.getrms(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
-                thisoverscan_values=np.ravel(image.pix[thisoverscanboundary]/np.sqrt(image.meta["EXPTIME"]))
-                rms_thisamp=qalib.getrms(image.pix[thisampboundary]/np.sqrt(image.meta["EXPTIME"]))
-                rms_amps.append(rms_thisamp)
-                rms_over_amps.append(rms_thisover_thisamp)
-                overscan_values+=thisoverscan_values.tolist()
-            rmsover=np.std(overscan_values)
-            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum}
+            rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
+            rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
+            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps)}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
+
         else:
-            retval["METRICS"]={"RMS":rmsccd,"NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum}
+            retval["METRICS"]={"NOISE":rmsccd} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
         if qlf:
             qlf_post(retval)  
@@ -427,6 +540,7 @@ class Get_RMS(MonitoringAlg):
         return {}
 
 
+
 class Calc_XWSigma(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -435,8 +549,8 @@ class Calc_XWSigma(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "WSIGMA_MED_SKY"
         status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -550,13 +664,7 @@ class Calc_XWSigma(MonitoringAlg):
             peak_upper = peaks[p] + dw
             peak_wave.append(peak_lower)
             peak_wave.append(peak_upper)
-
-        if camera[0] == 'b':
-            npeaks = 3
-        elif camera[0] == 'r':
-            npeaks = 5
-        elif camera[0] == 'z':
-            npeaks = 6
+        npeaks=len(peaks)
 
         if fibermap["OBJTYPE"][0] == 'ARC':
             import desispec.psf
@@ -745,8 +853,8 @@ class Count_Pixels(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "LITFRAC_AMP"
         status=kwargs['statKey'] if 'statKey' in kwargs else "LITFRAC_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -861,8 +969,8 @@ class CountSpectralBins(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NGOODFIB"
         status=kwargs['statKey'] if 'statKey' in kwargs else "NGOODFIB_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
 
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
@@ -1008,8 +1116,8 @@ class Sky_Continuum(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "SKYCONT"
         status=kwargs['statKey'] if 'statKey' in kwargs else "SKYCONT_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -1120,8 +1228,8 @@ class Sky_Peaks(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT_MED_SKY"
         status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -1204,7 +1312,7 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS":rms_skyspec}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec}
 
         if qlf:
             qlf_post(retval)
@@ -1232,10 +1340,10 @@ class Sky_Residual(MonitoringAlg):
             name="RESIDUAL"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDRMS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDNOISE"
         status=kwargs['statKey'] if 'statKey' in kwargs else "RESID_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
 
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
@@ -1355,8 +1463,8 @@ class Integrate_Spec(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "INTEG_AVG"
         status=kwargs['statKey'] if 'statKey' in kwargs else "DELTAMAG_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -1494,8 +1602,8 @@ class Calculate_SNR(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "ELG_FIDSNR"
         status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
