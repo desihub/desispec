@@ -432,7 +432,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["singleqa"]=None
         resl=qa(inp,**qargs)
         #self.assertTrue(np.all(resl['METRICS']['PEAKCOUNT_RMS_AMP'])>=0.)
-        self.assertTrue(resl['METRICS']['PEAKCOUNT_RMS']>0)
+        self.assertTrue(resl['METRICS']['PEAKCOUNT_NOISE']>0)
 
     def testIntegrateSpec(self):
         qa=QA.Integrate_Spec('integ',self.config)
