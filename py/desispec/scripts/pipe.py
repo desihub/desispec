@@ -61,6 +61,7 @@ Where supported commands are:
    update   Update an existing production.
    getready Auto-Update of prod DB.
    sync     Synchronize DB state based on the filesystem.
+   cleanup  Reset tasks from "running" back to "ready".
    status   Overview of production.
    top      Live display of production database.
 """)
@@ -315,15 +316,25 @@ Where supported commands are:
         parser.add_argument("--nside", required=False, type=int, default=64,
             help="HEALPix nside value to use for spectral grouping.")
 
+        parser.add_argument("--expid", required=False, type=int, default=-1,
+            help="Only update the production for a single exposure ID.")
+
         args = parser.parse_args(sys.argv[2:])
 
-        pipe.update_prod(nightstr=args.nights, hpxnside=args.nside)
+        expid = None
+        if args.expid >= 0:
+            expid = args.expid
+        pipe.update_prod(nightstr=args.nights, hpxnside=args.nside, expid=expid)
 
         return
 
 
-    def _get_tasks(self, db, tasktype, states, nights):
+    def _get_tasks(self, db, tasktype, states, nights, expid=None):
         ntlist = ",".join(nights)
+        if (expid is not None) and (len(nights) > 1):
+            raise RuntimeError("Only one night should be specified when "
+                               "getting tasks for a single exposure.")
+
         tasks = list()
         with db.cursor() as cur:
 
@@ -339,8 +350,11 @@ Where supported commands are:
                           pipe.task_int_to_state[y] in states ]
 
             else :
-                cmd = "select name, state from {} where night in ({})"\
-                    .format(tasktype, ntlist)
+                if expid is None:
+                    cmd = "select name, state from {} where night in ({})"\
+                        .format(tasktype, ntlist)
+                else:
+                    cmd = "select name, state from {} where night = {} and expid = {}".format(tasktype, nights[0], expid)
                 cur.execute(cmd)
                 tasks = [ x for (x, y) in cur.fetchall() if \
                           pipe.task_int_to_state[y] in states ]
@@ -360,6 +374,9 @@ Where supported commands are:
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
             "matching these patterns will be examined.")
+
+        parser.add_argument("--expid", required=False, type=int, default=-1,
+            help="Only update the production for a single exposure ID.")
 
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
@@ -393,6 +410,10 @@ Where supported commands are:
         allnights = io.get_nights(strip_path=True)
         nights = pipe.prod.select_nights(allnights, args.nights)
 
+        expid = None
+        if args.expid >= 0:
+            expid = args.expid
+
         ttypes = args.tasktypes.split(',')
         tasktypes = list()
         for tt in pipe.tasks.base.default_task_chain:
@@ -401,7 +422,7 @@ Where supported commands are:
 
         all_tasks = list()
         for tt in tasktypes:
-            tasks = self._get_tasks(db, tt, states, nights)
+            tasks = self._get_tasks(db, tt, states, nights, expid=expid)
             if args.nosubmitted:
                 if (tt != "spectra") and (tt != "redshift"):
                     sb = db.get_submitted(tasks)
@@ -414,9 +435,24 @@ Where supported commands are:
 
 
     def getready(self):
+        parser = argparse.ArgumentParser(description="Update database to "
+            "for one or more nights to ensure that forward dependencies "
+            "know that they are ready.",
+            usage="desi_pipe getready [options] (use --help for details)")
+
+        parser.add_argument("--nights", required=False, default=None,
+            help="comma separated (YYYYMMDD) or regex pattern- only nights "
+            "matching these patterns will be examined.")
+
+        args = parser.parse_args(sys.argv[2:])
+
         dbpath = io.get_pipe_database()
-        db     = pipe.load_db(dbpath, mode="w")
-        db.getready()
+        db = pipe.load_db(dbpath, mode="w")
+        allnights = io.get_nights(strip_path=True)
+        nights = pipe.prod.select_nights(allnights, args.nights)
+        for nt in nights:
+            db.getready(nt)
+        return
 
 
     def check(self):
@@ -808,6 +844,9 @@ Where supported commands are:
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
             "matching these patterns will be generated.")
 
+        parser.add_argument("--expid", required=False, type=int, default=-1,
+            help="Only update the production for a single exposure ID.")
+
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
             "in these states will be scheduled.")
@@ -834,7 +873,9 @@ Where supported commands are:
             machprops = pipe.scriptgen.nersc_machine(args.nersc,
                 args.nersc_queue)
 
-        # FIXME:  we should support task selection by exposure ID as well.
+        expid = None
+        if args.expid >= 0:
+            expid = args.expid
 
         states = None
         if args.states is None:
@@ -877,7 +918,7 @@ Where supported commands are:
         tasks_by_type = OrderedDict()
         for tt in tasktypes:
             # Get the tasks.  We select by state and submitted status.
-            tasks = self._get_tasks(db, tt, states, nights)
+            tasks = self._get_tasks(db, tt, states, nights, expid=expid)
             if args.nosubmitted:
                 if (tt != "spectra") and (tt != "redshift"):
                     sb = db.get_submitted(tasks)
