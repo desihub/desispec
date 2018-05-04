@@ -132,36 +132,39 @@ def plot_bias_overscan(qa_dict,outfile):
     Map of bias from overscan from 4 regions of CCD
     
     Args:
-        qa_dict: qa dictionary from countpix qa
+        qa_dict: qa dictionary from bias_from_overscan qa
         outfile : pdf file of the plot
     """
-    expid=qa_dict["EXPID"]
-    camera =qa_dict["CAMERA"]
-    paname=qa_dict["PANAME"]
-
+    expid = qa_dict["EXPID"]
+    camera = qa_dict["CAMERA"]
+    paname = qa_dict["PANAME"]
+    params = qa_dict["PARAMS"]
+    exptime = qa_dict["EXPTIME"]
+    print(qa_dict)
+    
     bias=qa_dict["METRICS"]["BIAS"]
     bias_amp=qa_dict["METRICS"]["BIAS_AMP"]
     fig=plt.figure()
     plt.suptitle("Bias from overscan region after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(111)
     heatmap1=ax1.pcolor(bias_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Bias = {:.4f}'.format(bias), fontsize=10)
+    plt.title('Bias = {:.4f}'.format(bias/exptime), fontsize=10)
     ax1.set_xlabel("Avg. bias value per Amp (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax1.tick_params(axis='y',labelsize=10,labelleft=False)
-    ax1.annotate("Amp 1\n{:.3f}".format(bias_amp[0]),
+    ax1.annotate("Amp 1\n{:.3f}".format(bias_amp[0]/exptime),
                  xy=(0.4,0.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 2\n{:.3f}".format(bias_amp[1]),
+    ax1.annotate("Amp 2\n{:.3f}".format(bias_amp[1]/exptime),
                  xy=(1.4,0.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 3\n{:.3f}".format(bias_amp[2]),
+    ax1.annotate("Amp 3\n{:.3f}".format(bias_amp[2]/exptime),
                  xy=(0.4,1.4),
                  fontsize=10
                  )
-    ax1.annotate("Amp 4\n{:.3f}".format(bias_amp[3]),
+    ax1.annotate("Amp 4\n{:.3f}".format(bias_amp[3]/exptime),
                  xy=(1.4,1.4),
                  fontsize=10
                  )

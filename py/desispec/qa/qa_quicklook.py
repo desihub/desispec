@@ -192,9 +192,9 @@ class Check_HDUs(MonitoringAlg):
                 raise qlexceptions.ParameterException("EXPOSURE NUMBER DOES NOT MATCH THE ONE IN THE HEADER")
                 EXPNUMstat = "ALARM"
         
-        param['EXPTIME'] = header["EXPTIME"]
-        param['DESISPEC_VERSION'] = header['DEPVER07']
         
+        param['DESISPEC_VERSION'] = header['DEPVER07']
+        param['EXPTIME'] = header["EXPTIME"]
         
         if header["FLAVOR"] != "science" :
             
@@ -204,7 +204,7 @@ class Check_HDUs(MonitoringAlg):
            retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
            param['SEEING'] = header["SEEING"]
            param['AIRMASS'] = header["AIRMASS"]
-
+           
           
         retval["PARAMS"] = param   
         
@@ -301,6 +301,7 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["EXPTIME"] = image.meta["EXPTIME"]
         kwargs=self.config['kwargs']
 
         if retval["FLAVOR"] == 'arc':
@@ -310,6 +311,8 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
+        
+          
         #header = image.meta
         if 'INHERIT' in image.meta and image.meta['INHERIT']:
 
