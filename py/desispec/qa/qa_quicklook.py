@@ -109,8 +109,8 @@ class Check_HDUs(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else ""
         status=kwargs['statKey'] if 'statKey' in kwargs else "HDU_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
 
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
@@ -233,8 +233,8 @@ class Bias_From_Overscan(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "BIAS_AMP"
         status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
 
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
@@ -369,8 +369,8 @@ class Get_RMS(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NOISE_AMP" 
         status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STATUS" 
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
@@ -549,8 +549,8 @@ class Calc_XWSigma(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "WSIGMA_MED_SKY"
         status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -853,8 +853,8 @@ class Count_Pixels(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "LITFRAC_AMP"
         status=kwargs['statKey'] if 'statKey' in kwargs else "LITFRAC_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -969,8 +969,8 @@ class CountSpectralBins(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NGOODFIB"
         status=kwargs['statKey'] if 'statKey' in kwargs else "NGOODFIB_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
 
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
@@ -1116,8 +1116,8 @@ class Sky_Continuum(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "SKYCONT"
         status=kwargs['statKey'] if 'statKey' in kwargs else "SKYCONT_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -1228,8 +1228,8 @@ class Sky_Peaks(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT_MED_SKY"
         status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -1342,8 +1342,8 @@ class Sky_Residual(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDRMS"
         status=kwargs['statKey'] if 'statKey' in kwargs else "RESID_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
 
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
@@ -1463,8 +1463,8 @@ class Integrate_Spec(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "INTEG_AVG"
         status=kwargs['statKey'] if 'statKey' in kwargs else "DELTAMAG_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
@@ -1602,8 +1602,8 @@ class Calculate_SNR(MonitoringAlg):
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "ELG_FIDSNR"
         status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STATUS"
-        kwargs["SAMI_RESULTKEY"]=key
-        kwargs["SAMI_QASTATUSKEY"]=status
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
