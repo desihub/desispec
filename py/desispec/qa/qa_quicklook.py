@@ -519,10 +519,10 @@ class Get_RMS(MonitoringAlg):
         if amps:
             rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
             rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
-            retval["METRICS"]={"RMS":rmsccd,"RMS_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps)}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
+            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps)}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
 
         else:
-            retval["METRICS"]={"RMS":rmsccd} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
+            retval["METRICS"]={"NOISE":rmsccd} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
         if qlf:
             qlf_post(retval)  
@@ -1312,7 +1312,7 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_RMS":rms_skyspec}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec}
 
         if qlf:
             qlf_post(retval)
@@ -1340,7 +1340,7 @@ class Sky_Residual(MonitoringAlg):
             name="RESIDUAL"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDRMS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "RESIDNOISE"
         status=kwargs['statKey'] if 'statKey' in kwargs else "RESID_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status

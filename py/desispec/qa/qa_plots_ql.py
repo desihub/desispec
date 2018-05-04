@@ -140,7 +140,6 @@ def plot_bias_overscan(qa_dict,outfile):
     paname = qa_dict["PANAME"]
     params = qa_dict["PARAMS"]
     exptime = qa_dict["EXPTIME"]
-    print(qa_dict)
     
     bias=qa_dict["METRICS"]["BIAS"]
     bias_amp=qa_dict["METRICS"]["BIAS_AMP"]
@@ -267,8 +266,8 @@ def plot_RMS(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
     """
-    rms=qa_dict["METRICS"]["RMS"]
-    rms_amp=qa_dict["METRICS"]["RMS_AMP"]
+    rms=qa_dict["METRICS"]["NOISE"]
+    rms_amp=qa_dict["METRICS"]["NOISE_AMP"]
     #rms_over=qa_dict["METRICS"]["NOISE_OVER"]
     rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
     # arm=qa_dict["ARM"]
@@ -279,11 +278,11 @@ def plot_RMS(qa_dict,outfile):
     pa=qa_dict["PANAME"]
 
     fig=plt.figure()
-    plt.suptitle("RMS image counts per amplifier, Camera: {}, ExpID: {}".format(camera,expid),fontsize=10,y=0.99)
+    plt.suptitle("NOISE image counts per amplifier, Camera: {}, ExpID: {}".format(camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(211)
     heatmap1=ax1.pcolor(rms_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('RMS = {:.4f}'.format(rms), fontsize=10)
-    ax1.set_xlabel("RMS per Amp (photon counts)",fontsize=10)
+    plt.title('NOISE = {:.4f}'.format(rms), fontsize=10)
+    ax1.set_xlabel("NOISE per Amp (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax1.tick_params(axis='y',labelsize=10,labelleft=False)
     ax1.annotate("Amp 1\n{:.3f}".format(rms_amp[0]),
@@ -304,8 +303,8 @@ def plot_RMS(qa_dict,outfile):
                  )
     ax2=fig.add_subplot(212)
     heatmap2=ax2.pcolor(rms_over_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    #plt.title('RMS Overscan = {:.4f}'.format(rms_over), fontsize=10)
-    ax2.set_xlabel("RMS Overscan per Amp (photon counts)",fontsize=10)
+    #plt.title('NOISE Overscan = {:.4f}'.format(rms_over), fontsize=10)
+    ax2.set_xlabel("NOISE Overscan per Amp (photon counts)",fontsize=10)
     ax2.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax2.tick_params(axis='y',labelsize=10,labelleft=False)
     ax2.annotate("Amp 1\n{:.3f}".format(rms_over_amp[0]),
@@ -401,7 +400,7 @@ def plot_sky_peaks(qa_dict,outfile):
     paname=qa_dict["PANAME"]
     sumcount=qa_dict["METRICS"]["PEAKCOUNT"]
     fiber=np.arange(sumcount.shape[0])
-    skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_RMS"]
+    skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_NOISE"]
     fig=plt.figure()
     plt.suptitle("Counts for Sky Fibers after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
 
