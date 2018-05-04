@@ -457,11 +457,11 @@ def batch_shell(tasks_by_type, outroot, logroot, mpirun="", mpiprocs=1,
         task_write(taskfile, tasklist)
 
         if mpiprocs > 1:
-            coms = [ "desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
-                .format(t, taskfile, dbstr) ]
+            coms.append("desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
+                .format(t, taskfile, dbstr))
         else:
-            coms = [ "desi_pipe_exec --tasktype {} --taskfile {} {}"\
-                .format(t, taskfile, dbstr) ]
+            coms.append("desi_pipe_exec --tasktype {} --taskfile {} {}"\
+                .format(t, taskfile, dbstr))
 
     outfile = "{}.sh".format(outroot)
 
