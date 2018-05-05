@@ -49,7 +49,7 @@ Where supported commands are:
             exposure will be calibrated.
   arcs      All arcs are done, proceed with nightly PSF.
   flats     All flats are done, proceed with nightly fiberflat.
-  redshift  Regroup spectra and process all updated redshifts.
+  redshifts Regroup spectra and process all updated redshifts.
 """)
         parser.add_argument("command", help="Subcommand to run")
         # parse_args defaults to [1:] for args, but you need to
@@ -447,8 +447,8 @@ Where supported commands are:
         return
 
 
-    def redshift(self):
-        parser = argparse.ArgumentParser(description="Run spectra grouping and redshifts", usage="desi_night redshift [options] (use "
+    def redshifts(self):
+        parser = argparse.ArgumentParser(description="Run spectra grouping and redshifts", usage="desi_night redshifts [options] (use "
             "--help for details)")
 
         parser.add_argument("--night", required=True, default=None,
