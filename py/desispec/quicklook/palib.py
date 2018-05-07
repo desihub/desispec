@@ -54,7 +54,6 @@ def resample_spec(wave,flux,outwave,ivar=None):
     """
     #- convert flux to per bin before projecting to new bins
     flux=flux*np.gradient(wave) 
-    ivar=ivar/(np.gradient(wave))**2
 
     Pr=project(wave,outwave)
     n=len(wave)
@@ -65,6 +64,7 @@ def resample_spec(wave,flux,outwave,ivar=None):
     if ivar is None:
         return newflux
     else:
+        ivar = ivar/(np.gradient(wave))**2.0
         newvar=Pr.T.dot(ivar**(-1.)) #- maintaining Total S/N
         newivar=1/newvar
 
