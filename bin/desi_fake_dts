@@ -29,7 +29,31 @@ from desiutil.log import get_logger
 import desispec.pipeline as pipe
 
 
-def main(args):
+def pack_args(args):
+    optlist = [
+        "nersc",
+        "nersc_queue",
+        "nersc_maxtime",
+        "nersc_maxnodes",
+        "nersc_shifter",
+        "mpi_procs",
+        "mpi_run",
+        "procs_per_node",
+        "debug"
+    ]
+    varg = vars(args)
+    opts = ""
+    for k, v in varg.items():
+        if k in optlist:
+            if v is not None:
+                if isinstance(v, bool):
+                    opts = "{} --{}".format(opts, k)
+                else:
+                    opts = "{} --{} {}".format(opts, k, v)
+    return opts
+
+
+def main():
     parser = argparse.ArgumentParser(description="Copy data from a staging "
         "area into DESI_SPECTRO_DATA")
 
@@ -48,10 +72,44 @@ def main(args):
     parser.add_argument("--night_break", required=False, default=0, type=int,
         help="Minutes to pause in between nights.")
 
-    parser.add_argument("--copy", required=False, default=False,
-        action="store_true", help="Copy data rather than symlink.")
+    parser.add_argument("--nersc", required=False, default=None,
+        help="write a script for this NERSC system (edison | cori-haswell "
+        "| cori-knl)")
+
+    parser.add_argument("--nersc_queue", required=False, default="regular",
+        help="write a script for this NERSC queue (debug | regular)")
+
+    parser.add_argument("--nersc_maxtime", required=False,
+        default=None, help="Then maximum run time (in minutes) for a single "
+        " job.  If the list of tasks cannot be run in this time, multiple "
+        " job scripts will be written.  Default is the maximum time for "
+        " the specified queue.")
+
+    parser.add_argument("--nersc_maxnodes", required=False,
+        default=None, help="The maximum number of nodes to use.  Default "
+        " is the maximum nodes for the specified queue.")
+
+    parser.add_argument("--nersc_shifter", required=False, default=None,
+        help="The shifter image to use for NERSC jobs")
+
+    parser.add_argument("--mpi_procs", required=False, default=None,
+        help="The number of MPI processes to use for non-NERSC shell "
+        "scripts (default 1)")
+
+    parser.add_argument("--mpi_run", required=False,
+        default=None, help="The command to launch MPI programs "
+        "for non-NERSC shell scripts (default do not use MPI)")
+
+    parser.add_argument("--procs_per_node", required=False,
+        default=None, help="The number of processes to use per node.  If not "
+        "specified it uses a default value for each machine.")
+
+    parser.add_argument("--debug", required=False, default=False,
+        action="store_true", help="debugging messages in job logs")
 
     args = parser.parse_args()
+
+    nightopts = pack_args(args)
 
     flavor_times = {
         "arc" : args.exptime_arc,
@@ -73,11 +131,12 @@ def main(args):
     log.info("    {}".format(rawdir))
     sys.stdout.flush()
 
-    nights = io.get_nights(strip_path=True)
+    nights = io.get_nights(strip_path=True, specprod_dir=stagedir,
+                           sub_folder="")
 
     for nt in nights:
         # exposures for this night
-        expids = io.get_exposures(night, raw=True, rawdata_dir=stagedir)
+        expids = io.get_exposures(nt, raw=True, rawdata_dir=stagedir)
 
         # Look up flavors of each exposure
         lastarc = None
@@ -105,46 +164,45 @@ def main(args):
             sys.stdout.flush()
             time.sleep(expsec)
             fmsrc = io.get_raw_files("fibermap", nt, ex, rawdata_dir=stagedir)
-            fmtarg = io.get_raw_files("fibermap", nt, ex)
             rawsrc = io.get_raw_files("raw", nt, ex, rawdata_dir=stagedir)
-            rawtarg = io.get_raw_files("raw", nt, ex)
-            targetdir = os.path.dirname(fmtarg)
+
+            targetdir = os.path.join(rawdir, nt)
+            fmtarg = os.path.join(targetdir, os.path.basename(fmsrc))
+            rawtarg = os.path.join(targetdir, os.path.basename(rawsrc))
             if not os.path.isdir(targetdir):
                 os.makedirs(targetdir)
+
             if os.path.exists(fmtarg):
                 os.remove(fmtarg)
             if os.path.exists(rawtarg):
                 os.remove(rawtarg)
-            if args.copy:
-                shutil.copy2(fmsrc, fmtarg)
-                shutil.copy2(rawsrc, rawtarg)
-            else:
-                # just symlink
-                os.symlink(fmsrc, fmtarg)
-                os.symlink(rawsrc, rawtarg)
+
+            shutil.copy2(fmsrc, fmtarg)
+            shutil.copy2(rawsrc, rawtarg)
+
             log.info("  Finished exposure {} on night {}".format(ex, nt))
             sys.stdout.flush()
 
             # Trigger nightly processing
-            com = "desi_night update --night {} --expid {}".format(nt, ex)
+            com = "desi_night update --night {} --expid {}{}".format(nt, ex, nightopts)
             log.info("  Running {}".format(com))
-            sp.check_call(com, shell=True, universal_newlines=True)
+            #sp.check_call(com, shell=True, universal_newlines=True)
 
             # If we are at the last arc or flat, trigger nightly products.
             if ex == lastarc:
-                com = "desi_night arcs --night {}".format(nt)
+                com = "desi_night arcs --night {}{}".format(nt, nightopts)
                 log.info("  Running {}".format(com))
-                sp.check_call(com, shell=True, universal_newlines=True)
+                #sp.check_call(com, shell=True, universal_newlines=True)
 
             if ex == lastflat:
-                com = "desi_night flats --night {}".format(nt)
+                com = "desi_night flats --night {}{}".format(nt, nightopts)
                 log.info("  Running {}".format(com))
-                sp.check_call(com, shell=True, universal_newlines=True)
+                #sp.check_call(com, shell=True, universal_newlines=True)
 
         # Trigger redshifts at the end of the night (for now)
-        com = "desi_night redshifts --night {}".format(nt)
+        com = "desi_night redshifts --night {}{}".format(nt, nightopts)
         log.info("  Running {}".format(com))
-        sp.check_call(com, shell=True, universal_newlines=True)
+        #sp.check_call(com, shell=True, universal_newlines=True)
 
 if __name__ == '__main__':
     main()

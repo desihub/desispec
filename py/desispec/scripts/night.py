@@ -11,13 +11,17 @@ from __future__ import (absolute_import, division, print_function,
 
 import sys
 import os
+import re
 import argparse
 import subprocess as sp
 import time
+import warnings
 
 import fitsio
 
 from desiutil.log import get_logger
+
+from ..util import sprun
 
 from .. import io
 
@@ -33,7 +37,6 @@ errs = {
 class Nightly(object):
 
     def __init__(self):
-        self.pref = "DESINIGHT"
         self.log = get_logger()
 
         parser = argparse.ArgumentParser(
@@ -65,11 +68,9 @@ Where supported commands are:
 
 
     def _update_db(self, night):
-        try:
-            sp.check_call("desi_pipe update --nights {}".format(night),
-                          shell=True, universal_newlines=True)
-        except:
-            self.log.error("{}: desi_pipe update failed".format(self.pref))
+        com = ["desi_pipe", "update", "--nights", "{}".format(night)]
+        ret = sprun(com)
+        if ret != 0:
             sys.exit(errs["pipefail"])
         return
 
@@ -78,12 +79,12 @@ Where supported commands are:
         # What exposures are we using?
         exp_by_flavor = dict()
         for flv in ["arc", "flat", "science"]:
-            exp_by_flavor[fl] = list()
+            exp_by_flavor[flv] = list()
 
         if expid is not None:
             # Only use this one
             with db.cursor() as cur:
-                cmd = "select expid, flavor from fibermap where night = {} and expid = {}".format(args.night, args.expid)
+                cmd = "select expid, flavor from fibermap where night = {} and expid = {}".format(night, expid)
                 cur.execute(cmd)
                 for result in cur.fetchall():
                     exp_by_flavor[result[1]].append(result[0])
@@ -91,7 +92,7 @@ Where supported commands are:
             # Get them all
             with db.cursor() as cur:
                 cmd = "select expid, flavor from fibermap where night = {}"\
-                    .format(args.night, args.expid)
+                    .format(night)
                 cur.execute(cmd)
                 for result in cur.fetchall():
                     exp_by_flavor[result[1]].append(result[0])
@@ -112,33 +113,35 @@ Where supported commands are:
         with db.cursor() as cur:
             cur.execute(cmd)
             for result in cur.fetchall():
-                if (pipe.task_int_to_state(result[2]) != "done") and \
+                if (pipe.task_int_to_state[result[2]] != "done") and \
                     (result[3] != 1):
-                    self.log.info("{}: found unprocessed {} exposure {}".format(self.pref, table, result[1]))
-                    exps.update(result[1])
-        return exps
+                    if result[1] not in exps:
+                        self.log.info("found unprocessed {} exposure {}".format(table, result[1]))
+                        exps.add(result[1])
+        return list(sorted(exps))
 
 
     def _write_jobid(self, root, night, expid, jobid):
-        outdir = os.path.join(pipe.io.specprod_root(),
-                              pipe.io.get_pipe_rundir(),
-                              pipe.io.get_pipe_scriptdir(),
-                              pipe.io.get_pipe_nightdir(),
+        outdir = os.path.join(io.specprod_root(),
+                              io.get_pipe_rundir(),
+                              io.get_pipe_scriptdir(),
+                              io.get_pipe_nightdir(),
                               night)
-        outfile = os.path.join(outdir, "{}_{:08d}_{}".format(root, expid, jobid))
+        fname = "{}_{:08d}_{}".format(root, expid, jobid)
+        outfile = os.path.join(outdir, fname)
         with open(outfile, "w") as f:
             f.write(time.ctime())
             f.write("\n")
         return
 
 
-    def _read_jobids(self, root, night):
-        outdir = os.path.join(pipe.io.specprod_root(),
-                              pipe.io.get_pipe_rundir(),
-                              pipe.io.get_pipe_scriptdir(),
-                              pipe.io.get_pipe_nightdir(),
+    def _read_jobids(self, ttype, night):
+        outdir = os.path.join(io.specprod_root(),
+                              io.get_pipe_rundir(),
+                              io.get_pipe_scriptdir(),
+                              io.get_pipe_nightdir(),
                               night)
-        pat = re.compile(r"{}_(\d{{8}})_(.*)".format(root))
+        pat = re.compile(r"{}_(\d{{8}})_(.*)".format(ttype))
         jobids = list()
         for root, dirs, files in os.walk(outdir, topdown=True):
             for f in files:
@@ -162,72 +165,72 @@ Where supported commands are:
             "debug"
         ]
         varg = vars(args)
-        opts = ""
+        opts = list()
         for k, v in varg.items():
             if k in optlist:
-                if isinstance(v, bool):
-                    opts = "{} --{}".format(opts, k)
-                else:
-                    opts = "{} --{} {}".format(opts, k, v)
+                if v is not None:
+                    opts.append("--{}".format(k))
+                    if not isinstance(v, bool):
+                        opts.append(v)
         return opts
+
+
+    def _run_chain(self, args, exps, db, night, tasktypes, deps=None):
+        cargs = self._chain_args(args)
+        jobids = list()
+        if exps is None:
+            com = ["desi_pipe", "chain", "--tasktypes", tasktypes, "--pack", "--nosubmitted", "--nights", "{}".format(night), "--outdir", os.path.join("night", night)]
+            if deps is not None:
+                com.extend(["--depjobs", ",".join(deps)])
+            com.extend(cargs)
+            self.log.info("Running {}".format(" ".join(com)))
+            ret, out = sprun(com, capture=True)
+            jid = None
+            for line in out:
+                jid = line
+            jobids.append(jid)
+            if ret != 0:
+                sys.exit(errs["pipefail"])
+        else:
+            for ex in exps:
+                com = ["desi_pipe", "chain", "--tasktypes", tasktypes, "--pack", "--nosubmitted", "--nights", "{}".format(night), "--outdir", os.path.join("night", night), "--expid", "{}".format(ex)]
+                if deps is not None:
+                    com.extend(["--depjobs", ",".join(deps)])
+                com.extend(cargs)
+                self.log.info("Running {}".format(" ".join(com)))
+                ret, out = sprun(com, capture=True)
+                jid = None
+                for line in out:
+                    jid = line
+                jobids.append(jid)
+                if ret != 0:
+                    sys.exit(errs["pipefail"])
+        return jobids
 
 
     def _run_psf(self, args, db, night, expid=None):
         exps = self._select_exposures(db, night, "psf", expid=expid)
-        cargs = self._chain_args(args)
-        jobids = list()
-        for ex in exps:
-            com = "desi_pipe chain --tasktypes preproc,psf --pack --nosubmitted --nights {} --outdir {} --expid {} {}".format(night, os.path.join("night", night), ex, cargs)
-            try:
-                self.log.info("{}:  running {}".format(self.pref, com))
-                jid = sp.check_output(com, shell=True, universal_newlines=True)
-                jobids.append(jid)
-            except:
-                self.log.error("{}: failure running {}".format(self.pref, com))
-                sys.exit(errs["pipefail"])
-        return jobids
+        return self._run_chain(args, exps, db, night, "preproc,psf")
 
 
     def _run_extract(self, args, exp_by_flavor, db, night, expid=None, deps=None):
-        exps = self._select_exposures(db, night, "frame", expid=expid)
-        cargs = self._chain_args(args)
+        exps = self._select_exposures(db, night, "extract", expid=expid)
         jobids = list()
         for ex in exps:
-            com = None
+            jids = None
             if ex in exp_by_flavor["flat"]:
-                # Process through fiberflat
-                com = "desi_pipe chain --tasktypes preproc,traceshift,extract,fiberflat --pack --nosubmitted --nights {} --outdir {} --expid {} {}".format(night, os.path.join("night", night), ex, cargs)
+                jids = self._run_chain(args, [ex], db, night,
+                    "preproc,traceshift,extract,fiberflat", deps=deps)
             else:
-                # Just extract
-                com = "desi_pipe chain --tasktypes preproc,traceshift,extract --pack --nosubmitted --nights {} --outdir {} --expid {} {}".format(night, os.path.join("night", night), ex, cargs)
-            if deps is not None:
-                com = "{} --depjobs {}".format(com, deps)
-            try:
-                self.log.info("{}:  running {}".format(self.pref, com))
-                jid = sp.check_output(com, shell=True, universal_newlines=True)
-                jobids.append(jid)
-            except:
-                self.log.error("{}: failure running {}".format(self.pref, com))
-                sys.exit(errs["pipefail"])
+                jids = self._run_chain(args, [ex], db, night,
+                    "preproc,traceshift,extract", deps=deps)
+            jobids.extend(jids)
         return jobids
 
 
     def _run_calib(self, args, db, night, expid=None, deps=None):
         exps = self._select_exposures(db, night, "cframe", expid=expid)
-        cargs = self._chain_args(args)
-        jobids = list()
-        for ex in exps:
-            com = "desi_pipe chain --tasktypes sky,starfit,fluxcalib,cframe --pack --nosubmitted --nights {} --outdir {} --expid {} {}".format(night, os.path.join("night", night), ex, cargs)
-            if deps is not None:
-                com = "{} --depjobs {}".format(com, deps)
-            try:
-                self.log.info("{}:  running {}".format(self.pref, com))
-                jid = sp.check_output(com, shell=True, universal_newlines=True)
-                jobids.append(jid)
-            except:
-                self.log.error("{}: failure running {}".format(self.pref, com))
-                sys.exit(errs["pipefail"])
-        return jobids
+        return self._run_chain(args, exps, db, night, "sky,starfit,fluxcalib,cframe", deps=deps)
 
 
     def _check_nightly(self, ttype, db, night):
@@ -238,7 +241,7 @@ Where supported commands are:
         with db.cursor() as cur:
             cur.execute(cmd)
             for result in cur.fetchall():
-                if pipe.task_int_to_state(result[1]) != "done":
+                if pipe.task_int_to_state[result[1]] != "done":
                     ready = False
         if not ready:
             # Did we already submit a job?
@@ -246,7 +249,7 @@ Where supported commands are:
             if len(nids) > 0:
                 ready = True
                 deps = ",".join(nids)
-        return read, deps
+        return ready, deps
 
 
     def _pipe_opts(self, parser):
@@ -259,29 +262,29 @@ Where supported commands are:
         parser.add_argument("--nersc_queue", required=False, default="regular",
             help="write a script for this NERSC queue (debug | regular)")
 
-        parser.add_argument("--nersc_maxtime", required=False, type=int,
-            default=0, help="Then maximum run time (in minutes) for a single "
+        parser.add_argument("--nersc_maxtime", required=False, default=None,
+            help="Then maximum run time (in minutes) for a single "
             " job.  If the list of tasks cannot be run in this time, multiple "
             " job scripts will be written.  Default is the maximum time for "
             " the specified queue.")
 
-        parser.add_argument("--nersc_maxnodes", required=False, type=int,
-            default=0, help="The maximum number of nodes to use.  Default "
+        parser.add_argument("--nersc_maxnodes", required=False, default=None,
+            help="The maximum number of nodes to use.  Default "
             " is the maximum nodes for the specified queue.")
 
         parser.add_argument("--nersc_shifter", required=False, default=None,
             help="The shifter image to use for NERSC jobs")
 
-        parser.add_argument("--mpi_procs", required=False, type=int, default=1,
+        parser.add_argument("--mpi_procs", required=False, default=None,
             help="The number of MPI processes to use for non-NERSC shell "
             "scripts (default 1)")
 
-        parser.add_argument("--mpi_run", required=False, type=str,
-            default="", help="The command to launch MPI programs "
+        parser.add_argument("--mpi_run", required=False, default=None,
+            help="The command to launch MPI programs "
             "for non-NERSC shell scripts (default do not use MPI)")
 
-        parser.add_argument("--procs_per_node", required=False, type=int,
-            default=0, help="The number of processes to use per node.  If not "
+        parser.add_argument("--procs_per_node", required=False, default=None,
+            help="The number of processes to use per node.  If not "
             "specified it uses a default value for each machine.")
 
         parser.add_argument("--debug", required=False, default=False,
@@ -320,39 +323,48 @@ Where supported commands are:
 
         # If there are any arcs, we always process them
         for ex in expid_by_flavor["arc"]:
-            jobids = self._run_psf(args, db, night, expid=ex)
+            jobids = self._run_psf(args, db, args.night, expid=ex)
             #FIXME: once we have a job table in the DB, the job ID will
             # be recorded automatically.  Until then, we record the PSF job
             # IDs in some file names so that the psfnight job can get the
             # dependencies correct.
-            for jid in jobids.split(","):
-                self._write_jobid("psf", night, ex, jid)
+            for jid in jobids:
+                self._write_jobid("psf", args.night, ex, jid)
 
         # Check whether psfnight tasks are done or submitted
-        ntpsfready, ntpsfdeps = self._check_nightly("psf", db, night)
+        ntpsfready, ntpsfdeps = self._check_nightly("psf", db, args.night)
 
         # Check whether fiberflatnight tasks are done or submitted
-        ntflatready, ntflatdeps = self._check_nightly("fiberflat", db, night)
+        ntflatready, ntflatdeps = self._check_nightly("fiberflat", db, args.night)
 
         if ntpsfready:
             # We can do extractions
             for ex in expid_by_flavor["flat"]:
-                jobids = self._run_extract(args, exp_by_flavor, db, night,
-                                           expid=ex, deps=ntpsfdeps)
+                jobids = self._run_extract(args, expid_by_flavor, db, args.night, expid=ex, deps=ntpsfdeps)
                 #FIXME: once we have a job table in the DB, the job ID will
                 # be recorded automatically.  Until then, we record the
                 # fiberflat job IDs in some file names so that the
                 # fiberflatnight job can get the dependencies correct.
-                for jid in jobids.split(","):
-                    self._write_jobid("fiberflat", night, ex, jid)
+                for jid in jobids:
+                    self._write_jobid("fiberflat", args.night, ex, jid)
 
             for ex in expid_by_flavor["science"]:
-                exids = self._run_extract(args, exp_by_flavor, db, night,
-                                          expid=ex, deps=ntpsfdeps)
+                exids = self._run_extract(args, expid_by_flavor, db, args.night, expid=ex, deps=ntpsfdeps)
                 if ntflatready:
                     # We can submit calibration jobs too.
                     alldeps = "{},{}".format(ntflatdeps, ",".join(exids))
-                    calids = self._run_calib(args, db, night, expid=ex, deps=alldeps)
+                    print("alldeps", alldeps)
+                    #calids = self._run_calib(args, db, args.night, expid=ex, deps=alldeps)
+                else:
+                    allexp = [ "{}".format(x) for x in expid_by_flavor["science"] ]
+                    msg = "Attempting to update processing of science exposures before the nightly fiberflat has been submitted.  Calibration has been skipped for the following exposures: {}  You should resubmit these exposures after running 'desi_night flats'".format(",".join(allexp))
+                    warnings.warn(msg, RuntimeWarning)
+        else:
+            if (len(expid_by_flavor["flat"]) > 0) or (len(expid_by_flavor["science"]) > 0):
+                allexp = [ "{}".format(x) for x in expid_by_flavor["science"] ]
+                allexp.extend([ "{}".format(x) for x in expid_by_flavor["flat"] ])
+                msg = "Attempting to update processing with flats and/or science exposures before the nightly PSF has been submitted.  The following exposures have been skipped:  {}  You should resubmit these exposures after running 'desi_night arcs'".format(",".join(allexp))
+                warnings.warn(msg, RuntimeWarning)
 
         return
 
@@ -377,28 +389,22 @@ Where supported commands are:
         db = pipe.load_db(dbpath, mode="w")
 
         # Check whether psfnight tasks are already done or submitted
-        ntpsfready, ntpsfdeps = self._check_nightly("psf", db, night)
+        ntpsfready, ntpsfdeps = self._check_nightly("psf", db, args.night)
+        print(ntpsfready)
+        print(ntpsfdeps)
 
         if ntpsfready:
             if ntpsfdeps is None:
-                self.log.info("{}: psfnight for {} already done".format(self.pref, night))
+                self.log.info("psfnight for {} already done".format(args.night))
             else:
-                self.log.info("{}: psfnight for {} already submitted to queue (job = {})".format(self.pref, night, ntpsfdeps))
+                self.log.info("psfnight for {} already submitted to queue (job = {})".format(args.night, ntpsfdeps))
         else:
             # Safe to run.  Get the job IDs of any previous psf tasks.
-            psfjobs = self._read_jobids("psf", night)
-            cargs = self._chain_args(args)
-            com = "desi_pipe chain --tasktypes psfnight --pack --nosubmitted --nights {} --outdir {} {}".format(night, os.path.join("night", night), cargs)
+            psfjobs = self._read_jobids("psf", args.night)
+            deps = None
             if len(psfjobs) > 0:
-                com = "{} --depjobs {}".format(com, psfjobs)
-            try:
-                self.log.info("{}:  running {}".format(self.pref, com))
-                jid = sp.check_output(com, shell=True, universal_newlines=True)
-                self._write_jobid("psfnight", night, "NA", jid)
-            except:
-                self.log.error("{}: failure running {}".format(self.pref, com))
-                sys.exit(errs["pipefail"])
-
+                deps = psfjobs
+            jid = self._run_chain(args, None, db, args.night, "psfnight", deps=deps)
         return
 
 
@@ -422,28 +428,20 @@ Where supported commands are:
         db = pipe.load_db(dbpath, mode="w")
 
         # Check whether psfnight tasks are already done or submitted
-        ntflatready, ntflatdeps = self._check_nightly("fiberflat", db, night)
+        ntflatready, ntflatdeps = self._check_nightly("fiberflat", db, args.night)
 
         if ntflatready:
             if ntflatdeps is None:
-                self.log.info("{}: fiberflatnight for {} already done".format(self.pref, night))
+                self.log.info("fiberflatnight for {} already done".format(args.night))
             else:
-                self.log.info("{}: fiberflatnight for {} already submitted to queue (job = {})".format(self.pref, night, ntpsfdeps))
+                self.log.info("fiberflatnight for {} already submitted to queue (job = {})".format(args.night, ntpsfdeps))
         else:
             # Safe to run.  Get the job IDs of any previous fiberflat tasks.
-            flatjobs = self._read_jobids("fiberflat", night)
-            cargs = self._chain_args(args)
-            com = "desi_pipe chain --tasktypes fiberflatnight --pack --nosubmitted --nights {} --outdir {} {}".format(night, os.path.join("night", night), cargs)
+            flatjobs = self._read_jobids("fiberflat", args.night)
+            deps = None
             if len(flatjobs) > 0:
-                com = "{} --depjobs {}".format(com, flatjobs)
-            try:
-                self.log.info("{}:  running {}".format(self.pref, com))
-                jid = sp.check_output(com, shell=True, universal_newlines=True)
-                self._write_jobid("fiberflatnight", night, "NA", jid)
-            except:
-                self.log.error("{}: failure running {}".format(self.pref, com))
-                sys.exit(errs["pipefail"])
-
+                deps = flatjobs
+            jid = self._run_chain(args, None, db, args.night, "fiberflatnight", deps=deps)
         return
 
 
@@ -461,14 +459,11 @@ Where supported commands are:
         # First update the DB
         self._update_db(args.night)
 
+        # Now load the DB
+        dbpath = io.get_pipe_database()
+        db = pipe.load_db(dbpath, mode="w")
+
         # Run it
-        cargs = self._chain_args(args)
-        com = "desi_pipe chain --tasktypes spectra,redshift --pack --nosubmitted --nights {} --outdir {} {}".format(night, os.path.join("night", night), cargs)
-        try:
-            self.log.info("{}:  running {}".format(self.pref, com))
-            sp.check_call(com, shell=True, universal_newlines=True)
-        except:
-            self.log.error("{}: failure running {}".format(self.pref, com))
-            sys.exit(errs["pipefail"])
+        jid = self._run_chain(args, None, db, args.night, "spectra,redshift")
 
         return

@@ -362,7 +362,7 @@ def stdouterr_redirected(to=None, comm=None):
 
     if rank == 0:
         log = get_logger()
-        log.debug("Begin log redirection to {} at {}".format(to, time.asctime()))
+        log.info("Begin log redirection to {} at {}".format(to, time.asctime()))
 
     # Save the original file descriptors so we can restore them later
     saved_fd_out = os.dup(fd_out)
@@ -409,7 +409,7 @@ def stdouterr_redirected(to=None, comm=None):
 
         if rank == 0:
             log = get_logger()
-            log.debug("End log redirection to {} at {}".format(to, time.asctime()))
+            log.info("End log redirection to {} at {}".format(to, time.asctime()))
 
         # flush python handles for good measure
         sys.stdout.flush()
