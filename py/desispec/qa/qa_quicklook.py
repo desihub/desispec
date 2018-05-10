@@ -506,11 +506,13 @@ class Get_RMS(MonitoringAlg):
         sig3_hi = np.percentile(full_data,50.+(param['PERCENTILES'][2]/2.))
 
         #- Find difference between upper and lower sigma bounds
+        # DIFF1SIG: The number of counts separating the 1 sigma percentiles in the noise distribution (from the overscan region)
         diff1sig = sig1_hi - sig1_lo
+        # DIFF2SIG: The number of counts separating 2 or 3 sigma in the noise distribution
         diff2sig = sig2_hi - sig2_lo
         diff3sig = sig3_hi - sig3_lo
 
-        #- Calculate number of pixels below 5 sigma
+        #-DATA5SIG: number of pixels more than 5 sigma below the bias level
         sig5_value = np.percentile(full_data,3e-5)
         data5sig = len(np.where(full_data <= sig5_value)[0])
        
@@ -519,10 +521,10 @@ class Get_RMS(MonitoringAlg):
         if amps:
             rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
             rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
-            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps)}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
+            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
 
         else:
-            retval["METRICS"]={"NOISE":rmsccd} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
+            retval["METRICS"]={"NOISE":rmsccd,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
         if qlf:
             qlf_post(retval)  
