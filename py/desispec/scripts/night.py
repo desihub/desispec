@@ -161,8 +161,7 @@ Where supported commands are:
             "nersc_shifter",
             "mpi_procs",
             "mpi_run",
-            "procs_per_node",
-            "debug"
+            "procs_per_node"
         ]
         varg = vars(args)
         opts = list()
@@ -175,13 +174,16 @@ Where supported commands are:
         return opts
 
 
-    def _run_chain(self, args, exps, db, night, tasktypes, deps=None):
+    def _run_chain(self, args, exps, db, night, tasktypes, deps=None,
+                   spec=None):
         cargs = self._chain_args(args)
         jobids = list()
         if exps is None:
             com = ["desi_pipe", "chain", "--tasktypes", tasktypes, "--pack", "--nosubmitted", "--nights", "{}".format(night), "--outdir", os.path.join("night", night)]
             if deps is not None:
                 com.extend(["--depjobs", ",".join(deps)])
+            if spec is not None:
+                com.extend(["--spec", "{}".format(spec)])
             com.extend(cargs)
             self.log.info("Running {}".format(" ".join(com)))
             ret, out = sprun(com, capture=True)
@@ -196,6 +198,8 @@ Where supported commands are:
                 com = ["desi_pipe", "chain", "--tasktypes", tasktypes, "--pack", "--nosubmitted", "--nights", "{}".format(night), "--outdir", os.path.join("night", night), "--expid", "{}".format(ex)]
                 if deps is not None:
                     com.extend(["--depjobs", ",".join(deps)])
+                if spec is not None:
+                    com.extend(["--spec", "{}".format(spec)])
                 com.extend(cargs)
                 self.log.info("Running {}".format(" ".join(com)))
                 ret, out = sprun(com, capture=True)
@@ -208,29 +212,37 @@ Where supported commands are:
         return jobids
 
 
-    def _run_psf(self, args, db, night, expid=None):
+    def _run_psf(self, args, db, night, expid=None, spec=None):
         exps = self._select_exposures(db, night, "psf", expid=expid)
-        return self._run_chain(args, exps, db, night, "preproc,psf")
+        return self._run_chain(args, exps, db, night, "preproc,psf", spec=spec)
 
 
-    def _run_extract(self, args, exp_by_flavor, db, night, expid=None, deps=None):
+    def _run_extract(self, args, exp_by_flavor, db, night, expid=None,
+                     deps=None, spec=None):
         exps = self._select_exposures(db, night, "extract", expid=expid)
         jobids = list()
         for ex in exps:
             jids = None
+            # Regardless of exposure type, preprocess and traceshift in a
+            # single job.
+            trids = self._run_chain(args, [ex], db, night,
+                "preproc,traceshift", deps=deps, spec=spec)
+            # Now either extract or also do fiberflat.
             if ex in exp_by_flavor["flat"]:
                 jids = self._run_chain(args, [ex], db, night,
-                    "preproc,traceshift,extract,fiberflat", deps=deps)
+                    "extract,fiberflat", deps=trids, spec=spec)
             else:
                 jids = self._run_chain(args, [ex], db, night,
-                    "preproc,traceshift,extract", deps=deps)
+                    "extract", deps=trids, spec=spec)
             jobids.extend(jids)
         return jobids
 
 
-    def _run_calib(self, args, db, night, expid=None, deps=None):
+    def _run_calib(self, args, db, night, expid=None, deps=None, spec=None):
         exps = self._select_exposures(db, night, "cframe", expid=expid)
-        return self._run_chain(args, exps, db, night, "sky,starfit,fluxcalib,cframe", deps=deps)
+        return self._run_chain(args, exps, db, night,
+                               "sky,starfit,fluxcalib,cframe", deps=deps,
+                               spec=spec)
 
 
     def _check_nightly(self, ttype, db, night):
@@ -248,7 +260,7 @@ Where supported commands are:
             nids = self._read_jobids(tnight, night)
             if len(nids) > 0:
                 ready = True
-                deps = ",".join(nids)
+                deps = nids
         return ready, deps
 
 
@@ -304,6 +316,9 @@ Where supported commands are:
         parser.add_argument("--expid", required=False, type=int, default=-1,
             help="Only process this exposure.")
 
+        parser.add_argument("--spec", required=False, type=int, default=-1,
+            help="Only process a single spectrograph.  (FOR DEBUGGING ONLY)")
+
         parser = self._pipe_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
@@ -319,11 +334,16 @@ Where supported commands are:
         expid = None
         if args.expid >= 0:
             expid = args.expid
+
+        spec = None
+        if args.spec >= 0:
+            spec = args.spec
+
         expid_by_flavor = self._exposure_flavor(db, args.night, expid=expid)
 
         # If there are any arcs, we always process them
         for ex in expid_by_flavor["arc"]:
-            jobids = self._run_psf(args, db, args.night, expid=ex)
+            jobids = self._run_psf(args, db, args.night, expid=ex, spec=spec)
             #FIXME: once we have a job table in the DB, the job ID will
             # be recorded automatically.  Until then, we record the PSF job
             # IDs in some file names so that the psfnight job can get the
@@ -340,7 +360,7 @@ Where supported commands are:
         if ntpsfready:
             # We can do extractions
             for ex in expid_by_flavor["flat"]:
-                jobids = self._run_extract(args, expid_by_flavor, db, args.night, expid=ex, deps=ntpsfdeps)
+                jobids = self._run_extract(args, expid_by_flavor, db, args.night, expid=ex, deps=ntpsfdeps, spec=spec)
                 #FIXME: once we have a job table in the DB, the job ID will
                 # be recorded automatically.  Until then, we record the
                 # fiberflat job IDs in some file names so that the
@@ -349,12 +369,14 @@ Where supported commands are:
                     self._write_jobid("fiberflat", args.night, ex, jid)
 
             for ex in expid_by_flavor["science"]:
-                exids = self._run_extract(args, expid_by_flavor, db, args.night, expid=ex, deps=ntpsfdeps)
+                exids = self._run_extract(args, expid_by_flavor, db, args.night, expid=ex, deps=ntpsfdeps, spec=spec)
                 if ntflatready:
                     # We can submit calibration jobs too.
-                    alldeps = "{},{}".format(ntflatdeps, ",".join(exids))
-                    print("alldeps", alldeps)
-                    #calids = self._run_calib(args, db, args.night, expid=ex, deps=alldeps)
+                    alldeps = list(ntflatdeps)
+                    alldeps.extend(exids)
+                    calids = self._run_calib(args, db, args.night, expid=ex, deps=alldeps)
+                    for cid in calids:
+                        self._write_jobid("cframe", args.night, ex, cid)
                 else:
                     allexp = [ "{}".format(x) for x in expid_by_flavor["science"] ]
                     msg = "Attempting to update processing of science exposures before the nightly fiberflat has been submitted.  Calibration has been skipped for the following exposures: {}  You should resubmit these exposures after running 'desi_night flats'".format(",".join(allexp))
@@ -377,9 +399,16 @@ Where supported commands are:
         parser.add_argument("--night", required=True, default=None,
             help="The night in YYYYMMDD format.")
 
+        parser.add_argument("--spec", required=False, type=int, default=-1,
+            help="Only select tasks for a single spectrograph.  (FOR DEBUGGING ONLY)")
+
         parser = self._pipe_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
+
+        spec = None
+        if args.spec >= 0:
+            spec = args.spec
 
         # First update the DB
         self._update_db(args.night)
@@ -390,8 +419,6 @@ Where supported commands are:
 
         # Check whether psfnight tasks are already done or submitted
         ntpsfready, ntpsfdeps = self._check_nightly("psf", db, args.night)
-        print(ntpsfready)
-        print(ntpsfdeps)
 
         if ntpsfready:
             if ntpsfdeps is None:
@@ -404,7 +431,8 @@ Where supported commands are:
             deps = None
             if len(psfjobs) > 0:
                 deps = psfjobs
-            jid = self._run_chain(args, None, db, args.night, "psfnight", deps=deps)
+            jid = self._run_chain(args, None, db, args.night, "psfnight", deps=deps, spec=spec)
+            self._write_jobid("psfnight", args.night, 0, jid[0])
         return
 
 
@@ -416,9 +444,16 @@ Where supported commands are:
         parser.add_argument("--night", required=True, default=None,
             help="The night in YYYYMMDD format.")
 
+        parser.add_argument("--spec", required=False, type=int, default=-1,
+            help="Only select tasks for a single spectrograph.  (FOR DEBUGGING ONLY)")
+
         parser = self._pipe_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
+
+        spec = None
+        if args.spec >= 0:
+            spec = args.spec
 
         # First update the DB
         self._update_db(args.night)
@@ -441,7 +476,9 @@ Where supported commands are:
             deps = None
             if len(flatjobs) > 0:
                 deps = flatjobs
-            jid = self._run_chain(args, None, db, args.night, "fiberflatnight", deps=deps)
+            jid = self._run_chain(args, None, db, args.night, "fiberflatnight",
+                                  deps=deps, spec=spec)
+            self._write_jobid("fiberflatnight", args.night, 0, jid[0])
         return
 
 
@@ -463,7 +500,11 @@ Where supported commands are:
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="w")
 
+        # Get the list of submitted cframe jobs.  Use these as our dependencies.
+        cframejobs = self._read_jobids("cframe", args.night)
+
         # Run it
-        jid = self._run_chain(args, None, db, args.night, "spectra,redshift")
+        jid = self._run_chain(args, None, db, args.night, "spectra,redshift",
+                              deps=cframejobs)
 
         return

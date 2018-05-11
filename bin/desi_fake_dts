@@ -22,6 +22,8 @@ import warnings
 
 import fitsio
 
+from desispec.util import sprun
+
 import desispec.io as io
 
 from desiutil.log import get_logger
@@ -38,18 +40,16 @@ def pack_args(args):
         "nersc_shifter",
         "mpi_procs",
         "mpi_run",
-        "procs_per_node",
-        "debug"
+        "procs_per_node"
     ]
     varg = vars(args)
-    opts = ""
+    opts = list()
     for k, v in varg.items():
         if k in optlist:
             if v is not None:
-                if isinstance(v, bool):
-                    opts = "{} --{}".format(opts, k)
-                else:
-                    opts = "{} --{} {}".format(opts, k, v)
+                opts.append("--{}".format(k))
+                if not isinstance(v, bool):
+                    opts.append(v)
     return opts
 
 
@@ -104,9 +104,6 @@ def main():
         default=None, help="The number of processes to use per node.  If not "
         "specified it uses a default value for each machine.")
 
-    parser.add_argument("--debug", required=False, default=False,
-        action="store_true", help="debugging messages in job logs")
-
     args = parser.parse_args()
 
     nightopts = pack_args(args)
@@ -125,7 +122,7 @@ def main():
     rawdir = os.path.abspath(io.rawdata_root())
 
     log.info("Starting fake DTS at {}".format(time.asctime()))
-    log.info("  Will link data from staging location:")
+    log.info("  Will copy data from staging location:")
     log.info("    {}".format(stagedir))
     log.info("  To DESI_SPECTRO_DATA at:")
     log.info("    {}".format(rawdir))
@@ -184,25 +181,39 @@ def main():
             sys.stdout.flush()
 
             # Trigger nightly processing
-            com = "desi_night update --night {} --expid {}{}".format(nt, ex, nightopts)
-            log.info("  Running {}".format(com))
-            #sp.check_call(com, shell=True, universal_newlines=True)
+            com = ["desi_night", "update", "--night", "{}".format(nt),
+                   "--expid", "{}".format(ex)]
+            com.extend(nightopts)
+            log.info("  Running {}".format(" ".join(com)))
+            ret = sprun(com)
+            if ret != 0:
+                sys.exit(ret)
 
             # If we are at the last arc or flat, trigger nightly products.
             if ex == lastarc:
-                com = "desi_night arcs --night {}{}".format(nt, nightopts)
-                log.info("  Running {}".format(com))
-                #sp.check_call(com, shell=True, universal_newlines=True)
+                com = ["desi_night", "arcs", "--night", "{}".format(nt)]
+                com.extend(nightopts)
+                log.info("  Running {}".format(" ".join(com)))
+                ret = sprun(com)
+                if ret != 0:
+                    sys.exit(ret)
 
             if ex == lastflat:
-                com = "desi_night flats --night {}{}".format(nt, nightopts)
-                log.info("  Running {}".format(com))
-                #sp.check_call(com, shell=True, universal_newlines=True)
+                com = ["desi_night", "flats", "--night", "{}".format(nt)]
+                com.extend(nightopts)
+                log.info("  Running {}".format(" ".join(com)))
+                ret = sprun(com)
+                if ret != 0:
+                    sys.exit(ret)
 
         # Trigger redshifts at the end of the night (for now)
-        com = "desi_night redshifts --night {}{}".format(nt, nightopts)
-        log.info("  Running {}".format(com))
-        #sp.check_call(com, shell=True, universal_newlines=True)
+        com = ["desi_night", "redshifts", "--night", "{}".format(nt)]
+        com.extend(nightopts)
+        log.info("  Running {}".format(" ".join(com)))
+        ret = sprun(com)
+        if ret != 0:
+            sys.exit(ret)
+
 
 if __name__ == '__main__':
     main()

@@ -329,7 +329,7 @@ Where supported commands are:
         return
 
 
-    def _get_tasks(self, db, tasktype, states, nights, expid=None):
+    def _get_tasks(self, db, tasktype, states, nights, expid=None, spec=None):
         ntlist = ",".join(nights)
         if (expid is not None) and (len(nights) > 1):
             raise RuntimeError("Only one night should be specified when "
@@ -350,11 +350,12 @@ Where supported commands are:
                           pipe.task_int_to_state[y] in states ]
 
             else :
-                if expid is None:
-                    cmd = "select name, state from {} where night in ({})"\
-                        .format(tasktype, ntlist)
-                else:
-                    cmd = "select name, state from {} where night = {} and expid = {}".format(tasktype, nights[0], expid)
+                cmd = "select name, state from {} where night in ({})"\
+                    .format(tasktype, ntlist)
+                if expid is not None:
+                    cmd = "{} and expid = {}".format(cmd, expid)
+                if spec is not None:
+                    cmd = "{} and spec = {}".format(cmd, spec)
                 cur.execute(cmd)
                 tasks = [ x for (x, y) in cur.fetchall() if \
                           pipe.task_int_to_state[y] in states ]
@@ -376,7 +377,10 @@ Where supported commands are:
             "matching these patterns will be examined.")
 
         parser.add_argument("--expid", required=False, type=int, default=-1,
-            help="Only update the production for a single exposure ID.")
+            help="Only select tasks for a single exposure ID.")
+
+        parser.add_argument("--spec", required=False, type=int, default=-1,
+            help="Only select tasks for a single spectrograph.")
 
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
@@ -414,6 +418,10 @@ Where supported commands are:
         if args.expid >= 0:
             expid = args.expid
 
+        spec = None
+        if args.spec >= 0:
+            spec = args.spec
+
         ttypes = args.tasktypes.split(',')
         tasktypes = list()
         for tt in pipe.tasks.base.default_task_chain:
@@ -422,7 +430,8 @@ Where supported commands are:
 
         all_tasks = list()
         for tt in tasktypes:
-            tasks = self._get_tasks(db, tt, states, nights, expid=expid)
+            tasks = self._get_tasks(db, tt, states, nights, expid=expid,
+                                    spec=spec)
             if args.nosubmitted:
                 if (tt != "spectra") and (tt != "redshift"):
                     sb = db.get_submitted(tasks)
@@ -451,7 +460,7 @@ Where supported commands are:
         allnights = io.get_nights(strip_path=True)
         nights = pipe.prod.select_nights(allnights, args.nights)
         for nt in nights:
-            db.getready(nt)
+            db.getready(night=nt)
         return
 
 
@@ -845,7 +854,10 @@ Where supported commands are:
             "matching these patterns will be generated.")
 
         parser.add_argument("--expid", required=False, type=int, default=-1,
-            help="Only update the production for a single exposure ID.")
+            help="Only select tasks for a single exposure ID.")
+
+        parser.add_argument("--spec", required=False, type=int, default=-1,
+            help="Only select tasks for a single spectrograph.")
 
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
@@ -874,6 +886,10 @@ Where supported commands are:
         expid = None
         if args.expid >= 0:
             expid = args.expid
+
+        spec = None
+        if args.spec >= 0:
+            spec = args.spec
 
         states = None
         if args.states is None:
@@ -916,7 +932,8 @@ Where supported commands are:
         tasks_by_type = OrderedDict()
         for tt in tasktypes:
             # Get the tasks.  We select by state and submitted status.
-            tasks = self._get_tasks(db, tt, states, nights, expid=expid)
+            tasks = self._get_tasks(db, tt, states, nights, expid=expid,
+                                    spec=spec)
             if args.nosubmitted:
                 if (tt != "spectra") and (tt != "redshift"):
                     sb = db.get_submitted(tasks)

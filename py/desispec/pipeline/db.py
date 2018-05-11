@@ -809,7 +809,7 @@ class DataBase:
         return
 
 
-    def getready(self, night):
+    def getready(self, night=None):
         """Update DB, changing waiting to ready depending on status of dependencies .
 
         Args:
@@ -827,9 +827,11 @@ class DataBase:
         with self.cursor() as cur:
             for tt in ttypes:
                 # for each type of task, get the list of tasks in waiting mode
-                cur.execute('select name from {} where state = {} and night = {}'.format(tt, task_state_to_int["waiting"], night))
+                cmd = "select name from {} where state = {}".format(tt, task_state_to_int["waiting"])
+                if night is not None:
+                    cmd = "{} and night = {}".format(cmd, night)
+                cur.execute(cmd)
                 tasks = [ x for (x, ) in cur.fetchall()]
-
                 if len(tasks) > 0:
                     log.debug("checking {} {} tasks ...".format(len(tasks),tt))
                 for tsk in tasks:
