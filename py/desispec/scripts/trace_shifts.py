@@ -57,6 +57,8 @@ Two methods are implemented.
                         help = 'limit the number of fibers for debugging')
     parser.add_argument('--max-error', type = float, default = 0.05 , required=False,
                         help = "max statistical error threshold to automatically lower polynomial degree")
+    parser.add_argument('--width', type = int, default = 7 , required=False,
+                        help = "width of cross-dispersion profile")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -167,10 +169,14 @@ def main(args) :
         # nor a prior set of lines. this method is much faster
         
         # measure x shifts
-        x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=7, deg=args.degxy)
+        x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy)
         if internal_wavelength_calib :
             # measure y shifts
-            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=7)
+            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width)
+            mdy = np.median(dy)
+            log.info("Subtract median(dy)={}".format(mdy))
+            dy -= mdy # remove median, because this is an internal calibration
+            
         else :
             # duplicate dx results with zero shift to avoid write special case code below
             x_for_dy = x_for_dx.copy()
@@ -207,9 +213,8 @@ def main(args) :
                     m=monomials(tx,ty,degyx,degyy)
                     tdy=np.inner(dy_coeff,m)
                     tsy=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))
-                    merr=max(merr,tdx)
-                    merr=max(merr,tdy)
-                    #log.info("fiber=%d wave=%dA x=%d y=%d dx=%4.3f+-%4.3f dy=%4.3f+-%4.3f"%(fiber,int(wave),int(x),int(y),dx,sx,dy,sy))
+                    merr=max(merr,tsx)
+                    merr=max(merr,tsy)
             log.info("max edge shift error = %4.3f pixels"%merr)
             if degxx==0 and degxy==0 and degyx==0 and degyy==0 :
                 break
@@ -259,11 +264,12 @@ def main(args) :
     mdy=np.inner(dy_coeff,m)
     mey=np.sqrt(np.inner(m,dy_coeff_covariance.dot(m)))    
     log.info("central shifts dx = %4.3f +- %4.3f dy = %4.3f +- %4.3f "%(mdx,mex,mdy,mey))
-    
+        
     # for each fiber, apply offsets and recompute legendre polynomial
     log.info("for each fiber, apply offsets and recompute legendre polynomial")
+    log.info("BEFORE: ycoef[:,0]={}".format(ycoef[:,0]))
     xcoef,ycoef = recompute_legendre_coefficients(xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,degxx=degxx,degxy=degxy,degyx=degyx,degyy=degyy,dx_coeff=dx_coeff,dy_coeff=dy_coeff)
-    
+    log.info("AFTER: ycoef[:,0]={}".format(ycoef[:,0]))
     
     # use an input spectrum as an external calibration of wavelength
     if spectrum_filename  :
@@ -273,9 +279,11 @@ def main(args) :
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.outpsf)
                 
+        log.info("BEFORE: ycoef[:,0]={}".format(ycoef[:,0]))
         ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
                                                   image=image,fibers=fibers,spectrum_filename=spectrum_filename,degyy=args.degyy,width=7)
         
+        log.info("AFTER: ycoef[:,0]={}".format(ycoef[:,0]))
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         log.info("wrote modified PSF in %s"%args.outpsf)
         
