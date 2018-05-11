@@ -523,6 +523,8 @@ Where supported commands are:
 
 
     def cleanup(self):
+        availtypes = ",".join(pipe.db.all_task_types())
+
         parser = argparse.ArgumentParser(\
             description="Clean up stale task states in the DB",
             usage="desi_pipe cleanup [options] (use --help for details)")
@@ -533,11 +535,27 @@ Where supported commands are:
         parser.add_argument("--submitted", required=False, default=False,
             action="store_true", help="Also clear submitted flag")
 
+        parser.add_argument("--tasktypes", required=False, default=None,
+            help="comma separated list of task types to clean ({})".format(availtypes))
+
+        parser.add_argument("--expid", required=False, type=int, default=-1,
+            help="Only clean tasks for this exposure ID.")
+
         args = parser.parse_args(sys.argv[2:])
 
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="w")
-        db.cleanup(cleanfailed=args.failed, cleansubmitted=args.submitted)
+
+        ttypes = None
+        if args.tasktypes is not None:
+            ttypes = args.tasktypes.split(",")
+
+        expid = None
+        if args.expid >= 0:
+            expid = args.expid
+
+        db.cleanup(tasktypes=ttypes, expid=expid, cleanfailed=args.failed,
+                   cleansubmitted=args.submitted)
         return
 
 
