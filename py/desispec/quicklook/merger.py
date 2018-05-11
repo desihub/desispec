@@ -6,9 +6,10 @@ from desiutil.io import yamlify
 import yaml
 import json
 import numpy as np
-
+import datetime
+import pytz
 ###################################
-# Sarah E.: added this function to facilitate the GENERAL_INFO section
+# SE: added this to facilitate the GENERAL_INFO section
 def delKey(d, k, val=None, remove=True):
     
     if isinstance(d, dict):
@@ -36,6 +37,8 @@ def delKey(d, k, val=None, remove=True):
     return val
 
 ###################################
+# SE: added this to facilitate the GENERAL_INFO section
+
 def reOrderDict(mergeDict):
     
   for Night in mergeDict["NIGHTS"]:
@@ -76,9 +79,16 @@ def reOrderDict(mergeDict):
              
              #placeholder for mags
              imaging_mag=[22.]*500
-
              
-             Camera["GENERAL_INFO"]={"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"DESISPEC_VERSION":desispec_ver,"RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAG": imaging_mag}   
+             # Date/time of the merger i.e., QL run - time is in UTC = Mayall local time + 7h
+             def utcnow():
+               return datetime.datetime.now(tz=pytz.utc)
+             
+             QLrun_datime = utcnow().isoformat()
+
+             datetime.datetime.now(datetime.timezone.utc)
+             datetime.datetime.now(tz=pytz.utc)
+             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"DESISPEC_VERSION":desispec_ver,"RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAG": imaging_mag}   
 
 
 class QL_QAMerger:

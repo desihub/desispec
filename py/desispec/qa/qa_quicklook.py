@@ -183,7 +183,8 @@ class Check_HDUs(MonitoringAlg):
         HDUstat = "NORMAL" 
         EXPNUMstat = "NORMAL"    
         
-        
+        param['EXPTIME'] = header["EXPTIME"]
+
         if camera != header["CAMERA"]:
                 raise qlexceptions.ParameterException("Missing camera "+camera)
                 HDUstat = 'ALARM'
@@ -193,8 +194,6 @@ class Check_HDUs(MonitoringAlg):
                 EXPNUMstat = "ALARM"
         
         
-        param['DESISPEC_VERSION'] = header['DEPVER07']
-        param['EXPTIME'] = header["EXPTIME"]
         
         if header["FLAVOR"] != "science" :
             
@@ -311,6 +310,8 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
+        param['DESISPEC_VERSION'] = image.meta['DEPVER07']
+        print(image.meta['DEPVER07'])
         
           
         #header = image.meta
