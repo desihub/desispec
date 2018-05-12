@@ -4,9 +4,10 @@ Program: dark
 Flavor: flat
 #- Calibration files: Assuming the same night for psf and fiberflat
 PSFType: psfboot
-PSFExpid: 0
+PSFExpid: 3891
+
 #- FiberflatExpid used as expid for flat image files when running calibration
-FiberflatExpid: 1
+FiberflatExpid: 3894
 #- Writeout intermediate files
 WritePixfile: False
 WriteSkyModelfile: False
@@ -48,6 +49,6 @@ Algorithms:
             }
         QA:
             CountSpectralBins:
-                PARAMS: {CUTBINS: 5, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
+                PARAMS: {CUTBINS: 5,N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
     ComputeFiberflat_QL:
         QA: {}

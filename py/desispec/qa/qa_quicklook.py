@@ -1060,7 +1060,8 @@ class CountSpectralBins(MonitoringAlg):
             param = {
                  "CUTBINS":5,   #- threshold for number of counts in units of readnoise(scaled to bins)
                  "NGOODFIB_NORMAL_RANGE":[490, 500],
-                 "NGOODFIB_WARN_RANGE":[480, 500]
+                 "NGOODFIB_WARN_RANGE":[480, 500],
+                 "N_KNOWN_BROKEN_FIBERS": 0
                  }
 
         retval["PARAMS"] = param
@@ -1077,7 +1078,7 @@ class CountSpectralBins(MonitoringAlg):
         #- compare the flux sum to threshold
         
         passfibers=np.where(frame.flux.sum(axis=1)>threshold)[0] 
-        ngoodfibers=passfibers.shape[0]
+        ngoodfibers=passfibers.shape[0] - param["N_KNOWN_BROKEN_FIBERS"]
         good_fiber=np.array([0]*frame.nspec)
         good_fiber[passfibers]=1 #- assign 1 for good fiber
 
