@@ -309,9 +309,13 @@ class Bias_From_Overscan(MonitoringAlg):
             retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
-
-        param['DESISPEC_VERSION'] = image.meta['DEPVER07']
-        print(image.meta['DEPVER07'])
+        
+        #SE: this would give the desispec version stored in DEPVER07 key of the raw simulated fits file :0.16.0.dev1830
+        param['FITS_DESISPEC_VERSION'] = image.meta['DEPVER07'] 
+        import desispec
+        from desispec import quicklook
+        param['PROC_DESISPEC_VERSION']= desispec.__version__
+        param['PROC_QuickLook_VERSION']= quicklook.__qlversion__
         
           
         #header = image.meta
