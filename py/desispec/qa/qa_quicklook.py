@@ -1685,6 +1685,7 @@ class Calculate_SNR(MonitoringAlg):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
         objlist = set(fibermap["OBJTYPE"])
+        
         if 'SKY' in objlist:
             objlist.remove('SKY')
 

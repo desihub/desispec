@@ -122,13 +122,13 @@ class QL_QAMerger:
         self.__stepsArr.append(stepDict)
         return self.QL_Step(stepName,paramsDict,metricsDict)
 
-    def getYaml(self):
-        yres=yamlify(self.__schema)
-        reOrderDict(yres)
-        return yaml.dump(yres)
-    def getJson(self):
-        import json
-        return json.dumps(yamlify(self.__schema))
+    #def getYaml(self):
+        #yres=yamlify(self.__schema)
+        #reOrderDict(yres)
+        #return yaml.dump(yres)
+    #def getJson(self):
+        #import json
+        #return json.dumps(yamlify(self.__schema))
     #def writeToFile(self,fileName):
         #with open(fileName,'w') as f:
             #f.write(self.getYaml())
