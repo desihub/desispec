@@ -570,18 +570,10 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     if "Filter" in params:
         thisfilter=params["Filter"]
 
-    mag_filter=[]
+    mag_filters=[]
     for mag in range(magnitudes.shape[0]):
-        if thisfilter == 'DECAM_G':
-            magindex=0
-        elif thisfilter == 'DECAM_R':
-            magindex=1
-        elif thisfilter == 'DECAM_Z':
-            magindex=2
-        else:
-            log.warning("Filter not recognized... Should be DECAM_G, DECAM_R, or DECAM_Z")
-        mag_filter.append(magnitudes[mag][magindex])
-    qadict["MAGNITUDES"]=mag_filter
+        mag_filters.append([magnitudes[mag][0],magnitudes[mag][1],magnitudes[mag][2]])
+    qadict["MAGNITUDES"]=mag_filters
 
     #- Set up fit of SNR vs. Magnitude
     #- Using astronomical SNR equation, fitting 'a'(throughput) and 'B'(sky background)
