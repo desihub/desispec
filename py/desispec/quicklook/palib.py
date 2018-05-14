@@ -18,15 +18,37 @@ def project(x1,x2):
     """
     x1=np.sort(x1)
     x2=np.sort(x2)
-    Pr=np.zeros((len(x1),len(x2)))
-    for ii in range(len(x2)-1): # columns
+    Pr=np.zeros((len(x2),len(x1)))
+    e1 = np.zeros(len(x1)+1)
+    e2 = np.zeros(len(x2)+1)
+    for k in range(len(x1)-1) :  #calculate bin edges
+        if k < len(x1)-2 :
+            halfbin = (x1[k+1] - x1[k])/2.0
+            e1[k] = x1[k] - halfbin
+        else : 
+            e1[k] = x1[k] - halfbin
+            e1[k+1] = x1[k] + halfbin
+    for ii in range(len(x2)-1) :  # bin edges for resampled grid
+        if ii < len(x2)-2 :
+            halfbin = (x2[ii+1] - x2[ii])/2.0
+            e2[ii] = x2[ii] - halfbin
+        else : 
+            e2[ii] = x2[ii] - halfbin
+            e2[ii+1] = x2[ii] + halfbin
+
+    for ii in range(len(e2)-1): # columns
         #- Find indices in x1, containing the element in x2 
         #- This is much faster than looping over rows
-        k=np.where((x1>=x2[ii]) & (x1<=x2[ii+1]))[0] 
+        k=np.where((e1>=e2[ii]) & (e1<=e2[ii+1]))[0] 
         if len(k)>0:
-            dx=(x1[k]-x2[ii])/(x2[ii+1]-x2[ii])
-            Pr[k,ii]=1-dx
-            Pr[k,ii+1]=dx
+        #-    dx=(x1[k]-x2[ii])/(x2[ii+1]-x2[ii])
+            emin = e1[k]
+            emax = e1[k+1]
+            if emin[0] < e2[ii] :  emin[0] = e2[ii]
+            if emax[-1] > e2[ii+1] : emax[-1] = e2[ii+1]
+            dx = (emax-emin)/(e1[k+1]-e1[k])
+            Pr[ii,k]=1-dx
+            Pr[ii+1,k]=dx
     #- edge: 
     if x2[-1]==x1[-1]:
         Pr[-1,-1]=1
@@ -58,14 +80,14 @@ def resample_spec(wave,flux,outwave,ivar=None):
     Pr=project(wave,outwave)
     n=len(wave)
     
-    newflux=Pr.T.dot(flux)
+    newflux=Pr.dot(flux)
     #- convert back to df/dx (per angstrom) sampled at outwave
     newflux/=np.gradient(outwave) #- per angstrom
     if ivar is None:
         return newflux
     else:
         ivar = ivar/(np.gradient(wave))**2.0
-        newvar=Pr.T.dot(ivar**(-1.)) #- maintaining Total S/N
+        newvar=Pr.dot(ivar**(-1.)) #- maintaining Total S/N
         newivar=1/newvar
 
         #- convert to per angstrom
