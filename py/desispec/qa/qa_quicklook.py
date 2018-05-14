@@ -1308,7 +1308,7 @@ class Sky_Peaks(MonitoringAlg):
         nspec_counts, sky_counts = sky_peaks(param, frame)
         rms_nspec = qalib.getrms(nspec_counts)
         rms_skyspec = qalib.getrms(sky_counts)
-        sumcount_med_sky=[]
+        sumcount_med_sky=np.median(sky_counts)
 
         retval["PARAMS"] = param
 
