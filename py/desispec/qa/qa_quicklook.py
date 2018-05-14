@@ -218,10 +218,6 @@ class Check_HDUs(MonitoringAlg):
     def get_default_config(self):
         return {}
 
-
-
-
-
 class Bias_From_Overscan(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -251,7 +247,7 @@ class Bias_From_Overscan(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        if kwargs["singleqa"] == 'Bias_From_Ovescan':
+        if kwargs["singleqa"] == 'Bias_From_Overscan':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
@@ -423,7 +419,7 @@ class Get_RMS(MonitoringAlg):
         if "qafile" in kwargs: qafile = kwargs["qafile"]
         else: qafile = None
 
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        if "qafig" in kwargs: qafig = kwargs["qafig"]
         else: qafig = None
 
         return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
@@ -461,6 +457,7 @@ class Get_RMS(MonitoringAlg):
         row_data_amp2=[]
         row_data_amp3=[]
         row_data_amp4=[]
+        bias_patnoise=[]
         #bias_overscan=[]        
         for kk in ['1','2','3','4']:
             sel=_parse_sec_keyword(image.meta['BIASSEC'+kk])
@@ -472,14 +469,17 @@ class Get_RMS(MonitoringAlg):
                     row_amp1=pixdata[i]
                     row_data_amp1.append(row_amp1)
             if kk == '2':
+                noise = image.meta['RDNOISE2']
                 for i in range(pixdata.shape[0]):
                     row_amp2=pixdata[i]
                     row_data_amp2.append(row_amp2)
             if kk == '3':
+                noise = image.meta['RDNOISE3']
                 for i in range(pixdata.shape[0]):
                     row_amp3=pixdata[i]
                     row_data_amp3.append(row_amp3)
             if kk == '4':
+                noise = image.meta['RDNOISE4']
                 for i in range(pixdata.shape[0]):
                     row_amp4=pixdata[i]
                     row_data_amp4.append(row_amp4)
@@ -501,6 +501,46 @@ class Get_RMS(MonitoringAlg):
             row_data_top.append(row_data_upper)
         row_data=np.concatenate((row_data_bottom,row_data_top))
         full_data=np.concatenate((data[0],data[1],data[2],data[3])).ravel()
+
+
+        # BIAS_ROW = mean_row  
+        median_row_amp1=[]
+        for i in range(len(row_data_amp1)):
+            median=np.median(row_data_amp1[i])
+            median_row_amp1.append(median)
+        
+        rms_median_row_amp1= np.std(median_row_amp1)
+        noise1 = image.meta['RDNOISE1']
+        bias_patnoise.append(rms_median_row_amp1/noise1)
+        
+        median_row_amp2=[]
+        for i in range(len(row_data_amp2)):
+            median=np.median(row_data_amp2[i])
+            median_row_amp2.append(median)
+        
+        rms_median_row_amp2= np.std(median_row_amp2)
+        noise2 = image.meta['RDNOISE2']
+        bias_patnoise.append(rms_median_row_amp2/noise2)
+        
+        
+        median_row_amp3=[]
+        for i in range(len(row_data_amp3)):
+            median=np.median(row_data_amp3[i])
+            median_row_amp3.append(median)
+        
+        rms_median_row_amp3= np.std(median_row_amp3)
+        noise3 = image.meta['RDNOISE3']
+        bias_patnoise.append(rms_median_row_amp3/noise3)
+        
+        median_row_amp4=[]
+        for i in range(len(row_data_amp4)):
+            median=np.median(row_data_amp4[i])
+            median_row_amp4.append(median)
+        
+        rms_median_row_amp4= np.std(median_row_amp4)
+        noise4 = image.meta['RDNOISE4']
+        bias_patnoise.append(rms_median_row_amp4/noise4)
+
 
         #- Calculate upper and lower bounds of 1, 2, and 3 sigma  
         sig1_lo = np.percentile(full_data,50.-(param['PERCENTILES'][0]/2.))
@@ -526,10 +566,10 @@ class Get_RMS(MonitoringAlg):
         if amps:
             rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
             rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
-            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
+            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
 
         else:
-            retval["METRICS"]={"NOISE":rmsccd,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
+            retval["METRICS"]={"NOISE":rmsccd,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
         if qlf:
             qlf_post(retval)  
