@@ -206,9 +206,9 @@ def plot_XWSigma(qa_dict,outfile):
     ax2.tick_params(axis='y',labelsize=10)
     plt.xlim(0,len(wfiber))
 
-    if "XSIGMA_AMP" in qa_dict["METRICS"]:
-        xsigma_amp=qa_dict["METRICS"]["XSIGMA_AMP"]
-        wsigma_amp=qa_dict["METRICS"]["WSIGMA_AMP"]
+    if "XWSIGMA_AMP" in qa_dict["METRICS"]:
+        xsigma_amp=qa_dict["METRICS"]["XWSIGMA_AMP"][0]
+        wsigma_amp=qa_dict["METRICS"]["XWSIGMA_AMP"][1]
         ax3=fig.add_subplot(223)
         heatmap3=ax3.pcolor(xsigma_amp.reshape(2,2),cmap=plt.cm.OrRd)
         plt.title('X Sigma = {:.4f}'.format(xsigma_med), fontsize=10)
