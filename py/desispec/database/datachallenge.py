@@ -1,13 +1,11 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
-desispec.database.datachallenge
-===============================
+desispec.database.redshift
+==========================
 
-Code for loading data challenge spectra results into a database.
-
-Once the data model for both quicksurvey and data challenge results has
-converged, this file will be deprecated.
+Code for loading spectroscopic pipeline results (specifically redshifts)
+into a database.
 """
 from __future__ import absolute_import, division, print_function
 import numpy as np
