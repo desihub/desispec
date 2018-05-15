@@ -17,9 +17,9 @@ description="Compute the electronic cross-talk coefficient among the amplifiers 
                                  ''')
 parser.add_argument('-i','--image', type = str, default = None, required = True, nargs = "*",
                     help = 'path of preprocessed image fits files')
-parser.add_argument('-t','--threshold', type = float, default = 2000, required = False,
+parser.add_argument('-t','--threshold', type = float, default = 200, required = False,
                     help = 'flux threshold to detect cross-talk in other amps')
-parser.add_argument('-m','--maxflux',type = float, default = 15000, required = False,
+parser.add_argument('-m','--maxflux',type = float, default = 50000, required = False,
                     help = 'max flux to avoid saturation issues')
 parser.add_argument('--plot',action="store_true",help="show the fit")
 
@@ -36,6 +36,15 @@ for filename in args.image :
     flux = image_file[0].data
     ivar = image_file["IVAR"].data*(image_file["MASK"].data==0)
     flux *= (ivar>0)
+
+    # work with gradient of image along wavelength
+    # to erase sensitivity of estimator to background level
+    nflux = np.zeros(flux.shape)
+    nflux[1:-1] = flux[1:-1]-(flux[2:]+flux[:-2])/2.
+    flux = nflux
+    #pyfits.writeto("grad.fits",flux,clobber=True); print("wrote grad.fits")
+    
+    
     header = image_file[0].header
 
     amplifiers=["A","B","C","D"]

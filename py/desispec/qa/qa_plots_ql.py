@@ -547,16 +547,14 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
 
     rmneg=med_snr[med_snr>=0.]
     rmind=index[med_snr>=0.]
-    logs=np.log(rmneg)
 
     ax1=fig.add_subplot(221)
-    hist_med=ax1.plot(rmind,logs,linewidth=1)
+    hist_med=ax1.semilogy(rmind,rmneg,linewidth=1)
     ax1.set_xlabel('Fiber #',fontsize=6)
-    ax1.set_ylabel('Log(Median S/N)',fontsize=8)
+    ax1.set_ylabel('Median S/N',fontsize=8)
     ax1.tick_params(axis='x',labelsize=6)
     ax1.tick_params(axis='y',labelsize=6)
     ax1.set_xlim(0)
-    ax1.set_ylim(min(logs)-0.2,max(logs)+0.2)
 
     ax2=fig.add_subplot(222)
     ax2.set_title('Residual SNR: (calculated SNR - fit SNR) / fit SNR',fontsize=8)
@@ -586,20 +584,17 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         obj_mag=mags[objid]
         obj_snr=snrs[objid]
         plot_mag=sorted(obj_mag)
-        plot_fit=np.log(np.array(fitsnr[objid])**2)
-        logsnr2=np.log(np.array(obj_snr)**2)
+        plot_fit=np.array(fitsnr[objid])**2
+        snr2=np.array(obj_snr)**2
         fitval=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
 
         if i == 0:
-            ax.set_ylabel('Log(Median S/N**2)',fontsize=8)
-        ax.set_xlabel('{} Mag ({})'.format(objtype,thisfilter),fontsize=6)
+            ax.set_ylabel('Median S/N**2',fontsize=8)
+        ax.set_xlabel('{} Mag ({})\na={:4f}, B={:4f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
         ax.set_xlim(16,24)
-        ax.set_ylim(min(logsnr2)-0.1,max(logsnr2)+0.1)
-        yticks=np.arange(int(np.rint(min(logsnr2))),int(np.rint(max(logsnr2)))+1,1)
-        ax.yaxis.set_ticks(yticks)
         ax.tick_params(axis='x',labelsize=6)
         ax.tick_params(axis='y',labelsize=6)
-        ax.plot(obj_mag,logsnr2,'b.',markersize=1)
-        ax.plot(plot_mag,plot_fit,'y',markersize=0.5)
+        ax.semilogy(obj_mag,snr2,'b.',markersize=1)
+        ax.semilogy(plot_mag,plot_fit,'y',markersize=0.5)
     
     fig.savefig(outfile)
