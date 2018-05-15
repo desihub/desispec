@@ -469,17 +469,17 @@ class Get_RMS(MonitoringAlg):
                     row_amp1=pixdata[i]
                     row_data_amp1.append(row_amp1)
             if kk == '2':
-                noise = image.meta['RDNOISE2']
+                
                 for i in range(pixdata.shape[0]):
                     row_amp2=pixdata[i]
                     row_data_amp2.append(row_amp2)
             if kk == '3':
-                noise = image.meta['RDNOISE3']
+                
                 for i in range(pixdata.shape[0]):
                     row_amp3=pixdata[i]
                     row_data_amp3.append(row_amp3)
             if kk == '4':
-                noise = image.meta['RDNOISE4']
+                
                 for i in range(pixdata.shape[0]):
                     row_amp4=pixdata[i]
                     row_data_amp4.append(row_amp4)
@@ -566,7 +566,7 @@ class Get_RMS(MonitoringAlg):
         if amps:
             rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
             rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
-            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
+            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_OVERSCAN_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
 
         else:
             retval["METRICS"]={"NOISE":rmsccd,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
