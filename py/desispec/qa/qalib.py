@@ -589,7 +589,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
         with open(rfile) as rf:
             rmsfile=yaml.load(rf)
-        rmsval=rmsfile["METRICS"]["NOISE_OVER"]
+        rmsval=rmsfile["METRICS"]["NOISE"]
         #- The factor of 1e-3 is a very basic (and temporary!!) flux calibration
         #- used to convert read noise to proper flux units
         r2=1e-3*rmsval**2
@@ -623,7 +623,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             T="STAR"
         for ii,fib in enumerate(fibers):
             if thisfilter not in filters[fib]:
-                print("WARNING!!! {} magnitude is not available filter for fiber {}".format(thisfilter,fib))
+                log.warning("WARNING!!! {} magnitude is not available filter for fiber {}".format(thisfilter,fib))
                 mags[ii]=None
             else:
                 mags[ii]=magnitudes[fib][filters[fib]==thisfilter]

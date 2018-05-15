@@ -326,7 +326,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     else:
         import numpy as np
         qa=None
-        qas=['Bias_From_Overscan',['Get_RMS','Calc_XWSigma','Count_Pixels'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
         for palg in range(len(qas)):
             if singqa in qas[palg]:
                 pa=pl[palg][0]

@@ -590,7 +590,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
 
         if i == 0:
             ax.set_ylabel('Median S/N**2',fontsize=8)
-        ax.set_xlabel('{} Mag ({})'.format(objtype,thisfilter),fontsize=6)
+        ax.set_xlabel('{} Mag ({})\na={:4f}, B={:4f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
         ax.set_xlim(16,24)
         ax.tick_params(axis='x',labelsize=6)
         ax.tick_params(axis='y',labelsize=6)
