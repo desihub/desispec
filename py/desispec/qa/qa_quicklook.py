@@ -1247,8 +1247,31 @@ class Sky_Continuum(MonitoringAlg):
 
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
+ 
+        #SE: Added a "place holder" for the Sky_Rband Flux from the skymonitor written in the header of the raw exposure comparison   
+        fibs = skyfiber.tolist()
+        flux=frame.flux
+        wave=frame.wave
+        integrals=np.zeros(flux.shape[0])
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
+        skyfibmag=[]
+        
+        for skyfib in fibs:
+            
+            sky_integ = qalib.integrate_spec(wave,flux[skyfib])
+            sky_fibmag = -2.5*np.log(sky_integ/frame.meta["EXPTIME"])+30.
+            skyfibmag.append(sky_fibmag)
+            
+        #SE: assuming there is a key in the header of the raw exposure header where the sky R-band flux from the sky monitor is stored 
+        filters=frame.fibermap['FILTER']
+        if (mags[fibs][filters[fibs]=='DECAM_R'] and frame.meta["SKYFLUX"] != ""):
+            
+            sky_r=frame.meta["SKYFLUX"]
+        else: 
+            sky_r=[]
+            log.warning("No SKY Monitor R-band Flux was found in the header!")
+        
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r, "Sky_"}
 
         if qlf:
             qlf_post(retval)    
@@ -1587,20 +1610,24 @@ class Integrate_Spec(MonitoringAlg):
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
         mag_avg_tgt=[]
+        integ_avg_sky=[]
+    
         for T in ["ELG","QSO","LRG","STD"]:
             fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
             if len(fibers) < 1:
                 log.warning("no {} fibers found.".format(T))
+                 
             magnitudes=frame.fibermap['MAG'][fibers]
             mag_avg=np.mean(magnitudes)
             mag_avg_tgt.append(mag_avg)
             integ=integrals[fibers]
             integ_avg=np.mean(integ)
             integ_avg_tgt.append(integ_avg)
+                
             if T == "STD":
-                starfibers=fibers
-                int_stars=integ
-                int_average=integ_avg
+                   starfibers=fibers
+                   int_stars=integ
+                   int_average=integ_avg
 
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
@@ -1623,6 +1650,7 @@ class Integrate_Spec(MonitoringAlg):
 
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
         delta_mag=np.zeros(frame.nspec) #- placeholder
+
 
         retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
 
