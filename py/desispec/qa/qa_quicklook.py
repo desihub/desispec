@@ -251,7 +251,10 @@ class Bias_From_Overscan(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
+
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+            image.meta = image[0].header
+           
         else:
             image=args[0]
             
@@ -284,6 +287,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
 
+    
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["PANAME"] = paname
@@ -301,7 +305,6 @@ class Bias_From_Overscan(MonitoringAlg):
             retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
-
         
         #SE: this would give the desispec version stored in DEPVER07 key of the raw simulated fits file :0.16.0.dev1830
         param['FITS_DESISPEC_VERSION'] = image.meta['DEPVER07'] 
@@ -356,6 +359,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
     def get_default_config(self):
         return {}
+
 
 
 class Get_RMS(MonitoringAlg):
@@ -1182,6 +1186,7 @@ class Sky_Continuum(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1243,7 +1248,7 @@ class Sky_Continuum(MonitoringAlg):
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
  
-        #SE: Added a "place holder" for the Sky_Rband Flux from the skymonitor written in the header of the raw exposure comparison   
+        #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
         fibs = skyfiber.tolist()
         flux=frame.flux
         wave=frame.wave
@@ -1259,6 +1264,7 @@ class Sky_Continuum(MonitoringAlg):
             
         #SE: assuming there is a key in the header of the raw exposure header where the sky R-band flux from the sky monitor is stored 
         filters=frame.fibermap['FILTER']
+        mags=frame.fibermap['MAG']
         if (mags[fibs][filters[fibs]=='DECAM_R'] and frame.meta["SKYFLUX"] != ""):
             
             sky_r=frame.meta["SKYFLUX"]
@@ -1266,7 +1272,7 @@ class Sky_Continuum(MonitoringAlg):
             sky_r=[]
             log.warning("No SKY Monitor R-band Flux was found in the header!")
         
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r, "Sky_"}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r}
 
         if qlf:
             qlf_post(retval)    
@@ -1374,7 +1380,7 @@ class Sky_Peaks(MonitoringAlg):
         nspec_counts, sky_counts = sky_peaks(param, frame)
         rms_nspec = qalib.getrms(nspec_counts)
         rms_skyspec = qalib.getrms(sky_counts)
-        sumcount_med_sky=np.median(sky_counts)
+        sumcount_med_sky=[]
 
         retval["PARAMS"] = param
 
@@ -1432,6 +1438,7 @@ class Sky_Residual(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1550,6 +1557,7 @@ class Integrate_Spec(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1662,8 +1670,7 @@ class Integrate_Spec(MonitoringAlg):
 
     def get_default_config(self):
         return {}
-
-
+ 
 class Calculate_SNR(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -1694,6 +1701,7 @@ class Calculate_SNR(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
