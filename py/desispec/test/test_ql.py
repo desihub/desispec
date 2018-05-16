@@ -94,11 +94,11 @@ class TestQL(unittest.TestCase):
                       'Timeout': 120.0,
                       'Pipeline': ['Initialize','Preproc'],
                       'Algorithms': {'Initialize':{
-                                         'QA':{
-                                             'Bias_From_Overscan':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'DIFF_WARN_RANGE':[-1.0,1.0],'DIFF_ALARM_RANGE':[-2.0,2.0]}}}},
+                                         'QA':{'Check_HDUs':{'PARAMS':{}}
+                                             }},
                                      'Preproc':{
-                                         'QA':{
-                                             'Get_RMS':{'PARAMS':{'RMS_WARN_RANGE':[-1.0,1.0],'RMS_ALARM_RANGE':[-2.0,2.0]}},
+                                         'QA':{'Bias_From_Overscan':{'PARAMS':{'DIFF_WARN_RANGE':[-1.0,1.0],'DIFF_ALARM_RANGE':[-2.0,2.0]}},
+                                             'Get_RMS':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'RMS_WARN_RANGE':[-1.0,1.0],'RMS_ALARM_RANGE':[-2.0,2.0]}},
                                              'Count_Pixels':{'PARAMS':{'CUTPIX':500,'LITFRAC_NORMAL_RANGE':[200.0,500.0],'LITFRAC_WARN_RANGE':[50.0,650.0]}}}}}
                       }
         with open('{}/test_config.yaml'.format(testDir),'w') as config:
