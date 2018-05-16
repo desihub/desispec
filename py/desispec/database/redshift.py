@@ -221,7 +221,16 @@ class ZCat(SchemaMixin, Base):
 
     targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     chi2 = Column(Float, nullable=False)
-    # coeff =
+    coeff_0 = Column(Float, nullable=False)
+    coeff_1 = Column(Float, nullable=False)
+    coeff_2 = Column(Float, nullable=False)
+    coeff_3 = Column(Float, nullable=False)
+    coeff_4 = Column(Float, nullable=False)
+    coeff_5 = Column(Float, nullable=False)
+    coeff_6 = Column(Float, nullable=False)
+    coeff_7 = Column(Float, nullable=False)
+    coeff_8 = Column(Float, nullable=False)
+    coeff_9 = Column(Float, nullable=False)
     z = Column(Float, index=True, nullable=False)
     zerr = Column(Float, nullable=False)
     zwarn = Column(BigInteger, index=True, nullable=False)
@@ -269,7 +278,16 @@ class ZCat(SchemaMixin, Base):
         return ("<ZCat(" +
                 "targetid={0.targetid:d}, " +
                 "chi2={0.chi2:f}, " +
-                "coeff={0.chi2:f}," +
+                "coeff_0={0.coeff_0:f}, " +
+                "coeff_1={0.coeff_1:f}, " +
+                "coeff_2={0.coeff_2:f}, " +
+                "coeff_3={0.coeff_3:f}, " +
+                "coeff_4={0.coeff_4:f}, " +
+                "coeff_5={0.coeff_5:f}, " +
+                "coeff_6={0.coeff_6:f}, " +
+                "coeff_7={0.coeff_7:f}, " +
+                "coeff_8={0.coeff_8:f}, " +
+                "coeff_9={0.coeff_9:f}, " +
                 "z={0.z:f}, zerr={0.zerr:f}, zwarn={0.zwarn:d}, " +
                 "npixels={0.npixels:d}, " +
                 "spectype='{0.spectype}', " +
@@ -782,7 +800,8 @@ def main():
               {'filepath': os.path.join(options.datapath, 'spectro', 'redux', 'mini', 'zcatalog-mini.fits'),
                'tcls': ZCat,
                'hdu': 'ZCATALOG',
-               'expand': None,
+               'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
                'convert': None,
                'q3c': postgresql,
                'chunksize': options.chunksize,
