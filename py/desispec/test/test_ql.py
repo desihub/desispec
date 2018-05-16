@@ -15,7 +15,6 @@ from desispec.io import empty_fibermap
 from desispec.io.fibermap import write_fibermap
 import datetime
 import pytz
-
 class TestQL(unittest.TestCase):
     @classmethod
     def setUp(cls):
@@ -167,8 +166,13 @@ class TestQL(unittest.TestCase):
     def test_mergeQA(self):
         os.environ['QL_SPEC_REDUX'] = self.testDir
         cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
-        if runcmd(cmd) != 0:
-            raise RuntimeError('quicklook pipeline failed')
+        pyver = format(sys.executable.split('anaconda')[1])
+        print('NOTE: Test is running on python v'+format(pyver.split('/')[0]))
+        if int(format(pyver.split('/')[0])) < 3:
+             pass
+        else:
+           if runcmd(cmd) != 0:
+              raise RuntimeError('quicklook pipeline failed')
 
 
 #- This runs all test* functions in any TestCase class in this file
