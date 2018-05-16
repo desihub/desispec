@@ -778,7 +778,7 @@ def main():
                'index': None,
                'q3c': postgresql,
                'chunksize': options.chunksize,
-               'maxrows': options.maxrows},]
+               'maxrows': options.maxrows},
               {'filepath': os.path.join(options.datapath, 'spectro', 'redux', 'mini', 'zcatalog-mini.fits'),
                'tcls': ZCat,
                'hdu': 'ZCATALOG',
