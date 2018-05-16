@@ -13,6 +13,8 @@ from desispec.util import runcmd
 from desispec.io.raw import write_raw
 from desispec.io import empty_fibermap
 from desispec.io.fibermap import write_fibermap
+import datetime
+import pytz
 
 class TestQL(unittest.TestCase):
     @classmethod

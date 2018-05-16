@@ -55,6 +55,7 @@ def reOrderDict(mergeDict):
              desispec_run_ver = delKey(Camera, "PROC_DESISPEC_VERSION") # desispec version in the raw FITS header 
              desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
              quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quivklook development state
+             imaging_mag = delKey(Camera,'MAGNITUDES') # imaging mags: for each target a triplet in this order: [DECAM_G,DECAM_R,DECAM_Z]
              
              if sky_fiberid is None:
                  sky_fiberid = skyfiberid
@@ -78,9 +79,7 @@ def reOrderDict(mergeDict):
              
              try: dec = [float("%.5f" % m) for m in dec]
              except: dec=None
-             
-             #placeholder for mags
-             imaging_mag=[22.]*500
+            
              
              # Date/time of the merger i.e., QL run - time is in UTC = Mayall local time + 7h
              def utcnow():
@@ -90,7 +89,7 @@ def reOrderDict(mergeDict):
 
              datetime.datetime.now(datetime.timezone.utc)
              datetime.datetime.now(tz=pytz.utc)
-             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAG": imaging_mag}   
+             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag}   
 
 
 class QL_QAMerger:
