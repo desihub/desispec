@@ -7,6 +7,7 @@ import datetime
 import numpy as np
 import scipy.ndimage
 import yaml
+import re
 import astropy.io.fits as fits
 import desispec.qa.qa_plots_ql as plot
 from desispec.quicklook.qas import MonitoringAlg, QASeverity
@@ -20,6 +21,7 @@ from desispec.io.sky import read_sky
 from desispec.image import Image as im
 from desispec.frame import Frame as fr
 from desispec.preproc import _parse_sec_keyword
+
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -671,8 +673,8 @@ class Calc_XWSigma(MonitoringAlg):
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
 
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -869,9 +871,9 @@ class Calc_XWSigma(MonitoringAlg):
         xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
 
         if amps:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
+            retval["METRICS"]={"XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
+            retval["METRICS"]={"XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
 
         #- http post if needed
         if qlf:
@@ -1084,8 +1086,8 @@ class CountSpectralBins(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
 
         if fibermap["OBJTYPE"][0] == 'ARC':
             import desispec.psf
@@ -1136,7 +1138,7 @@ class CountSpectralBins(MonitoringAlg):
             retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
             retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "NGOODFIB": ngoodfibers, "GOOD_FIBER": good_fiber}
+        retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBER": good_fiber}
 
         #- http post if needed
         if qlf:
@@ -1228,9 +1230,9 @@ class Sky_Continuum(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
-
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
+        
         camera=frame.meta["CAMERA"]
 
         if param is None:
@@ -1248,31 +1250,55 @@ class Sky_Continuum(MonitoringAlg):
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
  
-        #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
         fibs = skyfiber.tolist()
-        flux=frame.flux
-        wave=frame.wave
-        integrals=np.zeros(flux.shape[0])
-
-        skyfibmag=[]
+        skyfib_Rflux=[]
         
-        for skyfib in fibs:
-            
-            sky_integ = qalib.integrate_spec(wave,flux[skyfib])
-            sky_fibmag = -2.5*np.log(sky_integ/frame.meta["EXPTIME"])+30.
-            skyfibmag.append(sky_fibmag)
-            
-        #SE: assuming there is a key in the header of the raw exposure header where the sky R-band flux from the sky monitor is stored 
-        filters=frame.fibermap['FILTER']
+        #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
+   
+        filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
         mags=frame.fibermap['MAG']
-        if (mags[fibs][filters[fibs]=='DECAM_R'] and frame.meta["SKYFLUX"] != ""):
-            
-            sky_r=frame.meta["SKYFLUX"]
-        else: 
-            sky_r=[]
-            log.warning("No SKY Monitor R-band Flux was found in the header!")
         
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r}
+        if (filt == 'r'):
+            
+            flux=frame.flux
+            wave=frame.wave
+            integrals=np.zeros(flux.shape[0])
+            
+            import desimodel
+            from desimodel.focalplane import fiber_area_arcsec2
+        
+            wsky = np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
+            xsky = frame.fibermap["X_FVCOBS"][wsky]
+            ysky = frame.fibermap["Y_FVCOBS"][wsky]    
+            apsky = desimodel.focalplane.fiber_area_arcsec2(xsky,ysky)
+            expt = frame.meta["EXPTIME"]
+            
+            for i in range(len(fibs)):
+            
+                sky_integ = qalib.integrate_spec(wave,flux[fibs[i]])
+                # SE:  leaving the units as counts/sec/arcsec^2 to be compared to sky monitor fluc from ETC 
+                sky_flux = sky_integ/expt/apsky[i]
+            
+                skyfib_Rflux.append(sky_flux)
+            
+        #SE: assuming there is a key in the header of the raw exposure header [OR somewhere else] where the sky R-band flux from the sky monitor is stored 
+        #    the units would be counts/sec/arcsec^2   ---> sky_r=frame.meta["SKYFLUX"] - 1000 is just a dummy number as a placeholder
+        sky_r=  1000#frame.meta["SKYFLUX"]
+        
+        if (sky_r != "" and len(skyfib_Rflux) >0):
+            
+            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":abs(sky_r-np.mean(skyfib_Rflux)) }
+
+        else:
+             if (sky_r != "" and len(skyfib_Rflux) == 0): 
+                 
+                
+                retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":sky_r}
+             
+             else: 
+              
+                log.warning("No SKY Monitor R-band Flux was found in the header!")
+                retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":sky_fib_flux}
 
         if qlf:
             qlf_post(retval)    
@@ -1367,8 +1393,9 @@ class Sky_Peaks(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        #SE: no reason to call in RA/DEC, be careful with copy-paste!
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
 
         # Parameters
         if param is None:
@@ -1384,7 +1411,7 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec}
+        retval["METRICS"]={"PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec}
 
         if qlf:
             qlf_post(retval)
@@ -1489,8 +1516,10 @@ class Sky_Residual(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+
+        #SE: why keep calling in values that are not used in this QA?
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
 
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -1597,8 +1626,8 @@ class Integrate_Spec(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        ra = frame.fibermap["RA_TARGET"]
+        dec = frame.fibermap["DEC_TARGET"]
 
         #- get the integrals for all fibers
         flux=frame.flux
@@ -1633,7 +1662,9 @@ class Integrate_Spec(MonitoringAlg):
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
         for i in range(len(mag_avg_tgt)):
-            mag_fib=-2.5*np.log(integ_avg_tgt[i]/frame.meta["EXPTIME"])+30.
+            
+            #SE: still using counts as opposed to a calibrated flux. mag_AB= -2.5 log10(f)-48.6 
+            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+48.6
             if mag_avg_tgt[i] != np.nan:
                 magdiff=mag_fib-mag_avg_tgt[i]
             else:
