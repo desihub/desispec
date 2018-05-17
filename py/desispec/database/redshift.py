@@ -635,13 +635,17 @@ def q3c_index(table):
     return
 
 
-def setup_db(options):
+def setup_db(options=None, **kwargs):
     """Initialize the database connection.
 
     Parameters
     ----------
     options : :class:`argpare.Namespace`
         Parsed command-line options.
+    kwargs : keywords
+        If present, use these instead of `options`.  This is more
+        user-friendly than setting up a :class:`~argpare.Namespace`
+        object in, *e.g.* a Jupyter Notebook.
 
     Returns
     -------
@@ -652,10 +656,50 @@ def setup_db(options):
     #
     # Schema creation
     #
-    if options.schema:
-        schemaname = options.schema
+    if options is None:
+        if len(kwargs) > 0:
+            try:
+                schema = kwargs['schema']
+            except KeyError:
+                schema = None
+            try:
+                overwrite = kwargs['overwrite']
+            except KeyError:
+                overwrite = False
+            try:
+                hostname = kwargs['hostname']
+            except KeyError:
+                hostname = None
+            try:
+                username = kwargs['username']
+            except KeyError:
+                username = 'desidev_admin'
+            try:
+                dbfile = kwargs['dbfile']
+            except KeyError:
+                dbfile = 'redshift.db'
+            try:
+                datapath = kwargs['datapath']
+            except KeyError:
+                datapath = None
+            try:
+                verbose = kwargs['verbose']
+            except KeyError:
+                verbose = False
+        else:
+            raise ValueError("No options specified!")
+    else:
+        schema = options.schema
+        overwrite = options.overwrite
+        hostname = options.hostname
+        username = options.username
+        dbfile = options.dbfile
+        datapath = options.datapath
+        verbose = options.verbose
+    if schema:
+        schemaname = schema
         # event.listen(Base.metadata, 'before_create', CreateSchema(schemaname))
-        if options.overwrite:
+        if overwrite:
             event.listen(Base.metadata, 'before_create',
                          DDL('DROP SCHEMA IF EXISTS {0} CASCADE'.format(schemaname)))
         event.listen(Base.metadata, 'before_create',
@@ -664,26 +708,26 @@ def setup_db(options):
     # Create the file.
     #
     postgresql = False
-    if options.hostname:
+    if hostname:
         postgresql = True
-        db_connection = parse_pgpass(hostname=options.hostname,
-                                     username=options.username)
+        db_connection = parse_pgpass(hostname=hostname,
+                                     username=username)
         if db_connection is None:
             log.critical("Could not load database information!")
             return 1
     else:
-        if os.path.basename(options.dbfile) == options.dbfile:
-            db_file = os.path.join(options.datapath, options.dbfile)
+        if os.path.basename(dbfile) == dbfile:
+            db_file = os.path.join(datapath, dbfile)
         else:
-            db_file = options.dbfile
-        if options.overwrite and os.path.exists(db_file):
+            db_file = dbfile
+        if overwrite and os.path.exists(db_file):
             log.info("Removing file: %s.", db_file)
             os.remove(db_file)
         db_connection = 'sqlite:///'+db_file
     #
     # SQLAlchemy stuff.
     #
-    engine = create_engine(db_connection, echo=options.verbose)
+    engine = create_engine(db_connection, echo=verbose)
     dbSession.remove()
     dbSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
     log.info("Begin creating tables.")
@@ -713,7 +757,7 @@ def get_options(*args):
                                        "database."),
                           prog=os.path.basename(argv[0]))
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
-                      default='quicksurvey.db', metavar='FILE',
+                      default='redshift.db', metavar='FILE',
                       help="Store data in FILE.")
     prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
                       metavar='HOSTNAME',
