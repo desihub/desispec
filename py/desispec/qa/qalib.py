@@ -384,7 +384,8 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
-    qadict['RESID'] = []
+    #SE: commented by popular demand!
+    #qadict['RESID'] = []
 
     qadict["SKYFIBERID"]=skyfibers.tolist()
     #- Residuals in wave and fiber axes
