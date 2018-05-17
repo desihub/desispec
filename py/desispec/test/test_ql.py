@@ -163,11 +163,25 @@ class TestQL(unittest.TestCase):
             shutil.rmtree(cls.testDir)
 
     #- Test if QuickLook outputs merged QA file
-    def test_mergeQA(self):
+    #def test_mergeQA(self):
+        #os.environ['QL_SPEC_REDUX'] = self.testDir
+        #cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
+        #pyver = format(sys.executable.split('anaconda')[1])
+        #print('NOTE: Test is running on python v'+format(pyver.split('/')[0]))
+        
+        #if int(format(pyver.split('/')[0])) < 3:
+             #pass
+        #else:
+           #if runcmd(cmd) != 0:
+              #raise RuntimeError('quicklook pipeline failed')
+
+
+    def test_QA(self):
         os.environ['QL_SPEC_REDUX'] = self.testDir
-        cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
+        cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} ".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
         pyver = format(sys.executable.split('anaconda')[1])
         print('NOTE: Test is running on python v'+format(pyver.split('/')[0]))
+        
         if int(format(pyver.split('/')[0])) < 3:
              pass
         else:

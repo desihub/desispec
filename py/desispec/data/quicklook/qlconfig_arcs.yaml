@@ -5,7 +5,7 @@ Flavor: arcs
 #- Calibration files: Assuming the same night for psf and fiberflat
 #- PSFExpid used as expid for arc exposures
 PSFExpid: 0
-PSFType: psf
+PSFType: psfboot
 #- FiberflatExpid used as expid for flat exposures
 FiberflatExpid: 1
 #- Writeout intermediate files
