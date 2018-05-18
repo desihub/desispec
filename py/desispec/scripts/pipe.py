@@ -639,11 +639,13 @@ Where supported commands are:
         if args.nodb:
             db = None
 
-        ppn = args.procs_per_node
+        ppn = None
+        if args.procs_per_node > 0:
+            ppn = args.procs_per_node
 
         if args.nersc is None:
             # Not running at NERSC
-            if ppn <= 0:
+            if ppn is None:
                 ppn = args.mpi_procs
             for tt, tlist in tasks_by_type.items():
                 pipe.run.dry_run(tt, tlist, opts, args.mpi_procs,
@@ -652,8 +654,6 @@ Where supported commands are:
             # Running at NERSC
             hostprops = pipe.scriptgen.nersc_machine(args.nersc,
                 args.nersc_queue)
-            if ppn <= 0:
-                ppn = hostprops["nodecores"]
 
             for tt, tlist in tasks_by_type.items():
                 joblist = pipe.scriptgen.nersc_job_size(tt, tlist,
@@ -661,10 +661,10 @@ Where supported commands are:
                     args.nersc_maxnodes, nodeprocs=ppn, db=db)
 
                 launch="srun -n"
-                for (jobnodes, jobtime, jobtasks) in joblist:
-                    jobprocs = jobnodes * ppn
+                for (jobnodes, jobppn, jobtime, jobtasks) in joblist:
+                    jobprocs = jobnodes * jobppn
                     pipe.run.dry_run(tt, jobtasks, opts, jobprocs,
-                        ppn, db=db, launch=launch, force=False)
+                        jobppn, db=db, launch=launch, force=False)
 
         return
 
@@ -702,7 +702,9 @@ Where supported commands are:
         if nodb:
             db = None
 
-        ppn = args.procs_per_node
+        ppn = None
+        if args.procs_per_node > 0:
+            ppn = args.procs_per_node
 
         # FIXME: Add openmp / multiproc function to task classes and
         # call them here.
@@ -717,11 +719,6 @@ Where supported commands are:
 
         else:
             # Running at NERSC
-            if ppn <= 0:
-                hostprops = pipe.scriptgen.nersc_machine(args.nersc,
-                    args.nersc_queue)
-                ppn = hostprops["nodecores"]
-
             scripts = pipe.scriptgen.batch_nersc(tasks_by_type,
                 outscript, outlog, jobname, args.nersc, args.nersc_queue,
                 args.nersc_maxtime, args.nersc_maxnodes, nodeprocs=ppn,

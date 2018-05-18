@@ -45,6 +45,7 @@ def nersc_machine(name, queue):
         props["sbatch"] = list()
         props["nodecores"] = 24
         props["corecpus"] = 2
+        props["nodemem"] = 61.0
         if queue == "debug":
             props["maxnodes"] = 512
             props["maxtime"] = 30
@@ -63,6 +64,7 @@ def nersc_machine(name, queue):
         ]
         props["nodecores"] = 32
         props["corecpus"] = 2
+        props["nodemem"] = 125.0
         if queue == "debug":
             props["maxnodes"] = 64
             props["maxtime"] = 30
@@ -82,6 +84,7 @@ def nersc_machine(name, queue):
         ]
         props["nodecores"] = 64
         props["corecpus"] = 4
+        props["nodemem"] = 93.0
         if queue == "debug":
             props["maxnodes"] = 512
             props["maxtime"] = 30
@@ -132,7 +135,7 @@ def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
 
 
 def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
-    nodes, nodeproc, minutes, multisrun=False, openmp=False, multiproc=False,
+    nodes, ppns, minutes, multisrun=False, openmp=False, multiproc=False,
     shifterimg=None,debug=False):
     """Create a SLURM script for use at NERSC.
 
@@ -151,10 +154,6 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
     if minutes > hostprops["maxtime"]:
         raise RuntimeError("request time '{}' is too long for {} queue '{}'"\
             .format(minutes, machine, queue))
-
-    if nodeproc > hostprops["nodecores"]:
-        raise RuntimeError("requested procs per node '{}' is more than the "
-            "the number of cores per node on {}".format(nodeproc, machine))
 
     hours = int(minutes/60)
     fullmin = int(minutes - 60*hours)
@@ -192,46 +191,47 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         f.write("export TMPDIR=/dev/shm\n\n")
 
         f.write("cpu_per_core={}\n\n".format(hostprops["corecpus"]))
-        f.write("node_cores={}\n\n".format(hostprops["nodecores"]))
-
-        f.write("nodes={}\n".format(nodes))
-        f.write("node_proc={}\n".format(nodeproc))
-        f.write("node_thread=$(( node_cores / node_proc ))\n")
-        f.write("node_depth=$(( cpu_per_core * node_thread ))\n")
-
-        f.write("procs=$(( nodes * node_proc ))\n\n")
-        if openmp:
-            f.write("export OMP_NUM_THREADS=${node_thread}\n")
-            f.write("export OMP_PLACES=threads\n")
-            f.write("export OMP_PROC_BIND=spread\n")
-        else:
-            f.write("export OMP_NUM_THREADS=1\n")
-        f.write("\n")
+        f.write("node_cores={}\n".format(hostprops["nodecores"]))
+        f.write("nodes={}\n\n".format(nodes))
 
         if debug:
             f.write("export DESI_LOGLEVEL=DEBUG\n\n")
-
-        runstr = "srun"
-        if multiproc:
-            runstr = "{} --cpu_bind=no".format(runstr)
-            f.write("export KMP_AFFINITY=disabled\n")
-            f.write("\n")
-        else:
-            runstr = "{} --cpu_bind=cores".format(runstr)
-
-        if shifterimg is None:
-            f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c "
-                "${{node_depth}}\"\n\n".format(runstr))
-        else:
-            f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c "
-                "${{node_depth}} shifter\"\n\n".format(runstr))
 
         f.write("now=`date +%Y%m%d-%H%M%S`\n")
         f.write("echo \"job datestamp = ${now}\"\n")
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("envlog={}_${{now}}.env\n".format(logroot))
         f.write("env > ${envlog}\n\n")
-        for com in commands:
+        for com, ppn in zip(commands, ppns):
+            if ppn > hostprops["nodecores"]:
+                raise RuntimeError("requested procs per node '{}' is more than"
+                    " the number of cores per node on {}".format(ppn, machine))
+            f.write("node_proc={}\n".format(ppn))
+            f.write("node_thread=$(( node_cores / node_proc ))\n")
+            f.write("node_depth=$(( cpu_per_core * node_thread ))\n")
+            f.write("procs=$(( nodes * node_proc ))\n\n")
+            if openmp:
+                f.write("export OMP_NUM_THREADS=${node_thread}\n")
+                f.write("export OMP_PLACES=threads\n")
+                f.write("export OMP_PROC_BIND=spread\n")
+            else:
+                f.write("export OMP_NUM_THREADS=1\n")
+            f.write("\n")
+            runstr = "srun"
+            if multiproc:
+                runstr = "{} --cpu_bind=no".format(runstr)
+                f.write("export KMP_AFFINITY=disabled\n")
+                f.write("\n")
+            else:
+                runstr = "{} --cpu_bind=cores".format(runstr)
+
+            if shifterimg is None:
+                f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c "
+                    "${{node_depth}}\"\n\n".format(runstr))
+            else:
+                f.write("run=\"{} -n ${{procs}} -N ${{nodes}} -c "
+                    "${{node_depth}} shifter\"\n\n".format(runstr))
+
             comlist = com.split(" ")
             executable = comlist.pop(0)
             f.write("ex=`which {}`\n".format(executable))
@@ -283,7 +283,9 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         queue (str): the nersc queue name, e.g. regular or debug
         maxtime (int): the maximum run time in minutes.
         maxnodes (int): the maximum number of nodes.
-        nodeprocs (int): the number of processes per node.
+        nodeprocs (int): the number of processes per node.  If None, estimate
+            this based on the per-process memory needs of the task and the
+            machine properties.
         db (DataBase): the database to pass to the task runtime
             calculation.
 
@@ -297,6 +299,9 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
     if len(tasklist) == 0:
         raise RuntimeError("List of tasks is empty")
+
+    # Required memory per process.
+    taskprocmem = task_classes[tasktype].run_max_mem()
 
     # Get the machine properties
     hostprops = nersc_machine(machine, queue)
@@ -314,7 +319,15 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
             "queue '{}'".format(maxtime, machine, queue))
 
     if nodeprocs is None:
-        nodeprocs = hostprops["nodecores"]
+        # Estimate the required processes per node based on memory use.
+        coremem = hostprops["nodemem"] / hostprops["nodecores"]
+        coreprocs = taskprocmem / coremem
+        nearest = int(0.5 + coreprocs)
+        if np.absolute(coreprocs - nearest) < 0.01:
+            coreprocs = nearest
+        else:
+            coreprocs = int(coreprocs) + 1
+        nodeprocs = hostprops["nodecores"] // coreprocs
 
     if nodeprocs > hostprops["nodecores"]:
         raise RuntimeError("requested procs per node '{}' is more than the "
@@ -408,7 +421,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         for w in workertasks:
             outtasks.extend(w)
 
-        ret.append( (totalnodes, runtime, outtasks) )
+        ret.append( (totalnodes, nodeprocs, runtime, outtasks) )
         log.debug("job will run on {} nodes for {} minutes on {} tasks".format(totalnodes, runtime, len(outtasks)))
 
         if len(tasktimes) == 0:
@@ -539,7 +552,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
         if len(joblist) == 1:
             suffix = False
         tasktype = list(tasks_by_type.keys())[0]
-        for (nodes, runtime, tasks) in joblist[tasktype]:
+        for (nodes, ppn, runtime, tasks) in joblist[tasktype]:
             joblogroot = None
             joboutroot = None
             if suffix:
@@ -554,7 +567,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
                 .format(tasktype, taskfile, dbstr) ]
             outfile = "{}.slurm".format(joboutroot)
             nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine,
-                      queue, nodes, nodeprocs, runtime, openmp=openmp,
+                      queue, nodes, [ ppn ], runtime, openmp=openmp,
                       multiproc=multiproc, shifterimg=shifterimg, debug=debug)
             scriptfiles.append(outfile)
             jindx += 1
@@ -568,7 +581,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
         fullnodes = 0
         fullruntime = 0
         for t in tasks_by_type.keys():
-            for (nodes, runtime, tasks) in joblist[t]:
+            for (nodes, ppn, runtime, tasks) in joblist[t]:
                 if nodes > fullnodes:
                     fullnodes = nodes
                 fullruntime += runtime
@@ -579,16 +592,18 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
             raise RuntimeError("Packed pipeline jobs exceed time limit")
 
         coms = list()
+        ppns = list()
         for t, tasklist in tasks_by_type.items():
-            (nodes, runtime, tasks) = joblist[t][0]
+            (nodes, ppn, runtime, tasks) = joblist[t][0]
             taskfile = "{}_{}.tasks".format(outroot, t)
             task_write(taskfile, tasks)
             coms.append("desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
                 .format(t, taskfile, dbstr))
+            ppns.append(ppn)
 
         outfile = "{}.slurm".format(outroot)
         nersc_job(jobname, outfile, logroot, desisetup, coms, machine,
-                  queue, fullnodes, nodeprocs, fullruntime, openmp=openmp,
+                  queue, fullnodes, ppns, fullruntime, openmp=openmp,
                   multiproc=multiproc, shifterimg=shifterimg, debug=debug)
         scriptfiles.append(outfile)
 
