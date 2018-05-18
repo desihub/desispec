@@ -19,22 +19,15 @@ def project(x1,x2):
     x1=np.sort(x1)
     x2=np.sort(x2)
     Pr=np.zeros((len(x2),len(x1)))
-    e1 = np.zeros(len(x1)+1)
-    e2 = np.zeros(len(x2)+1)
-    for k in range(len(x1)-1) :  #calculate bin edges
-        if k < len(x1)-2 :
-            halfbin = (x1[k+1] - x1[k])/2.0
-            e1[k] = x1[k] - halfbin
-        else : 
-            e1[k] = x1[k] - halfbin
-            e1[k+1] = x1[k] + halfbin
-    for ii in range(len(x2)-1) :  # bin edges for resampled grid
-        if ii < len(x2)-2 :
-            halfbin = (x2[ii+1] - x2[ii])/2.0
-            e2[ii] = x2[ii] - halfbin
-        else : 
-            e2[ii] = x2[ii] - halfbin
-            e2[ii+1] = x2[ii] + halfbin
+    e1=np.zeros(len(x1)+1)
+    e1[1:-1]=(x1[:-1]+x1[1:])/2.
+    e1[0]=1.5*x1[0]-0.5*x1[1]
+    e1[-1]=1.5*x1[-1]-0.5*x1[-2]
+
+    e2=np.zeros(len(x2)+1)
+    e2[1:-1]=(x2[:-1]+x2[1:])/2.
+    e2[0]=1.5*x2[0]-0.5*x2[1]
+    e2[-1]=1.5*x2[-1]-0.5*x2[-2]
 
     for ii in range(len(e2)-1): # columns
         #- Find indices in x1, containing the element in x2 
@@ -48,7 +41,7 @@ def project(x1,x2):
             if emax[-1] > e2[ii+1] : emax[-1] = e2[ii+1]
             dx = (emax-emin)/(e1[k+1]-e1[k])
             Pr[ii,k]=1-dx
-            Pr[ii+1,k]=dx
+            #Pr[ii+1,k]=dx
     #- edge: 
     if x2[-1]==x1[-1]:
         Pr[-1,-1]=1
