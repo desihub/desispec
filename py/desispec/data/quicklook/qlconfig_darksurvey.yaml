@@ -24,7 +24,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, BoxcarExtract, ApplyFiberFlat_QL, SkySub_QL]
+Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ApplyFiberFlat_QL, SkySub_QL]
 Algorithms:
     Initialize:
         QA: 
@@ -32,8 +32,6 @@ Algorithms:
                 PARAMS: {}
     Preproc:
         QA: 
-            Trace_Shifts:
-                PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0]}
             Bias_From_Overscan:
                 PARAMS: {BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
             Get_RMS:
@@ -46,6 +44,10 @@ Algorithms:
                          Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4],
                          XWSIGMA_NORMAL_RANGE: [-2.0, 2.0],
                          XWSIGMA_WARN_RANGE: [-4.0, 4.0]}
+    Flexure:
+        QA:
+            Trace_Shifts:
+                PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0]}
     BoxcarExtract:
         wavelength: {
             b: [3570,5730,0.8],

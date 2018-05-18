@@ -130,6 +130,17 @@ class Config(object):
             bootfile=None
             psffile=None
 
+        if self.conf["Flavor"] == 'science':
+            preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
+            inputpsf=findfile(self.conf["PSFType"],self.night,self.psfexpid,self.camera,specprod_dir=self.specprod_dir)
+            outputpsf=findfile('psf',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
+        else:
+            preproc_file=None
+            inputpsf=None
+            outputpsf=None
+
+        paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': inputpsf, 'outputPSFFile': outputpsf}
+
         paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
 
         paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
@@ -155,6 +166,7 @@ class Config(object):
         defList={
             'Initialize':paopt_initialize,
             'Preproc':paopt_preproc,
+            'Flexure':paopt_flexure,
             'BootCalibration':paopt_bootcalib,
             'BoxcarExtract':paopt_extract,
             'ResolutionFit':paopt_resfit,
@@ -191,7 +203,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'BootCalibration': 'psfboot', 'BoxcarExtract': 'frame', 'ResolutionFit': None, 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BootCalibration': 'psfboot', 'BoxcarExtract': 'frame', 'ResolutionFit': None, 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -259,10 +271,6 @@ class Config(object):
                 if qa == 'Calculate_SNR':
                     qaopts[qa]['rescut']=self.rescut
                     qaopts[qa]['sigmacut']=self.sigmacut
-                elif qa == 'Trace_Shifts':
-                    qaopts[qa]['preprocFile']=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
-                    qaopts[qa]['inputFile']=findfile(self.conf["PSFType"],self.night,self.psfexpid,self.camera,specprod_dir=self.specprod_dir)
-                    qaopts[qa]['outputFile']=findfile('psftrace',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir

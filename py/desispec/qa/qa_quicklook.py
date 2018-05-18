@@ -246,10 +246,6 @@ class Trace_Shifts(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
 
-        preproc_file=kwargs["preprocFile"]
-        input_file=kwargs["inputFile"]
-        output_file=kwargs["outputFile"]
-
         if kwargs["singleqa"] == 'Trace_Shifts':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
@@ -293,9 +289,9 @@ class Trace_Shifts(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,image,paname=paname,amps=amps,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics,preproc_file=preproc_file,input_file=input_file,output_file=output_file)
+        return self.run_qa(fibermap,image,paname=paname,amps=amps,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None,preproc_file=None,input_file=None,output_file=None):
+    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
 
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -304,10 +300,7 @@ class Trace_Shifts(MonitoringAlg):
                 "TRACE_WARN_RANGE":[-2.0, 2.0]
                 }
 
-        cmd="desi_compute_trace_shifts --image {} --psf {} --outpsf {}".format(preproc_file,input_file,output_file)
-        if runcmd(cmd) !=0:
-            raise RuntimeError('desi_compute_trace_shifts failed, psftrace not written')
-
+        #- RS: Return empty dictionaries until flexure metrics are decided
         retval={}
         retval["METRICS"]={}
         retval["PARAMS"]=param
