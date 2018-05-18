@@ -169,7 +169,7 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
             meanskyivar=1./werr**2
         else:
             meanskyflux=skyfluxes
-            meanskyivar=skyivar
+            meanskyivar=skyivars
 
         #- Create a 2d- sky model replicating this  
         finalskyflux=np.tile(meanskyflux,nspec).reshape(nspec,nwave)
