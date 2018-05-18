@@ -384,7 +384,8 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     perc = dustat.perc(res, per=param['PER_RESID'])
     qadict['RESID_PER'] = [float(iperc) for iperc in perc]
 
-    qadict['RESID'] = []
+    #SE: commented by popular demand!
+    #qadict['RESID'] = []
 
     qadict["SKYFIBERID"]=skyfibers.tolist()
     #- Residuals in wave and fiber axes
@@ -404,8 +405,10 @@ def sky_resid(param, frame, skymodel, quick_look=False):
         nbin = i1-i0
         hist, edges = np.histogram(devs, range=rng, bins=nbin)
 
-        qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
-        qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
+
+        #SE: commented this because didn't seem to be needed to be saved in the dictionary 
+        #qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
+        #qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
 
     #- Add additional metrics for quicklook
     if quick_look:
