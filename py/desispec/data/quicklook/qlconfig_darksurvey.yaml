@@ -35,14 +35,11 @@ Algorithms:
             Trace_Shifts:
                 PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0]}
             Bias_From_Overscan:
-                PARAMS: {DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
-        
+                PARAMS: {BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
             Get_RMS:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
-                
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
-
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5578.9],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
