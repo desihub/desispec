@@ -32,6 +32,8 @@ Algorithms:
                 PARAMS: {}
     Preproc:
         QA: 
+            Trace_Shifts:
+                PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0]}
             Bias_From_Overscan:
                 PARAMS: {DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
         

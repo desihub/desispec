@@ -56,7 +56,7 @@ class Config(object):
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
-        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
 
     @property
     def mode(self):
@@ -259,6 +259,10 @@ class Config(object):
                 if qa == 'Calculate_SNR':
                     qaopts[qa]['rescut']=self.rescut
                     qaopts[qa]['sigmacut']=self.sigmacut
+                elif qa == 'Trace_Shifts':
+                    qaopts[qa]['preprocFile']=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
+                    qaopts[qa]['inputFile']=findfile(self.conf["PSFType"],self.night,self.psfexpid,self.camera,specprod_dir=self.specprod_dir)
+                    qaopts[qa]['outputFile']=findfile('psftrace',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir
@@ -378,6 +382,7 @@ class Config(object):
                      }
         else:
             filemap={'Check_HDUs':'ql_checkHDUs',
+                     'Trace_Shifts':'ql_trace',
                      'Bias_From_Overscan': 'ql_getbias',
                      'Get_RMS' : 'ql_getrms',
                      'Count_Pixels': 'ql_countpix',
