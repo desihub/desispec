@@ -30,7 +30,7 @@ def convert_dateobs(timestamp, tzinfo=None):
     return x
 
 
-def parse_pgpass(hostname='scidb2.nersc.gov', username='desidev_admin'):
+def parse_pgpass(hostname='nerscdb03.nersc.gov', username='desidev_admin'):
     """Read a ``~/.pgpass`` file.
 
     Parameters
