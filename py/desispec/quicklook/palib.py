@@ -32,32 +32,22 @@ def project(x1,x2):
     e2[0]=1.5*x2[0]-0.5*x2[1]
     e2[-1]=1.5*x2[-1]-0.5*x2[-2]
 
-    for ii in range(len(e2)-2): # columns
+    for ii in range(len(e2)-1): # columns
         #- Find indices in x1, containing the element in x2 
         #- This is much faster than looping over rows
-##        k=np.where((e1>=e2[ii]) & (e1<=e2[ii+1]))[0] 
-##        if len(k)>0:
-        #-    dx=(x1[k]-x2[ii])/(x2[ii+1]-x2[ii])
-##            emin = e1[k]
-##            emax = e1[k+1]
-##            if emin[0] < e2[ii] :  emin[0] = e2[ii]
-##            if emax[-1] > e2[ii+1] : emax[-1] = e2[ii+1]
-##            dx = (emax-emin)/(e1[k+1]-e1[k])
-##            Pr[ii,k]=1-dx
-##            Pr[ii+1,k]=dx
         
-        k = np.where((e1lo<=e2[ii]) & (e1hi>e2[ii]))
+        k = np.where((e1lo<=e2[ii]) & (e1hi>e2[ii]))[0]
         # this where obtains single e1 edge just below start of e2 bin
         emin = e2[ii]
         emax = e1hi[k]
-        print(ii, k, e2[ii], emin, e1lo[k], e1hi[k], emax)
+        #print(ii, k, e2[ii], emin, e1lo[k], e1hi[k], emax)
         if e2[ii+1] < emax : emax = e2[ii+1]
         dx = (emax-emin)/(e1hi[k]-e1lo[k])
         Pr[ii,k] = dx    # enter first e1 contribution to e2[ii]
 
         if e2[ii+1] > emax :
             # cross over to another e1 bin contributing to this e2 bin
-            l = np.where((e1 < e2[ii+1]) & (e1 > e1hi[k]))
+            l = np.where((e1 < e2[ii+1]) & (e1 > e1hi[k]))[0]
             if len(l) > 0 :
                # several-to-one resample.  Just consider 3 bins max. case
                Pr[ii,k[0]+1] = 1.0  # middle bin fully contained in e2
