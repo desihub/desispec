@@ -252,7 +252,7 @@ class Bias_From_Overscan(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        if kwargs["singleqa"] == 'Bias_From_Ovescan':
+        if kwargs["singleqa"] == 'Bias_From_Overscan':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
