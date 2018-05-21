@@ -141,9 +141,9 @@ class Target(SchemaMixin, Base):
                 "brickname='{0.brickname}', " +
                 "brick_objid={0.brick_objid:d}, " +
                 "ra={0.ra:f}, dec={0.dec:f}, " +
-                "flux_u={0.flux_u:f}, " +
                 "flux_g={0.flux_g:f}, " +
                 "flux_r={0.flux_r:f}, " +
+                "flux_z={0.flux_z:f}, " +
                 "flux_w1={0.flux_w1:f}, " +
                 "flux_w2={0.flux_w2:f}, " +
                 "shapeexp_r={0.shapeexp_r:f}," +
@@ -300,9 +300,9 @@ class ZCat(SchemaMixin, Base):
                 "brickid={0.brickid:d}, " +
                 "brick_objid={0.brick_objid:d}, " +
                 "ra={0.ra:f}, dec={0.dec:f}, " +
-                "flux_u={0.flux_u:f}, " +
                 "flux_g={0.flux_g:f}, " +
                 "flux_r={0.flux_r:f}, " +
+                "flux_z={0.flux_z:f}, " +
                 "flux_w1={0.flux_w1:f}, " +
                 "flux_w2={0.flux_w2:f}, " +
                 "mw_transmission_g={0.mw_transmission_g:f}, " +
