@@ -128,7 +128,10 @@ class Check_HDUs(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
         
         if kwargs["singleqa"] == 'Check_HDUs':
-            rawfile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=kwargs["rawdir"])
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            rawfile = findfile('raw',int(night),int(expid),camera,rawdata_dir=kwargs["rawdir"])
             raw = fits.open(rawfile)
         else:
             raw=args[0]
@@ -356,10 +359,7 @@ class Bias_From_Overscan(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
-            image.meta = image[0].header
-           
         else:
             image=args[0]
             

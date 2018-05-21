@@ -326,19 +326,20 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     else:
         import numpy as np
         qa=None
-        qas=['Check_HDUs',['Trace_Shifts','Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
         for palg in range(len(qas)):
             if singqa in qas[palg]:
                 pa=pl[palg][0]
                 pac=paconf[palg]
-                if singqa == 'Bias_From_Overscan' or singqa == 'CountSpectralBins':
+                if singqa in singleqaperpa:
                     qa = pl[palg][1][0]
                 else:
                     for qalg in range(len(qas[palg])):
                         if qas[palg][qalg] == singqa:
                             qa=pl[palg][1][qalg]
         if qa is None:
-            log.critical("Unknown input... Valid QAs are: {}".format(qas))
+            log.critical("Unknown input QA... Valid QAs are: {}".format(qas))
             sys.exit()
 
         log.info("Starting to run step {}".format(pac["StepName"]))
