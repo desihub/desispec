@@ -567,7 +567,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
                 .format(tasktype, taskfile, dbstr) ]
             outfile = "{}.slurm".format(joboutroot)
             nersc_job(jobname, outfile, joblogroot, desisetup, coms, machine,
-                      queue, nodes, [ ppn ], runtime, openmp=openmp,
+                      queue, nodes, [ nodes ], [ ppn ], runtime, openmp=openmp,
                       multiproc=multiproc, shifterimg=shifterimg, debug=debug)
             scriptfiles.append(outfile)
             jindx += 1
