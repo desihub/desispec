@@ -349,8 +349,7 @@ class FiberAssign(SchemaMixin, Base):
     brickname = Column(String, index=True, nullable=False)
 
     def __repr__(self):
-        return ("<FiberAssign(faid={0.faid:d}, " +
-                "tileid={0.tileid:d}, " +
+        return ("<FiberAssign(tileid={0.tileid:d}, " +
                 "fiber={0.fiber:d}, " +
                 "location={0.location:d}, " +
                 "numtarget={0.numtarget:d}, " +
@@ -868,13 +867,13 @@ def main():
     #
     # Load zbest files.
     #
-    q = dbSession.query(ZCat).first()
-    if q is None:
-        log.info("Loading ZCat from %s.", options.datapath)
-        load_zcat(options.datapath, run1d='mini')
-        log.info("Finished loading ZCat.")
-    else:
-        log.info("ZCat table already loaded.")
+    # q = dbSession.query(ZCat).first()
+    # if q is None:
+    #     log.info("Loading ZCat from %s.", options.datapath)
+    #     load_zcat(options.datapath, run1d='mini')
+    #     log.info("Finished loading ZCat.")
+    # else:
+    #     log.info("ZCat table already loaded.")
     #
     # Load fiber assignment files.
     #
