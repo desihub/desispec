@@ -16,6 +16,7 @@ desispec Change Log
 * Allow running multiple task types in a single job (PR `#601`_).
 * Override PSF file psferr to avoid masking bright lines.
   Requires specter > 0.8.1 (PR `#606`_).
+* new desi_night scripts for semi-realtime processing (PR `#609`_).
 
 .. _`#585`: https://github.com/desihub/desispec/pull/585
 .. _`#588`: https://github.com/desihub/desispec/pull/588
@@ -23,6 +24,7 @@ desispec Change Log
 .. _`#592`: https://github.com/desihub/desispec/pull/592
 .. _`#601`: https://github.com/desihub/desispec/pull/601
 .. _`#606`: https://github.com/desihub/desispec/pull/606
+.. _`#609`: https://github.com/desihub/desispec/pull/609
 
 0.20.0 (2018-03-29)
 -------------------
