@@ -326,7 +326,7 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     else:
         import numpy as np
         qa=None
-        qas=['Bias_From_Overscan',['Get_RMS','Calc_XWSigma','Count_Pixels'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
         for palg in range(len(qas)):
             if singqa in qas[palg]:
                 pa=pl[palg][0]
@@ -364,16 +364,14 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
         except Exception as e:
             log.warning("Failed to run QA {}. Got Exception {}".format(qa.name,e),exc_info=True)
         if len(qaresult):
-            if conf["DumpIntermediates"]:
+           if conf["DumpIntermediates"]:
                 f = open(pac["OutputFile"],"w")
                 f.write(yaml.dump(yamlify(qaresult)))
                 log.info("{} finished".format(qa.name))
 
     #- merge QAs for this pipeline execution
     if mergeQA is True:
-        # from desispec.quicklook.util import merge_QAs
-        # log.info("Merging all the QAs for this pipeline execution")
-        # merge_QAs(QAresults,conf)
+
         log.debug("Dumping mergedQAs")
         from desispec.io import findfile
         ftype='ql_mergedQA_file'
@@ -384,9 +382,8 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                           expid=conf['Expid'],
                           camera=conf['Camera'],
                           specprod_dir=specprod_dir)
-# this will overwrite the file. above function returns same name for different QL executions
-# results will be erased.
-        # Sarah E.: disabled the functionality of writing yamls  
+
+        # SE: disabled the functionality of writing yamls
         #schemaMerger.writeToFile(destFile)
         #log.info("Wrote merged QA file {}".format(destFile))
         schemaMerger.writeTojsonFile(destFile)

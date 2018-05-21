@@ -33,7 +33,7 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: { DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
         
             Get_RMS:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
@@ -56,7 +56,7 @@ Algorithms:
         QuickResolution: True
         QA: 
             CountSpectralBins:
-                PARAMS: {CUTBINS: 5, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
+                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
     ApplyFiberFlat_QL:
         QA: 
             Sky_Continuum:

@@ -20,7 +20,7 @@ import sys
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Apply fiberflat, sky subtraction and calibration.")
-    parser.add_argument('--infile', type = str, default = None, required=True,
+    parser.add_argument('-i','--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None,
                         help = 'path of DESI fiberflat fits file')
@@ -28,7 +28,7 @@ def parse(options=None):
                         help = 'path of DESI sky fits file')
     parser.add_argument('--calib', type = str, default = None,
                         help = 'path of DESI calibration fits file')
-    parser.add_argument('--outfile', type = str, default = None, required=True,
+    parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
     parser.add_argument('--cosmics-nsig', type = float, default = 0, required=False,
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')

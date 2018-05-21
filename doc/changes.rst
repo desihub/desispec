@@ -5,25 +5,38 @@ desispec Change Log
 0.21.0 (unreleased)
 -------------------
 
-* Add ability to load Frame without reading Resolution matrix
-* Refactor offline QA to use qaprod_dir more sensibly
-* Include hooks in QA to previous fiberflat file location (calib2d)
-* Inhibit scatter plot in skyredidual QA
 * Pipeline fix to allow redrock to use a full node per healpix (PR `#585`_).
 * Update pipeline maxtime/maxnodes job calculation (PR `#588`_).
 * Better sync of pixel tasks and DB sync bugfixes (PR `#590`_).
 * Improved handling of errors in case of full job failure (PR `#592`_).
+* QA speedups and improvements (PR `#593`_)
+  * Add ability to load Frame without reading Resolution matrix
+  * Refactor offline QA to use qaprod_dir more sensibly
+  * Include hooks in QA to previous fiberflat file location (calib2d)
+  * Inhibit scatter plot in skyredidual QA
+* Pass MAG into output zbest file (PR `#595`_)
 * Allow running multiple task types in a single job (PR `#601`_).
+* Pipeline hooks for processing a single exposure (PR `#604`_).
 * Override PSF file psferr to avoid masking bright lines.
   Requires specter > 0.8.1 (PR `#606`_).
-* new desi_night scripts for semi-realtime processing (PR `#609`_).
+* QL updates (PR `#577`_, `#600`_, `#607`_).
+* Integration test and QA fixes (PR `#602`_ and `#605`_)
+* New desi_night scripts for semi-realtime processing (PR `#609`_).
 
+.. _`#577`: https://github.com/desihub/desispec/pull/577
 .. _`#585`: https://github.com/desihub/desispec/pull/585
 .. _`#588`: https://github.com/desihub/desispec/pull/588
 .. _`#590`: https://github.com/desihub/desispec/pull/590
 .. _`#592`: https://github.com/desihub/desispec/pull/592
+.. _`#593`: https://github.com/desihub/desispec/pull/593
+.. _`#595`: https://github.com/desihub/desispec/pull/595
+.. _`#600`: https://github.com/desihub/desispec/pull/600
 .. _`#601`: https://github.com/desihub/desispec/pull/601
+.. _`#602`: https://github.com/desihub/desispec/pull/602
+.. _`#604`: https://github.com/desihub/desispec/pull/604
+.. _`#605`: https://github.com/desihub/desispec/pull/605
 .. _`#606`: https://github.com/desihub/desispec/pull/606
+.. _`#607`: https://github.com/desihub/desispec/pull/607
 .. _`#609`: https://github.com/desihub/desispec/pull/609
 
 0.20.0 (2018-03-29)
@@ -42,6 +55,7 @@ Multiple non-backwards compatible changes:
 * module file set DESI_CCD_CALIBRATION_DATA (`#564`_).
 * Optionally include RA,DEC in merged zcatalog (`#562`_).
 * QL updates to S/N calculations (`#556`_).
+* fix BUNIT, HPXNSIDE, HPXPIXEL keywords (PR `#566`_) 
 
 .. _`#517`: https://github.com/desihub/desispec/pull/517
 .. _`#519`: https://github.com/desihub/desispec/pull/519
@@ -61,6 +75,7 @@ Multiple non-backwards compatible changes:
 .. _`#559`: https://github.com/desihub/desispec/pull/559
 .. _`#562`: https://github.com/desihub/desispec/pull/562
 .. _`#564`: https://github.com/desihub/desispec/pull/564
+.. _`#566`: https://github.com/desihub/desispec/pull/566
 
 0.19.0 (2018-03-01)
 -------------------

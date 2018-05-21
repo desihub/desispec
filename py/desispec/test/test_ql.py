@@ -13,7 +13,8 @@ from desispec.util import runcmd
 from desispec.io.raw import write_raw
 from desispec.io import empty_fibermap
 from desispec.io.fibermap import write_fibermap
-
+import datetime
+import pytz
 class TestQL(unittest.TestCase):
     @classmethod
     def setUp(cls):
@@ -94,11 +95,11 @@ class TestQL(unittest.TestCase):
                       'Timeout': 120.0,
                       'Pipeline': ['Initialize','Preproc'],
                       'Algorithms': {'Initialize':{
-                                         'QA':{
-                                             'Bias_From_Overscan':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'DIFF_WARN_RANGE':[-1.0,1.0],'DIFF_ALARM_RANGE':[-2.0,2.0]}}}},
+                                         'QA':{'Check_HDUs':{'PARAMS':{}}
+                                             }},
                                      'Preproc':{
-                                         'QA':{
-                                             'Get_RMS':{'PARAMS':{'RMS_WARN_RANGE':[-1.0,1.0],'RMS_ALARM_RANGE':[-2.0,2.0]}},
+                                         'QA':{'Bias_From_Overscan':{'PARAMS':{'DIFF_WARN_RANGE':[-1.0,1.0],'DIFF_ALARM_RANGE':[-2.0,2.0]}},
+                                             'Get_RMS':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'RMS_WARN_RANGE':[-1.0,1.0],'RMS_ALARM_RANGE':[-2.0,2.0]}},
                                              'Count_Pixels':{'PARAMS':{'CUTPIX':500,'LITFRAC_NORMAL_RANGE':[200.0,500.0],'LITFRAC_WARN_RANGE':[50.0,650.0]}}}}}
                       }
         with open('{}/test_config.yaml'.format(testDir),'w') as config:
@@ -162,11 +163,25 @@ class TestQL(unittest.TestCase):
             shutil.rmtree(cls.testDir)
 
     #- Test if QuickLook outputs merged QA file
-    def test_mergeQA(self):
+    #def test_mergeQA(self):
+        #os.environ['QL_SPEC_REDUX'] = self.testDir
+        #cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
+        #pyver = format(sys.executable.split('anaconda')[1])
+        #print('NOTE: Test is running on python v'+format(pyver.split('/')[0]))
+        
+        #if int(format(pyver.split('/')[0])) < 3:
+             #pass
+        #else:
+           #if runcmd(cmd) != 0:
+              #raise RuntimeError('quicklook pipeline failed')
+
+
+    def test_QA(self):
         os.environ['QL_SPEC_REDUX'] = self.testDir
-        cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} --mergeQA".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
+        cmd = "{} {}/desi_quicklook -i {} -n {} -c {} -e {} --rawdata_dir {} --specprod_dir {} ".format(sys.executable,self.binDir,self.configfile,self.night,self.camera,self.expid,self.testDir,self.testDir)
+ 
         if runcmd(cmd) != 0:
-            raise RuntimeError('quicklook pipeline failed')
+              raise RuntimeError('quicklook pipeline failed')
 
 
 #- This runs all test* functions in any TestCase class in this file

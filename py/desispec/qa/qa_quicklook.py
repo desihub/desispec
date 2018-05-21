@@ -7,6 +7,7 @@ import datetime
 import numpy as np
 import scipy.ndimage
 import yaml
+import re
 import astropy.io.fits as fits
 import desispec.qa.qa_plots_ql as plot
 from desispec.quicklook.qas import MonitoringAlg, QASeverity
@@ -20,6 +21,7 @@ from desispec.io.sky import read_sky
 from desispec.image import Image as im
 from desispec.frame import Frame as fr
 from desispec.preproc import _parse_sec_keyword
+
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -183,7 +185,8 @@ class Check_HDUs(MonitoringAlg):
         HDUstat = "NORMAL" 
         EXPNUMstat = "NORMAL"    
         
-        
+        param['EXPTIME'] = header["EXPTIME"]
+
         if camera != header["CAMERA"]:
                 raise qlexceptions.ParameterException("Missing camera "+camera)
                 HDUstat = 'ALARM'
@@ -193,8 +196,6 @@ class Check_HDUs(MonitoringAlg):
                 EXPNUMstat = "ALARM"
         
         
-        param['DESISPEC_VERSION'] = header['DEPVER07']
-        param['EXPTIME'] = header["EXPTIME"]
         
         if header["FLAVOR"] != "science" :
             
@@ -218,10 +219,6 @@ class Check_HDUs(MonitoringAlg):
 
     def get_default_config(self):
         return {}
-
-
-
-
 
 class Bias_From_Overscan(MonitoringAlg):
     def __init__(self,name,config,logger=None):
@@ -252,7 +249,7 @@ class Bias_From_Overscan(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
-        if kwargs["singleqa"] == 'Bias_From_Ovescan':
+        if kwargs["singleqa"] == 'Bias_From_Overscan':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
@@ -310,7 +307,13 @@ class Bias_From_Overscan(MonitoringAlg):
             retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
-
+        
+        #SE: this would give the desispec version stored in DEPVER07 key of the raw simulated fits file :0.16.0.dev1830
+        param['FITS_DESISPEC_VERSION'] = image.meta['DEPVER07'] 
+        import desispec
+        from desispec import quicklook
+        param['PROC_DESISPEC_VERSION']= desispec.__version__
+        param['PROC_QuickLook_VERSION']= quicklook.__qlversion__
         
           
         #header = image.meta
@@ -418,7 +421,7 @@ class Get_RMS(MonitoringAlg):
         if "qafile" in kwargs: qafile = kwargs["qafile"]
         else: qafile = None
 
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        if "qafig" in kwargs: qafig = kwargs["qafig"]
         else: qafig = None
 
         return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
@@ -456,6 +459,7 @@ class Get_RMS(MonitoringAlg):
         row_data_amp2=[]
         row_data_amp3=[]
         row_data_amp4=[]
+        bias_patnoise=[]
         #bias_overscan=[]        
         for kk in ['1','2','3','4']:
             sel=_parse_sec_keyword(image.meta['BIASSEC'+kk])
@@ -467,14 +471,17 @@ class Get_RMS(MonitoringAlg):
                     row_amp1=pixdata[i]
                     row_data_amp1.append(row_amp1)
             if kk == '2':
+                
                 for i in range(pixdata.shape[0]):
                     row_amp2=pixdata[i]
                     row_data_amp2.append(row_amp2)
             if kk == '3':
+                
                 for i in range(pixdata.shape[0]):
                     row_amp3=pixdata[i]
                     row_data_amp3.append(row_amp3)
             if kk == '4':
+                
                 for i in range(pixdata.shape[0]):
                     row_amp4=pixdata[i]
                     row_data_amp4.append(row_amp4)
@@ -497,6 +504,46 @@ class Get_RMS(MonitoringAlg):
         row_data=np.concatenate((row_data_bottom,row_data_top))
         full_data=np.concatenate((data[0],data[1],data[2],data[3])).ravel()
 
+
+        # BIAS_ROW = mean_row  
+        median_row_amp1=[]
+        for i in range(len(row_data_amp1)):
+            median=np.median(row_data_amp1[i])
+            median_row_amp1.append(median)
+        
+        rms_median_row_amp1= np.std(median_row_amp1)
+        noise1 = image.meta['RDNOISE1']
+        bias_patnoise.append(rms_median_row_amp1/noise1)
+        
+        median_row_amp2=[]
+        for i in range(len(row_data_amp2)):
+            median=np.median(row_data_amp2[i])
+            median_row_amp2.append(median)
+        
+        rms_median_row_amp2= np.std(median_row_amp2)
+        noise2 = image.meta['RDNOISE2']
+        bias_patnoise.append(rms_median_row_amp2/noise2)
+        
+        
+        median_row_amp3=[]
+        for i in range(len(row_data_amp3)):
+            median=np.median(row_data_amp3[i])
+            median_row_amp3.append(median)
+        
+        rms_median_row_amp3= np.std(median_row_amp3)
+        noise3 = image.meta['RDNOISE3']
+        bias_patnoise.append(rms_median_row_amp3/noise3)
+        
+        median_row_amp4=[]
+        for i in range(len(row_data_amp4)):
+            median=np.median(row_data_amp4[i])
+            median_row_amp4.append(median)
+        
+        rms_median_row_amp4= np.std(median_row_amp4)
+        noise4 = image.meta['RDNOISE4']
+        bias_patnoise.append(rms_median_row_amp4/noise4)
+
+
         #- Calculate upper and lower bounds of 1, 2, and 3 sigma  
         sig1_lo = np.percentile(full_data,50.-(param['PERCENTILES'][0]/2.))
         sig1_hi = np.percentile(full_data,50.+(param['PERCENTILES'][0]/2.))
@@ -506,11 +553,13 @@ class Get_RMS(MonitoringAlg):
         sig3_hi = np.percentile(full_data,50.+(param['PERCENTILES'][2]/2.))
 
         #- Find difference between upper and lower sigma bounds
+        # DIFF1SIG: The number of counts separating the 1 sigma percentiles in the noise distribution (from the overscan region)
         diff1sig = sig1_hi - sig1_lo
+        # DIFF2SIG: The number of counts separating 2 or 3 sigma in the noise distribution
         diff2sig = sig2_hi - sig2_lo
         diff3sig = sig3_hi - sig3_lo
 
-        #- Calculate number of pixels below 5 sigma
+        #-DATA5SIG: number of pixels more than 5 sigma below the bias level
         sig5_value = np.percentile(full_data,3e-5)
         data5sig = len(np.where(full_data <= sig5_value)[0])
        
@@ -519,10 +568,10 @@ class Get_RMS(MonitoringAlg):
         if amps:
             rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
             rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
-            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_AMP":np.array(rms_over_amps)}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
+            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_OVERSCAN_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
 
         else:
-            retval["METRICS"]={"NOISE":rmsccd} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
+            retval["METRICS"]={"NOISE":rmsccd,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
         if qlf:
             qlf_post(retval)  
@@ -624,8 +673,8 @@ class Calc_XWSigma(MonitoringAlg):
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
 
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -822,9 +871,9 @@ class Calc_XWSigma(MonitoringAlg):
         xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
 
         if amps:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
+            retval["METRICS"]={"XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
         else:
-            retval["METRICS"]={"RA":ra,"DEC":dec, "XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
+            retval["METRICS"]={"XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
 
         #- http post if needed
         if qlf:
@@ -1037,8 +1086,8 @@ class CountSpectralBins(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
 
         if fibermap["OBJTYPE"][0] == 'ARC':
             import desispec.psf
@@ -1053,7 +1102,8 @@ class CountSpectralBins(MonitoringAlg):
             param = {
                  "CUTBINS":5,   #- threshold for number of counts in units of readnoise(scaled to bins)
                  "NGOODFIB_NORMAL_RANGE":[490, 500],
-                 "NGOODFIB_WARN_RANGE":[480, 500]
+                 "NGOODFIB_WARN_RANGE":[480, 500],
+                 "N_KNOWN_BROKEN_FIBERS": 0
                  }
 
         retval["PARAMS"] = param
@@ -1070,7 +1120,7 @@ class CountSpectralBins(MonitoringAlg):
         #- compare the flux sum to threshold
         
         passfibers=np.where(frame.flux.sum(axis=1)>threshold)[0] 
-        ngoodfibers=passfibers.shape[0]
+        ngoodfibers=passfibers.shape[0] - param["N_KNOWN_BROKEN_FIBERS"]
         good_fiber=np.array([0]*frame.nspec)
         good_fiber[passfibers]=1 #- assign 1 for good fiber
 
@@ -1088,7 +1138,7 @@ class CountSpectralBins(MonitoringAlg):
             retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
             retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "NGOODFIB": ngoodfibers, "GOOD_FIBER": good_fiber}
+        retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBER": good_fiber}
 
         #- http post if needed
         if qlf:
@@ -1180,9 +1230,9 @@ class Sky_Continuum(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
-
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
+        
         camera=frame.meta["CAMERA"]
 
         if param is None:
@@ -1199,8 +1249,56 @@ class Sky_Continuum(MonitoringAlg):
 
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
+ 
+        fibs = skyfiber.tolist()
+        skyfib_Rflux=[]
+        
+        #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
+   
+        filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
+        mags=frame.fibermap['MAG']
+        
+        if (filt == 'r'):
+            
+            flux=frame.flux
+            wave=frame.wave
+            integrals=np.zeros(flux.shape[0])
+            
+            import desimodel
+            from desimodel.focalplane import fiber_area_arcsec2
+        
+            wsky = np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
+            xsky = frame.fibermap["X_FVCOBS"][wsky]
+            ysky = frame.fibermap["Y_FVCOBS"][wsky]    
+            apsky = desimodel.focalplane.fiber_area_arcsec2(xsky,ysky)
+            expt = frame.meta["EXPTIME"]
+            
+            for i in range(len(fibs)):
+            
+                sky_integ = qalib.integrate_spec(wave,flux[fibs[i]])
+                # SE:  leaving the units as counts/sec/arcsec^2 to be compared to sky monitor fluc from ETC 
+                sky_flux = sky_integ/expt/apsky[i]
+            
+                skyfib_Rflux.append(sky_flux)
+            
+        #SE: assuming there is a key in the header of the raw exposure header [OR somewhere else] where the sky R-band flux from the sky monitor is stored 
+        #    the units would be counts/sec/arcsec^2   ---> sky_r=frame.meta["SKYFLUX"] - 1000 is just a dummy number as a placeholder
+        sky_r=  1000#frame.meta["SKYFLUX"]
+        
+        if (sky_r != "" and len(skyfib_Rflux) >0):
+            
+            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":abs(sky_r-np.mean(skyfib_Rflux)) }
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
+        else:
+             if (sky_r != "" and len(skyfib_Rflux) == 0): 
+                 
+                
+                retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":sky_r}
+             
+             else: 
+              
+                log.warning("No SKY Monitor R-band Flux was found in the header!")
+                retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":sky_fib_flux}
 
         if qlf:
             qlf_post(retval)    
@@ -1295,8 +1393,9 @@ class Sky_Peaks(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        #SE: no reason to call in RA/DEC, be careful with copy-paste!
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
 
         # Parameters
         if param is None:
@@ -1312,7 +1411,7 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec}
+        retval["METRICS"]={"PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec}
 
         if qlf:
             qlf_post(retval)
@@ -1417,8 +1516,10 @@ class Sky_Residual(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+
+        #SE: why keep calling in values that are not used in this QA?
+        #ra = fibermap["RA_TARGET"]
+        #dec = fibermap["DEC_TARGET"]
 
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -1525,8 +1626,8 @@ class Integrate_Spec(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        ra = fibermap["RA_TARGET"]
-        dec = fibermap["DEC_TARGET"]
+        ra = frame.fibermap["RA_TARGET"]
+        dec = frame.fibermap["DEC_TARGET"]
 
         #- get the integrals for all fibers
         flux=frame.flux
@@ -1539,25 +1640,31 @@ class Integrate_Spec(MonitoringAlg):
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
         mag_avg_tgt=[]
+        integ_avg_sky=[]
+    
         for T in ["ELG","QSO","LRG","STD"]:
             fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
             if len(fibers) < 1:
                 log.warning("no {} fibers found.".format(T))
+                 
             magnitudes=frame.fibermap['MAG'][fibers]
             mag_avg=np.mean(magnitudes)
             mag_avg_tgt.append(mag_avg)
             integ=integrals[fibers]
             integ_avg=np.mean(integ)
             integ_avg_tgt.append(integ_avg)
+                
             if T == "STD":
-                starfibers=fibers
-                int_stars=integ
-                int_average=integ_avg
+                   starfibers=fibers
+                   int_stars=integ
+                   int_average=integ_avg
 
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
         for i in range(len(mag_avg_tgt)):
-            mag_fib=-2.5*np.log(integ_avg_tgt[i]/frame.meta["EXPTIME"])+30.
+            
+            #SE: still using counts as opposed to a calibrated flux. mag_AB= -2.5 log10(f)-48.6 
+            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+48.6
             if mag_avg_tgt[i] != np.nan:
                 magdiff=mag_fib-mag_avg_tgt[i]
             else:
@@ -1575,6 +1682,7 @@ class Integrate_Spec(MonitoringAlg):
 
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
         delta_mag=np.zeros(frame.nspec) #- placeholder
+
 
         retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
 
@@ -1677,6 +1785,7 @@ class Calculate_SNR(MonitoringAlg):
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
         objlist = set(fibermap["OBJTYPE"])
+        
         if 'SKY' in objlist:
             objlist.remove('SKY')
 

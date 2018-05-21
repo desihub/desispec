@@ -272,10 +272,11 @@ def write_qa_ql(outfile, qaresult):
     #import yaml
     #from desiutil.io import yamlify
     # Take in QL input and output to yaml
+    #SE:  No yaml creation as of May 2018
     qadict = yamlify(qaresult)
-    f=open(outfile,"w")
-    f.write(yaml.dump(qadict))
-    f.close()
+    #f=open(outfile,"w")
+    #f.write(yaml.dump(qadict))
+    #f.close()
     
     g=open(outfile.split('.yaml')[0]+'.json',"w")
     json.dump(qadict, g, sort_keys=True, indent=4)
