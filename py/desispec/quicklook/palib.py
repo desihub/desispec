@@ -43,6 +43,7 @@ def project(x1,x2):
         #print(ii, k, e2[ii], emin, e1lo[k], e1hi[k], emax)
         if e2[ii+1] < emax : emax = e2[ii+1]
         dx = (emax-emin)/(e1hi[k]-e1lo[k])
+        #if dx ==  0.0 : print(dx)
         Pr[ii,k] = dx    # enter first e1 contribution to e2[ii]
 
         if e2[ii+1] > emax :
@@ -88,7 +89,6 @@ def resample_spec(wave,flux,outwave,ivar=None):
 
     Pr=project(wave,outwave)
     n=len(wave)
-    
     newflux=Pr.dot(flux)
     #- convert back to df/dx (per angstrom) sampled at outwave
     newflux/=np.gradient(outwave) #- per angstrom
@@ -96,11 +96,14 @@ def resample_spec(wave,flux,outwave,ivar=None):
         return newflux
     else:
         ivar = ivar/(np.gradient(wave))**2.0
-        newvar=Pr.dot(ivar**(-1.)) #- maintaining Total S/N
+        newvar=Pr.dot(ivar**(-1.0)) #- maintaining Total S/N
+        # RK:  this is just a kludge until we more robustly ensure newvar is correct
+        k = np.where(newvar <= 0.0)[0]
+        if len(k) > 0 : newvar[k] = 0.0000001
         newivar=1/newvar
 
         #- convert to per angstrom
-        newivar*=(np.gradient(outwave))**2
+        newivar*=(np.gradient(outwave))**2.0
         return newflux, newivar
 
 
