@@ -135,8 +135,8 @@ def shell_job(path, logroot, desisetup, commands, comrun="", mpiprocs=1,
 
 
 def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
-    nodes, ppns, minutes, multisrun=False, openmp=False, multiproc=False,
-    shifterimg=None,debug=False):
+    nodes, cnodes, ppns, minutes, multisrun=False, openmp=False,
+    multiproc=False, shifterimg=None,debug=False):
     """Create a SLURM script for use at NERSC.
 
     Args:
@@ -190,9 +190,8 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         f.write("# Set TMPDIR to be on the ramdisk\n")
         f.write("export TMPDIR=/dev/shm\n\n")
 
-        f.write("cpu_per_core={}\n\n".format(hostprops["corecpus"]))
-        f.write("node_cores={}\n".format(hostprops["nodecores"]))
-        f.write("nodes={}\n\n".format(nodes))
+        f.write("cpu_per_core={}\n".format(hostprops["corecpus"]))
+        f.write("node_cores={}\n\n".format(hostprops["nodecores"]))
 
         if debug:
             f.write("export DESI_LOGLEVEL=DEBUG\n\n")
@@ -202,10 +201,11 @@ def nersc_job(jobname, path, logroot, desisetup, commands, machine, queue,
         f.write("log={}_${{now}}.log\n\n".format(logroot))
         f.write("envlog={}_${{now}}.env\n".format(logroot))
         f.write("env > ${envlog}\n\n")
-        for com, ppn in zip(commands, ppns):
+        for com, cn, ppn in zip(commands, cnodes, ppns):
             if ppn > hostprops["nodecores"]:
                 raise RuntimeError("requested procs per node '{}' is more than"
                     " the number of cores per node on {}".format(ppn, machine))
+            f.write("nodes={}\n".format(cn))
             f.write("node_proc={}\n".format(ppn))
             f.write("node_thread=$(( node_cores / node_proc ))\n")
             f.write("node_depth=$(( cpu_per_core * node_thread ))\n")
@@ -333,7 +333,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         raise RuntimeError("requested procs per node '{}' is more than the "
             "the number of cores per node on {}".format(nodeprocs, machine))
 
-    log.debug("maxtime = {}, maxnodes = {}, nodeprocs = {}".format(maxtime, maxnodes, nodeprocs))
+    #log.debug("maxtime = {}, maxnodes = {}, nodeprocs = {}".format(maxtime, maxnodes, nodeprocs))
 
     # Max number of procs to use per task.
     taskproc = task_classes[tasktype].run_max_procs(nodeprocs)
@@ -347,8 +347,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
     mintasktime = tasktimes[-1][1]
     maxtasktime = tasktimes[0][1]
-    log.debug("taskproc = {}".format(taskproc))
-    log.debug("tasktimes range = {} ... {}".format(mintasktime, maxtasktime))
+    #log.debug("taskproc = {}".format(taskproc))
+    #log.debug("tasktimes range = {} ... {}".format(mintasktime, maxtasktime))
 
     if maxtasktime > maxtime:
         raise RuntimeError("The longest task ({} minutes) exceeds the "
@@ -361,14 +361,14 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     nworker = maxworkers
     if nworker > len(tasklist):
         nworker = len(tasklist)
-    log.debug("maxworkers = {}".format(maxworkers))
-    log.debug("nworker = {}".format(nworker))
+    #log.debug("maxworkers = {}".format(maxworkers))
+    #log.debug("nworker = {}".format(nworker))
 
     totalnodes = (nworker * taskproc) // nodeprocs
     if totalnodes * nodeprocs < nworker * taskproc:
         totalnodes += 1
 
-    log.debug("totalnodes = {}".format(totalnodes))
+    #log.debug("totalnodes = {}".format(totalnodes))
 
     # The returned list of jobs
     ret = list()
@@ -415,14 +415,14 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
             totalnodes = (nworker * taskproc) // nodeprocs
             if totalnodes * nodeprocs < nworker * taskproc:
                 totalnodes += 1
-            log.debug("shrinking final job size to {} nodes".format(totalnodes))
+            #log.debug("shrinking final job size to {} nodes".format(totalnodes))
 
         outtasks = list()
         for w in workertasks:
             outtasks.extend(w)
 
         ret.append( (totalnodes, nodeprocs, runtime, outtasks) )
-        log.debug("job will run on {} nodes for {} minutes on {} tasks".format(totalnodes, runtime, len(outtasks)))
+        #log.debug("job will run on {} nodes for {} minutes on {} tasks".format(totalnodes, runtime, len(outtasks)))
 
         if len(tasktimes) == 0:
             alldone = True
@@ -593,6 +593,7 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
 
         coms = list()
         ppns = list()
+        cnodes = list()
         for t, tasklist in tasks_by_type.items():
             (nodes, ppn, runtime, tasks) = joblist[t][0]
             taskfile = "{}_{}.tasks".format(outroot, t)
@@ -600,10 +601,11 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
             coms.append("desi_pipe_exec_mpi --tasktype {} --taskfile {} {}"\
                 .format(t, taskfile, dbstr))
             ppns.append(ppn)
+            cnodes.append(nodes)
 
         outfile = "{}.slurm".format(outroot)
         nersc_job(jobname, outfile, logroot, desisetup, coms, machine,
-                  queue, fullnodes, ppns, fullruntime, openmp=openmp,
+                  queue, fullnodes, cnodes, ppns, fullruntime, openmp=openmp,
                   multiproc=multiproc, shifterimg=shifterimg, debug=debug)
         scriptfiles.append(outfile)
 

@@ -372,9 +372,16 @@ Where supported commands are:
                 exids = self._run_extract(args, expid_by_flavor, db, args.night, expid=ex, deps=ntpsfdeps, spec=spec)
                 if ntflatready:
                     # We can submit calibration jobs too.
-                    alldeps = list(ntflatdeps)
-                    alldeps.extend(exids)
-                    calids = self._run_calib(args, db, args.night, expid=ex, deps=alldeps)
+                    alldeps = None
+                    if len(exids) > 0:
+                        alldeps = list(exids)
+                    if ntflatdeps is not None:
+                        if alldeps is None:
+                            alldeps = list(ntflatdeps)
+                        else:
+                            alldeps.extend(ntflatdeps)
+                    calids = self._run_calib(args, db, args.night, expid=ex,
+                        deps=alldeps)
                     for cid in calids:
                         self._write_jobid("cframe", args.night, ex, cid)
                 else:
