@@ -363,6 +363,22 @@ class BaseTask(object):
         return self._run_max_procs(procs_per_node)
 
 
+    def _run_max_mem(self):
+        """Return the default value for fully packed edison use.
+        """
+        return 2.5
+
+
+    def run_max_mem(self):
+        """Maximum memory in GB per process required.
+
+        Returns:
+            float: the required RAM in GB per process.
+
+        """
+        return self._run_max_mem()
+
+
     def _run_time(self, name, procs_per_node, db):
         raise NotImplementedError("You should not use a BaseTask object "
             " directly")

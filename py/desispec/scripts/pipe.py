@@ -329,7 +329,7 @@ Where supported commands are:
         return
 
 
-    def _get_tasks(self, db, tasktype, states, nights, expid=None):
+    def _get_tasks(self, db, tasktype, states, nights, expid=None, spec=None):
         ntlist = ",".join(nights)
         if (expid is not None) and (len(nights) > 1):
             raise RuntimeError("Only one night should be specified when "
@@ -350,11 +350,12 @@ Where supported commands are:
                           pipe.task_int_to_state[y] in states ]
 
             else :
-                if expid is None:
-                    cmd = "select name, state from {} where night in ({})"\
-                        .format(tasktype, ntlist)
-                else:
-                    cmd = "select name, state from {} where night = {} and expid = {}".format(tasktype, nights[0], expid)
+                cmd = "select name, state from {} where night in ({})"\
+                    .format(tasktype, ntlist)
+                if expid is not None:
+                    cmd = "{} and expid = {}".format(cmd, expid)
+                if spec is not None:
+                    cmd = "{} and spec = {}".format(cmd, spec)
                 cur.execute(cmd)
                 tasks = [ x for (x, y) in cur.fetchall() if \
                           pipe.task_int_to_state[y] in states ]
@@ -376,7 +377,10 @@ Where supported commands are:
             "matching these patterns will be examined.")
 
         parser.add_argument("--expid", required=False, type=int, default=-1,
-            help="Only update the production for a single exposure ID.")
+            help="Only select tasks for a single exposure ID.")
+
+        parser.add_argument("--spec", required=False, type=int, default=-1,
+            help="Only select tasks for a single spectrograph.")
 
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
@@ -414,6 +418,10 @@ Where supported commands are:
         if args.expid >= 0:
             expid = args.expid
 
+        spec = None
+        if args.spec >= 0:
+            spec = args.spec
+
         ttypes = args.tasktypes.split(',')
         tasktypes = list()
         for tt in pipe.tasks.base.default_task_chain:
@@ -422,7 +430,8 @@ Where supported commands are:
 
         all_tasks = list()
         for tt in tasktypes:
-            tasks = self._get_tasks(db, tt, states, nights, expid=expid)
+            tasks = self._get_tasks(db, tt, states, nights, expid=expid,
+                                    spec=spec)
             if args.nosubmitted:
                 if (tt != "spectra") and (tt != "redshift"):
                     sb = db.get_submitted(tasks)
@@ -451,7 +460,7 @@ Where supported commands are:
         allnights = io.get_nights(strip_path=True)
         nights = pipe.prod.select_nights(allnights, args.nights)
         for nt in nights:
-            db.getready(nt)
+            db.getready(night=nt)
         return
 
 
@@ -514,6 +523,8 @@ Where supported commands are:
 
 
     def cleanup(self):
+        availtypes = ",".join(pipe.db.all_task_types())
+
         parser = argparse.ArgumentParser(\
             description="Clean up stale task states in the DB",
             usage="desi_pipe cleanup [options] (use --help for details)")
@@ -524,11 +535,27 @@ Where supported commands are:
         parser.add_argument("--submitted", required=False, default=False,
             action="store_true", help="Also clear submitted flag")
 
+        parser.add_argument("--tasktypes", required=False, default=None,
+            help="comma separated list of task types to clean ({})".format(availtypes))
+
+        parser.add_argument("--expid", required=False, type=int, default=-1,
+            help="Only clean tasks for this exposure ID.")
+
         args = parser.parse_args(sys.argv[2:])
 
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="w")
-        db.cleanup(cleanfailed=args.failed, cleansubmitted=args.submitted)
+
+        ttypes = None
+        if args.tasktypes is not None:
+            ttypes = args.tasktypes.split(",")
+
+        expid = None
+        if args.expid >= 0:
+            expid = args.expid
+
+        db.cleanup(tasktypes=ttypes, expid=expid, cleanfailed=args.failed,
+                   cleansubmitted=args.submitted)
         return
 
 
@@ -612,11 +639,13 @@ Where supported commands are:
         if args.nodb:
             db = None
 
-        ppn = args.procs_per_node
+        ppn = None
+        if args.procs_per_node > 0:
+            ppn = args.procs_per_node
 
         if args.nersc is None:
             # Not running at NERSC
-            if ppn <= 0:
+            if ppn is None:
                 ppn = args.mpi_procs
             for tt, tlist in tasks_by_type.items():
                 pipe.run.dry_run(tt, tlist, opts, args.mpi_procs,
@@ -625,8 +654,6 @@ Where supported commands are:
             # Running at NERSC
             hostprops = pipe.scriptgen.nersc_machine(args.nersc,
                 args.nersc_queue)
-            if ppn <= 0:
-                ppn = hostprops["nodecores"]
 
             for tt, tlist in tasks_by_type.items():
                 joblist = pipe.scriptgen.nersc_job_size(tt, tlist,
@@ -634,10 +661,10 @@ Where supported commands are:
                     args.nersc_maxnodes, nodeprocs=ppn, db=db)
 
                 launch="srun -n"
-                for (jobnodes, jobtime, jobtasks) in joblist:
-                    jobprocs = jobnodes * ppn
+                for (jobnodes, jobppn, jobtime, jobtasks) in joblist:
+                    jobprocs = jobnodes * jobppn
                     pipe.run.dry_run(tt, jobtasks, opts, jobprocs,
-                        ppn, db=db, launch=launch, force=False)
+                        jobppn, db=db, launch=launch, force=False)
 
         return
 
@@ -675,7 +702,9 @@ Where supported commands are:
         if nodb:
             db = None
 
-        ppn = args.procs_per_node
+        ppn = None
+        if args.procs_per_node > 0:
+            ppn = args.procs_per_node
 
         # FIXME: Add openmp / multiproc function to task classes and
         # call them here.
@@ -690,11 +719,6 @@ Where supported commands are:
 
         else:
             # Running at NERSC
-            if ppn <= 0:
-                hostprops = pipe.scriptgen.nersc_machine(args.nersc,
-                    args.nersc_queue)
-                ppn = hostprops["nodecores"]
-
             scripts = pipe.scriptgen.batch_nersc(tasks_by_type,
                 outscript, outlog, jobname, args.nersc, args.nersc_queue,
                 args.nersc_maxtime, args.nersc_maxnodes, nodeprocs=ppn,
@@ -756,8 +780,8 @@ Where supported commands are:
             for scr in scripts:
                 sout = sp.check_output("sbatch {} {}".format(depstr, scr),
                     shell=True, universal_newlines=True)
-                jid = sout.split()[3]
-                print("submitted job {} script {}".format(jid,scr))
+                p = sout.split()
+                jid = re.sub(r'[^\d]', '', p[3])
                 jobids.append(jid)
         else:
             # run the scripts one at a time
@@ -845,7 +869,10 @@ Where supported commands are:
             "matching these patterns will be generated.")
 
         parser.add_argument("--expid", required=False, type=int, default=-1,
-            help="Only update the production for a single exposure ID.")
+            help="Only select tasks for a single exposure ID.")
+
+        parser.add_argument("--spec", required=False, type=int, default=-1,
+            help="Only select tasks for a single spectrograph.")
 
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states (see defs.py).  Only tasks "
@@ -866,8 +893,6 @@ Where supported commands are:
 
         args = parser.parse_args(sys.argv[2:])
 
-        print("Step(s) to run:",args.tasktypes)
-
         machprops = None
         if args.nersc is not None:
             machprops = pipe.scriptgen.nersc_machine(args.nersc,
@@ -876,6 +901,10 @@ Where supported commands are:
         expid = None
         if args.expid >= 0:
             expid = args.expid
+
+        spec = None
+        if args.spec >= 0:
+            spec = args.spec
 
         states = None
         if args.states is None:
@@ -918,7 +947,8 @@ Where supported commands are:
         tasks_by_type = OrderedDict()
         for tt in tasktypes:
             # Get the tasks.  We select by state and submitted status.
-            tasks = self._get_tasks(db, tt, states, nights, expid=expid)
+            tasks = self._get_tasks(db, tt, states, nights, expid=expid,
+                                    spec=spec)
             if args.nosubmitted:
                 if (tt != "spectra") and (tt != "redshift"):
                     sb = db.get_submitted(tasks)

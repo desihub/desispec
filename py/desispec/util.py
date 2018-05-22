@@ -4,6 +4,7 @@ Utility functions for desispec
 from __future__ import absolute_import, division, print_function
 
 import os
+import sys
 import errno
 import time
 import collections
@@ -109,6 +110,60 @@ def runcmd(cmd, args=None, inputs=[], outputs=[], clobber=False):
 
     log.info("SUCCESS: {}".format(cmd))
     return 0
+
+
+def sprun(com, capture=False, input=None):
+    """Run a command with subprocess and handle errors.
+
+    This runs a command and returns the lines of STDOUT as a list.
+    Any contents of STDERR are logged.  If an OSError is raised by
+    the child process, that is also logged.  If another exception is
+    raised by the child process, the traceback from the child process
+    is printed.
+
+    Args:
+        com (list): the command to run.
+        capture (bool): if True, return the stdout contents.
+        input (str): the string data (can include embedded newlines) to write
+            to the STDIN of the child process.
+
+    Returns:
+        tuple(int, (list)): the return code and optionally the lines of STDOUT
+            from the child process.
+
+    """
+    import traceback
+    log = get_logger()
+    stdin = None
+    if input is not None:
+        stdin = sp.PIPE
+    out = None
+    err = None
+    ret = -1
+    try:
+        with sp.Popen(com, stdin=stdin, stdout=sp.PIPE, stderr=sp.PIPE, universal_newlines=True) as p:
+            if input is None:
+                out, err = p.communicate()
+            else:
+                out, err = p.communicate(input=input)
+            for line in err.splitlines():
+                log.info("STDERR: {}".format(line))
+            ret = p.returncode
+    except OSError as e:
+        log.error("OSError: {}".format(e.errno))
+        log.error("OSError: {}".format(e.strerror))
+        log.error("OSError: {}".format(e.filename))
+    except:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        for line in lines:
+            log.error("exception: {}".format(line))
+    if capture:
+        return ret, out.splitlines()
+    else:
+        for line in out.splitlines():
+            print(line)
+        return ret
 
 
 def pid_exists( pid ):
@@ -303,4 +358,3 @@ def healpix_degrade_fixed(nside, pixel):
     subnside = 2**subfactor
     subpixel = pixel >> (factor - subfactor)
     return (subnside, subpixel)
-

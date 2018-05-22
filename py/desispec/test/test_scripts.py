@@ -77,21 +77,6 @@ class TestScripts(unittest.TestCase):
         self.assertEqual(options.nightStatus, 'start')
 
 
-    def test_night(self):
-        """Test desispec.scripts.night.
-        """
-        from ..scripts.night import parse
-        #
-        # Test argument parser.
-        #
-        args, status = parse('start', options=['--night', 'foo'])
-        self.assertEqual(status, 3)
-
-        args, status = parse('start', options=['--night', '20170317'])
-        self.assertEqual(args.night, '20170317')
-
-
-
 def test_suite():
     """Allows testing of only this module with the command::
 

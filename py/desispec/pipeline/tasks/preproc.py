@@ -82,10 +82,14 @@ class TaskPreproc(BaseTask):
         return 1
 
 
+    def _run_max_mem(self):
+        return 5.0
+
+
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 2
+        return 5
 
 
     def _run_defaults(self):
@@ -145,5 +149,12 @@ class TaskPreproc(BaseTask):
         cur.execute(cmd)
         tasks = [ x for (x,) in cur.fetchall() ]
         log.debug("checking {}".format(tasks))
-        for task in tasks :
-            task_classes[tt].getready( db=db,name=task,cur=cur)
+        for task in tasks:
+            task_classes[tt].getready(db=db, name=task, cur=cur)
+        tt  = "traceshift"
+        cmd = "select name from {} where night={} and band='{}' and spec={} and expid={} and state=0".format(tt,props["night"],props["band"],props["spec"],props["expid"])
+        cur.execute(cmd)
+        tasks = [ x for (x,) in cur.fetchall() ]
+        log.debug("checking {}".format(tasks))
+        for task in tasks:
+            task_classes[tt].getready(db=db, name=task, cur=cur)

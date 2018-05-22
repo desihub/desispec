@@ -69,7 +69,7 @@ class TaskPSFNight(BaseTask):
     def _run_time(self, name, procs_per_node, db=None):
         """See BaseTask.run_time.
         """
-        return 1
+        return 5
 
     def _run_defaults(self):
         """See BaseTask.run_defaults.
