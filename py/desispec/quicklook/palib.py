@@ -40,10 +40,8 @@ def project(x1,x2):
         # this where obtains single e1 edge just below start of e2 bin
         emin = e2[ii]
         emax = e1hi[k]
-        #print(ii, k, e2[ii], emin, e1lo[k], e1hi[k], emax)
         if e2[ii+1] < emax : emax = e2[ii+1]
         dx = (emax-emin)/(e1hi[k]-e1lo[k])
-        #if dx ==  0.0 : print(dx)
         Pr[ii,k] = dx    # enter first e1 contribution to e2[ii]
 
         if e2[ii+1] > emax :
@@ -99,8 +97,9 @@ def resample_spec(wave,flux,outwave,ivar=None):
         newvar=Pr.dot(ivar**(-1.0)) #- maintaining Total S/N
         # RK:  this is just a kludge until we more robustly ensure newvar is correct
         k = np.where(newvar <= 0.0)[0]
-        if len(k) > 0 : newvar[k] = 0.0000001
+        newvar[k] = 0.0000001  # flag bins with no contribution from input grid
         newivar=1/newvar
+        # newivar[k] = 0.0
 
         #- convert to per angstrom
         newivar*=(np.gradient(outwave))**2.0
