@@ -20,7 +20,8 @@ desispec Change Log
 * Override PSF file psferr to avoid masking bright lines.
   Requires specter > 0.8.1 (PR `#606`_).
 * QL updates (PR `#577`_, `#600`_, `#607`_).
-* Integration test and QA fixes (PR `#602`_ and `#605`_)
+* Integration test and QA fixes (PR `#602`_ and `#605`_).
+* Merge database modules (PR `#616`_)
 
 .. _`#577`: https://github.com/desihub/desispec/pull/577
 .. _`#585`: https://github.com/desihub/desispec/pull/585
@@ -36,6 +37,8 @@ desispec Change Log
 .. _`#605`: https://github.com/desihub/desispec/pull/605
 .. _`#606`: https://github.com/desihub/desispec/pull/606
 .. _`#607`: https://github.com/desihub/desispec/pull/607
+.. _`#616`: https://github.com/desihub/desispec/pull/616
+
 
 0.20.0 (2018-03-29)
 -------------------
@@ -53,7 +56,7 @@ Multiple non-backwards compatible changes:
 * module file set DESI_CCD_CALIBRATION_DATA (`#564`_).
 * Optionally include RA,DEC in merged zcatalog (`#562`_).
 * QL updates to S/N calculations (`#556`_).
-* fix BUNIT, HPXNSIDE, HPXPIXEL keywords (PR `#566`_) 
+* fix BUNIT, HPXNSIDE, HPXPIXEL keywords (PR `#566`_)
 
 .. _`#517`: https://github.com/desihub/desispec/pull/517
 .. _`#519`: https://github.com/desihub/desispec/pull/519
