@@ -18,15 +18,45 @@ def project(x1,x2):
     """
     x1=np.sort(x1)
     x2=np.sort(x2)
-    Pr=np.zeros((len(x1),len(x2)))
-    for ii in range(len(x2)-1): # columns
+    Pr=np.zeros((len(x2),len(x1)))
+
+    e1 = np.zeros(len(x1)+1)
+    e1[1:-1]=(x1[:-1]+x1[1:])/2.0  # calculate bin edges
+    e1[0]=1.5*x1[0]-0.5*x1[1]
+    e1[-1]=1.5*x1[-1]-0.5*x1[-2]
+    e1lo = e1[:-1]  # make upper and lower bounds arrays vs. index
+    e1hi = e1[1:]
+  
+    e2=np.zeros(len(x2)+1)
+    e2[1:-1]=(x2[:-1]+x2[1:])/2.0  # bin edges for resampled grid
+    e2[0]=1.5*x2[0]-0.5*x2[1]
+    e2[-1]=1.5*x2[-1]-0.5*x2[-2]
+
+    for ii in range(len(e2)-1): # columns
         #- Find indices in x1, containing the element in x2 
         #- This is much faster than looping over rows
-        k=np.where((x1>=x2[ii]) & (x1<=x2[ii+1]))[0] 
-        if len(k)>0:
-            dx=(x1[k]-x2[ii])/(x2[ii+1]-x2[ii])
-            Pr[k,ii]=1-dx
-            Pr[k,ii+1]=dx
+        
+        k = np.where((e1lo<=e2[ii]) & (e1hi>e2[ii]))[0]
+        # this where obtains single e1 edge just below start of e2 bin
+        emin = e2[ii]
+        emax = e1hi[k]
+        if e2[ii+1] < emax : emax = e2[ii+1]
+        dx = (emax-emin)/(e1hi[k]-e1lo[k])
+        Pr[ii,k] = dx    # enter first e1 contribution to e2[ii]
+
+        if e2[ii+1] > emax :
+            # cross over to another e1 bin contributing to this e2 bin
+            l = np.where((e1 < e2[ii+1]) & (e1 > e1hi[k]))[0]
+            if len(l) > 0 :
+               # several-to-one resample.  Just consider 3 bins max. case
+               Pr[ii,k[0]+1] = 1.0  # middle bin fully contained in e2
+               q = k[0]+2
+            else : q = k[0]+1  # point to bin partially contained in current e2 bin
+            emin = e1lo[q]
+            emax = e2[ii+1]
+            dx = (emax-emin)/(e1hi[q]-e1lo[q])
+            Pr[ii,q] = dx
+
     #- edge: 
     if x2[-1]==x1[-1]:
         Pr[-1,-1]=1
@@ -54,22 +84,25 @@ def resample_spec(wave,flux,outwave,ivar=None):
     """
     #- convert flux to per bin before projecting to new bins
     flux=flux*np.gradient(wave) 
-    ivar=ivar/(np.gradient(wave))**2
 
     Pr=project(wave,outwave)
     n=len(wave)
-    
-    newflux=Pr.T.dot(flux)
+    newflux=Pr.dot(flux)
     #- convert back to df/dx (per angstrom) sampled at outwave
     newflux/=np.gradient(outwave) #- per angstrom
     if ivar is None:
         return newflux
     else:
-        newvar=Pr.T.dot(ivar**(-1.)) #- maintaining Total S/N
+        ivar = ivar/(np.gradient(wave))**2.0
+        newvar=Pr.dot(ivar**(-1.0)) #- maintaining Total S/N
+        # RK:  this is just a kludge until we more robustly ensure newvar is correct
+        k = np.where(newvar <= 0.0)[0]
+        newvar[k] = 0.0000001  # flag bins with no contribution from input grid
         newivar=1/newvar
+        # newivar[k] = 0.0
 
         #- convert to per angstrom
-        newivar*=(np.gradient(outwave))**2
+        newivar*=(np.gradient(outwave))**2.0
         return newflux, newivar
 
 
