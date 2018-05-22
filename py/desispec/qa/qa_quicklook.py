@@ -1739,6 +1739,8 @@ class Integrate_Spec(MonitoringAlg):
         log.info(len(integrals))
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
+        #- RS: Convert integrated counts to magnitudes
+        fibermags=22.5-2.5*np.log10(integrals/frame.meta["EXPTIME"])
 
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
@@ -1765,9 +1767,7 @@ class Integrate_Spec(MonitoringAlg):
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
         for i in range(len(mag_avg_tgt)):
-            
-            #SE: still using counts as opposed to a calibrated flux. mag_AB= -2.5 log10(f)-48.6 
-            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+48.6
+            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+22.5
             if mag_avg_tgt[i] != np.nan:
                 magdiff=mag_fib-mag_avg_tgt[i]
             else:
@@ -1787,7 +1787,7 @@ class Integrate_Spec(MonitoringAlg):
         delta_mag=np.zeros(frame.nspec) #- placeholder
 
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
 
         if qlf:
             qlf_post(retval) 
