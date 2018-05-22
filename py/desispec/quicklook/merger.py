@@ -6,9 +6,10 @@ from desiutil.io import yamlify
 import yaml
 import json
 import numpy as np
-
+import datetime
+import pytz
 ###################################
-# Sarah E.: added this function to facilitate the GENERAL_INFO section
+# SE: added this to facilitate the GENERAL_INFO section
 def delKey(d, k, val=None, remove=True):
     
     if isinstance(d, dict):
@@ -36,6 +37,8 @@ def delKey(d, k, val=None, remove=True):
     return val
 
 ###################################
+# SE: added this to facilitate the GENERAL_INFO section
+
 def reOrderDict(mergeDict):
     
   for Night in mergeDict["NIGHTS"]:
@@ -49,7 +52,10 @@ def reOrderDict(mergeDict):
              airmass = delKey(Camera, "AIRMASS")
              seeing = delKey(Camera, "SEEING")
              exptime = delKey(Camera, "EXPTIME")
-             desispec_ver = delKey(Camera, "DESISPEC_VERSION")
+             desispec_run_ver = delKey(Camera, "PROC_DESISPEC_VERSION") # desispec version in the raw FITS header 
+             desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
+             quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quivklook development state
+             imaging_mag = delKey(Camera,'MAGNITUDES') # imaging mags: for each target a triplet in this order: [DECAM_G,DECAM_R,DECAM_Z]
              
              if sky_fiberid is None:
                  sky_fiberid = skyfiberid
@@ -73,12 +79,17 @@ def reOrderDict(mergeDict):
              
              try: dec = [float("%.5f" % m) for m in dec]
              except: dec=None
+            
              
-             #placeholder for mags
-             imaging_mag=[22.]*500
+             # Date/time of the merger i.e., QL run - time is in UTC = Mayall local time + 7h
+             def utcnow():
+               return datetime.datetime.now(tz=pytz.utc)
+             
+             QLrun_datime = utcnow().isoformat()
 
-             
-             Camera["GENERAL_INFO"]={"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"DESISPEC_VERSION":desispec_ver,"RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAG": imaging_mag}   
+             datetime.datetime.now(datetime.timezone.utc)
+             datetime.datetime.now(tz=pytz.utc)
+             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag}   
 
 
 class QL_QAMerger:
@@ -110,13 +121,13 @@ class QL_QAMerger:
         self.__stepsArr.append(stepDict)
         return self.QL_Step(stepName,paramsDict,metricsDict)
 
-    def getYaml(self):
-        yres=yamlify(self.__schema)
-        reOrderDict(yres)
-        return yaml.dump(yres)
-    def getJson(self):
-        import json
-        return json.dumps(yamlify(self.__schema))
+    #def getYaml(self):
+        #yres=yamlify(self.__schema)
+        #reOrderDict(yres)
+        #return yaml.dump(yres)
+    #def getJson(self):
+        #import json
+        #return json.dumps(yamlify(self.__schema))
     #def writeToFile(self,fileName):
         #with open(fileName,'w') as f:
             #f.write(self.getYaml())

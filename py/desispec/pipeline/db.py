@@ -762,12 +762,13 @@ class DataBase:
                         set_hpx_frame_1(row, spec_name, red_name, cur)
 
         # Update ready state of tasks
-        self.getready(night)
+        self.getready(night=night)
 
         return
 
 
-    def cleanup(self, cleanfailed=False, cleansubmitted=False):
+    def cleanup(self, tasktypes=None, expid=None, cleanfailed=False,
+                cleansubmitted=False):
         """Reset states of tasks.
 
         Any tasks that are marked as "running" will have their
@@ -775,41 +776,89 @@ class DataBase:
         completing all tasks.
 
         Args:
+            tasktypes (list): if not None, clean up only tasks of these types.
+            expid (int): if not None, only clean tasks related to this
+                exposure ID.  Note that tasks which are independent of
+                an expid (psfnight, fiberflatnight, spectra, redshift)
+                will be ignored if this option is given.
             cleanfailed (bool): if True, also reset failed tasks to ready.
             cleansubmitted (bool): if True, set submitted flag to False.
 
         """
         tasks_running = None
+
+        alltypes = all_task_types()
+        ttypes = None
+        if tasktypes is None:
+            ttypes = alltypes
+        else:
+            for tt in tasktypes:
+                if tt not in alltypes:
+                    raise RuntimeError("Cannot clean invalid task type {}"\
+                        .format(tt))
+            ttypes = tasktypes
+
         # Grab existing nightly tasks
         with self.cursor() as cur:
             tasks_running = {}
-            for tt in all_task_types():
-                if cleanfailed:
-                    cur.execute(\
-                        "select name from {} where state = {} or state = {}"\
-                        .format(tt, task_state_to_int["running"],
-                        task_state_to_int["failed"]))
+            for tt in ttypes:
+                hasexpid = (tt not in ["psfnight", "fiberflatnight", "spectra",
+                            "redshift"])
+                if hasexpid:
+                    # This task type has an expid property.
+                    cmd = None
+                    if expid is not None:
+                        # We are cleaning only a single exposure.
+                        cmd = "select name from {} where expid = {} and ( state = {}".format(tt, expid, task_state_to_int["running"])
+                    else:
+                        # We are cleaning all exposures for this task type.
+                        cmd = "select name from {} where ( state = {}".format(tt, task_state_to_int["running"])
+                    if cleanfailed:
+                        cmd = "{} or state = {} )".format(cmd,
+                            task_state_to_int["failed"])
+                    else:
+                        cmd = "{} )".format(cmd)
+                    cur.execute(cmd)
+                    tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
+                    if cleansubmitted:
+                        if expid is not None:
+                            cmd = "update {} set submitted = 0 where expid = {}".format(tt, expid)
+                        else:
+                            cmd = "update {} set submitted = 0".format(tt)
+                        cur.execute(cmd)
                 else:
-                    cur.execute(\
-                        "select name from {} where state = {}"\
-                        .format(tt, task_state_to_int["running"]))
-                tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
-                if cleansubmitted:
-                    if (tt != "spectra") and (tt != "redshift"):
-                        cur.execute("update {} set submitted = 0".format(tt))
+                    # This task type has no concept of an exposure ID
+                    if expid is not None:
+                        # We specified an exposure ID, which makes no sense
+                        # for this task type.  Skip it.
+                        tasks_running[tt] = list()
+                        continue
+                    else:
+                        # cleanup this task type.
+                        cmd = "select name from {} where ( state = {}".format(tt, task_state_to_int["running"])
+                        if cleanfailed:
+                            cmd = "{} or state = {} )".format(cmd,
+                                task_state_to_int["failed"])
+                        else:
+                            cmd = "{} )".format(cmd)
+                        cur.execute(cmd)
+                        tasks_running[tt] = [ x for (x, ) in cur.fetchall() ]
+                        if cleansubmitted:
+                            if (tt != "spectra") and (tt != "redshift"):
+                                cmd = "update {} set submitted = 0".format(tt)
+                                cur.execute(cmd)
 
-        for tt in all_task_types():
-            st = [ (x, "waiting") for x in tasks_running[tt] ]
-            self.set_states_type(tt, st)
+        for tt in ttypes:
+            if len(tasks_running[tt]) > 0:
+                st = [ (x, "waiting") for x in tasks_running[tt] ]
+                self.set_states_type(tt, st)
 
-        nights = io.get_nights()
-        for nt in nights:
-            self.getready(nt)
+        self.getready()
 
         return
 
 
-    def getready(self, night):
+    def getready(self, night=None):
         """Update DB, changing waiting to ready depending on status of dependencies .
 
         Args:
@@ -827,9 +876,11 @@ class DataBase:
         with self.cursor() as cur:
             for tt in ttypes:
                 # for each type of task, get the list of tasks in waiting mode
-                cur.execute('select name from {} where state = {} and night = {}'.format(tt, task_state_to_int["waiting"], night))
+                cmd = "select name from {} where state = {}".format(tt, task_state_to_int["waiting"])
+                if night is not None:
+                    cmd = "{} and night = {}".format(cmd, night)
+                cur.execute(cmd)
                 tasks = [ x for (x, ) in cur.fetchall()]
-
                 if len(tasks) > 0:
                     log.debug("checking {} {} tasks ...".format(len(tasks),tt))
                 for tsk in tasks:

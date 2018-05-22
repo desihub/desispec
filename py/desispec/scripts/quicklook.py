@@ -3,9 +3,10 @@ desispec.scripts.quicklook
 ===========================
 Command line wrapper for running a QL pipeline 
 
-S. Kama, G. Dhungana 
-SMU
-Spring 2016
+QuickLook team @Southern Methodist University (SMU) 
+First version Spring 2016
+Latest revision February 2018 
+
 """
 
 from __future__ import absolute_import, division, print_function

@@ -21,7 +21,8 @@ desispec Change Log
   Requires specter > 0.8.1 (PR `#606`_).
 * QL updates (PR `#577`_, `#600`_, `#607`_).
 * Integration test and QA fixes (PR `#602`_ and `#605`_).
-* Merge database modules (PR `#616`_)
+* New desi_night scripts for semi-realtime processing (PR `#609`_).
+* Merge database modules (PR `#616`_).
 
 .. _`#577`: https://github.com/desihub/desispec/pull/577
 .. _`#585`: https://github.com/desihub/desispec/pull/585
@@ -37,8 +38,8 @@ desispec Change Log
 .. _`#605`: https://github.com/desihub/desispec/pull/605
 .. _`#606`: https://github.com/desihub/desispec/pull/606
 .. _`#607`: https://github.com/desihub/desispec/pull/607
+.. _`#609`: https://github.com/desihub/desispec/pull/609
 .. _`#616`: https://github.com/desihub/desispec/pull/616
-
 
 0.20.0 (2018-03-29)
 -------------------
