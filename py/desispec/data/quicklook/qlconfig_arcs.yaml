@@ -9,7 +9,7 @@ PSFType: psfboot
 #- FiberflatExpid used as expid for flat exposures
 FiberflatExpid: 1
 #- Writeout intermediate files
-WritePixfile: True
+WritePreprocfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True

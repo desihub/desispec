@@ -32,7 +32,7 @@ class Config(object):
         self.specprod_dir = specprod_dir
         self.outdir = outdir
         self.dumpintermediates = self.conf["WriteIntermediatefiles"]
-        self.writepixfile = self.conf["WritePixfile"]
+        self.writepreprocfile = self.conf["WritePreprocfile"]
         self.writeskymodelfile = self.conf["WriteSkyModelfile"]
         self.writestaticplots = self.conf["WriteStaticPlots"]
         self.usesigma = self.conf["UseResolution"]
@@ -100,11 +100,11 @@ class Config(object):
         #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
         paopt_initialize={'camera': self.camera}
 
-        if self.writepixfile:
-            pixfile=self.dump_pa("Preproc")
+        if self.writepreprocfile:
+            preprocfile=self.dump_pa("Preproc")
         else: 
-            pixfile = None
-        paopt_preproc={'camera': self.camera,'dumpfile': pixfile}
+            preprocfile = None
+        paopt_preproc={'camera': self.camera,'dumpfile': preprocfile}
 
         if self.dumpintermediates:
             if self.conf["Flavor"] == 'arcs':
