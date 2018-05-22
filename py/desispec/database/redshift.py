@@ -1,22 +1,32 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 # -*- coding: utf-8 -*-
 """
-desispec.database.datachallenge
-===============================
+desispec.database.redshift
+==========================
 
-Code for loading data challenge spectra results into a database.
-
-Once the data model for both quicksurvey and data challenge results has
-converged, this file will be deprecated.
+Code for loading spectroscopic pipeline results (specifically redshifts)
+into a database.
 """
 from __future__ import absolute_import, division, print_function
+import os
+import re
+import glob
+
 import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from pytz import utc
+
 from sqlalchemy import (create_engine, event, ForeignKey, Column, DDL,
                         BigInteger, Integer, String, Float, DateTime)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy.schema import CreateSchema
+
+from desiutil.log import log, DEBUG, INFO
+
+from ..io.meta import specprod_root
 from .util import convert_dateobs, parse_pgpass
 
 Base = declarative_base()
@@ -131,9 +141,9 @@ class Target(SchemaMixin, Base):
                 "brickname='{0.brickname}', " +
                 "brick_objid={0.brick_objid:d}, " +
                 "ra={0.ra:f}, dec={0.dec:f}, " +
-                "flux_u={0.flux_u:f}, " +
                 "flux_g={0.flux_g:f}, " +
                 "flux_r={0.flux_r:f}, " +
+                "flux_z={0.flux_z:f}, " +
                 "flux_w1={0.flux_w1:f}, " +
                 "flux_w2={0.flux_w2:f}, " +
                 "shapeexp_r={0.shapeexp_r:f}," +
@@ -157,7 +167,7 @@ class Target(SchemaMixin, Base):
                 "desi_target={0.desi_target:d}, bgs_target={0.bgs_target}, " +
                 "mws_target={0.mws_target:d}, " +
                 "hpxpixel={0.hpxpixel:d}, " +
-                "subpriority={0.subpriority:f}, " +
+                "subpriority={0.subpriority:f}" +
                 ")>").format(self)
 
 
@@ -209,26 +219,113 @@ class ZCat(SchemaMixin, Base):
     """Representation of the zcat table.
     """
 
+    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
     chi2 = Column(Float, nullable=False)
+    coeff_0 = Column(Float, nullable=False)
+    coeff_1 = Column(Float, nullable=False)
+    coeff_2 = Column(Float, nullable=False)
+    coeff_3 = Column(Float, nullable=False)
+    coeff_4 = Column(Float, nullable=False)
+    coeff_5 = Column(Float, nullable=False)
+    coeff_6 = Column(Float, nullable=False)
+    coeff_7 = Column(Float, nullable=False)
+    coeff_8 = Column(Float, nullable=False)
+    coeff_9 = Column(Float, nullable=False)
     z = Column(Float, index=True, nullable=False)
     zerr = Column(Float, nullable=False)
     zwarn = Column(BigInteger, index=True, nullable=False)
+    npixels = Column(BigInteger, nullable=False)
     spectype = Column(String, index=True, nullable=False)
     subtype = Column(String, index=True, nullable=False)
-    targetid = Column(BigInteger, primary_key=True, autoincrement=False)
+    ncoeff = Column(BigInteger, nullable=False)
     deltachi2 = Column(Float, nullable=False)
     brickname = Column(String, index=True, nullable=False)
-    # numobs = Column(Integer, nullable=False, default=-1)
+    numexp = Column(Integer, nullable=False, default=-1)
+    numtile = Column(Integer, nullable=False)
+    brickid = Column(Integer, nullable=False)
+    brick_objid = Column(Integer, nullable=False)
+    ra = Column(Float, nullable=False)
+    dec = Column(Float, nullable=False)
+    flux_g = Column(Float, nullable=False)
+    flux_r = Column(Float, nullable=False)
+    flux_z = Column(Float, nullable=False)
+    flux_w1 = Column(Float, nullable=False)
+    flux_w2 = Column(Float, nullable=False)
+    mw_transmission_g = Column(Float, nullable=False)
+    mw_transmission_r = Column(Float, nullable=False)
+    mw_transmission_z = Column(Float, nullable=False)
+    mw_transmission_w1 = Column(Float, nullable=False)
+    mw_transmission_w2 = Column(Float, nullable=False)
+    psfdepth_g = Column(Float, nullable=False)
+    psfdepth_r = Column(Float, nullable=False)
+    psfdepth_z = Column(Float, nullable=False)
+    galdepth_g = Column(Float, nullable=False)
+    galdepth_r = Column(Float, nullable=False)
+    galdepth_z = Column(Float, nullable=False)
+    shapedev_r = Column(Float, nullable=False)
+    shapedev_e1 = Column(Float, nullable=False)
+    shapedev_e2 = Column(Float, nullable=False)
+    shapeexp_r = Column(Float, nullable=False)
+    shapeexp_e1 = Column(Float, nullable=False)
+    shapeexp_e2 = Column(Float, nullable=False)
+    subpriority = Column(Float, nullable=False)
+    desi_target = Column(BigInteger, nullable=False)
+    bgs_target = Column(BigInteger, nullable=False)
+    mws_target = Column(BigInteger, nullable=False)
+    hpxpixel = Column(BigInteger, nullable=False)
 
     def __repr__(self):
-        return ("<ZCat(chi2={0.chi2:f}, " +
-                "z={0.z:f}, zerr={0.zerr:f}, zwarn={0.zwarn:d}, " +
-                "spectype='{0.spectype}', subtype='{0.subtype}', " +
+        return ("<ZCat(" +
                 "targetid={0.targetid:d}, " +
+                "chi2={0.chi2:f}, " +
+                "coeff_0={0.coeff_0:f}, " +
+                "coeff_1={0.coeff_1:f}, " +
+                "coeff_2={0.coeff_2:f}, " +
+                "coeff_3={0.coeff_3:f}, " +
+                "coeff_4={0.coeff_4:f}, " +
+                "coeff_5={0.coeff_5:f}, " +
+                "coeff_6={0.coeff_6:f}, " +
+                "coeff_7={0.coeff_7:f}, " +
+                "coeff_8={0.coeff_8:f}, " +
+                "coeff_9={0.coeff_9:f}, " +
+                "z={0.z:f}, zerr={0.zerr:f}, zwarn={0.zwarn:d}, " +
+                "npixels={0.npixels:d}, " +
+                "spectype='{0.spectype}', " +
+                "subtype='{0.subtype}', " +
+                "ncoeff={0.ncoeff:d}, " +
                 "deltachi2={0.deltachi2:f}, " +
-                # "brickname='{0.brickname}', " +
-                # "numobs={0.numobs:d}" +
-                "brickname='{0.brickname}'" +
+                "brickname='{0.brickname}', " +
+                "numexp={0.numexp:d}, " +
+                "numtile={0.numtile:d}, " +
+                "brickid={0.brickid:d}, " +
+                "brick_objid={0.brick_objid:d}, " +
+                "ra={0.ra:f}, dec={0.dec:f}, " +
+                "flux_g={0.flux_g:f}, " +
+                "flux_r={0.flux_r:f}, " +
+                "flux_z={0.flux_z:f}, " +
+                "flux_w1={0.flux_w1:f}, " +
+                "flux_w2={0.flux_w2:f}, " +
+                "mw_transmission_g={0.mw_transmission_g:f}, " +
+                "mw_transmission_r={0.mw_transmission_r:f}, " +
+                "mw_transmission_z={0.mw_transmission_z:f}, " +
+                "mw_transmission_w1={0.mw_transmission_w1:f}, " +
+                "mw_transmission_w2={0.mw_transmission_w2:f}, " +
+                "psfdepth_g={0.psfdepth_g:f}, " +
+                "psfdepth_r={0.psfdepth_r:f}, " +
+                "psfdepth_z={0.psfdepth_z:f}, " +
+                "galdepth_g={0.galdepth_g:f}, " +
+                "galdepth_r={0.galdepth_r:f}, " +
+                "galdepth_z={0.galdepth_z:f}, " +
+                "shapedev_r={0.shapedev_r:f}, " +
+                "shapedev_e1={0.shapedev_e1:f}," +
+                "shapedev_e2={0.shapedev_e2:f}," +
+                "shapeexp_r={0.shapeexp_r:f}," +
+                "shapeexp_e1={0.shapeexp_e1:f}," +
+                "shapeexp_e2={0.shapeexp_e2:f}," +
+                "subpriority={0.subpriority:f}, " +
+                "desi_target={0.desi_target:d}, bgs_target={0.bgs_target}, " +
+                "mws_target={0.mws_target:d}, " +
+                "hpxpixel={0.hpxpixel:d}" +
                 ")>").format(self)
 
 
@@ -252,8 +349,7 @@ class FiberAssign(SchemaMixin, Base):
     brickname = Column(String, index=True, nullable=False)
 
     def __repr__(self):
-        return ("<FiberAssign(faid={0.faid:d}, " +
-                "tileid={0.tileid:d}, " +
+        return ("<FiberAssign(tileid={0.tileid:d}, " +
                 "fiber={0.fiber:d}, " +
                 "location={0.location:d}, " +
                 "numtarget={0.numtarget:d}, " +
@@ -295,10 +391,6 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
         If set, stop loading after `maxrows` are loaded.  Alteratively,
         set `maxrows` to zero (0) to load all rows.
     """
-    from astropy.io import fits
-    from astropy.table import Table
-    from desiutil.log import get_logger
-    log = get_logger()
     tn = tcls.__tablename__
     if filepath.endswith('.fits'):
         with fits.open(filepath) as hdulist:
@@ -385,6 +477,9 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
 def load_zcat(datapath=None, q3c=False):
     """Load zbest files into the zcat table.
 
+    This function is deprecated since there should now be a single
+    redshift catalog file.
+
     Parameters
     ----------
     datapath : :class:`str`
@@ -392,19 +487,11 @@ def load_zcat(datapath=None, q3c=False):
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     """
-    from ..io.meta import specprod_root
-    from os.path import basename, dirname, join
-    from re import compile
-    from glob import glob
-    from astropy.io import fits
-    from desiutil.log import get_logger
-    log = get_logger()
     if datapath is None:
         datapath = specprod_root()
-
-    zbestpath = join(datapath, 'spectra-64', '*', '*', 'zbest-64-*.fits')
+    zbestpath = os.path.join(datapath, 'spectra-64', '*', '*', 'zbest-64-*.fits')
     log.info("Using zbest file search path: %s.", zbestpath)
-    zbest_files = glob(zbestpath)
+    zbest_files = glob.glob(zbestpath)
     if len(zbest_files) == 0:
         log.error("No zbest files found!")
         return
@@ -413,7 +500,7 @@ def load_zcat(datapath=None, q3c=False):
     # Read the identified zbest files.
     #
     for f in zbest_files:
-        brickname = basename(dirname(f))
+        brickname = os.path.basename(os.path.dirname(f))
         with fits.open(f) as hdulist:
             data = hdulist['ZBEST'].data
         log.info("Read data from %s.", f)
@@ -470,15 +557,9 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     latest_epoch : :class:`bool`, optional
         If set, search for the latest tile file among several epochs.
     """
-    from os.path import basename, join
-    from re import compile
-    from glob import glob
-    from astropy.io import fits
-    from desiutil.log import get_logger
-    log = get_logger()
-    fiberpath = join(datapath, 'tile_*.fits')
+    fiberpath = os.path.join(datapath, 'tile_*.fits')
     log.info("Using tile file search path: %s.", fiberpath)
-    tile_files = glob(fiberpath)
+    tile_files = glob.glob(fiberpath)
     if len(tile_files) == 0:
         log.error("No tile files found!")
         return
@@ -488,7 +569,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     #
     latest_tiles = dict()
     if latest_epoch:
-        tileidre = compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
+        tileidre = re.compile(r'/(\d+)/fiberassign/tile_(\d+)\.fits$')
         for f in tile_files:
             m = tileidre.search(f)
             if m is None:
@@ -502,7 +583,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
                 latest_tiles[tileid] = (epoch, f)
     else:
         for f in tile_files:
-            tileid = int((basename(f).split('.')[0]).split('_')[1])
+            tileid = int((os.path.basename(f).split('.')[0]).split('_')[1])
             latest_tiles[tileid] = (0, f)
     log.info("Identified %d tile files for loading.", len(latest_tiles))
     #
@@ -542,8 +623,6 @@ def q3c_index(table):
     table : :class:`str`
         Name of the table to index.
     """
-    from desiutil.log import get_logger
-    log = get_logger()
     q3c_sql = """CREATE INDEX ix_{table}_q3c_ang2ipix ON {schema}.{table} (q3c_ang2ipix(ra, dec));
     CLUSTER {schema}.{table} USING ix_{table}_q3c_ang2ipix;
     ANALYZE {schema}.{table};
@@ -555,13 +634,17 @@ def q3c_index(table):
     return
 
 
-def setup_db(options):
+def setup_db(options=None, **kwargs):
     """Initialize the database connection.
 
     Parameters
     ----------
     options : :class:`argpare.Namespace`
         Parsed command-line options.
+    kwargs : keywords
+        If present, use these instead of `options`.  This is more
+        user-friendly than setting up a :class:`~argpare.Namespace`
+        object in, *e.g.* a Jupyter Notebook.
 
     Returns
     -------
@@ -569,17 +652,53 @@ def setup_db(options):
         ``True`` if the configured database is a PostgreSQL database.
     """
     global engine, schemaname
-    from os import remove
-    from os.path import basename, exists, join
-    from desiutil.log import get_logger
-    log = get_logger()
     #
     # Schema creation
     #
-    if options.schema:
-        schemaname = options.schema
+    if options is None:
+        if len(kwargs) > 0:
+            try:
+                schema = kwargs['schema']
+            except KeyError:
+                schema = None
+            try:
+                overwrite = kwargs['overwrite']
+            except KeyError:
+                overwrite = False
+            try:
+                hostname = kwargs['hostname']
+            except KeyError:
+                hostname = None
+            try:
+                username = kwargs['username']
+            except KeyError:
+                username = 'desidev_admin'
+            try:
+                dbfile = kwargs['dbfile']
+            except KeyError:
+                dbfile = 'redshift.db'
+            try:
+                datapath = kwargs['datapath']
+            except KeyError:
+                datapath = None
+            try:
+                verbose = kwargs['verbose']
+            except KeyError:
+                verbose = False
+        else:
+            raise ValueError("No options specified!")
+    else:
+        schema = options.schema
+        overwrite = options.overwrite
+        hostname = options.hostname
+        username = options.username
+        dbfile = options.dbfile
+        datapath = options.datapath
+        verbose = options.verbose
+    if schema:
+        schemaname = schema
         # event.listen(Base.metadata, 'before_create', CreateSchema(schemaname))
-        if options.clobber:
+        if overwrite:
             event.listen(Base.metadata, 'before_create',
                          DDL('DROP SCHEMA IF EXISTS {0} CASCADE'.format(schemaname)))
         event.listen(Base.metadata, 'before_create',
@@ -588,26 +707,26 @@ def setup_db(options):
     # Create the file.
     #
     postgresql = False
-    if options.hostname:
+    if hostname:
         postgresql = True
-        db_connection = parse_pgpass(hostname=options.hostname,
-                                     username=options.username)
+        db_connection = parse_pgpass(hostname=hostname,
+                                     username=username)
         if db_connection is None:
             log.critical("Could not load database information!")
             return 1
     else:
-        if basename(options.dbfile) == options.dbfile:
-            db_file = join(options.datapath, options.dbfile)
+        if os.path.basename(dbfile) == dbfile:
+            db_file = os.path.join(datapath, dbfile)
         else:
-            db_file = options.dbfile
-        if options.clobber and exists(db_file):
+            db_file = dbfile
+        if overwrite and os.path.exists(db_file):
             log.info("Removing file: %s.", db_file)
-            remove(db_file)
+            os.remove(db_file)
         db_connection = 'sqlite:///'+db_file
     #
     # SQLAlchemy stuff.
     #
-    engine = create_engine(db_connection, echo=options.verbose)
+    engine = create_engine(db_connection, echo=verbose)
     dbSession.remove()
     dbSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
     log.info("Begin creating tables.")
@@ -632,15 +751,12 @@ def get_options(*args):
         The parsed options.
     """
     from sys import argv
-    from os.path import basename
     from argparse import ArgumentParser
     prsr = ArgumentParser(description=("Load a data challenge simulation into a " +
                                        "database."),
-                          prog=basename(argv[0]))
-    prsr.add_argument('-c', '--clobber', action='store_true', dest='clobber',
-                      help='Delete any existing file(s) before loading.')
+                          prog=os.path.basename(argv[0]))
     prsr.add_argument('-f', '--filename', action='store', dest='dbfile',
-                      default='quicksurvey.db', metavar='FILE',
+                      default='redshift.db', metavar='FILE',
                       help="Store data in FILE.")
     prsr.add_argument('-H', '--hostname', action='store', dest='hostname',
                       metavar='HOSTNAME',
@@ -648,6 +764,8 @@ def get_options(*args):
     prsr.add_argument('-m', '--max-rows', action='store', dest='maxrows',
                       type=int, default=0, metavar='M',
                       help="Load up to M rows in the tables (default is all rows).")
+    prsr.add_argument('-o', '--overwrite', action='store_true', dest='overwrite',
+                      help='Delete any existing file(s) before loading.')
     prsr.add_argument('-r', '--rows', action='store', dest='chunksize',
                       type=int, default=50000, metavar='N',
                       help="Load N rows at a time (default %(default)s).")
@@ -675,10 +793,7 @@ def main():
     :class:`int`
         An integer suitable for passing to :func:`sys.exit`.
     """
-    from os.path import join
     # from pkg_resources import resource_filename
-    from pytz import utc
-    from desiutil.log import get_logger, DEBUG, INFO
     #
     # command-line arguments
     #
@@ -697,7 +812,7 @@ def main():
     #
     # Load configuration
     #
-    loader = [{'filepath': join(options.datapath, 'targets', 'truth.fits'),
+    loader = [{'filepath': os.path.join(options.datapath, 'targets', 'truth.fits'),
                'tcls': Truth,
                'hdu': 'TRUTH',
                'expand': None,
@@ -706,7 +821,7 @@ def main():
                'q3c': False,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},
-              {'filepath': join(options.datapath, 'targets', 'targets.fits'),
+              {'filepath': os.path.join(options.datapath, 'targets', 'targets.fits'),
                'tcls': Target,
                'hdu': 'TARGETS',
                'expand': None,
@@ -715,7 +830,7 @@ def main():
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows},
-              {'filepath': join(options.datapath, 'survey', 'exposures.fits'),
+              {'filepath': os.path.join(options.datapath, 'survey', 'exposures.fits'),
                'tcls': ObsList,
                'hdu': 'EXPOSURES',
                'expand': {'PASS': 'passnum'},
@@ -724,15 +839,16 @@ def main():
                'index': None,
                'q3c': postgresql,
                'chunksize': options.chunksize,
-               'maxrows': options.maxrows},]
-            #   {'filepath': join(options.datapath, 'output', 'dark', '4', 'zcat.fits'),
-            #    'tcls': ZCat,
-            #    'hdu': 1,
-            #    'expand': None,
-            #    'convert': None,
-            #    'q3c': False,
-            #    'chunksize': options.chunksize,
-            #    'maxrows': options.maxrows}]
+               'maxrows': options.maxrows},
+              {'filepath': os.path.join(options.datapath, 'spectro', 'redux', 'mini', 'zcatalog-mini.fits'),
+               'tcls': ZCat,
+               'hdu': 'ZCATALOG',
+               'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                                    'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
+               'convert': None,
+               'q3c': postgresql,
+               'chunksize': options.chunksize,
+               'maxrows': options.maxrows}]
     #
     # Load the tables that correspond to a single file.
     #
@@ -751,13 +867,13 @@ def main():
     #
     # Load zbest files.
     #
-    q = dbSession.query(ZCat).first()
-    if q is None:
-        log.info("Loading ZCat from %s.", options.datapath)
-        load_zcat(options.datapath, run1d='mini')
-        log.info("Finished loading ZCat.")
-    else:
-        log.info("ZCat table already loaded.")
+    # q = dbSession.query(ZCat).first()
+    # if q is None:
+    #     log.info("Loading ZCat from %s.", options.datapath)
+    #     load_zcat(options.datapath, run1d='mini')
+    #     log.info("Finished loading ZCat.")
+    # else:
+    #     log.info("ZCat table already loaded.")
     #
     # Load fiber assignment files.
     #

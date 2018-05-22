@@ -22,15 +22,10 @@ Full desispec API Reference
 .. automodule:: desispec.database
     :members:
 
-.. This module will eventually go away, so comment it out for now to avoid
-.. Documentation build errors.
-.. .. automodule:: desispec.database.datachallenge
-..     :members:
-
 .. automodule:: desispec.database.metadata
     :members:
 
-.. automodule:: desispec.database.spectra
+.. automodule:: desispec.database.redshift
     :members:
 
 .. automodule:: desispec.database.util
