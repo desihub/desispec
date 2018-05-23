@@ -42,7 +42,7 @@ addons:
             # - libboost-all-dev
             # - libcfitsio3-dev
 # python:
-    # - 2.6
+    # - 2.6 NOTE: no longer testing python 2.x
     # - 2.7
     # - 3.3
     # - 3.4
@@ -83,8 +83,8 @@ env:
         # Debug the Travis install process.
         - DEBUG=False
     matrix:
-        - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
-        - PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
+       # - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
+       # - PYTHON_VERSION=2.7 SETUP_CMD='bdist_egg'
         - PYTHON_VERSION=3.5 SETUP_CMD='egg_info'
         - PYTHON_VERSION=3.5 SETUP_CMD='bdist_egg'
         - PYTHON_VERSION=3.6 SETUP_CMD='egg_info'
@@ -122,10 +122,10 @@ matrix:
                PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # Standard tests.
-        - os: linux
-          env: PYTHON_VERSION=2.7 SETUP_CMD='test'
-               CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
-               PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
+       # - os: linux
+       #   env: PYTHON_VERSION=2.7 SETUP_CMD='test'
+       #        CONDA_DEPENDENCIES=$CONDA_ALL_DEPENDENCIES
+       #        PIP_DEPENDENCIES=$PIP_ALL_DEPENDENCIES
 
         # Redundant with the coverage test
         # - os: linux
