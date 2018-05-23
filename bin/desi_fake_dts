@@ -35,8 +35,11 @@ def pack_args(args):
     optlist = [
         "nersc",
         "nersc_queue",
+        "nersc_queue_redshifts",
         "nersc_maxtime",
         "nersc_maxnodes",
+        "nersc_maxnodes_small",
+        "nersc_maxnodes_redshifts",
         "nersc_shifter",
         "mpi_procs",
         "mpi_run",
@@ -79,6 +82,10 @@ def main():
     parser.add_argument("--nersc_queue", required=False, default="regular",
         help="write a script for this NERSC queue (debug | regular)")
 
+    parser.add_argument("--nersc_queue_redshifts", required=False,
+        default=None, help="Use this NERSC queue for redshifts. "
+        "Defaults to same as --nersc_queue.")
+
     parser.add_argument("--nersc_maxtime", required=False,
         default=None, help="Then maximum run time (in minutes) for a single "
         " job.  If the list of tasks cannot be run in this time, multiple "
@@ -88,6 +95,15 @@ def main():
     parser.add_argument("--nersc_maxnodes", required=False,
         default=None, help="The maximum number of nodes to use.  Default "
         " is the maximum nodes for the specified queue.")
+
+    parser.add_argument("--nersc_maxnodes_small", required=False,
+        default=None, help="The maximum number of nodes to use for 'small' "
+        "steps like the per-night psf and fiberflat.  Default is to use the"
+        " same value as --nersc_maxnodes.")
+
+    parser.add_argument("--nersc_maxnodes_redshifts", required=False,
+        default=None, help="The maximum number of nodes to use for "
+        " redshifts.  Default is to use --nersc_maxnodes.")
 
     parser.add_argument("--nersc_shifter", required=False, default=None,
         help="The shifter image to use for NERSC jobs")

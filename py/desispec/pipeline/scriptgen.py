@@ -60,6 +60,7 @@ def nersc_machine(name, queue):
             props["maxnodes"] = 10
             props["maxtime"] = 120
             props["submitlimit"] = 5000
+            props["sbatch"].append("#SBATCH --exclusive")
             props["sbatch"].append("#SBATCH --partition=realtime")
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
@@ -84,6 +85,7 @@ def nersc_machine(name, queue):
             props["maxnodes"] = 10
             props["maxtime"] = 120
             props["submitlimit"] = 5000
+            props["sbatch"].append("#SBATCH --exclusive")
             props["sbatch"].append("#SBATCH --partition=realtime")
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
