@@ -56,6 +56,11 @@ def nersc_machine(name, queue):
             props["maxtime"] = 12 * 60
             props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --partition=regular")
+        elif queue == "realtime":
+            props["maxnodes"] = 10
+            props["maxtime"] = 120
+            props["submitlimit"] = 5000
+            props["sbatch"].append("#SBATCH --partition=realtime")
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
     elif name == "cori-haswell":
@@ -75,6 +80,11 @@ def nersc_machine(name, queue):
             props["maxtime"] = 12 * 60
             props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --partition=regular")
+        elif queue == "realtime":
+            props["maxnodes"] = 10
+            props["maxtime"] = 120
+            props["submitlimit"] = 5000
+            props["sbatch"].append("#SBATCH --partition=realtime")
         else:
             raise RuntimeError("Unknown {} queue '{}'".format(name, queue))
     elif name == "cori-knl":
