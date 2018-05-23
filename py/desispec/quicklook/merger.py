@@ -201,9 +201,8 @@ def reOrderDict(mergeDict):
              Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag}   
 
 ###################################
-# EK: added this to facilitate the GENERAL_INFO section
-
-def esnEditDic(Camera):
+# SE: added this to facilitate the GENERAL_INFO section
+def EditDic(Camera):
             
              ra  = delKey(Camera, "RA")
              dec = delKey(Camera, "DEC")
@@ -239,7 +238,9 @@ def esnEditDic(Camera):
              delKey(Camera, "NOISE")
              delKey(Camera, "XWSHIFT_AMP")
              delKey(Camera, "XWSHIFT_SHIFT") 
-
+             delKey(Camera, "NREJ")
+             delKey(Camera, "MED_SKY")
+             delKey(Camera, "NBAD_PCHI")
              
              if star_fiberid is None:
                  star_fiberid = std_fiberid
@@ -327,7 +328,7 @@ class QL_QAMerger:
         #reOrderDict(myDict)
         
         # remove lists ... after this step there is no list of dictionaries
-        esnEditDic(myDict)
+        EditDic(myDict)
         
         # this step modifies Takse, renames them, and re-arrange Metrics and corresponding Paramas
         myDict = taskMaker(myDict)  
