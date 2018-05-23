@@ -19,6 +19,8 @@ TemplateExpid: 2
 Debuglevel: 20
 #- Apply x or w resolution to frame file
 UseResolution: True
+#- Generate modified PSF file
+Flexure: False
 #- Heartbeat Period in seconds
 Period: 5.0
 #- Time out in seconds

@@ -18,6 +18,8 @@ TemplateExpid: 1
 Debuglevel: 20
 #- Must use resolution in extraction to generate fiberflat
 UseResolution: True
+#- Generate modified PSF file
+Flexure: False
 #- Heartbeat Period in seconds
 Period: 5.0
 #- Time out in seconds

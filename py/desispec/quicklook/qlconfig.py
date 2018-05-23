@@ -36,7 +36,13 @@ class Config(object):
         self.writeskymodelfile = self.conf["WriteSkyModelfile"]
         self.writestaticplots = self.conf["WriteStaticPlots"]
         self.usesigma = self.conf["UseResolution"]
+        try:
+            self.flexure = self.conf["Flexure"]    
+        except:
+            self.flexure = False
         self.pipeline = self.conf["Pipeline"]
+        if not self.flexure and "Flexure" in self.pipeline:
+            self.pipeline.remove("Flexure")
         self.algorithms = self.conf["Algorithms"]
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
@@ -130,8 +136,7 @@ class Config(object):
             bootfile=None
             psffile=None
 
-        trace_objects=['flat','science']
-        if self.conf["Flavor"] in trace_objects:
+        if self.flexure:
             preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
             inputpsf=findfile(self.conf["PSFType"],self.night,self.psfexpid,self.camera,specprod_dir=self.specprod_dir)
             outputpsf=findfile('psf',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
