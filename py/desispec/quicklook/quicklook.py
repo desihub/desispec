@@ -248,7 +248,7 @@ def mapkeywords(kw,kwmap):
             newmap[k]=v
     return newmap
 
-def runpipeline(pl,convdict,conf,mergeQA=False):
+def runpipeline(pl,convdict,conf):
     """
     Runs the quicklook pipeline as configured
 
@@ -260,8 +260,6 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             details in setup_pipeline method below for examples.
         conf: a configured dictionary, read from the configuration yaml file.
             e.g: conf=configdict=yaml.load(open('configfile.yaml','rb'))
-        mergedQA: if True, outputs the merged QA after the execution of pipeline. Perhaps, this 
-            should always be True, but leaving as option, until configuration and IO settles.
     """
 
     qlog=qllogger.QLLogger()
@@ -371,24 +369,22 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                 log.info("{} finished".format(qa.name))
 
     #- merge QAs for this pipeline execution
-    if mergeQA is True:
+    log.debug("Dumping mergedQAs")
+    from desispec.io import findfile
+    ftype='ql_mergedQA_file'
+    specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
+    if conf['Flavor']=='arcs':
+        ftype='ql_mergedQAarc_file'
+    destFile=findfile(ftype,night=conf['Night'],
+                      expid=conf['Expid'],
+                      camera=conf['Camera'],
+                      specprod_dir=specprod_dir)
 
-        log.debug("Dumping mergedQAs")
-        from desispec.io import findfile
-        ftype='ql_mergedQA_file'
-        specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
-        if conf['Flavor']=='arcs':
-            ftype='ql_mergedQAarc_file'
-        destFile=findfile(ftype,night=conf['Night'],
-                          expid=conf['Expid'],
-                          camera=conf['Camera'],
-                          specprod_dir=specprod_dir)
-
-        # SE: disabled the functionality of writing yamls
-        #schemaMerger.writeToFile(destFile)
-        #log.info("Wrote merged QA file {}".format(destFile))
-        schemaMerger.writeTojsonFile(destFile)
-        log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
+    # SE: disabled the functionality of writing yamls
+    #schemaMerger.writeToFile(destFile)
+    #log.info("Wrote merged QA file {}".format(destFile))
+    schemaMerger.writeTojsonFile(destFile)
+    log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
     if isinstance(inp,tuple):
        return inp[0]
     else:
