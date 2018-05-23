@@ -3,13 +3,12 @@ name: DESI Quicklook Flat Calibration
 Program: dark
 Flavor: flat
 #- Calibration files: Assuming the same night for psf and fiberflat
-PSFType: psfboot
+PSFType: psf
 PSFExpid: 0
-
 #- FiberflatExpid used as expid for flat image files when running calibration
 FiberflatExpid: 1
 #- Writeout intermediate files
-WritePreprocfile: False
+WritePreprocfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
@@ -24,9 +23,8 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, BoxcarExtract, ComputeFiberflat_QL]
+Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ComputeFiberflat_QL]
 Algorithms:
-
     Initialize:
         QA: 
             Check_HDUs:
@@ -39,6 +37,10 @@ Algorithms:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
+    Flexure:
+        QA:
+            Trace_Shifts:
+                PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0]}
     BoxcarExtract:
         wavelength: {
             b: [3570,5730,0.8],

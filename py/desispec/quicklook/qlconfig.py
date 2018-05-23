@@ -130,7 +130,8 @@ class Config(object):
             bootfile=None
             psffile=None
 
-        if self.conf["Flavor"] == 'science':
+        trace_objects=['flat','science']
+        if self.conf["Flavor"] in trace_objects:
             preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
             inputpsf=findfile(self.conf["PSFType"],self.night,self.psfexpid,self.camera,specprod_dir=self.specprod_dir)
             outputpsf=findfile('psf',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
