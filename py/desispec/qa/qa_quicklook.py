@@ -304,8 +304,11 @@ class Trace_Shifts(MonitoringAlg):
                 }
 
         #- RS: Return empty dictionaries until flexure metrics are decided
+        dx=[]
+        dy=[]
+        xyshift=np.array(dx,dy)
         retval={}
-        retval["METRICS"]={}
+        retval["METRICS"]={"XYSHIFT":xyshift}
         retval["PARAMS"]=param
 
         #- http post if needed
@@ -699,7 +702,7 @@ class Calc_XWSigma(MonitoringAlg):
             name="XWSIGMA"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "WSIGMA_MED_SKY"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "XWSIGMA"
         status=kwargs['statKey'] if 'statKey' in kwargs else "XWSIGMA_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
@@ -950,33 +953,32 @@ class Calc_XWSigma(MonitoringAlg):
         xsigma_amp=np.array([xamp1_med,xamp2_med,xamp3_med,xamp4_med])
         wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
 
-        xshift_med=0.0
-        wshift_med=0.0
-        xshift_fib=[]
-        wshift_fib=[]
-        xshift_amp=[]
-        wshift_amp=[]
-        shift_warn=[]
+        #xshift_med=0.0
+        #wshift_med=0.0
+        #xshift_fib=[]
+        #wshift_fib=[]
+        #xshift_amp=[]
+        #wshift_amp=[]
+        #shift_warn=[]
 
         xwfails=[xfails,wfails]
 
         retval["PARAMS"] = param
 
         #- Combine metrics for x and w
-        xwsigma=np.array((xsigma,wsigma)) #- (2,nfib)
-        #xwsigma_med=np.array((xsigma_med,wsigma_med)) #- (2)
+        xwsigma_fib=np.array((xsigma,wsigma)) #- (2,nfib)
+        xwsigma_med=np.array((xsigma_med,wsigma_med)) #- (2)
         xwsigma_amp=np.array((xsigma_amp,wsigma_amp))
        
-        xwshift=np.zeros((2,500)) #- 500 should change to nfib (read from top)
+        #xwshift=np.zeros((2,500)) #- 500 should change to nfib (read from top)
         #xwshift_med=np.array((xshift_med,wshift_med))
-        xwshift_amp=np.array((xshift_amp, wshift_amp))
-        
-        xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
+        #xwshift_amp=np.array((xshift_amp, wshift_amp))
+        #xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
 
         if amps:
-            retval["METRICS"]={"XWSIGMA":xwsigma,"XWSIGMA_AMP":xwsigma_amp,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
+            retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib,"XWSIGMA_AMP":xwsigma_amp}#,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
         else:
-            retval["METRICS"]={"XWSIGMA":xwsigma,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
+            retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib}#,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
 
         #- http post if needed
         if qlf:
