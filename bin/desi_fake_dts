@@ -120,6 +120,9 @@ def main():
         default=None, help="The number of processes to use per node.  If not "
         "specified it uses a default value for each machine.")
 
+    parser.add_argument("--start_expid", required=False, default=None,
+        help="Start processing at this exposure ID.")
+
     args = parser.parse_args()
 
     nightopts = pack_args(args)
@@ -131,6 +134,10 @@ def main():
     }
 
     log = get_logger()
+
+    startexp = 0
+    if args.start_expid is not None:
+        startexp = int(args.start_expid)
 
     # data locations
 
@@ -171,6 +178,9 @@ def main():
 
         # Go through exposures in order
         for ex, flavor in ntexp.items():
+            if int(ex) < startexp:
+                log.info("Skipping exposure {} on night {} which is before --start_expid".format(ex, nt))
+                continue
             exptime = flavor_times[flavor]
             expsec = 60 * exptime
             log.info("Acquiring exposure {} on night {} for {} minutes...".format(ex, nt, exptime))
