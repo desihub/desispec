@@ -437,6 +437,7 @@ class Config(object):
         self.psfexpid = self.conf["PSFExpid"]
         self.psftype = self.conf["PSFType"]
         self.templateexpid = self.conf["TemplateExpid"]
+        self.templatenight = self.conf["TemplateNight"]
 
         #- some global variables:
         self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
@@ -449,9 +450,9 @@ class Config(object):
 
         #- Get reference metrics from template yaml file
         if self.flavor == 'arcs':
-            template=findfile('ql_mergedQAarc_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+            template=findfile('ql_mergedQAarc_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
-            template=findfile('ql_mergedQA_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+            template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         self.reference=None
         if os.path.isfile(template):
             with open(template) as reference:

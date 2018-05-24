@@ -15,6 +15,8 @@ WriteIntermediatefiles: False
 WriteStaticPlots: True
 #- Exposure ID for Reference Template
 TemplateExpid: 2
+#- Night for Reference Template
+TemplateNight: 20191001
 #-Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file

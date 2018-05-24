@@ -14,6 +14,8 @@ WriteIntermediatefiles: False
 WriteStaticPlots: True
 #- Exposure ID for Reference Template
 TemplateExpid: 1
+#- Night for Reference Template
+TemplateNight: 20191001
 #-Debuglevel 
 Debuglevel: 20
 #- Must use resolution in extraction to generate fiberflat
