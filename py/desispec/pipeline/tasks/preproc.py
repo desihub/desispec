@@ -83,7 +83,7 @@ class TaskPreproc(BaseTask):
 
 
     def _run_max_mem(self):
-        return 5.0
+        return 7.0
 
 
     def _run_time(self, name, procs_per_node, db=None):

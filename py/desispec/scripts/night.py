@@ -12,6 +12,7 @@ from __future__ import (absolute_import, division, print_function,
 import sys
 import os
 import re
+import copy
 import argparse
 import subprocess as sp
 import time
@@ -174,6 +175,13 @@ Where supported commands are:
         return opts
 
 
+    def _small(self, args):
+        small = copy.copy(args)
+        if small.nersc_maxnodes_small is not None:
+            small.nersc_maxnodes = small.nersc_maxnodes_small
+        return small
+
+
     def _run_chain(self, args, exps, db, night, tasktypes, deps=None,
                    spec=None):
         cargs = self._chain_args(args)
@@ -225,7 +233,7 @@ Where supported commands are:
             jids = None
             # Regardless of exposure type, preprocess and traceshift in a
             # single job.
-            trids = self._run_chain(args, [ex], db, night,
+            trids = self._run_chain(self._small(args), [ex], db, night,
                 "preproc,traceshift", deps=deps, spec=spec)
             # Now either extract or also do fiberflat.
             if ex in exp_by_flavor["flat"]:
@@ -240,7 +248,8 @@ Where supported commands are:
 
     def _run_calib(self, args, db, night, expid=None, deps=None, spec=None):
         exps = self._select_exposures(db, night, "cframe", expid=expid)
-        return self._run_chain(args, exps, db, night,
+        # Swap in the modified args for "small" jobs
+        return self._run_chain(self._small(args), exps, db, night,
                                "sky,starfit,fluxcalib,cframe", deps=deps,
                                spec=spec)
 
@@ -274,6 +283,10 @@ Where supported commands are:
         parser.add_argument("--nersc_queue", required=False, default="regular",
             help="write a script for this NERSC queue (debug | regular)")
 
+        parser.add_argument("--nersc_queue_redshifts", required=False,
+            default=None, help="Use this NERSC queue for redshifts. "
+            "Defaults to same as --nersc_queue.")
+
         parser.add_argument("--nersc_maxtime", required=False, default=None,
             help="Then maximum run time (in minutes) for a single "
             " job.  If the list of tasks cannot be run in this time, multiple "
@@ -283,6 +296,15 @@ Where supported commands are:
         parser.add_argument("--nersc_maxnodes", required=False, default=None,
             help="The maximum number of nodes to use.  Default "
             " is the maximum nodes for the specified queue.")
+
+        parser.add_argument("--nersc_maxnodes_small", required=False,
+            default=None, help="The maximum number of nodes to use for 'small' "
+            "steps like the per-night psf and fiberflat.  Default is to use the"
+            " same value as --nersc_maxnodes.")
+
+        parser.add_argument("--nersc_maxnodes_redshifts", required=False,
+            default=None, help="The maximum number of nodes to use for "
+            " redshifts.  Default is to use --nersc_maxnodes.")
 
         parser.add_argument("--nersc_shifter", required=False, default=None,
             help="The shifter image to use for NERSC jobs")
@@ -438,7 +460,7 @@ Where supported commands are:
             deps = None
             if len(psfjobs) > 0:
                 deps = psfjobs
-            jid = self._run_chain(args, None, db, args.night, "psfnight", deps=deps, spec=spec)
+            jid = self._run_chain(self._small(args), None, db, args.night, "psfnight", deps=deps, spec=spec)
             self._write_jobid("psfnight", args.night, 0, jid[0])
         return
 
@@ -483,8 +505,8 @@ Where supported commands are:
             deps = None
             if len(flatjobs) > 0:
                 deps = flatjobs
-            jid = self._run_chain(args, None, db, args.night, "fiberflatnight",
-                                  deps=deps, spec=spec)
+            jid = self._run_chain(self._small(args), None, db, args.night,
+                "fiberflatnight", deps=deps, spec=spec)
             self._write_jobid("fiberflatnight", args.night, 0, jid[0])
         return
 
@@ -511,7 +533,12 @@ Where supported commands are:
         cframejobs = self._read_jobids("cframe", args.night)
 
         # Run it
-        jid = self._run_chain(args, None, db, args.night, "spectra,redshift",
+        redargs = copy.copy(args)
+        if redargs.nersc_queue_redshifts is not None:
+            redargs.nersc_queue = redargs.nersc_queue_redshifts
+        if redargs.nersc_maxnodes_redshifts is not None:
+            redargs.nersc_maxnodes = redargs.nersc_maxnodes_redshifts
+        jid = self._run_chain(redargs, None, db, args.night, "spectra,redshift",
                               deps=cframejobs)
 
         return
