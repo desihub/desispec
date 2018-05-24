@@ -9,7 +9,7 @@ PSFType: psf
 #- FiberflatExpid used as expid for flat exposures
 FiberflatExpid: 1
 #- Writeout intermediate files
-WritePixfile: False
+WritePreprocfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
@@ -19,12 +19,14 @@ TemplateExpid: 2
 Debuglevel: 20
 #- Apply x or w resolution to frame file
 UseResolution: True
+#- Generate modified PSF file
+Flexure: False
 #- Heartbeat Period in seconds
 Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, BoxcarExtract, ApplyFiberFlat_QL, SkySub_QL]
+Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ApplyFiberFlat_QL, SkySub_QL]
 Algorithms:
     Initialize:
         QA: 
@@ -33,20 +35,21 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
-        
+                PARAMS: {BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
             Get_RMS:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
-                
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
-
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5578.9],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                          Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4],
                          XWSIGMA_NORMAL_RANGE: [-2.0, 2.0],
                          XWSIGMA_WARN_RANGE: [-4.0, 4.0]}
+    Flexure:
+        QA:
+            Trace_Shifts:
+                PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0]}
     BoxcarExtract:
         wavelength: {
             b: [3570,5730,0.8],

@@ -111,6 +111,7 @@ def write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=None):
     from astropy.io import fits
     psf=fits.open(psfbootfile)
     xcoeff=psf[0]
+    xcoeff.header["PSFTYPE"]='psf'
     ycoeff=psf[1]
     xsigma=psf[2]
     

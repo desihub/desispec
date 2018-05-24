@@ -44,7 +44,7 @@ class MonitoringAlg:
             else: #- For absolute value checks
                 self.m_log.warning("No reference given. STATUS will be assigned for the Absolute Value. Confirm your ranges.")
                 #- check the data type
-                if isinstance(current,float) or isinstance(current,int):
+                if isinstance(current,float) or isinstance(current,np.float32) or isinstance(current,int):
                     refval=0
                 else:
                     refval=np.zeros(len(current)) #- 1D list or array

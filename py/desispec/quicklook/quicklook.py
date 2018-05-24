@@ -248,7 +248,7 @@ def mapkeywords(kw,kwmap):
             newmap[k]=v
     return newmap
 
-def runpipeline(pl,convdict,conf,mergeQA=False):
+def runpipeline(pl,convdict,conf):
     """
     Runs the quicklook pipeline as configured
 
@@ -260,8 +260,6 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
             details in setup_pipeline method below for examples.
         conf: a configured dictionary, read from the configuration yaml file.
             e.g: conf=configdict=yaml.load(open('configfile.yaml','rb'))
-        mergedQA: if True, outputs the merged QA after the execution of pipeline. Perhaps, this 
-            should always be True, but leaving as option, until configuration and IO settles.
     """
 
     qlog=qllogger.QLLogger()
@@ -326,19 +324,20 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
     else:
         import numpy as np
         qa=None
-        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
         for palg in range(len(qas)):
             if singqa in qas[palg]:
                 pa=pl[palg][0]
                 pac=paconf[palg]
-                if singqa == 'Bias_From_Overscan' or singqa == 'CountSpectralBins':
+                if singqa in singleqaperpa:
                     qa = pl[palg][1][0]
                 else:
                     for qalg in range(len(qas[palg])):
                         if qas[palg][qalg] == singqa:
                             qa=pl[palg][1][qalg]
         if qa is None:
-            log.critical("Unknown input... Valid QAs are: {}".format(qas))
+            log.critical("Unknown input QA... Valid QAs are: {}".format(qas))
             sys.exit()
 
         log.info("Starting to run step {}".format(pac["StepName"]))
@@ -370,24 +369,22 @@ def runpipeline(pl,convdict,conf,mergeQA=False):
                 log.info("{} finished".format(qa.name))
 
     #- merge QAs for this pipeline execution
-    if mergeQA is True:
+    log.debug("Dumping mergedQAs")
+    from desispec.io import findfile
+    ftype='ql_mergedQA_file'
+    specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
+    if conf['Flavor']=='arcs':
+        ftype='ql_mergedQAarc_file'
+    destFile=findfile(ftype,night=conf['Night'],
+                      expid=conf['Expid'],
+                      camera=conf['Camera'],
+                      specprod_dir=specprod_dir)
 
-        log.debug("Dumping mergedQAs")
-        from desispec.io import findfile
-        ftype='ql_mergedQA_file'
-        specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
-        if conf['Flavor']=='arcs':
-            ftype='ql_mergedQAarc_file'
-        destFile=findfile(ftype,night=conf['Night'],
-                          expid=conf['Expid'],
-                          camera=conf['Camera'],
-                          specprod_dir=specprod_dir)
-
-        # SE: disabled the functionality of writing yamls
-        #schemaMerger.writeToFile(destFile)
-        #log.info("Wrote merged QA file {}".format(destFile))
-        schemaMerger.writeTojsonFile(destFile)
-        log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
+    # SE: disabled the functionality of writing yamls
+    #schemaMerger.writeToFile(destFile)
+    #log.info("Wrote merged QA file {}".format(destFile))
+    schemaMerger.writeTojsonFile(destFile)
+    log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
     if isinstance(inp,tuple):
        return inp[0]
     else:

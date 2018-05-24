@@ -21,6 +21,7 @@ from desispec.io.sky import read_sky
 from desispec.image import Image as im
 from desispec.frame import Frame as fr
 from desispec.preproc import _parse_sec_keyword
+from desispec.util import runcmd
 
 
 qlog=qllogger.QLLogger("QuickLook",0)
@@ -127,7 +128,10 @@ class Check_HDUs(MonitoringAlg):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
         
         if kwargs["singleqa"] == 'Check_HDUs':
-            rawfile = findfile(filetype,int(night),int(expid),camera,rawdata_dir=kwargs["rawdir"])
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            rawfile = findfile('raw',int(night),int(expid),camera,rawdata_dir=kwargs["rawdir"])
             raw = fits.open(rawfile)
         else:
             raw=args[0]
@@ -220,6 +224,108 @@ class Check_HDUs(MonitoringAlg):
     def get_default_config(self):
         return {}
 
+
+class Trace_Shifts(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="TRACE"
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        key=kwargs['refKey'] if 'refKey' in kwargs else "TRACE_REF"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "TRACE_REF"
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
+        if "TRACE_WARN_RANGE" in parms and "TRACE_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["TRACE_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["TRACE_NORMAL_RANGE"]),QASeverity.NORMAL)]
+        MonitoringAlg.__init__(self,name,im,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
+
+        if kwargs["singleqa"] == 'Trace_Shifts':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+        else:
+            image=args[0]
+
+        fibermap=kwargs['FiberMap']
+
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+
+        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
+        else: refmetrics=None
+
+        amps=False
+        if "amps" in kwargs:
+            amps=kwargs["amps"]
+
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        psf = None
+        if "PSFFile" in kwargs:
+            psf=kwargs["PSFFile"]
+
+        fibermap = None
+        if "FiberMap" in kwargs:
+            fibermap=kwargs["FiberMap"]
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+
+        return self.run_qa(fibermap,image,paname=paname,amps=amps,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
+
+    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+
+        if param is None:
+            log.debug("Param is None. Using default param instead")
+            param = {
+                "TRACE_NORMAL_RANGE":[-1.0, 1.0],
+                "TRACE_WARN_RANGE":[-2.0, 2.0]
+                }
+
+        #- RS: Return empty dictionaries until flexure metrics are decided
+        retval={}
+        retval["METRICS"]={}
+        retval["PARAMS"]=param
+
+        #- http post if needed
+        if qlf:
+            qlf_post(retval)
+
+        if qafile is not None:
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+#        if qafig is not None:
+#            plot.plot_TraceShifts(retval,qafig)
+
+            log.debug("Output QA fig {}".format(qafig))
+
+        return retval
+
+    def get_default_config(self):
+        return {}
+
+
 class Bias_From_Overscan(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -253,10 +359,7 @@ class Bias_From_Overscan(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
-            image.meta = image[0].header
-           
         else:
             image=args[0]
             
@@ -1636,6 +1739,8 @@ class Integrate_Spec(MonitoringAlg):
         log.info(len(integrals))
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
+        #- RS: Convert integrated counts to magnitudes
+        fibermags=22.5-2.5*np.log10(integrals/frame.meta["EXPTIME"])
 
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
@@ -1662,9 +1767,7 @@ class Integrate_Spec(MonitoringAlg):
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
         for i in range(len(mag_avg_tgt)):
-            
-            #SE: still using counts as opposed to a calibrated flux. mag_AB= -2.5 log10(f)-48.6 
-            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+48.6
+            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+22.5
             if mag_avg_tgt[i] != np.nan:
                 magdiff=mag_fib-mag_avg_tgt[i]
             else:
@@ -1684,7 +1787,7 @@ class Integrate_Spec(MonitoringAlg):
         delta_mag=np.zeros(frame.nspec) #- placeholder
 
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":integrals, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
 
         if qlf:
             qlf_post(retval) 

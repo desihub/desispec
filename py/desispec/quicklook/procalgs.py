@@ -117,9 +117,41 @@ class Preproc(pas.PipelineAlg):
         return img
 
 
+class Flexure(pas.PipelineAlg):
+    """ Use desi_compute_trace_shifts to output modified psf file
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Flexure"
+        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if 'preprocFile' not in kwargs:
+            raise qlexceptions.ParameterException("Must provide preproc file for desi_compute_trace_shifts")
+        if 'inputPSFFile' not in kwargs:
+            raise qlexceptions.ParameterException("Must provide input psf file desi_compute_trace_shifts")
+        if 'outputPSFFile' not in kwargs:
+            raise qlexceptions.ParameterException("Must provide output psf file")
+
+        preproc_file=kwargs["preprocFile"]
+        input_file=kwargs["inputPSFFile"]
+        output_file=kwargs["outputPSFFile"]
+
+        return self.run_pa(preproc_file,input_file,output_file,args)
+
+    def run_pa(self,preproc_file,input_file,output_file,args):
+        from desispec.util import runcmd
+        #- Generate modified psf file
+        cmd="desi_compute_trace_shifts --image {} --psf {} --outpsf {}".format(preproc_file,input_file,output_file)
+        if runcmd(cmd) !=0:
+            raise RuntimeError('desi_compute_trace_shifts failed, psftrace not written')
+
+        #- return image object to pass to boxcar for extraction
+        img=args[0]
+        return img
+
+
 class BootCalibration(pas.PipelineAlg):
-    from desispec import bootcalib as desiboot
-    
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="Boot Calibration"

@@ -9,7 +9,7 @@ PSFType: psf
 #- FiberflatExpid used as expid for flat image files when running calibration
 FiberflatExpid: 1
 #- Writeout intermediate files
-WritePixfile: False
+WritePreprocfile: False
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
@@ -33,10 +33,8 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {DIFF_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
-        
+                PARAMS: {BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
             Get_RMS:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
-                
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}

@@ -41,7 +41,6 @@ def parse():
     parser.add_argument("--fullconfig", type=str, required=False, help="full expanded configfile")
     parser.add_argument("--save",type=str, required=False,help="save this full config to a file")
     parser.add_argument("--qlf",type=str,required=False,help="setup for QLF run", default=False)
-    parser.add_argument("--mergeQA", default=False, action='store_true',help="output Merged QA file")
     parser.add_argument("--singleQA",type=str,required=False,help="choose one QA to run",default=None,dest="singqa")
     parser.add_argument("--loglvl",default=20,type=int,help="log level for quicklook (0=verbose, 50=Critical)")
 
@@ -114,9 +113,9 @@ def ql_main(args=None):
             f.close()
         else:
             log.warning("Can save config to only yaml output. Put a yaml in the argument")
-        
+
     pipeline, convdict = quicklook.setup_pipeline(configdict)
-    res=quicklook.runpipeline(pipeline,convdict,configdict,mergeQA=args.mergeQA)
+    res=quicklook.runpipeline(pipeline,convdict,configdict)
     inpname=configdict["RawImage"]
     night=configdict["Night"]
     camera=configdict["Camera"]

@@ -32,11 +32,17 @@ class Config(object):
         self.specprod_dir = specprod_dir
         self.outdir = outdir
         self.dumpintermediates = self.conf["WriteIntermediatefiles"]
-        self.writepixfile = self.conf["WritePixfile"]
+        self.writepreprocfile = self.conf["WritePreprocfile"]
         self.writeskymodelfile = self.conf["WriteSkyModelfile"]
         self.writestaticplots = self.conf["WriteStaticPlots"]
         self.usesigma = self.conf["UseResolution"]
+        try:
+            self.flexure = self.conf["Flexure"]    
+        except:
+            self.flexure = False
         self.pipeline = self.conf["Pipeline"]
+        if not self.flexure and "Flexure" in self.pipeline:
+            self.pipeline.remove("Flexure")
         self.algorithms = self.conf["Algorithms"]
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
@@ -56,7 +62,7 @@ class Config(object):
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
-        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
 
     @property
     def mode(self):
@@ -100,11 +106,11 @@ class Config(object):
         #- Make kwargs less verbose using '%%' marker for global variables. Pipeline will map them back
         paopt_initialize={'camera': self.camera}
 
-        if self.writepixfile:
-            pixfile=self.dump_pa("Preproc")
+        if self.writepreprocfile:
+            preprocfile=self.dump_pa("Preproc")
         else: 
-            pixfile = None
-        paopt_preproc={'camera': self.camera,'dumpfile': pixfile}
+            preprocfile = None
+        paopt_preproc={'camera': self.camera,'dumpfile': preprocfile}
 
         if self.dumpintermediates:
             if self.conf["Flavor"] == 'arcs':
@@ -129,6 +135,17 @@ class Config(object):
             flatimg=None
             bootfile=None
             psffile=None
+
+        if self.flexure:
+            preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
+            inputpsf=findfile(self.conf["PSFType"],self.night,self.psfexpid,self.camera,specprod_dir=self.specprod_dir)
+            outputpsf=findfile('psf',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
+        else:
+            preproc_file=None
+            inputpsf=None
+            outputpsf=None
+
+        paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': inputpsf, 'outputPSFFile': outputpsf}
 
         paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
 
@@ -155,6 +172,7 @@ class Config(object):
         defList={
             'Initialize':paopt_initialize,
             'Preproc':paopt_preproc,
+            'Flexure':paopt_flexure,
             'BootCalibration':paopt_bootcalib,
             'BoxcarExtract':paopt_extract,
             'ResolutionFit':paopt_resfit,
@@ -191,7 +209,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'BootCalibration': 'psfboot', 'BoxcarExtract': 'frame', 'ResolutionFit': None, 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BootCalibration': 'psfboot', 'BoxcarExtract': 'frame', 'ResolutionFit': None, 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -378,6 +396,7 @@ class Config(object):
                      }
         else:
             filemap={'Check_HDUs':'ql_checkHDUs',
+                     'Trace_Shifts':'ql_trace',
                      'Bias_From_Overscan': 'ql_getbias',
                      'Get_RMS' : 'ql_getrms',
                      'Count_Pixels': 'ql_countpix',
