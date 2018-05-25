@@ -85,6 +85,7 @@ class TestQL(unittest.TestCase):
                       'PSFType': 'psf',
                       'FiberflatExpid': flatExpid,
                       'TemplateExpid': templateExpid,
+                      'TemplateNight': night,
                       'WritePreprocfile': False,
                       'WriteSkyModelfile': False,
                       'WriteIntermediatefiles': False,

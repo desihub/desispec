@@ -369,7 +369,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["paname"]="abc"
         qargs["singleqa"]=None
         resl=qa(inp,**qargs)
-        self.assertTrue(len(resl["METRICS"]["XWSIGMA_SHIFT"].ravel())==4)
+        self.assertTrue(len(resl["METRICS"]["XWSIGMA"].ravel())==2)
 
     def testCountPixels(self):
         qa=QA.Count_Pixels('countpix',self.config)
