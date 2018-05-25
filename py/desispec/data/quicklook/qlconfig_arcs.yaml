@@ -12,9 +12,11 @@ FiberflatExpid: 1
 WritePreprocfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
-WriteStaticPlots: True
+WriteStaticPlots: False
 #- Exposure ID for Reference Template
 TemplateExpid: 0
+#- Night for Reference Template
+TemplateNight: 20191001
 #- Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file
@@ -57,7 +59,7 @@ Algorithms:
             }
         QA:
             CountSpectralBins:
-                PARAMS: {CUTBINS: 5, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
+                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
     ResolutionFit:
         NBINS: 5
         QA: {

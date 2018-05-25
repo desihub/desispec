@@ -1,4 +1,5 @@
 import numpy as np
+import json
 import yaml
 from desispec.io import findfile
 import os,sys
@@ -285,11 +286,11 @@ class Config(object):
                         qaopts[qa]['SkyFile']=skyfile
 
                 if self.reference != None:
-                    for step in self.reference:
-                        if pa_yaml == step['PIPELINE_STEP']:
-                            if 'METRICS' in step:
-                                key=self._qaRefKeys[qa]
-                                qaopts[qa]['ReferenceMetrics']={key:step['METRICS'][key]}
+                    refkey=qaopts[qa]['refKey']
+                    for padict in range(len(self.reference)):
+                        pa_metrics=self.reference[padict].keys()
+                        if refkey in pa_metrics:
+                            qaopts[qa]['ReferenceMetrics']={'{}'.format(refkey): self.reference[padict][refkey]}
         return qaopts
 
     def _qaparams(self,qa):
@@ -437,6 +438,7 @@ class Config(object):
         self.psfexpid = self.conf["PSFExpid"]
         self.psftype = self.conf["PSFType"]
         self.templateexpid = self.conf["TemplateExpid"]
+        self.templatenight = self.conf["TemplateNight"]
 
         #- some global variables:
         self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
@@ -449,27 +451,27 @@ class Config(object):
 
         #- Get reference metrics from template yaml file
         if self.flavor == 'arcs':
-            template=findfile('ql_mergedQAarc_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+            template=findfile('ql_mergedQAarc_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
-            template=findfile('ql_mergedQA_file',night=self.night,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+            template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        json_template=template.split('.yaml')[0]+'.json'
         self.reference=None
-        if os.path.isfile(template):
-            with open(template) as reference:
-                refdict=yaml.load(reference)
-                nights=refdict['NIGHTS']
-                for night in nights:
-                    if self.night == night['NIGHT']:
-                        exposures=night['EXPOSURES']
-                        for exposure in exposures:
-                            if self.templateexpid == exposure['EXPID']:
-                                cameras=exposure['CAMERAS']
-                                for camera in cameras:
-                                    if self.camera == camera['CAMERA']:
-                                        self.reference=camera['PIPELINE_STEPS']
-                if self.reference is None:
-                    self.log.warning("WARNING template file is malformed %s"%template)                    
+        if os.path.isfile(json_template):
+            try:
+                with open(json_template) as reference:
+                    refdict=json.load(reference)
+                    tasks=refdict["TASKS"]
+                    tasklist=[]
+                    for task in tasks.keys():
+                        tasklist.append(task)
+                    ref_met=[]
+                    for ttask in tasklist:
+                        ref_met.append(tasks[ttask]['METRICS'])
+                    self.reference=ref_met
+            except:
+                self.log.warning("WARNING, template file is malformed %s"%json_template)
         else:
-            self.log.warning("WARNING can't open template file %s"%template)
+            self.log.warning("WARNING, can't open template file %s"%json_template)
 
         outconfig={}
 
