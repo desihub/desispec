@@ -1188,6 +1188,7 @@ class DataBasePostgres(DataBase):
     def initdb(self):
         """Create DB tables for all tasks if they do not exist.
         """
+        log = get_logger()
         # Check existence of the schema.  If we were not passed the schema
         # in the constructor, it means that we are creating a new prod, so any
         # existing schema should be wiped and recreated.
@@ -1198,48 +1199,48 @@ class DataBasePostgres(DataBase):
             if have_schema:
                 # We need to wipe it first
                 com = "drop schema {} cascade".format(self._schema)
-                print(com,flush=True)
+                log.debug(com)
                 cur.execute(com)
             com = "create schema {} authorization {}"\
                 .format(self._schema, self._user)
-            print(com,flush=True)
+            log.debug(com)
             cur.execute(com)
 
             if self._authorize is not None:
                 com = "grant usage on schema {} to {}"\
                     .format(self._schema, self._authorize)
-                print(com,flush=True)
+                log.debug(com)
                 cur.execute(com)
 
                 com = "alter default privileges in schema {} grant select on tables to {}".format(self._schema, self._authorize)
-                print(com,flush=True)
+                log.debug(com)
                 cur.execute(com)
 
                 com = "alter default privileges in schema {} grant select,usage on sequences to {}".format(self._schema, self._authorize)
-                print(com,flush=True)
+                log.debug(com)
                 cur.execute(com)
 
                 com = "alter default privileges in schema {} grant execute on functions to {}".format(self._schema, self._authorize)
-                print(com,flush=True)
+                log.debug(com)
                 cur.execute(com)
 
                 com = "alter default privileges in schema {} grant usage on types to {}".format(self._schema, self._authorize)
-                print(com,flush=True)
+                log.debug(com)
                 cur.execute(com)
 
             # Create a table of information about this prod
             com = "create table {}.info (key text unique, val text)"\
                 .format(self._schema)
-            print(com,flush=True)
+            log.debug(com)
             cur.execute(com)
             com = "insert into {}.info values ('{}', '{}')"\
                 .format(self._schema, "path", self._proddir)
-            print(com,flush=True)
+            log.debug(com)
             cur.execute(com)
             if 'USER' in os.environ:
                 com = "insert into {}.info values ('{}', '{}')"\
                     .format(self._schema, "created_by", os.environ['USER'])
-                print(com,flush=True)
+                log.debug(com)
                 cur.execute(com)
 
             # check existing tables
