@@ -2,8 +2,16 @@
 desispec Change Log
 ===================
 
-0.21.0 (unreleased)
+0.22.0 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.21.0 (2018-05-25)
+-------------------
+
+Major updates including non-backwards compatible changes to QL output format
+and pipeline updates for semi-realtime nightly processing.
 
 * Pipeline fix to allow redrock to use a full node per healpix (PR `#585`_).
 * Update pipeline maxtime/maxnodes job calculation (PR `#588`_).
@@ -19,11 +27,16 @@ desispec Change Log
 * Pipeline hooks for processing a single exposure (PR `#604`_).
 * Override PSF file psferr to avoid masking bright lines.
   Requires specter > 0.8.1 (PR `#606`_).
-* QL updates (PR `#577`_, `#600`_, `#607`_).
+* QL QA reorganization (PR `#577`_, `#600`_, `#607`_, `#613`_).
 * Integration test and QA fixes (PR `#602`_ and `#605`_).
 * New desi_night scripts for semi-realtime processing (PR `#609`_).
+* Spectro teststand calibration/utility code updates (PR `#610`_)
+* QL S/N vs. mag updates (PR `#611`_)
+* QL resampling fixes (PR `#615`_)
 * Merge database modules (PR `#616`_).
-* Added cori and edison realtime queue definitions (PR `#618`_).
+* Add flexure tests to QL (PR `#617`_).
+* Added cori and edison realtime queue support (PR `#618`_, `#619`_, `#624`_).
+* QL output format updates (PR `#623`_).
 
 .. _`#577`: https://github.com/desihub/desispec/pull/577
 .. _`#585`: https://github.com/desihub/desispec/pull/585
@@ -40,8 +53,16 @@ desispec Change Log
 .. _`#606`: https://github.com/desihub/desispec/pull/606
 .. _`#607`: https://github.com/desihub/desispec/pull/607
 .. _`#609`: https://github.com/desihub/desispec/pull/609
+.. _`#610`: https://github.com/desihub/desispec/pull/610
+.. _`#611`: https://github.com/desihub/desispec/pull/611
+.. _`#613`: https://github.com/desihub/desispec/pull/613
+.. _`#615`: https://github.com/desihub/desispec/pull/615
 .. _`#616`: https://github.com/desihub/desispec/pull/616
+.. _`#617`: https://github.com/desihub/desispec/pull/617
 .. _`#618`: https://github.com/desihub/desispec/pull/618
+.. _`#619`: https://github.com/desihub/desispec/pull/619
+.. _`#623`: https://github.com/desihub/desispec/pull/623
+.. _`#624`: https://github.com/desihub/desispec/pull/624
 
 0.20.0 (2018-03-29)
 -------------------
