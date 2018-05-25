@@ -161,6 +161,7 @@ def main():
         # Look up flavors of each exposure
         lastarc = None
         lastflat = None
+        lastscience = None
         ntexp = OrderedDict()
         for ex in expids:
             fibermap = io.get_raw_files("fibermap", nt, ex,
@@ -175,6 +176,8 @@ def main():
                     lastarc = ex
                 if flavor == "flat":
                     lastflat = ex
+                if flavor == "science":
+                    lastscience = ex
 
         # Go through exposures in order
         for ex, flavor in ntexp.items():
@@ -233,12 +236,21 @@ def main():
                     sys.exit(ret)
 
         # Trigger redshifts at the end of the night (for now)
-        com = ["desi_night", "redshifts", "--night", "{}".format(nt)]
-        com.extend(nightopts)
-        log.info("  Running {}".format(" ".join(com)))
-        ret = sprun(com)
-        if ret != 0:
-            sys.exit(ret)
+        if int(lastscience) >= startexp:
+            com = ["desi_night", "redshifts", "--night", "{}".format(nt)]
+            com.extend(nightopts)
+            log.info("  Running {}".format(" ".join(com)))
+            ret = sprun(com)
+            if ret != 0:
+                sys.exit(ret)
+
+            # Pause until the next night
+            incr = 5
+            nloop = args.night_break // 5
+            for ir in range(nloop):
+                log.info("End of night {}, will resume in {} minutes...".format(nt, args.night_break - (ir*incr)))
+                sys.stdout.flush()
+                time.sleep(60*incr)
 
 
 if __name__ == '__main__':
