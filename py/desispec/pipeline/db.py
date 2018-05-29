@@ -279,6 +279,8 @@ def all_tasks(night, nside, expid=None):
                     full["fluxcalib"].append(props)
                     # Add cframe
                     full["cframe"].append(props)
+                    # Add QA
+                    full["qadata"].append(props)
 
                     # Add starfit if does not exist
                     exists=False
