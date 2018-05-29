@@ -416,6 +416,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
     # Return
     return qadict
 
+
 def SN_ratio(flux,ivar):
     """
     SN Ratio
@@ -425,16 +426,16 @@ def SN_ratio(flux,ivar):
         flux (array): 2d [nspec,nwave] the signal (typically for spectra,
             this comes from frame object
         ivar (array): 2d [nspec,nwave] corresponding inverse variance
+
+    Returns:
+        medsnr (array): 1d [nspec]
     """
 
     #- we calculate median and total S/N assuming no correlation bin by bin
-    medsnr=np.zeros(flux.shape[0])
-    #totsnr=np.zeros(flux.shape[0])
-    for ii in range(flux.shape[0]):
-        snr=flux[ii]*np.sqrt(ivar[ii])
-        medsnr[ii]=np.median(snr)
-        # totsnr[ii]=np.sqrt(np.sum(snr**2))
+    snr = flux * np.sqrt(ivar)
+    medsnr = np.median(snr, axis=1)
     return medsnr #, totsnr
+
 
 def SignalVsNoise(frame,params,fidboundary=None):
     """
