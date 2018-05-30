@@ -23,9 +23,11 @@ class MonitoringAlg:
         self.m_log.debug("initializing Monitoring alg {}".format(name))
     def __call__(self,*args,**kwargs):
         res=self.run(*args,**kwargs)
-        res["QA_STATUS"]="UNKNOWN"
         cargs=self.config['kwargs']
         params=cargs['param']
+
+        #print(params,"MA1")
+
         metrics=res["METRICS"] if 'METRICS' in res else None
         if metrics is None:
             metrics={}
@@ -37,10 +39,16 @@ class MonitoringAlg:
             QARESULTKEY=cargs["QASTATUSKEY"]
         if "RESULTKEY" in cargs:
             reskey=cargs["RESULTKEY"]
+
+        #print(reskey,QARESULTKEY,"MA1.5")
+
         if reskey in metrics:
             current=metrics[reskey]
             if "REFERENCE" in cargs:
                 refval=cargs["REFERENCE"]
+    
+                print(refval,"MA inside if")
+ 
             else: #- For absolute value checks
                 self.m_log.warning("No reference given. STATUS will be assigned for the Absolute Value. Confirm your ranges.")
                 #- check the data type
@@ -50,6 +58,8 @@ class MonitoringAlg:
                     refval=np.zeros(len(current)) #- 1D list or array
             #- Update PARAMS ref key
             res["PARAMS"][reskey+'_REF']=refval
+
+            #print(res,"MA2")
 
             currlist=isinstance(current,(np.ndarray,collections.Sequence))
             reflist=isinstance(refval,(np.ndarray,collections.Sequence))
@@ -62,6 +72,8 @@ class MonitoringAlg:
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,len(refval),len(current)))
             else: # both are scalars
                 self.__deviation=current-refval
+
+            #print(self.__deviation,"self_deviation MA 2.5")
 
         # check RANGES given in config and set QA_STATUS keyword
         # it should be a sorted overlapping list of range tuples in the form [ ((interval),QASeverity),((-1.0,1.0),QASeverity.NORMAL),(-2.0,2.0),QAStatus.WARNING)]
@@ -77,29 +89,41 @@ class MonitoringAlg:
                 if d>=l[0][0] and d<l[0][1]:
                     val=l[1]
             return val
+
+        #print(metrics, "MA 3")
+
         if self.__deviation is not None and "RANGES" in cargs:
             self.m_log.info("QL Reference checking for QA {}".format(self.name))
             thr=cargs["RANGES"]
             metrics[QARESULTKEY]="ERROR"
+
+            #print(metrics[QARESULTKEY], "MA 3.3")
+
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
             devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
             #if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
             #    self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
             #    return res
             #else: #they are of the same type
+
+            #print(thrlist,devlist,"MA 4")
+
             if devlist: # if results are a list
                 if len(thr)==2: # check all results against same thresholds
                     #- maximum deviation
                     kk=np.argmax(np.abs(self.__deviation).flatten()) #- flatten for > 1D array
                     metrics[QARESULTKEY]=findThr(np.array(self.__deviation).flatten()[kk],thr)
-                    #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
+                    #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation]
                 #else: # each result has its own thresholds
                 #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
+
+                #print(metrics[QARESULTKEY],"inside devlist if: MA 5")
+
             else: #result is a scalar
-                metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
-            if metrics[QARESULTKEY]=='QASeverity.NORMAL':
+                metrics[QARESULTKEY]=findThr(self.__deviation,thr)
+            if metrics[QARESULTKEY]==QASeverity.NORMAL:
                 metrics[QARESULTKEY]='NORMAL'
-            elif metrics[QARESULTKEY]=='QASeverity.WARNING':
+            elif metrics[QARESULTKEY]==QASeverity.WARNING:
                 metrics[QARESULTKEY]='WARNING'
             else:
                 metrics[QARESULTKEY]='ALARM'

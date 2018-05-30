@@ -347,6 +347,7 @@ class Bias_From_Overscan(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
+        print(parms)
         if "BIAS_WARN_RANGE" in parms and "BIAS_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["BIAS_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["BIAS_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
@@ -380,6 +381,7 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
+        print(param,"step 2")
 
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
@@ -394,7 +396,6 @@ class Bias_From_Overscan(MonitoringAlg):
         return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
-
     
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
@@ -420,8 +421,7 @@ class Bias_From_Overscan(MonitoringAlg):
         from desispec import quicklook
         param['PROC_DESISPEC_VERSION']= desispec.__version__
         param['PROC_QuickLook_VERSION']= quicklook.__qlversion__
-        
-          
+                  
         #header = image.meta
         if 'INHERIT' in image.meta and image.meta['INHERIT']:
 
@@ -437,13 +437,13 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if param is None:
             log.debug("Param is None. Using default param instead")
-            param = {
-                
+            param = {                
                 "BIAS_NORMAL_RANGE":[-1.0, 1.0],
                 "BIAS_WARN_RANGE:":[-2.0, 2.0]
                 }
         retval["PARAMS"] = param
-        
+        print(param,"step 2")        
+
         if amps:
             bias_amps=np.array(bias_overscan)
             retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps}
