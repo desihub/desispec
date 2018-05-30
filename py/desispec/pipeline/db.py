@@ -38,7 +38,7 @@ def all_task_types():
     """
     from . import tasks
     from .tasks.base import default_task_chain
-    ttypes = ["fibermap", "rawdata"]
+    ttypes = ["fibermap", "rawdata", "qadata"]
     ttypes.extend(tasks.base.default_task_chain)
     return ttypes
 
