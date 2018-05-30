@@ -28,7 +28,7 @@ class TaskQAData(BaseTask):
         super(TaskQAData, self).__init__()
         # then put int the specifics of this class
         # _cols must have a state
-        self._type = "sky"
+        self._type = "qadata"
         self._cols = [
             "night",
             "band",
@@ -61,9 +61,7 @@ class TaskQAData(BaseTask):
         from .base import task_classes
         props = self.name_split(name)
         deptasks = {
-            "fiberflat" : task_classes["fiberflatnight"].name_join(props),
-            "sky" : task_classes["sky"].name_join(props),
-            "fluxcalib" : task_classes["fluxcalib"].name_join(props),
+            "cframe" : task_classes["cframe"].name_join(props),
         }
         return deptasks
 
@@ -94,10 +92,10 @@ class TaskQAData(BaseTask):
         """
         from .base import task_classes, task_type
 
-        deps = self.deps(name)
+        props = self.name_split(name)
         options = {}
-        options["frame_file"]    = task_classes["extract"].paths(deps["infile"])[0]
-        #options["outfile"]    = self.paths(name)[0]
+        options["frame_file"] = task_classes["extract"].paths(
+            task_classes["extract"].name_join(props))
 
         options.update(opts)
         return option_list(options)
