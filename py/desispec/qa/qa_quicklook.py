@@ -1013,6 +1013,7 @@ class Count_Pixels(MonitoringAlg):
             r=kwargs["ReferenceMetrics"]
             if key in r:
                 kwargs["REFERENCE"]=r[key]
+                
         if "LITFRAC_WARN_RANGE" in parms and "LITFRAC_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["LITFRAC_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["LITFRAC_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
@@ -1343,8 +1344,128 @@ class Sky_Continuum(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             desi_params = read_params()
-            param = {}
+            param = {"B_CONT": ["4000, 4500", "5250, 5550"],
+                         "R_CONT": ["5950, 6200", "6990, 7230"],
+                         "Z_CONT": ["8120, 8270", "9110, 9280"],
+                         "SKYCONT_NORMAL_RANGE": [100.0, 400.0],
+                         "SKYCONT_WARN_RANGE": [50.0, 600.0]}
             for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_ALARM_RANGE', 'SKYCONT_WARN_RANGE']: #- needs updating alarm/warn - normal/warn in desi_params.
+                param[key] = desi_params['qa']['skysub']['PARAMS'][key]
+
+        wrange1=param["{}_CONT".format(camera[0].upper())][0]
+        wrange2=param["{}_CONT".format(camera[0].upper())][1]
+
+        retval["PARAMS"] = param
+
+        skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
+            frame, wrange1, wrange2)
+ 
+                            
+        retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
+             
+
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+
+        if qafig is not None:
+            plot.plot_sky_continuum(retval,qafig)
+            
+            log.debug("Output QA fig {}".format(qafig))
+        
+        return retval
+
+    def get_default_config(self):
+        return {}
+
+
+
+class Sky_Rband(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="SKYRBAND"
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        key=kwargs['refKey'] if 'refKey' in kwargs else "SKYRBAND"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "SKYRBAND_STATUS"
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
+
+        if "SKYRBAND_WARN_RANGE" in parms and "SKYRBAND_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["SKYRBAND_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["SKYRBAND_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        MonitoringAlg.__init__(self,name,fr,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
+
+        if kwargs["singleqa"] == 'SkyRband':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
+            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
+        else:
+            frame=args[0]
+
+        fibermap=kwargs['FiberMap']
+        
+        if "paname" in kwargs:
+            paname=kwargs["paname"]
+
+        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
+        else: refmetrics=None
+
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig=None
+
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
+
+    def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+
+        #- qa dictionary 
+        retval={}
+        retval["PANAME" ]= paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        
+        camera=frame.meta["CAMERA"]
+
+        if param is None:
+            log.debug("Param is None. Using default param instead")
+            desi_params = read_params()
+            
+            param = {"B_CONT": ["4000, 4500", "5250, 5550"],
+                         "R_CONT": ["5950, 6200", "6990, 7230"],
+                         "Z_CONT": ["8120, 8270", "9110, 9280"],
+                         "SKYRBAND_NORMAL_RANGE": [-100.0, 100.0],
+                         "SKYRBAND_WARN_RANGE": [-200.0, 200.0]}
+            
+            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYRBAND_ALARM_RANGE', 'SKYRBAND_WARN_RANGE']: 
                 param[key] = desi_params['qa']['skysub']['PARAMS'][key]
 
         wrange1=param["{}_CONT".format(camera[0].upper())][0]
@@ -1387,23 +1508,24 @@ class Sky_Continuum(MonitoringAlg):
                 skyfib_Rflux.append(sky_flux)
             
         #SE: assuming there is a key in the header of the raw exposure header [OR somewhere else] where the sky R-band flux from the sky monitor is stored 
-        #    the units would be counts/sec/arcsec^2   ---> sky_r=frame.meta["SKYFLUX"] - 1000 is just a dummy number as a placeholder
-        sky_r=  1000#frame.meta["SKYFLUX"]
+        #    the units would be counts/sec/arcsec^2  1000 is just a dummy number as a placeholder
+        sky_r=  100   # SE: to come from ETC in count/sec/arcsec^2 
         
         if (sky_r != "" and len(skyfib_Rflux) >0):
             
-            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":abs(sky_r-np.mean(skyfib_Rflux)) }
-
+            diff = abs(sky_r-np.mean(skyfib_Rflux)) 
+            
         else:
              if (sky_r != "" and len(skyfib_Rflux) == 0): 
                  
-                
-                retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":sky_r}
+                diff = sky_r
              
              else: 
-              
+                diff = sky_fib_flux
                 log.warning("No SKY Monitor R-band Flux was found in the header!")
-                retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":sky_fib_flux}
+
+
+        retval["METRICS"]={"SKY_RBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
 
         if qlf:
             qlf_post(retval)    
@@ -1412,10 +1534,10 @@ class Sky_Continuum(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
 
-        if qafig is not None:
-            plot.plot_sky_continuum(retval,qafig)
+        #if qafig is not None:
+            #plot.plot_sky_continuum(retval,qafig)
             
-            log.debug("Output QA fig {}".format(qafig))
+            #log.debug("Output QA fig {}".format(qafig))
         
         return retval
 
@@ -1622,10 +1744,6 @@ class Sky_Residual(MonitoringAlg):
         kwargs=self.config['kwargs']
 
 
-        #SE: why keep calling in values that are not used in this QA?
-        #ra = fibermap["RA_TARGET"]
-        #dec = fibermap["DEC_TARGET"]
-
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
@@ -1659,6 +1777,9 @@ class Sky_Residual(MonitoringAlg):
 
     def get_default_config(self):
         return {}
+
+
+
 
 
 class Integrate_Spec(MonitoringAlg):

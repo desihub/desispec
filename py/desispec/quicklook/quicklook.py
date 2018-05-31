@@ -324,7 +324,7 @@ def runpipeline(pl,convdict,conf):
     else:
         import numpy as np
         qa=None
-        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']]
         singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
         for palg in range(len(qas)):
             if singqa in qas[palg]:
@@ -383,8 +383,9 @@ def runpipeline(pl,convdict,conf):
     # SE: disabled the functionality of writing yamls
     #schemaMerger.writeToFile(destFile)
     #log.info("Wrote merged QA file {}".format(destFile))
+    
     schemaMerger.writeTojsonFile(destFile)
-    log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
+    log.info("Wrote merged QA file {}".format(destFile))#.split('.yaml')[0]+'.json'))
     if isinstance(inp,tuple):
        return inp[0]
     else:

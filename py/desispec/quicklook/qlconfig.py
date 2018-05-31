@@ -63,7 +63,7 @@ class Config(object):
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
-        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Sky_Rband":"SKYRBAND", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
 
     @property
     def mode(self):
@@ -404,6 +404,7 @@ class Config(object):
                      'Calc_XWSigma': 'ql_xwsigma',
                      'CountSpectralBins': 'ql_countbins',
                      'Sky_Continuum': 'ql_skycont',
+                     'Sky_Rband': 'ql_skyRband',
                      'Sky_Peaks': 'ql_skypeak',
                      'Sky_Residual': 'ql_skyresid',
                      'Integrate_Spec': 'ql_integ',
@@ -454,7 +455,7 @@ class Config(object):
             template=findfile('ql_mergedQAarc_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
             template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-        json_template=template.split('.yaml')[0]+'.json'
+        json_template=template#.split('.yaml')[0]+'.json'
         self.reference=None
         if os.path.isfile(json_template):
             try:
@@ -611,7 +612,7 @@ class Palist(object):
                 QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
                 QAs_extract=['CountSpectralBins']
                 QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
-                QAs_SkySub=['Sky_Residual','Integrate_Spec','Calculate_SNR']
+                QAs_SkySub=['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']
         
             qalist={}
             for PA in self.palist:
