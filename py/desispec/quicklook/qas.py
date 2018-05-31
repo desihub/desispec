@@ -23,7 +23,6 @@ class MonitoringAlg:
         self.m_log.debug("initializing Monitoring alg {}".format(name))
     def __call__(self,*args,**kwargs):
         res=self.run(*args,**kwargs)
-        res["QA_STATUS"]="UNKNOWN"
         cargs=self.config['kwargs']
         params=cargs['param']
         metrics=res["METRICS"] if 'METRICS' in res else None
@@ -96,10 +95,10 @@ class MonitoringAlg:
                 #else: # each result has its own thresholds
                 #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
             else: #result is a scalar
-                metrics[QARESULTKEY]=str(findThr(self.__deviation,thr))
-            if metrics[QARESULTKEY]=='QASeverity.NORMAL':
+                metrics[QARESULTKEY]=findThr(self.__deviation,thr)
+            if metrics[QARESULTKEY]==QASeverity.NORMAL:
                 metrics[QARESULTKEY]='NORMAL'
-            elif metrics[QARESULTKEY]=='QASeverity.WARNING':
+            elif metrics[QARESULTKEY]==QASeverity.WARNING:
                 metrics[QARESULTKEY]='WARNING'
             else:
                 metrics[QARESULTKEY]='ALARM'
