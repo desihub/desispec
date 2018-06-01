@@ -59,7 +59,7 @@ def ql_main(args=None):
 
     qlog=qllogger.QLLogger(name="QuickLook",loglevel=args.loglvl)
     log=qlog.getlog()
-    # Sami
+    
     # quiet down DESI logs. We don't want DESI_LOGGER to print messages unless they are important
     # initalize singleton with WARNING level
     quietDesiLogger(args.loglvl+10)

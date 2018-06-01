@@ -316,17 +316,20 @@ class QL_QAMerger:
         #yres=yamlify(self.__schema)
         #reOrderDict(yres)
         #return yaml.dump(yres)
+        
     #def getJson(self):
         #import json
         #return json.dumps(yamlify(self.__schema))
+    
     #def writeToFile(self,fileName):
         #with open(fileName,'w') as f:
-            #f.write(self.getYaml())
+            ##f.write(self.getYaml())
+            #f.write(self.getJson())
             
             
     def writeTojsonFile(self,fileName):
-        #g=open(fileName.split('.yaml')[0]+'.json',"w")
-        g=open(fileName,"w")
+        
+        g=open(fileName.split('.json')[0]+'.json',"w")
         myDict = yamlify(self.__schema)
         #reOrderDict(myDict)
         
