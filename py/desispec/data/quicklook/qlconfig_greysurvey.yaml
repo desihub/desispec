@@ -4,17 +4,17 @@ Program: grey
 Flavor: science
 #- Calibration files: Assuming the same night for psf and fiberflat
 #- PSFExpid used as expid for arc exposures
-PSFExpid: 3891
+PSFExpid: 1
 PSFType: psf
 #- FiberflatExpid used as expid for flat exposures
-FiberflatExpid: 3894
+FiberflatExpid: 2
 #- Writeout intermediate files
 WritePreprocfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
 #- Exposure ID for Reference Template
-TemplateExpid: 2
+TemplateExpid: 3900
 #- Night for Reference Template
 TemplateNight: 20191017
 #-Debuglevel 
@@ -84,8 +84,8 @@ Algorithms:
                          Z_CONT: ["8120, 8270", "9110, 9280"],
                          SKYRBAND_NORMAL_RANGE: [-100.0, 100.0],
                          SKYRBAND_WARN_RANGE: [-200.0, 200.0]}
-            Sky_Residual:
-                PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, RESID_NORMAL_RANGE: [-5.0, 5.0], RESID_WARN_RANGE: [-10.0, 10.0]}
+            #Sky_Residual:
+                #PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, RESID_NORMAL_RANGE: [-5.0, 5.0], RESID_WARN_RANGE: [-10.0, 10.0]}
             Integrate_Spec:
                 PARAMS: {DELTAMAG_NORMAL_RANGE: [-0.5, 0.5], DELTAMAG_WARN_RANGE: [-1.0, 1.0]}
             Calculate_SNR:

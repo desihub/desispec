@@ -145,9 +145,6 @@ def plot_bias_overscan(qa_dict,outfile):
         qa_dict: qa dictionary from bias_from_overscan qa
         outfile : pdf file of the plot
     """
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
     
     expid = qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
@@ -155,13 +152,13 @@ def plot_bias_overscan(qa_dict,outfile):
     params = qa_dict["PARAMS"]
     exptime = qa_dict["EXPTIME"]
     
-    bias=qa_dict["METRICS"]["BIAS"]
+    #bias=qa_dict["METRICS"]["BIAS"]
     bias_amp=qa_dict["METRICS"]["BIAS_AMP"]
     fig=plt.figure()
     plt.suptitle("Bias from overscan region after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(111)
     heatmap1=ax1.pcolor(bias_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Bias = {:.4f}'.format(bias/exptime), fontsize=10)
+    #plt.title('Bias = {:.4f}'.format(bias/exptime), fontsize=10)
     ax1.set_xlabel("Avg. bias value per Amp (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax1.tick_params(axis='y',labelsize=10,labelleft=False)
@@ -192,9 +189,7 @@ def plot_XWSigma(qa_dict,outfile):
         qa_dict: qa dictionary from countpix qa
         outfile : file of the plot
     """
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
+
     
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
@@ -285,11 +280,9 @@ def plot_RMS(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
     """
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
+
     
-    rms=qa_dict["METRICS"]["NOISE"]
+    #rms=qa_dict["METRICS"]["NOISE"]
     rms_amp=qa_dict["METRICS"]["NOISE_AMP"]
     #rms_over=qa_dict["METRICS"]["NOISE_OVER"]
     rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
@@ -304,7 +297,7 @@ def plot_RMS(qa_dict,outfile):
     plt.suptitle("NOISE image counts per amplifier, Camera: {}, ExpID: {}".format(camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(211)
     heatmap1=ax1.pcolor(rms_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('NOISE = {:.4f}'.format(rms), fontsize=10)
+    #plt.title('NOISE = {:.4f}'.format(rms), fontsize=10)
     ax1.set_xlabel("NOISE per Amp (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax1.tick_params(axis='y',labelsize=10,labelleft=False)
@@ -350,9 +343,7 @@ def plot_RMS(qa_dict,outfile):
 
 def plot_integral(qa_dict,outfile):
     
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
+
     import matplotlib.ticker as ticker
     """
     Plot integral.
@@ -393,9 +384,7 @@ def plot_sky_continuum(qa_dict,outfile):
         outfile: pdf file to save the plot
     """
             
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
+
     
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
@@ -429,9 +418,7 @@ def plot_sky_peaks(qa_dict,outfile):
         qa_dict: dictionary from sky peaks QA
         outfile: pdf file to save the plot
     """
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
+
     
     expid=qa_dict["EXPID"]
     camera=qa_dict["CAMERA"]
@@ -461,9 +448,7 @@ def plot_residuals(qa_dict,outfile):
         qa_dict: qa dictionary
         outfile : output plot file
     """
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
+
     
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
@@ -520,9 +505,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
         outfile: Name of figure.
     """
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
+
     
     med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
     avg_med_snr=np.mean(med_snr)

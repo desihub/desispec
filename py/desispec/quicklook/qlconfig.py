@@ -406,7 +406,7 @@ class Config(object):
                      'Sky_Continuum': 'ql_skycont',
                      'Sky_Rband': 'ql_skyRband',
                      'Sky_Peaks': 'ql_skypeak',
-                     'Sky_Residual': 'ql_skyresid',
+                     #'Sky_Residual': 'ql_skyresid',
                      'Integrate_Spec': 'ql_integ',
                      'Calculate_SNR': 'ql_snr'
                      }
@@ -612,8 +612,9 @@ class Palist(object):
                 QAs_preproc=['Get_RMS','Count_Pixels','Calc_XWSigma']
                 QAs_extract=['CountSpectralBins']
                 QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
-                QAs_SkySub=['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']
-        
+                #QAs_SkySub=['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']
+                QAs_SkySub=['Sky_Rband','Integrate_Spec','Calculate_SNR']
+                
             qalist={}
             for PA in self.palist:
                 if PA == 'Initialize':

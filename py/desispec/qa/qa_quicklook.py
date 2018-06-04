@@ -450,10 +450,10 @@ class Bias_From_Overscan(MonitoringAlg):
         
         if amps:
             bias_amps=np.array(bias_overscan)
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps}
+            retval["METRICS"]={'BIAS_AMP':bias_amps}
         else:
             #retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
-            retval["METRICS"]={'BIAS':bias}
+            retval["METRICS"]={}
 
         #- http post if needed
         if qlf:
@@ -549,7 +549,7 @@ class Get_RMS(MonitoringAlg):
 
         # return rms values in rms/sqrt(exptime)
         #rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
-        rmsccd = np.mean([image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']])
+        #rmsccd = np.mean([image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]) #--> "NOISE":rmsccd
         
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -678,10 +678,10 @@ class Get_RMS(MonitoringAlg):
         if amps:
             rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
             rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
-            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_OVERSCAN_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
+            retval["METRICS"]={"NOISE_AMP":np.array(rms_amps),"NOISE_OVERSCAN_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
 
         else:
-            retval["METRICS"]={"NOISE":rmsccd,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
+            retval["METRICS"]={"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
         if qlf:
             qlf_post(retval)  
@@ -1777,9 +1777,6 @@ class Sky_Residual(MonitoringAlg):
 
     def get_default_config(self):
         return {}
-
-
-
 
 
 class Integrate_Spec(MonitoringAlg):
