@@ -48,6 +48,10 @@ def parse():
     return args
 
 def ql_main(args=None):
+    
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
     from desispec.quicklook import quicklook,qllogger,qlconfig
     import desispec.image as image
     import desispec.frame as frame

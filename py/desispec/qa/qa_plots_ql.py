@@ -18,10 +18,7 @@ def plot_countspectralbins(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
         outfile: Name of figure.
     """
-    from desispec.util import set_backend
-    _matplotlib_backend = None
-    set_backend()
-    
+
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]

@@ -237,7 +237,7 @@ def EditDic(Camera):
              delKey(Camera, "BIAS")
              delKey(Camera, "NOISE")
              delKey(Camera, "XWSHIFT_AMP")
-             delKey(Camera, "XWSHIFT_SHIFT") 
+             delKey(Camera, "XWSIGMA_SHIFT") 
              delKey(Camera, "NREJ")
              delKey(Camera, "MED_SKY")
              delKey(Camera, "NBAD_PCHI")
