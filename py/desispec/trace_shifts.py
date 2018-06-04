@@ -17,6 +17,8 @@ from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
 
+import numba
+
 def read_psf_and_traces(psf_filename) :
     """
     Reads PSF and traces in PSF fits file
@@ -188,6 +190,48 @@ def legx(wave,wavemin,wavemax) :
 
 # beginning of routines for cross-correlation method for trace shifts  
 
+@numba.jit
+def numba_extract(image_flux,image_var,x,hw=3) :
+    n0=image_flux.shape[0]
+    flux=np.zeros(n0)
+    ivar=np.zeros(n0)
+    for j in range(n0) :
+        var=0
+        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+            flux[j] += image_flux[j,i]
+            if image_var[j,i]>0 :
+                var += image_var[j,i]
+            else :
+                flux[j]=0
+                ivar[j]=0
+                var=0
+                break
+        if var>0 : 
+            ivar[j] = 1./var
+    return flux,ivar
+
+def boxcar_extraction_from_filenames(image_filename,psf_filename,fibers=None, width=7) :   
+    """
+    Fast boxcar extraction of spectra from a preprocessed image and a trace set
+    
+    Args:
+        image_filename : input preprocessed fits filename
+        psf_filename : input PSF fits filename
+
+    Optional:   
+        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
+        width  : extraction boxcar width, default is 7
+
+    Returns:
+        flux :  2D np.array of shape (nfibers,n0=image.shape[0]), sum of pixel values per row of length=width per fiber
+        ivar :  2D np.array of shape (nfibers,n0), ivar[f,j] = 1/( sum_[j,b:e] (1/image.ivar) ), ivar=0 if at least 1 pixel in the row has image.ivar=0 or image.mask!=0
+        wave :  2D np.array of shape (nfibers,n0), determined from the traces
+    """
+    psf,xtrace,ytrace,wavemin,wavemax = read_psf_and_traces(psf_filename)
+    image = read_image(image_filename)
+    return boxcar_extraction(xtrace,ytrace,wavemin,wavemax, image, fibers=fibers ,width=width)
+
+
 def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) :    
     """
     Fast boxcar extraction of spectra from a preprocessed image and a trace set
@@ -212,8 +256,10 @@ def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) 
     log=get_logger()
     log.info("Starting boxcar extraction...")
     
+    t0=time.time()
+    
     if fibers is None :
-        fibers = np.arange(psf.nspec)
+        fibers = np.arange(xcoef.shape[0])
     
     log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
     
@@ -238,20 +284,20 @@ def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) 
     hw = width//2
     
     ncoef=ycoef.shape[1]
-    twave=np.linspace(wavemin, wavemax, ncoef+2)
+    twave=np.linspace(wavemin, wavemax, n0//4) # this number of bins n0//p is calibrated to give a negligible difference of wavelength precision
     rwave=legx(twave, wavemin, wavemax)
+    y=np.arange(n0).astype(float)
+    
     for f,fiber in enumerate(fibers) :
-        log.info("extracting fiber #%03d"%fiber)
-        y_of_wave     = legval(rwave, ycoef[fiber])
-        coef          = legfit(legx(y_of_wave, 0, n0), twave, deg=ncoef) # add one deg
-        frame_wave[f] = legval(legx(np.arange(n0).astype(float), 0, n0), coef)
-        x_of_y        = np.floor( legval(legx(frame_wave[f], wavemin, wavemax), xcoef[fiber]) + 0.5 ).astype(int)
-        mask=((xx.T>=x_of_y-hw)&(xx.T<=x_of_y+hw)).T
-        frame_flux[f]=image.pix[mask].reshape((n0,width)).sum(-1)
-        tvar=var[mask].reshape((n0,width)).sum(-1)
-        frame_ivar[f]=(tvar>0)/(tvar+(tvar==0))
-        bad=(badimage[mask].reshape((n0,width)).sum(-1))>0
-        frame_ivar[f,bad]=0.
+        log.debug("extracting fiber #%03d"%fiber)
+        ty = legval(rwave, ycoef[fiber])
+        tx = legval(rwave, xcoef[fiber])
+        frame_wave[f] = np.interp(y,ty,twave)
+        x_of_y        = np.interp(y,ty,tx)        
+        frame_flux[f],frame_ivar[f] = numba_extract(image.pix,var,x_of_y,hw)
+        
+    t1=time.time()
+    log.info("Extracted {} fibers in {:3.1f} sec".format(len(fibers),t1-t0))
     
     return frame_flux, frame_ivar, frame_wave
 
