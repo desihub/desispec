@@ -363,7 +363,7 @@ class Config(object):
                  'Sky_Continuum': 'ql_skycont',
                  'Sky_Rband': 'ql_skyRband',
                  'Sky_Peaks': 'ql_skypeak',
-                 #'Sky_Residual': 'ql_skyresid',
+                 'Sky_Residual': 'ql_skyresid',
                  'Integrate_Spec': 'ql_integ',
                  'Calculate_SNR': 'ql_snr'
                  }

@@ -1296,7 +1296,6 @@ class Sky_Continuum(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1415,7 +1414,6 @@ class Sky_Rband(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1690,7 +1688,6 @@ class Sky_Residual(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1767,7 +1764,7 @@ class Sky_Residual(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            plot.plot_residuals(retval,qafig)
+            plot.plot_residuals(frame,retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
 
@@ -1807,7 +1804,6 @@ class Integrate_Spec(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1953,7 +1949,6 @@ class Calculate_SNR(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
