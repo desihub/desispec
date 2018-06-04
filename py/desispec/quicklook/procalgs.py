@@ -49,13 +49,12 @@ class Initialize(pas.PipelineAlg):
 class Preproc(pas.PipelineAlg):
     #- TODO: currently io itself seems to have the preproc inside it. And preproc does bias, pi
      # xelflat, etc in one step. 
-
+    from desispec.maskbits import ccdmask
+    
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="Preproc"
-        #- No raw object (like image or frame object) exists yet so,
-        #- type from reading raw: eg: raw=fits.open('desi-00000002.fits.fz',memmap=False)
-        #- rawtype=type(raw)
+
         rawtype=astropy.io.fits.hdu.hdulist.HDUList
         pas.PipelineAlg.__init__(self,name,rawtype,im,config,logger)
 
@@ -90,7 +89,7 @@ class Preproc(pas.PipelineAlg):
 
         return self.run_pa(input_raw,camera,bias=bias,pixflat=pixflat,mask=mask,dumpfile=dumpfile)
 
-    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=False,dumpfile=None):
+    def run_pa(self,input_raw,camera,bias=False,pixflat=False,mask=True,dumpfile='ttt1.fits'):
         import desispec.preproc
 
         rawimage=input_raw[camera.upper()].data
@@ -114,6 +113,7 @@ class Preproc(pas.PipelineAlg):
             expid = img.meta['EXPID']
             io.write_image(dumpfile, img)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+
         return img
 
 
@@ -188,6 +188,7 @@ class BootCalibration(pas.PipelineAlg):
 
 class BoxcarExtract(pas.PipelineAlg):
     from desispec.boxcar import do_boxcar
+    from desispec.maskbits import ccdmask
 
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":

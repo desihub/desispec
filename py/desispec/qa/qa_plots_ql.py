@@ -18,6 +18,10 @@ def plot_countspectralbins(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
         outfile: Name of figure.
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
@@ -64,6 +68,7 @@ def plot_countspectralbins(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_countpix(qa_dict,outfile):
+    
     """
     Plot pixel counts above some threshold
     
@@ -71,6 +76,10 @@ def plot_countpix(qa_dict,outfile):
         qa_dict: qa dictionary from countpix qa
         outfile: pdf file of the plot
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -128,6 +137,7 @@ def plot_countpix(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_bias_overscan(qa_dict,outfile):
+    
     """
     Map of bias from overscan from 4 regions of CCD
     
@@ -135,6 +145,10 @@ def plot_bias_overscan(qa_dict,outfile):
         qa_dict: qa dictionary from bias_from_overscan qa
         outfile : pdf file of the plot
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     expid = qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname = qa_dict["PANAME"]
@@ -170,6 +184,7 @@ def plot_bias_overscan(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_XWSigma(qa_dict,outfile):
+
     """
     Plot XWSigma
     
@@ -177,6 +192,10 @@ def plot_XWSigma(qa_dict,outfile):
         qa_dict: qa dictionary from countpix qa
         outfile : file of the plot
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
@@ -266,6 +285,10 @@ def plot_RMS(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     rms=qa_dict["METRICS"]["NOISE"]
     rms_amp=qa_dict["METRICS"]["NOISE_AMP"]
     #rms_over=qa_dict["METRICS"]["NOISE_OVER"]
@@ -326,6 +349,10 @@ def plot_RMS(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_integral(qa_dict,outfile):
+    
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
     import matplotlib.ticker as ticker
     """
     Plot integral.
@@ -356,6 +383,7 @@ def plot_integral(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_sky_continuum(qa_dict,outfile):
+
     """
     Plot mean sky continuum from lower and higher wavelength range for each 
     fiber and accross amps.
@@ -364,6 +392,11 @@ def plot_sky_continuum(qa_dict,outfile):
         qa_dict: dictionary from sky continuum QA
         outfile: pdf file to save the plot
     """
+            
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -388,6 +421,7 @@ def plot_sky_continuum(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_sky_peaks(qa_dict,outfile):
+    
     """
     Plot rms of sky peaks for smy fibers across amps
        
@@ -395,6 +429,10 @@ def plot_sky_peaks(qa_dict,outfile):
         qa_dict: dictionary from sky peaks QA
         outfile: pdf file to save the plot
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     expid=qa_dict["EXPID"]
     camera=qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -423,6 +461,10 @@ def plot_residuals(qa_dict,outfile):
         qa_dict: qa dictionary
         outfile : output plot file
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -478,6 +520,10 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
         outfile: Name of figure.
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])

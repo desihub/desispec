@@ -278,7 +278,6 @@ def write_qa_ql(outfile, qaresult):
     #f.write(yaml.dump(qadict))
     #f.close()
     
-    #g=open(outfile.split('.yaml')[0]+'.json',"w")
     g=open(outfile,"w")
     json.dump(qadict, g, sort_keys=True, indent=4)
     g.close()    

@@ -77,7 +77,7 @@ def get_image(filetype,night,expid,camera,specdir):
 
     #- Create image object
     imageobj = im(pix,ivar,mask=mask,readnoise=readnoise,camera=camera,meta=meta)
-
+    print(mask)
     return imageobj
 
 def get_frame(filetype,night,expid,camera,specdir):
@@ -254,6 +254,7 @@ class Trace_Shifts(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+            
         else:
             image=args[0]
 
@@ -363,6 +364,9 @@ class Bias_From_Overscan(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+            print(image.mask)
+            import sys
+            sys.exit()
         else:
             image=args[0]
             
@@ -1502,7 +1506,7 @@ class Sky_Rband(MonitoringAlg):
             for i in range(len(fibs)):
             
                 sky_integ = qalib.integrate_spec(wave,flux[fibs[i]])
-                # SE:  leaving the units as counts/sec/arcsec^2 to be compared to sky monitor fluc from ETC 
+                # SE:  leaving the units as counts/sec/arcsec^2 to be compared to sky monitor flux from ETC in the same unit 
                 sky_flux = sky_integ/expt/apsky[i]
             
                 skyfib_Rflux.append(sky_flux)
@@ -1619,10 +1623,6 @@ class Sky_Peaks(MonitoringAlg):
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
-
-        #SE: no reason to call in RA/DEC, be careful with copy-paste!
-        #ra = fibermap["RA_TARGET"]
-        #dec = fibermap["DEC_TARGET"]
 
         # Parameters
         if param is None:
