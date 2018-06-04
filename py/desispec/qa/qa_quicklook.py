@@ -1410,7 +1410,7 @@ class Sky_Rband(MonitoringAlg):
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
 
-        if kwargs["singleqa"] == 'SkyRband':
+        if kwargs["singleqa"] == 'Sky_Rband':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
@@ -1527,7 +1527,7 @@ class Sky_Rband(MonitoringAlg):
                 log.warning("No SKY Monitor R-band Flux was found in the header!")
 
 
-        retval["METRICS"]={"SKY_RBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
+        retval["METRICS"]={"SKYRBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
 
         if qlf:
             qlf_post(retval)    
