@@ -369,27 +369,26 @@ def runpipeline(pl,convdict,conf):
                 log.info("{} finished".format(qa.name))
 
     #- merge QAs for this pipeline execution
-    log.debug("Dumping mergedQAs")
-    from desispec.io import findfile
-    ftype='ql_mergedQA_file'
-    specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
-    if conf['Flavor']=='arcs':
-        ftype='ql_mergedQAarc_file'
-    destFile=findfile(ftype,night=conf['Night'],
-                      expid=conf['Expid'],
-                      camera=conf['Camera'],
-                      specprod_dir=specprod_dir)
+    #- RS: don't write merged file if running single QA
+    if singqa is None:
+        log.debug("Dumping mergedQAs")
+        from desispec.io import findfile
+        specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
+        destFile=findfile('ql_mergedQA_file',night=conf['Night'],
+                          expid=conf['Expid'],
+                          camera=conf['Camera'],
+                          specprod_dir=specprod_dir)
 
-    # SE: disabled the functionality of writing yamls
-    #schemaMerger.writeToFile(destFile)
-    #log.info("Wrote merged QA file {}".format(destFile))
-    
-    schemaMerger.writeTojsonFile(destFile)
-    log.info("Wrote merged QA file {}".format(destFile))#.split('.yaml')[0]+'.json'))
-    if isinstance(inp,tuple):
-       return inp[0]
-    else:
-       return inp
+        # SE: disabled the functionality of writing yamls
+        #schemaMerger.writeToFile(destFile)
+        #log.info("Wrote merged QA file {}".format(destFile))
+
+        schemaMerger.writeTojsonFile(destFile)
+        log.info("Wrote merged QA file {}".format(destFile))#.split('.yaml')[0]+'.json'))
+        if isinstance(inp,tuple):
+           return inp[0]
+        else:
+           return inp
 
 #- Setup pipeline from configuration
 

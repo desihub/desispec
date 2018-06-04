@@ -77,7 +77,6 @@ def get_image(filetype,night,expid,camera,specdir):
 
     #- Create image object
     imageobj = im(pix,ivar,mask=mask,readnoise=readnoise,camera=camera,meta=meta)
-    print(mask)
     return imageobj
 
 def get_frame(filetype,night,expid,camera,specdir):
@@ -364,7 +363,6 @@ class Bias_From_Overscan(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
-            print(image.mask)
             import sys
             sys.exit()
         else:
