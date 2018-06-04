@@ -9,7 +9,7 @@ PSFType: psf
 #- FiberflatExpid used as expid for flat image files when running calibration
 FiberflatExpid: 1
 #- Writeout intermediate files
-WritePreprocfile: False
+WritePreprocfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
