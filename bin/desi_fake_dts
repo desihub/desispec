@@ -193,10 +193,15 @@ def main():
             rawsrc = io.get_raw_files("raw", nt, ex, rawdata_dir=stagedir)
 
             targetdir = os.path.join(rawdir, nt)
-            fmtarg = os.path.join(targetdir, os.path.basename(fmsrc))
-            rawtarg = os.path.join(targetdir, os.path.basename(rawsrc))
             if not os.path.isdir(targetdir):
                 os.makedirs(targetdir)
+
+            targetexpdir = os.path.join(targetdir, "{:08d}".format(int(ex)))
+            if not os.path.isdir(targetexpdir):
+                os.makedirs(targetexpdir)
+
+            fmtarg = os.path.join(targetexpdir, os.path.basename(fmsrc))
+            rawtarg = os.path.join(targetexpdir, os.path.basename(rawsrc))
 
             if os.path.exists(fmtarg):
                 os.remove(fmtarg)

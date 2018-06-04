@@ -95,7 +95,6 @@ def all_tasks(night, nside, expid=None):
     """
     import desimodel.footprint
 
-
     log = get_logger()
 
     log.debug("io.get_exposures night={}".format(night))
@@ -600,7 +599,7 @@ class DataBase:
 
         log = get_logger()
 
-        alltasks , healpix_frames = all_tasks(night, nside, expid=expid)
+        alltasks, healpix_frames = all_tasks(night, nside, expid=expid)
 
         with self.cursor() as cur:
             # insert or ignore all healpix_frames
