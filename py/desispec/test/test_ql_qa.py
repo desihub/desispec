@@ -446,9 +446,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["dict_countbins"]=self.map2pix
         qargs["singleqa"]=None
         resl=qa(inp,**qargs)
-        self.assertTrue(len(resl["METRICS"]["FIBER_MAG"])==len(resl["METRICS"]["DELTAMAG"]))
-        resl2=qa(inp,**qargs)
-        self.assertTrue(len(resl2["METRICS"]["STD_FIBERID"])>0)
+        self.assertTrue(len(resl["METRICS"]["STD_FIBERID"])>0)
         
     def testSkyResidual(self):
         qa=QA.Sky_Residual('skyresid',self.config)

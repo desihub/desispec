@@ -407,11 +407,8 @@ class Config(object):
         
         self.psf=findfile(self.psftype,night=self.night,expid=self.psfexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
-        #- Get reference metrics from template yaml file
-        if self.flavor == 'arcs':
-            template=findfile('ql_mergedQAarc_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-        else:
-            template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        #- Get reference metrics from template json file
+        template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         json_template=template#.split('.yaml')[0]+'.json'
         self.reference=None
         if os.path.isfile(json_template):
