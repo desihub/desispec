@@ -645,7 +645,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     hw = width//2
     
     ncoef=ycoef.shape[1]
-    twave=np.linspace(wavemin, wavemax, ncoef+2)
+    twave=np.linspace(wavemin, wavemax, n0)
     rwave=legx(twave, wavemin, wavemax)
     
     ox=np.array([])
