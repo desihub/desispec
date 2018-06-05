@@ -321,6 +321,7 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
     log=get_logger()
     
     log.info("resampling with oversampling")
+    t0=time.time()
     nfibers=frame_flux.shape[0]
     wave=frame_wave[nfibers//2]
     dwave=np.median(np.gradient(frame_wave))/oversampling
@@ -330,8 +331,14 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
     flux=np.zeros((nfibers,nwave))
     ivar=np.zeros((nfibers,nwave))
     for i in range(nfibers) :
-        log.info("resampling fiber #%03d"%i)
-        flux[i],ivar[i] = resample_flux(wave, frame_wave[i],frame_flux[i],frame_ivar[i])
+        #log.info("resampling fiber #%03d"%i)
+        #flux[i],ivar[i] = resample_flux(wave, frame_wave[i],frame_flux[i],frame_ivar[i])
+        # because I am oversampling, a linear interpolation is sufficient
+        flux[i] = np.interp(wave, frame_wave[i],frame_flux[i])
+        ivar[i] = np.interp(wave, frame_wave[i],frame_ivar[i])/oversampling # larger variance, approximately
+    
+    t1=time.time()
+    log.info("Resampled {} fibers in {:3.1f} sec".format(nfibers,t1-t0))    
     return flux,ivar,wave
 
 
@@ -545,6 +552,30 @@ def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fiber
     # measure y shifts 
     return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
     
+@numba.jit
+def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
+    n0=image_flux.shape[0]
+    swdx=np.zeros(n0)
+    sw=np.zeros(n0)
+    svar=np.zeros(n0)
+    swy=np.zeros(n0)
+    swx=np.zeros(n0)
+    swl=np.zeros(n0)
+    for j in range(n0) :
+        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+            if image_ivar[j,i]==0 :
+               swdx[j]=0
+               sw[j]=0
+               break
+            swdx[j]    += (i-x[j])*image_flux[j,i]
+            sw[j]      += image_flux[j,i]
+            svar[j]    += 1./image_ivar[j,i]
+        swy[j] = sw[j]*j
+        swx[j] = sw[j]*x[j]
+        swl[j] = sw[j]*wave[j]
+    
+    return swdx,sw,svar,swy,swx,swl
+
 
 def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7,deg=2,image_rebin=4) :
     """
@@ -574,6 +605,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     log=get_logger()
     log.info("Starting compute_dx_from_cross_dispersion_profiles with width={} deg={} rebin={}...".format(width,deg,image_rebin))
     
+    t0=time.time()
+    
     if fibers is None :
         fibers = np.arange(psf.nspec)
     
@@ -583,13 +616,6 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         image.ivar *= (image.mask==0)
 
     error_floor = 0.04 # pixel
-    
-    #   Variance based on inverse variance's size
-    # var    = np.zeros(image.ivar.shape)
-
-    #   Applying a mask that keeps positive value to get the Variance by inversing the inverse variance.
-    
-    
     
     
     n0 = image.pix.shape[0]
@@ -605,7 +631,6 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     else :
         pix  = image.pix
         ivar = image.ivar
-        
     
     y  = np.arange(n0)+0.5 # this 0.5 is important when rebinning to avoid a bias on y (here y = CCD_rows//rebin + 0.5 )
     xx = np.tile(np.arange(n1),(n0,1))
@@ -628,57 +653,40 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     
     
     for f,fiber in enumerate(fibers) :
-        log.info("computing dx for fiber #%03d"%fiber)
+        # log.info("computing dx for fiber #%03d"%fiber)
         
         # the following 5 lines take 0.25 sec for all 500 fibers
         ty = legval(rwave, ycoef[fiber])/image_rebin
         tx = legval(rwave, xcoef[fiber])
         wave_of_y  = np.interp(y,ty,twave)
         x_of_y     = np.interp(y,ty,tx)
-        x_of_y_int = np.floor(x_of_y+0.5).astype(int)
-        
-        # the following 2 lines take 78.6 sec for all 500 fibers
-        # it's faster when we first rebin the images
-        mask    = ((xx>=x_of_y_int[:,None]-hw)&(xx<=x_of_y_int[:,None]+hw))
-        tivar = ivar[mask].reshape((n0,width))
-        jj    = np.where((tivar==0).sum(-1)==0)[0]  # keep only lines with zero masked pixel
-        tivar = tivar[jj]
-        dx    = xx[mask].reshape((n0,width))[jj]-x_of_y[jj,None]
-        tpix  = pix[mask].reshape((n0,width))[jj]
-        
-        swdx          = (dx*tpix).sum(-1)
-        swdxvar       = (dx**2/(tivar+0.1*(tivar==0))).sum(-1)
-        sw            = tpix.sum(-1)
-        swy           = sw*y[jj]
-        swx           = sw*x_of_y[jj]
-        swl           = sw*wave_of_y[jj]
+
+        swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix,ivar,x_of_y,wave_of_y,hw=hw)
+        jj      = np.where(sw>0)[0]
         
         # rebin
         tn0   = jj.size
-        rebin = 200//image_rebin
+        rebin = 100//image_rebin
         sw  = sw[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         swdx = swdx[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
-        swdxvar = swdxvar[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
+        svar = svar[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         swx = swx[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         swy = swy[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         swl = swl[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         
-        '''
-        import matplotlib.pyplot as plt
-        i=np.where((sw>0.01)&(ok>0))[0]
-        plt.errorbar(swy[i]/sw[i],swdx[i]/sw[i],np.sqrt(swdxvar[i])/sw[i],fmt="o")
-        plt.show()
-        '''
         
-        sw[sw<0]       = 0 
-                
-        fex            = np.sqrt(swdxvar/(sw+(sw==0))**2 + error_floor**2) # error on dx, with an error floor
-        ok             = (fex>0)&(fex<10) # ok means no ivar=0 pixel
-        fex            = fex[ok]
+        
+        snr = sw/np.sqrt(svar+(svar==0)) # signal to noise in bin
+        ok             = (snr>3) # keep only high snr pixels
+        fex            = np.sqrt( (20./snr[ok])**2 + 0.01**2) # uncertainties scale as snr
         fdx            = (swdx/(sw+(sw==0)))[ok]
         fx             = (swx/(sw+(sw==0)))[ok]
         fy             = (swy/(sw+(sw==0)))[ok]*image_rebin-0.5
         fl             = (swl/(sw+(sw==0)))[ok]        
+        
+        import matplotlib.pyplot as plt
+        plt.errorbar(fy,fdx,fex,fmt="o")
+        
         
         good_fiber=True
         for loop in range(10) :
@@ -691,16 +699,12 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
                 c             = np.polyfit(fy,fdx,deg,w=1/fex**2)
                 pol           = np.poly1d(c)
                 chi2          = (fdx-pol(fy))**2/fex**2
-                mchi2         = np.median(chi2)
-                
-                #log.info("mchi2=%f"%mchi2)
-                #if mchi2>1 :
-                #    fex *= np.sqrt(mchi2)
-                
-                ok            = np.where(chi2<=25.*mchi2)[0]
+                mchi2         = 2*np.median(chi2)
+                ok            = np.where(chi2<=9.*mchi2)[0]
                 nbad          = fdx.size-ok.size
-                
-                
+                if nbad > 0 :
+                   log.debug("fiber {} loop {} mchi2 = {}, nbad= {}".format(fiber,loop,mchi2,nbad))
+                                
                 fex            = fex[ok]
                 fdx            = fdx[ok]
                 fx             = fx[ok]
@@ -713,8 +717,13 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
             
             if nbad==0 :
                 break
-            #print("removing %d bad measurements"%nbad)
         
+        """
+        plt.errorbar(fy,fdx,fex,fmt="o")
+        plt.plot(fy,pol(fy),"-")
+        plt.show()
+        """
+    
         # we return the original sample of offset values
         if good_fiber :
             ox  = np.append(ox,fx)
@@ -724,8 +733,8 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
             of = np.append(of,fiber*np.ones(fy.size))
             ol = np.append(ol,fl)
     
-    #print ("takes {}sec".format(dt))
-    #sys.exit(12)
+    t1=time.time()
+    log.info("computing dx for {} fibers in {} sec".format(len(fibers),t1-t0))
     
     return ox,oy,odx,oex,of,ol
 
