@@ -343,8 +343,8 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
 
 
 
-
-def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.,deg=2) :
+# @numba.jit no real gain
+def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3., calibrate=False) :
     """
     Measure y offsets from two spectra expected to be on the same wavelength grid.
     refflux is the assumed well calibrated spectrum.
@@ -357,7 +357,6 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
     Optional:   
         ivar   : 1D array of inverse variance of flux
         hw     : half width in Angstrom of the cross-correlation chi2 scan, default=3A corresponding approximatly to 5 pixels for DESI 
-        deg    : degree of polynomial fit as a function of wavelength, only used to find and mask outliers
         
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction) 
@@ -368,13 +367,18 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
         wave  : 1D array of wavelength
     """
     
+    
+    
     # absorb differences of calibration (fiberflat not yet applied)
-    x=(wave-wave[wave.size//2])/500.
-    kernel=np.exp(-x**2/2)
-    f1=fftconvolve(flux,kernel,mode='same')
-    f2=fftconvolve(refflux,kernel,mode='same')
-    scale=f1/f2
-    refflux *= scale
+    if calibrate: 
+        x=(wave-wave[wave.size//2])/500.
+        kernel=np.exp(-x**2/2)
+        f1=fftconvolve(flux,kernel,mode='same')
+        f2=fftconvolve(refflux,kernel,mode='same')
+        scale=f1/f2
+        refflux *= scale
+    
+        
     
     error_floor=0.01 #A 
     
@@ -410,7 +414,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
             e=2*ihw+1
             b=e-(2*hh+1)
         x=dwave*(np.arange(b,e)-ihw)
-        c=np.polyfit(x,chi2[b:e],deg)
+        c=np.polyfit(x,chi2[b:e],2)
         if c[0]>0 :
             delta=-c[1]/(2.*c[0])
             sigma=np.sqrt(1./c[0] + error_floor**2)
@@ -421,7 +425,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
             # something else went wrong
             delta=0.
             sigma=100.
-        
+    
     '''
     print("dw= %f +- %f"%(delta,sigma))
     if np.abs(delta)>1. :    
@@ -476,7 +480,8 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
     nfibers = flux.shape[0]
     
     for fiber in range(nfibers) :
-        log.info("computing dy for fiber #%03d"%fiber)
+        if fiber %10==0 :
+            log.info("computing dy for fiber #%03d"%fiber)
         
         for b in range(n_wavelength_bins) :
             wmin=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*b
@@ -488,10 +493,13 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             sw=np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0))
             if sw<=0 :
                 continue
+            
             dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok],hw=3.)
-            block_wave = np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0)*wave[ok])/sw
+            
             if err > 1 :
                 continue
+            
+            block_wave = np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0)*wave[ok])/sw
             rw = legx(block_wave,wavemin,wavemax)
             tx = legval(rw,xcoef[fiber])
             ty = legval(rw,ycoef[fiber])
