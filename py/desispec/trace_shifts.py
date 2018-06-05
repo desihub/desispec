@@ -684,9 +684,10 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         fy             = (swy/(sw+(sw==0)))[ok]*image_rebin-0.5
         fl             = (swl/(sw+(sw==0)))[ok]        
         
+        """
         import matplotlib.pyplot as plt
         plt.errorbar(fy,fdx,fex,fmt="o")
-        
+        """
         
         good_fiber=True
         for loop in range(10) :
