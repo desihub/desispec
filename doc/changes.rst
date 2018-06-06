@@ -5,7 +5,11 @@ desispec Change Log
 0.22.0 (unreleased)
 -------------------
 
-* No changes yet.
+* faster traceshift code; requires numba (PR `#634`_).
+* fixed integration tests (PR `#635`_).
+
+.. _`#634`: https://github.com/desihub/desispec/pull/634
+.. _`#635`: https://github.com/desihub/desispec/pull/635
 
 0.21.0 (2018-05-25)
 -------------------
