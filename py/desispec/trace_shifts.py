@@ -4,6 +4,7 @@ from __future__ import absolute_import, division
 
 import sys
 import argparse
+import time
 import numpy as np
 from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
@@ -15,6 +16,8 @@ from desispec.io import read_image
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
+
+import numba
 
 def read_psf_and_traces(psf_filename) :
     """
@@ -96,7 +99,7 @@ def read_psf_and_traces(psf_filename) :
    
     
     
-def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavemin,wavemax) :
+def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavemin,wavemax,header_keywords=None) :
     """
     Writes traces in a PSF.
     
@@ -107,7 +110,10 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
         ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])    
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
+
+    Optional:
+        header_keywords : dictionnary of data to add to the psf header
     """
     
     log = get_logger()
@@ -167,6 +173,12 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
         log.error("didn't change the Y coefs in the psf: I/O error")
         raise IOError("didn't change the Y coefs in the psf")
 
+
+    if header_keywords is not None :
+        for k in header_keywords :
+            psf_fits["PSF"].header[k] = header_keywords[k]
+    
+
     psf_fits.writeto(output_psf_filename,clobber=True)
     log.info("wrote traces and psf in %s"%output_psf_filename)
     
@@ -186,6 +198,48 @@ def legx(wave,wavemin,wavemax) :
     return 2.*(wave-wavemin)/(wavemax-wavemin)-1.
 
 # beginning of routines for cross-correlation method for trace shifts  
+
+@numba.jit
+def numba_extract(image_flux,image_var,x,hw=3) :
+    n0=image_flux.shape[0]
+    flux=np.zeros(n0)
+    ivar=np.zeros(n0)
+    for j in range(n0) :
+        var=0
+        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+            flux[j] += image_flux[j,i]
+            if image_var[j,i]>0 :
+                var += image_var[j,i]
+            else :
+                flux[j]=0
+                ivar[j]=0
+                var=0
+                break
+        if var>0 : 
+            ivar[j] = 1./var
+    return flux,ivar
+
+def boxcar_extraction_from_filenames(image_filename,psf_filename,fibers=None, width=7) :   
+    """
+    Fast boxcar extraction of spectra from a preprocessed image and a trace set
+    
+    Args:
+        image_filename : input preprocessed fits filename
+        psf_filename : input PSF fits filename
+
+    Optional:   
+        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
+        width  : extraction boxcar width, default is 7
+
+    Returns:
+        flux :  2D np.array of shape (nfibers,n0=image.shape[0]), sum of pixel values per row of length=width per fiber
+        ivar :  2D np.array of shape (nfibers,n0), ivar[f,j] = 1/( sum_[j,b:e] (1/image.ivar) ), ivar=0 if at least 1 pixel in the row has image.ivar=0 or image.mask!=0
+        wave :  2D np.array of shape (nfibers,n0), determined from the traces
+    """
+    psf,xtrace,ytrace,wavemin,wavemax = read_psf_and_traces(psf_filename)
+    image = read_image(image_filename)
+    return boxcar_extraction(xtrace,ytrace,wavemin,wavemax, image, fibers=fibers ,width=width)
+
 
 def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) :    
     """
@@ -211,8 +265,10 @@ def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) 
     log=get_logger()
     log.info("Starting boxcar extraction...")
     
+    t0=time.time()
+    
     if fibers is None :
-        fibers = np.arange(psf.nspec)
+        fibers = np.arange(xcoef.shape[0])
     
     log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
     
@@ -237,20 +293,20 @@ def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) 
     hw = width//2
     
     ncoef=ycoef.shape[1]
-    twave=np.linspace(wavemin, wavemax, ncoef+2)
+    twave=np.linspace(wavemin, wavemax, n0//4) # this number of bins n0//p is calibrated to give a negligible difference of wavelength precision
+    rwave=legx(twave, wavemin, wavemax)
+    y=np.arange(n0).astype(float)
     
     for f,fiber in enumerate(fibers) :
-        log.info("extracting fiber #%03d"%fiber)
-        y_of_wave     = legval(legx(twave, wavemin, wavemax), ycoef[fiber])
-        coef          = legfit(legx(y_of_wave, 0, n0), twave, deg=ncoef) # add one deg
-        frame_wave[f] = legval(legx(np.arange(n0).astype(float), 0, n0), coef)
-        x_of_y        = np.floor( legval(legx(frame_wave[f], wavemin, wavemax), xcoef[fiber]) + 0.5 ).astype(int)
-        mask=((xx.T>=x_of_y-hw)&(xx.T<=x_of_y+hw)).T
-        frame_flux[f]=image.pix[mask].reshape((n0,width)).sum(-1)
-        tvar=var[mask].reshape((n0,width)).sum(-1)
-        frame_ivar[f]=(tvar>0)/(tvar+(tvar==0))
-        bad=(badimage[mask].reshape((n0,width)).sum(-1))>0
-        frame_ivar[f,bad]=0.
+        log.debug("extracting fiber #%03d"%fiber)
+        ty = legval(rwave, ycoef[fiber])
+        tx = legval(rwave, xcoef[fiber])
+        frame_wave[f] = np.interp(y,ty,twave)
+        x_of_y        = np.interp(y,ty,tx)        
+        frame_flux[f],frame_ivar[f] = numba_extract(image.pix,var,x_of_y,hw)
+        
+    t1=time.time()
+    log.info("Extracted {} fibers in {:3.1f} sec".format(len(fibers),t1-t0))
     
     return frame_flux, frame_ivar, frame_wave
 
@@ -274,6 +330,7 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
     log=get_logger()
     
     log.info("resampling with oversampling")
+    t0=time.time()
     nfibers=frame_flux.shape[0]
     wave=frame_wave[nfibers//2]
     dwave=np.median(np.gradient(frame_wave))/oversampling
@@ -283,14 +340,20 @@ def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
     flux=np.zeros((nfibers,nwave))
     ivar=np.zeros((nfibers,nwave))
     for i in range(nfibers) :
-        log.info("resampling fiber #%03d"%i)
-        flux[i],ivar[i] = resample_flux(wave, frame_wave[i],frame_flux[i],frame_ivar[i])
+        #log.info("resampling fiber #%03d"%i)
+        #flux[i],ivar[i] = resample_flux(wave, frame_wave[i],frame_flux[i],frame_ivar[i])
+        # because I am oversampling, a linear interpolation is sufficient
+        flux[i] = np.interp(wave, frame_wave[i],frame_flux[i])
+        ivar[i] = np.interp(wave, frame_wave[i],frame_ivar[i])/oversampling # larger variance, approximately
+    
+    t1=time.time()
+    log.info("Resampled {} fibers in {:3.1f} sec".format(nfibers,t1-t0))    
     return flux,ivar,wave
 
 
 
-
-def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.,deg=2) :
+# @numba.jit no real gain
+def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3., calibrate=False) :
     """
     Measure y offsets from two spectra expected to be on the same wavelength grid.
     refflux is the assumed well calibrated spectrum.
@@ -303,7 +366,6 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
     Optional:   
         ivar   : 1D array of inverse variance of flux
         hw     : half width in Angstrom of the cross-correlation chi2 scan, default=3A corresponding approximatly to 5 pixels for DESI 
-        deg    : degree of polynomial fit as a function of wavelength, only used to find and mask outliers
         
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction) 
@@ -314,13 +376,18 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
         wave  : 1D array of wavelength
     """
     
+    
+    
     # absorb differences of calibration (fiberflat not yet applied)
-    x=(wave-wave[wave.size//2])/500.
-    kernel=np.exp(-x**2/2)
-    f1=fftconvolve(flux,kernel,mode='same')
-    f2=fftconvolve(refflux,kernel,mode='same')
-    scale=f1/f2
-    refflux *= scale
+    if calibrate: 
+        x=(wave-wave[wave.size//2])/500.
+        kernel=np.exp(-x**2/2)
+        f1=fftconvolve(flux,kernel,mode='same')
+        f2=fftconvolve(refflux,kernel,mode='same')
+        scale=f1/f2
+        refflux *= scale
+    
+        
     
     error_floor=0.01 #A 
     
@@ -356,7 +423,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
             e=2*ihw+1
             b=e-(2*hh+1)
         x=dwave*(np.arange(b,e)-ihw)
-        c=np.polyfit(x,chi2[b:e],deg)
+        c=np.polyfit(x,chi2[b:e],2)
         if c[0]>0 :
             delta=-c[1]/(2.*c[0])
             sigma=np.sqrt(1./c[0] + error_floor**2)
@@ -367,7 +434,7 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
             # something else went wrong
             delta=0.
             sigma=100.
-        
+    
     '''
     print("dw= %f +- %f"%(delta,sigma))
     if np.abs(delta)>1. :    
@@ -422,7 +489,8 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
     nfibers = flux.shape[0]
     
     for fiber in range(nfibers) :
-        log.info("computing dy for fiber #%03d"%fiber)
+        if fiber %10==0 :
+            log.info("computing dy for fiber #%03d"%fiber)
         
         for b in range(n_wavelength_bins) :
             wmin=wave[0]+((wave[-1]-wave[0])/n_wavelength_bins)*b
@@ -434,10 +502,13 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
             sw=np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0))
             if sw<=0 :
                 continue
+            
             dwave,err = compute_dy_from_spectral_cross_correlation(flux[fiber,ok],wave[ok],reference_flux[ok],ivar=ivar[fiber,ok],hw=3.)
-            block_wave = np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0)*wave[ok])/sw
+            
             if err > 1 :
                 continue
+            
+            block_wave = np.sum(ivar[fiber,ok]*flux[fiber,ok]*(flux[fiber,ok]>0)*wave[ok])/sw
             rw = legx(block_wave,wavemin,wavemax)
             tx = legval(rw,xcoef[fiber])
             ty = legval(rw,ycoef[fiber])
@@ -498,8 +569,32 @@ def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fiber
     # measure y shifts 
     return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
     
+@numba.jit
+def numba_cross_profile(image_flux,image_ivar,x,wave,hw=3) :
+    n0=image_flux.shape[0]
+    swdx=np.zeros(n0)
+    sw=np.zeros(n0)
+    svar=np.zeros(n0)
+    swy=np.zeros(n0)
+    swx=np.zeros(n0)
+    swl=np.zeros(n0)
+    for j in range(n0) :
+        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
+            if image_ivar[j,i]==0 :
+               swdx[j]=0
+               sw[j]=0
+               break
+            swdx[j]    += (i-x[j])*image_flux[j,i]
+            sw[j]      += image_flux[j,i]
+            svar[j]    += 1./image_ivar[j,i]
+        swy[j] = sw[j]*j
+        swx[j] = sw[j]*x[j]
+        swl[j] = sw[j]*wave[j]
+    
+    return swdx,sw,svar,swy,swx,swl
 
-def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7,deg=2) :
+
+def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7,deg=2,image_rebin=4) :
     """
     Measure x offsets from a preprocessed image and a trace set 
     
@@ -515,7 +610,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
         width  : extraction boxcar width, default is 5
         deg    : degree of polynomial fit as a function of y, only used to find and mask outliers
-    
+        image_rebin : rebinning of CCD rows to run faster (with rebin=4 loss of precision <0.01 pixel)
     Returns:
         x  : 1D array of x coordinates on CCD (axis=1 in numpy image array, AXIS=0 in FITS, cross-dispersion axis = fiber number direction) 
         y  : 1D array of y coordinates on CCD (axis=0 in numpy image array, AXIS=1 in FITS, wavelength dispersion axis)        
@@ -525,7 +620,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
         wave  : 1D array of wavelength
     """
     log=get_logger()
-    log.info("Starting compute_dx_from_cross_dispersion_profiles ...")
+    log.info("Starting compute_dx_from_cross_dispersion_profiles with width={} deg={} rebin={}...".format(width,deg,image_rebin))
+    
+    t0=time.time()
     
     if fibers is None :
         fibers = np.arange(psf.nspec)
@@ -537,21 +634,29 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
 
     error_floor = 0.04 # pixel
     
-    #   Variance based on inverse variance's size
-    var    = np.zeros(image.ivar.shape)
-
-    #   Applying a mask that keeps positive value to get the Variance by inversing the inverse variance.
     
     n0 = image.pix.shape[0]
     n1 = image.pix.shape[1]
     
-    y  = np.arange(n0)
+    # image rebinning to got faster !!!
+    if image_rebin>1 :
+        pix=image.pix[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1).sum(1)
+        ivar=image.ivar[:(n0//image_rebin)*image_rebin,:].reshape(n0//image_rebin,image_rebin,n1)
+        hasnozero=(np.sum(ivar==0,axis=1)==0)
+        ivar=ivar.sum(1)*hasnozero
+        n0   = pix.shape[0]
+    else :
+        pix  = image.pix
+        ivar = image.ivar
+    
+    y  = np.arange(n0)+0.5 # this 0.5 is important when rebinning to avoid a bias on y (here y = CCD_rows//rebin + 0.5 )
     xx = np.tile(np.arange(n1),(n0,1))
     hw = width//2
     
     ncoef=ycoef.shape[1]
-    twave=np.linspace(wavemin, wavemax, ncoef+2)
-
+    twave=np.linspace(wavemin, wavemax, n0)
+    rwave=legx(twave, wavemin, wavemax)
+    
     ox=np.array([])
     oy=np.array([])
     odx=np.array([])
@@ -559,52 +664,47 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     of=np.array([])
     ol=np.array([])
     
+    dt=0.
+    
+        
+    
+    
     for f,fiber in enumerate(fibers) :
-        log.info("computing dx for fiber #%03d"%fiber)
-        y_of_wave     = legval(legx(twave, wavemin, wavemax), ycoef[fiber])
-        coef          = legfit(legx(y_of_wave, 0, n0), twave, deg=ncoef) # add one deg
-        twave         = legval(legx(np.arange(n0).astype(float), 0, n0), coef)
-        x_of_y        = legval(legx(twave, wavemin, wavemax), xcoef[fiber])
-        x_of_y_int    = np.floor(x_of_y+0.5).astype(int)
-        dx            = (xx.T-x_of_y).T
-        mask=((xx.T>=x_of_y_int-hw)&(xx.T<=x_of_y_int+hw)).T
-        ok            = ((image.ivar[mask]==0).reshape((n0,width)).sum(-1)==0)
-        swdx          = (dx[mask] * image.pix[mask] ).reshape((n0,width)).sum(-1)
-        swdxvar       = (dx[mask]**2/(image.ivar[mask]+0.1*(image.ivar[mask]==0) )).reshape((n0,width)).sum(-1)
-        sw            = (image.pix[mask]).reshape((n0,width)).sum(-1)
-        swy           = sw*y
-        swx           = sw*x_of_y
-        swl           = sw*twave
+        # log.info("computing dx for fiber #%03d"%fiber)
+        
+        # the following 5 lines take 0.25 sec for all 500 fibers
+        ty = legval(rwave, ycoef[fiber])/image_rebin
+        tx = legval(rwave, xcoef[fiber])
+        wave_of_y  = np.interp(y,ty,twave)
+        x_of_y     = np.interp(y,ty,tx)
+
+        swdx,sw,svar,swy,swx,swl = numba_cross_profile(pix,ivar,x_of_y,wave_of_y,hw=hw)
+        jj      = np.where(sw>0)[0]
         
         # rebin
-        rebin = 200
-        ok  = ((ok[:(n0//rebin)*rebin].reshape(n0//rebin,rebin)==0).sum(-1)==0)
-        sw  = sw[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
-        swdx = swdx[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
-        swdxvar = swdxvar[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
-        swx = swx[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
-        swy = swy[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
-        swl = swl[:(n0//rebin)*rebin].reshape(n0//rebin,rebin).sum(-1)
-        
-        '''
-        import matplotlib.pyplot as plt
-        i=np.where((sw>0.01)&(ok>0))[0]
-        plt.errorbar(swy[i]/sw[i],swdx[i]/sw[i],np.sqrt(swdxvar[i])/sw[i],fmt="o")
-        plt.show()
-        '''
-        
-        sw[sw<0]       = 0 
+        tn0   = jj.size
+        rebin = 100//image_rebin
+        sw  = sw[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
+        swdx = swdx[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
+        svar = svar[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
+        swx = swx[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
+        swy = swy[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
+        swl = swl[:(tn0//rebin)*rebin].reshape(tn0//rebin,rebin).sum(-1)
         
         
-        fex            = np.sqrt(swdxvar/(sw+(sw==0))**2 + error_floor**2) # error on dx, with an error floor
-        ok             &= (fex>0)&(fex<10) # ok means no ivar=0 pixel
-        fex            = fex[ok]
+        
+        snr = sw/np.sqrt(svar+(svar==0)) # signal to noise in bin
+        ok             = (snr>3) # keep only high snr pixels
+        fex            = np.sqrt( (20./snr[ok])**2 + 0.01**2) # uncertainties scale as snr
         fdx            = (swdx/(sw+(sw==0)))[ok]
         fx             = (swx/(sw+(sw==0)))[ok]
-        fy             = (swy/(sw+(sw==0)))[ok]
+        fy             = (swy/(sw+(sw==0)))[ok]*image_rebin-0.5
         fl             = (swl/(sw+(sw==0)))[ok]        
         
-        
+        """
+        import matplotlib.pyplot as plt
+        plt.errorbar(fy,fdx,fex,fmt="o")
+        """
         
         good_fiber=True
         for loop in range(10) :
@@ -617,16 +717,12 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
                 c             = np.polyfit(fy,fdx,deg,w=1/fex**2)
                 pol           = np.poly1d(c)
                 chi2          = (fdx-pol(fy))**2/fex**2
-                mchi2         = np.median(chi2)
-                
-                #log.info("mchi2=%f"%mchi2)
-                #if mchi2>1 :
-                #    fex *= np.sqrt(mchi2)
-                
-                ok            = np.where(chi2<=25.*mchi2)[0]
+                mchi2         = 2*np.median(chi2)
+                ok            = np.where(chi2<=9.*mchi2)[0]
                 nbad          = fdx.size-ok.size
-                
-                
+                if nbad > 0 :
+                   log.debug("fiber {} loop {} mchi2 = {}, nbad= {}".format(fiber,loop,mchi2,nbad))
+                                
                 fex            = fex[ok]
                 fdx            = fdx[ok]
                 fx             = fx[ok]
@@ -639,8 +735,13 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
             
             if nbad==0 :
                 break
-            #print("removing %d bad measurements"%nbad)
         
+        """
+        plt.errorbar(fy,fdx,fex,fmt="o")
+        plt.plot(fy,pol(fy),"-")
+        plt.show()
+        """
+    
         # we return the original sample of offset values
         if good_fiber :
             ox  = np.append(ox,fx)
@@ -649,6 +750,9 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
             oex = np.append(oex,fex)
             of = np.append(of,fiber*np.ones(fy.size))
             ol = np.append(ol,fl)
+    
+    t1=time.time()
+    log.info("computing dx for {} fibers in {} sec".format(len(fibers),t1-t0))
     
     return ox,oy,odx,oex,of,ol
 

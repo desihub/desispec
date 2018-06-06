@@ -59,6 +59,8 @@ Two methods are implemented.
                         help = "max statistical error threshold to automatically lower polynomial degree")
     parser.add_argument('--width', type = int, default = 7 , required=False,
                         help = "width of cross-dispersion profile")
+    parser.add_argument('--ccd-rows-rebin', type = int, default = 4 , required=False,
+                        help = "rebinning of CCD rows to run faster")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -169,7 +171,7 @@ def main(args) :
         # nor a prior set of lines. this method is much faster
         
         # measure x shifts
-        x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy)
+        x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy,image_rebin=args.ccd_rows_rebin)
         if internal_wavelength_calib :
             # measure y shifts
             x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width)
@@ -267,29 +269,68 @@ def main(args) :
         
     # for each fiber, apply offsets and recompute legendre polynomial
     log.info("for each fiber, apply offsets and recompute legendre polynomial")
-    log.info("BEFORE: ycoef[:,0]={}".format(ycoef[:,0]))
+    
+    
+    # compute x y to record max deviations
+    u  = np.linspace(-1,1,5)
+    x0 = np.zeros((xcoef.shape[0],u.size))
+    y0 = np.zeros((ycoef.shape[0],u.size))
+    for f in range(xcoef.shape[0]) :
+        x0[f]=legval(u,xcoef[f])
+        y0[f]=legval(u,ycoef[f])
+    
+
+
     xcoef,ycoef = recompute_legendre_coefficients(xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,degxx=degxx,degxy=degxy,degyx=degyx,degyy=degyy,dx_coeff=dx_coeff,dy_coeff=dy_coeff)
-    log.info("AFTER: ycoef[:,0]={}".format(ycoef[:,0]))
     
     # use an input spectrum as an external calibration of wavelength
     if spectrum_filename  :
-        
-        
+                
         log.info("write and reread PSF to be sure predetermined shifts were propagated")
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
         psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.outpsf)
-                
-        log.info("BEFORE: ycoef[:,0]={}".format(ycoef[:,0]))
+        
         ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
                                                   image=image,fibers=fibers,spectrum_filename=spectrum_filename,degyy=args.degyy,width=7)
         
-        log.info("AFTER: ycoef[:,0]={}".format(ycoef[:,0]))
-        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+
+        x = np.zeros((xcoef.shape[0],u.size))
+        y = np.zeros((ycoef.shape[0],u.size))
+        for f in range(xcoef.shape[0]) :
+            x[f]=legval(u,xcoef[f])
+            y[f]=legval(u,ycoef[f])
+        dx = x-x0
+        dy = y-y0
+        
+        header_keywords = {}
+        header_keywords["MEANDX"]=np.mean(dx)
+        header_keywords["MINDX"]=np.min(dx)
+        header_keywords["MAXDX"]=np.max(dx)
+        header_keywords["MEANDY"]=np.mean(dy)
+        header_keywords["MINDY"]=np.min(dy)
+        header_keywords["MAXDY"]=np.max(dy)
+        
+        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax,header_keywords=header_keywords)
         log.info("wrote modified PSF in %s"%args.outpsf)
         
     else :
+        x = np.zeros((xcoef.shape[0],u.size))
+        y = np.zeros((ycoef.shape[0],u.size))
+        for f in range(xcoef.shape[0]) :
+            x[f]=legval(u,xcoef[f])
+            y[f]=legval(u,ycoef[f])
+        dx = x-x0
+        dy = y-y0
         
-        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+        header_keywords = {}
+        header_keywords["MEANDX"]=np.mean(dx)
+        header_keywords["MINDX"]=np.min(dx)
+        header_keywords["MAXDX"]=np.max(dx)
+        header_keywords["MEANDY"]=np.mean(dy)
+        header_keywords["MINDY"]=np.min(dy)
+        header_keywords["MAXDY"]=np.max(dy)
+        
+        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax,header_keywords=header_keywords)
         log.info("wrote modified PSF in %s"%args.outpsf)
         
     
