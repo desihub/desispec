@@ -1897,12 +1897,14 @@ class Calculate_SNR(MonitoringAlg):
         #- select band for mag, using DECAM_R if present
         if param is None:
             log.debug("Param is None. Using default param instead")
-            param = {
-                "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc.
-                "FIDSNR_NORMAL_RANGE":[6.5, 7.5],
-                "FIDSNR_WARN_RANGE":[6.0, 8.0],
-                "FIDMAG":22.
-                }
+            desi_params = read_params()
+            param = desi_params['qa']['skysub']['PARAMS'].copy()
+            #param = {
+            #    "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc.
+            #    "FIDSNR_NORMAL_RANGE":[6.5, 7.5],
+            #    "FIDSNR_WARN_RANGE":[6.0, 8.0],
+            #    "FIDMAG":22.
+            #    }
 
         fidboundary=None
 
