@@ -114,7 +114,7 @@ def run_pipeline_step(tasktype):
     nready = task_count['ready']
     if nready > 0:
         log.info('{:16s}: {}'.format(tasktype, count_string))
-        com = "desi_pipe tasks --tasktype {tasktype} | grep -v DEBUG | desi_pipe script --tasktype {tasktype}".format(tasktype=tasktype)
+        com = "desi_pipe tasks --tasktypes {tasktype} | grep -v DEBUG | desi_pipe script".format(tasktype=tasktype)
         log.info('Running {}'.format(com))
         script = sp.check_output(com, shell=True)
         log.info('Running {}'.format(script))
