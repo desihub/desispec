@@ -99,7 +99,7 @@ def read_psf_and_traces(psf_filename) :
    
     
     
-def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavemin,wavemax) :
+def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavemin,wavemax,header_keywords=None) :
     """
     Writes traces in a PSF.
     
@@ -110,7 +110,10 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
         ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
         wavemin : float
         wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])    
+                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
+
+    Optional:
+        header_keywords : dictionnary of data to add to the psf header
     """
     
     log = get_logger()
@@ -169,6 +172,12 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
     if not modified_y :
         log.error("didn't change the Y coefs in the psf: I/O error")
         raise IOError("didn't change the Y coefs in the psf")
+
+
+    if header_keywords is not None :
+        for k in header_keywords :
+            psf_fits["PSF"].header[k] = header_keywords[k]
+    
 
     psf_fits.writeto(output_psf_filename,clobber=True)
     log.info("wrote traces and psf in %s"%output_psf_filename)
