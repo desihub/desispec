@@ -1,5 +1,5 @@
 #!/usr/bin/env python
 # See top-level LICENSE.rst file for Copyright information
-from desispec.database.datachallenge import main
+from desispec.database.redshift import main
 from sys import exit
 exit(main())
