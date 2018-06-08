@@ -537,8 +537,8 @@ def load_zbest(datapath=None, q3c=False):
         # zbest files don't contain the same columns as zcatalog.
         #
         for col in ZCat.__table__.columns:
-            if c.name not in data_names:
-                data_names.append(c.name)
+            if col.name not in data_names:
+                data_names.append(col.name)
                 data_list.append([0]*len(data_list[0]))
         data_rows = list(zip(*data_list))
         log.info("Converted columns into rows on brick = %s.", brickname)
