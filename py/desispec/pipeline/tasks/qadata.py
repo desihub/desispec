@@ -121,14 +121,3 @@ class TaskQAData(BaseTask):
         """For successful runs, postprocessing on DB"""
         # run getready on all fierflatnight with same night,band,spec
         pass
-        '''
-        props = self.name_split(name)
-        log  = get_logger()
-        tt="starfit"
-        cmd = "select name from {} where night={} and expid={} and spec={} and state=0".format(tt,props["night"],props["expid"],props["spec"])
-        cur.execute(cmd)
-        tasks = [ x for (x,) in cur.fetchall() ]
-        log.debug("checking {}".format(tasks))
-        for task in tasks :
-            task_classes[tt].getready( db=db,name=task,cur=cur)
-        '''
