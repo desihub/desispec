@@ -11,7 +11,7 @@ desispec Change Log
 
 .. _`#634`: https://github.com/desihub/desispec/pull/634
 .. _`#635`: https://github.com/desihub/desispec/pull/635
-.. _`#63g`: https://github.com/desihub/desispec/pull/636
+.. _`#636`: https://github.com/desihub/desispec/pull/636
 
 0.21.0 (2018-05-25)
 -------------------
