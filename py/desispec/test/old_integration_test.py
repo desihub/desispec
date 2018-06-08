@@ -14,7 +14,7 @@ from astropy.io import fits
 from ..util import runcmd
 from .. import io
 from ..qa import QA_Exposure
-from ..database.redshift import get_options, setup_db, load_zcat
+from ..database.redshift import get_options, setup_db, load_zbest
 
 from desiutil.log import get_logger
 
@@ -307,7 +307,7 @@ def integration_test(night=None, nspec=5, clobber=False):
                           os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                                        os.environ['SPECPROD']))
     postgresql = setup_db(options)
-    load_zcat(options.datapath)
+    load_zbest(options.datapath)
     # ztruth QA
     # qafile = io.findfile('qa_ztruth', night)
     # qafig = io.findfile('qa_ztruth_fig', night)
