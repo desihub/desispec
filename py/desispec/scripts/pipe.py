@@ -424,7 +424,8 @@ Where supported commands are:
 
         ttypes = args.tasktypes.split(',')
         tasktypes = list()
-        for tt in pipe.tasks.base.default_task_chain:
+        #for tt in pipe.tasks.base.default_task_chain:
+        for tt in pipe.db.all_task_types():
             if tt in ttypes:
                 tasktypes.append(tt)
 

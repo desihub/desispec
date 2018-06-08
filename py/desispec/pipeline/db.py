@@ -40,6 +40,9 @@ def all_task_types():
     from .tasks.base import default_task_chain
     ttypes = ["fibermap", "rawdata"]
     ttypes.extend(tasks.base.default_task_chain)
+    # Insert qadata after cframe
+    idx = ttypes.index('cframe')
+    ttypes.insert(idx+1, 'qdata')
     return ttypes
 
 
@@ -279,6 +282,8 @@ def all_tasks(night, nside, expid=None):
                     full["fluxcalib"].append(props)
                     # Add cframe
                     full["cframe"].append(props)
+                    # Add QA
+                    full["qadata"].append(props)
 
                     # Add starfit if does not exist
                     exists=False
