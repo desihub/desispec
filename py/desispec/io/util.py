@@ -85,16 +85,16 @@ def native_endian(data):
 def add_columns(data, colnames, colvals):
     '''
     Adds extra columns to a data table
-    
+
     Args:
         data: astropy Table or numpy structured array
         colnames: list of new column names to add
         colvals: list of column values to add;
             each element can be scalar or vector
-    
+
     Returns:
         new table with extra columns added
-    
+
     Example:
         fibermap = add_columns(fibermap,
                     ['NIGHT', 'EXPID'], [20102020, np.arange(len(fibermap))])
@@ -146,7 +146,7 @@ def makepath(outfile, filetype=None):
     return outfile
 
 def write_bintable(filename, data, header=None, comments=None, units=None,
-                   extname=None, clobber=False):
+                   extname=None, clobber=False, primary_extname='PRIMARY'):
     """Utility function to write a fits binary table complete with
     comments and units in the FITS header too.  DATA can either be
     dictionary, an Astropy Table, a numpy.recarray or a numpy.ndarray.
@@ -155,7 +155,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     from desiutil.io import encode_table
 
     log = get_logger()
-    
+
     #- Convert data as needed
     if isinstance(data, (np.recarray, np.ndarray, Table)):
         outdata = encode_table(data, encoding='ascii')
@@ -179,37 +179,44 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     #- Write the data and header
 
-    
+
     if os.path.isfile(filename) :
         if extname is None :
+            #
+            # In DESI, we should *always* be setting the extname, so this
+            # might never be called.
+            #
             if clobber :
                 #- overwrite file
                 log.debug("overwriting {}".format(filename))
-                astropy.io.fits.writeto(filename, hdu.data, hdu.header, clobber=True, checksum=True)
+                hdu0 = astropy.io.fits.PrimaryHDU()
+                hdu0.header['EXTNAME'] = primary_extname
+                hdulist = astropy.io.fits.HDUList([hdu0, hdu])
+                hdulist.writeto(filename, overwrite=True, checksum=True)
             else :
                 #- append file
                 log.debug("adding new HDU to {}".format(filename))
                 astropy.io.fits.append(filename, hdu.data, hdu.header, checksum=True)
         else :
             #- we need to open the file and only overwrite the extension
-            fx = astropy.io.fits.open(filename,mode='update')
-            if extname in fx :                
-                if not clobber :
-                    log.warning("do not modify {} because extname {} exists".format(filename,extname))
-                    return
-                #- need replace here
-                log.debug("replacing HDU {} in {}".format(extname,filename))
-                fx[extname]=hdu
-            else :
-                log.debug("adding HDU {} to {}".format(extname,filename))
-                fx.append(hdu)
-            #- Write updates and close file
-            fx.flush()
-            fx.close()
+            with astropy.io.fits.open(filename, mode='update') as fx:
+                if extname in fx :
+                    if not clobber :
+                        log.warning("do not modify {} because extname {} exists".format(filename,extname))
+                        return
+                    #- need replace here
+                    log.debug("replacing HDU {} in {}".format(extname,filename))
+                    fx[extname]=hdu
+                else :
+                    log.debug("adding HDU {} to {}".format(extname,filename))
+                    fx.append(hdu)
     else :
         log.debug("writing new file {}".format(filename))
-        astropy.io.fits.writeto(filename, hdu.data, hdu.header, checksum=True)
-    
+        hdu0 = astropy.io.fits.PrimaryHDU()
+        hdu0.header['EXTNAME'] = primary_extname
+        hdulist = astropy.io.fits.HDUList([hdu0, hdu])
+        hdulist.writeto(filename, checksum=True)
+
 
     #- TODO:
     #- The following could probably be implemented for efficiently by updating
@@ -286,7 +293,7 @@ def healpix_subdirectory(nside, pixel):
     Return a fixed directory path for healpix grouped files.
 
     Given an NSIDE and NESTED pixel index, return a directory
-    named after a degraded NSIDE and pixel followed by the 
+    named after a degraded NSIDE and pixel followed by the
     original nside and pixel.  This function is just to ensure
     that this subdirectory path is always created by the same
     code.
@@ -296,7 +303,7 @@ def healpix_subdirectory(nside, pixel):
         pixel (int): the NESTED pixel index.
 
     Returns (str):
-        a path containing the low and high resolution 
+        a path containing the low and high resolution
         directories.
 
     """
@@ -310,4 +317,3 @@ def healpix_subdirectory(nside, pixel):
     # subnside, subpixel = healpix_degrade_fixed(nside, pixel)
     # return os.path.join("{}-{}".format(subnside, subpixel),
     #     "{}-{}".format(nside, pixel))
-
