@@ -7,11 +7,13 @@ desispec Change Log
 
 * Faster traceshift code; requires numba (PR `#634`_).
 * Fixed integration tests (PR `#635`_).
-* Give empty HDUs am ``EXTNAME`` (PR `#636`_)
+* Give empty HDUs am ``EXTNAME`` (PR `#636`_).
+* Update redshift database loading in integration test (PR `#638`_).
 
 .. _`#634`: https://github.com/desihub/desispec/pull/634
 .. _`#635`: https://github.com/desihub/desispec/pull/635
 .. _`#636`: https://github.com/desihub/desispec/pull/636
+.. _`#638`: https://github.com/desihub/desispec/pull/638
 
 0.21.0 (2018-05-25)
 -------------------
