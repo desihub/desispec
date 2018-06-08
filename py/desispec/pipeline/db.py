@@ -38,8 +38,11 @@ def all_task_types():
     """
     from . import tasks
     from .tasks.base import default_task_chain
-    ttypes = ["fibermap", "rawdata", "qadata"]
+    ttypes = ["fibermap", "rawdata"]
     ttypes.extend(tasks.base.default_task_chain)
+    # Insert qadata after cframe
+    idx = ttypes.index('cframe')
+    ttypes.insert(idx+1, 'qdata')
     return ttypes
 
 
