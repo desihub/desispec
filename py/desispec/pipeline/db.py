@@ -42,7 +42,7 @@ def all_task_types():
     ttypes.extend(tasks.base.default_task_chain)
     # Insert qadata after cframe
     idx = ttypes.index('cframe')
-    ttypes.insert(idx+1, 'qdata')
+    ttypes.insert(idx+1, 'qadata')
     return ttypes
 
 
@@ -105,7 +105,7 @@ def all_tasks(night, nside, expid=None):
     full = dict()
     for t in all_task_types():
         full[t] = list()
-
+    
     healpix_frames = []
 
     if expid is not None:
