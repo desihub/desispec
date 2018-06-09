@@ -500,7 +500,11 @@ class ComputeFiberflat_QL(pas.PipelineAlg):
         for fib in range(nfibers):
             Rf=frame.R[fib].todense()
             B=flux[fib]
-            realFlux[fib]=cholesky_solve(Rf,B)
+            try:
+                realFlux[fib]=cholesky_solve(Rf,B)
+            except:
+                log.warning("cholesky_solve failed for fiber {}, using numpy.linalg.solve instead.".format(fib))
+                realFlux[fib]=np.linalg.solve(Rf,B)
             sumFlux+=realFlux[fib]
         #iflux=nfibers/sumFlux
         flat = np.zeros(flux.shape)
