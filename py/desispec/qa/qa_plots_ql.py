@@ -6,6 +6,8 @@ https://desi.lbl.gov/trac/wiki/Pipeline/QuickLook/QuicklookQAOutputs/Science
 """
 
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from desispec.qa import qalib
