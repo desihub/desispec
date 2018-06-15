@@ -327,24 +327,26 @@ class Config(object):
         """
         Specify the filenames: json and png of the pa level qa files"
         """
-        filemap={'Initialize': 'ql_initial',
-                 'Preproc': 'ql_preproc',
-                 'BootCalibration': 'ql_bootcalib',
-                 'BoxcarExtract': 'ql_boxextract',
-                 'ResolutionFit': 'ql_resfit',
-                 'ApplyFiberFlat_QL': 'ql_fiberflat',
-                 'SkySub_QL': 'ql_skysub'
+        filemap={'Initialize': 'initial',
+                 'Preproc': 'preproc',
+                 'BootCalibration': 'bootcalib',
+                 'BoxcarExtract': 'boxextract',
+                 'ResolutionFit': 'resfit',
+                 'ComputeFiberflat_QL': 'computeflat',
+                 'ApplyFiberFlat_QL': 'fiberflat',
+                 'SkySub_QL': 'skysub'
                  }
 
+        filetype='ql_file'
+        figtype='ql_fig'
+
         if paname in filemap:
-            filetype=filemap[paname]+'_file'
-            figtype=filemap[paname]+'_fig'
+            outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfile=outfile.replace('qlfile',filemap[paname])
+            outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfig=outfig.replace('qlfig',filemap[paname])
         else:
             raise IOError("PA name does not match any file type. Check PA name in config for {}".format(paname))
-
-        outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
-
-        outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return (outfile,outfig)
 
@@ -353,30 +355,31 @@ class Config(object):
         """
         Specify the filenames: json and png for the given qa output
         """
-        filemap={'Check_HDUs':'ql_checkHDUs',
-                 'Trace_Shifts':'ql_trace',
-                 'Bias_From_Overscan': 'ql_getbias',
-                 'Get_RMS' : 'ql_getrms',
-                 'Count_Pixels': 'ql_countpix',
-                 'Calc_XWSigma': 'ql_xwsigma',
-                 'CountSpectralBins': 'ql_countbins',
-                 'Sky_Continuum': 'ql_skycont',
-                 'Sky_Rband': 'ql_skyRband',
-                 'Sky_Peaks': 'ql_skypeak',
-                 'Sky_Residual': 'ql_skyresid',
-                 'Integrate_Spec': 'ql_integ',
-                 'Calculate_SNR': 'ql_snr'
+        filemap={'Check_HDUs':'checkHDUs',
+                 'Trace_Shifts':'trace',
+                 'Bias_From_Overscan': 'getbias',
+                 'Get_RMS' : 'getrms',
+                 'Count_Pixels': 'countpix',
+                 'Calc_XWSigma': 'xwsigma',
+                 'CountSpectralBins': 'countbins',
+                 'Sky_Continuum': 'skycont',
+                 'Sky_Rband': 'skyRband',
+                 'Sky_Peaks': 'skypeak',
+                 'Sky_Residual': 'skyresid',
+                 'Integrate_Spec': 'integ',
+                 'Calculate_SNR': 'snr'
                  }
 
+        filetype='ql_file'
+        figtype='ql_fig'
+
         if qaname in filemap:
-            filetype=filemap[qaname]+'_file'
-            figtype=filemap[qaname]+'_fig'
+            outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfile=outfile.replace('qlfile',filemap[qaname])
+            outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfig=outfig.replace('qlfig',filemap[qaname])
         else:
             raise IOError("QA name does not match any file type. Check QA name in config for {}".format(qaname))
-
-        outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
-
-        outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return (outfile,outfig)
 
