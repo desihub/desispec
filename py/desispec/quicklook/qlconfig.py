@@ -114,11 +114,7 @@ class Config(object):
         paopt_preproc={'camera': self.camera,'dumpfile': preprocfile}
 
         if self.dumpintermediates:
-            if self.conf["Flavor"] == 'arcs':
-                calibdir=os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d',self.night)
-                framefile=findfile('frame',night=self.night,expid=self.expid,camera=self.camera,outdir=calibdir)
-            else:
-                framefile=self.dump_pa("BoxcarExtract")
+            framefile=self.dump_pa("BoxcarExtract")
             fframefile=self.dump_pa("ApplyFiberFlat_QL")
             sframefile=self.dump_pa("SkySub_QL")
         else:
@@ -325,100 +321,55 @@ class Config(object):
 
     def io_qa_pa(self,paname):
         """
-        Specify the filenames: yaml and png of the pa level qa files"
+        Specify the filenames: json and png of the pa level qa files"
         """
-        if self.conf["Flavor"] == 'arcs':
-            filemap={'Initialize': 'ql_initial_arc',
-                     'Preproc': 'ql_preproc_arc',
-                     'BootCalibration': 'ql_bootcalib',
-                     'BoxcarExtract': 'ql_boxextract_arc',
-                     'ResolutionFit': 'ql_resfit_arc'
-                     }
-        elif self.conf["Flavor"] == 'flat':
-            filemap={'Initialize': 'ql_initial',
-                     'Preproc': 'ql_preproc',
-                     'BoxcarExtract': 'ql_boxextract',
-                     'ComputeFiberflat_QL': 'ql_computeflat',
-                     }
-        elif self.conf["Flavor"] == 'bias':
-            filemap={'Initialize': 'ql_initial_bias',
-                     'Preproc': 'ql_preproc_bias'
-                     }
-        elif self.conf["Flavor"] == 'dark':
-            filemap={'Initialize': 'ql_initial_dark',
-                     'Preproc': 'ql_preproc_dark'
-                     }
-        else:
-            filemap={'Initialize': 'ql_initial',
-                     'Preproc': 'ql_preproc',
-                     'BootCalibration': 'ql_bootcalib',
-                     'BoxcarExtract': 'ql_boxextract',
-                     'ResolutionFit': 'ql_resfit',
-                     'ApplyFiberFlat_QL': 'ql_fiberflat',
-                     'SkySub_QL': 'ql_skysub'
-                     }
+        filemap={'Initialize': 'initial',
+                 'Preproc': 'preproc',
+                 'Flexure': 'flexure',
+                 'BootCalibration': 'bootcalib',
+                 'BoxcarExtract': 'boxextract',
+                 'ResolutionFit': 'resfit',
+                 'ComputeFiberflat_QL': 'computeflat',
+                 'ApplyFiberFlat_QL': 'fiberflat',
+                 'SkySub_QL': 'skysub'
+                 }
 
         if paname in filemap:
-            filetype=filemap[paname]+'_file'
-            figtype=filemap[paname]+'_fig'
+            outfile=findfile('ql_file',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfile=outfile.replace('qlfile',filemap[paname])
+            outfig=findfile('ql_fig',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfig=outfig.replace('qlfig',filemap[paname])
         else:
             raise IOError("PA name does not match any file type. Check PA name in config for {}".format(paname))
-
-        outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
-
-        outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return (outfile,outfig)
 
 
     def io_qa(self,qaname):
         """
-        Specify the filenames: yaml and png for the given qa output
+        Specify the filenames: json and png for the given qa output
         """
-        if self.conf["Flavor"] == 'arcs':
-            filemap={'Check_HDUs':'ql_checkHDUs',
-                     'Bias_From_Overscan': 'ql_getbias_arc',
-                     'Get_RMS' : 'ql_getrms_arc',
-                     'Count_Pixels': 'ql_countpix_arc',
-                     'Calc_XWSigma': 'ql_xwsigma_arc',
-                     'CountSpectralBins': 'ql_countbins_arc'
-                     }
-        elif self.conf["Flavor"] == 'bias':
-            filemap={'Check_HDUs':'ql_checkHDUs',
-                     'Bias_From_Overscan': 'ql_getbias_bias',
-                     'Get_RMS' : 'ql_getrms_bias',
-                     'Count_Pixels': 'ql_countpix_bias'
-                     }
-        elif self.conf["Flavor"] == 'dark':
-            filemap={'Check_HDUs':'ql_checkHDUs',
-                     'Bias_From_Overscan': 'ql_getbias_dark',
-                     'Get_RMS' : 'ql_getrms_dark',
-                     'Count_Pixels': 'ql_countpix_dark'
-                     }
-        else:
-            filemap={'Check_HDUs':'ql_checkHDUs',
-                     'Trace_Shifts':'ql_trace',
-                     'Bias_From_Overscan': 'ql_getbias',
-                     'Get_RMS' : 'ql_getrms',
-                     'Count_Pixels': 'ql_countpix',
-                     'Calc_XWSigma': 'ql_xwsigma',
-                     'CountSpectralBins': 'ql_countbins',
-                     'Sky_Continuum': 'ql_skycont',
-                     'Sky_Peaks': 'ql_skypeak',
-                     'Sky_Residual': 'ql_skyresid',
-                     'Integrate_Spec': 'ql_integ',
-                     'Calculate_SNR': 'ql_snr'
-                     }
+        filemap={'Check_HDUs':'checkHDUs',
+                 'Trace_Shifts':'trace',
+                 'Bias_From_Overscan': 'getbias',
+                 'Get_RMS' : 'getrms',
+                 'Count_Pixels': 'countpix',
+                 'Calc_XWSigma': 'xwsigma',
+                 'CountSpectralBins': 'countbins',
+                 'Sky_Continuum': 'skycont',
+                 'Sky_Peaks': 'skypeak',
+                 'Sky_Residual': 'skyresid',
+                 'Integrate_Spec': 'integ',
+                 'Calculate_SNR': 'snr'
+                 }
 
         if qaname in filemap:
-            filetype=filemap[qaname]+'_file'
-            figtype=filemap[qaname]+'_fig'
+            outfile=findfile('ql_file',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfile=outfile.replace('qlfile',filemap[qaname])
+            outfig=findfile('ql_fig',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfig=outfig.replace('qlfig',filemap[qaname])
         else:
             raise IOError("QA name does not match any file type. Check QA name in config for {}".format(qaname))
-
-        outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
-
-        outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
 
         return (outfile,outfig)
 
@@ -449,16 +400,12 @@ class Config(object):
         
         self.psf=findfile(self.psftype,night=self.night,expid=self.psfexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
-        #- Get reference metrics from template yaml file
-        if self.flavor == 'arcs':
-            template=findfile('ql_mergedQAarc_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-        else:
-            template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-        json_template=template.split('.yaml')[0]+'.json'
+        #- Get reference metrics from template json file
+        template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateexpid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         self.reference=None
-        if os.path.isfile(json_template):
+        if os.path.isfile(template):
             try:
-                with open(json_template) as reference:
+                with open(template) as reference:
                     refdict=json.load(reference)
                     tasks=refdict["TASKS"]
                     tasklist=[]
@@ -469,9 +416,9 @@ class Config(object):
                         ref_met.append(tasks[ttask]['METRICS'])
                     self.reference=ref_met
             except:
-                self.log.warning("WARNING, template file is malformed %s"%json_template)
+                self.log.warning("WARNING, template file is malformed %s"%template)
         else:
-            self.log.warning("WARNING, can't open template file %s"%json_template)
+            self.log.warning("WARNING, can't open template file %s"%template)
 
         outconfig={}
 
