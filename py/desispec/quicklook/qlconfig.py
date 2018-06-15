@@ -114,11 +114,7 @@ class Config(object):
         paopt_preproc={'camera': self.camera,'dumpfile': preprocfile}
 
         if self.dumpintermediates:
-            if self.conf["Flavor"] == 'arcs':
-                calibdir=os.path.join(os.environ['QL_SPEC_REDUX'],'calib2d',self.night)
-                framefile=findfile('frame',night=self.night,expid=self.expid,camera=self.camera,outdir=calibdir)
-            else:
-                framefile=self.dump_pa("BoxcarExtract")
+            framefile=self.dump_pa("BoxcarExtract")
             fframefile=self.dump_pa("ApplyFiberFlat_QL")
             sframefile=self.dump_pa("SkySub_QL")
         else:
