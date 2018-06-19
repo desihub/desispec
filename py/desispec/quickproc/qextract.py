@@ -61,8 +61,8 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :
     if "CAMERA" in image.meta :
         camera=image.meta["CAMERA"].strip()
         spectrograph = int(camera[-1])
-        log.info("camera='{}' -> spectrograph='{}'. I AM USING THIS TO DEFINE THE FIBER NUMBER.".format(camera,spectrograph))
-        log.warning("ASSUMES 500 FIBERS PER CAMERA TO DEFINE THE FIBER NUMBERS")
+        log.info("camera='{}' -> spectrograph={}. I AM USING THIS TO DEFINE THE FIBER NUMBER (ASSUMING 500 FIBERS PER SPECTRO).".format(camera,spectrograph))
+    
     allfibers = np.arange(xcoef.shape[0])+500*spectrograph
     
     if fibers is None :
