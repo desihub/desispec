@@ -5,13 +5,14 @@ Run DESI quickproc on a given exposure
 
 
 import argparse
-import sys
+import sys,os
 import time
 import numpy as np
 import astropy.io.fits as fits
 from desiutil.log import get_logger
 from desispec.io import read_raw,read_image,read_fibermap
 from desispec.io.xytraceset import read_xytraceset
+from desispec.preproc import read_ccd_calibration
 from desispec.quickproc.io import read_qframe,write_qframe
 from desispec.quickproc.qextract import boxcar_extraction
 from desispec.quickproc.qfiberflat import quick_apply_fiberflat,quick_compute_fiberflat
@@ -19,8 +20,8 @@ from desispec.quickproc.qsky import quick_sky_subtraction
 from desispec.quickproc.util import parse_fibers
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('-p','--psf', type = str, default = None, required = True,
-                    help = 'path to psf fits file to get the trace coordinates')
+parser.add_argument('-p','--psf', type = str, default = None, required = False,
+                    help = 'path to psf fits file to get the trace coordinates (default is psf in $DESI_CCD_CALIBRATION_DATA)')
 parser.add_argument('-i','--image', type = str, default = None, required = True,
                     help = 'path to image fits file (either preprocessed or raw image)')
 parser.add_argument('-c','--camera', type = str, default = None, required = False,
@@ -46,12 +47,12 @@ t0   = time.time()
 log  = get_logger()
 args = parser.parse_args()
 
-tset    = read_xytraceset(args.psf)
 
 
 # guess if it is a preprocessed or a raw image
 hdulist   = fits.open(args.image)
-is_preprocessed = ("FLUX" in hdulist)&("IVAR" in hdulist)
+is_preprocessed = ("IMAGE" in hdulist)&("IVAR" in hdulist)
+primary_header  = hdulist[0].header
 hdulist.close()
 
 if is_preprocessed :
@@ -62,6 +63,18 @@ else :
         print("try adding the option '--camera xx', with xx in {brz}{0-9}, like r7,  or type 'desi_quickproc --help' for more options")
         sys.exit(12)
     image = read_raw(args.image, args.camera)
+
+
+if args.psf is None :
+    if "DESI_CCD_CALIBRATION_DATA" not in os.environ :
+        log.error("either specify the path to a psf with the '--psf' option or set the DESI_CCD_CALIBRATION_DATA environment variable")
+        sys.exit(12)
+    log.info("Choosing PSF using $DESI_CCD_CALIBRATION_DATA/ccd_calibration.yaml and the image header")
+    calibration_data = read_ccd_calibration(image.meta,primary_header)
+    args.psf = os.path.join(os.environ["DESI_CCD_CALIBRATION_DATA"],calibration_data["PSF"])
+    log.info(" Using PSF {}".format(args.psf))
+
+tset    = read_xytraceset(args.psf)
 
 
 fibers  = parse_fibers(args.fibers)
