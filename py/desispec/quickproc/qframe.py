@@ -85,7 +85,7 @@ class QFrame(object):
             elif (self.meta is not None) and ('FIBERMIN' in self.meta):
                 self.fibers = self.meta['FIBERMIN'] + np.arange(self.nspec, dtype=int)
             else:
-                raise ValueError("Must set fibers by one of the methods!")
+                self.fibers = np.arange(self.flux.shape[0])
 
         if self.meta is not None:
             self.meta['FIBERMIN'] = np.min(self.fibers)
