@@ -85,10 +85,7 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
     """Reads a frame fits file and returns its data.
 
     Args:
-        filename: path to a file, or (night, expid, camera) tuple where
-            night = string YEARMMDD
-            expid = integer exposure ID
-            camera = b0, r1, .. z9
+        filename: path to a file
         skip_resolution: bool, option
             Speed up read time (>5x) by avoiding the Resolution matrix
 
@@ -96,12 +93,7 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
         desispec.Frame object with attributes wave, flux, ivar, etc.
     """
     log = get_logger()
-
-    #- check if filename is (night, expid, camera) tuple instead
-    if not isinstance(filename, str):
-        night, expid, camera = filename
-        filename = findfile('qframe', night, expid, camera)
-
+    
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
 
@@ -110,6 +102,12 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
     flux = native_endian(fx['FLUX'].data.astype('f8'))
     ivar = native_endian(fx['IVAR'].data.astype('f8'))
     wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
+
+    if wave.shape != flux.shape :
+        log.Error("{} is not a valid QFrame file because wave.shape != flux.shape".format(filename))
+        return None
+    
+
     if 'MASK' in fx:
         mask = native_endian(fx['MASK'].data)
     else:
