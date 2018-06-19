@@ -15,8 +15,8 @@ import warnings
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 
-import qframe
-from ..util import fitsheader, native_endian, makepath
+import desispec.quickproc.qframe
+from desispec.io.util import fitsheader, native_endian, makepath
 from desiutil.log import get_logger
 
 

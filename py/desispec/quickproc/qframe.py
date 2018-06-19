@@ -67,8 +67,8 @@ class QFrame(object):
         fibers_per_spectrograph = 500   #- hardcode; could get from desimodel
         if fibers is not None:
             fibers = np.asarray(fibers)
-            if len(fibers) != self.nspec:
-                raise ValueError("len(fibers) != nspec ({} != {})".format(len(fibers), self.nspec))
+            if len(fibers) != self.flux.shape[0]:
+                raise ValueError("len(fibers) != flux.shape[0] ({} != {})".format(len(fibers), flux.shape[0]))
             if fibermap is not None and np.any(fibers != fibermap['FIBER']):
                 raise ValueError("fibermap doesn't match fibers")
             if (spectrograph is not None):
@@ -115,7 +115,7 @@ class QFrame(object):
         else:
             fibermap = None
         
-        result = Frame(self.wave[index], self.flux[index], self.ivar[index],
+        result = QFrame(self.wave[index], self.flux[index], self.ivar[index],
                        self.mask[index], fibers=self.fibers[index], spectrograph=self.spectrograph,
                        meta=self.meta, fibermap=fibermap)
         

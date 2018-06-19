@@ -39,7 +39,7 @@ def read_xytraceset(filename) :
     wavemin2=None
     wavemax2=None
 
-    fits_file = fits.open(psf_filename)
+    fits_file = fits.open(filename)
     
     try :
         psftype=fits_file[0].header["PSFTYPE"]
