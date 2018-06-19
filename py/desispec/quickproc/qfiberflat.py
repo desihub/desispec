@@ -3,9 +3,10 @@ import numpy as np
 import scipy.ndimage
 
 from desiutil.log import get_logger
-from .qframe import QFrame
+from desispec.linalg import spline_fit
+from desispec.quickproc.qframe import QFrame
 
-def quick_fiberflat(qframe,nloop=4,min_median_flux=100.,max_flat_uncertainty=0.1,median_filter_width=50) :    
+def quick_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.5,max_flat_uncertainty=0.1,spline_res=10.) :    
     """
     Fast estimation of fiberflat
     """
@@ -23,7 +24,7 @@ def quick_fiberflat(qframe,nloop=4,min_median_flux=100.,max_flat_uncertainty=0.1
    
     # iterative loop to absorb constant term in fiber (should have more parameters)
     
-    for loop in range(nloop) :
+    for iter in range(niter_meanspec) :
         mflux=np.median(tflux,axis=0)
         for i in range(qframe.flux.shape[0]) :
             a = np.median(tflux[i,mflux>0]/mflux[mflux>0])
@@ -31,39 +32,59 @@ def quick_fiberflat(qframe,nloop=4,min_median_flux=100.,max_flat_uncertainty=0.1
     
     
     # go back to original grid
-    ok=(mflux>min_median_flux)
-    for i in range(qframe.flux.shape[0]) :
-        tmp = np.interp(qframe.wave[i],twave[ok],mflux[ok],left=0,right=0)
-        good=(tmp!=0)
-        tflux[i,good] = qframe.flux[i,good]/tmp[good]
-        tivar[i,good] = qframe.ivar[i,good]*tmp[good]**2
-        good &= (qframe.ivar[i]>0)
-        if qframe.mask is not None : 
-            good &= (qframe.mask[i]==0)
-        bad  = np.logical_not(good)
-        tflux[i,bad] = np.interp(qframe.wave[i,bad],qframe.wave[i,good],tflux[i,good])
-        
-        # sliding median to detect cosmics
-        tmp  = scipy.ndimage.filters.median_filter(tflux[i],median_filter_width,mode='constant')
-        diff = np.abs(tflux[i]-tmp)
-        mdiff = scipy.ndimage.filters.median_filter(diff,200,mode='constant')
-        good = diff<3*mdiff
-        bad  = np.logical_not(good)
-        tflux[i,bad] = np.interp(qframe.wave[i,bad],qframe.wave[i,good],tflux[i,good])
+    ok=(mflux>100.)#np.median(mflux)*0.01)
+    lowflux=np.where(np.logical_not(ok))[0]
     
+    for fiber in range(qframe.flux.shape[0]) :
+        
+        tmp = np.interp(qframe.wave[fiber],twave[ok],mflux[ok],left=0,right=0)
+        good=(tmp!=0)
+        tflux[fiber,good] = qframe.flux[fiber,good]/tmp[good]
+        tivar[fiber,good] = qframe.ivar[fiber,good]*tmp[good]**2
+        good &= (qframe.ivar[fiber]>0)
+        if qframe.mask is not None : 
+            good &= (qframe.mask[fiber]==0)
+        bad  = np.logical_not(good)
+        tflux[fiber,bad] = np.interp(qframe.wave[fiber,bad],qframe.wave[fiber,good],tflux[fiber,good])
+        tivar[fiber,bad] = 0.
+        
+        # iterative spline fit
+        max_rej_it=5# not more than 5 pixels at a time
+        max_bad=1000
+        nbad_tot=0
+        
+        for loop in range(10) :
+            
+            good &= (tivar[fiber]>0)
+            
+            # add constrain at first and last wave
+            #tflux[fiber,0]=tflux[fiber,-1]=1.
+            #tivar[fiber,0]=tivar[fiber,-1]=1000.
+            #good[0]=good[-1]=True
+            
+            splineflat = spline_fit(qframe.wave[fiber],qframe.wave[fiber,good],tflux[fiber,good],required_resolution=spline_res,input_ivar=tivar[fiber,good],max_resolution=3*spline_res)
+            chi2 = tivar[fiber]*(tflux[fiber]-splineflat)**2
+            bad=np.where(chi2>nsig_clipping**2)[0]
+            if bad.size>0 :
+                if bad.size>max_rej_it : # not more than 5 pixels at a time
+                    ii=np.argsort(chi2[bad])
+                    bad=bad[ii[-max_rej_it:]]
+                tivar[fiber,bad] = 0
+                nbad_tot += len(bad)
+                log.warning("iteration {} rejecting {} pixels (tot={}) from fiber {}".format(loop,len(bad),nbad_tot,fiber))
+                if nbad_tot>=max_bad:
+                    tivar[fiber,:]=0
+                    log.warning("1st pass: rejecting fiber {} due to too many (new) bad pixels".format(fiber))
+            else :
+                break
+        tflux[fiber] = splineflat
+        valid=np.where((tivar[fiber]>1./max_flat_uncertainty**2))[0]
+        tflux[fiber,:valid[0]]    = 1.
+        tflux[fiber,valid[-1]+1:] = 1.
+        tivar[fiber,tivar[fiber]<1./max_flat_uncertainty**2]=0.
+        
     t1=time.time()
     log.info(" done in {:3.1f} sec".format(t1-t0))
     
-    bad=(tivar<1./max_flat_uncertainty**2)
-    tivar[bad]=0.
-    tflux[bad]=1. # default (for nice plots)
-    
-
-    # now smooth the flat
-    import matplotlib.pyplot as plt
-    for i in range(qframe.flux.shape[0]) :
-        plt.plot(twave,tflux[i])
-    
-    plt.show()
-    #t2=time.time(); log.info(" done in {} sec".format(t2-t1)) ; t1=t2
+    return QFrame(qframe.wave, tflux, tivar, mask=None, fibers=qframe.fibers)
 
