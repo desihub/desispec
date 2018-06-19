@@ -8,9 +8,9 @@ import argparse
 import sys
 import time
 import numpy as np
-import fitsio
+import astropy.io.fits as fits
 from desiutil.log import get_logger
-from desispec.io import read_image,read_fibermap
+from desispec.io import read_raw,read_image,read_fibermap
 from desispec.io.xytraceset import read_xytraceset
 from desispec.quickproc.io import read_qframe,write_qframe
 from desispec.quickproc.qextract import boxcar_extraction
@@ -23,6 +23,8 @@ parser.add_argument('-p','--psf', type = str, default = None, required = True,
                     help = 'path to psf fits file to get the trace coordinates')
 parser.add_argument('-i','--image', type = str, default = None, required = True,
                     help = 'path to image fits file (either preprocessed or raw image)')
+parser.add_argument('-c','--camera', type = str, default = None, required = False,
+                    help = 'has to specify camera if input image is raw data')
 parser.add_argument('-o','--outframe', type = str, default = None, required = False,
                     help = 'path to output qframe file')
 parser.add_argument('--fibers', type=str, default = None, required = False,
@@ -45,7 +47,22 @@ log  = get_logger()
 args = parser.parse_args()
 
 tset    = read_xytraceset(args.psf)
-image   = read_image(args.image)
+
+
+# guess if it is a preprocessed or a raw image
+hdulist   = fits.open(args.image)
+is_preprocessed = ("FLUX" in hdulist)&("IVAR" in hdulist)
+hdulist.close()
+
+if is_preprocessed :
+    image   = read_image(args.image)
+else :
+    if args.camera is None :
+        print("need to specify camera to open a raw fits image (with all cameras in different fits HDUs)")
+        print("try adding the option '--camera xx', with xx in {brz}{0-9}, like r7,  or type 'desi_quickproc --help' for more options")
+        sys.exit(12)
+    image = read_raw(args.image, args.camera)
+
 
 fibers  = parse_fibers(args.fibers)
 
