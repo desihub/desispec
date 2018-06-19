@@ -100,4 +100,4 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7) :
     t1=time.time()
     log.info(" done {} fibers in {:3.1f} sec".format(len(fibers),t1-t0))
     
-    return QFrame(frame_wave, frame_flux, frame_ivar, mask=None, fibers=fibers)
+    return QFrame(frame_wave, frame_flux, frame_ivar, mask=None, fibers=fibers, meta=image.meta)

@@ -7,11 +7,26 @@ from desispec.linalg import spline_fit
 from desispec.quickproc.qframe import QFrame
 
 def quick_apply_fiberflat(qframe,qflat) :
-    ii=(qflat.flux!=0)
-    qframe.flux[ii] /= qflat.flux[ii]
-    qframe.ivar[ii] *= qflat.flux[ii]**2
-    qframe.ivar[(qflat.flux<=0)|(qflat.ivar==0)] = 0.
-    
+
+    log = get_logger()
+
+    if len(qframe.fibers) == len(qflat.fibers) and np.sum(qframe.fibers != qflat.fibers)==0  :
+        ii=(qflat.flux!=0)
+        qframe.flux[ii] /= qflat.flux[ii]
+        qframe.ivar[ii] *= qflat.flux[ii]**2
+        qframe.ivar[(qflat.flux<=0)|(qflat.ivar==0)] = 0.
+    else :
+        for j in range(qframe.flux.shape[0]) :
+            k=np.where(qflat.fibers==qframe.fibers[j])[0]
+            if k.size != 1 :
+                log.Error("No fiber {} in flat".format(qframe.fibers[j]))
+                raise ValueError("No fiber {} in flat".format(qframe.fibers[j]))
+            k=k[0]
+            ii=(qflat.flux[k]!=0)
+            qframe.flux[j,ii] /= qflat.flux[k,ii]
+            qframe.ivar[j,ii] *= qflat.flux[k,ii]**2
+            qframe.ivar[j,(qflat.flux[k]<=0)|(qflat.ivar[k]==0)] = 0.
+
 def quick_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.5,max_flat_uncertainty=0.1,spline_res=10.) :    
     """
     Fast estimation of fiberflat
