@@ -10,95 +10,15 @@ from numpy.linalg.linalg import LinAlgError
 import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from scipy.signal import fftconvolve
+import numba
 
 import specter.psf
 from desispec.io import read_image
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
+from desispec.quickproc.qextract import boxcar_extraction
 
-import numba
-
-def read_psf_and_traces(psf_filename) :
-    """
-    Reads PSF and traces in PSF fits file
-    
-    Args:
-        psf_filename : Path to input fits file which has to contain XTRACE and YTRACE HDUs
-    Returns:
-        psf : specter PSF object
-        xtrace : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ytrace : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
-        wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber])
-    
-    """
-
-    log=get_logger()
-
-    psf=None
-    xtrace=None
-    ytrace=None
-    wavemin=None
-    wavemax=None
-    wavemin2=None
-    wavemax2=None
-
-    fits_file = pyfits.open(psf_filename)
-    
-    try :
-        psftype=fits_file[0].header["PSFTYPE"]
-    except KeyError :
-        psftype=""
-    if psftype=="GAUSS-HERMITE" :
-        psf = specter.psf.GaussHermitePSF(psf_filename)
-    elif psftype=="SPOTGRID" :
-        psf = specter.psf.SpotGridPSF(psf_filename)
-
-    # now read trace coefficients
-    log.info("psf is a '%s'"%psftype)
-    if psftype == "bootcalib" :    
-        wavemin = fits_file[0].header["WAVEMIN"]
-        wavemax = fits_file[0].header["WAVEMAX"]
-        xcoef   = fits_file[0].data
-        ycoef   = fits_file[1].data        
-        wavemin2 = wavemin
-        wavemax2 = wavemax
-    elif "XTRACE" in fits_file :
-        xtrace=fits_file["XTRACE"].data
-        ytrace=fits_file["YTRACE"].data
-        wavemin=fits_file["XTRACE"].header["WAVEMIN"]
-        wavemax=fits_file["XTRACE"].header["WAVEMAX"]
-        wavemin2=fits_file["YTRACE"].header["WAVEMIN"]
-        wavemax2=fits_file["YTRACE"].header["WAVEMAX"]
-    elif psftype == "GAUSS-HERMITE" :
-        table=fits_file["PSF"].data        
-        i=np.where(table["PARAM"]=="X")[0][0]
-        wavemin=table["WAVEMIN"][i]
-        wavemax=table["WAVEMAX"][i]
-        xtrace=table["COEFF"][i]
-        i=np.where(table["PARAM"]=="Y")[0][0]
-        ytrace=table["COEFF"][i]
-        wavemin2=table["WAVEMIN"][i]
-        wavemax2=table["WAVEMAX"][i]
-    
-    if xtrace is None or ytrace is None :
-        raise ValueError("could not find XTRACE and YTRACE in psf file %s"%psf_filename)
-    if wavemin != wavemin2 :
-        raise ValueError("XTRACE and YTRACE don't have same WAVEMIN %f %f"%(wavemin,wavemin2))
-    if wavemax != wavemax2 :
-        raise ValueError("XTRACE and YTRACE don't have same WAVEMAX %f %f"%(wavemax,wavemax2))
-    if xtrace.shape[0] != ytrace.shape[0] :
-        raise ValueError("XTRACE and YTRACE don't have same number of fibers %d %d"%(xtrace.shape[0],ytrace.shape[0]))
-    
-    fits_file.close()
-    
-    return psf,xtrace,ytrace,wavemin,wavemax
-
-   
-    
-    
 def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavemin,wavemax,header_keywords=None) :
     """
     Writes traces in a PSF.
@@ -199,26 +119,6 @@ def legx(wave,wavemin,wavemax) :
 
 # beginning of routines for cross-correlation method for trace shifts  
 
-@numba.jit
-def numba_extract(image_flux,image_var,x,hw=3) :
-    n0=image_flux.shape[0]
-    flux=np.zeros(n0)
-    ivar=np.zeros(n0)
-    for j in range(n0) :
-        var=0
-        for i in range(int(x[j]-hw),int(x[j]+hw+1)) :
-            flux[j] += image_flux[j,i]
-            if image_var[j,i]>0 :
-                var += image_var[j,i]
-            else :
-                flux[j]=0
-                ivar[j]=0
-                var=0
-                break
-        if var>0 : 
-            ivar[j] = 1./var
-    return flux,ivar
-
 def boxcar_extraction_from_filenames(image_filename,psf_filename,fibers=None, width=7) :   
     """
     Fast boxcar extraction of spectra from a preprocessed image and a trace set
@@ -236,79 +136,13 @@ def boxcar_extraction_from_filenames(image_filename,psf_filename,fibers=None, wi
         ivar :  2D np.array of shape (nfibers,n0), ivar[f,j] = 1/( sum_[j,b:e] (1/image.ivar) ), ivar=0 if at least 1 pixel in the row has image.ivar=0 or image.mask!=0
         wave :  2D np.array of shape (nfibers,n0), determined from the traces
     """
-    psf,xtrace,ytrace,wavemin,wavemax = read_psf_and_traces(psf_filename)
+    
+    tset = read_xytraceset(psf_filename)
     image = read_image(image_filename)
-    return boxcar_extraction(xtrace,ytrace,wavemin,wavemax, image, fibers=fibers ,width=width)
+    qframe = boxcar_extraction(xytraceset,image,fibers=fibers,width=width)
+    return qframe.flux, qframe.ivar, qframe.wave
 
 
-def boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=None, width=7) :    
-    """
-    Fast boxcar extraction of spectra from a preprocessed image and a trace set
-    
-    Args:
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
-        wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
-        image : DESI preprocessed image object
-
-    Optional:   
-        fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
-        width  : extraction boxcar width, default is 7
-
-    Returns:
-        flux :  2D np.array of shape (nfibers,n0=image.shape[0]), sum of pixel values per row of length=width per fiber
-        ivar :  2D np.array of shape (nfibers,n0), ivar[f,j] = 1/( sum_[j,b:e] (1/image.ivar) ), ivar=0 if at least 1 pixel in the row has image.ivar=0 or image.mask!=0
-        wave :  2D np.array of shape (nfibers,n0), determined from the traces
-    """
-    log=get_logger()
-    log.info("Starting boxcar extraction...")
-    
-    t0=time.time()
-    
-    if fibers is None :
-        fibers = np.arange(xcoef.shape[0])
-    
-    log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
-    
-    if image.mask is not None :
-        image.ivar *= (image.mask==0)
-    
-    #  Applying a mask that keeps positive value to get the Variance by inversing the inverse variance.
-    var=np.zeros(image.ivar.size)
-    ok=image.ivar.ravel()>0
-    var[ok] = 1./image.ivar.ravel()[ok]
-    var=var.reshape(image.ivar.shape)
-
-    badimage=(image.ivar==0)
-    
-    n0 = image.pix.shape[0]
-    n1 = image.pix.shape[1]
-    
-    frame_flux = np.zeros((fibers.size,n0))
-    frame_ivar = np.zeros((fibers.size,n0))
-    frame_wave = np.zeros((fibers.size,n0))
-    xx         = np.tile(np.arange(n1),(n0,1))
-    hw = width//2
-    
-    ncoef=ycoef.shape[1]
-    twave=np.linspace(wavemin, wavemax, n0//4) # this number of bins n0//p is calibrated to give a negligible difference of wavelength precision
-    rwave=legx(twave, wavemin, wavemax)
-    y=np.arange(n0).astype(float)
-    
-    for f,fiber in enumerate(fibers) :
-        log.debug("extracting fiber #%03d"%fiber)
-        ty = legval(rwave, ycoef[fiber])
-        tx = legval(rwave, xcoef[fiber])
-        frame_wave[f] = np.interp(y,ty,twave)
-        x_of_y        = np.interp(y,ty,tx)        
-        frame_flux[f],frame_ivar[f] = numba_extract(image.pix,var,x_of_y,hw)
-        
-    t1=time.time()
-    log.info("Extracted {} fibers in {:3.1f} sec".format(len(fibers),t1-t0))
-    
-    return frame_flux, frame_ivar, frame_wave
 
 def resample_boxcar_frame(frame_flux,frame_ivar,frame_wave,oversampling=2) :
     """
@@ -527,17 +361,13 @@ def compute_dy_from_spectral_cross_correlations_of_frame(flux, ivar, wave , xcoe
 
     return x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy
 
-def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers, width=7, degyy=2) :
+def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy=2) :
     """
     Measures y offsets (internal wavelength calibration) from a preprocessed image and a trace set using a cross-correlation of boxcar extracted spectra.
     Uses boxcar_extraction , resample_boxcar_frame , compute_dy_from_spectral_cross_correlations_of_frame
     
     Args:
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
-        wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
+        xytraceset : XYTraceset object
         image : DESI preprocessed image object
 
     Optional:   
@@ -558,15 +388,19 @@ def compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fiber
     log=get_logger()
     
     # boxcar extraction
-    boxcar_flux, boxcar_ivar, boxcar_wave = boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=fibers, width=7)
+    qframe = boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
     
     # resampling on common finer wavelength grid
-    flux, ivar, wave = resample_boxcar_frame(boxcar_flux, boxcar_ivar, boxcar_wave, oversampling=4)
+    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
     
     # median flux used as internal spectral reference
     mflux=np.median(flux,axis=0)
 
     # measure y shifts 
+    wavemin = xytraceset.wavemin
+    wavemax = xytraceset.wavemax
+    xcoef   = xytraceset.x_vs_wave_traceset._coeff 
+    ycoef   = xytraceset.y_vs_wave_traceset._coeff 
     return compute_dy_from_spectral_cross_correlations_of_frame(flux=flux, ivar=ivar, wave=wave, xcoef=xcoef, ycoef=ycoef, wavemin=wavemin, wavemax=wavemax, reference_flux = mflux , n_wavelength_bins = degyy+4)
     
 @numba.jit
@@ -757,7 +591,7 @@ def compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image
     return ox,oy,odx,oex,of,ol
 
 
-def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fibers,spectrum_filename,degyy=2,width=7) :
+def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_filename,degyy=2,width=7) :
     """
     Measure y offsets (external wavelength calibration) from a preprocessed image , a PSF + trace set using a cross-correlation of boxcar extracted spectra
     and an external well-calibrated spectrum.
@@ -766,11 +600,7 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
     
     Args:
         psf : specter PSF
-        xcoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to XCCD
-        ycoef : 2D np.array of shape (nfibers,ncoef) containing Legendre coefficents for each fiber to convert wavelenght to YCCD
-        wavemin : float
-        wavemax : float. wavemin and wavemax are used to define a reduced variable legx(wave,wavemin,wavemax)=2*(wave-wavemin)/(wavemax-wavemin)-1
-                  used to compute the traces, xccd=legval(legx(wave,wavemin,wavemax),xtrace[fiber]) 
+        xytraceset : XYTraceset object
         image : DESI preprocessed image object
         fibers : 1D np.array of fiber indices
         spectrum_filename : path to input spectral file ( read with np.loadtxt , first column is wavelength (in vacuum and Angstrom) , second column in flux (arb. units)
@@ -784,6 +614,11 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
     """
     log = get_logger()
 
+    wavemin = xytraceset.wavemin
+    wavemax = xytraceset.wavemax
+    xcoef   = xytraceset.x_vs_wave_traceset._coeff 
+    ycoef   = xytraceset.y_vs_wave_traceset._coeff
+    
     tmp=np.loadtxt(spectrum_filename).T
     ref_wave=tmp[0]
     ref_spectrum=tmp[1]
@@ -792,10 +627,10 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
     log.info("rextract spectra with boxcar")   
 
     # boxcar extraction
-    boxcar_flux, boxcar_ivar, boxcar_wave = boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image, fibers=fibers, width=width)
-
+    qframe = boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
+        
     # resampling on common finer wavelength grid
-    flux, ivar, wave = resample_boxcar_frame(boxcar_flux, boxcar_ivar, boxcar_wave, oversampling=2)
+    flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=2)
     
     # median flux used as internal spectral reference
     mflux=np.median(flux,axis=0)
@@ -815,11 +650,11 @@ def shift_ycoef_using_external_spectrum(psf,xcoef,ycoef,wavemin,wavemax,image,fi
         ref_spectrum = resample_flux(tmp_wave, ref_wave , ref_spectrum)
         ref_wave = tmp_wave
 
+    i=np.argmax(ref_spectrum)
+    central_wave_for_psf_evaluation  = ref_wave[i]
+    fiber_for_psf_evaluation = (flux.shape[0]//2)
     try :
         # compute psf at most significant line of ref_spectrum
-        i=np.argmax(ref_spectrum)
-        central_wave_for_psf_evaluation  = ref_wave[i]
-        fiber_for_psf_evaluation = (boxcar_flux.shape[0]//2)
         dwave=ref_wave[i+1]-ref_wave[i]
         hw=int(3./dwave)+1 # 3A half width
         wave_range = ref_wave[i-hw:i+hw+1]
