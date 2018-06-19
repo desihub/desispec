@@ -45,9 +45,39 @@ class Config(object):
         if not self.flexure and "Flexure" in self.pipeline:
             self.pipeline.remove("Flexure")
         self.algorithms = self.conf["Algorithms"]
+
+        #print("ALGORITHMS ",self.algorithms)
+
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
+
+        #print("PAMODULE",self.pamodule)
+
         self.qamodule = self._palist.qamodule
+
+        #print("QAMODULE",self.qamodule)
+
+        #print("ALGORITHM KYES ",self.algorithms.keys())
+        algokeys = self.algorithms.keys()
+        #print("refkeys ",self.algorithms["SkySub_QL"]["QA"].keys())
+
+        qaRefKeys = {}
+        #qaRefKeys = {"":"", "":"", "":"", "":"", "":"", "":"", "":"","":"","":"","":"","":""}
+        #print(qaRefKeys," 44") 
+        for i in algokeys: 
+            #print("1 algokeys ",i)
+            #print("2    QAs",self.algorithms[i]["QA"].keys())
+            for k in self.algorithms[i]["QA"].keys():
+                #print("3       keys ",k)
+                scalar = self.algorithms[i]["QA"][k]["SCALAR"]
+                #print("4       scalar ",self.algorithms[i]["QA"][k].keys()," ",scalar)
+                qaScalar = {k:scalar}
+                #print(qaScalar)
+                qaRefKeys[k] = scalar
+                #qaRefKeys.append(k:scalar)
+                #qaRefKeys = qaRefKeys.append(qaScalar)
+        #print("5 ",qaRefKeys) 
+
         if "BoxcarExtract" in self.algorithms.keys():
             if "wavelength" in self.algorithms["BoxcarExtract"].keys():
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
@@ -63,7 +93,9 @@ class Config(object):
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
-        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        self._qaRefKeys = qaRefKeys
+        #self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        #print("QA REFKEYS ", self._qaRefKeys)
 
     @property
     def mode(self):
