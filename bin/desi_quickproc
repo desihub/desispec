@@ -19,7 +19,11 @@ from desispec.quickproc.qfiberflat import quick_apply_fiberflat,quick_compute_fi
 from desispec.quickproc.qsky import quick_sky_subtraction
 from desispec.quickproc.util import parse_fibers
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                 description="""Quick extraction and processing script. The input image file is either a raw data fits file from the ICS (in which case one must specify the camera) or a preprocessed image. The output is a frame (a series of spectra) that can be saved to disk and/or displayed. An approximate fiber flat field correction can be computed if the input is a dome screen exposure. For on-sky images, fiber flat field and a rudimentary sky subtraction can be performed. This script relies on the existence of a DESI_CCD_CALIBRATION_DATA environment variable pointing to a local copy of the CCD calibration SVN repository.
+""",
+                                 epilog="""Example: desi_quickproc -i desi-00003577.fits --camera r1 --fibermap fibermap-00003577.fits --fibers 12:15 --plot"""
+)
 parser.add_argument('-p','--psf', type = str, default = None, required = False,
                     help = 'path to psf fits file to get the trace coordinates (default is psf in $DESI_CCD_CALIBRATION_DATA)')
 parser.add_argument('-i','--image', type = str, default = None, required = True,
@@ -31,7 +35,7 @@ parser.add_argument('-o','--outframe', type = str, default = None, required = Fa
 parser.add_argument('--fibers', type=str, default = None, required = False,
                     help = 'defines from_to which fiber to work on. (ex: --fibers=50:60,4 means that only fibers 4, and fibers from 50 to 60 (excluded) will be extracted)')
 parser.add_argument('--width', type=int, default=7, required=False,
-                    help = 'extraction line width')
+                    help = 'extraction line width (in pixels)')
 parser.add_argument('--plot', action='store_true',
                     help = 'plot result')
 parser.add_argument('--compute-fiberflat', type = str, default = None, required = False,
