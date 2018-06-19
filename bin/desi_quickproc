@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+"""
+Run DESI quickproc on a given exposure
+"""
+
+
+import argparse
+import sys
+
+from desiutil.log import get_logger
+from desispec.io import read_image
+from desispec.io.xytraceset import read_xytraceset
+from desispec.quickproc.io import read_qframe,write_qframe
+from desispec.quickproc.qextract import boxcar_extraction
+from desispec.quickproc.qfiberflat import quick_apply_fiberflat,quick_compute_fiberflat
+from desispec.quickproc.util import parse_fibers
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('-p','--psf', type = str, default = None, required = True,
+                    help = 'path to psf fits file to get the trace coordinates')
+parser.add_argument('-i','--image', type = str, default = None, required = True,
+                    help = 'path to image fits file (either preprocessed or raw image)')
+parser.add_argument('-o','--outframe', type = str, default = None, required = False,
+                    help = 'path to output qframe file')
+parser.add_argument('--fibers', type=str, default = None, required = False,
+                    help = 'defines from_to which fiber to work on. (ex: --fibers=50:60,4 means that only fibers 4, and fibers from 50 to 60 (excluded) will be extracted)')
+parser.add_argument('--width', type=int, default=7, required=False,
+                    help = 'extraction line width')
+parser.add_argument('--plot', action='store_true',
+                    help = 'plot result')
+parser.add_argument('--compute-fiberflat', type = str, default = None, required = False,
+                    help = 'compute flat and save it to this file')
+
+parser.add_argument('--fiberflat', type = str, default = None, required = False,
+                    help = 'use this fiberflat file')
+
+log  = get_logger()
+args = parser.parse_args()
+
+tset    = read_xytraceset(args.psf)
+image   = read_image(args.image)
+fibers  = parse_fibers(args.fibers)
+qframe  = boxcar_extraction(tset,image,fibers=fibers,width=args.width)
+ 
+if fibers is None : 
+    fibers = qframe.flux.shape[0]
+
+if args.compute_fiberflat is not None :
+    qflat = quick_compute_fiberflat(qframe)
+    write_qframe(args.compute_fiberflat,qflat)
+    log.info("wrote {}".format(args.compute_fiberflat))
+    
+if args.fiberflat :
+    log.info("applying fiber flat {}".format(args.fiberflat))
+    flat = read_qframe(args.fiberflat)
+    quick_apply_fiberflat(qframe,flat)
+    
+if args.outframe is not None :
+    write_qframe(args.outframe,qframe)
+    log.info("wrote {}".format(args.outframe))
+
+if args.plot :
+    log.info("plotting {} spectra".format(qframe.wave.shape[0]))
+    
+    import matplotlib.pyplot as plt
+    fig = plt.figure()
+    for i in range(qframe.wave.shape[0]) :
+        plt.plot(qframe.wave[i],qframe.flux[i])
+    plt.grid()
+    plt.xlabel("wavelength")
+    plt.ylabel("flux")
+    plt.show()
