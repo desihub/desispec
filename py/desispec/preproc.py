@@ -240,8 +240,9 @@ def read_ccd_calibration(header, primary_header, filename=None) :
 
     if filename is None :
         if not "DESI_CCD_CALIBRATION_DATA" in os.environ :
-            log.error("Need environment variable DESI_CCD_CALIBRATION_DATA to access to the CCD calibration data")
-            raise RuntimeError("Need environment variable DESI_CCD_CALIBRATION_DATA to access to the CCD calibration data")
+            log.warning("Need environment variable DESI_CCD_CALIBRATION_DATA to access to the CCD calibration data, returning empty dict")
+            return dict()
+            
         filename = os.path.join(os.environ["DESI_CCD_CALIBRATION_DATA"],"ccd_calibration.yaml")
         
     if not os.path.isfile(filename) :
