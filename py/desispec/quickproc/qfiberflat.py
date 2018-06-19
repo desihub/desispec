@@ -6,7 +6,13 @@ from desiutil.log import get_logger
 from desispec.linalg import spline_fit
 from desispec.quickproc.qframe import QFrame
 
-def quick_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.5,max_flat_uncertainty=0.1,spline_res=10.) :    
+def quick_apply_fiberflat(qframe,qflat) :
+    ii=(qflat.flux!=0)
+    qframe.flux[ii] /= qflat.flux[ii]
+    qframe.ivar[ii] *= qflat.flux[ii]**2
+    qframe.ivar[(qflat.flux<=0)|(qflat.ivar==0)] = 0.
+    
+def quick_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.5,max_flat_uncertainty=0.1,spline_res=10.) :    
     """
     Fast estimation of fiberflat
     """
@@ -18,9 +24,13 @@ def quick_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.5,max_flat_uncertain
     twave=np.mean(qframe.wave,axis=0)
     tflux=np.zeros(qframe.flux.shape)
     tivar=np.zeros(qframe.flux.shape)
+
+    if qframe.mask is not None :
+        qframe.ivar *= (qframe.mask==0)
     
     for i in range(qframe.flux.shape[0]) :
-        tflux[i]=np.interp(twave,qframe.wave[i],qframe.flux[i])
+        jj=(qframe.ivar[i]>0)
+        tflux[i]=np.interp(twave,qframe.wave[i,jj],qframe.flux[i,jj])
    
     # iterative loop to absorb constant term in fiber (should have more parameters)
     
