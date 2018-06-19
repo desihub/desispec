@@ -37,7 +37,7 @@ parser.add_argument('--fiberflat', type = str, default = None, required = False,
                     help = 'use this fiberflat file')
 parser.add_argument('--skysub', action='store_true',
                     help = 'perform as simple sky subtraction')
-parser.add_argument('-f','--fibermap', type = str, default = None, required = True,
+parser.add_argument('-f','--fibermap', type = str, default = None, required = False,
                     help = 'path to fibermap file')
 
 t0   = time.time()
@@ -46,14 +46,16 @@ args = parser.parse_args()
 
 tset    = read_xytraceset(args.psf)
 image   = read_image(args.image)
+
 fibers  = parse_fibers(args.fibers)
-qframe  = boxcar_extraction(tset,image,fibers=fibers,width=args.width)
 
 # add fibermap
 if args.fibermap :
     fibermap = read_fibermap(args.fibermap)
-    indices = np.arange(fibermap["FIBER"].size)[np.in1d(fibermap["FIBER"],qframe.fibers)]
-    qframe.fibermap = fibermap[:][indices]
+else :
+    fibermap = None
+
+qframe  = boxcar_extraction(tset,image,fibers=fibers,width=args.width, fibermap=fibermap)
 
 if fibers is None : 
     fibers = qframe.flux.shape[0]

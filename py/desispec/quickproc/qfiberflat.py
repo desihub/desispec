@@ -19,7 +19,7 @@ def quick_apply_fiberflat(qframe,qflat) :
         for j in range(qframe.flux.shape[0]) :
             k=np.where(qflat.fibers==qframe.fibers[j])[0]
             if k.size != 1 :
-                log.Error("No fiber {} in flat".format(qframe.fibers[j]))
+                log.error("No fiber {} in flat".format(qframe.fibers[j]))
                 raise ValueError("No fiber {} in flat".format(qframe.fibers[j]))
             k=k[0]
             ii=(qflat.flux[k]!=0)
@@ -107,9 +107,14 @@ def quick_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.5,max_flat_u
         tflux[fiber,:valid[0]]    = 1.
         tflux[fiber,valid[-1]+1:] = 1.
         tivar[fiber,tivar[fiber]<1./max_flat_uncertainty**2]=0.
+
+
+    
+
         
     t1=time.time()
     log.info(" done in {:3.1f} sec".format(t1-t0))
     
-    return QFrame(qframe.wave, tflux, tivar, mask=None, fibers=qframe.fibers)
+    
+    return QFrame(qframe.wave, tflux, tivar, mask=None, fibers=qframe.fibers, fibermap=qframe.fibermap)
 

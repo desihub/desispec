@@ -4,10 +4,10 @@ from numpy.polynomial.legendre import legval
 import numba
 
 from desiutil.log import get_logger
-from ..xytraceset import XYTraceSet
-from ..image import Image
-#from specter.util import legval_numba
-from .qframe import QFrame
+from desispec.xytraceset import XYTraceSet
+from desispec.image import Image
+from desispec.io.fibermap import empty_fibermap
+from desispec.quickproc.qframe import QFrame
 
 
 @numba.jit
@@ -32,7 +32,7 @@ def numba_extract(image_flux,image_var,x,hw=3) :
 
 
 
-def boxcar_extraction(xytraceset, image, fibers=None, width=7) :    
+def boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :    
     """
     Fast boxcar extraction of spectra from a preprocessed image and a trace set
     
@@ -43,7 +43,7 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7) :
     Optional:   
         fibers : 1D np.array of int (default is all fibers, the first fiber is always = 0)
         width  : extraction boxcar width, default is 7
-
+        fibermap : table
     Returns:
         QFrame object
     """
@@ -57,9 +57,19 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7) :
     xcoef   = xytraceset.x_vs_wave_traceset._coeff 
     ycoef   = xytraceset.y_vs_wave_traceset._coeff 
     
-    if fibers is None :
-        fibers = np.arange(xcoef.shape[0])
+    spectrograph = 0
+    if "CAMERA" in image.meta :
+        camera=image.meta["CAMERA"].strip()
+        spectrograph = int(camera[-1])
+        log.info("camera='{}' -> spectrograph='{}'. I AM USING THIS TO DEFINE THE FIBER NUMBER.".format(camera,spectrograph))
+        log.warning("ASSUMES 500 FIBERS PER CAMERA TO DEFINE THE FIBER NUMBERS")
+    allfibers = np.arange(xcoef.shape[0])+500*spectrograph
     
+    if fibers is None :
+        fibers = allfibers
+
+    
+
     #log.info("wavelength range : [%f,%f]"%(wavemin,wavemax))
     
     if image.mask is not None :
@@ -91,8 +101,8 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7) :
     
     for f,fiber in enumerate(fibers) :
         log.debug("extracting fiber #%03d"%fiber)
-        ty = legval(rwave, ycoef[fiber])
-        tx = legval(rwave, xcoef[fiber])
+        ty = legval(rwave, ycoef[f])
+        tx = legval(rwave, xcoef[f])
         frame_wave[f] = np.interp(y,ty,twave)
         x_of_y        = np.interp(y,ty,tx)        
         frame_flux[f],frame_ivar[f] = numba_extract(image.pix,var,x_of_y,hw)
@@ -100,4 +110,12 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7) :
     t1=time.time()
     log.info(" done {} fibers in {:3.1f} sec".format(len(fibers),t1-t0))
     
-    return QFrame(frame_wave, frame_flux, frame_ivar, mask=None, fibers=fibers, meta=image.meta)
+    if fibermap is None: 
+        log.warning("setting up a fibermap to save the FIBER identifiers")
+        fibermap = empty_fibermap(fibers.size)
+        fibermap["FIBER"] = fibers
+    else :        
+        indices = np.arange(fibermap["FIBER"].size)[np.in1d(fibermap["FIBER"],fibers)]
+        fibermap = fibermap[:][indices]
+            
+    return QFrame(frame_wave, frame_flux, frame_ivar, mask=None, fibers=fibers, meta=image.meta, fibermap=fibermap)

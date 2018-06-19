@@ -113,10 +113,13 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
     else:
         mask = None   #- let the Frame object create the default mask
         
+    
     if 'FIBERMAP' in fx:
         fibermap = fx['FIBERMAP'].data
+        fibers   = fibermap['FIBER']
     else:
         fibermap = None
+        fibers = None
         
     fx.close()
     
@@ -127,9 +130,11 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
             mask = mask[0:nspec]
         if fibermap is not None:
             fibermap = fibermap[:][0:nspec]
+        if fibers is not None:
+            fibers = fibers[:][0:nspec]
     
     # return flux,ivar,wave,resolution_data, hdr
-    qframe = QFrame(wave, flux, ivar, mask, meta=hdr, fibermap=fibermap)
+    qframe = QFrame(wave, flux, ivar, mask, meta=hdr, fibermap=fibermap, fibers=fibers)
     
     # Return
     return qframe

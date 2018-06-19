@@ -33,7 +33,8 @@ def quick_sky_subtraction(qframe) :
     
     sky  = np.median(tflux[skyfibers],axis=0)
     for i in range(qframe.flux.shape[0]) :
-        qframe.flux[i] -= np.interp(qframe.wave[i],twave,sky)
+        jj=(qframe.flux[i]!=0)
+        qframe.flux[i,jj] -= np.interp(qframe.wave[i,jj],twave,sky)
     
     t1=time.time()
     log.info(" done in {:3.1f} sec".format(t1-t0))
