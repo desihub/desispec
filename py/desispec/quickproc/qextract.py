@@ -93,7 +93,7 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :
     hw = width//2
     
     
-    twave=np.linspace(wavemin-15., wavemax+15., n0//4) # this number of bins n0//p is calibrated to give a negligible difference of wavelength precision
+    twave=np.linspace(wavemin, wavemax, n0//4) # this number of bins n0//p is calibrated to give a negligible difference of wavelength precision
     rwave=(twave-wavemin)/(wavemax-wavemin)*2-1.
     y=np.arange(n0).astype(float)
     
@@ -105,6 +105,14 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :
         tx = legval(rwave, xcoef[f])
         frame_wave[f] = np.interp(y,ty,twave)
         x_of_y        = np.interp(y,ty,tx)        
+        
+        i=np.where(y<ty[0])[0]
+        if i.size>0 : # need extrapolation
+            frame_wave[f,i] = twave[0]+(twave[1]-twave[0])/(ty[1]-ty[0])*(y[i]-ty[0])
+        i=np.where(y>ty[-1])[0]
+        if i.size>0 : # need extrapolation
+            frame_wave[f,i] = twave[-1]+(twave[-2]-twave[-1])/(ty[-2]-ty[-1])*(y[i]-ty[-1])
+                
         frame_flux[f],frame_ivar[f] = numba_extract(image.pix,var,x_of_y,hw)
         
     t1=time.time()
