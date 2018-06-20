@@ -221,6 +221,9 @@ def _unweighted_resample(output_x,input_x,input_flux_density, extrapolate=False)
     trapeze_centers=(tx[1:]+tx[:-1])/2.
     binsize = bins[1:]-bins[:-1]
     
+    if np.min(binsize)<=0  :
+        raise ValueError("Minimum bin size = {}".format(np.min(binsize)))
+    
     if extrapolate :
         of = np.histogram(trapeze_centers, bins=bins, weights=trapeze_integrals)[0] / binsize
     else : # only keep trapezes inside input array (including assumed input bin edges) to preserve flux and ivar       
