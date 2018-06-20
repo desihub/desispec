@@ -93,7 +93,7 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :
     hw = width//2
     
     
-    twave=np.linspace(wavemin, wavemax, n0//4) # this number of bins n0//p is calibrated to give a negligible difference of wavelength precision
+    twave=np.linspace(wavemin-15., wavemax+15., n0//4) # this number of bins n0//p is calibrated to give a negligible difference of wavelength precision
     rwave=(twave-wavemin)/(wavemax-wavemin)*2-1.
     y=np.arange(n0).astype(float)
     
