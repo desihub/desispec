@@ -104,6 +104,8 @@ class MonitoringAlg:
                 metrics[QARESULTKEY]='ALARM'
         else:
             self.m_log.warning("No Reference checking for QA {}".format(self.name))
+
+        self.m_log.info("{}: {}".format(QARESULTKEY, metrics[QARESULTKEY]))
         return res
     def run(self,*argv,**kwargs):
         pass
