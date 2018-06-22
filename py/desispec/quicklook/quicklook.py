@@ -384,7 +384,7 @@ def runpipeline(pl,convdict,conf):
     #schemaMerger.writeToFile(destFile)
     #log.info("Wrote merged QA file {}".format(destFile))
     schemaMerger.writeTojsonFile(destFile)
-    log.info("Wrote merged QA file {}".format(destFile.split('.yaml')[0]+'.json'))
+    log.info("Wrote merged QA file {}".format(destFile))
     if isinstance(inp,tuple):
        return inp[0]
     else:

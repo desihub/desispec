@@ -323,7 +323,7 @@ class QL_QAMerger:
         #with open(fileName,'w') as f:
             #f.write(self.getYaml())
     def writeTojsonFile(self,fileName):
-        g=open(fileName.split('.yaml')[0]+'.json',"w")
+        g=open(fileName,'w')
         myDict = yamlify(self.__schema)
         #reOrderDict(myDict)
         
