@@ -26,8 +26,6 @@ class MonitoringAlg:
         cargs=self.config['kwargs']
         params=cargs['param']
 
-        #print(params,"MA1")
-
         metrics=res["METRICS"] if 'METRICS' in res else None
         if metrics is None:
             metrics={}
@@ -39,8 +37,6 @@ class MonitoringAlg:
             QARESULTKEY=cargs["QASTATUSKEY"]
         if "RESULTKEY" in cargs:
             reskey=cargs["RESULTKEY"]
-
-        #print(reskey,QARESULTKEY,"MA1.5")
 
         if reskey in metrics:
             current=metrics[reskey]
@@ -59,8 +55,6 @@ class MonitoringAlg:
             #- Update PARAMS ref key
             res["PARAMS"][reskey+'_REF']=refval
 
-            #print(res,"MA2")
-
             currlist=isinstance(current,(np.ndarray,collections.Sequence))
             reflist=isinstance(refval,(np.ndarray,collections.Sequence))
             if currlist != reflist: # different types
@@ -72,8 +66,6 @@ class MonitoringAlg:
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,len(refval),len(current)))
             else: # both are scalars
                 self.__deviation=current-refval
-
-            #print(self.__deviation,"self_deviation MA 2.5")
 
         # check RANGES given in config and set QA_STATUS keyword
         # it should be a sorted overlapping list of range tuples in the form [ ((interval),QASeverity),((-1.0,1.0),QASeverity.NORMAL),(-2.0,2.0),QAStatus.WARNING)]
@@ -90,14 +82,10 @@ class MonitoringAlg:
                     val=l[1]
             return val
 
-        #print(metrics, "MA 3")
-
         if self.__deviation is not None and "RANGES" in cargs:
             self.m_log.info("QL Reference checking for QA {}".format(self.name))
             thr=cargs["RANGES"]
             metrics[QARESULTKEY]="ERROR"
-
-            #print(metrics[QARESULTKEY], "MA 3.3")
 
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
             devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
@@ -105,8 +93,6 @@ class MonitoringAlg:
             #    self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
             #    return res
             #else: #they are of the same type
-
-            #print(thrlist,devlist,"MA 4")
 
             if devlist: # if results are a list
                 if len(thr)==2: # check all results against same thresholds
@@ -116,8 +102,6 @@ class MonitoringAlg:
                     #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation]
                 #else: # each result has its own thresholds
                 #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
-
-                #print(metrics[QARESULTKEY],"inside devlist if: MA 5")
 
             else: #result is a scalar
                 metrics[QARESULTKEY]=findThr(self.__deviation,thr)

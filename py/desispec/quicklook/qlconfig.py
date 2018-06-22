@@ -45,39 +45,21 @@ class Config(object):
         if not self.flexure and "Flexure" in self.pipeline:
             self.pipeline.remove("Flexure")
         self.algorithms = self.conf["Algorithms"]
-
-        #print("ALGORITHMS ",self.algorithms)
-
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
-
-        #print("PAMODULE",self.pamodule)
-
         self.qamodule = self._palist.qamodule
-
-        #print("QAMODULE",self.qamodule)
-
-        #print("ALGORITHM KYES ",self.algorithms.keys())
         algokeys = self.algorithms.keys()
-        #print("refkeys ",self.algorithms["SkySub_QL"]["QA"].keys())
 
+        # Extract mapping of scalar/refence key names for each QA
         qaRefKeys = {}
-        #qaRefKeys = {"":"", "":"", "":"", "":"", "":"", "":"", "":"","":"","":"","":"","":""}
-        #print(qaRefKeys," 44") 
         for i in algokeys: 
-            #print("1 algokeys ",i)
-            #print("2    QAs",self.algorithms[i]["QA"].keys())
             for k in self.algorithms[i]["QA"].keys():
-                #print("3       keys ",k)
                 scalar = self.algorithms[i]["QA"][k]["SCALAR"]
-                #print("4       scalar ",self.algorithms[i]["QA"][k].keys()," ",scalar)
                 qaScalar = {k:scalar}
-                #print(qaScalar)
                 qaRefKeys[k] = scalar
-                #qaRefKeys.append(k:scalar)
-                #qaRefKeys = qaRefKeys.append(qaScalar)
-        #print("5 ",qaRefKeys) 
 
+        # Special additional parameters to read in.  
+        # RK:  For Calculate_SNR quatities, these neeed to be moved into PARAMS
         if "BoxcarExtract" in self.algorithms.keys():
             if "wavelength" in self.algorithms["BoxcarExtract"].keys():
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
@@ -95,7 +77,6 @@ class Config(object):
         self.log=qlog.getlog()
         self._qaRefKeys = qaRefKeys
         #self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
-        #print("QA REFKEYS ", self._qaRefKeys)
 
     @property
     def mode(self):
@@ -332,26 +313,28 @@ class Config(object):
             for PA in self.palist:
                 if qa in self.qalist[PA]:
                     params[qa]=self.algorithms[PA]['QA'][qa]['PARAMS']
-
         else:
-            if qa == 'Count_Pixels':
-                params[qa]= dict(
-                                CUTLO = 100,
-                                 CUTHI = 500
-                                )
-            elif qa == 'CountSpectralBins':
-                params[qa]= dict(
-                                 CUTLO = 100,   # low threshold for number of counts
-                                 CUTMED = 250,
-                                 CUTHI = 500
-                                )
-            elif qa == 'Sky_Residual':
-                params[qa]= dict(
-                                 PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-                                 PER_RESID=95.,   # Percentile for residual distribution
-                                 BIN_SZ=0.1,) # Bin size for residual/sigma histogram
-            else:
-                params[qa]= dict()
+            # RK:  Need to settle optimal error handling in cases like this.
+            raise qlexceptions.ParameterException("Run time PARAMs not provided for QA")
+
+            #if qa == 'Count_Pixels':
+            #    params[qa]= dict(
+            #                    CUTLO = 100,
+            #                     CUTHI = 500
+            #                    )
+            #elif qa == 'CountSpectralBins':
+            #    params[qa]= dict(
+            #                     CUTLO = 100,   # low threshold for number of counts
+            #                     CUTMED = 250,
+            #                     CUTHI = 500
+            #                    )
+            #elif qa == 'Sky_Residual':
+            #    params[qa]= dict(
+            #                     PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+            #                     PER_RESID=95.,   # Percentile for residual distribution
+            #                     BIN_SZ=0.1,) # Bin size for residual/sigma histogram
+            #else:
+            #    params[qa]= dict()
         
         return params[qa]
 
