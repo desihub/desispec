@@ -94,4 +94,4 @@ Algorithms:
                 #- If Residual_Cut is none:
                 #- Cut SNR residual values outside given range for plotting
                 Sigma_Cut: 2.0
-                PARAMS: {FIDSNR_NORMAL_RANGE: [-0.1, 0.1], FIDSNR_WARN_RANGE: [-0.2, 0.2], FIDMAG: 22.}
+                PARAMS: {FIDSNR_NORMAL_RANGE: [-11, 11.], FIDSNR_WARN_RANGE: [-12, 12.], FIDMAG: 22.}

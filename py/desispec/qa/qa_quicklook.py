@@ -1908,9 +1908,9 @@ class Integrate_Spec(MonitoringAlg):
             if mag_avg_tgt[i] != np.nan:
                 magdiff=mag_fib-mag_avg_tgt[i]
             else:
-                magdiff=nan
+                magdiff=np.nan
             magdiff_avg.append(magdiff)
-
+            
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
@@ -1923,7 +1923,7 @@ class Integrate_Spec(MonitoringAlg):
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
 
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":np.nan_to_num(magdiff_avg)}
 
         if qlf:
             qlf_post(retval) 
