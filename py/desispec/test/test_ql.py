@@ -66,15 +66,17 @@ class TestQL(unittest.TestCase):
         cls.framefile = 'frame-'+id+'.fits'
 
         cls.testDir = testDir = os.path.join(os.environ['HOME'],'ql_test_io')
-        dataDir = os.path.join(testDir,night)
+        datanightDir = os.path.join(testDir,night)
+        dataDir = os.path.join(datanightDir,'{:08d}'.format(expid))
         expDir = os.path.join(testDir,'exposures')
-        nightDir = os.path.join(expDir,night)
-        reduxDir = os.path.join(nightDir,'{:08d}'.format(expid))
+        expnightDir = os.path.join(expDir,night)
+        reduxDir = os.path.join(expnightDir,'{:08d}'.format(expid))
         if not os.path.exists(testDir):
             os.makedirs(testDir)
+            os.makedirs(datanightDir)
             os.makedirs(dataDir)
             os.makedirs(expDir)
-            os.makedirs(nightDir)
+            os.makedirs(expnightDir)
             os.makedirs(reduxDir)
 
         #- Write dummy configuration and input files to test merging
