@@ -164,6 +164,9 @@ def fibermap_new2old(fibermap):
     the old format.  After all code has been converted to use the new
     format, this will be removed.
     '''
+    from desiutil.brick import Bricks
+    brickmap = Bricks()
+
     fm = fibermap.copy()
     n = len(fm)
 
