@@ -14,9 +14,9 @@ WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
 #- Exposure ID for Reference Template
-TemplateExpid: 3900
+TemplateExpid: 3577
 #- Night for Reference Template
-TemplateNight: 20191017
+TemplateNight: 20191001
 #-Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file
@@ -87,7 +87,7 @@ Algorithms:
             Sky_Residual:
                 PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, RESID_NORMAL_RANGE: [-5.0, 5.0], RESID_WARN_RANGE: [-10.0, 10.0]}
             Integrate_Spec:
-                PARAMS: {DELTAMAG_NORMAL_RANGE: [-0.5, 0.5], DELTAMAG_WARN_RANGE: [-1.0, 1.0]}
+                PARAMS: {DELTAMAG_NORMAL_RANGE: [-2.0, 2.0], DELTAMAG_WARN_RANGE: [-4.0, 4.0]}
             Calculate_SNR:
                 #- Set boundaries for SNR residual values
                 Residual_Cut: 0.2

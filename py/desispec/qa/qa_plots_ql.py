@@ -418,7 +418,7 @@ def plot_sky_peaks(qa_dict,outfile):
     expid=qa_dict["EXPID"]
     camera=qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    sumcount=qa_dict["METRICS"]["PEAKCOUNT"]
+    sumcount=qa_dict["METRICS"]["PEAKCOUNT_FIB"]
     fiber=np.arange(sumcount.shape[0])
     skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_NOISE"]
     fig=plt.figure()

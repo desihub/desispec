@@ -1484,7 +1484,9 @@ class Sky_Rband(MonitoringAlg):
    
         filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
         mags=frame.fibermap['MAG']
-        
+        import sys
+        print(filt,str(filt))
+        sys.exit()
         if (filt == 'r'):
             
             flux=frame.flux
@@ -1552,7 +1554,7 @@ class Sky_Peaks(MonitoringAlg):
             name="SKYPEAK"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT_MED_SKY"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT"
         status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
@@ -1628,14 +1630,20 @@ class Sky_Peaks(MonitoringAlg):
             param = desi_params['qa']['skypeaks']['PARAMS']
 
         # Run
-        nspec_counts, sky_counts = sky_peaks(param, frame)
-        rms_nspec = qalib.getrms(nspec_counts)
-        rms_skyspec = qalib.getrms(sky_counts)
-        sumcount_med_sky=[]
+        
+        #SE: it is deactivated now but remember that the order of targets in tgt array here is: tgtlist = ['STD','QSO','ELG','LRG','BGS','MWS_STAR']
+        #nspec_counts, sky_counts, tgt_counts, tgt_counts_rms = sky_peaks(param, frame)
+        nspec_counts, sky_counts= sky_peaks(param, frame)
+        rms_nspec = np.std(nspec_counts)#qalib.getrms(nspec_counts)
+        rms_skyspec = np.std(sky_counts)#qalib.getrms(sky_counts)  
+        
+        
+        sumcount_med_sky=np.median(sky_counts)
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec}
+        retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
+
 
         if qlf:
             qlf_post(retval)
