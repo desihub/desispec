@@ -165,10 +165,30 @@ def fibermap_new2old(fibermap):
     format, this will be removed.
     '''
     from desiutil.brick import Bricks
-    brickmap = Bricks()
+    from desitarget.targetmask import desi_mask
 
+    brickmap = Bricks()
     fm = fibermap.copy()
     n = len(fm)
+
+    isMWS = (fm['DESI_TARGET'] & desi_mask.MWS_ANY) != 0
+    fm['OBJTYPE'][isMWS] = 'MWS_STAR'
+    isBGS = (fm['DESI_TARGET'] & desi_mask.BGS_ANY) != 0
+    fm['OBJTYPE'][isBGS] = 'BGS'
+    isSTD = (fm['DESI_TARGET'] & desi_mask.mask('STD_FSTAR|STD_WD|STD_BRIGHT')) != 0
+    fm['OBJTYPE'][isSTD] = 'STD'
+    isELG = (fm['DESI_TARGET'] & desi_mask.ELG) != 0
+    fm['OBJTYPE'][isELG] = 'ELG'
+    isLRG = (fm['DESI_TARGET'] & desi_mask.LRG) != 0
+    fm['OBJTYPE'][isLRG] = 'LRG'
+    isQSO = (fm['DESI_TARGET'] & desi_mask.QSO) != 0
+    fm['OBJTYPE'][isQSO] = 'QSO'
+    
+    if ('FLAVOR' in fm.meta):
+        if fm.meta['FLAVOR'] == 'arc':
+            fm['OBJTYPE'] = 'ARC'
+        elif fm.meta['FLAVOR'] == 'flat':
+            fm['OBJTYPE'] = 'FLAT'
 
     fm.rename_column('TARGET_RA', 'RA_TARGET')
     fm.rename_column('TARGET_DEC', 'DEC_TARGET')
@@ -184,11 +204,11 @@ def fibermap_new2old(fibermap):
     fm['MAG'][:,4] = 22.5 - 2.5*np.log10(fm['FLUX_W2'])
 
     fm['FILTER'] = np.zeros((n,5), dtype=(str, 10))
-    fm['FILTER'][:,0] = 'decam-r'
-    fm['FILTER'][:,1] = 'decam-g'
-    fm['FILTER'][:,2] = 'decam-z'
-    fm['FILTER'][:,3] = 'wise-w1'
-    fm['FILTER'][:,4] = 'wise-w2'
+    fm['FILTER'][:,0] = 'DECAM_G'
+    fm['FILTER'][:,1] = 'DECAM_R'
+    fm['FILTER'][:,2] = 'DECAM_Z'
+    fm['FILTER'][:,3] = 'WISE_W1'
+    fm['FILTER'][:,4] = 'WISE_W2'
 
     fm['POSITIONER'] = fm['LOCATION'].astype('i8')
     fm.rename_column('LAMBDA_REF', 'LAMBDAREF')
