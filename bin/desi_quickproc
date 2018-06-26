@@ -11,7 +11,7 @@ import numpy as np
 import astropy.io.fits as fits
 from desiutil.log import get_logger
 from desispec.util import runcmd
-from desispec.io import read_raw,read_image,read_fibermap,write_image
+from desispec.io import read_raw,read_image,read_fibermap,write_image,write_fiberflat,read_fiberflat
 from desispec.io.xytraceset import read_xytraceset
 from desispec.preproc import read_ccd_calibration
 from desispec.quickproc.io import read_qframe,write_qframe
@@ -120,13 +120,14 @@ if fibers is None :
     fibers = qframe.flux.shape[0]
 
 if args.compute_fiberflat is not None :
-    qflat = quick_compute_fiberflat(qframe)
-    write_qframe(args.compute_fiberflat,qflat)
+    fiberflat = quick_compute_fiberflat(qframe)
+    #write_qframe(args.compute_fiberflat,qflat)
+    write_fiberflat(args.compute_fiberflat,fiberflat,header=qframe.meta)
     log.info("wrote {}".format(args.compute_fiberflat))
     
 if args.fiberflat :
     log.info("applying fiber flat {}".format(args.fiberflat))
-    flat = read_qframe(args.fiberflat)
+    flat = read_fiberflat(args.fiberflat)
     quick_apply_fiberflat(qframe,flat)
 
 if args.skysub :
@@ -146,7 +147,8 @@ if args.plot :
     import matplotlib.pyplot as plt
     fig = plt.figure()
     for i in range(qframe.wave.shape[0]) :
-        plt.plot(qframe.wave[i],qframe.flux[i])
+        j=(qframe.ivar[i]>0)
+        plt.plot(qframe.wave[i,j],qframe.flux[i,j])
     plt.grid()
     plt.xlabel("wavelength")
     plt.ylabel("flux")
