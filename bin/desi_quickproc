@@ -47,8 +47,10 @@ parser.add_argument('--plot', action='store_true',
                     help = 'plot result')
 parser.add_argument('--compute-fiberflat', type = str, default = None, required = False,
                     help = 'compute flat and save it to this file')
-parser.add_argument('--fiberflat', type = str, default = None, required = False,
-                    help = 'use this fiberflat file')
+parser.add_argument('--apply-fiberflat', action='store_true',
+                    help = 'apply fiber flat field (use default from $DESI_CCD_CALIBRATION_DATA if input-fiberflat not provide)')
+parser.add_argument('--input-fiberflat', type = str, default = None, required = False,
+                    help = 'use this fiberflat file and apply it')
 parser.add_argument('--skysub', action='store_true',
                     help = 'perform as simple sky subtraction')
 
@@ -125,9 +127,19 @@ if args.compute_fiberflat is not None :
     write_fiberflat(args.compute_fiberflat,fiberflat,header=qframe.meta)
     log.info("wrote {}".format(args.compute_fiberflat))
     
-if args.fiberflat :
-    log.info("applying fiber flat {}".format(args.fiberflat))
-    flat = read_fiberflat(args.fiberflat)
+if args.apply_fiberflat or args.input_fiberflat :
+
+    if args.input_fiberflat is None :
+        if "DESI_CCD_CALIBRATION_DATA" not in os.environ :
+            print("ERROR: Either specify the path to a fiberflat with the '--input-fiberflat' option or set the DESI_CCD_CALIBRATION_DATA environment variable")
+            print("Type 'desi_quickproc --help' for more options")
+            sys.exit(12)
+        log.info("Choosing fiberflat using $DESI_CCD_CALIBRATION_DATA/ccd_calibration.yaml and the image header")
+        calibration_data = read_ccd_calibration(image.meta,primary_header)
+        args.input_fiberflat = os.path.join(os.environ["DESI_CCD_CALIBRATION_DATA"],calibration_data["FIBERFLAT"])
+        
+    log.info("applying fiber flat {}".format(args.input_fiberflat))
+    flat = read_fiberflat(args.input_fiberflat)
     quick_apply_fiberflat(qframe,flat)
 
 if args.skysub :
