@@ -111,7 +111,6 @@ if args.shifted_psf :
 tset    = read_xytraceset(args.psf)
 
 
-fibers  = parse_fibers(args.fibers)
 
 # add fibermap
 if args.fibermap :
@@ -119,10 +118,8 @@ if args.fibermap :
 else :
     fibermap = None
 
-qframe  = boxcar_extraction(tset,image,fibers=fibers,width=args.width, fibermap=fibermap)
+qframe  = boxcar_extraction(tset,image,width=args.width, fibermap=fibermap)
 
-if fibers is None : 
-    fibers = qframe.flux.shape[0]
 
 if args.compute_fiberflat is not None :
     fiberflat = quick_compute_fiberflat(qframe)
@@ -149,7 +146,14 @@ if args.apply_fiberflat or args.input_fiberflat :
 if args.skysub :
     log.info("sky subtraction")
     quick_sky_subtraction(qframe)
-    
+
+fibers  = parse_fibers(args.fibers)
+if fibers is None : 
+    fibers = qframe.flux.shape[0]
+else :
+    ii = np.arange(qframe.fibers.size)[np.in1d(qframe.fibers,fibers)]
+    qframe = qframe[ii]
+
 if args.outframe is not None :
     write_qframe(args.outframe,qframe)
     log.info("wrote {}".format(args.outframe))
