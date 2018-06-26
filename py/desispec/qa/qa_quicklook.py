@@ -1484,9 +1484,7 @@ class Sky_Rband(MonitoringAlg):
    
         filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
         mags=frame.fibermap['MAG']
-        import sys
-        print(filt,str(filt))
-        sys.exit()
+
         if (filt == 'r'):
             
             flux=frame.flux

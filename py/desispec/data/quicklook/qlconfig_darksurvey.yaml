@@ -14,9 +14,9 @@ WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
 #- Night for Reference Template
-TemplateNight: 20191017
+TemplateNight: 20191001
 #- Exposure ID for Reference Template
-TemplateExpid: 3900
+TemplateExpid: 3577
 #- Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file
@@ -37,7 +37,7 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {BIAS_NORMAL_RANGE: [-100.0, 100.0], BIAS_WARN_RANGE: [-200.0, 200.0]}
             Get_RMS:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
             Count_Pixels:

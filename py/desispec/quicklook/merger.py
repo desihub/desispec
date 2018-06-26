@@ -61,7 +61,7 @@ def modify_tasks(myDict):
     myDict = transferKEY(myDict, "PARAMS", "FLEXURE", "BOXCAREXTRACT", keyList)    
 
     ################    
-    keyList = ["PEAKCOUNT", "PEAKCOUNT_MED_SKY", "PEAKCOUNT_NOISE", "PEAKCOUNT_STATUS", "SKYCONT", "SKYCONT_FIBER", "SKYCONT_STATUS", "Sky_Rband", "Sky_Rflux_diff", "Sky_fib_Rband"]
+    keyList = ["PEAKCOUNT", "PEAKCOUNT_FIB", "PEAKCOUNT_NOISE", "PEAKCOUNT_STATUS", "SKYCONT", "SKYCONT_FIBER", "SKYCONT_STATUS", "SKYRBAND", "SKY_RFLUX_DIFF", "SKY_FIB_RBAND"]
     myDict = transferKEY(myDict, "METRICS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
 
     ################      
