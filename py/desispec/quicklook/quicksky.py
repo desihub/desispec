@@ -10,6 +10,7 @@ from desispec import util
 from desispec import frame as fr
 import scipy
 from desispec.resolution import Resolution
+from desispec.linalg import cholesky_solve
 
 def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
     """

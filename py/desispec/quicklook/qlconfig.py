@@ -21,9 +21,11 @@ class Config(object):
         Note:
         rawdata_dir and specprod_dir: if not None, overrides the standard DESI convention       
         """
-  
-        #- load the config file and extract
-        self.conf = yaml.load(open(configfile,"r"))
+
+        #- load the config file and extract command line/config information
+        with open(configfile,'r') as f:
+            self.conf = yaml.load(f)
+        f.close()
         self.night = night
         self.expid = expid
         self.camera = camera
