@@ -731,6 +731,7 @@ class Calc_XWSigma(MonitoringAlg):
         else:
             image=args[0]
 
+        flavor=kwargs['Flavor']
         fibermap=kwargs['FiberMap'] 
  
         if "paname" not in kwargs:
@@ -766,9 +767,9 @@ class Calc_XWSigma(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
  
-        return self.run_qa(fibermap,image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,flavor,image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
  
-    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,flavor,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from scipy.optimize import curve_fit
 
         retval={}
@@ -823,7 +824,7 @@ class Calc_XWSigma(MonitoringAlg):
             peak_wave.append(peak_upper)
         npeaks=len(peaks)
 
-        if fibermap["OBJTYPE"][0] == 'ARC':
+        if flavor == 'arcs':
             import desispec.psf
             psf=desispec.psf.PSF(psf)
 

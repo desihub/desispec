@@ -361,6 +361,7 @@ class TestQL_QA(unittest.TestCase):
         qa=QA.Calc_XWSigma('xwsigma',self.config)
         inp=xwimage
         qargs={}
+        qargs["Flavor"]='science'
         qargs["PSFFile"]=self.psf
         qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera

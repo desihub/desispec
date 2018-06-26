@@ -210,6 +210,7 @@ class BoxcarExtract(pas.PipelineAlg):
         if "dumpfile" in kwargs:
             dumpfile=kwargs["dumpfile"]
 
+        flavor=kwargs["Flavor"]
         psf=kwargs["PSFFile"]
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
@@ -271,18 +272,16 @@ class BoxcarExtract(pas.PipelineAlg):
         input_image.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
         input_image.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
 
-        return self.run_pa(input_image,psf
-                           ,wave,boxwidth,nspec,
-                           fibers=fibers,fibermap=fibermap,
-                           dumpfile=dumpfile,maskFile=maskFile,usesigma=usesigma,
-                           quick_resolution=quickRes)
+        return self.run_pa(input_image,flavor,psf,wave,boxwidth,nspec,
+                           fibers=fibers,fibermap=fibermap,dumpfile=dumpfile,
+                           maskFile=maskFile,usesigma=usesigma,quick_resolution=quickRes)
 
-    def run_pa(self, input_image, psf, outwave, boxwidth, nspec,
-               fibers=None, fibermap=None,dumpfile=None,
+    def run_pa(self,input_image,flavor,psf,outwave,boxwidth,nspec,
+               fibers=None,fibermap=None,dumpfile=None,
                maskFile=None,usesigma=False,quick_resolution=False):
         from desispec.boxcar import do_boxcar
         import desispec.psf
-        if fibermap['OBJTYPE'][0] == 'ARC':
+        if flavor == 'arcs':
             psf=desispec.psf.PSF(psf)
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
                                   nspec=nspec,maskFile=maskFile,usesigma=usesigma,

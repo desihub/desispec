@@ -32,6 +32,7 @@ class Config(object):
         self.rawdata_dir = rawdata_dir 
         self.specprod_dir = specprod_dir
         self.outdir = outdir
+        self.flavor = self.conf["Flavor"]
         self.dumpintermediates = self.conf["WriteIntermediatefiles"]
         self.writepreprocfile = self.conf["WritePreprocfile"]
         self.writeskymodelfile = self.conf["WriteSkyModelfile"]
@@ -146,7 +147,7 @@ class Config(object):
 
         paopt_bootcalib={'ArcLampImage':arcimg, 'FlatImage':flatimg, 'outputFile':bootfile}
 
-        paopt_extract={'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
+        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
 
         paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
 
@@ -271,6 +272,8 @@ class Config(object):
                             'qafig': qaplot, 'FiberMap': self.fibermap,
                             'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa}
+                if qa == 'Calc_XWSigma':
+                    qaopts[qa]['Flavor']=self.flavor
                 if qa == 'Calculate_SNR':
                     qaopts[qa]['rescut']=self.rescut
                     qaopts[qa]['sigmacut']=self.sigmacut
@@ -387,7 +390,6 @@ class Config(object):
         self.log.debug("Building Full Configuration")
 
         self.program = self.conf["Program"]
-        self.flavor = self.conf["Flavor"]
         self.debuglevel = self.conf["Debuglevel"]
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
@@ -510,7 +512,6 @@ class Palist(object):
         flavor: only needed if new list is to be built.
         mode: online offline?
         """
-        self.flavor=flavor
         self.mode=mode
         self.thislist=thislist
         self.algorithms=algorithms
