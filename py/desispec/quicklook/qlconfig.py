@@ -23,16 +23,9 @@ class Config(object):
         """
 
         #- load the config file and extract command line/config information
-        dirname = os.path.dirname(configfile)
-        path_config = os.path.join(dirname, "lock.lck")
-
-        if not os.path.isfile(path_config):
-            open(path_config, 'a').close()
-
-        with open(path_config, "r") as config:
-            conf = open(configfile, "r")
-            self.conf = yaml.load(conf)
-            conf.close()
+        with open(configfile,'r') as cfile:
+            self.conf = yaml.load(cfile)
+            cfile.close()
         self.night = night
         self.expid = expid
         self.camera = camera
