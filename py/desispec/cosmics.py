@@ -191,9 +191,8 @@ def reject_cosmic_rays_ala_sdss_numba(pix,ivar,selection,psf_gradients,nsig,cfud
                 
                 ivar0=ivar[i0-d0,i1-d1]
                 ivar1=ivar[i0+d0,i1+d1]
-                nvalid=(ivar0>0)+(ivar1>0)
-                #if nvalid==0 : continue
-                nvalidinv=(nvalid>0)/(nvalid+(nvalid==0))
+                nvalid=int(ivar0>0)+int(ivar1>0)
+                nvalidinv=float(nvalid>0)/(nvalid+(nvalid==0))
                 back=((ivar0>0)*pix[i0-d0,i1-d1]+(ivar1>0)*pix[i0+d0,i1+d1])*nvalidinv
                 sigmaback=np.sqrt((ivar0>0)/(ivar0+(ivar0==0))+(ivar1>0)/(ivar1+(ivar1==0)))*nvalidinv
                 
