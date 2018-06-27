@@ -1891,7 +1891,7 @@ class Integrate_Spec(MonitoringAlg):
         mag_avg_tgt=[]
         integ_avg_sky=[]
 
-        objtypes=list(set(objects))
+        objtypes=sorted(list(set(objects)))
         if "SKY" in objtypes: objtypes.remove("SKY")
         starfibers=None
         for T in objtypes:
