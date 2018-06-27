@@ -190,7 +190,12 @@ def _unweighted_resample(output_x,input_x,input_flux_density, extrapolate=False)
     
     # add the edges of the first and last input bins
     # to the temporary node array if inside array
-    ixmin=1.5*ix[0]-0.5*ix[1]  # = ix[0]-(ix[1]-ix[0])/2
+    try:
+        ixmin=1.5*ix[0]-0.5*ix[1]  # = ix[0]-(ix[1]-ix[0])/2
+    except IndexError:
+        if ix.size<=1: print('input_x has a size of {}'.format(ix.size))
+        raise Exception
+
     if ixmin>np.min(tx) :
         y_ixmin=1.5*iy[0]-0.5*iy[1] # extrapolation using slope (and not constant) for this point to preserve integral in first input bin
         tx=np.append(tx,ixmin)
