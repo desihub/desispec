@@ -62,7 +62,7 @@ def parse_delivery(*args):
     from argparse import ArgumentParser
     desc = "Script called by DTS when files are delivered."
     prsr = ArgumentParser(prog=os.path.basename(argv[0]), description=desc)
-    prsr.add_argument('-n', '--nersc', default='edison', metavar='NERSC_HOST'
+    prsr.add_argument('-n', '--nersc', default='edison', metavar='NERSC_HOST',
                       help="Run a script on this NERSC system (default %(default)s).")
     prsr.add_argument('-p', '--prefix', metavar='PREFIX', action='append',
                       help="Prepend one or more commands to the night command.")
