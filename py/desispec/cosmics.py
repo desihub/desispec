@@ -360,6 +360,8 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
     tivar=img.ivar*(img.mask==0)*(img.ivar>0)
     
     
+
+    # those gradients have been computed using the code desi_compute_psf_gradients
     band=img.camera[0].lower()
     if band == 'b':
         psf_gradients=np.array([0.366247,0.391422,0.172965,0.184552])
