@@ -35,7 +35,7 @@ while /bin/true; do
             fi
             if [[ "${status}" == "0" ]]; then
                 [[ ! -d ${dest}/${night} ]] && \
-                    sprun /bin/mkdir -p ${staging}/${night}
+                    sprun /bin/mkdir -p ${dest}/${night}
                 [[ ! -L ${dest}/${night}/${exposure} ]] && \
                     sprun /bin/ln -s ${staging}/${night}/${exposure} ${dest}/${night}/${exposure}
             else
