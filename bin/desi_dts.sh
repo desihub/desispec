@@ -45,5 +45,12 @@ while /bin/true; do
     else
         echo "WARNING: No links found, check connection." >> ${log}
     fi
-    sleep 10m
+    /bin/sleep 10m
 done
+#
+# TODO
+#
+# Check file permissions
+# Checksums
+# Pipeline notifications.
+#
