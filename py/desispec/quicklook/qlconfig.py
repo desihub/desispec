@@ -52,14 +52,6 @@ class Config(object):
             if "wavelength" in self.algorithms["BoxcarExtract"].keys():
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
         else: self.wavelength = None
-        if "SkySub_QL" in self.algorithms.keys():
-            if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
-                if "Residual_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
-                    self.rescut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Residual_Cut"]
-                else: self.rescut = None
-                if "Sigma_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
-                    self.sigmacut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Sigma_Cut"]
-                else: self.sigmacut = None
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
@@ -271,9 +263,6 @@ class Config(object):
                             'qafig': qaplot, 'FiberMap': self.fibermap,
                             'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa}
-                if qa == 'Calculate_SNR':
-                    qaopts[qa]['rescut']=self.rescut
-                    qaopts[qa]['sigmacut']=self.sigmacut
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir

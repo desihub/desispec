@@ -83,10 +83,5 @@ Algorithms:
             Integrate_Spec:
                 PARAMS: {DELTAMAG_NORMAL_RANGE: [-0.5, 0.5], DELTAMAG_WARN_RANGE: [-1.0, 1.0]}
             Calculate_SNR:
-                #- Set boundaries for SNR residual values
-                Residual_Cut: 0.2
-                #- If Residual_Cut is none:
-                #- Cut SNR residual values outside given range for plotting
-                Sigma_Cut: 2.0
-                PARAMS: {FIDSNR_NORMAL_RANGE: [6.5, 7.5], FIDSNR_WARN_RANGE: [6.0, 8.0], FIDMAG: 22.}
-
+                #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
+                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_NORMAL_RANGE: [-11., 11.], FIDSNR_WARN_RANGE: [-12., 12.], FIDMAG: 22.}

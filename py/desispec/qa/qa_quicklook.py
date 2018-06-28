@@ -1857,11 +1857,6 @@ class Calculate_SNR(MonitoringAlg):
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
-        if "rescut" in kwargs: rescut=kwargs["rescut"]
-        else: rescut=None
-        if "sigmacut" in kwargs: sigmacut=kwargs["sigmacut"]
-        else: sigmacut=None
-
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
         else: qlf=False
@@ -1872,9 +1867,9 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics,rescut=rescut,sigmacut=sigmacut)
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None,rescut=None,sigmacut=None):
+    def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None):
 
         #- return values
         retval={}
@@ -1928,6 +1923,8 @@ class Calculate_SNR(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
+            rescut=param["RESIDUAL_CUT"]
+            sigmacut=param["SIGMA_CUT"]
             plot.plot_SNR(retval,qafig,objlist,badfibs,fitsnr,rescut,sigmacut)
             log.debug("Output QA fig {}".format(qafig))
 
