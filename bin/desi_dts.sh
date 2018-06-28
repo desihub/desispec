@@ -28,7 +28,7 @@ while /bin/true; do
             [[ ! -d ${staging}/${night} ]] && \
                 sprun /bin/mkdir -p ${staging}/${night}
             if [[ ! -d ${staging}/${night}/${exposure} ]]; then
-                sprun /bin/rsync --verbose --no-motd
+                sprun /bin/rsync --verbose --no-motd \
                     --recursive --copy-dirlinks --times --omit-dir-times \
                     dts:${src}/${night}/${exposure}/ ${staging}/${night}/${exposure}/
                 status=$?
