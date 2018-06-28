@@ -75,33 +75,40 @@ while /bin/true; do
                 [[ ! -L ${dest}/${night}/${exposure} ]] && \
                     sprun /bin/ln -s ${staging}/${night}/${exposure} ${dest}/${night}/${exposure}
                 #
-                # Run update
+                # Is this a "realistic" exposure?
                 #
-                sprun ssh ${pipeline_host} desi_night update \
-                    --night ${night} --exposure ${exposure} \
-                    --nersc ${pipeline_host} --nersc_queue realtime \
-                    --nersc_maxnodes 25
-                #
-                # if (flat|arc) done, run flat|arc update.
-                #
-                [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]] && \
-                    sprun ssh ${pipeline_host} desi_night flats \
-                        --night ${night} \
+                if [[ -f ${dest}/${night}/${exposure}/desi-${exposure}.fits.fz ]]; then
+                    #
+                    # Run update
+                    #
+                    sprun ssh ${pipeline_host} desi_night update \
+                        --night ${night} --exposure ${exposure} \
                         --nersc ${pipeline_host} --nersc_queue realtime \
                         --nersc_maxnodes 25
-                [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]] && \
-                    sprun ssh ${pipeline_host} desi_night arcs \
-                        --night ${night} \
-                        --nersc ${pipeline_host} --nersc_queue realtime \
-                        --nersc_maxnodes 25
-                #
-                # if night done run redshifts
-                #
-                [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]] && \
-                    sprun ssh ${pipeline_host} desi_night redshifts \
-                        --night ${night} \
-                        --nersc ${pipeline_host} --nersc_queue realtime \
-                        --nersc_maxnodes 25
+                    #
+                    # if (flat|arc) done, run flat|arc update.
+                    #
+                    [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]] && \
+                        sprun ssh ${pipeline_host} desi_night flats \
+                            --night ${night} \
+                            --nersc ${pipeline_host} --nersc_queue realtime \
+                            --nersc_maxnodes 25
+                    [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]] && \
+                        sprun ssh ${pipeline_host} desi_night arcs \
+                            --night ${night} \
+                            --nersc ${pipeline_host} --nersc_queue realtime \
+                            --nersc_maxnodes 25
+                    #
+                    # if night done run redshifts
+                    #
+                    [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]] && \
+                        sprun ssh ${pipeline_host} desi_night redshifts \
+                            --night ${night} \
+                            --nersc ${pipeline_host} --nersc_queue realtime \
+                            --nersc_maxnodes 25
+                else
+                    echo "INFO: ${night}/${exposure} appears to be test data.  Skipping pipeline activation." >> ${log}
+                fi
             elif [[ "${status}" == "done" ]]; then
                 #
                 # Do nothing, successfully.
