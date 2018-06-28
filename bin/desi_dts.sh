@@ -61,6 +61,7 @@ while /bin/true; do
                 #
                 if [[ -f ${staging}/${night}/${exposure}/checksum-${night}-${exposure}.sha256sum ]]; then
                     (cd ${staging}/${night}/${exposure} && /bin/sha256sum --quiet --check checksum-${night}-${exposure}.sha256sum) &>> ${log}
+                    # TODO: Add error handling.
                 else
                     echo "WARNING: no checksum file for ${night}/${exposure}." >> ${log}
                 fi
