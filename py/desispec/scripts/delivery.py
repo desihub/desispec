@@ -4,9 +4,45 @@
 desispec.scripts.delivery
 =========================
 
-Entry point for :command:`desi_dts_delivery`.
+Entry point for :command:`desi_dts`.
 """
 from __future__ import absolute_import, division, print_function, unicode_literals
+import os
+
+
+def pack_args(options):
+    """Parse and format NERSC-specific command-line options.
+
+    Parameters
+    ----------
+    :class:`argparse.Namespace`
+        The parsed command-line options.
+
+    Returns
+    -------
+    :class:`list`
+        Command-line options that can be appended to an existing command.
+    """
+    optlist = ("nersc",
+               "nersc_queue",
+               "nersc_queue_redshifts",
+               "nersc_maxtime",
+               "nersc_maxnodes",
+               "nersc_maxnodes_small",
+               "nersc_maxnodes_redshifts",
+               "nersc_shifter",
+               "mpi_procs",
+               "mpi_run",
+               "procs_per_node")
+    varg = vars(options)
+    opts = list()
+    for k, v in varg.items():
+        if k in optlist:
+            if v is not None:
+                opts.append("--{0}".format(k))
+                if not isinstance(v, bool):
+                    opts.append(v)
+    return opts
 
 
 def parse_delivery(*args):
@@ -22,16 +58,19 @@ def parse_delivery(*args):
     :class:`argparse.Namespace`
         The parsed command-line options.
     """
-    from os.path import basename
     from sys import argv
     from argparse import ArgumentParser
     desc = "Script called by DTS when files are delivered."
-    prsr = ArgumentParser(prog=basename(argv[0]), description=desc)
-    prsr.add_argument('-n', '--nersc-host', metavar='NERSC_HOST',
-                      dest='nersc_host', default='edison',
-                      help='Run night commands on this host (default %(default)s).')
+    prsr = ArgumentParser(prog=os.path.basename(argv[0]), description=desc)
+    prsr.add_argument('-n', '--nersc', default='edison', metavar='NERSC_HOST'
+                      help="Run a script on this NERSC system (default %(default)s).")
     prsr.add_argument('-p', '--prefix', metavar='PREFIX', action='append',
                       help="Prepend one or more commands to the night command.")
+    prsr.add_argument('-s', '--staging', metavar='DIR',
+                      default=os.path.join(os.environ['DESI_ROOT'],
+                                           'spectro', 'staging', 'raw'),
+                      help=("Staging directory containing night directories " +
+                            "(default %(default)s)."))
     prsr.add_argument('filename', metavar='FILE',
                       help='Filename with path of delivered file.')
     prsr.add_argument('exposure', type=int, metavar='EXPID',
@@ -62,9 +101,8 @@ def check_exposure(dst, expid):
     :class:`bool`
         ``True`` if all files have arrived.
     """
-    from os.path import exists, join
     files = ('fibermap-{0:08d}.fits', 'desi-{0:08d}.fits.fz', 'guider-{0:08d}.fits.fz')
-    return all([exists(join(dst, f.format(expid))) for f in files])
+    return all([os.path.exists(os.path.join(dst, f.format(expid))) for f in files])
 
 
 def move_file(filename, dst):
