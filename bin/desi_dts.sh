@@ -4,7 +4,7 @@
 #
 log=${HOME}/desi_dts.log
 [[ -f ${log} ]] && /bin/touch ${log}
-src=/data/dts/exposures/raw
+src=/data/dts/exposures/quicklook
 staging=$(/bin/realpath ${DESI_ROOT}/spectro/staging/raw)
 dest=$(/bin/realpath ${DESI_SPECTRO_DATA})
 pipeline_host=edison
