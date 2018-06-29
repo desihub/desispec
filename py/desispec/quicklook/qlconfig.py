@@ -26,9 +26,21 @@ class Config(object):
         #with open(configfile,'r') as cfile:
         #    self.conf = yaml.load(cfile)
         #    cfile.close()
-        from filelock import FileLock
 
-        lock = FileLock("{}.lock".format(configfile))
+        #- Use filelock if available; needed at KPNO with docker+NFS
+        try:
+            from filelock import FileLock
+            lock = FileLock("{}.lock".format(configfile))
+        except ImportError:
+            class NullContextManager(object):
+                def __init__(self):
+                    pass
+                def __enter__(self):
+                    pass
+                def __exit__(self, *args):
+                    pass
+
+            lock = NullContextManager()
 
         with lock:
             with open(configfile, 'r') as f:
@@ -393,12 +405,12 @@ class Config(object):
 #
 #        self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'fiberflat-{}.fits'.format(self.camera))
         if self.psfid is None:
-            self.psf=os.path.join(os.environ['QL_CALIB'],'psf-{}.fits'.format(self.camera))
+            self.psf=os.path.join(os.environ['QL_CALIB_DIR'],'psf-{}.fits'.format(self.camera))
         else:
             self.psf=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         if self.flatid is None:
-            self.fiberflat=os.path.join(os.environ['QL_CALIB'],'fiberflat-{}.fits'.format(self.camera))
+            self.fiberflat=os.path.join(os.environ['QL_CALIB_DIR'],'fiberflat-{}.fits'.format(self.camera))
         else:
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.flatid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         #- Get reference metrics from template json file

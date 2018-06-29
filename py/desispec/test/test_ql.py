@@ -15,6 +15,8 @@ from desispec.io import empty_fibermap
 from desispec.io.fibermap import write_fibermap
 import datetime
 import pytz
+from pkg_resources import resource_filename
+
 class TestQL(unittest.TestCase):
     @classmethod
     def setUp(cls):
@@ -29,7 +31,7 @@ class TestQL(unittest.TestCase):
         cls.nspec = nspec = 5
         cls.exptime = exptime = 100
 
-        #- Seup environment and override default environment variables
+        #- Setup environment and override default environment variables
 
         #- python 2.7 location:
         cls.topDir = os.path.dirname( # top-level
@@ -71,6 +73,10 @@ class TestQL(unittest.TestCase):
         expDir = os.path.join(testDir,'exposures')
         expnightDir = os.path.join(expDir,night)
         reduxDir = os.path.join(expnightDir,'{:08d}'.format(expid))
+        calibDir = os.path.join(testDir, 'ql_calib')
+        configDir = os.path.join(testDir, 'ql_config')
+        os.environ['QL_CALIB_DIR'] = calibDir
+        os.environ['QL_CONFIG_DIR'] = configDir
         if not os.path.exists(testDir):
             os.makedirs(testDir)
             os.makedirs(datanightDir)
@@ -78,6 +84,8 @@ class TestQL(unittest.TestCase):
             os.makedirs(expDir)
             os.makedirs(expnightDir)
             os.makedirs(reduxDir)
+            os.makedirs(calibDir)
+            os.makedirs(configDir)
 
         #- Write dummy configuration and input files to test merging
         configdict = {'name': 'Test Configuration',
@@ -155,6 +163,17 @@ class TestQL(unittest.TestCase):
         fibermapfile = os.path.join(dataDir,'fibermap-00000314.fits')
         fibermap = empty_fibermap(nspec)
         write_fibermap(fibermapfile,fibermap)
+
+        #- Generate calib data
+        for camera in ['b0', 'r0', 'z0']:
+            #- Fiberflat has to exist but can be a dummpy file
+            filename = '{}/fiberflat-{}.fits'.format(calibDir, camera)
+            fx = open(filename, 'w'); fx.write('fiberflat file'); fx.close()
+
+            #- PSF has to be real file
+            psffile = '{}/psf-{}.fits'.format(calibDir, camera)
+            example_psf = resource_filename('desispec', 'test/data/ql/psf-{}.fits'.format(camera))
+            shutil.copy(example_psf, psffile)
 
    #- Clean up test files and directories if they exist
     @classmethod
