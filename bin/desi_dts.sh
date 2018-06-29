@@ -7,6 +7,7 @@ log=${HOME}/desi_dts.log
 src=/data/dts/exposures/quicklook
 staging=$(/bin/realpath ${DESI_ROOT}/spectro/staging/raw)
 dest=$(/bin/realpath ${DESI_SPECTRO_DATA})
+run_pipeline=/bin/true
 pipeline_host=edison
 #
 # Functions
@@ -79,12 +80,14 @@ while /bin/true; do
                 #
                 # Is this a "realistic" exposure?
                 #
-                if [[ -f ${dest}/${night}/${exposure}/desi-${exposure}.fits.fz ]]; then
+                if [[ ${run_pipeline} && \
+                      -f ${dest}/${night}/${exposure}/desi-${exposure}.fits.fz && \
+                      -f ${dest}/${night}/${exposure}/fibermap-${exposure}.fits ]]; then
                     #
                     # Run update
                     #
                     sprun ssh ${pipeline_host} desi_night update \
-                        --night ${night} --exposure ${exposure} \
+                        --night ${night} --expid ${exposure} \
                         --nersc ${pipeline_host} --nersc_queue realtime \
                         --nersc_maxnodes 25
                     #
