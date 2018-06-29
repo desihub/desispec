@@ -36,6 +36,10 @@ def parse():
     parser.add_argument("-n","--night", type=str, required=False, help="night for the data")
     parser.add_argument("-c", "--camera", type=str, required=False, help= "camera for the raw data")
     parser.add_argument("-e","--expid", type=int, required=False, help="exposure id")
+    parser.add_argument("-p","--psfid", type=int, required=False, help="psf id")
+    parser.add_argument("-f","--flatid", type=int, required=False, help="flat id")
+    parser.add_argument("-t","--templateid", type=int, required=False, help="template id")
+    parser.add_argument("-m","--templatenight", type=int, required=False, help="template night")
     parser.add_argument("--rawdata_dir", type=str, required=False, help="rawdata directory. overrides $QL_SPEC_DATA in config")
     parser.add_argument("--specprod_dir",type=str, required=False, help="specprod directory, overrides $QL_SPEC_REDUX in config")
     parser.add_argument("--fullconfig", type=str, required=False, help="full expanded configfile")
@@ -48,6 +52,10 @@ def parse():
     return args
 
 def ql_main(args=None):
+    
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
     from desispec.quicklook import quicklook,qllogger,qlconfig
     import desispec.image as image
     import desispec.frame as frame
@@ -59,11 +67,25 @@ def ql_main(args=None):
 
     qlog=qllogger.QLLogger(name="QuickLook",loglevel=args.loglvl)
     log=qlog.getlog()
-    # Sami
+    
     # quiet down DESI logs. We don't want DESI_LOGGER to print messages unless they are important
     # initalize singleton with WARNING level
     quietDesiLogger(args.loglvl+10)
     if args.config is not None:
+
+        #RS: have command line arguments for finding files via old datamodel
+        psfid=None
+        if args.psfid:
+            psfid=args.psfid
+        flatid=None
+        if args.flatid:
+            flatid=args.flatid
+        templateid=None
+        if args.templateid:
+            templateid=args.templateid
+        templatenight=None
+        if args.templatenight:
+            templatenight=args.templatenight
 
         if args.rawdata_dir:
             rawdata_dir = args.rawdata_dir
@@ -82,7 +104,7 @@ def ql_main(args=None):
         log.debug("Running Quicklook using configuration file {}".format(args.config))
         if os.path.exists(args.config):
             if "yaml" in args.config:
-                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir)
+                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir,psfid=psfid,flatid=flatid,templateid=templateid,templatenight=templatenight)
                 configdict=config.expand_config()
             else:
                 log.critical("Can't open config file {}".format(args.config))
