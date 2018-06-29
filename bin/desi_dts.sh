@@ -9,6 +9,7 @@ staging=$(/bin/realpath ${DESI_ROOT}/spectro/staging/raw)
 dest=$(/bin/realpath ${DESI_SPECTRO_DATA})
 run_pipeline=/bin/true
 pipeline_host=edison
+ssh=/bin/ssh -q ${pipeline_host}
 #
 # Functions
 #
@@ -86,7 +87,7 @@ while /bin/true; do
                     #
                     # Run update
                     #
-                    sprun ssh ${pipeline_host} desi_night update \
+                    sprun ${ssh} desi_night update \
                         --night ${night} --expid ${exposure} \
                         --nersc ${pipeline_host} --nersc_queue realtime \
                         --nersc_maxnodes 25
@@ -94,12 +95,12 @@ while /bin/true; do
                     # if (flat|arc) done, run flat|arc update.
                     #
                     [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]] && \
-                        sprun ssh ${pipeline_host} desi_night flats \
+                        sprun ${ssh} desi_night flats \
                             --night ${night} \
                             --nersc ${pipeline_host} --nersc_queue realtime \
                             --nersc_maxnodes 25
                     [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]] && \
-                        sprun ssh ${pipeline_host} desi_night arcs \
+                        sprun ${ssh} desi_night arcs \
                             --night ${night} \
                             --nersc ${pipeline_host} --nersc_queue realtime \
                             --nersc_maxnodes 25
@@ -107,7 +108,7 @@ while /bin/true; do
                     # if night done run redshifts
                     #
                     [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]] && \
-                        sprun ssh ${pipeline_host} desi_night redshifts \
+                        sprun ${ssh} desi_night redshifts \
                             --night ${night} \
                             --nersc ${pipeline_host} --nersc_queue realtime \
                             --nersc_maxnodes 25
