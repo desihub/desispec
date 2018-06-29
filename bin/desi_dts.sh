@@ -53,6 +53,7 @@ while /bin/true; do
                 #
                 # Check permissions.
                 #
+                sprun /bin/chmod 2750 ${staging}/${night}/${exposure}
                 for f in ${staging}/${night}/${exposure}/*; do
                     sprun /bin/chmod 0440 ${f}
                 done
