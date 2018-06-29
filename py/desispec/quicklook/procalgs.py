@@ -281,8 +281,6 @@ class BoxcarExtract(pas.PipelineAlg):
                maskFile=None,usesigma=False,quick_resolution=False):
         from desispec.boxcar import do_boxcar
         import desispec.psf
-        if flavor == 'arcs':
-            psf=desispec.psf.PSF(psf)
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
                                   nspec=nspec,maskFile=maskFile,usesigma=usesigma,
                                   quick_resolution=quick_resolution)

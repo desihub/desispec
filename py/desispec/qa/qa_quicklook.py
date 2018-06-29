@@ -1198,10 +1198,6 @@ class CountSpectralBins(MonitoringAlg):
         #ra = fibermap["RA_TARGET"]
         #dec = fibermap["DEC_TARGET"]
 
-        if fibermap["OBJTYPE"][0] == 'ARC':
-            import desispec.psf
-            psf=desispec.psf.PSF(psf)
-
         grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
             log.debug("grid_size is NOT UNIFORM")

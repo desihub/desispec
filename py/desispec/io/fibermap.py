@@ -225,7 +225,7 @@ def fibermap_new2old(fibermap):
 
     for colname in [
         'BRICKID', 'BRICK_OBJID', 'COMM_TARGET',
-        'DELTA_XPFA', 'DELTA_XPFA_IVAR', 'DELTA_YPFA', 'DELTA_YPFA_IVAR',
+        'DELTA_XFPA', 'DELTA_XFPA_IVAR', 'DELTA_YFPA', 'DELTA_YFPA_IVAR',
         'DESIGN_Q', 'DESIGN_S',
         'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z',
         'FIBERSTATUS',

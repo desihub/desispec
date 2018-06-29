@@ -2,21 +2,11 @@
 name: DESI Quicklook Dark Survey
 Program: dark
 Flavor: science
-#- Calibration files: Assuming the same night for psf and fiberflat
-#- PSFExpid used as expid for arc exposures
-PSFExpid: 1
-PSFType: psf
-#- FiberflatExpid used as expid for flat exposures
-FiberflatExpid: 2
 #- Writeout intermediate files
 WritePreprocfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
-#- Night for Reference Template
-TemplateNight: 20191001
-#- Exposure ID for Reference Template
-TemplateExpid: 3577
 #- Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file

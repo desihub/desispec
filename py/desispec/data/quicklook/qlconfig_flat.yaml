@@ -2,20 +2,11 @@
 name: DESI Quicklook Flat Calibration
 Program: dark
 Flavor: flat
-#- Calibration files: Assuming the same night for psf and fiberflat
-PSFType: psf
-PSFExpid: 0
-#- FiberflatExpid used as expid for flat image files when running calibration
-FiberflatExpid: 1
 #- Writeout intermediate files
 WritePreprocfile: True
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: True
-#- Exposure ID for Reference Template
-TemplateExpid: 1
-#- Night for Reference Template
-TemplateNight: 20191001
 #-Debuglevel 
 Debuglevel: 20
 #- Must use resolution in extraction to generate fiberflat
