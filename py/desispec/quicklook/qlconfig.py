@@ -23,9 +23,17 @@ class Config(object):
         """
 
         #- load the config file and extract command line/config information
-        with open(configfile,'r') as cfile:
-            self.conf = yaml.load(cfile)
-            cfile.close()
+        #with open(configfile,'r') as cfile:
+        #    self.conf = yaml.load(cfile)
+        #    cfile.close()
+        from filelock import FileLock
+
+        lock = FileLock("{}.lock".format(configfile))
+
+        with lock:
+            with open(configfile, 'r') as f:
+                self.conf = yaml.load(f)
+                f.close()
         self.night = night
         self.expid = expid
         self.psfid = psfid
