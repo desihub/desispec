@@ -240,7 +240,7 @@ def find_exposure_night(expid):
                 return night
 
 
-def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None, ):
+def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
     """Get a list of available exposures for the specified night.
 
     Exposures are identified as correctly formatted subdirectory names within the
@@ -272,31 +272,22 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None, ):
     else:
         if specprod_dir is None:
             specprod_dir = specprod_root()
-        night_path = os.path.join(specprod_dir,'exposures',night)
+        night_path = os.path.join(specprod_dir, 'exposures', night)
 
     if not os.path.exists(night_path):
-        raise RuntimeError('Non-existent night %s' % night)
+        raise RuntimeError('Non-existent night {0}'.format(night))
 
     exposures = []
 
-    if raw:
-        fpat = re.compile(r'.*fibermap-(.*).fits')
-        for entry in glob.glob(os.path.join(night_path,'fibermap-*.fits')):
-            mat = fpat.match(entry)
-            if mat is not None:
-                iexp = int(mat.group(1))
-                assert mat.group(1) == "{:08d}".format(iexp)
-                exposures.append(iexp)
-    else:
-        for entry in glob.glob(os.path.join(night_path,'*')):
-            head,tail = os.path.split(entry)
-            try:
-                exposure = int(tail)
-                assert tail == "{:08d}".format(exposure)
-                exposures.append(exposure)
-            except (ValueError,AssertionError):
-                # Silently ignore entries that are not exposure subdirectories.
-                pass
+    for entry in glob.glob(os.path.join(night_path, '*')):
+        e = os.path.basename(entry)
+        try:
+            exposure = int(e)
+            assert e == "{0:08d}".format(exposure)
+            exposures.append(exposure)
+        except (ValueError, AssertionError):
+            # Silently ignore entries that are not exposure subdirectories.
+            pass
 
     return sorted(exposures)
 
