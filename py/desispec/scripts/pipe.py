@@ -720,6 +720,7 @@ Where supported commands are:
 
         else:
             # Running at NERSC
+
             scripts = pipe.scriptgen.batch_nersc(tasks_by_type,
                 outscript, outlog, jobname, args.nersc, args.nersc_queue,
                 args.nersc_maxtime, args.nersc_maxnodes, nodeprocs=ppn,
