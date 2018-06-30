@@ -4,13 +4,13 @@
 #
 log=${HOME}/desi_dts.log
 [[ -f ${log} ]] && /bin/touch ${log}
-src=/data/dts/exposures/quicklook
+src=/data/dts/exposures/raw
 staging=$(/bin/realpath ${DESI_ROOT}/spectro/staging/raw)
 dest=$(/bin/realpath ${DESI_SPECTRO_DATA})
-run_pipeline=/bin/true
+run_pipeline=/bin/false
 pipeline_host=edison
 ssh="/bin/ssh -q ${pipeline_host}"
-sleep=5m
+sleep=10m
 #
 # Functions
 #
