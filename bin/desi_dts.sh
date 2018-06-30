@@ -45,7 +45,7 @@ while /bin/true; do
                     dts:${src}/${night}/${exposure}/ ${staging}/${night}/${exposure}/
                 status=$?
             else
-                echo "INFO: ${staging}/${night} already transferred." >> ${log}
+                echo "INFO: ${staging}/${night}/${exposure} already transferred." >> ${log}
                 status="done"
             fi
             #
