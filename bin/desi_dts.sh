@@ -82,8 +82,8 @@ while /bin/true; do
                 #
                 # Is this a "realistic" exposure?
                 #
-                if [[ ${run_pipeline} && \
-                      -f ${dest}/${night}/${exposure}/desi-${exposure}.fits.fz && \
+                if ${run_pipeline} && \
+                   [[ -f ${dest}/${night}/${exposure}/desi-${exposure}.fits.fz && \
                       -f ${dest}/${night}/${exposure}/fibermap-${exposure}.fits ]]; then
                     #
                     # Run update
