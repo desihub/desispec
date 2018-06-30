@@ -174,7 +174,7 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
         raise IOError("didn't change the Y coefs in the psf")
 
 
-    if header_keywords is not None :
+    if (header_keywords is not None) and ("PSF" in psf_fits):
         for k in header_keywords :
             psf_fits["PSF"].header[k] = header_keywords[k]
     
