@@ -9,7 +9,8 @@ staging=$(/bin/realpath ${DESI_ROOT}/spectro/staging/raw)
 dest=$(/bin/realpath ${DESI_SPECTRO_DATA})
 run_pipeline=/bin/true
 pipeline_host=edison
-ssh=/bin/ssh -q ${pipeline_host}
+ssh="/bin/ssh -q ${pipeline_host}"
+sleep=5m
 #
 # Functions
 #
@@ -127,5 +128,5 @@ while /bin/true; do
     else
         echo "WARNING: No links found, check connection." >> ${log}
     fi
-    /bin/sleep 10m
+    /bin/sleep ${sleep}
 done
