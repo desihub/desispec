@@ -2,20 +2,48 @@
 desispec Change Log
 ===================
 
-0.22.0 (unreleased)
+0.22.1 (unreleased)
 -------------------
+
+* No changes yet.
+
+0.22.0 (2018-06-30)
+-------------------
+
+This is the version used for mock observing in June 2018.  It includes an
+update to the directory substructure where raw data are found, grouping each
+exposure into a separate directory `$DESI_SPECTRO_DATA/{YEARMMDD}/{EXPID}/`.
 
 * Faster traceshift code; requires numba (PR `#634`_).
 * Fixed integration tests (PR `#635`_).
 * Give empty HDUs am ``EXTNAME`` (PR `#636`_).
 * Update redshift database loading in integration test (PR `#638`_).
+* Integration test DB loading (PR `#640`_).
 * Move ccd_calibration.yaml to SVN repo (PR `#641`_).
+* Logging QA metric status for QLF (PR `#642`_).
+* Supporting both new and old fibermap via io.read_fibermap (PP `#643`_).
+* Faster lower memory preproc using numba (PR `#644`_)
+* ivar bugfix in resample_flux interpolation (PR `#646`_).
+* Many QL updates from mock observing (PR `#648`_).
+* Raw data in NIGHT/EXPID/*.* instead of NIGHT/*.* (PR `#648`_).
+* Fix cosmics masking near masked saturated pixels (PR `#649`_).
+* Update edison realtime queue config to 25 nodes (PR `#650`_).
+* trace_shift code supports PSF formats without "PSF" HDU (PR `#654`_).
 
 .. _`#634`: https://github.com/desihub/desispec/pull/634
 .. _`#635`: https://github.com/desihub/desispec/pull/635
 .. _`#636`: https://github.com/desihub/desispec/pull/636
 .. _`#638`: https://github.com/desihub/desispec/pull/638
+.. _`#640`: https://github.com/desihub/desispec/pull/640
 .. _`#641`: https://github.com/desihub/desispec/pull/641
+.. _`#642`: https://github.com/desihub/desispec/pull/642
+.. _`#643`: https://github.com/desihub/desispec/pull/643
+.. _`#644`: https://github.com/desihub/desispec/pull/644
+.. _`#646`: https://github.com/desihub/desispec/pull/646
+.. _`#648`: https://github.com/desihub/desispec/pull/648
+.. _`#649`: https://github.com/desihub/desispec/pull/649
+.. _`#650`: https://github.com/desihub/desispec/pull/650
+.. _`#654`: https://github.com/desihub/desispec/pull/654
 
 0.21.0 (2018-05-25)
 -------------------
