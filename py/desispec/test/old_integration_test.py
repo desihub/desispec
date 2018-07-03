@@ -3,6 +3,7 @@ Run integration tests from pixsim through redshifts
 
 python -m desispec.test.old_integration_test
 """
+
 from __future__ import absolute_import, print_function
 import os
 import time
@@ -13,7 +14,7 @@ from astropy.io import fits
 from ..util import runcmd
 from .. import io
 from ..qa import QA_Exposure
-from ..database.datachallenge import get_options, setup_db, load_zcat
+from ..database.redshift import get_options, setup_db, load_zbest
 
 from desiutil.log import get_logger
 
@@ -302,11 +303,11 @@ def integration_test(night=None, nspec=5, clobber=False):
     #
     # Load redshifts into database
     #
-    options = get_options('--clobber', '--filename', 'dailytest.db',
+    options = get_options('--overwrite', '--filename', 'dailytest.db',
                           os.path.join(os.environ['DESI_SPECTRO_REDUX'],
                                        os.environ['SPECPROD']))
     postgresql = setup_db(options)
-    load_zcat(options.datapath)
+    load_zbest(options.datapath)
     # ztruth QA
     # qafile = io.findfile('qa_ztruth', night)
     # qafig = io.findfile('qa_ztruth_fig', night)
@@ -368,7 +369,6 @@ def integration_test(night=None, nspec=5, clobber=False):
                 pix, truetype, truez, objtype, z, zwarn, status))
 
     print("--------------------------------------------------")
-
 
 if __name__ == '__main__':
     from sys import exit

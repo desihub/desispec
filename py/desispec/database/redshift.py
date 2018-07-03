@@ -474,7 +474,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
     return
 
 
-def load_zcat(datapath=None, q3c=False):
+def load_zbest(datapath=None, q3c=False):
     """Load zbest files into the zcat table.
 
     This function is deprecated since there should now be a single
@@ -516,9 +516,30 @@ def load_zcat(datapath=None, q3c=False):
         #         log.warning("Duplicate TARGETID = %d.", z.targetid)
         #         good_targetids = good_targetids & (data['TARGETID'] != z.targetid)
         data_list = [data[col][good_targetids].tolist()
-                     for col in data.names if col != 'COEFF']
-        data_names = [col.lower() for col in data.names if col != 'COEFF']
+                     for col in data.names]
+        data_names = [col.lower() for col in data.names]
         log.info("Initial column conversion complete on brick = %s.", brickname)
+        #
+        # Expand COEFF
+        #
+        col = 'COEFF'
+        expand = ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                  'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)
+        i = data_names.index(col.lower())
+        del data_names[i]
+        del data_list[i]
+        for j, n in enumerate(expand):
+            log.debug("Expanding column %d of %s (at index %d) to %s.", j, col, i, n)
+            data_names.insert(i + j, n)
+            data_list.insert(i + j, data[col][:, j].tolist())
+        log.debug(data_names)
+        #
+        # zbest files don't contain the same columns as zcatalog.
+        #
+        for col in ZCat.__table__.columns:
+            if col.name not in data_names:
+                data_names.append(col.name)
+                data_list.append([0]*len(data_list[0]))
         data_rows = list(zip(*data_list))
         log.info("Converted columns into rows on brick = %s.", brickname)
         try:
@@ -777,6 +798,8 @@ def get_options(*args):
                       help="If specified, connect to a PostgreSQL database with USERNAME.")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
+    prsr.add_argument('-z', '--zbest', action='store_true', dest='zbest',
+                      help='Force loading of the zcat table from zbest files.')
     prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
     if len(args) > 0:
         options = prsr.parse_args(args)
@@ -859,21 +882,15 @@ def main():
         #
         q = dbSession.query(l['tcls']).first()
         if q is None:
-            log.info("Loading %s from %s.", tn, l['filepath'])
-            load_file(**l)
+            if options.zbest and tn == 'zcat':
+                log.info("Loading %s from zbest files in %s.", tn, options.datapath)
+                load_zbest(datapath=options.datapath, q3c=postgresql)
+            else:
+                log.info("Loading %s from %s.", tn, l['filepath'])
+                load_file(**l)
             log.info("Finished loading %s.", tn)
         else:
             log.info("%s table already loaded.", tn.title())
-    #
-    # Load zbest files.
-    #
-    # q = dbSession.query(ZCat).first()
-    # if q is None:
-    #     log.info("Loading ZCat from %s.", options.datapath)
-    #     load_zcat(options.datapath, run1d='mini')
-    #     log.info("Finished loading ZCat.")
-    # else:
-    #     log.info("ZCat table already loaded.")
     #
     # Load fiber assignment files.
     #

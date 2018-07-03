@@ -424,7 +424,8 @@ Where supported commands are:
 
         ttypes = args.tasktypes.split(',')
         tasktypes = list()
-        for tt in pipe.tasks.base.default_task_chain:
+        #for tt in pipe.tasks.base.default_task_chain:
+        for tt in pipe.db.all_task_types():
             if tt in ttypes:
                 tasktypes.append(tt)
 
@@ -719,6 +720,7 @@ Where supported commands are:
 
         else:
             # Running at NERSC
+
             scripts = pipe.scriptgen.batch_nersc(tasks_by_type,
                 outscript, outlog, jobname, args.nersc, args.nersc_queue,
                 args.nersc_maxtime, args.nersc_maxnodes, nodeprocs=ppn,

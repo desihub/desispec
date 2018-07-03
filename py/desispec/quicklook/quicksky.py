@@ -10,6 +10,7 @@ from desispec import util
 from desispec import frame as fr
 import scipy
 from desispec.resolution import Resolution
+from desispec.linalg import cholesky_solve
 
 def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
     """
@@ -81,7 +82,7 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
                 skyflux[w]=cholesky_solve(A_pos_def,B[w])
             except:
                 print("cholesky failed, trying svd in iteration {}".format(iteration))
-                skyflux[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
+                skyflux[w]=np.linalg.lstsq(A_pos_def,B[w],rcond=None)[0]
 
             print("iter %d compute chi2"%iteration)
 
@@ -128,7 +129,7 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
         print("nout tot=%d"%nout_tot)
         # solve once again to get deconvolved sky variance
         #skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
-        skyflux = np.linalg.lstsq(A.todense(),B)[0]
+        skyflux = np.linalg.lstsq(A.todense(),B,rcond=None)[0]
         skycovar = np.linalg.pinv(A.todense())
         #- sky inverse variance, but incomplete and not needed anyway
         # skyvar=np.diagonal(skycovar)

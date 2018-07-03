@@ -18,6 +18,7 @@ def plot_countspectralbins(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
         outfile: Name of figure.
     """
+
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
@@ -64,6 +65,7 @@ def plot_countspectralbins(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_countpix(qa_dict,outfile):
+    
     """
     Plot pixel counts above some threshold
     
@@ -71,6 +73,10 @@ def plot_countpix(qa_dict,outfile):
         qa_dict: qa dictionary from countpix qa
         outfile: pdf file of the plot
     """
+    from desispec.util import set_backend
+    _matplotlib_backend = None
+    set_backend()
+    
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -128,6 +134,7 @@ def plot_countpix(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_bias_overscan(qa_dict,outfile):
+    
     """
     Map of bias from overscan from 4 regions of CCD
     
@@ -135,19 +142,20 @@ def plot_bias_overscan(qa_dict,outfile):
         qa_dict: qa dictionary from bias_from_overscan qa
         outfile : pdf file of the plot
     """
+    
     expid = qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname = qa_dict["PANAME"]
     params = qa_dict["PARAMS"]
     exptime = qa_dict["EXPTIME"]
     
-    bias=qa_dict["METRICS"]["BIAS"]
+    #bias=qa_dict["METRICS"]["BIAS"]
     bias_amp=qa_dict["METRICS"]["BIAS_AMP"]
     fig=plt.figure()
     plt.suptitle("Bias from overscan region after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(111)
     heatmap1=ax1.pcolor(bias_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('Bias = {:.4f}'.format(bias/exptime), fontsize=10)
+    #plt.title('Bias = {:.4f}'.format(bias/exptime), fontsize=10)
     ax1.set_xlabel("Avg. bias value per Amp (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax1.tick_params(axis='y',labelsize=10,labelleft=False)
@@ -170,6 +178,7 @@ def plot_bias_overscan(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_XWSigma(qa_dict,outfile):
+
     """
     Plot XWSigma
     
@@ -177,6 +186,8 @@ def plot_XWSigma(qa_dict,outfile):
         qa_dict: qa dictionary from countpix qa
         outfile : file of the plot
     """
+
+    
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
@@ -266,7 +277,9 @@ def plot_RMS(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.Get_RMS
         outfile: Name of plot output file
     """
-    rms=qa_dict["METRICS"]["NOISE"]
+
+    
+    #rms=qa_dict["METRICS"]["NOISE"]
     rms_amp=qa_dict["METRICS"]["NOISE_AMP"]
     #rms_over=qa_dict["METRICS"]["NOISE_OVER"]
     rms_over_amp=qa_dict["METRICS"]["NOISE_AMP"]
@@ -281,7 +294,7 @@ def plot_RMS(qa_dict,outfile):
     plt.suptitle("NOISE image counts per amplifier, Camera: {}, ExpID: {}".format(camera,expid),fontsize=10,y=0.99)
     ax1=fig.add_subplot(211)
     heatmap1=ax1.pcolor(rms_amp.reshape(2,2),cmap=plt.cm.OrRd)
-    plt.title('NOISE = {:.4f}'.format(rms), fontsize=10)
+    #plt.title('NOISE = {:.4f}'.format(rms), fontsize=10)
     ax1.set_xlabel("NOISE per Amp (photon counts)",fontsize=10)
     ax1.tick_params(axis='x',labelsize=10,labelbottom=False)
     ax1.tick_params(axis='y',labelsize=10,labelleft=False)
@@ -356,6 +369,7 @@ def plot_integral(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_sky_continuum(qa_dict,outfile):
+
     """
     Plot mean sky continuum from lower and higher wavelength range for each 
     fiber and accross amps.
@@ -364,6 +378,9 @@ def plot_sky_continuum(qa_dict,outfile):
         qa_dict: dictionary from sky continuum QA
         outfile: pdf file to save the plot
     """
+            
+
+    
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
@@ -388,6 +405,7 @@ def plot_sky_continuum(qa_dict,outfile):
     fig.savefig(outfile)
 
 def plot_sky_peaks(qa_dict,outfile):
+    
     """
     Plot rms of sky peaks for smy fibers across amps
        
@@ -395,10 +413,12 @@ def plot_sky_peaks(qa_dict,outfile):
         qa_dict: dictionary from sky peaks QA
         outfile: pdf file to save the plot
     """
+
+    
     expid=qa_dict["EXPID"]
     camera=qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
-    sumcount=qa_dict["METRICS"]["PEAKCOUNT"]
+    sumcount=qa_dict["METRICS"]["PEAKCOUNT_FIB"]
     fiber=np.arange(sumcount.shape[0])
     skyfiber_rms=qa_dict["METRICS"]["PEAKCOUNT_NOISE"]
     fig=plt.figure()
@@ -415,59 +435,83 @@ def plot_sky_peaks(qa_dict,outfile):
     plt.tight_layout()
     fig.savefig(outfile)
 
-def plot_residuals(qa_dict,outfile):
+def plot_residuals(frame,qa_dict,outfile):
+    import random
     """
-    Plot histogram of sky residuals for each sky fiber
-    
+    Plot one random sky subtracted, fiber flattened spectrum per object type
+
     Args:
+        frame: sframe object
         qa_dict: qa dictionary
         outfile : output plot file
     """
+
     expid=qa_dict["EXPID"]
     camera = qa_dict["CAMERA"]
     paname=qa_dict["PANAME"]
     med_resid_fiber=qa_dict["METRICS"]["MED_RESID_FIBER"]
     med_resid_wave=qa_dict["METRICS"]["MED_RESID_WAVE"]
     wavelength=qa_dict["METRICS"]["WAVELENGTH"]
+    flux=frame.flux
+    objects=frame.fibermap["OBJTYPE"]
+    objtypes=list(set(objects))
 
     fig=plt.figure()
+    plt.suptitle('Randomly selected sky subtracted, fiber flattenend spectra\ncamera {}, exposure, {}'.format(camera,expid),fontsize=10)
 
-    gs=GridSpec(6,4)
-    plt.suptitle("Sky Residuals after {}, Camera: {}, ExpID: {}".format(paname,camera,expid))
-    
-    ax0=fig.add_subplot(gs[:2,2:])
-    ax0.set_axis_off()
-    keys=["MED_RESID","NBAD_PCHI","NREJ","NSKY_FIB","RESID_PER"]
-    skyfiberid=qa_dict["METRICS"]["SKYFIBERID"]
-    
-    xl=0.05
-    yl=0.9
-    for key in keys:
-        ax0.text(xl,yl,key+': '+str(qa_dict["METRICS"][key]),transform=ax0.transAxes,ha='left',fontsize='x-small')
-        yl=yl-0.1
+    for i in range(len(objtypes)):
+        ax=fig.add_subplot('23{}'.format(i+1))
 
-    ax1=fig.add_subplot(gs[:2,:2])
-    ax1.plot(wavelength, med_resid_wave,'b')
-    ax1.set_ylabel("Med. Sky Res. (photon counts)",fontsize=10)
-    ax1.set_xlabel("Wavelength(A)",fontsize=10)
-    ax1.set_ylim(np.percentile(med_resid_wave,2.5),np.percentile(med_resid_wave,97.5))
-    ax1.set_xlim(np.min(wavelength),np.max(wavelength))
-    ax1.tick_params(axis='x',labelsize=10)
-    ax1.tick_params(axis='y',labelsize=10)
+        objs=np.where(objects==objtypes[i])[0]
+        obj=random.choice(objs)
+        objflux=flux[obj]
 
-    ax2=fig.add_subplot(gs[3:,:])
-    index=range(med_resid_fiber.shape[0])
-    hist_res=ax2.bar(index,med_resid_fiber,align='center')
-    ax2.plot(index,np.zeros_like(index),'k-')
-    #ax1.plot(index,med_resid_fiber,'bo')
-    ax2.set_xlabel('Sky fiber ID',fontsize=10)
-    ax2.set_ylabel('Med. Sky Res. (photon counts)',fontsize=10)
-    ax2.tick_params(axis='x',labelsize=10)
-    ax2.tick_params(axis='y',labelsize=10)
-    ax2.set_xticks(index)
-    ax2.set_xticklabels(skyfiberid)
-    ax2.set_xlim(0)
-    #plt.tight_layout()
+        ax.set_xlabel('Wavelength (Angstroms)',fontsize=8)
+        ax.set_ylabel('{} Flux (counts)'.format(objtypes[i]),fontsize=8)
+        ax.tick_params(axis='x',labelsize=8)
+        ax.tick_params(axis='y',labelsize=8)
+        ax.plot(wavelength,objflux)
+
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.9)
+
+#    gs=GridSpec(6,4)
+#    plt.suptitle("Sky Residuals after {}, Camera: {}, ExpID: {}".format(paname,camera,expid))
+#
+#    ax0=fig.add_subplot(gs[:2,2:])
+#    ax0.set_axis_off()
+#    keys=["MED_RESID","NBAD_PCHI","NREJ","NSKY_FIB","RESID_PER"]
+#    skyfiberid=qa_dict["METRICS"]["SKYFIBERID"]
+#
+#    xl=0.05
+#    yl=0.9
+#    for key in keys:
+#        ax0.text(xl,yl,key+': '+str(qa_dict["METRICS"][key]),transform=ax0.transAxes,ha='left',fontsize='x-small')
+#        yl=yl-0.1
+#
+#    ax1=fig.add_subplot(gs[:2,:2])
+#    ax1.plot(wavelength, med_resid_wave,'b')
+#    ax1.set_ylabel("Med. Sky Res. (photon counts)",fontsize=10)
+#    ax1.set_xlabel("Wavelength(A)",fontsize=10)
+#    ax1.set_ylim(np.percentile(med_resid_wave,2.5),np.percentile(med_resid_wave,97.5))
+#    ax1.set_xlim(np.min(wavelength),np.max(wavelength))
+#    ax1.tick_params(axis='x',labelsize=10)
+#    ax1.tick_params(axis='y',labelsize=10)
+#
+#    ax2=fig.add_subplot(gs[3:,:])
+#    index=range(med_resid_fiber.shape[0])
+#    hist_res=ax2.bar(index,med_resid_fiber,align='center')
+#    ax2.plot(index,np.zeros_like(index),'k-')
+#    #ax1.plot(index,med_resid_fiber,'bo')
+#    ax2.set_xlabel('Sky fiber ID',fontsize=10)
+#    ax2.set_ylabel('Med. Sky Res. (photon counts)',fontsize=10)
+#    ax2.tick_params(axis='x',labelsize=10)
+#    ax2.tick_params(axis='y',labelsize=10)
+#    ax2.set_xticks(index)
+#    ax2.set_xticklabels(skyfiberid)
+#    ax2.set_xlim(0)
+#    #plt.tight_layout()
+
     fig.savefig(outfile)
     
 def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
@@ -484,6 +528,8 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         sigmacut: only plot residuals (+/-) less than sigma cut (default 2.0)
         NOTE: rescut taken as default cut parameter
     """
+
+    
     med_snr=qa_dict["METRICS"]["MEDIAN_SNR"]
     avg_med_snr=np.mean(med_snr)
     index=np.arange(med_snr.shape[0])
@@ -576,14 +622,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         fig.colorbar(resid_plot,ticks=[np.min(resids),0,np.max(resids)])
 
     for i in range(len(o)):
-        if i == 0:
-            ax=fig.add_subplot(245)
-        elif i == 1:
-            ax=fig.add_subplot(246)
-        elif i == 2:
-            ax=fig.add_subplot(247)
-        else:
-            ax=fig.add_subplot(248)
+        ax=fig.add_subplot('24{}'.format(i+5))
 
         objtype=list(objlist)[i]
         objid=np.where(np.array(list(objlist))==objtype)[0][0]

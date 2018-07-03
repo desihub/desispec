@@ -324,7 +324,8 @@ def runpipeline(pl,convdict,conf):
     else:
         import numpy as np
         qa=None
-        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']]
+#        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']]
         singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
         for palg in range(len(qas)):
             if singqa in qas[palg]:
@@ -369,26 +370,25 @@ def runpipeline(pl,convdict,conf):
                 log.info("{} finished".format(qa.name))
 
     #- merge QAs for this pipeline execution
-    log.debug("Dumping mergedQAs")
-    from desispec.io import findfile
-    ftype='ql_mergedQA_file'
-    specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
-    if conf['Flavor']=='arcs':
-        ftype='ql_mergedQAarc_file'
-    destFile=findfile(ftype,night=conf['Night'],
-                      expid=conf['Expid'],
-                      camera=conf['Camera'],
-                      specprod_dir=specprod_dir)
+    #- RS: don't write merged file if running single QA
+    if singqa is None:
+        log.debug("Dumping mergedQAs")
+        from desispec.io import findfile
+        specprod_dir=os.environ['QL_SPEC_REDUX'] if 'QL_SPEC_REDUX' in os.environ else ""
+        destFile=findfile('ql_mergedQA_file',night=conf['Night'],
+                          expid=conf['Expid'],
+                          camera=conf['Camera'],
+                          specprod_dir=specprod_dir)
 
-    # SE: disabled the functionality of writing yamls
-    #schemaMerger.writeToFile(destFile)
-    #log.info("Wrote merged QA file {}".format(destFile))
-    schemaMerger.writeTojsonFile(destFile)
-    log.info("Wrote merged QA file {}".format(destFile))
-    if isinstance(inp,tuple):
-       return inp[0]
-    else:
-       return inp
+        # SE: disabled the functionality of writing yamls
+        #schemaMerger.writeToFile(destFile)
+        #log.info("Wrote merged QA file {}".format(destFile))
+        schemaMerger.writeTojsonFile(destFile)
+        log.info("Wrote merged QA file {}".format(destFile))#.split('.yaml')[0]+'.json'))
+        if isinstance(inp,tuple):
+           return inp[0]
+        else:
+           return inp
 
 #- Setup pipeline from configuration
 
@@ -464,22 +464,9 @@ def setup_pipeline(config):
         skyfile=config["SkyFile"]
 
     psf=None
-    if config["Flavor"] == 'dark' or config["Flavor"] == 'bias':
-        pass
-    elif config["Flavor"] == 'arcs':
-        if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"],'{:08d}'.format(config["Expid"]))):
-            if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures')):
-                os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures'))
-            if not os.path.exists(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"])):
-                os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"]))
-            os.mkdir(os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',config["Night"],'{:08d}'.format(config["Expid"])))
-        pass
-    elif config["Flavor"] == 'science' or config["Flavor"] == 'flat':
-        #from specter.psf import load_psf
-        if "PSFFile" in config:
-            import desispec.psf
-            psf=desispec.psf.PSF(config["PSFFile"])
-        #psf=load_psf(config["PSFFile"])
+    if "PSFFile" in config:
+        import desispec.psf
+        psf=desispec.psf.PSF(config["PSFFile"])
 
     if "basePath" in config:
         basePath=config["basePath"]

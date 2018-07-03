@@ -23,7 +23,7 @@ class TestResample(unittest.TestCase):
         nout = n//2
         stepout = n/float(nout)
         xout = np.arange(nout)*stepout+stepout/2-0.5 
-        yout = resample_flux(xout, x, y)
+        yout = resample_flux(xout, x, y, extrapolate=True)
         self.assertTrue(np.all(yout == 1.0))                
 
     def test_non_uniform_grid(self):
@@ -41,7 +41,7 @@ class TestResample(unittest.TestCase):
         offset   =  x[-1]+0.5-(xout[-1]-xout[-2])/2 - xout[-1]
         xout[-2:] += offset # same edge of last bin
         
-        yout = resample_flux(xout, x, y)
+        yout = resample_flux(xout, x, y,extrapolate=True)
         zero = np.max(np.abs(yout-1))
         self.assertAlmostEqual(zero,0.)
 

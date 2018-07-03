@@ -77,7 +77,6 @@ def get_image(filetype,night,expid,camera,specdir):
 
     #- Create image object
     imageobj = im(pix,ivar,mask=mask,readnoise=readnoise,camera=camera,meta=meta)
-
     return imageobj
 
 def get_frame(filetype,night,expid,camera,specdir):
@@ -254,6 +253,7 @@ class Trace_Shifts(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+            
         else:
             image=args[0]
 
@@ -364,6 +364,8 @@ class Bias_From_Overscan(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+            import sys
+            sys.exit()
         else:
             image=args[0]
             
@@ -446,10 +448,10 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if amps:
             bias_amps=np.array(bias_overscan)
-            retval["METRICS"]={'BIAS':bias,'BIAS_AMP':bias_amps}
+            retval["METRICS"]={'BIAS_AMP':bias_amps}
         else:
             #retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
-            retval["METRICS"]={'BIAS':bias}
+            retval["METRICS"]={}
 
         #- http post if needed
         if qlf:
@@ -545,7 +547,7 @@ class Get_RMS(MonitoringAlg):
 
         # return rms values in rms/sqrt(exptime)
         #rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
-        rmsccd = np.mean([image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']])
+        #rmsccd = np.mean([image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]) #--> "NOISE":rmsccd
         
         if param is None:
             log.debug("Param is None. Using default param instead")
@@ -674,10 +676,10 @@ class Get_RMS(MonitoringAlg):
         if amps:
             rms_over_amps = [image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]
             rms_amps = [image.meta['OBSRDN1'],image.meta['OBSRDN2'],image.meta['OBSRDN3'],image.meta['OBSRDN4']]
-            retval["METRICS"]={"NOISE":rmsccd,"NOISE_AMP":np.array(rms_amps),"NOISE_OVERSCAN_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
+            retval["METRICS"]={"NOISE_AMP":np.array(rms_amps),"NOISE_OVERSCAN_AMP":np.array(rms_over_amps),"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig,"BIAS_PATNOISE":bias_patnoise}#,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum,"NOISE_OVER":rmsover
 
         else:
-            retval["METRICS"]={"NOISE":rmsccd,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
+            retval["METRICS"]={"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
         if qlf:
             qlf_post(retval)  
@@ -729,6 +731,7 @@ class Calc_XWSigma(MonitoringAlg):
         else:
             image=args[0]
 
+        flavor=kwargs['Flavor']
         fibermap=kwargs['FiberMap'] 
  
         if "paname" not in kwargs:
@@ -764,9 +767,9 @@ class Calc_XWSigma(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
  
-        return self.run_qa(fibermap,image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
+        return self.run_qa(fibermap,flavor,image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
  
-    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,fibermap,flavor,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from scipy.optimize import curve_fit
 
         retval={}
@@ -821,7 +824,7 @@ class Calc_XWSigma(MonitoringAlg):
             peak_wave.append(peak_upper)
         npeaks=len(peaks)
 
-        if fibermap["OBJTYPE"][0] == 'ARC':
+        if flavor == 'arcs':
             import desispec.psf
             psf=desispec.psf.PSF(psf)
 
@@ -1013,6 +1016,7 @@ class Count_Pixels(MonitoringAlg):
             r=kwargs["ReferenceMetrics"]
             if key in r:
                 kwargs["REFERENCE"]=r[key]
+                
         if "LITFRAC_WARN_RANGE" in parms and "LITFRAC_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["LITFRAC_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["LITFRAC_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
@@ -1194,10 +1198,6 @@ class CountSpectralBins(MonitoringAlg):
         #ra = fibermap["RA_TARGET"]
         #dec = fibermap["DEC_TARGET"]
 
-        if fibermap["OBJTYPE"][0] == 'ARC':
-            import desispec.psf
-            psf=desispec.psf.PSF(psf)
-
         grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
             log.debug("grid_size is NOT UNIFORM")
@@ -1293,7 +1293,6 @@ class Sky_Continuum(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1343,7 +1342,11 @@ class Sky_Continuum(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             desi_params = read_params()
-            param = {}
+            param = {"B_CONT": ["4000, 4500", "5250, 5550"],
+                         "R_CONT": ["5950, 6200", "6990, 7230"],
+                         "Z_CONT": ["8120, 8270", "9110, 9280"],
+                         "SKYCONT_NORMAL_RANGE": [100.0, 400.0],
+                         "SKYCONT_WARN_RANGE": [50.0, 600.0]}
             for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_ALARM_RANGE', 'SKYCONT_WARN_RANGE']: #- needs updating alarm/warn - normal/warn in desi_params.
                 param[key] = desi_params['qa']['skysub']['PARAMS'][key]
 
@@ -1355,55 +1358,9 @@ class Sky_Continuum(MonitoringAlg):
         skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
             frame, wrange1, wrange2)
  
-        fibs = skyfiber.tolist()
-        skyfib_Rflux=[]
-        
-        #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
-   
-        filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
-        mags=frame.fibermap['MAG']
-        
-        if (filt == 'r'):
-            
-            flux=frame.flux
-            wave=frame.wave
-            integrals=np.zeros(flux.shape[0])
-            
-            import desimodel
-            from desimodel.focalplane import fiber_area_arcsec2
-        
-            wsky = np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
-            xsky = frame.fibermap["X_FVCOBS"][wsky]
-            ysky = frame.fibermap["Y_FVCOBS"][wsky]    
-            apsky = desimodel.focalplane.fiber_area_arcsec2(xsky,ysky)
-            expt = frame.meta["EXPTIME"]
-            
-            for i in range(len(fibs)):
-            
-                sky_integ = qalib.integrate_spec(wave,flux[fibs[i]])
-                # SE:  leaving the units as counts/sec/arcsec^2 to be compared to sky monitor fluc from ETC 
-                sky_flux = sky_integ/expt/apsky[i]
-            
-                skyfib_Rflux.append(sky_flux)
-            
-        #SE: assuming there is a key in the header of the raw exposure header [OR somewhere else] where the sky R-band flux from the sky monitor is stored 
-        #    the units would be counts/sec/arcsec^2   ---> sky_r=frame.meta["SKYFLUX"] - 1000 is just a dummy number as a placeholder
-        sky_r=  1000#frame.meta["SKYFLUX"]
-        
-        if (sky_r != "" and len(skyfib_Rflux) >0):
-            
-            retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":abs(sky_r-np.mean(skyfib_Rflux)) }
-
-        else:
-             if (sky_r != "" and len(skyfib_Rflux) == 0): 
-                 
-                
-                retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":sky_r}
+                            
+        retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
              
-             else: 
-              
-                log.warning("No SKY Monitor R-band Flux was found in the header!")
-                retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber, "Sky_Rband":sky_r,"Sky_fib_Rband":skyfib_Rflux, "Sky_Rflux_diff":sky_fib_flux}
 
         if qlf:
             qlf_post(retval)    
@@ -1423,13 +1380,175 @@ class Sky_Continuum(MonitoringAlg):
         return {}
 
 
+
+class Sky_Rband(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="SKYRBAND"
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        key=kwargs['refKey'] if 'refKey' in kwargs else "SKYRBAND"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "SKYRBAND_STATUS"
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
+
+        if "SKYRBAND_WARN_RANGE" in parms and "SKYRBAND_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["SKYRBAND_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["SKYRBAND_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        MonitoringAlg.__init__(self,name,fr,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
+
+        if kwargs["singleqa"] == 'Sky_Rband':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
+        else:
+            frame=args[0]
+
+        fibermap=kwargs['FiberMap']
+        
+        if "paname" in kwargs:
+            paname=kwargs["paname"]
+
+        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
+        else: refmetrics=None
+
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "qlf" in kwargs:
+             qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig=None
+
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
+
+    def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+
+        #- qa dictionary 
+        retval={}
+        retval["PANAME" ]= paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
+        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        retval["FLAVOR"] = frame.meta["FLAVOR"]
+        retval["NIGHT"] = frame.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+        
+        camera=frame.meta["CAMERA"]
+
+        if param is None:
+            log.debug("Param is None. Using default param instead")
+            desi_params = read_params()
+            
+            param = {"B_CONT": ["4000, 4500", "5250, 5550"],
+                         "R_CONT": ["5950, 6200", "6990, 7230"],
+                         "Z_CONT": ["8120, 8270", "9110, 9280"],
+                         "SKYRBAND_NORMAL_RANGE": [-100.0, 100.0],
+                         "SKYRBAND_WARN_RANGE": [-200.0, 200.0]}
+            
+            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYRBAND_ALARM_RANGE', 'SKYRBAND_WARN_RANGE']: 
+                param[key] = desi_params['qa']['skysub']['PARAMS'][key]
+
+        wrange1=param["{}_CONT".format(camera[0].upper())][0]
+        wrange2=param["{}_CONT".format(camera[0].upper())][1]
+
+        retval["PARAMS"] = param
+
+        skyfiber, contfiberlow, contfiberhigh, meancontfiber, skycont = qalib.sky_continuum(
+            frame, wrange1, wrange2)
+ 
+        fibs = skyfiber.tolist()
+        skyfib_Rflux=[]
+        
+        #SE: Added a "place holder" for the Sky_Rband Flux from the sky monitor written in the header of the raw exposure 
+   
+        filt = re.split('(\d+)',frame.meta["CAMERA"])[0]
+        mags=frame.fibermap['MAG']
+
+        if (filt == 'r'):
+            
+            flux=frame.flux
+            wave=frame.wave
+            integrals=np.zeros(flux.shape[0])
+            
+            import desimodel
+            from desimodel.focalplane import fiber_area_arcsec2
+        
+            wsky = np.where(frame.fibermap['OBJTYPE']=='SKY')[0]
+            xsky = frame.fibermap["X_FVCOBS"][wsky]
+            ysky = frame.fibermap["Y_FVCOBS"][wsky]    
+            apsky = desimodel.focalplane.fiber_area_arcsec2(xsky,ysky)
+            expt = frame.meta["EXPTIME"]
+            
+            for i in range(len(fibs)):
+            
+                sky_integ = qalib.integrate_spec(wave,flux[fibs[i]])
+                # SE:  leaving the units as counts/sec/arcsec^2 to be compared to sky monitor flux from ETC in the same unit 
+                sky_flux = sky_integ/expt/apsky[i]
+            
+                skyfib_Rflux.append(sky_flux)
+            
+        #SE: assuming there is a key in the header of the raw exposure header [OR somewhere else] where the sky R-band flux from the sky monitor is stored 
+        #    the units would be counts/sec/arcsec^2  1000 is just a dummy number as a placeholder
+        sky_r=  100   # SE: to come from ETC in count/sec/arcsec^2 
+        
+        if (sky_r != "" and len(skyfib_Rflux) >0):
+            
+            diff = abs(sky_r-np.mean(skyfib_Rflux)) 
+            
+        else:
+             if (sky_r != "" and len(skyfib_Rflux) == 0): 
+                 
+                diff = sky_r
+             
+             else: 
+                diff = sky_fib_flux
+                log.warning("No SKY Monitor R-band Flux was found in the header!")
+
+
+        retval["METRICS"]={"SKYRBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
+
+        if qlf:
+            qlf_post(retval)    
+
+        if qafile is not None:
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+
+        #if qafig is not None:
+            #plot.plot_sky_continuum(retval,qafig)
+            
+            #log.debug("Output QA fig {}".format(qafig))
+        
+        return retval
+
+    def get_default_config(self):
+        return {}
+
+
 class Sky_Peaks(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="SKYPEAK"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT_MED_SKY"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT"
         status=kwargs['statKey'] if 'statKey' in kwargs else "PEAKCOUNT_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
@@ -1498,10 +1617,6 @@ class Sky_Peaks(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        #SE: no reason to call in RA/DEC, be careful with copy-paste!
-        #ra = fibermap["RA_TARGET"]
-        #dec = fibermap["DEC_TARGET"]
-
         # Parameters
         if param is None:
             log.info("Param is None. Using default param instead")
@@ -1509,14 +1624,20 @@ class Sky_Peaks(MonitoringAlg):
             param = desi_params['qa']['skypeaks']['PARAMS']
 
         # Run
-        nspec_counts, sky_counts = sky_peaks(param, frame)
-        rms_nspec = qalib.getrms(nspec_counts)
-        rms_skyspec = qalib.getrms(sky_counts)
-        sumcount_med_sky=[]
+        
+        #SE: it is deactivated now but remember that the order of targets in tgt array here is: tgtlist = ['STD','QSO','ELG','LRG','BGS','MWS_STAR']
+        #nspec_counts, sky_counts, tgt_counts, tgt_counts_rms = sky_peaks(param, frame)
+        nspec_counts, sky_counts= sky_peaks(param, frame)
+        rms_nspec = np.std(nspec_counts)#qalib.getrms(nspec_counts)
+        rms_skyspec = np.std(sky_counts)#qalib.getrms(sky_counts)  
+        
+        
+        sumcount_med_sky=np.median(sky_counts)
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"PEAKCOUNT":nspec_counts,"PEAKCOUNT_MED_SKY":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec}
+        retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
+
 
         if qlf:
             qlf_post(retval)
@@ -1570,7 +1691,6 @@ class Sky_Residual(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1622,10 +1742,6 @@ class Sky_Residual(MonitoringAlg):
         kwargs=self.config['kwargs']
 
 
-        #SE: why keep calling in values that are not used in this QA?
-        #ra = fibermap["RA_TARGET"]
-        #dec = fibermap["DEC_TARGET"]
-
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
@@ -1651,7 +1767,7 @@ class Sky_Residual(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
-            plot.plot_residuals(retval,qafig)
+            plot.plot_residuals(frame,retval,qafig)
             
             log.debug("Output QA fig {}".format(qafig))
 
@@ -1667,7 +1783,7 @@ class Integrate_Spec(MonitoringAlg):
             name="INTEG"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "INTEG_AVG"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "DELTAMAG_TGT"
         status=kwargs['statKey'] if 'statKey' in kwargs else "DELTAMAG_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
@@ -1691,7 +1807,6 @@ class Integrate_Spec(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1725,7 +1840,7 @@ class Integrate_Spec(MonitoringAlg):
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
-        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera = frame.meta["CAMERA"]
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -1734,28 +1849,52 @@ class Integrate_Spec(MonitoringAlg):
         ra = frame.fibermap["RA_TARGET"]
         dec = frame.fibermap["DEC_TARGET"]
 
-        #- get the integrals for all fibers
         flux=frame.flux
         wave=frame.wave
+        #- Grab magnitudes for appropriate filter
+        if camera[0].lower() == 'b':
+            filterindex=0 #- DECAM_G
+        elif camera[0].lower() == 'r':
+            filterindex=1 #- DECAM_R
+        elif camera[0].lower() == 'z':
+            filterindex=2 #- DECAM_Z
+        else:
+            log.warning("Camera not in b, r, or z channels...")
+        magnitudes=np.zeros(frame.nspec)
+        for obj in range(frame.nspec):
+            magnitudes[obj]=frame.fibermap['MAG'][obj][filterindex]
+        #- Calculate integrals for all fibers
         integrals=np.zeros(flux.shape[0])
-        log.info(len(integrals))
+        #log.info(len(integrals))
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
-        #- RS: Convert integrated counts to magnitudes
-        fibermags=22.5-2.5*np.log10(integrals/frame.meta["EXPTIME"])
+        #- RS: Convert integrated counts to magnitudes using flux calibration constant (to be updated!!)
+        fibermags=22.5-2.5*np.log10(1e-3*integrals/frame.meta["EXPTIME"])
+        #- Calculate delta_mag (remove sky fibers first)
+        objects=frame.fibermap['OBJTYPE']
+        skyfibers=np.where(objects=="SKY")[0]
+        immags_nosky=list(magnitudes)
+        fibmags_nosky=list(fibermags)
+        for skyfib in range(len(skyfibers)):
+            immags_nosky.remove(immags_nosky[skyfibers[skyfib]])
+            fibmags_nosky.remove(fibmags_nosky[skyfibers[skyfib]])
+            for skyfibindex in range(len(skyfibers)):
+                skyfibers[skyfibindex]-=1
+        delta_mag=np.array(fibmags_nosky)-np.array(immags_nosky)
 
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
         mag_avg_tgt=[]
         integ_avg_sky=[]
-    
-        for T in ["ELG","QSO","LRG","STD"]:
-            fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
-            if len(fibers) < 1:
-                log.warning("no {} fibers found.".format(T))
-                 
-            magnitudes=frame.fibermap['MAG'][fibers]
-            mag_avg=np.mean(magnitudes)
+
+        objtypes=sorted(list(set(objects)))
+        if "SKY" in objtypes: objtypes.remove("SKY")
+        starfibers=None
+        for T in objtypes:
+            fibers=np.where(objects==T)[0]
+
+            objmags=magnitudes[fibers]
+            mag_avg=np.mean(objmags)
             mag_avg_tgt.append(mag_avg)
             integ=integrals[fibers]
             integ_avg=np.mean(integ)
@@ -1769,13 +1908,13 @@ class Integrate_Spec(MonitoringAlg):
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
         for i in range(len(mag_avg_tgt)):
-            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+22.5
+            mag_fib=-2.5*np.log10(1e-3*integ_avg_tgt[i]/frame.meta["EXPTIME"])+22.5
             if mag_avg_tgt[i] != np.nan:
                 magdiff=mag_fib-mag_avg_tgt[i]
             else:
-                magdiff=nan
+                magdiff=np.nan
             magdiff_avg.append(magdiff)
-
+            
         if param is None:
             log.debug("Param is None. Using default param instead")
             param = {
@@ -1786,10 +1925,9 @@ class Integrate_Spec(MonitoringAlg):
         retval["PARAMS"] = param
 
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
-        delta_mag=np.zeros(frame.nspec) #- placeholder
 
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":delta_mag, "STD_FIBERID":starfibers.tolist(), "DELTAMAG_TGT":magdiff_avg}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg)}
 
         if qlf:
             qlf_post(retval) 
@@ -1837,7 +1975,6 @@ class Calculate_SNR(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-            reduxpath = os.path.join(os.environ['QL_SPEC_REDUX'],'exposures',night,expid)
         else:
             frame=args[0]
 
@@ -1884,8 +2021,8 @@ class Calculate_SNR(MonitoringAlg):
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]
-        objlist = set(fibermap["OBJTYPE"])
-        
+        objlist = sorted(set(fibermap["OBJTYPE"]))
+
         if 'SKY' in objlist:
             objlist.remove('SKY')
 
