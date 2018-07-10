@@ -57,7 +57,7 @@ def nersc_machine(name, queue):
             props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --partition=regular")
         elif queue == "realtime":
-            props["maxnodes"] = 10
+            props["maxnodes"] = 25
             props["maxtime"] = 120
             props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --exclusive")
@@ -328,7 +328,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         maxnodes = hostprops["maxnodes"]
     if maxnodes > hostprops["maxnodes"]:
         raise RuntimeError("requested max nodes '{}' is larger than {} "
-            "queue '{}'".format(maxtime, machine, queue))
+            "queue '{}' with {} nodes".format(
+                maxnodes, machine, queue, hostprops["maxnodes"]))
 
     if nodeprocs is None:
         # Estimate the required processes per node based on memory use.

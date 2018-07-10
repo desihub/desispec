@@ -684,6 +684,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             fitcoeff.append(vs)
             fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
+            
         except scipy.optimize.OptimizeWarning:
             log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
             vs=out[0]

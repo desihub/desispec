@@ -82,6 +82,12 @@ class MonitoringAlg:
                     val=l[1]
             return val
 
+<<<<<<< HEAD
+=======
+        #print(metrics, "MA 3")
+
+        metrics[QARESULTKEY]='NORMAL'
+>>>>>>> f0feae35f1862435f35815369820740aba869fb9
         if self.__deviation is not None and "RANGES" in cargs:
             self.m_log.info("QL Reference checking for QA {}".format(self.name))
             thr=cargs["RANGES"]
@@ -113,6 +119,8 @@ class MonitoringAlg:
                 metrics[QARESULTKEY]='ALARM'
         else:
             self.m_log.warning("No Reference checking for QA {}".format(self.name))
+            
+        self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
         return res
     def run(self,*argv,**kwargs):
         pass
