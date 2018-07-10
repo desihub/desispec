@@ -81,12 +81,15 @@ class Config(object):
         qaRefKeys = {}
         for i in algokeys: 
             for k in self.algorithms[i]["QA"].keys():
-                scalar = self.algorithms[i]["QA"][k]["SCALAR"]
-                qaScalar = {k:scalar}
-                qaRefKeys[k] = scalar
+                if k == "Check_HDUs":
+                    qaRefKeys[k] = "HDUs_OK"
+                qaparams=self.algorithms[i]["QA"][k]["PARAMS"]
+                for par in qaparams.keys():
+                    if "NORMAL_RANGE" in par:
+                        scalar = par.replace("_NORMAL_RANGE","")
+                        qaRefKeys[k] = scalar
 
         # Special additional parameters to read in.  
-        # RK:  For Calculate_SNR quatities, these neeed to be moved into PARAMS
         if "BoxcarExtract" in self.algorithms.keys():
             if "wavelength" in self.algorithms["BoxcarExtract"].keys():
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
@@ -281,6 +284,8 @@ class Config(object):
                             'qafig': qaplot, 'FiberMap': self.fibermap,
                             'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
                             'singleqa' : self.singqa}
+                if qa == 'Calc_XWSigma':
+                    qaopts[qa]['Flavor']=self.flavor
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir

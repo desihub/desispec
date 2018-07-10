@@ -347,7 +347,6 @@ class Bias_From_Overscan(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
-        print(parms)
         if "BIAS_WARN_RANGE" in parms and "BIAS_NORMAL_RANGE" in parms:
             kwargs["RANGES"]=[(np.asarray(parms["BIAS_WARN_RANGE"]),QASeverity.WARNING),
                               (np.asarray(parms["BIAS_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe 
@@ -383,7 +382,6 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if "param" in kwargs: param=kwargs["param"]
         else: param=None
-        print(param,"step 2")
 
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
@@ -444,7 +442,6 @@ class Bias_From_Overscan(MonitoringAlg):
                 "BIAS_WARN_RANGE:":[-2.0, 2.0]
                 }
         retval["PARAMS"] = param
-        print(param,"step 2")        
 
         if amps:
             bias_amps=np.array(bias_overscan)
