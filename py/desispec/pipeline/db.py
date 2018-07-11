@@ -105,7 +105,7 @@ def all_tasks(night, nside, expid=None):
     full = dict()
     for t in all_task_types():
         full[t] = list()
-    
+
     healpix_frames = []
 
     if expid is not None:
@@ -121,10 +121,10 @@ def all_tasks(night, nside, expid=None):
 
         log.info("read {}".format(fibermap))
 
-        #fmdata = io.read_fibermap(fibermap)
-        #flavor = fmdata.meta["FLAVOR"]
+        fmdata = io.read_fibermap(fibermap)
+        header = fmdata.meta
 
-        fmdata,header = fitsio.read(fibermap,header=True)
+        # fmdata, header = fitsio.read(fibermap, 'FIBERMAP', header=True)
         flavor = header["FLAVOR"].strip().lower()
         if flavor not in ["arc","flat","science"] :
             log.error("Do not know what do to with fibermap flavor '{}' for file '{}".format(flavor,fibermap))

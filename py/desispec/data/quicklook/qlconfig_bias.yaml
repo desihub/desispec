@@ -2,21 +2,11 @@
 name: DESI Quicklook Bias Calibration
 Program: dark
 Flavor: bias
-#- Calibration files: Assuming the same night for psf and fiberflat
-#- PSFExpid used as expid for arc exposures
-PSFExpid: 0
-PSFType: psf
-#- FiberflatExpid used as expid for flat exposures
-FiberflatExpid: 1
 #- Writeout intermediate files
 WritePreprocfile: False
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: False
-#- Exposure ID for Reference Template
-TemplateExpid: 0
-#- Night for Reference Template
-TemplateNight: 20191001
 #-Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file

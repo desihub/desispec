@@ -60,6 +60,7 @@ class TestScripts(unittest.TestCase):
         self.environ_cache.clear()
         return
 
+    @unittest.skipIf(True, 'Skipping code undergoing significant changes.')
     def test_delivery(self):
         """Test desispec.scripts.delivery.
         """

@@ -121,7 +121,7 @@ def dilate_numba(input_boolean_array,include_input=False) :
 
 
 @numba.jit
-def reject_cosmic_rays_ala_sdss_numba(pix,ivar,selection,psf_gradients,nsig,cfudge,c2fudge) :
+def _reject_cosmic_rays_ala_sdss_single_numba(pix,ivar,selection,psf_gradients,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
 
@@ -130,7 +130,10 @@ def reject_cosmic_rays_ala_sdss_numba(pix,ivar,selection,psf_gradients,nsig,cfud
 
     Input is a pre-processed image : desispec.Image
     Ouput is a rejection mask of the same size as the image
-
+    
+    This routine is much faster than _reject_cosmic_rays_ala_sdss_single
+    (if you have numba installed, otherwise it is catastrophically slower)
+    
     Args:
        pix: input desispec.Image.pix (counts in pixels, 2D image)
        ivar: inverse variance of pix
@@ -167,44 +170,55 @@ def reject_cosmic_rays_ala_sdss_numba(pix,ivar,selection,psf_gradients,nsig,cfud
     for i0 in range(1,n0-1) :
         for i1 in range(1,n1-1) :
             
-            if (not selection[i0,i1]) or ivar[i0,i1]<=0 : continue
+            central_pix_ivar=ivar[i0,i1]
+            if (not selection[i0,i1]) or central_pix_ivar<=0 : continue
             
-            # first criterion, signal in pix must be significantly higher than neighbours (=back)
+            # first criterion, signal in pix must be significantly higher than neighbors
             # in all directions
             # JG comment : this does not look great for muon tracks that are perfectly aligned
-            # with one the axis.
-            # I change the algorithm to accept 3 out of 4 valid tests
-            first_criterion=1 # why do I start at 1 ?????
+            # with one the axis. I change the algorithm to accept 2 out of 4 valid tests
+            first_criterion=0 
             
             # second criterion, rejected if at least for one axis
-            # the background values "back" are not consistent with PSF given the central pixel value
+            # the neighbors average value are not consistent with PSF given the central pixel value
             # here the number of sigmas is the parameter cfudge
             # c2fudge alters the PSF
             second_criterion=False
             
-            pixii=pix[i0,i1]
-            sigii=1/np.sqrt(ivar[i0,i1])
-            
-            for a in range(naxis) :
+            central_pix_val=pix[i0,i1]
+            central_pix_err=1/np.sqrt(central_pix_ivar)
+                        
+            # loop on axis
+            for a in range(naxis) : 
+
+                # the offsets
                 d0=dd[a,0]
                 d1=dd[a,1]
                 
-                ivar0=ivar[i0-d0,i1-d1]
-                ivar1=ivar[i0+d0,i1+d1]
-                nvalid=(ivar0>0)+(ivar1>0)
-                #if nvalid==0 : continue
-                nvalidinv=(nvalid>0)/(nvalid+(nvalid==0))
-                back=((ivar0>0)*pix[i0-d0,i1-d1]+(ivar1>0)*pix[i0+d0,i1+d1])*nvalidinv
-                sigmaback=np.sqrt((ivar0>0)/(ivar0+(ivar0==0))+(ivar1>0)/(ivar1+(ivar1==0)))*nvalidinv
+                neighboring_pix_val=0.
+                neighboring_pix_err=0.
                 
-                first_criterion += (pixii>(back+nsig*sigii))
-                second_criterion |= (((pixii-cfudge*sigii)*c2fudge*psf_gradients[a]) > ( back+cfudge*sigmaback ))
+                # compute average value on both sides of central pix 
+                for signe in [-1,1] :
+                    tmp_ivar = ivar[i0+signe*d0,i1+signe*d1]
+                    if tmp_ivar > 0 :
+                        neighboring_pix_val  += pix[i0+signe*d0,i1+signe*d1]
+                        neighboring_pix_err  += 1/tmp_ivar
+                    else : # replace it by the central pixel value
+                        neighboring_pix_val  += central_pix_val
+                        neighboring_pix_err  += central_pix_err**2
+                
+                neighboring_pix_val  *= 0.5 # average value
+                neighboring_pix_err   = np.sqrt(neighboring_pix_err)*0.5 # uncertainty on average value
+                
+                first_criterion += (central_pix_val>(neighboring_pix_val+nsig*central_pix_err))
+                second_criterion |= (((central_pix_val-cfudge*central_pix_err)*c2fudge*psf_gradients[a]) > ( neighboring_pix_val+cfudge*neighboring_pix_err ))
             
-            rejection[i0,i1] = ( (first_criterion>=3) & second_criterion )
+            rejection[i0,i1] = ( (first_criterion>=2) & second_criterion )
             
     return rejection
     
-def reject_cosmic_rays_ala_sdss_single(pix,ivar,selection,psf_gradients,nsig,cfudge,c2fudge) :
+def _reject_cosmic_rays_ala_sdss_single(pix,ivar,selection,psf_gradients,nsig,cfudge,c2fudge) :
     """Cosmic ray rejection following the implementation in SDSS/BOSS.
     (see idlutils/src/image/reject_cr_psf.c and idlutils/pro/image/reject_cr.pro)
 
@@ -213,6 +227,9 @@ def reject_cosmic_rays_ala_sdss_single(pix,ivar,selection,psf_gradients,nsig,cfu
 
     Input is a pre-processed image : desispec.Image
     Ouput is a rejection mask of the same size as the image
+
+    A faster version of this routine using numba in implemented in
+    _reject_cosmic_rays_ala_sdss_single_numba
 
     Args:
        pix: input desispec.Image.pix (counts in pixels, 2D image)
@@ -271,11 +288,15 @@ def reject_cosmic_rays_ala_sdss_single(pix,ivar,selection,psf_gradients,nsig,cfu
 
     # back and sigmaback are the average values of each pair and their error
     # (same notation as SDSS code)
-    tmp=np.sum(pairivar>0,axis=1).astype(float)
-    tmp=(tmp>0)/(tmp+(tmp==0))
-    back=np.sum(pairpix*(pairivar>0),axis=1)*tmp
-    sigmaback=np.sqrt(np.sum((pairivar>0)/(pairivar+(pairivar==0)),axis=1))*tmp
-
+    for a in range(naxis) :
+        for i in range(2) :
+            jj=(pairivar[a,i]==0)
+            pairpix[a,i,jj]=tpix[jj] # replace null ivar pair pixel value with central value
+            pairivar[a,i,jj]=tpixivar[jj]
+    
+    back=np.sum(pairpix*(pairivar>0),axis=1)*0.5
+    sigmaback=np.sqrt(np.sum((pairivar>0)/(pairivar+(pairivar==0)),axis=1))*0.5
+    
     log.debug("mean pix = %f"%np.mean(tpix))
     log.debug("mean back = %f"%np.mean(back))
     log.debug("mean sigmaback = %f"%np.mean(sigmaback))
@@ -291,7 +312,7 @@ def reject_cosmic_rays_ala_sdss_single(pix,ivar,selection,psf_gradients,nsig,cfu
     tmp[nonullivar]=tpix[nonullivar]-nsig/np.sqrt(tpixivar[nonullivar])
     for a in range(naxis) :
         first_criterion += (tmp>back[a])
-    first_criterion=(first_criterion>=3).astype(bool)
+    first_criterion=(first_criterion>=3)
 
     # second criterion, rejected if at least for one axis
     # the values back are not consistent with PSF given the central
@@ -303,7 +324,6 @@ def reject_cosmic_rays_ala_sdss_single(pix,ivar,selection,psf_gradients,nsig,cfu
     tmp[nonullivar]=tpix[nonullivar]-cfudge/np.sqrt(tpixivar[nonullivar])
     for a in range(naxis) :
         second_criterion |= ( tmp*c2fudge*psf_gradients[a] > ( back[a]+cfudge*sigmaback[a] ) )
-
 
     log.debug("npix selected                       = %d"%tpix.size)
     log.debug("npix rejected 1st criterion         = %d"%np.sum(first_criterion))
@@ -340,6 +360,8 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
     tivar=img.ivar*(img.mask==0)*(img.ivar>0)
     
     
+
+    # those gradients have been computed using the code desi_compute_psf_gradients
     band=img.camera[0].lower()
     if band == 'b':
         psf_gradients=np.array([0.366247,0.391422,0.172965,0.184552])
@@ -356,9 +378,9 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
     use_numba = True
     
     if use_numba :
-        rejected   = reject_cosmic_rays_ala_sdss_numba(img.pix,tivar,selection,psf_gradients,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge)
+        rejected   = _reject_cosmic_rays_ala_sdss_single_numba(img.pix,tivar,selection,psf_gradients,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge)
     else :
-        rejected  = reject_cosmic_rays_ala_sdss_single(img.pix,tivar,selection,psf_gradients,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge)
+        rejected  = _reject_cosmic_rays_ala_sdss_single(img.pix,tivar,selection,psf_gradients,nsig=nsig,cfudge=cfudge,c2fudge=c2fudge)
     
     
     log.info("first pass: %d pixels rejected"%(np.sum(rejected)))
@@ -387,9 +409,9 @@ def reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate
 
             # rerun with much more strict cuts
             if use_numba :
-                newrejected=reject_cosmic_rays_ala_sdss_numba(img.pix,tivar,neighbors,psf_gradients,nsig=3.,cfudge=0.,c2fudge=1.)
+                newrejected=_reject_cosmic_rays_ala_sdss_single_numba(img.pix,tivar,neighbors,psf_gradients,nsig=3.,cfudge=0.,c2fudge=1.)
             else :
-                newrejected=reject_cosmic_rays_ala_sdss_single(img.pix,tivar,neighbors,psf_gradients,nsig=3.,cfudge=0.,c2fudge=1.)
+                newrejected=_reject_cosmic_rays_ala_sdss_single(img.pix,tivar,neighbors,psf_gradients,nsig=3.,cfudge=0.,c2fudge=1.)
                 
             log.info("at iter %d: %d new pixels rejected"%(iteration,np.sum(newrejected)))
             if np.sum(newrejected)<1 :            

@@ -45,7 +45,7 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
     #- NOTE: specprod_dir is the directory $DESI_SPECTRO_REDUX/$SPECPROD,
     #-       specprod is just the environment variable $SPECPROD
     location = dict(
-        raw = '{rawdata_dir}/{night}/desi-{expid:08d}.fits.fz',
+        raw = '{rawdata_dir}/{night}/{expid:08d}/desi-{expid:08d}.fits.fz',
         preproc = '{specprod_dir}/preproc/{night}/{expid:08d}/preproc-{camera}-{expid:08d}.fits',
         fiberflat = '{specprod_dir}/exposures/{night}/{expid:08d}/fiberflat-{camera}-{expid:08d}.fits',
         fiberflatnight = '{specprod_dir}/calibnight/{night}/fiberflatnight-{camera}-{night}.fits',
@@ -72,90 +72,13 @@ def findfile(filetype, night=None, expid=None, camera=None, groupname=None,
         qa_flat_fig = '{qaprod_dir}/calib2d/{night}/qa-flat-{camera}-{expid:08d}.png',
         qa_ztruth = '{qaprod_dir}/exposures/{night}/qa-ztruth-{night}.yaml',
         qa_ztruth_fig = '{qaprod_dir}/exposures/{night}/qa-ztruth-{night}.png',
-        ql_bootcalib_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-bootcalib-{camera}-{expid:08d}.png',
-        ql_bootcalib_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-bootcalib-{camera}-{expid:08d}.yaml',
-        ql_boxextract_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-boxextract-{camera}-{expid:08d}.png',
-        ql_boxextract_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-boxextract-{camera}-{expid:08d}.yaml',
-        ql_boxextract_arc_fig = '{specprod_dir}/calib2d/{night}/ql-boxextractarc-{camera}-{expid:08d}.png',
-        ql_boxextract_arc_file = '{specprod_dir}/calib2d/{night}/ql-boxextractarc-{camera}-{expid:08d}.yaml',
-        ql_computeflat_fig = '{specprod_dir}/calib2d/{night}/ql-computeflat-{camera}-{expid:08d}.png',
-        ql_computeflat_file = '{specprod_dir}/calib2d/{night}/ql-computeflat-{camera}-{expid:08d}.yaml',
-        ql_countbins_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-countbins-{camera}-{expid:08d}.png',
-        ql_countbins_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-countbins-{camera}-{expid:08d}.yaml',
-        ql_countbins_arc_fig = '{specprod_dir}/calib2d/{night}/ql-countbinsarc-{camera}-{expid:08d}.png',
-        ql_countbins_arc_file = '{specprod_dir}/calib2d/{night}/ql-countbinsarc-{camera}-{expid:08d}.yaml',
-        ql_countpix_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-countpix-{camera}-{expid:08d}.png',
-        ql_countpix_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-countpix-{camera}-{expid:08d}.yaml',
-        ql_countpix_arc_fig = '{specprod_dir}/calib2d/{night}/ql-countpixarc-{camera}-{expid:08d}.png',
-        ql_countpix_arc_file = '{specprod_dir}/calib2d/{night}/ql-countpixarc-{camera}-{expid:08d}.yaml',
-        ql_countpix_bias_fig = '{specprod_dir}/calib2d/{night}/ql-countpixbias-{camera}-{expid:08d}.png',
-        ql_countpix_bias_file = '{specprod_dir}/calib2d/{night}/ql-countpixbias-{camera}-{expid:08d}.yaml',
-        ql_countpix_dark_fig = '{specprod_dir}/calib2d/{night}/ql-countpixdark-{camera}-{expid:08d}.png',
-        ql_countpix_dark_file = '{specprod_dir}/calib2d/{night}/ql-countpixdark-{camera}-{expid:08d}.yaml',
-        ql_fiberflat_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-fiberflat-{camera}-{expid:08d}.png',
-        ql_fiberflat_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-fiberflat-{camera}-{expid:08d}.yaml',
-        ql_getbias_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-getbias-{camera}-{expid:08d}.png',
-        ql_getbias_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-getbias-{camera}-{expid:08d}.yaml',
-        ql_getbias_arc_fig = '{specprod_dir}/calib2d/{night}/ql-getbiasarc-{camera}-{expid:08d}.png',
-        ql_getbias_arc_file = '{specprod_dir}/calib2d/{night}/ql-getbiasarc-{camera}-{expid:08d}.yaml',
-        ql_getbias_bias_fig = '{specprod_dir}/calib2d/{night}/ql-getbiasbias-{camera}-{expid:08d}.png',
-        ql_getbias_bias_file = '{specprod_dir}/calib2d/{night}/ql-getbiasbias-{camera}-{expid:08d}.yaml',
-        ql_getbias_dark_fig = '{specprod_dir}/calib2d/{night}/ql-getbiasdark-{camera}-{expid:08d}.png',
-        ql_getbias_dark_file = '{specprod_dir}/calib2d/{night}/ql-getbiasdark-{camera}-{expid:08d}.yaml',
-        ql_checkHDUs_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-checkHDUs-{camera}-{expid:08d}.png',
-        ql_checkHDUs_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-checkHDUs-{camera}-{expid:08d}.yaml',
-        ql_getrms_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-getrms-{camera}-{expid:08d}.png',
-        ql_getrms_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-getrms-{camera}-{expid:08d}.yaml',
-        ql_getrms_arc_fig = '{specprod_dir}/calib2d/{night}/ql-getrmsarc-{camera}-{expid:08d}.png',
-        ql_getrms_arc_file = '{specprod_dir}/calib2d/{night}/ql-getrmsarc-{camera}-{expid:08d}.yaml',
-        ql_getrms_bias_fig = '{specprod_dir}/calib2d/{night}/ql-getrmsbias-{camera}-{expid:08d}.png',
-        ql_getrms_bias_file = '{specprod_dir}/calib2d/{night}/ql-getrmsbias-{camera}-{expid:08d}.yaml',
-        ql_getrms_dark_fig = '{specprod_dir}/calib2d/{night}/ql-getrmsdark-{camera}-{expid:08d}.png',
-        ql_getrms_dark_file = '{specprod_dir}/calib2d/{night}/ql-getrmsdark-{camera}-{expid:08d}.yaml',
-        ql_initial_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-initial-{camera}-{expid:08d}.png',
-        ql_initial_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-initial-{camera}-{expid:08d}.yaml',
-        ql_initial_arc_fig = '{specprod_dir}/calib2d/{night}/ql-initialarc-{camera}-{expid:08d}.png',
-        ql_initial_arc_file = '{specprod_dir}/calib2d/{night}/ql-initialarc-{camera}-{expid:08d}.yaml',
-        ql_initial_bias_fig = '{specprod_dir}/calib2d/{night}/ql-initialbias-{camera}-{expid:08d}.png',
-        ql_initial_bias_file = '{specprod_dir}/calib2d/{night}/ql-initialbias-{camera}-{expid:08d}.yaml',
-        ql_initial_dark_fig = '{specprod_dir}/calib2d/{night}/ql-initialdark-{camera}-{expid:08d}.png',
-        ql_initial_dark_file = '{specprod_dir}/calib2d/{night}/ql-initialdark-{camera}-{expid:08d}.yaml',
-        ql_integ_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-integ-{camera}-{expid:08d}.png',
-        ql_integ_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-integ-{camera}-{expid:08d}.yaml',
-        ql_mergedQA_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-mergedQA-{camera}-{expid:08d}.yaml',
-        ql_mergedQAarc_file = '{specprod_dir}/calib2d/{night}/ql-mergedQAarc-{camera}-{expid:08d}.yaml',
-        ql_preproc_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-preproc-{camera}-{expid:08d}.png',
-        ql_preproc_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-preproc-{camera}-{expid:08d}.yaml',
-        ql_preproc_arc_fig = '{specprod_dir}/calib2d/{night}/ql-preprocarc-{camera}-{expid:08d}.png',
-        ql_preproc_arc_file = '{specprod_dir}/calib2d/{night}/ql-preprocarc-{camera}-{expid:08d}.yaml',
-        ql_preproc_bias_fig = '{specprod_dir}/calib2d/{night}/ql-preprocbias-{camera}-{expid:08d}.png',
-        ql_preproc_bias_file = '{specprod_dir}/calib2d/{night}/ql-preprocbias-{camera}-{expid:08d}.yaml',
-        ql_preproc_dark_fig = '{specprod_dir}/calib2d/{night}/ql-preprocdark-{camera}-{expid:08d}.png',
-        ql_preproc_dark_file = '{specprod_dir}/calib2d/{night}/ql-preprocdark-{camera}-{expid:08d}.yaml',
-        ql_resfit_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-resfit-{camera}-{expid:08d}.png',
-        ql_resfit_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-resfit-{camera}-{expid:08d}.yaml',
-        ql_resfit_arc_fig = '{specprod_dir}/calib2d/{night}/ql-resfitarc-{camera}-{expid:08d}.png',
-        ql_resfit_arc_file = '{specprod_dir}/calib2d/{night}/ql-resfitarc-{camera}-{expid:08d}.yaml',
-        ql_skycont_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-skycont-{camera}-{expid:08d}.png',
-        ql_skycont_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-skycont-{camera}-{expid:08d}.yaml',
-        ql_skypeak_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-skypeak-{camera}-{expid:08d}.png',
-        ql_skypeak_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-skypeak-{camera}-{expid:08d}.yaml',
-        ql_skyresid_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-skyresid-{camera}-{expid:08d}.png',
-        ql_skyresid_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-skyresid-{camera}-{expid:08d}.yaml',
-        ql_skysub_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-skysub-{camera}-{expid:08d}.png',
-        ql_skysub_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-skysub-{camera}-{expid:08d}.yaml',
-        ql_snr_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-snr-{camera}-{expid:08d}.png',
-        ql_snr_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-snr-{camera}-{expid:08d}.yaml',
-        ql_trace_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-trace-{camera}-{expid:08d}.png',
-        ql_trace_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-trace-{camera}-{expid:08d}.yaml',
-        ql_xwsigma_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-xwsigma-{camera}-{expid:08d}.png',
-        ql_xwsigma_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-xwsigma-{camera}-{expid:08d}.yaml',
-        ql_xwsigma_arc_fig = '{specprod_dir}/calib2d/{night}/ql-xwsigmaarc-{camera}-{expid:08d}.png',
-        ql_xwsigma_arc_file = '{specprod_dir}/calib2d/{night}/ql-xwsigmaarc-{camera}-{expid:08d}.yaml',
+        ql_fig = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfig-{camera}-{expid:08d}.png',
+        ql_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-qlfile-{camera}-{expid:08d}.json',
+        ql_mergedQA_file = '{specprod_dir}/exposures/{night}/{expid:08d}/ql-mergedQA-{camera}-{expid:08d}.json',
         psf = '{specprod_dir}/exposures/{night}/{expid:08d}/psf-{camera}-{expid:08d}.fits',
         psfnight = '{specprod_dir}/calibnight/{night}/psfnight-{camera}-{night}.fits',
         psfboot = '{specprod_dir}/exposures/{night}/{expid:08d}/psfboot-{camera}-{expid:08d}.fits',
-        fibermap = '{rawdata_dir}/{night}/fibermap-{expid:08d}.fits',
+        fibermap = '{rawdata_dir}/{night}/{expid:08d}/fibermap-{expid:08d}.fits',
         zcatalog = '{specprod_dir}/zcatalog-{specprod}.fits',
         spectra = '{specprod_dir}/spectra-{nside}/{hpixdir}/spectra-{nside}-{groupname}.fits',
         redrock = '{specprod_dir}/spectra-{nside}/{hpixdir}/redrock-{nside}-{groupname}.h5',
@@ -317,7 +240,7 @@ def find_exposure_night(expid):
                 return night
 
 
-def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None, ):
+def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None):
     """Get a list of available exposures for the specified night.
 
     Exposures are identified as correctly formatted subdirectory names within the
@@ -349,31 +272,22 @@ def get_exposures(night, raw=False, rawdata_dir=None, specprod_dir=None, ):
     else:
         if specprod_dir is None:
             specprod_dir = specprod_root()
-        night_path = os.path.join(specprod_dir,'exposures',night)
+        night_path = os.path.join(specprod_dir, 'exposures', night)
 
     if not os.path.exists(night_path):
-        raise RuntimeError('Non-existent night %s' % night)
+        raise RuntimeError('Non-existent night {0}'.format(night))
 
     exposures = []
 
-    if raw:
-        fpat = re.compile(r'.*fibermap-(.*).fits')
-        for entry in glob.glob(os.path.join(night_path,'fibermap-*.fits')):
-            mat = fpat.match(entry)
-            if mat is not None:
-                iexp = int(mat.group(1))
-                assert mat.group(1) == "{:08d}".format(iexp)
-                exposures.append(iexp)
-    else:
-        for entry in glob.glob(os.path.join(night_path,'*')):
-            head,tail = os.path.split(entry)
-            try:
-                exposure = int(tail)
-                assert tail == "{:08d}".format(exposure)
-                exposures.append(exposure)
-            except (ValueError,AssertionError):
-                # Silently ignore entries that are not exposure subdirectories.
-                pass
+    for entry in glob.glob(os.path.join(night_path, '*')):
+        e = os.path.basename(entry)
+        try:
+            exposure = int(e)
+            assert e == "{0:08d}".format(exposure)
+            exposures.append(exposure)
+        except (ValueError, AssertionError):
+            # Silently ignore entries that are not exposure subdirectories.
+            pass
 
     return sorted(exposures)
 
