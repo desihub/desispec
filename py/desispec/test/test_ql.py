@@ -109,9 +109,9 @@ class TestQL(unittest.TestCase):
                                          'QA':{'Check_HDUs':{'PARAMS':{}}
                                              }},
                                      'Preproc':{
-                                         'QA':{'Bias_From_Overscan':{'PARAMS':{'DIFF_WARN_RANGE':[-1.0,1.0],'DIFF_ALARM_RANGE':[-2.0,2.0]}},
-                                             'Get_RMS':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'RMS_WARN_RANGE':[-1.0,1.0],'RMS_ALARM_RANGE':[-2.0,2.0]}},
-                                             'Count_Pixels':{'PARAMS':{'CUTPIX':500,'LITFRAC_NORMAL_RANGE':[200.0,500.0],'LITFRAC_WARN_RANGE':[50.0,650.0]}}}}}
+                                         'QA':{'Bias_From_Overscan':{'PARAMS':{'BIAS_AMP_NORMAL_RANGE':[-100.0,100.0],'BIAS_AMP_WARN_RANGE':[-200.0,200.0]}},
+                                             'Get_RMS':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'NOISE_AMP_NORMAL_RANGE':[-1.0,1.0],'NOISE_AMP_WARN_RANGE':[-2.0,2.0]}},
+                                             'Count_Pixels':{'PARAMS':{'CUTPIX':500,'LITFRAC_NORMAL_RANGE':[-0.1,0.1],'LITFRAC_WARN_RANGE':[-0.2,0.2]}}}}}
                       }
         with open('{}/test_config.yaml'.format(testDir),'w') as config:
             yaml.dump(configdict,config)
