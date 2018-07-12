@@ -15,7 +15,7 @@ from .util import fitsheader, native_endian, makepath
 
 def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=None):
     """Writes the normalized flux for the best models.
-    
+
     Args:
         norm_modelfile : output file path
         normalizedFlux : 2D array of flux[nstdstars, nwave]
@@ -25,7 +25,7 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     """
     hdr = fitsheader(header)
     add_dependencies(hdr)
-    
+
     hdr['EXTNAME'] = ('FLUX', '[1e-17 erg/(s cm2 Angstrom)]')
     hdr['BUNIT'] = ('1e-17 erg/(s cm2 Angstrom)', 'Flux units')
     hdu1=fits.PrimaryHDU(normalizedFlux.astype('f4'), header=hdr)
@@ -49,11 +49,11 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     # add coefficients
     if "COEFF" in data :
         hdulist.append(fits.ImageHDU(data["COEFF"],name="COEFF"))
-    
+
     tmpfile = norm_modelfile+".tmp"
-    hdulist.writeto(tmpfile, clobber=True, checksum=True)
+    hdulist.writeto(tmpfile, overwrite=True, checksum=True)
     os.rename(tmpfile, norm_modelfile)
-    
+
 
 def read_stdstar_models(filename):
     """Read stdstar models from filename.
@@ -69,26 +69,26 @@ def read_stdstar_models(filename):
         wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
         fibers = native_endian(fx['FIBERS'].data)
         metadata = fx['METADATA'].data
-        
+
 
     return flux, wave, fibers , metadata
 
 
 def write_flux_calibration(outfile, fluxcalib, header=None):
     """Writes  flux calibration.
-    
+
     Args:
         outfile : output file name
         fluxcalib : FluxCalib object
-        
+
     Options:
         header : dict-like object of key/value pairs to include in header
     """
     hx = fits.HDUList()
-    
+
     hdr = fitsheader(header)
     add_dependencies(hdr)
-    
+
     hdr['EXTNAME'] = 'FLUXCALIB'
     hdr['BUNIT'] = ('1e+17 cm2 electron s / erg', 'i.e. (electron/Angstrom) / (1e-17 erg/s/cm2/Angstrom)')
     hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f4'), header=hdr) )
@@ -96,8 +96,8 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     hx.append( fits.CompImageHDU(fluxcalib.mask, name='MASK') )
     hx.append( fits.ImageHDU(fluxcalib.wave.astype('f4'), name='WAVELENGTH') )
     hx[-1].header['BUNIT'] = 'Angstrom'
-    
-    hx.writeto(outfile+'.tmp', clobber=True, checksum=True)
+
+    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
     return outfile
@@ -122,10 +122,10 @@ def read_flux_calibration(filename):
 def read_stdstar_templates(stellarmodelfile):
     """
     Reads an input stellar model file
-    
+
     Args:
         stellarmodelfile : input filename
-    
+
     Returns (wave, flux, templateid, teff, logg, feh) tuple:
         wave : 1D[nwave] array of wavelengths [Angstroms]
         flux : 2D[nmodel, nwave] array of model fluxes
@@ -135,12 +135,12 @@ def read_stdstar_templates(stellarmodelfile):
         feh : 1D[nmodel] array of metallicity for each model
     """
     phdu=fits.open(stellarmodelfile, memmap=False)
-    
+
     #- New templates have wavelength in HDU 2
     if len(phdu) >= 3:
         wavebins = native_endian(phdu[2].data)
     #- Old templates define wavelength grid in HDU 0 keywords
-    else:        
+    else:
         hdr0=phdu[0].header
         crpix1=hdr0['CRPIX1']
         crval1=hdr0['CRVAL1']
@@ -152,7 +152,7 @@ def read_stdstar_templates(stellarmodelfile):
             model_wave_offset = (crval1-cdelt1*(crpix1-1))
             n_model_wave = phdu[0].data.shape[1]
             wavebins=model_wave_step*numpy.arange(n_model_wave) + model_wave_offset
-        
+
     paramData=phdu[1].data
     templateid=paramData["TEMPLATEID"]
     teff=paramData["TEFF"]

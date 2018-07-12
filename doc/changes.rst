@@ -29,6 +29,7 @@ exposure into a separate directory `$DESI_SPECTRO_DATA/{YEARMMDD}/{EXPID}/`.
 * Fix cosmics masking near masked saturated pixels (PR `#649`_).
 * Update edison realtime queue config to 25 nodes (PR `#650`_).
 * trace_shift code supports PSF formats without "PSF" HDU (PR `#654`_).
+* Change keyword ``clobber`` to ``overwrite`` in functions from ``astropy.io.fits`` (PR `#655`_).
 
 .. _`#634`: https://github.com/desihub/desispec/pull/634
 .. _`#635`: https://github.com/desihub/desispec/pull/635
@@ -44,6 +45,7 @@ exposure into a separate directory `$DESI_SPECTRO_DATA/{YEARMMDD}/{EXPID}/`.
 .. _`#649`: https://github.com/desihub/desispec/pull/649
 .. _`#650`: https://github.com/desihub/desispec/pull/650
 .. _`#654`: https://github.com/desihub/desispec/pull/654
+.. _`#655`: https://github.com/desihub/desispec/pull/655
 
 0.21.0 (2018-05-25)
 -------------------
