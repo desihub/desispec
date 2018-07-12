@@ -69,7 +69,7 @@ for filename in args.image :
     dark=False
     pixflat=False
     mask=False
-    
+
     img = io.read_raw(filename, args.camera,bias=args.bias,nocosmic=args.nocosmic,mask=mask,dark=dark,pixflat=pixflat,ccd_calibration_filename=False)
     if shape is None :
         shape=img.pix.shape
@@ -108,5 +108,5 @@ i=0
 for filename in args.image :
     hdulist[0].header["INPUT%03d"%i]=filename
     i+=1
-hdulist.writeto(args.outfile,clobber="True")
+hdulist.writeto(args.outfile, overwrite=True)
 log.info("done")
