@@ -291,7 +291,7 @@ def merge_psf(inputs, output):
         other_psf_hdulist.close()
 
     # write
-    psf_hdulist.writeto(output,clobber=True)
+    psf_hdulist.writeto(output,overwrite=True)
     log.info("Wrote PSF {}".format(output))
 
     return
@@ -469,7 +469,7 @@ def mean_psf(inputs, output):
         hdulist["PSF"].header["EXPID"]=0. # it's a mix, need to add the expids
 
     # save output PSF
-    hdulist.writeto(output, clobber=True)
+    hdulist.writeto(output, overwrite=True)
     log.info("wrote {}".format(output))
 
     return

@@ -16,15 +16,15 @@ from desiutil.log import get_logger
 
 def grid_from_psf(filename) :
     """ Return a list of spots coordinates along traces and trace orientations
-    
+
     Args:
-        filename : a fits file withe a specter PSF 
+        filename : a fits file withe a specter PSF
 
     Returns:
         x     : 1D array, x_ccd coordinate of spots (fiber axis, axis=1 in np.array)
         y     : 1D array, y_ccd coordinate of spots (wavelength axis, axis=0 in np.array)
         dx/dy : 1D array, dx/dy for curves of constant fiber coordinate
-        dy/dx : 1D array, dy/dx for curves of constant wavelength        
+        dy/dx : 1D array, dy/dx for curves of constant wavelength
     """
     try :
         psftype=pyfits.open(filename)[0].header["PSFTYPE"]
@@ -32,15 +32,15 @@ def grid_from_psf(filename) :
         psftype=""
 
     psf=None
-    
+
     if psftype=="GAUSS-HERMITE" :
         psf=specter.psf.GaussHermitePSF(filename)
     elif psftype=="SPOTGRID" :
         psf=specter.psf.SpotGridPSF(filename)
-    
+
     if psf is None :
         raise ValueError("cannot read PSFTYPE=%s"%psftype)
-    
+
     # make a grid of points from this PSF
     x=[]
     y=[]
@@ -56,7 +56,7 @@ def grid_from_psf(filename) :
             y.append(ty)
             f.append(fiber)
             w.append(wave)
-    
+
     x=np.array(x)
     y=np.array(y)
     dxdy=np.zeros(x.size).astype(float)
@@ -71,7 +71,7 @@ def grid_from_psf(filename) :
         dx=np.gradient(tx[i])
         dy=np.gradient(ty[i])
         dxdy[mask[i]]=dx/dy
-    
+
     for wave in waves :
         mask=np.where(w==wave)[0]
         tx=x[mask]
@@ -84,7 +84,7 @@ def grid_from_psf(filename) :
 
 def median_image(image_filenames) :
     """ Return a median of input images after rescaling each image
-    
+
     Args:
         image_filenames : list of preprocessed image path
 
@@ -92,7 +92,7 @@ def median_image(image_filenames) :
         mimage : median image (2D np.array)
         ivar   : ivar of median
     """
-    
+
     log.debug("first median")
     images=[]
     ivars=[]
@@ -100,7 +100,7 @@ def median_image(image_filenames) :
         h=pyfits.open(filename)
         images.append(h[0].data)
         ivars.append(h["IVAR"].data)
-    
+
     mimage=np.median(images,axis=0)
     log.debug("compute a scale per image")
     smimage2=np.sum(mimage**2)
@@ -117,7 +117,7 @@ def median_image(image_filenames) :
 
 def convolve2d(image,k,weight=None) :
     """ Return a 2D convolution of image with kernel k, optionally with a weight image
-    
+
     Args:
         image : 2D np.array image
         k : 2D np.array kernel, each dimension must be odd and greater than 1
@@ -132,7 +132,7 @@ def convolve2d(image,k,weight=None) :
         sw=convolve2d(weight,k,None)
         swim=convolve2d(weight*image,k,None)
         return swim/(sw+(sw==0))
-    
+
     if len(k.shape) != 2 or len(image.shape) != 2:
         raise ValueError("kernel and image should have 2 dimensions")
     for d in range(2) :
@@ -156,18 +156,18 @@ def convolve2d(image,k,weight=None) :
 
 def gaussian_smoothing_1d_per_axis(image,ivar,sigma,npass=2,dxdy=0.,dydx=0.) :
     """Computes a smooth model of the input image using two
-    1D convolution with a Gaussian kernel of parameter sigma. 
+    1D convolution with a Gaussian kernel of parameter sigma.
     Can do several passes.
-    
+
     Args:
         image : 2D array input image
         sigma : float number (>0)
-        npass : integer number (>=1) 
-    
+        npass : integer number (>=1)
+
     Returns:
         model : 2D array image of same shape as image
     """
-    
+
     log=get_logger()
     hw=int(3*sigma)
     tmp = image.copy()
@@ -178,9 +178,9 @@ def gaussian_smoothing_1d_per_axis(image,ivar,sigma,npass=2,dxdy=0.,dydx=0.) :
     u=(np.arange(2*hw+1)-hw)
     prof=np.exp(-u**2/sigma**2/2.)
     prof/=np.sum(prof)
-    
+
     # two kernels along two axes
-    # 
+    #
     kernels=[]
 
     # axis 0
@@ -196,7 +196,7 @@ def gaussian_smoothing_1d_per_axis(image,ivar,sigma,npass=2,dxdy=0.,dydx=0.) :
         kernel=np.zeros((2*hw+1,2*hwb+1))
         kernel[j,i+hwb]=prof
         kernels.append(kernel)
-    
+
     # axis 1
     if dydx==0 :
         kernel=np.zeros((3,2*hw+1))
@@ -210,49 +210,49 @@ def gaussian_smoothing_1d_per_axis(image,ivar,sigma,npass=2,dxdy=0.,dydx=0.) :
         kernel=np.zeros((2*hwb+1,2*hw+1))
         kernel[j+hwb,i]=prof
         kernels.append(kernel)
-    
+
     for p in range(npass) : # possibly do several passes
         for a in range(2) : # convolve in 1d on each axis
             #log.debug("p=%d a=%d"%(p,a))
             res=convolve2d(tmp,kernels[a],weight=tmpivar)
             model *= res
             tmpivar *= res**2 # ?
-            #tmpivar *= tmp**2 # ?            
+            #tmpivar *= tmp**2 # ?
             tmp /= (res+(res==0))
-            
+
 
     if 0 : # add 2D smoothing (does not help)
         x=np.tile((np.arange(2*hw+1)-hw)/sigma,(2*hw+1,1))
-        r2=x**2+x.T**2    
+        r2=x**2+x.T**2
         kernel2d=np.exp(-r2/2.)
         kernel2d/=np.sum(kernel2d)
         res = convolve2d(tmp,kernel2d,weight=tmpivar)
         model *= res
-    
+
     return model
 
-    
+
 def gaussian_smoothing_1d_with_tilted_axes(image,ivar,sigma,npass,x,y,dxdy,dydx,nblocks=5) :
     """Computes a smooth model of the input image using two
-    1D convolution with a Gaussian kernel of parameter sigma. 
+    1D convolution with a Gaussian kernel of parameter sigma.
     Can do several passes.
-    
+
     Args:
         image : 2D array input image
         sigma : float number (>0)
-        npass : integer number (>=1) 
-    
+        npass : integer number (>=1)
+
     Returns:
         model : 2D array image of same shape as image
     """
     if x is None or nblocks==1 :
         return gaussian_smoothing_1d_per_axis(image,ivar,sigma,npass=npass,dxdy=0,dydx=0)
-    
-    
+
+
     # defining blocks where trace directions are averaged
     b0size=image.shape[0]//nblocks
     b1size=image.shape[1]//nblocks
-    
+
     # blocks begin and end coordinates
     b0=b0size*np.arange(nblocks)
     e0=b0+b0size
@@ -260,10 +260,10 @@ def gaussian_smoothing_1d_with_tilted_axes(image,ivar,sigma,npass,x,y,dxdy,dydx,
     b1=b1size*np.arange(nblocks)
     e1=b1+b1size
     e1[-1]=image.shape[1]
-    
+
     # blocks begin and end coordinates with margins
     hw=int(3*sigma)
-    b0m = b0-hw    
+    b0m = b0-hw
     e0m = e0+hw
     b1m = b1-hw
     e1m = e1+hw
@@ -271,21 +271,21 @@ def gaussian_smoothing_1d_with_tilted_axes(image,ivar,sigma,npass,x,y,dxdy,dydx,
     e0m[e0m>image.shape[0]]=image.shape[0]
     b1m[b1m<0]=0
     e1m[e1m>image.shape[1]]=image.shape[1]
-    
-    
+
+
     # average trace direction per block
     bdxdy=np.zeros((nblocks,nblocks))
     bdydx=np.zeros((nblocks,nblocks))
     for i in range(nblocks) :
         for j in range(nblocks) :
             mask=(y>b0[i])&(y<=e0[i])&(x>b1[j])&(x<=e1[j])
-            
-            if np.sum(mask)>0 :                
+
+            if np.sum(mask)>0 :
                 bdxdy[i,j]=np.mean(dxdy[mask])
                 bdydx[i,j]=np.mean(dydx[mask])
-            
+
             #log.debug("Block %d,%d n psf points=%d dxdy=%f dydx=%f"%(i,j,np.sum(mask),bdxdy[i,j],bdydx[i,j]))
-    
+
     model=np.zeros(image.shape)
     for i in range(nblocks) :
         for j in range(nblocks) :
@@ -295,32 +295,32 @@ def gaussian_smoothing_1d_with_tilted_axes(image,ivar,sigma,npass,x,y,dxdy,dydx,
                 if (i==0 and j==0) or (i==0 and j==(nblocks-1)) or  (i==(nblocks-1) and j==(nblocks-1)) or (i==(nblocks-1) and j==0) :
                     block_sigma = sigma/2.
                     log.info("Using lower sigma for edge blocks (%d,%d) = %f"%(i,j,block_sigma))
-            
+
             model[b0[i]:e0[i],b1[j]:e1[j]] = gaussian_smoothing_1d_per_axis(image[b0m[i]:e0m[i],b1m[j]:e1m[j]],ivar[b0m[i]:e0m[i],b1m[j]:e1m[j]],sigma=block_sigma,npass=npass,dxdy=bdxdy[i,j],dydx=bdydx[i,j])[b0[i]-b0m[i]:,b1[j]-b1m[j]:][:e0[i]-b0[i],:e1[j]-b1[j]]
-    
+
     return model
-    
+
 
 def gaussian_smoothing_2d(image,ivar,sigma) :
     """Computes a smooth model of the input image using one
-    2D convolution with a 2D Gaussian kernel of parameter sigma. 
-    
+    2D convolution with a 2D Gaussian kernel of parameter sigma.
+
     Args:
         image : 2D array input image
         sigma : float number (>0)
-    
+
     Returns:
         model : 2D array image of same shape as image
     """
     hw=int(3*sigma)
     x=np.tile((np.arange(2*hw+1)-hw)/sigma,(2*hw+1,1))
-    r2=x**2+x.T**2    
+    r2=x**2+x.T**2
     kernel=np.exp(-r2/2.)
     kernel/=np.sum(kernel)
     return convolve2d(image,kernel,weight=ivar)
 
 def multicomponent_model(image,ivar,wave_of_pixels,fiber_of_pixels,number_of_components=2,minflux=1.,amplifier_stitching=False) :
-    
+
     """
     """
     # coordinates
@@ -340,15 +340,15 @@ def multicomponent_model(image,ivar,wave_of_pixels,fiber_of_pixels,number_of_com
     fiber_bins=np.append(fibers-df/2,[fibers[-1]+df/2])
     fiber_of_pixels=fiber_of_pixels.ravel()
     fiber_of_pixels_indices=np.argsort(fiber_of_pixels)
-    
+
     image_shape=image.shape
     image=image.copy().ravel()
     ivar=ivar.copy().ravel()
-    
+
     other_components_image=np.zeros(image.shape)
     mask0 = np.ones(image.shape)
     mask  = mask0*(image>minflux)
-    
+
     spectra=np.zeros((number_of_components,wave.size))
     transmissions=np.zeros((number_of_components,fibers.size))
     spectrum_images=np.zeros((number_of_components,)+image.shape)
@@ -370,7 +370,7 @@ def multicomponent_model(image,ivar,wave_of_pixels,fiber_of_pixels,number_of_com
 
         if ( loop>2 or current_component>0 ) and ( superloop==0 ) : # freeze mask after first loop on all components
 
-            # NEED TO DO A MEDIAN FILTERING IN BOTH DIMENSIONS FOR MASKING 
+            # NEED TO DO A MEDIAN FILTERING IN BOTH DIMENSIONS FOR MASKING
 
             mask = mask0+0
             mask *= (image>0.001*np.mean(image))
@@ -381,7 +381,7 @@ def multicomponent_model(image,ivar,wave_of_pixels,fiber_of_pixels,number_of_com
 
         log.info("#%04d fit spectrum"%(number))
         h0,junk=np.histogram(wave_of_pixels,bins=wave_bins,weights=(ivar*mask*trans_images[current_component]**2))
-        h1,junk=np.histogram(wave_of_pixels,bins=wave_bins,weights=(ivar*mask*(image-other_components_image)*trans_images[current_component]))    
+        h1,junk=np.histogram(wave_of_pixels,bins=wave_bins,weights=(ivar*mask*(image-other_components_image)*trans_images[current_component]))
         spectra[current_component]=(h0!=0)*h1/(h0+(h0==0))
         if current_component>0 :
             if np.mean(spectra[current_component])<0 :
@@ -408,7 +408,7 @@ def multicomponent_model(image,ivar,wave_of_pixels,fiber_of_pixels,number_of_com
 
 
 
-        if current_component == 0 : 
+        if current_component == 0 :
             scale=1./np.max(transmissions[current_component])
             #scale=1./np.median(transmissions[current_component])
         else :
@@ -445,7 +445,7 @@ def multicomponent_model(image,ivar,wave_of_pixels,fiber_of_pixels,number_of_com
                 image[:n0//2,n1//2:] /= b
                 image[n0//2:,:n1//2] /= c
                 image[:n0//2,:n1//2] /= d
-            '''        
+            '''
 
             # method 2 : bands
             margin=10
@@ -557,7 +557,7 @@ def multicomponent_model(image,ivar,wave_of_pixels,fiber_of_pixels,number_of_com
 
             # compute sum of other components
             other_components_image *= 0.
-            for c in range(number_of_components) :               
+            for c in range(number_of_components) :
                 spectrum_images[c][wave_of_pixels_indices]=np.interp(wave_of_pixels[wave_of_pixels_indices],wave,spectra[c])
                 trans_images[c][fiber_of_pixels_indices]=np.interp(fiber_of_pixels[fiber_of_pixels_indices],fibers,transmissions[c])
                 if c != current_component :
@@ -576,12 +576,12 @@ def multicomponent_model(image,ivar,wave_of_pixels,fiber_of_pixels,number_of_com
 
 
         previous_rms=rms
-    
 
-    
+
+
     return model.reshape(image_shape)
-    
-   
+
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="""Computes a pixel level flat field image from a set of preprocessed images obtained with the flatfield slit.
 A median image is computed if several preprocessed images are given.
@@ -594,19 +594,19 @@ parser.add_argument('-i','--images', type = str, nargs='*', default = None, requ
                     help = 'path to input preprocessed image fits files, or a single median image')
 parser.add_argument('-o','--outfile', type = str, default = None, required = True,
                     help = 'output flatfield image filename')
-parser.add_argument('--sigma', type = int, default = 60 , required = False, 
+parser.add_argument('--sigma', type = int, default = 60 , required = False,
                     help = "gaussian filtering sigma")
-parser.add_argument('--niter_filter', type = int, default = 2 , required = False, 
+parser.add_argument('--niter_filter', type = int, default = 2 , required = False,
                     help = "number of iterations in gaussian filtering")
-parser.add_argument('--niter-mask', type = int, default = 3 , required = False, 
+parser.add_argument('--niter-mask', type = int, default = 3 , required = False,
                     help = "number of iterations for mask evaluation")
-parser.add_argument('--sigma-mask', type = int, default = 10 , required = False, 
+parser.add_argument('--sigma-mask', type = int, default = 10 , required = False,
                     help = "gaussian smoothing sigma for the mask")
-parser.add_argument('--nsig-mask', type = float, default = 4.0 , required = False, 
+parser.add_argument('--nsig-mask', type = float, default = 4.0 , required = False,
                     help = "# sigma cut for mask")
-parser.add_argument('--nsig-smooth-mask', type = float, default = 1.5 , required = False, 
+parser.add_argument('--nsig-smooth-mask', type = float, default = 1.5 , required = False,
                     help = "# sigma cut for mask after smoothing")
-parser.add_argument('--nblocks', type = int, default = 4 , required = False, 
+parser.add_argument('--nblocks', type = int, default = 4 , required = False,
                     help = "number of blocks along one axis (total number of blocks is the square) where the trace orientations are averaged (to use in combination with --psf option otherwise ignored)")
 parser.add_argument('--out-median', type = str, default = None , required = False, help = "save output median image (for development)")
 parser.add_argument('--psf', type = str, default = None , required = False, help = "use traces in this PSF to orient 1D convolutions")
@@ -636,7 +636,7 @@ else :
 if args.out_median is not None :
     log.info("writing median image %s ..."%args.out_median)
     h=pyfits.HDUList([pyfits.PrimaryHDU(image),pyfits.ImageHDU(ivar,name="IVAR")])
-    h.writeto(args.out_median,clobber=True)
+    h.writeto(args.out_median,overwrite=True)
 
 if args.psf :
     log.info("get trace coordinates from psf %s"%args.psf)
@@ -671,9 +671,9 @@ if args.psf and ( not args.no_trim ) :
     log.info("trimed image %s -> %s"%(str(original_image_shape),str(image.shape)))
 
 
-if args.divide_mean_spectrum | args.divide_mean_transmission | args.ncomp>0 : 
+if args.divide_mean_spectrum | args.divide_mean_transmission | args.ncomp>0 :
     log.info("computing wavelength and x image from PSF")
-    hdulist=pyfits.open(args.psf)    
+    hdulist=pyfits.open(args.psf)
     WAVEMIN=hdulist["XTRACE"].header["WAVEMIN"]
     WAVEMAX=hdulist["XTRACE"].header["WAVEMAX"]
     xtrace=hdulist["XTRACE"].data
@@ -685,12 +685,12 @@ if args.divide_mean_spectrum | args.divide_mean_transmission | args.ncomp>0 :
     wave    = np.linspace(WAVEMIN,WAVEMAX,(WAVEMAX-WAVEMIN)/wstep)
     xslit   = xtrace[:,0] # XCCD of each fiber at wave=(WAVEMIN+WAVEMAX)/2. as coordinate system
     nfibers = xtrace.shape[0]
-    
+
     wave2d=[]
     xslit2d=[]
     xccd2d=[]
     yccd2d=[]
-    for fiber in range(nfibers) : 
+    for fiber in range(nfibers) :
         xccd = legval((wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2-1,xtrace[fiber])-xmin
         yccd = legval((wave-WAVEMIN)/(WAVEMAX-WAVEMIN)*2-1,ytrace[fiber])-ymin
         wave2d.append(wave)
@@ -701,40 +701,40 @@ if args.divide_mean_spectrum | args.divide_mean_transmission | args.ncomp>0 :
     xslit2d = np.hstack(xslit2d)
     xccd2d  = np.hstack(xccd2d)
     yccd2d  = np.hstack(yccd2d)
-    
+
     tck=scipy.interpolate.bisplrep(xccd2d,yccd2d,wave2d)
     waveimage = scipy.interpolate.bisplev(np.arange(image.shape[1]),np.arange(image.shape[0]), tck).T
     tck=scipy.interpolate.bisplrep(xccd2d,yccd2d,xslit2d)
     ximage = scipy.interpolate.bisplev(np.arange(image.shape[1]),np.arange(image.shape[0]), tck).T
-    
+
     if args.output_ximage is not None :
         print("writing",args.output_ximage)
-        pyfits.writeto(args.output_ximage,ximage,clobber=True)
+        pyfits.writeto(args.output_ximage,ximage,overwrite=True)
     if args.output_waveimage is not None :
         print("writing",args.output_waveimage)
-        pyfits.writeto(args.output_waveimage,waveimage,clobber=True)
+        pyfits.writeto(args.output_waveimage,waveimage,overwrite=True)
 
 if args.ncomp > 0 :
     log.info("fitting a multi component model with ncomp = {}".format(args.ncomp))
     model = multicomponent_model(image,ivar,wave_of_pixels=waveimage,fiber_of_pixels=ximage,number_of_components=args.ncomp,minflux=args.minflux)
     print("writing","model-ncomp.fits")
-    pyfits.writeto("model-ncomp.fits",model,clobber=True)
+    pyfits.writeto("model-ncomp.fits",model,overwrite=True)
     image *= (model>args.minflux)/( model*(model>args.minflux) + (model<=args.minflux) )
     image[image==0] = 1.
     ivar  *= model**2*(model>args.minflux)
     print("writing","flat-ncomp.fits")
-    pyfits.writeto("flat-ncomp.fits",image,clobber=True)
-    
-    #sys.exit(12)
-    
+    pyfits.writeto("flat-ncomp.fits",image,overwrite=True)
 
-if args.divide_mean_spectrum :    
-    
+    #sys.exit(12)
+
+
+if args.divide_mean_spectrum :
+
     log.info("compute a mean spectrum on the center of the CCD")
     width=400
     xb=image.shape[1]//2-width//2
     xe=image.shape[1]//2+width//2+1
-    
+
     if 0 : # weighted mean (dangerous)
         swx=np.sum(ivar[:,xb:xe]*image[:,xb:xe],axis=1)
         sw=np.sum(ivar[:,xb:xe],axis=1)
@@ -745,32 +745,32 @@ if args.divide_mean_spectrum :
         for i in range(tmp.shape[1]) :
             tmp[:,i] *= medval/np.median(tmp[:,i])
         spec=np.median(tmp,axis=1)
-    
+
     log.info("compute wave of the spectrum")
     specwave=np.mean(waveimage[:,xb:xe],axis=1)
-    
-    log.info("compute sorted wave image indices")    
+
+    log.info("compute sorted wave image indices")
     waveimage=waveimage.ravel()
     ii=np.argsort(waveimage)
-    
+
     log.info("project this spectrum on an image")
     specimage=np.zeros(waveimage.shape)
     specimage[ii]=np.interp(waveimage[ii],specwave,spec)
     specimage=specimage.reshape(image.shape)
     if args.output_specimage is not None :
-        pyfits.writeto(args.output_specimage,specimage,clobber=True)
+        pyfits.writeto(args.output_specimage,specimage,overwrite=True)
 
-    log.info("divide image by spectrum image")    
+    log.info("divide image by spectrum image")
     image *= (specimage>args.minflux)/( specimage*(specimage>args.minflux) + (specimage<=args.minflux) )
     ivar  *= specimage**2*(specimage>args.minflux)
-    
+
 if args.divide_mean_transmission :
-    
+
     log.info("compute a mean transmission on the center of the CCD")
     width=400
     yb=image.shape[0]//2-width//2
     ye=image.shape[0]//2+width//2+1
-    
+
     if 0 : # weighted mean (dangerous)
         swx=np.sum(ivar[yb:ye]*image[yb:ye],axis=0)
         sw=np.sum(ivar[yb:ye],axis=0)
@@ -782,22 +782,22 @@ if args.divide_mean_transmission :
             tmp[i] *= medval/np.median(tmp[i])
         trans=np.median(tmp,axis=0)
 
-    
+
     log.info("compute x of the transmission")
     transx=np.mean(ximage[yb:ye],axis=0)
-    
-    log.info("compute sorted x image indices")    
+
+    log.info("compute sorted x image indices")
     ximage=ximage.ravel()
     ii=np.argsort(ximage)
-    
+
     log.info("project this transmission on an image")
     transimage=np.zeros(ximage.shape)
     transimage[ii]=np.interp(ximage[ii],transx,trans)
     transimage=transimage.reshape(image.shape)
     if args.output_transimage is not None :
-        pyfits.writeto(args.output_transimage,transimage,clobber=True)
+        pyfits.writeto(args.output_transimage,transimage,overwrite=True)
 
-    log.info("divide image by transmission image")    
+    log.info("divide image by transmission image")
     mintrans=0.001*np.max(transimage)
     image *= (transimage>mintrans)/( transimage*(transimage>mintrans) + (transimage<=mintrans) )
     ivar  *= transimage**2*(transimage>mintrans)
@@ -822,10 +822,10 @@ for sloop in range(args.niter_mask) :
         mask[:,image.shape[1]//2-2:image.shape[1]//2+3]=0
     if sloop<(args.niter_mask-1) :
         model=gaussian_smoothing_1d_with_tilted_axes(image,ivar=ivar*(mask==0),sigma=args.sigma,npass=1,x=x,y=y,dxdy=dxdy,dydx=dydx,nblocks=args.nblocks)
- 
-mivar=(mask==0)*ivar   
+
+mivar=(mask==0)*ivar
 if args.niter_mask > 0 :
-    if args.per_amplifier :        
+    if args.per_amplifier :
         log.info("last gaussian smoothing, per quadrant, to remove residual gain difference")
         n0=image.shape[0]//2
         n1=image.shape[1]//2
@@ -851,26 +851,25 @@ flat+=((model<=minflat)|(ivar<=0))
 
 if args.psf and (not args.no_trim ):
     log.info("restore image size after triming")
-    
+
     tmp_flat=np.ones(original_image_shape)
-    tmp_flat[ymin:ymax,xmin:xmax]=flat    
+    tmp_flat[ymin:ymax,xmin:xmax]=flat
     flat=tmp_flat
-    
+
     tmp_model=np.zeros(original_image_shape)
-    tmp_model[ymin:ymax,xmin:xmax]=model    
+    tmp_model[ymin:ymax,xmin:xmax]=model
     model=tmp_model
-    
+
     mask += (ivar==0)*(mask==0)
     tmp_mask=np.ones(original_image_shape)
     tmp_mask[ymin:ymax,xmin:xmax]=mask
     mask=tmp_mask
-    
+
 log.info("writing %s ..."%args.outfile)
 h=pyfits.HDUList([pyfits.PrimaryHDU(flat),pyfits.ImageHDU(model,name="MODEL"),pyfits.ImageHDU(mask.astype(int),name="MODMASK")])
 h[0].header["EXTNAME"]="FLAT"
 h[0].header["KERNSIG"]=args.sigma
-h.writeto(args.outfile,clobber=True)
+h.writeto(args.outfile,overwrite=True)
 
 
 log.info("done")
-

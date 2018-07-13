@@ -56,9 +56,9 @@ def parse(options=None):
     parser.add_argument("--mpi", action="store_true", help="Use MPI for parallelism")
     parser.add_argument("--decorrelate-fibers", action="store_true", help="Not recommended")
     parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
-    parser.add_argument("--psferr", type=float, default=None, required=False, 
+    parser.add_argument("--psferr", type=float, default=None, required=False,
                         help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
-    
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -171,23 +171,23 @@ regularize: {regularize}
     frame = Frame(wave, flux, ivar, mask=mask, resolution_data=Rdata,
                 fibers=fibers, meta=img.meta, fibermap=fibermap,
                 chi2pix=chi2pix)
-    
+
     #- Add unit
     #   In specter.extract.ex2d one has flux /= dwave
     #   to convert the measured total number of electrons per
     #   wavelength node to an electron 'density'
-    frame.meta['BUNIT'] = 'electron/Angstrom' 
-    
+    frame.meta['BUNIT'] = 'electron/Angstrom'
+
     #- Add scores to frame
     if not args.no_scores :
         compute_and_append_frame_scores(frame,suffix="RAW")
-    
+
     #- Write output
     io.write_frame(args.output, frame)
 
     if args.model is not None:
         from astropy.io import fits
-        fits.writeto(args.model, results['modelimage'], header=frame.meta, clobber=True)
+        fits.writeto(args.model, results['modelimage'], header=frame.meta, overwrite=True)
 
     print('Done {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
@@ -390,13 +390,13 @@ def main_mpi(args, comm=None, timing=None):
             #   In specter.extract.ex2d one has flux /= dwave
             #   to convert the measured total number of electrons per
             #   wavelength node to an electron 'density'
-            frame.meta['BUNIT'] = 'electron/Angstrom' 
-            
+            frame.meta['BUNIT'] = 'electron/Angstrom'
+
             #- Add scores to frame
             compute_and_append_frame_scores(frame,suffix="RAW")
 
             mark_extraction = time.time()
-            
+
             #- Write output
             io.write_frame(outbundle, frame)
 
