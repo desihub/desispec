@@ -8,7 +8,7 @@ Lightweight wrapper class for trace coordinates and wavelength solution, to be r
 from specter.util.traceset import TraceSet 
 
 class XYTraceSet(object):
-    def __init__(self, xcoef, ycoef, wavemin,wavemax) :
+    def __init__(self, xcoef, ycoef, wavemin, wavemax, npix_y) :
         """
         Lightweight wrapper for trace coordinates and wavelength solution
         
@@ -29,6 +29,7 @@ class XYTraceSet(object):
         self.y_vs_wave_traceset = TraceSet(ycoef,[wavemin,wavemax])
         self.wave_vs_y_traceset = None
         self.x_vs_y_traceset    = None
+        self.npix_y = npix_y
         
     
     def x_vs_wave(self,fiber,wavelength) :
@@ -43,6 +44,21 @@ class XYTraceSet(object):
         return self.wave_vs_y_traceset.eval(fiber,y)
     
     def x_vs_y(self,fiber,y) :
-        FINISH THIS WORK
-        twave = self.wave_vs_y(fiber,y)
-        FINISH THIS WORK
+        
+        if self.x_vs_y_traceset is None :
+            if self.wave_vs_y_traceset is None :
+                self.wave_vs_y_traceset = self.y_vs_wave_traceset.invert()
+            ymin  = self.wave_vs_y_traceset._xmin
+            ymax  = self.wave_vs_y_traceset._xmax
+            ncoef = np.max(self.x_vs_wave_traceset._coeff.shape[1],self.y_vs_wave_traceset._coeff.shape[1]) + 1. # one more deg for inversion
+            ty    = np.linspace(ymin,ymax,ncoef+1)
+            rty   = 2*(ty-ymin)/(ymax-ymin) - 1.0 # [-1,+1] range
+            coef  = np.zeros((self.nspec,ncoef))
+            for i in range(self.nspec) :
+                twave = self.wave_vs_y(i,ty)
+                tx    = self.x_vs_wave(i,twave)
+                coef[fiber] = legfit(rty,tx,ncoef-1)
+            self.x_vs_y_traceset =  TraceSet(coef, domain=[ymin, ymax])
+        
+        return self.x_vs_y_traceset.eval(fiber,y)
+        
