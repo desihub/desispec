@@ -12,7 +12,7 @@ from desispec.image import Image as im
 from desispec.frame import Frame as fr
 
 # this is deprecated, need to remove this dependency
-from desispec.psf import PSF
+from desispec.quicklook.qlpsf import PSF
 
 from desispec.io.xytraceset import read_xytraceset
 from desispec.maskbits import ccdmask
@@ -195,7 +195,7 @@ class BootCalibration(pas.PipelineAlg):
 
 
 class BoxcarExtract(pas.PipelineAlg):
-    from desispec.boxcar import do_boxcar
+    from desispec.quicklook.qlboxcar import do_boxcar
     from desispec.maskbits import ccdmask
     
     def __init__(self,name,config,logger=None):
@@ -289,8 +289,8 @@ class BoxcarExtract(pas.PipelineAlg):
     def run_pa(self,input_image,flavor,psf,outwave,boxwidth,nspec,
                fibers=None,fibermap=None,dumpfile=None,
                maskFile=None,usesigma=False,quick_resolution=False):
-        from desispec.boxcar import do_boxcar
-        import desispec.psf
+        from desispec.quicklook.qlboxcar import do_boxcar
+        #import desispec.psf
         flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
                                   nspec=nspec,maskFile=maskFile,usesigma=usesigma,
                                   quick_resolution=quick_resolution)
@@ -906,7 +906,7 @@ class ResolutionFit(pas.PipelineAlg):
              usesigma=kwargs["usesigma"]
         else: usesigma = False
 
-        from desispec.psf import PSF
+        from desispec.quicklook.qlpsf import PSF
         psfboot=PSF(psfbootfile)
         domain=(psfboot.wmin,psfboot.wmax)
 
@@ -928,7 +928,7 @@ class ResolutionFit(pas.PipelineAlg):
     def run_pa(self,input_frame,psfbootfile,outfile,usesigma,linelist=None,npoly=2,nbins=2,domain=None):
         from desispec.quicklook.arcprocess import process_arc,write_psffile
         from desispec.quicklook.palib import get_resolution
-        from desispec.psf import PSF
+        from desispec.quicklook.qlpsf import PSF
 
         wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
 

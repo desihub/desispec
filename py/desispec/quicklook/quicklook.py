@@ -21,7 +21,6 @@ from desispec.quicklook import qlheartbeat as QLHB
 from desispec.io import qa as qawriter
 from desispec.quicklook.merger import QL_QAMerger
 from desispec.quicklook import procalgs
-from desispec.boxcar import do_boxcar
 from desiutil.io import yamlify
 
 def testconfig(outfilename="qlconfig.yaml"):

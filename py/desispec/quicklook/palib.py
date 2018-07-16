@@ -113,7 +113,7 @@ def get_resolution(wave,nspec,psf,usesigma=False):
 
     wave: wavelength array
     nsepc: no of spectra (int)
-    psf: desispec.psf.PSF like object
+    psf: desispec.quicklook.qlpsf.PSF like object
     usesigma: allows to use sigma from psf file for resolution computation. 
     If psf file is psfboot, uses per fiber xsigma. 
     If psf file is from QL arcs processing, uses wsigma 
