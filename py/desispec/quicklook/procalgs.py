@@ -11,6 +11,14 @@ from desispec.quicklook import qlexceptions,qllogger
 from desispec.image import Image as im
 from desispec.frame import Frame as fr
 
+# this is deprecated, need to remove this dependency
+from desispec.psf import PSF
+
+from desispec.io.xytraceset import read_xytraceset
+from desispec.maskbits import ccdmask
+from desispec.quickproc.qextract import boxcar_extraction
+from desispec.quickproc.io import write_qframe
+
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
@@ -189,7 +197,7 @@ class BootCalibration(pas.PipelineAlg):
 class BoxcarExtract(pas.PipelineAlg):
     from desispec.boxcar import do_boxcar
     from desispec.maskbits import ccdmask
-
+    
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="BoxcarExtract"
@@ -211,7 +219,9 @@ class BoxcarExtract(pas.PipelineAlg):
             dumpfile=kwargs["dumpfile"]
 
         flavor=kwargs["Flavor"]
-        psf=kwargs["PSFFile"]
+
+        psf_filename=kwargs["PSFFile"]
+        psf = PSF(psf_filename)
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
         quickRes=kwargs["QuickResolution"] if "QuickResolution" in kwargs else False
@@ -311,6 +321,116 @@ class BoxcarExtract(pas.PipelineAlg):
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return frame
+  
+    def get_default_config(self):
+        return {("BoxWidth",2.5,"Boxcar halfwidth"),
+                ("PSFFile","%%PSFFile","PSFFile to use"),
+                ("DeltaW",0.5,"Binwidth of extrapolated wavelength array")
+                ("Nspec",500,"number of spectra to extract")
+                }
+
+class NumbaBoxcarExtract(pas.PipelineAlg):
+
+    
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="BoxcarExtract"
+        pas.PipelineAlg.__init__(self,name,im,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if "PSFFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need PSF File")
+
+        input_image=args[0]
+
+        dumpfile=None
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
+        
+        psf_filename=kwargs["PSFFile"]
+        print("psf_filename=",psf_filename)
+
+        traceset = read_xytraceset(psf_filename)
+        
+        boxwidth=kwargs["BoxWidth"]
+        nspec=kwargs["Nspec"]
+        if "Wavelength" not in kwargs:
+            wstart = np.ceil(traceset.wavemin)
+            wstop = np.floor(traceset.wavemax)
+            dw = 0.5
+        else: 
+            wavelength=kwargs["Wavelength"]
+            print('kwargs["Wavelength"]=',kwargs["Wavelength"])
+            if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
+                wstart, wstop, dw = [float(w) for w in wavelength]
+            else: 
+                wstart = np.ceil(traceset.wmin)
+                wstop = np.floor(traceset.wmax)
+                dw = 0.5            
+        wave = np.arange(wstart, wstop+dw/2.0, dw)
+        if "Specmin" not in kwargs:
+            specmin=0
+        else:
+            specmin=kwargs["Specmin"]
+            if kwargs["Specmin"] is None:
+               specmin=0
+
+        if "Nspec" not in kwargs:
+            nspec = traceset.nspec
+        else:
+            nspec=kwargs["Nspec"]
+            if nspec is None:
+                nspec=traceset.nspec
+
+        specmax = specmin + nspec
+
+        camera = input_image.meta['CAMERA'].lower()     #- b0, r1, .. z9
+        spectrograph = int(camera[1])
+        fibermin = spectrograph*500 + specmin
+        if "FiberMap" not in kwargs:
+            fibermap = None
+            fibers = np.arange(fibermin, fibermin+nspec, dtype='i4')
+        else:
+            fibermap=kwargs["FiberMap"]
+            fibermap = fibermap[fibermin:fibermin+nspec]
+            fibers = fibermap['FIBER']
+        if "Outfile" in kwargs:
+            outfile=kwargs["Outfile"]
+        else:
+            outfile=None
+        maskFile=None
+        if "MaskFile" in kwargs:
+            maskFile=kwargs['MaskFile']
+
+        #- Add some header keys relevant for this extraction
+        input_image.meta['NSPEC']   = (nspec, 'Number of spectra')
+        input_image.meta['WAVEMIN'] = (wstart, 'First wavelength [Angstroms]')
+        input_image.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
+        input_image.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
+        
+
+        
+        return self.run_pa(input_image,traceset,wave,boxwidth,nspec,
+                           fibers=fibers,fibermap=fibermap,dumpfile=dumpfile,
+                           maskFile=maskFile)
+
+    def run_pa(self,input_image,traceset,outwave,boxwidth,nspec,
+               fibers=None,fibermap=None,dumpfile=None,
+               maskFile=None):
+        
+        qframe = boxcar_extraction(traceset,input_image,fibers=fibers, width=boxwidth, fibermap=fibermap)
+        
+        if dumpfile is not None:
+            io.write_qframe(dumpfile, qframe, fibermap=fibermap)
+            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+        
+        return qframe
+        
   
     def get_default_config(self):
         return {("BoxWidth",2.5,"Boxcar halfwidth"),
