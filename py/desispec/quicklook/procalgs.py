@@ -841,6 +841,7 @@ class ResolutionFit(pas.PipelineAlg):
 from desispec.qproc.io import write_qframe
 from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat 
+from desispec.qproc.qsky import qproc_sky_subtraction
 
 class Extract_QP(pas.PipelineAlg):
 
@@ -993,3 +994,39 @@ class ApplyFiberFlat_QP(pas.PipelineAlg):
         
         return qframe
 
+class SkySub_QP(pas.PipelineAlg):
+    """
+       Sky subtraction. The input frame object should be fiber flat corrected.
+       No sky model is saved for now
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="SkySub_QP"
+        pas.PipelineAlg.__init__(self,name,fr,type(tuple),config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
+        input_qframe=args[0] #- this must be flat field applied before sky subtraction in the pipeline
+
+        dumpfile=None
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
+
+        #- now do the subtraction                   
+        return self.run_pa(input_qframe,dumpfile=dumpfile)
+    
+    def run_pa(self,qframe,dumpfile=None):
+        
+        qproc_sky_subtraction(qframe)
+        
+        if dumpfile is not None:
+            night = qframe.meta['NIGHT']
+            expid = qframe.meta['EXPID']
+            io.write_frame(dumpfile, qframe)
+            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+
+        return qframe

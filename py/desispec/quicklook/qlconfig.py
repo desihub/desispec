@@ -89,6 +89,14 @@ class Config(object):
                 if "Sigma_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
                     self.sigmacut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Sigma_Cut"]
                 else: self.sigmacut = None
+        if "SkySub_QP" in self.algorithms.keys():
+            if "Calculate_SNR" in self.algorithms["SkySub_QP"]["QA"].keys():
+                if "Residual_Cut" in self.algorithms["SkySub_QP"]["QA"]["Calculate_SNR"].keys():
+                    self.rescut = self.algorithms["SkySub_QP"]["QA"]["Calculate_SNR"]["Residual_Cut"]
+                else: self.rescut = None
+                if "Sigma_Cut" in self.algorithms["SkySub_QP"]["QA"]["Calculate_SNR"].keys():
+                    self.sigmacut = self.algorithms["SkySub_QP"]["QA"]["Calculate_SNR"]["Sigma_Cut"]
+                else: self.sigmacut = None
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
@@ -148,7 +156,7 @@ class Config(object):
             sframefile=self.dump_pa("SkySub_QL")
             framefile=self.dump_pa("Extract_QP")
             fframefile=self.dump_pa("ApplyFiberFlat_QP")
-            #sframefile=self.dump_pa("SkySub_QL")
+            sframefile=self.dump_pa("SkySub_QP")
             
         else:
             framefile=None
@@ -177,6 +185,7 @@ class Config(object):
         else:
             outskyfile=None       
         paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile, 'Apply_resolution': self.usesigma}
+        paopt_skysub_qp={'dumpfile': sframefile, 'Apply_resolution': False}
 
         paopts={}
         defList={
@@ -188,7 +197,8 @@ class Config(object):
             'ComputeFiberflat_QL':paopt_comflat,
             'ApplyFiberFlat_QL':paopt_apfflat,
             'ApplyFiberFlat_QP':paopt_apfflat,
-            'SkySub_QL':paopt_skysub
+            'SkySub_QL':paopt_skysub,
+            'SkySub_QP':paopt_skysub_qp
         }
 
         def getPAConfigFromFile(PA,algs):
@@ -219,7 +229,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
