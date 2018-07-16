@@ -61,6 +61,8 @@ class QFrame(object):
         else:
             self.mask = util.mask32(mask)
         
+        self.nspec = self.flux.shape[0]
+            
         self.spectrograph = spectrograph
         
         # Deal with Fibers (these must be set!)
