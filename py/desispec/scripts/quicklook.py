@@ -17,8 +17,8 @@ import desispec.image as image
 import desispec.frame as frame
 import desispec.io.frame as frIO
 import desispec.io.image as imIO
-from desispec.quickproc.qframe import QFrame
-from desispec.quickproc.io import write_qframe
+from desispec.qproc.qframe import QFrame
+from desispec.qproc.io import write_qframe
 
 
 import os,sys

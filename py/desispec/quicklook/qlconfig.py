@@ -78,8 +78,8 @@ class Config(object):
         self.wavelength = None
         if "BoxcarExtract" in self.algorithms.keys() and "wavelength" in self.algorithms["BoxcarExtract"].keys():
             self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
-        elif "NumbaBoxcarExtract" in self.algorithms.keys() and "wavelength" in self.algorithms["NumbaBoxcarExtract"].keys():
-            self.wavelength = self.algorithms["NumbaBoxcarExtract"]["wavelength"][self.camera[0]]
+        elif "Extract_QP" in self.algorithms.keys() and "wavelength" in self.algorithms["Extract_QP"].keys():
+            self.wavelength = self.algorithms["Extract_QP"]["wavelength"][self.camera[0]]
         
         if "SkySub_QL" in self.algorithms.keys():
             if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
@@ -146,6 +146,10 @@ class Config(object):
             framefile=self.dump_pa("BoxcarExtract")
             fframefile=self.dump_pa("ApplyFiberFlat_QL")
             sframefile=self.dump_pa("SkySub_QL")
+            framefile=self.dump_pa("Extract_QP")
+            fframefile=self.dump_pa("ApplyFiberFlat_QP")
+            #sframefile=self.dump_pa("SkySub_QL")
+            
         else:
             framefile=None
             fframefile=None
@@ -180,9 +184,10 @@ class Config(object):
             'Preproc':paopt_preproc,
             'Flexure':paopt_flexure,
             'BoxcarExtract':paopt_extract,
-            'NumbaBoxcarExtract':paopt_extract,
+            'Extract_QP':paopt_extract,
             'ComputeFiberflat_QL':paopt_comflat,
             'ApplyFiberFlat_QL':paopt_apfflat,
+            'ApplyFiberFlat_QP':paopt_apfflat,
             'SkySub_QL':paopt_skysub
         }
 
@@ -214,7 +219,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'NumbaBoxcarExtract': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
