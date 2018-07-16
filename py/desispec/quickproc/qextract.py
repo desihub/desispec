@@ -98,12 +98,14 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :
     y=np.arange(n0).astype(float)
     
     
-    
+    dwave = np.zeros(n0)
     for f,fiber in enumerate(fibers) :
         log.debug("extracting fiber #%03d"%fiber)
         ty = legval(rwave, ycoef[f])
         tx = legval(rwave, xcoef[f])
         frame_wave[f] = np.interp(y,ty,twave)
+        dwave[1:]     = frame_wave[f,1:]-frame_wave[f,:-1]
+        dwave[0]      = 2*dwave[1]-dwave[2]
         x_of_y        = np.interp(y,ty,tx)        
         
         i=np.where(y<ty[0])[0]
@@ -114,7 +116,10 @@ def boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :
             frame_wave[f,i] = twave[-1]+(twave[-2]-twave[-1])/(ty[-2]-ty[-1])*(y[i]-ty[-1])
                 
         frame_flux[f],frame_ivar[f] = numba_extract(image.pix,var,x_of_y,hw)
-        
+        # flux density
+        frame_flux[f] /= dwave
+        frame_ivar[f] *= dwave**2
+    
     t1=time.time()
     log.info(" done {} fibers in {:3.1f} sec".format(len(fibers),t1-t0))
     
