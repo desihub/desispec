@@ -75,10 +75,12 @@ class Config(object):
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
         self.qamodule = self._palist.qamodule
-        if "BoxcarExtract" in self.algorithms.keys():
-            if "wavelength" in self.algorithms["BoxcarExtract"].keys():
-                self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
-        else: self.wavelength = None
+        self.wavelength = None
+        if "BoxcarExtract" in self.algorithms.keys() and "wavelength" in self.algorithms["BoxcarExtract"].keys():
+            self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
+        elif "NumbaBoxcarExtract" in self.algorithms.keys() and "wavelength" in self.algorithms["NumbaBoxcarExtract"].keys():
+            self.wavelength = self.algorithms["NumbaBoxcarExtract"]["wavelength"][self.camera[0]]
+        
         if "SkySub_QL" in self.algorithms.keys():
             if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
                 if "Residual_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
@@ -151,7 +153,7 @@ class Config(object):
 
         if self.flexure:
             preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
-            inputpsf=self.psf
+            inputpsf=self.psf_filename
             outputpsf=findfile('psf',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
         else:
             preproc_file=None
@@ -160,7 +162,7 @@ class Config(object):
 
         paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': inputpsf, 'outputPSFFile': outputpsf}
 
-        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
+        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
 
         paopt_comflat={'outputFile': self.fiberflat}
 
@@ -178,6 +180,7 @@ class Config(object):
             'Preproc':paopt_preproc,
             'Flexure':paopt_flexure,
             'BoxcarExtract':paopt_extract,
+            'NumbaBoxcarExtract':paopt_extract,
             'ComputeFiberflat_QL':paopt_comflat,
             'ApplyFiberFlat_QL':paopt_apfflat,
             'SkySub_QL':paopt_skysub
@@ -211,7 +214,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'NumbaBoxcarExtract': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -271,7 +274,7 @@ class Config(object):
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
                 qaopts[qa]={'night' : self.night, 'expid' : self.expid,
-                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
+                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf_filename,
                             'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
                             'qafig': qaplot, 'FiberMap': self.fibermap,
                             'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
@@ -400,17 +403,16 @@ class Config(object):
         self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
- 
-#        self.psf=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'psf-{}.fits'.format(self.camera))
-#
-#        self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'fiberflat-{}.fits'.format(self.camera))
+        
         if self.psfid is None:
-            self.psf=os.path.join(os.environ['QL_CALIB_DIR'],'psf-{}.fits'.format(self.camera))
+            self.psf_filename=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'SIM/psf-{}.fits'.format(self.camera))
+            #self.psf_filename=os.path.join(os.environ['QL_CALIB_DIR'],'psf-{}.fits'.format(self.camera))
         else:
-            self.psf=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-
+            self.psf_filename=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        
         if self.flatid is None:
-            self.fiberflat=os.path.join(os.environ['QL_CALIB_DIR'],'fiberflat-{}.fits'.format(self.camera))
+            self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'SIM/fiberflat-{}.fits'.format(self.camera))
+            #self.fiberflat=os.path.join(os.environ['QL_CALIB_DIR'],'fiberflat-{}.fits'.format(self.camera))
         else:
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.flatid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         #- Get reference metrics from template json file
@@ -464,7 +466,7 @@ class Config(object):
         outconfig['OutputFile'] = self.outputfile
         outconfig['singleqa'] = self.singqa
         outconfig['Timeout'] = self.timeout
-        outconfig['PSFFile'] = self.psf
+        outconfig['PSFFile'] = self.psf_filename
         outconfig['FiberFlatFile'] = self.fiberflat
 
         #- Check if all the files exist for this QL configuraion
