@@ -464,10 +464,11 @@ def setup_pipeline(config):
     if "SkyFile" in config:
         skyfile=config["SkyFile"]
 
-    psf=None
+    psf_filename=None
     if "PSFFile" in config:
-        import desispec.psf
-        psf=desispec.psf.PSF(config["PSFFile"])
+        psf_filename=config["PSFFile"]
+        #import desispec.psf
+        #psf=desispec.psf.PSF(config["PSFFile"]) 
 
     if "basePath" in config:
         basePath=config["basePath"]
@@ -480,8 +481,8 @@ def setup_pipeline(config):
 
     convdict={"FiberMap":fibfile}
 
-    if psf is not None:
-        convdict["PSFFile"]=psf
+    if psf_filename is not None:
+        convdict["PSFFile"]=psf_filename
 
     if biasfile is not None:
         hbeat.start("Reading Bias Image {}".format(biasfile))
