@@ -38,8 +38,22 @@ def read_xytraceset(filename) :
     wavemax=None
     wavemin2=None
     wavemax2=None
-
+    
+    
     fits_file = fits.open(filename)
+    
+    
+    # npix_y, needed for boxcar extractions
+    npix_y=0
+    for hdu in [0,"XTRACE","PSF"] :
+        if npix_y > 0 : break
+        if hdu in fits_file : 
+            head = fits_file[hdu].header
+            if "NPIX_Y" in head :
+                npix_y=int(head["NPIX_Y"])
+    if npix_y == 0 :
+        raise KeyError("Didn't find head entry NPIX_Y in hdu 0, XTRACE or PSF")
+    log.info("npix_y={}".format(npix_y))
     
     try :
         psftype=fits_file[0].header["PSFTYPE"]
@@ -48,9 +62,10 @@ def read_xytraceset(filename) :
     
     # now read trace coefficients
     log.info("psf is a '%s'"%psftype)
-    if psftype == "bootcalib" :    
-        wavemin = fits_file[0].header["WAVEMIN"]
-        wavemax = fits_file[0].header["WAVEMAX"]
+    if psftype == "bootcalib" :
+        head =fits_file[0].header
+        wavemin = head["WAVEMIN"]
+        wavemax = head["WAVEMAX"]
         xcoef   = fits_file[0].data
         ycoef   = fits_file[1].data        
         wavemin2 = wavemin
@@ -62,7 +77,7 @@ def read_xytraceset(filename) :
         wavemax=fits_file["XTRACE"].header["WAVEMAX"]
         wavemin2=fits_file["YTRACE"].header["WAVEMIN"]
         wavemax2=fits_file["YTRACE"].header["WAVEMAX"]
-    elif psftype == "GAUSS-HERMITE" :
+    elif psftype == "GAUSS-HERMITE" : # older version where XTRACE and YTRACE are not saved in separate HDUs
         table=fits_file["PSF"].data        
         i=np.where(table["PARAM"]=="X")[0][0]
         wavemin=table["WAVEMIN"][i]
@@ -74,7 +89,7 @@ def read_xytraceset(filename) :
         wavemax2=table["WAVEMAX"][i]
     
     if xtrace is None or ytrace is None :
-        raise ValueError("could not find XTRACE and YTRACE in psf file %s"%psf_filename)
+        raise ValueError("could not find xtrace and ytrace in psf file %s"%filename)
     if wavemin != wavemin2 :
         raise ValueError("XTRACE and YTRACE don't have same WAVEMIN %f %f"%(wavemin,wavemin2))
     if wavemax != wavemax2 :
@@ -84,7 +99,7 @@ def read_xytraceset(filename) :
     
     fits_file.close()
     
-    return XYTraceSet(xtrace,ytrace,wavemin,wavemax)
+    return XYTraceSet(xtrace,ytrace,wavemin,wavemax,npix_y)
 
    
    
