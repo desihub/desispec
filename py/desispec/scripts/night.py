@@ -22,11 +22,12 @@ import fitsio
 
 from desiutil.log import get_logger
 
-from ..util import sprun
-
 from .. import io
 
 from .. import pipeline as pipe
+
+from ..pipeline import control as control
+
 
 errs = {
     "usage" : 1,
@@ -69,10 +70,7 @@ Where supported commands are:
 
 
     def _update_db(self, night):
-        com = ["desi_pipe", "update", "--nights", "{}".format(night)]
-        ret = sprun(com)
-        if ret != 0:
-            sys.exit(errs["pipefail"])
+        control.update(nightstr=night)
         return
 
 
@@ -153,28 +151,6 @@ Where supported commands are:
         return jobids
 
 
-    def _chain_args(self, args):
-        optlist = [
-            "nersc",
-            "nersc_queue",
-            "nersc_maxtime",
-            "nersc_maxnodes",
-            "nersc_shifter",
-            "mpi_procs",
-            "mpi_run",
-            "procs_per_node"
-        ]
-        varg = vars(args)
-        opts = list()
-        for k, v in varg.items():
-            if k in optlist:
-                if v is not None:
-                    opts.append("--{}".format(k))
-                    if not isinstance(v, bool):
-                        opts.append(v)
-        return opts
-
-
     def _small(self, args):
         small = copy.copy(args)
         if small.nersc_maxnodes_small is not None:
@@ -184,45 +160,58 @@ Where supported commands are:
 
     def _run_chain(self, args, exps, db, night, tasktypes, deps=None,
                    spec=None):
-        cargs = self._chain_args(args)
+        log = get_logger()
         jobids = list()
         if exps is None:
-            com = ["desi_pipe", "chain", "--tasktypes", tasktypes, "--pack", "--nosubmitted", "--nights", "{}".format(night), "--outdir", os.path.join("night", night)]
-            if deps is not None:
-                com.extend(["--depjobs", ",".join(deps)])
-            if spec is not None:
-                com.extend(["--spec", "{}".format(spec)])
-            com.extend(cargs)
-            self.log.info("Running {}".format(" ".join(com)))
-            ret, out = sprun(com, capture=True)
-            jid = None
-            for line in out:
-                jid = line
-            jobids.append(jid)
-            if ret != 0:
-                sys.exit(errs["pipefail"])
+            log.info("Running chain for night = {}, tasktypes = {}, "
+                "deps = {}".format(night, tasktypes, deps))
+            jobids = control.chain(
+                tasktypes,
+                nightstr=night,
+                spec=spec,
+                pack=True,
+                nosubmitted=True,
+                depjobs=deps,
+                nersc=args.nersc,
+                nersc_queue=args.nersc_queue,
+                nersc_maxtime=args.nersc_maxtime,
+                nersc_maxnodes=args.nersc_maxnodes,
+                nersc_shifter=args.nersc_shifter,
+                mpi_procs=args.mpi_procs,
+                mpi_run=args.mpi_run,
+                procs_per_node=args.procs_per_node,
+                out=os.path.join("night", night),
+                debug=False)
         else:
             for ex in exps:
-                com = ["desi_pipe", "chain", "--tasktypes", tasktypes, "--pack", "--nosubmitted", "--nights", "{}".format(night), "--outdir", os.path.join("night", night), "--expid", "{}".format(ex)]
-                if deps is not None:
-                    com.extend(["--depjobs", ",".join(deps)])
-                if spec is not None:
-                    com.extend(["--spec", "{}".format(spec)])
-                com.extend(cargs)
-                self.log.info("Running {}".format(" ".join(com)))
-                ret, out = sprun(com, capture=True)
-                jid = None
-                for line in out:
-                    jid = line
-                jobids.append(jid)
-                if ret != 0:
-                    sys.exit(errs["pipefail"])
+                log.info("Running chain for night = {}, tasktypes = {}, "
+                    "expid = {}, deps = {}".format(night, tasktypes, ex, deps))
+                exjobids = control.chain(
+                    tasktypes,
+                    nightstr=night,
+                    expid=ex,
+                    spec=spec,
+                    pack=True,
+                    nosubmitted=True,
+                    depjobs=deps,
+                    nersc=args.nersc,
+                    nersc_queue=args.nersc_queue,
+                    nersc_maxtime=args.nersc_maxtime,
+                    nersc_maxnodes=args.nersc_maxnodes,
+                    nersc_shifter=args.nersc_shifter,
+                    mpi_procs=args.mpi_procs,
+                    mpi_run=args.mpi_run,
+                    procs_per_node=args.procs_per_node,
+                    out=os.path.join("night", night),
+                    debug=False)
+                jobids.extend(exjobids)
         return jobids
 
 
     def _run_psf(self, args, db, night, expid=None, spec=None):
         exps = self._select_exposures(db, night, "psf", expid=expid)
-        return self._run_chain(args, exps, db, night, "preproc,psf", spec=spec)
+        return self._run_chain(args, exps, db, night, ["preproc", "psf"],
+            spec=spec)
 
 
     def _run_extract(self, args, exp_by_flavor, db, night, expid=None,
@@ -234,14 +223,14 @@ Where supported commands are:
             # Regardless of exposure type, preprocess and traceshift in a
             # single job.
             trids = self._run_chain(self._small(args), [ex], db, night,
-                "preproc,traceshift", deps=deps, spec=spec)
+                ["preproc", "traceshift"], deps=deps, spec=spec)
             # Now either extract or also do fiberflat.
             if ex in exp_by_flavor["flat"]:
                 jids = self._run_chain(args, [ex], db, night,
-                    "extract,fiberflat", deps=trids, spec=spec)
+                    ["extract", "fiberflat"], deps=trids, spec=spec)
             else:
                 jids = self._run_chain(args, [ex], db, night,
-                    "extract", deps=trids, spec=spec)
+                    ["extract"], deps=trids, spec=spec)
             jobids.extend(jids)
         return jobids
 
@@ -250,8 +239,7 @@ Where supported commands are:
         exps = self._select_exposures(db, night, "cframe", expid=expid)
         # Swap in the modified args for "small" jobs
         return self._run_chain(self._small(args), exps, db, night,
-                               "sky,starfit,fluxcalib,cframe", deps=deps,
-                               spec=spec)
+            ["sky", "starfit", "fluxcalib", "cframe"], deps=deps, spec=spec)
 
 
     def _check_nightly(self, ttype, db, night):
@@ -274,7 +262,7 @@ Where supported commands are:
 
 
     def _pipe_opts(self, parser):
-        """Internal function to parse options passed to desi_pipe.
+        """Internal function to parse options passed to desi_night.
         """
         parser.add_argument("--nersc", required=False, default=None,
             help="write a script for this NERSC system (edison | cori-haswell "
@@ -287,38 +275,38 @@ Where supported commands are:
             default=None, help="Use this NERSC queue for redshifts. "
             "Defaults to same as --nersc_queue.")
 
-        parser.add_argument("--nersc_maxtime", required=False, default=None,
-            help="Then maximum run time (in minutes) for a single "
+        parser.add_argument("--nersc_maxtime", required=False, type=int,
+            default=0, help="Then maximum run time (in minutes) for a single "
             " job.  If the list of tasks cannot be run in this time, multiple "
             " job scripts will be written.  Default is the maximum time for "
             " the specified queue.")
 
-        parser.add_argument("--nersc_maxnodes", required=False, default=None,
-            help="The maximum number of nodes to use.  Default "
+        parser.add_argument("--nersc_maxnodes", required=False, type=int,
+            default=0, help="The maximum number of nodes to use.  Default "
             " is the maximum nodes for the specified queue.")
 
-        parser.add_argument("--nersc_maxnodes_small", required=False,
-            default=None, help="The maximum number of nodes to use for 'small' "
+        parser.add_argument("--nersc_maxnodes_small", required=False, type=int,
+            default=0, help="The maximum number of nodes to use for 'small' "
             "steps like the per-night psf and fiberflat.  Default is to use the"
             " same value as --nersc_maxnodes.")
 
         parser.add_argument("--nersc_maxnodes_redshifts", required=False,
-            default=None, help="The maximum number of nodes to use for "
+            type=int, default=0, help="The maximum number of nodes to use for "
             " redshifts.  Default is to use --nersc_maxnodes.")
 
         parser.add_argument("--nersc_shifter", required=False, default=None,
             help="The shifter image to use for NERSC jobs")
 
-        parser.add_argument("--mpi_procs", required=False, default=None,
+        parser.add_argument("--mpi_procs", required=False, type=int, default=1,
             help="The number of MPI processes to use for non-NERSC shell "
             "scripts (default 1)")
 
-        parser.add_argument("--mpi_run", required=False, default=None,
+        parser.add_argument("--mpi_run", required=False, type=str, default="",
             help="The command to launch MPI programs "
             "for non-NERSC shell scripts (default do not use MPI)")
 
-        parser.add_argument("--procs_per_node", required=False, default=None,
-            help="The number of processes to use per node.  If not "
+        parser.add_argument("--procs_per_node", required=False, type=int,
+            default=0, help="The number of processes to use per node.  If not "
             "specified it uses a default value for each machine.")
 
         parser.add_argument("--debug", required=False, default=False,
@@ -460,7 +448,8 @@ Where supported commands are:
             deps = None
             if len(psfjobs) > 0:
                 deps = psfjobs
-            jid = self._run_chain(self._small(args), None, db, args.night, "psfnight", deps=deps, spec=spec)
+            jid = self._run_chain(self._small(args), None, db, args.night,
+                ["psfnight"], deps=deps, spec=spec)
             self._write_jobid("psfnight", args.night, 0, jid[0])
         return
 
@@ -506,7 +495,7 @@ Where supported commands are:
             if len(flatjobs) > 0:
                 deps = flatjobs
             jid = self._run_chain(self._small(args), None, db, args.night,
-                "fiberflatnight", deps=deps, spec=spec)
+                ["fiberflatnight"], deps=deps, spec=spec)
             self._write_jobid("fiberflatnight", args.night, 0, jid[0])
         return
 
