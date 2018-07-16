@@ -17,7 +17,7 @@ from desispec.io import read_image
 from desiutil.log import get_logger
 from desispec.linalg import cholesky_solve,cholesky_solve_and_invert
 from desispec.interpolation import resample_flux
-from desispec.quickproc.qextract import boxcar_extraction
+from desispec.qproc.qextract import qproc_boxcar_extraction
 
 def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavemin,wavemax,header_keywords=None) :
     """
@@ -139,7 +139,7 @@ def boxcar_extraction_from_filenames(image_filename,psf_filename,fibers=None, wi
     
     tset = read_xytraceset(psf_filename)
     image = read_image(image_filename)
-    qframe = boxcar_extraction(xytraceset,image,fibers=fibers,width=width)
+    qframe = qproc_boxcar_extraction(xytraceset,image,fibers=fibers,width=width)
     return qframe.flux, qframe.ivar, qframe.wave
 
 
@@ -388,7 +388,7 @@ def compute_dy_using_boxcar_extraction(xytraceset, image, fibers, width=7, degyy
     log=get_logger()
     
     # boxcar extraction
-    qframe = boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
+    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
     
     # resampling on common finer wavelength grid
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=4)
@@ -627,7 +627,7 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
     log.info("rextract spectra with boxcar")   
 
     # boxcar extraction
-    qframe = boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
+    qframe = qproc_boxcar_extraction(xytraceset, image, fibers=fibers, width=7)
         
     # resampling on common finer wavelength grid
     flux, ivar, wave = resample_boxcar_frame(qframe.flux, qframe.ivar, qframe.wave, oversampling=2)

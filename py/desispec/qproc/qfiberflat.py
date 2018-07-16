@@ -4,10 +4,10 @@ import scipy.ndimage
 
 from desiutil.log import get_logger
 from desispec.linalg import spline_fit
-from desispec.quickproc.qframe import QFrame
+from desispec.qproc.qframe import QFrame
 from desispec.fiberflat import FiberFlat
 
-def quick_apply_fiberflat(qframe,fiberflat) :
+def qproc_apply_fiberflat(qframe,fiberflat) :
 
     log = get_logger()
 
@@ -22,7 +22,7 @@ def quick_apply_fiberflat(qframe,fiberflat) :
             qframe.ivar[j] = 0.
 
 
-def quick_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_clipping=20.,spline_res_flat=5.) :    
+def qproc_compute_fiberflat(qframe,niter_meanspec=4,nsig_clipping=3.,spline_res_clipping=20.,spline_res_flat=5.) :    
     """
     Fast estimation of fiberflat
     """

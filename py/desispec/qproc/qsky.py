@@ -3,9 +3,9 @@ import numpy as np
 import scipy.ndimage
 
 from desiutil.log import get_logger
-from desispec.quickproc.qframe import QFrame
+from desispec.qproc.qframe import QFrame
 
-def quick_sky_subtraction(qframe) :
+def qproc_sky_subtraction(qframe) :
     log=get_logger()
     t0=time.time()
     log.info("Starting...")

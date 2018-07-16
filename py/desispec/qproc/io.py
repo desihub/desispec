@@ -1,8 +1,8 @@
 """
-desispec.quickproc.io
+desispec.qproc.io
 =================
 
-I/O routines for quickproc objects
+I/O routines for qproc objects
 """
 
 import os.path
@@ -15,7 +15,7 @@ import warnings
 from desiutil.depend import add_dependencies
 from desiutil.io import encode_table
 
-from desispec.quickproc.qframe import QFrame
+from desispec.qproc.qframe import QFrame
 from desispec.io.util import fitsheader, native_endian, makepath
 from desiutil.log import get_logger
 
@@ -25,7 +25,7 @@ def write_qframe(outfile, qframe, header=None, fibermap=None, units=None):
 
     Args:
         outfile: full path to output file, or tuple (night, expid, channel)
-        qframe:  desispec.quickproc.QFrame object with wave, flux, ivar...
+        qframe:  desispec.qproc.QFrame object with wave, flux, ivar...
 
     Optional:
         header: astropy.io.fits.Header or dict to override frame.header
@@ -72,7 +72,7 @@ def write_qframe(outfile, qframe, header=None, fibermap=None, units=None):
         fibermap.meta['EXTNAME'] = 'FIBERMAP'
         hdus.append( fits.convenience.table_to_hdu(fibermap) )
     elif qframe.spectrograph is not None:
-        x.header['FIBERMIN'] = 500*qframe.spectrograph  # Hard-coded (as in desispec.quickproc.qframe)
+        x.header['FIBERMIN'] = 500*qframe.spectrograph  # Hard-coded (as in desispec.qproc.qframe)
     else:
         log.error("You are likely writing a qframe without sufficient fiber info")
     

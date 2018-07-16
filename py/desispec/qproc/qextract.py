@@ -7,7 +7,7 @@ from desiutil.log import get_logger
 from desispec.xytraceset import XYTraceSet
 from desispec.image import Image
 from desispec.io.fibermap import empty_fibermap
-from desispec.quickproc.qframe import QFrame
+from desispec.qproc.qframe import QFrame
 
 
 @numba.jit
@@ -32,7 +32,7 @@ def numba_extract(image_flux,image_var,x,hw=3) :
 
 
 
-def boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :    
+def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :    
     """
     Fast boxcar extraction of spectra from a preprocessed image and a trace set
     

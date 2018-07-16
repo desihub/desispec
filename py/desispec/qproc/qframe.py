@@ -1,5 +1,5 @@
 """
-desispec.quickproc.qframe
+desispec.qproc.qframe
 ==============
 
 Lightweight wrapper class for spectra extract with qextract, row-by-row extraction (boxcar or profile)
@@ -81,7 +81,7 @@ class QFrame(object):
             self.fibers = fibers
         else:
             if fibermap is not None:
-                self.fibers = fibermap['FIBER']
+                self.fibers = np.asarray(fibermap['FIBER'])
             elif spectrograph is not None:
                 self.fibers = spectrograph*fibers_per_spectrograph + np.arange(self.nspec, dtype=int)
             elif (self.meta is not None) and ('FIBERMIN' in self.meta):
