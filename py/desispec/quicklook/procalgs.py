@@ -871,7 +871,7 @@ class Extract_QP(pas.PipelineAlg):
 
         traceset = read_xytraceset(psf_filename)
         
-        boxwidth=kwargs["BoxWidth"]
+        width=kwargs["FullWidth"]
         nspec=kwargs["Nspec"]
         if "Wavelength" not in kwargs:
             wstart = np.ceil(traceset.wavemin)
@@ -929,15 +929,15 @@ class Extract_QP(pas.PipelineAlg):
         
 
         
-        return self.run_pa(input_image,traceset,wave,boxwidth,nspec,
+        return self.run_pa(input_image,traceset,wave,width,nspec,
                            fibers=fibers,fibermap=fibermap,dumpfile=dumpfile,
                            maskFile=maskFile)
 
-    def run_pa(self,input_image,traceset,outwave,boxwidth,nspec,
+    def run_pa(self,input_image,traceset,outwave,width,nspec,
                fibers=None,fibermap=None,dumpfile=None,
                maskFile=None):
         
-        qframe = qproc_boxcar_extraction(traceset,input_image,fibers=fibers, width=boxwidth, fibermap=fibermap)
+        qframe = qproc_boxcar_extraction(traceset,input_image,fibers=fibers, width=width, fibermap=fibermap)
         
         if dumpfile is not None:
             io.write_qframe(dumpfile, qframe, fibermap=fibermap)
@@ -947,7 +947,7 @@ class Extract_QP(pas.PipelineAlg):
         
   
     def get_default_config(self):
-        return {("BoxWidth",2.5,"Boxcar halfwidth"),
+        return {("FullWidth",7,"Boxcar full width"),
                 ("PSFFile","%%PSFFile","PSFFile to use"),
                 ("DeltaW",0.5,"Binwidth of extrapolated wavelength array")
                 ("Nspec",500,"number of spectra to extract")

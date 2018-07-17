@@ -175,6 +175,8 @@ class Config(object):
         paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': inputpsf, 'outputPSFFile': outputpsf}
 
         paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
+        
+        paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
 
         paopt_comflat={'outputFile': self.fiberflat}
 
@@ -193,7 +195,7 @@ class Config(object):
             'Preproc':paopt_preproc,
             'Flexure':paopt_flexure,
             'BoxcarExtract':paopt_extract,
-            'Extract_QP':paopt_extract,
+            'Extract_QP':paopt_extract_qp,
             'ComputeFiberflat_QL':paopt_comflat,
             'ApplyFiberFlat_QL':paopt_apfflat,
             'ApplyFiberFlat_QP':paopt_apfflat,
