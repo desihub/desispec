@@ -520,7 +520,13 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
 
     Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
-        outfile: Name of figure.
+        outfile: output png file
+        objlist: list of targets for log(snr**2) vs. mag plots
+        badfibs: list of fibers with infs or nans to remove for plotting
+        fitsnr: snr vs. mag fitting coefficients
+        rescut: only plot residuals (+/-) less than rescut (default 0.2)
+        sigmacut: only plot residuals (+/-) less than sigma cut (default 2.0)
+        NOTE: rescut taken as default cut parameter
     """
 
     

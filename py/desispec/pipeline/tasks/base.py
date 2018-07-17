@@ -163,6 +163,8 @@ class BaseTask(object):
     def _insert(self, cursor, props):
         """See BaseTask.insert.
         """
+        log = get_logger()
+
         name = self.name_join(props)
         colstr = '(name'
         valstr = "('{}'".format(name)
@@ -184,7 +186,7 @@ class BaseTask(object):
         valstr += ', 0)'
 
         cmd = 'insert into {} {} values {}'.format(self._type, colstr, valstr)
-        print(cmd, flush=True)
+        log.debug(cmd)
         cursor.execute(cmd)
         return
 

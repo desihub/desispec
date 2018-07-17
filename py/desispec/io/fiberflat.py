@@ -53,7 +53,7 @@ def write_fiberflat(outfile,fiberflat,header=None):
     hdus.append(fits.ImageHDU(ff.wave.astype('f4'),     name='WAVELENGTH'))
     hdus[-1].header['BUNIT'] = 'Angstrom'
 
-    hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
+    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
     return outfile
 

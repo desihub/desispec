@@ -11,7 +11,7 @@ from desiutil.log import get_logger
 from desispec.preproc import read_ccd_calibration, _parse_sec_keyword, _overscan
 
 
-    
+
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 description="Compute a master bias from a set of raw data bias images",
@@ -39,7 +39,7 @@ if ccd_calibration_filename is None :
     else :
         ccd_calibration_filename=resource_filename('desispec', srch_file)
 
-  
+
 
 log.info("read images ...")
 images=[]
@@ -47,13 +47,13 @@ shape=None
 for filename in args.image :
     log.info("reading %s"%filename)
     fitsfile=pyfits.open(filename)
-    
+
     primary_header=fitsfile[0].header
     image_header=fitsfile[args.camera].header
 
     # subtract overscan region
     if ccd_calibration_filename is not None and  ccd_calibration_filename is not False :
-        calibration_data = read_ccd_calibration(image_header, primary_header, ccd_calibration_filename)        
+        calibration_data = read_ccd_calibration(image_header, primary_header, ccd_calibration_filename)
     else :
         calibration_data = None
 
@@ -63,10 +63,10 @@ for filename in args.image :
         amp_ids=list(calibration_data["AMPLIFIERS"])
     else :
         amp_ids=['A','B','C','D']
-    
+
     n0=image.shape[0]//2
     n1=image.shape[1]//2
-    
+
     for a,amp in enumerate(amp_ids) :
         ii = _parse_sec_keyword(image_header['BIASSEC'+amp])
         overscan_image = image[ii].copy()
@@ -80,12 +80,12 @@ for filename in args.image :
             image[n0:,:n1] -= overscan
         elif ii[0].start >= n0 and ii[1].start >= n1 :
             image[n0:,n1:] -= overscan
-        
-    
+
+
     if shape is None :
         shape=image.shape
     images.append(image.ravel())
-    
+
     fitsfile.close()
 
 log.info("compute median image ...")
@@ -94,6 +94,6 @@ print(images.shape)
 medimage=np.median(images,axis=0).reshape(shape)
 
 log.info("write result in %s ..."%args.outfile)
-pyfits.writeto(args.outfile,medimage,clobber="True")
+pyfits.writeto(args.outfile,medimage,overwrite="True")
 
 log.info("done")

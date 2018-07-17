@@ -328,8 +328,8 @@ class QL_QAMerger:
             
             
     def writeTojsonFile(self,fileName):
+        g=open(fileName,'w')
         
-        g=open(fileName.split('.json')[0]+'.json',"w")
         myDict = yamlify(self.__schema)
         #reOrderDict(myDict)
         

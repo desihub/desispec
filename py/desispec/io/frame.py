@@ -103,7 +103,7 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
                     if value in frame.scores_comments.keys() :
                         hdu.header[key] = (value, frame.scores_comments[value])
 
-    hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
+    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
     return outfile

@@ -1650,7 +1650,7 @@ def write_psf(outfile, xfit, fdicts, gauss, wv_solns, legendre_deg=5, without_ar
     hdulist = fits.HDUList([prihdu, yhdu, gausshdu])
 
 
-    hdulist.writeto(outfile, clobber=True)
+    hdulist.writeto(outfile, overwrite=True)
 
 def write_line_list(filename,all_wv_soln,llist) :
     wave = np.array([])
