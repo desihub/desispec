@@ -75,22 +75,30 @@ class Config(object):
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
         self.qamodule = self._palist.qamodule
+        algokeys = self.algorithms.keys()
+
+        # Extract mapping of scalar/refence key names for each QA
+        qaRefKeys = {}
+        for i in algokeys: 
+            for k in self.algorithms[i]["QA"].keys():
+                if k == "Check_HDUs":
+                    qaRefKeys[k] = "HDUs_OK"
+                qaparams=self.algorithms[i]["QA"][k]["PARAMS"]
+                for par in qaparams.keys():
+                    if "NORMAL_RANGE" in par:
+                        scalar = par.replace("_NORMAL_RANGE","")
+                        qaRefKeys[k] = scalar
+
+        # Special additional parameters to read in.  
         if "BoxcarExtract" in self.algorithms.keys():
             if "wavelength" in self.algorithms["BoxcarExtract"].keys():
                 self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
         else: self.wavelength = None
-        if "SkySub_QL" in self.algorithms.keys():
-            if "Calculate_SNR" in self.algorithms["SkySub_QL"]["QA"].keys():
-                if "Residual_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
-                    self.rescut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Residual_Cut"]
-                else: self.rescut = None
-                if "Sigma_Cut" in self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"].keys():
-                    self.sigmacut = self.algorithms["SkySub_QL"]["QA"]["Calculate_SNR"]["Sigma_Cut"]
-                else: self.sigmacut = None
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
-        self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Sky_Rband":"SKYRBAND", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        self._qaRefKeys = qaRefKeys
+        #self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
 
     @property
     def mode(self):
@@ -278,9 +286,6 @@ class Config(object):
                             'singleqa' : self.singqa}
                 if qa == 'Calc_XWSigma':
                     qaopts[qa]['Flavor']=self.flavor
-                if qa == 'Calculate_SNR':
-                    qaopts[qa]['rescut']=self.rescut
-                    qaopts[qa]['sigmacut']=self.sigmacut
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir
@@ -303,26 +308,28 @@ class Config(object):
             for PA in self.palist:
                 if qa in self.qalist[PA]:
                     params[qa]=self.algorithms[PA]['QA'][qa]['PARAMS']
-
         else:
-            if qa == 'Count_Pixels':
-                params[qa]= dict(
-                                CUTLO = 100,
-                                 CUTHI = 500
-                                )
-            elif qa == 'CountSpectralBins':
-                params[qa]= dict(
-                                 CUTLO = 100,   # low threshold for number of counts
-                                 CUTMED = 250,
-                                 CUTHI = 500
-                                )
-            elif qa == 'Sky_Residual':
-                params[qa]= dict(
-                                 PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
-                                 PER_RESID=95.,   # Percentile for residual distribution
-                                 BIN_SZ=0.1,) # Bin size for residual/sigma histogram
-            else:
-                params[qa]= dict()
+            # RK:  Need to settle optimal error handling in cases like this.
+            raise qlexceptions.ParameterException("Run time PARAMs not provided for QA")
+
+            #if qa == 'Count_Pixels':
+            #    params[qa]= dict(
+            #                    CUTLO = 100,
+            #                     CUTHI = 500
+            #                    )
+            #elif qa == 'CountSpectralBins':
+            #    params[qa]= dict(
+            #                     CUTLO = 100,   # low threshold for number of counts
+            #                     CUTMED = 250,
+            #                     CUTHI = 500
+            #                    )
+            #elif qa == 'Sky_Residual':
+            #    params[qa]= dict(
+            #                     PCHI_RESID=0.05, # P(Chi^2) limit for bad skyfiber model residuals
+            #                     PER_RESID=95.,   # Percentile for residual distribution
+            #                     BIN_SZ=0.1,) # Bin size for residual/sigma histogram
+            #else:
+            #    params[qa]= dict()
         
         return params[qa]
 
@@ -332,19 +339,18 @@ class Config(object):
         """
         filemap={'Initialize': 'initial',
                  'Preproc': 'preproc',
+                 'Flexure': 'flexure',
+                 'BoxcarExtract': 'boxextract',
                  'BoxcarExtract': 'boxextract',
                  'ComputeFiberflat_QL': 'computeflat',
                  'ApplyFiberFlat_QL': 'fiberflat',
                  'SkySub_QL': 'skysub'
                  }
 
-        filetype='ql_file'
-        figtype='ql_fig'
-
         if paname in filemap:
-            outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfile=findfile('ql_file',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
             outfile=outfile.replace('qlfile',filemap[paname])
-            outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfig=findfile('ql_fig',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
             outfig=outfig.replace('qlfig',filemap[paname])
         else:
             raise IOError("PA name does not match any file type. Check PA name in config for {}".format(paname))
@@ -371,13 +377,10 @@ class Config(object):
                  'Calculate_SNR': 'snr'
                  }
 
-        filetype='ql_file'
-        figtype='ql_fig'
-
         if qaname in filemap:
-            outfile=findfile(filetype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfile=findfile('ql_file',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
             outfile=outfile.replace('qlfile',filemap[qaname])
-            outfig=findfile(figtype,night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
+            outfig=findfile('ql_fig',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
             outfig=outfig.replace('qlfig',filemap[qaname])
         else:
             raise IOError("QA name does not match any file type. Check QA name in config for {}".format(qaname))
@@ -413,6 +416,7 @@ class Config(object):
             self.fiberflat=os.path.join(os.environ['QL_CALIB_DIR'],'fiberflat-{}.fits'.format(self.camera))
         else:
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.flatid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+
         #- Get reference metrics from template json file
         if self.templateid is None:
             template=os.path.join(os.environ['QL_CONFIG_DIR'],'templates','ql-mergedQA-{}-{}.json'.format(self.camera,self.program))

@@ -25,6 +25,7 @@ class MonitoringAlg:
         res=self.run(*args,**kwargs)
         cargs=self.config['kwargs']
         params=cargs['param']
+
         metrics=res["METRICS"] if 'METRICS' in res else None
         if metrics is None:
             metrics={}
@@ -36,10 +37,14 @@ class MonitoringAlg:
             QARESULTKEY=cargs["QASTATUSKEY"]
         if "RESULTKEY" in cargs:
             reskey=cargs["RESULTKEY"]
+
         if reskey in metrics:
             current=metrics[reskey]
             if "REFERENCE" in cargs:
                 refval=cargs["REFERENCE"]
+    
+#                print(refval,"MA inside if")
+ 
             else: #- For absolute value checks
                 self.m_log.warning("No reference given. STATUS will be assigned for the Absolute Value. Confirm your ranges.")
                 #- check the data type
@@ -76,25 +81,29 @@ class MonitoringAlg:
                 if d>=l[0][0] and d<l[0][1]:
                     val=l[1]
             return val
+
         metrics[QARESULTKEY]='NORMAL'
         if self.__deviation is not None and "RANGES" in cargs:
             self.m_log.info("QL Reference checking for QA {}".format(self.name))
             thr=cargs["RANGES"]
             metrics[QARESULTKEY]="ERROR"
+
             thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
             devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
             #if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
             #    self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
             #    return res
             #else: #they are of the same type
+
             if devlist: # if results are a list
                 if len(thr)==2: # check all results against same thresholds
                     #- maximum deviation
                     kk=np.argmax(np.abs(self.__deviation).flatten()) #- flatten for > 1D array
                     metrics[QARESULTKEY]=findThr(np.array(self.__deviation).flatten()[kk],thr)
-                    #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation] 
+                    #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation]
                 #else: # each result has its own thresholds
                 #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
+
             else: #result is a scalar
                 metrics[QARESULTKEY]=findThr(self.__deviation,thr)
             if metrics[QARESULTKEY]==QASeverity.NORMAL:

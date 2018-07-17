@@ -396,7 +396,6 @@ class Bias_From_Overscan(MonitoringAlg):
         return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
 
     def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
-
     
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
@@ -422,8 +421,7 @@ class Bias_From_Overscan(MonitoringAlg):
         from desispec import quicklook
         param['PROC_DESISPEC_VERSION']= desispec.__version__
         param['PROC_QuickLook_VERSION']= quicklook.__qlversion__
-        
-          
+                  
         #header = image.meta
         if 'INHERIT' in image.meta and image.meta['INHERIT']:
 
@@ -439,13 +437,12 @@ class Bias_From_Overscan(MonitoringAlg):
 
         if param is None:
             log.debug("Param is None. Using default param instead")
-            param = {
-                
+            param = {                
                 "BIAS_NORMAL_RANGE":[-1.0, 1.0],
                 "BIAS_WARN_RANGE:":[-2.0, 2.0]
                 }
         retval["PARAMS"] = param
-        
+
         if amps:
             bias_amps=np.array(bias_overscan)
             retval["METRICS"]={'BIAS_AMP':bias_amps}
@@ -1994,11 +1991,6 @@ class Calculate_SNR(MonitoringAlg):
         if "paname" in kwargs:
             paname=kwargs["paname"]
 
-        if "rescut" in kwargs: rescut=kwargs["rescut"]
-        else: rescut=None
-        if "sigmacut" in kwargs: sigmacut=kwargs["sigmacut"]
-        else: sigmacut=None
-
         if "qlf" in kwargs:
              qlf=kwargs["qlf"]
         else: qlf=False
@@ -2009,9 +2001,9 @@ class Calculate_SNR(MonitoringAlg):
         if "qafig" in kwargs: qafig=kwargs["qafig"]
         else: qafig = None
 
-        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics,rescut=rescut,sigmacut=sigmacut)
+        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
-    def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None,rescut=None,sigmacut=None):
+    def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None):
 
         #- return values
         retval={}
@@ -2065,6 +2057,8 @@ class Calculate_SNR(MonitoringAlg):
             outfile = qa.write_qa_ql(qafile,retval)
             log.debug("Output QA data is in {}".format(outfile))
         if qafig is not None:
+            rescut=param["RESIDUAL_CUT"]
+            sigmacut=param["SIGMA_CUT"]
             plot.plot_SNR(retval,qafig,objlist,badfibs,fitsnr,rescut,sigmacut)
             log.debug("Output QA fig {}".format(qafig))
 
