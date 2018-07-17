@@ -11,6 +11,8 @@ import numbers
 import numpy as np
 
 from desispec import util
+from desispec.frame import Frame
+from desispec.interpolation import resample_flux
 from desiutil.log import get_logger
 
 class QFrame(object):
@@ -122,3 +124,33 @@ class QFrame(object):
                        meta=self.meta, fibermap=fibermap)
         
         return result
+
+
+    def asframe(self,wavelength=None) :
+        """
+        Converts QFrame to a Frame 
+
+        """
+
+        if wavelength is None :
+            dwave=np.min(np.gradient(self.wave[self.nspec//2]))
+            wmin=np.max(self.wave[:,0])
+            wmax=np.min(self.wave[:,-1])
+            n=int((wmax-wmin)/dwave)+1
+            wavelength=np.linspace(wmin,wmax,n)
+        
+        rflux = np.zeros((self.nspec,wavelength.size))
+        rivar = np.zeros((self.nspec,wavelength.size))
+        if self.mask is None :
+            for i in range(self.nspec) :
+                rflux[i],rivar[i] = resample_flux(wavelength,self.wave[i],self.flux[i],self.ivar[i],extrapolate=False)
+        else :
+            for i in range(self.nspec) :
+                rflux[i],rivar[i] = resample_flux(wavelength,self.wave[i],self.flux[i],self.ivar[i]*(self.mask[i]==0),extrapolate=False)
+        
+            
+        return Frame(wave=wavelength,flux=rflux,ivar=rivar,mask=None,resolution_data=None,\
+                     fibers=self.fibers, spectrograph=None, meta=self.meta, fibermap=self.fibermap,\
+                     chi2pix=None,scores=None,scores_comments=None,\
+                     wsigma=None,ndiag=1, suppress_res_warning=True)
+        
