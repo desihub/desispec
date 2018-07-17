@@ -104,7 +104,7 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
     wave = native_endian(fx['WAVELENGTH'].data.astype('f8'))
 
     if wave.shape != flux.shape :
-        log.Error("{} is not a valid QFrame file because wave.shape != flux.shape".format(filename))
+        log.error("{} is not a valid QFrame file because wave.shape != flux.shape".format(filename))
         return None
     
 
