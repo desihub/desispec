@@ -237,10 +237,14 @@ Where supported commands are:
         if args.spec >= 0:
             spec = args.spec
 
+        states = None
+        if args.states is not None:
+            states = args.states.split(",")
+
         control.tasks(
             args.tasktypes,
             nightstr=args.nights,
-            states=args.states,
+            states=states,
             expid=expid,
             spec=spec,
             nosubmitted=args.nosubmitted,
@@ -601,6 +605,10 @@ Where supported commands are:
         if args.spec >= 0:
             spec = args.spec
 
+        states = None
+        if args.states is not None:
+            states = args.states.split(",")
+
         deps = None
         if args.depjobs is not None:
             deps = args.depjobs.split(",")
@@ -608,7 +616,7 @@ Where supported commands are:
         jobids = control.chain(
             args.tasktypes.split(","),
             nightstr=args.nights,
-            states=args.states,
+            states=states,
             expid=expid,
             spec=spec,
             pack=args.pack,
