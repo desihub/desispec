@@ -22,6 +22,7 @@ from desispec.image import Image as im
 from desispec.frame import Frame as fr
 from desispec.preproc import _parse_sec_keyword
 from desispec.util import runcmd
+from desispec.qproc.qframe import QFrame
 
 
 qlog=qllogger.QLLogger("QuickLook",0)
@@ -1184,6 +1185,9 @@ class CountSpectralBins(MonitoringAlg):
 
     def run_qa(self,fibermap,frame,paname=None,psf=None,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
 
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+
         #- qa dictionary 
         retval={}
         retval["PANAME"] = paname
@@ -1323,6 +1327,9 @@ class Sky_Continuum(MonitoringAlg):
                paname=None,qafile=None,qafig=None,param=None,qlf=False,
                refmetrics=None):
 
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+
         #- qa dictionary 
         retval={}
         retval["PANAME" ]= paname
@@ -1438,6 +1445,9 @@ class Sky_Rband(MonitoringAlg):
         return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
 
         #- qa dictionary 
         retval={}
@@ -1607,6 +1617,10 @@ class Sky_Peaks(MonitoringAlg):
 
     def run_qa(self,fibermap,frame,paname=None,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from desispec.qa.qalib import sky_peaks
+        
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
@@ -1728,6 +1742,9 @@ class Sky_Residual(MonitoringAlg):
     def run_qa(self,fibermap,frame,paname=None,skymodel=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
         from desispec.sky import qa_skysub
 
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+            
         if skymodel is None:
             raise IOError("Must have skymodel to find residual. It can't be None")
         #- return values
@@ -1836,6 +1853,10 @@ class Integrate_Spec(MonitoringAlg):
         return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+
         retval={}
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
@@ -2012,6 +2033,9 @@ class Calculate_SNR(MonitoringAlg):
         return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics,rescut=rescut,sigmacut=sigmacut)
 
     def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None,rescut=None,sigmacut=None):
+
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
 
         #- return values
         retval={}
