@@ -838,6 +838,7 @@ class ResolutionFit(pas.PipelineAlg):
 # qproc algorithms
 # =======================
 
+from desispec.sky import SkyModel
 from desispec.qproc.io import write_qframe
 from desispec.qproc.qextract import qproc_boxcar_extraction
 from desispec.qproc.qfiberflat import qproc_apply_fiberflat 
@@ -1020,13 +1021,19 @@ class SkySub_QP(pas.PipelineAlg):
         return self.run_pa(input_qframe,dumpfile=dumpfile)
     
     def run_pa(self,qframe,dumpfile=None):
-        
-        qproc_sky_subtraction(qframe)
+
+        skymodel = qproc_sky_subtraction(qframe,return_skymodel=True)
+        #qproc_sky_subtraction(qframe)
         
         if dumpfile is not None:
             night = qframe.meta['NIGHT']
             expid = qframe.meta['EXPID']
-            io.write_frame(dumpfile, qframe)
+            write_qframe(dumpfile, qframe)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
-
-        return qframe
+        
+        # convert for QA
+        sframe=qframe.asframe()
+        tmpsky=np.interp(sframe.wave,qframe.wave[0],skymodel[0])
+        skymodel = SkyModel(sframe.wave,np.tile(tmpsky,(sframe.nspec,1)),np.ones(sframe.flux.shape),np.zeros(sframe.flux.shape,dtype="int32"))
+        
+        return (sframe,skymodel)
