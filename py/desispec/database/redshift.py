@@ -424,6 +424,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
         good_rows = rowfilter(data[0:maxrows])
     data_list = [data[col][0:maxrows][good_rows].tolist() for col in colnames]
     data_names = [col.lower() for col in colnames]
+    finalrows = len(data_list[0])
     log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
         for col in expand:
@@ -454,26 +455,26 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
             data_list[i] = [convert[col](x) for x in data_list[i]]
     log.info("Column conversion complete on %s.", tn)
     if index is not None:
-        data_list.insert(0, list(range(1, maxrows+1)))
+        data_list.insert(0, list(range(1, finalrows+1)))
         data_names.insert(0, index)
         log.info("Added index column '%s'.", index)
     data_rows = list(zip(*data_list))
     del data_list
     log.info("Converted columns into rows on %s.", tn)
-    for k in range(maxrows//chunksize + 1):
+    for k in range(finalrows//chunksize + 1):
         data_chunk = [dict(zip(data_names, row))
                       for row in data_rows[k*chunksize:(k+1)*chunksize]]
         if len(data_chunk) > 0:
             engine.execute(tcls.__table__.insert(), data_chunk)
             log.info("Inserted %d rows in %s.",
-                     min((k+1)*chunksize, maxrows), tn)
-    # for k in range(maxrows//chunksize + 1):
+                     min((k+1)*chunksize, finalrows), tn)
+    # for k in range(finalrows//chunksize + 1):
     #     data_insert = [dict([(col, data_list[i].pop(0))
     #                          for i, col in enumerate(data_names)])
     #                    for j in range(chunksize)]
     #     session.bulk_insert_mappings(tcls, data_insert)
     #     log.info("Inserted %d rows in %s..",
-    #              min((k+1)*chunksize, maxrows), tn)
+    #              min((k+1)*chunksize, finalrows), tn)
     # session.commit()
     # dbSession.commit()
     if q3c:
