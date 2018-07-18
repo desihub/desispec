@@ -5,7 +5,9 @@ desispec Change Log
 0.22.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Allow rows to be filtered when loading the redshift database (PR `#663`_).
+
+.. _`#663`: https://github.com/desihub/desispec/pull/663
 
 0.22.0 (2018-06-30)
 -------------------
