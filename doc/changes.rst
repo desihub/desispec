@@ -2,11 +2,18 @@
 desispec Change Log
 ===================
 
-0.22.1 (unreleased)
+0.22.1 (2018-07-18)
 -------------------
 
+* Update processing of QL metrics (PR `#659`_).
+* Refactor pipeline and integration test (PR `#660`_).
+* Update redshift database to handle changes to fiberassign data model
+  (PR `#662`_).
 * Allow rows to be filtered when loading the redshift database (PR `#663`_).
 
+.. _`#659`: https://github.com/desihub/desispec/pull/659
+.. _`#660`: https://github.com/desihub/desispec/pull/660
+.. _`#662`: https://github.com/desihub/desispec/pull/662
 .. _`#663`: https://github.com/desihub/desispec/pull/663
 
 0.22.0 (2018-06-30)
