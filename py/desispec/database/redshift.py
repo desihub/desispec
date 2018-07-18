@@ -474,7 +474,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
     return
 
 
-def load_zbest(datapath=None, q3c=False):
+def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
     """Load zbest files into the zcat table.
 
     This function is deprecated since there should now be a single
@@ -484,6 +484,8 @@ def load_zbest(datapath=None, q3c=False):
     ----------
     datapath : :class:`str`
         Full path to the directory containing zbest files.
+    hdu : :class:`int` or :class:`str`, optional
+        Read a data table from this HDU (default 'ZBEST').
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     """
@@ -502,7 +504,7 @@ def load_zbest(datapath=None, q3c=False):
     for f in zbest_files:
         brickname = os.path.basename(os.path.dirname(f))
         with fits.open(f) as hdulist:
-            data = hdulist['ZBEST'].data
+            data = hdulist[hdu].data
         log.info("Read data from %s.", f)
         good_targetids = data['TARGETID'] != 0
         #
@@ -558,7 +560,8 @@ def load_zbest(datapath=None, q3c=False):
     return
 
 
-def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
+def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
+                     latest_epoch=False):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -573,6 +576,8 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
         Full path to the directory containing tile files.
     maxpass : :class:`int`, optional
         Search for pass numbers up to this value (default 4).
+    hdu : :class:`int` or :class:`str`, optional
+        Read a data table from this HDU (default 'FIBERASSIGN').
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     latest_epoch : :class:`bool`, optional
@@ -613,7 +618,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     for tileid in latest_tiles:
         epoch, f = latest_tiles[tileid]
         with fits.open(f) as hdulist:
-            data = hdulist['FIBER_ASSIGNMENTS'].data
+            data = hdulist[hdu].data
         log.info("Read data from %s.", f)
         for col in ('RA', 'DEC', 'XFOCAL_DESIGN', 'YFOCAL_DESIGN'):
             data[col][np.isnan(data[col])] = -9999.0
