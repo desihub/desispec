@@ -364,7 +364,7 @@ class FiberAssign(SchemaMixin, Base):
 
 
 def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
-              q3c=False, chunksize=50000, maxrows=0):
+              rowfilter=None, q3c=False, chunksize=50000, maxrows=0):
     """Load a data file into the database, assuming that column names map
     to database column names with no surprises.
 
@@ -383,6 +383,9 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
         supplied function.
     index : :class:`str`, optional
         If set, add a column that just counts the number of rows.
+    rowfilter : callable, optional
+        If set, apply this filter to the rows to be loaded.  The function
+        should return :class:`bool`, with ``True`` meaning a good row.
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     chunksize : :class:`int`, optional
@@ -415,7 +418,11 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
                 log.warning("%d rows of bad data detected in column " +
                             "%s of %s.", nbad, col, filepath)
     log.info("Integrity check complete on %s.", tn)
-    data_list = [data[col][0:maxrows].tolist() for col in colnames]
+    if rowfilter is None:
+        good_rows = np.ones((maxrows,), dtype=np.bool)
+    else:
+        good_rows = rowfilter(data[0:maxrows])
+    data_list = [data[col][0:maxrows][goodrows].tolist() for col in colnames]
     data_names = [col.lower() for col in colnames]
     log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
@@ -506,7 +513,7 @@ def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
         with fits.open(f) as hdulist:
             data = hdulist[hdu].data
         log.info("Read data from %s.", f)
-        good_targetids = data['TARGETID'] != 0
+        good_targetids = ((data['TARGETID'] != 0) & (data['TARGETID'] != -1))
         #
         # If there are too many targetids, the in_ clause will blow up.
         # Disabling this test, and crossing fingers.
@@ -874,6 +881,7 @@ def main():
                'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
                                     'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
                'convert': None,
+               'rowfilter': lambda x: ((x['TARGETID'] != 0) & (x['TARGETID'] != -1))
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows}]
