@@ -881,7 +881,7 @@ def main():
                'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
                                     'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
                'convert': None,
-               'rowfilter': lambda x: ((x['TARGETID'] != 0) & (x['TARGETID'] != -1))
+               'rowfilter': lambda x: ((x['TARGETID'] != 0) & (x['TARGETID'] != -1)),
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows}]

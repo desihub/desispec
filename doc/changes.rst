@@ -9,7 +9,6 @@ desispec Change Log
 
 .. _`#663`: https://github.com/desihub/desispec/pull/663
 
-
 0.22.0 (2018-06-30)
 -------------------
 
