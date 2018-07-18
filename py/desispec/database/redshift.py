@@ -422,7 +422,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
         good_rows = np.ones((maxrows,), dtype=np.bool)
     else:
         good_rows = rowfilter(data[0:maxrows])
-    data_list = [data[col][0:maxrows][goodrows].tolist() for col in colnames]
+    data_list = [data[col][0:maxrows][good_rows].tolist() for col in colnames]
     data_names = [col.lower() for col in colnames]
     log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
