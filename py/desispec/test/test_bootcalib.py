@@ -236,9 +236,7 @@ class TestBoot(unittest.TestCase):
         y = psf.y(ispec=indices, wavelength=psf.wmin)
         y = psf.y(ispec=indices, wavelength=waves)
         
-        t = psf.invert()
-
-
+        
 def test_suite():
     """Allows testing of only this module with the command::
 
