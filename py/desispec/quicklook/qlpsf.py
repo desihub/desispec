@@ -56,15 +56,18 @@ class PSF(object):
         
         if wavelength is None :
             wavelength = self.wavelength(ispec)
-            
+        else :
+            wavelength = np.atleast_1d(wavelength)
+        
         if len(wavelength.shape)==2 :
             res=np.zeros(wavelength.shape)
-            for ii in ispec: 
-                res[ii]=self.traceset.x_vs_wave(ii,wavelength[ii])
+            for j,i in enumerate(ispec): 
+                res[j]=self.traceset.x_vs_wave(i,wavelength[i])
         else :
+            print("ispec.size=",ispec.size,"wavelength.size=",wavelength.size)
             res=np.zeros((ispec.size,wavelength.size))
-            for ii in ispec: 
-                res[ii]=self.traceset.x_vs_wave(ii,wavelength)
+            for j,i in enumerate(ispec): 
+                res[j]=self.traceset.x_vs_wave(i,wavelength)
         return res
 
     def y(self,ispec=None,wavelength=None):
@@ -80,15 +83,17 @@ class PSF(object):
         
         if wavelength is None :
             wavelength = self.wavelength(ispec)
-            
+        else :
+            wavelength = np.atleast_1d(wavelength)
+        
         if len(wavelength.shape)==2 :
             res=np.zeros(wavelength.shape)
-            for ii in ispec: 
-                res[ii]=self.traceset.y_vs_wave(ii,wavelength[ii])
+            for j,i in enumerate(ispec): 
+                res[j]=self.traceset.y_vs_wave(ii,wavelength[i])
         else :
             res=np.zeros((ispec.size,wavelength.size))
-            for ii in ispec: 
-                res[ii]=self.traceset.y_vs_wave(ii,wavelength)
+            for j,i in enumerate(ispec): 
+                res[j]=self.traceset.y_vs_wave(i,wavelength)
         return res
     
     
@@ -98,16 +103,26 @@ class PSF(object):
         """
         if y is None:
             y=np.arange(0,self.npix_y)
+        else :
+            y = np.atleast_1d(y)
         if ispec is None:
             ispec = np.arange(self.traceset.nspec)
-            
+        else :
+            ispec = np.atleast_1d(ispec)
+
         if np.size(ispec)==1 :
             return self.traceset.wave_vs_y(ispec,y)
         else :
-            res=np.zeros((ispec.size,y.size))
-            for ii in ispec: 
-                res[ii]=self.traceset.wave_vs_y(ii,y)
-            return res
+            if np.size(y)==1 :
+                res=np.zeros((ispec.size))
+                for j,i in enumerate(ispec): 
+                    res[j]=self.traceset.wave_vs_y(i,y)
+                return res  
+            else :
+                res=np.zeros((ispec.size,y.size))
+                for j,i in enumerate(ispec): 
+                    res[j]=self.traceset.wave_vs_y(i,y)
+                return res
         
     def xsigma(self,ispec,wave):
         return self.traceset.xsig_vs_wave(ispec,wave)
