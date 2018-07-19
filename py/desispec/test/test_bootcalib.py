@@ -214,24 +214,26 @@ class TestBoot(unittest.TestCase):
         psf = PSF(self.testout)
 
         #- While we're at it, test some PSF accessor functions
+        indices = np.array([0,1])
+
         w = psf.wavelength()
         w = psf.wavelength(ispec=0)
-        w = psf.wavelength(ispec=[0,1])
-        w = psf.wavelength(ispec=[0,1], y=0)
-        w = psf.wavelength(ispec=[0,1], y=[0,1])
+        w = psf.wavelength(ispec=indices)
+        w = psf.wavelength(ispec=indices, y=0)
+        w = psf.wavelength(ispec=indices, y=indices)
 
         x = psf.x()
         x = psf.x(ispec=0)
-        x = psf.x(ispec=[0,1])
+        x = psf.x(ispec=indices)
         x = psf.x(ispec=None, wavelength=psf.wmin)
         x = psf.x(ispec=1, wavelength=psf.wmin)
-        x = psf.x(ispec=[0,1], wavelength=psf.wmin)
-        x = psf.x(ispec=[0,1], wavelength=[psf.wmin, psf.wmin+1])
+        x = psf.x(ispec=indices, wavelength=psf.wmin)
+        x = psf.x(ispec=indices, wavelength=[psf.wmin, psf.wmin+1])
 
         y = psf.y(ispec=None, wavelength=psf.wmin)
         y = psf.y(ispec=0, wavelength=psf.wmin)
-        y = psf.y(ispec=[0,1], wavelength=psf.wmin)
-        y = psf.y(ispec=[0,1], wavelength=[psf.wmin, psf.wmin+1])
+        y = psf.y(ispec=indices, wavelength=psf.wmin)
+        y = psf.y(ispec=indices, wavelength=[psf.wmin, psf.wmin+1])
 
         t = psf.invert()
 
