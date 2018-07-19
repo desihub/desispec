@@ -215,7 +215,8 @@ class TestBoot(unittest.TestCase):
 
         #- While we're at it, test some PSF accessor functions
         indices = np.array([0,1])
-
+        waves = np.array([psf.wmin, psf.wmin+1])
+        
         w = psf.wavelength()
         w = psf.wavelength(ispec=0)
         w = psf.wavelength(ispec=indices)
@@ -228,13 +229,13 @@ class TestBoot(unittest.TestCase):
         x = psf.x(ispec=None, wavelength=psf.wmin)
         x = psf.x(ispec=1, wavelength=psf.wmin)
         x = psf.x(ispec=indices, wavelength=psf.wmin)
-        x = psf.x(ispec=indices, wavelength=[psf.wmin, psf.wmin+1])
+        x = psf.x(ispec=indices, wavelength=waves)
 
         y = psf.y(ispec=None, wavelength=psf.wmin)
         y = psf.y(ispec=0, wavelength=psf.wmin)
         y = psf.y(ispec=indices, wavelength=psf.wmin)
-        y = psf.y(ispec=indices, wavelength=[psf.wmin, psf.wmin+1])
-
+        y = psf.y(ispec=indices, wavelength=waves)
+        
         t = psf.invert()
 
 
