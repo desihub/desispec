@@ -110,10 +110,10 @@ class PSF(object):
             return res
         
     def xsigma(self,ispec,wave):
-        return selt.traceset.xsig_vs_wave(ispec,wave)
+        return self.traceset.xsig_vs_wave(ispec,wave)
         
-    def wdisp(self,ispec,wave):
-        return selt.traceset.ysig_vs_wave(ispec,wave)
+    def ysigma(self,ispec,wave):
+        return self.traceset.ysig_vs_wave(ispec,wave)
     
     def angstroms_per_pixel(self, ispec, wavelength):
         """
