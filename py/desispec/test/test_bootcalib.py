@@ -210,7 +210,7 @@ class TestBoot(unittest.TestCase):
         bootscript.main(args)
 
         #- Ensure the PSF class can read that file
-        from desispec.psf import PSF
+        from desispec.quicklook.qlpsf import PSF
         psf = PSF(self.testout)
 
         #- While we're at it, test some PSF accessor functions
