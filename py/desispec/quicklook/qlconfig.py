@@ -1,7 +1,9 @@
 import numpy as np
 import json
 import yaml
+import astropy.io.fits as pyfits
 from desispec.io import findfile
+from desispec.preproc import read_ccd_calibration
 import os,sys
 from desispec.quicklook import qlexceptions,qllogger
 
@@ -417,14 +419,24 @@ class Config(object):
 
         self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         
+        if "DESI_CCD_CALIBRATION_DATA" not in os.environ :
+            log.error("please set the DESI_CCD_CALIBRATION_DATA environment variable")
+            raise RuntimeError("Please set the DESI_CCD_CALIBRATION_DATA environment variable")
+        
+        hdulist=pyfits.open(self.rawfile)
+        primary_header=hdulist[0].header
+        camera_header =hdulist[self.camera].header
+        hdulist.close()
+        calibration_data = read_ccd_calibration(camera_header,primary_header)
+        
         if self.psfid is None:
-            self.psf_filename=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'SIM/psf-{}.fits'.format(self.camera))
+            self.psf_filename=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["PSF"])
             #self.psf_filename=os.path.join(os.environ['QL_CALIB_DIR'],'psf-{}.fits'.format(self.camera))
         else:
             self.psf_filename=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         
         if self.flatid is None:
-            self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'SIM/fiberflat-{}.fits'.format(self.camera))
+            self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["FIBERFLAT"])
             #self.fiberflat=os.path.join(os.environ['QL_CALIB_DIR'],'fiberflat-{}.fits'.format(self.camera))
         else:
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.flatid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
