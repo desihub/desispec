@@ -41,8 +41,7 @@ class XYTraceSet(object):
             self.xsig_vs_wave_traceset = TraceSet(xsigcoef,[wavemin,wavemax])
         if ysigcoef is not None :
             self.ysig_vs_wave_traceset = TraceSet(ysigcoef,[wavemin,wavemax])
-            
-        self.ysig_vs_wave_traceset = TraceSet(ysigcoef,[wavemin,wavemax])
+        
         self.wave_vs_y_traceset = None
             
     def x_vs_wave(self,fiber,wavelength) :
