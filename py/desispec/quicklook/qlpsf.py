@@ -110,13 +110,11 @@ class PSF(object):
             return res
         
     def xsigma(self,ispec,wave):
-        print("WARNING RETURNING 1. FOR XSIGMA")
-        return 1.
+        return selt.traceset.xsig_vs_wave(ispec,wave)
         
     def wdisp(self,ispec,wave):
-        print("WARNING RETURNING 1. FOR WDISP")
-        return 1.
-
+        return selt.traceset.ysig_vs_wave(ispec,wave)
+    
     def angstroms_per_pixel(self, ispec, wavelength):
         """
         Return CCD pixel width in Angstroms for spectrum ispec at given
