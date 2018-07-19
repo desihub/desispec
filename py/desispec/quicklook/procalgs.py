@@ -226,7 +226,7 @@ class BoxcarExtract(pas.PipelineAlg):
         if "usesigma" in kwargs:
              usesigma=kwargs["usesigma"]
         else: usesigma = False
-
+        
         if "Wavelength" not in kwargs:
             wstart = np.ceil(psf.wmin)
             wstop = np.floor(psf.wmax)
@@ -302,10 +302,10 @@ class BoxcarExtract(pas.PipelineAlg):
                 if isinstance(nspec,(tuple,list,np.ndarray)):
                     for i,s in enumerate(nspec):
                         #- GD: Need confirmation, but this appears to be missing.
-                        wsigma[i]=psf.wdisp(s,outwave)/psf.angstroms_per_pixel(s,outwave)
+                        wsigma[i]=psf.ysigma(s,outwave)
                 else:
                     for i in range(nspec):
-                        wsigma[i]=psf.wdisp(i,outwave)/psf.angstroms_per_pixel(i,outwave)
+                        wsigma[i]=psf.ysigma(i,outwave)
             elif hasattr(psf,'xsigma_boot'):
                 wsigma=np.tile(psf.xsigma_boot,(outwave.shape[0],1))
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, 
