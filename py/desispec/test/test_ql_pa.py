@@ -5,6 +5,7 @@ tests for Quicklook Pipeline steps in desispec.quicklook.procalgs
 import unittest
 import numpy as np
 import os
+import shutil
 import desispec
 from desispec.quicklook import procalgs as PA
 from pkg_resources import resource_filename
@@ -23,12 +24,39 @@ class TestQL_PA(unittest.TestCase):
         for filename in [self.rawfile, self.pixfile]:
             if os.path.exists(filename):
                 os.remove(filename)
-
+        if os.path.exists(self.testDir):
+            shutil.rmtree(self.testDir)
+    
     #- Create some test data
     def setUp(self):
+        
+        #- Create temporary calib directory
+        self.testDir  = os.path.join(os.environ['HOME'], 'ql_test_io')
+        calibDir = os.path.join(self.testDir, 'ql_calib')
+        if not os.path.exists(calibDir): os.makedirs(calibDir)
+        
+        #- Generate calib data
+        for camera in ['b0', 'r0', 'z0']:
+            #- Fiberflat has to exist but can be a dummpy file
+            filename = '{}/fiberflat-{}.fits'.format(calibDir, camera)
+            fx = open(filename, 'w'); fx.write('fiberflat file'); fx.close()
 
-        self.rawfile = 'test-raw-abcd.fits'
-        self.pixfile = 'test-pix-abcd.fits'
+            #- PSF has to be real file
+            psffile = '{}/psf-{}.fits'.format(calibDir, camera)
+            example_psf = resource_filename('desispec', 'test/data/ql/psf-{}.fits'.format(camera))
+            shutil.copy(example_psf, psffile)
+            
+        #- Copy test calibration-data.yaml file 
+        input_yaml_file = resource_filename('desispec', 'test/data/ql/ccd_calibration.yaml')
+        output_yaml_file = os.path.join(calibDir,'ccd_calibration.yaml')
+        shutil.copy(input_yaml_file,output_yaml_file)
+        
+        #- Set calibration environment variable
+        os.environ['DESI_CCD_CALIBRATION_DATA'] = calibDir
+
+        
+        self.rawfile =  os.path.join(self.testDir,'test-raw-abcd.fits')
+        self.pixfile =  os.path.join(self.testDir,'test-pix-abcd.fits')
         self.config={}
         
         #- rawimage
@@ -98,6 +126,8 @@ class TestQL_PA(unittest.TestCase):
         hdr['DETECTOR'] = 'SIM'
         desispec.io.write_raw(self.rawfile,rawimg,hdr,camera=self.camera)
         self.rawimage=fits.open(self.rawfile)
+
+        
 
     #- Individual tests already exist in offline tests. So we will mostly test the call etc. here
     def testPreproc(self):
