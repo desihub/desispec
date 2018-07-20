@@ -5,7 +5,7 @@ desispec Change Log
 0.22.2 (unreleased)
 -------------------
 
-* No changes yet.
+* qproc algorithms; QFrame class (PR `#664`_)  
 
 0.22.1 (2018-07-18)
 -------------------
