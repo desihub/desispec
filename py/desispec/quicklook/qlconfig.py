@@ -2,6 +2,7 @@ import numpy as np
 import json
 import yaml
 import astropy.io.fits as pyfits
+from desiutil.log import get_logger
 from desispec.io import findfile
 from desispec.preproc import read_ccd_calibration
 import os,sys
@@ -419,7 +420,10 @@ class Config(object):
 
         self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         
+
+
         if "DESI_CCD_CALIBRATION_DATA" not in os.environ :
+            log = get_logger()
             log.error("please set the DESI_CCD_CALIBRATION_DATA environment variable")
             raise RuntimeError("Please set the DESI_CCD_CALIBRATION_DATA environment variable")
         
