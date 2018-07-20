@@ -16,13 +16,11 @@ from desispec.interpolation import resample_flux
 from desiutil.log import get_logger
 
 class QFrame(object):
-    def __init__(self, wave, flux, ivar, mask=None,
+    def __init__(self, wave, flux, ivar, mask=None, sigma=None,
                 fibers=None, spectrograph=None, meta=None, fibermap=None,
     ):
         """
-        Lightweight wrapper for multiple spectra on a common wavelength grid
-
-        x.wave, x.flux, x.ivar, x.mask, x.resolution_data, x.header, sp.R
+        Lightweight wrapper for multiple spectra 
 
         Args:
             wave: 2D[nspec, nwave] wavelength in Angstroms
@@ -31,6 +29,7 @@ class QFrame(object):
 
         Optional:
             mask: 2D[nspec, nwave] integer bitmask of flux.  0=good.
+            sigma: 2D[nspec, nwave] LSF sigma in pixel units
             fibers: ndarray of which fibers these spectra are
             spectrograph: integer, which spectrograph [0-9]
             meta: dict-like object (e.g. FITS header)
@@ -52,7 +51,8 @@ class QFrame(object):
         assert (mask is None) or mask.shape == flux.shape
         assert (mask is None) or mask.dtype in \
             (int, np.int64, np.int32, np.uint64, np.uint32), "Bad mask type "+str(mask.dtype)
-
+        assert (sigma is None) or sigma.shape == flux.shape
+        
         self.wave = wave
         self.flux = flux
         self.ivar = ivar
@@ -62,6 +62,7 @@ class QFrame(object):
             self.mask = np.zeros(flux.shape, dtype=np.uint32)
         else:
             self.mask = util.mask32(mask)
+        self.sigma = sigma
         
         self.nspec = self.flux.shape[0]
             
@@ -119,8 +120,18 @@ class QFrame(object):
         else:
             fibermap = None
         
+        if self.mask is None :
+            tmp_mask=None
+        else :
+            tmp_mask=self.mask[index]
+        
+        if self.sigma is None :
+            tmp_sigma=None
+        else :
+            tmp_sigma=self.sigma[index]
+        
         result = QFrame(self.wave[index], self.flux[index], self.ivar[index],
-                       self.mask[index], fibers=self.fibers[index], spectrograph=self.spectrograph,
+                       tmp_mask, tmp_sigma, fibers=self.fibers[index], spectrograph=self.spectrograph,
                        meta=self.meta, fibermap=fibermap)
         
         return result

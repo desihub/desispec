@@ -60,7 +60,14 @@ def write_qframe(outfile, qframe, header=None, fibermap=None, units=None):
     hdus.append(x)
 
     hdus.append( fits.ImageHDU(qframe.ivar.astype('f4'), name='IVAR') )
+    if qframe.mask is None : 
+        qframe.mask=np.zeros(qframe.flux.shape,dtype=np.uint32)
     hdus.append( fits.CompImageHDU(qframe.mask, name='MASK') )
+    
+    if qframe.sigma is None : 
+        qframe.sigma=np.zeros(qframe.flux.shape,dtype=np.float)
+    hdus.append( fits.ImageHDU(qframe.sigma.astype('f4'), name='SIGMA') )
+    
     hdus.append( fits.ImageHDU(qframe.wave.astype('f8'), name='WAVELENGTH') )
     hdus[-1].header['BUNIT'] = 'Angstrom'
     if fibermap is not None:
@@ -113,6 +120,11 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
     else:
         mask = None   #- let the Frame object create the default mask
         
+    if 'SIGMA' in fx:
+        sigma = native_endian(fx['SIGMA'].data.astype('f8'))
+    else:
+        sgma = None  
+        
     
     if 'FIBERMAP' in fx:
         fibermap = fx['FIBERMAP'].data
@@ -134,7 +146,7 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
             fibers = fibers[:][0:nspec]
     
     # return flux,ivar,wave,resolution_data, hdr
-    qframe = QFrame(wave, flux, ivar, mask, meta=hdr, fibermap=fibermap, fibers=fibers)
+    qframe = QFrame(wave, flux, ivar, mask=mask, sigma=sigma, meta=hdr, fibermap=fibermap, fibers=fibers)
     
     # Return
     return qframe

@@ -32,7 +32,7 @@ def numba_extract(image_flux,image_var,x,hw=3) :
 
 
 
-def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None) :    
+def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=None, save_sigma=True) :    
     """
     Fast boxcar extraction of spectra from a preprocessed image and a trace set
     
@@ -89,6 +89,16 @@ def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=No
     frame_flux = np.zeros((fibers.size,n0))
     frame_ivar = np.zeros((fibers.size,n0))
     frame_wave = np.zeros((fibers.size,n0))
+
+    frame_sigma = None
+    ysigcoef = None
+    if save_sigma :
+        if  xytraceset.ysig_vs_wave_traceset is None :
+            log.warning("will not save sigma in qframe because missing in traceset")
+        else :
+            frame_sigma = np.zeros((fibers.size,n0))
+            ysigcoef    = xytraceset.ysig_vs_wave_traceset._coeff
+
     xx         = np.tile(np.arange(n1),(n0,1))
     hw = width//2
     
@@ -120,6 +130,10 @@ def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=No
         frame_flux[f] /= dwave
         frame_ivar[f] *= dwave**2
     
+        if frame_sigma is not None :
+            ts = legval(rwave, ysigcoef[f])
+            frame_sigma[f] = np.interp(y,ty,ts)
+
     t1=time.time()
     log.info(" done {} fibers in {:3.1f} sec".format(len(fibers),t1-t0))
     
@@ -131,4 +145,4 @@ def qproc_boxcar_extraction(xytraceset, image, fibers=None, width=7, fibermap=No
         indices = np.arange(fibermap["FIBER"].size)[np.in1d(fibermap["FIBER"],fibers)]
         fibermap = fibermap[:][indices]
             
-    return QFrame(frame_wave, frame_flux, frame_ivar, mask=None, fibers=fibers, meta=image.meta, fibermap=fibermap)
+    return QFrame(frame_wave, frame_flux, frame_ivar, mask=None, sigma=frame_sigma , fibers=fibers, meta=image.meta, fibermap=fibermap)
