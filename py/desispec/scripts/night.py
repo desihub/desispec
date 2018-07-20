@@ -261,12 +261,24 @@ Where supported commands are:
         return ready, deps
 
 
+    def _check_nersc_host(self, args):
+        """Modify the --nersc argument based on the environment.
+        """
+        if args.nersc is None:
+            if "NERSC_HOST" in os.environ:
+                if os.environ["NERSC_HOST"] == "cori":
+                    args.nersc = "cori-haswell"
+                else:
+                    args.nersc = os.environ["NERSC_HOST"]
+        return
+
+
     def _pipe_opts(self, parser):
         """Internal function to parse options passed to desi_night.
         """
         parser.add_argument("--nersc", required=False, default=None,
             help="write a script for this NERSC system (edison | cori-haswell "
-            "| cori-knl)")
+            "| cori-knl).  Default uses $NERSC_HOST")
 
         parser.add_argument("--nersc_queue", required=False, default="regular",
             help="write a script for this NERSC queue (debug | regular)")
@@ -332,6 +344,8 @@ Where supported commands are:
         parser = self._pipe_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
+
+        self._check_nersc_host(args)
 
         # First update the DB
         self._update_db(args.night)
@@ -423,6 +437,8 @@ Where supported commands are:
 
         args = parser.parse_args(sys.argv[2:])
 
+        self._check_nersc_host(args)
+
         spec = None
         if args.spec >= 0:
             spec = args.spec
@@ -469,6 +485,8 @@ Where supported commands are:
 
         args = parser.parse_args(sys.argv[2:])
 
+        self._check_nersc_host(args)
+
         spec = None
         if args.spec >= 0:
             spec = args.spec
@@ -510,6 +528,8 @@ Where supported commands are:
         parser = self._pipe_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
+
+        self._check_nersc_host(args)
 
         # First update the DB
         self._update_db(args.night)
