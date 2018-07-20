@@ -181,13 +181,13 @@ def main():
         stagedir = os.path.join(outputdir, "raw_nightly")
         if os.path.isdir(stagedir):
             print("Wiping {}".format(stagedir))
-            os.shutil.rmtree(stagedir)
+            shutil.rmtree(stagedir)
         os.makedirs(stagedir)
 
         # Pre-create prod.
         prodnight = os.path.join(outputdir, "nightly")
         if os.path.isdir(prodnight):
-            os.shutil.rmtree(prodnight)
+            shutil.rmtree(prodnight)
 
         com = ["desi_pipe", "create", "--db-sqlite"]
         com.extend(["--data", stagedir])
@@ -220,7 +220,7 @@ def main():
         # Create production for full chain processing
         prodfull = os.path.join(outputdir, "full")
         if os.path.isdir(prodfull):
-            os.shutil.rmtree(prodfull)
+            shutil.rmtree(prodfull)
 
         com = ["desi_pipe", "create", "--db-sqlite"]
         com.extend(["--data", inputdir])

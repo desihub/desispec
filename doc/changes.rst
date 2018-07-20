@@ -5,7 +5,9 @@ desispec Change Log
 0.22.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Adds `desi_pipe go` for production running (PR `#666`_).
+
+.. _`#666`: https://github.com/desihub/desispec/pull/666
 
 0.22.1 (2018-07-18)
 -------------------
