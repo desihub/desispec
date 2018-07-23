@@ -58,6 +58,7 @@ def parse(options=None):
     parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
     parser.add_argument("--psferr", type=float, default=None, required=False,
                         help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
+    parser.add_argument("--use_cached_values", default=None, required=False, action="store_true", help="cache values of legval, not very helpful")
 
     args = None
     if options is None:
@@ -148,7 +149,8 @@ regularize: {regularize}
     results = ex2d(img.pix, img.ivar*(img.mask==0), psf, specmin, nspec, wave,
                  regularize=args.regularize, ndecorr=args.decorrelate_fibers,
                  bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                   full_output=True, nsubbundles=args.nsubbundles,psferr=args.psferr)
+                 full_output=True, nsubbundles=args.nsubbundles, psferr=args.psferr,
+                 use_cache=args.use_cached_values)
     flux = results['flux']
     ivar = results['ivar']
     Rdata = results['resolution_data']
@@ -354,7 +356,7 @@ def main_mpi(args, comm=None, timing=None):
             results = ex2d(img.pix, img.ivar*(img.mask==0), psf, bspecmin[b],
                 bnspec[b], wave, regularize=args.regularize, ndecorr=args.decorrelate_fibers,
                 bundlesize=bundlesize, wavesize=args.nwavestep, verbose=args.verbose,
-                full_output=True, nsubbundles=args.nsubbundles)
+                full_output=True, nsubbundles=args.nsubbundles, use_cache=args.use_cached_values)
 
             flux = results['flux']
             ivar = results['ivar']
