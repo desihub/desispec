@@ -182,6 +182,7 @@ Where supported commands are:
                 procs_per_node=args.procs_per_node,
                 out=os.path.join("night", night),
                 debug=False)
+            log.debug('Job IDs {}'.format(jobids))
         else:
             for ex in exps:
                 log.info("Running chain for night = {}, tasktypes = {}, "
@@ -204,6 +205,7 @@ Where supported commands are:
                     procs_per_node=args.procs_per_node,
                     out=os.path.join("night", night),
                     debug=False)
+                log.debug('Job IDs {}'.format(exjobids))
                 jobids.extend(exjobids)
         return jobids
 
