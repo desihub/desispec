@@ -21,7 +21,7 @@ from desispec.io.filters import load_filter
 from desispec.dustextinction import ext_odonnell
 
 def parse(options=None):
-    parser = argparse.ArgumentParser(description="Extract spectra from pre-processed raw data.")
+    parser = argparse.ArgumentParser(description="Fit of standard star spectra in frames.")
     parser.add_argument('--frames', type = str, default = None, required=True, nargs='*',
                         help = 'list of path to DESI frame fits files (needs to be same exposure, spectro)')
     parser.add_argument('--skymodels', type = str, default = None, required=True, nargs='*',
@@ -35,7 +35,7 @@ def parse(options=None):
     parser.add_argument('--color', type = str, default = "G-R", required = False, help = 'color for selection of standard stars')
     parser.add_argument('--z-max', type = float, default = 0.008, required = False, help = 'max peculiar velocity (blue/red)shift range')
     parser.add_argument('--z-res', type = float, default = 0.00002, required = False, help = 'dz grid resolution')
-    parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 10% for BOSS b1)')
+    parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
     
     args = None
     if options is None:
