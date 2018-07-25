@@ -22,6 +22,8 @@ import numpy as np
 
 from .. import io
 
+from desiutil.log import get_logger
+
 from .. import pipeline as pipe
 
 from ..pipeline import control as control
@@ -52,21 +54,26 @@ class PipeUI(object):
             description="DESI pipeline control",
             usage="""desi_pipe <command> [options]
 
-Where supported commands are:
+Where supported commands are (use desi_pipe <command> --help for details):
+   (------- High-Level -------)
    create   Create a new production.
+   go       Run a full production.
+   update   Update an existing production.
+   top      Live display of production database.
+   status   Overview of production.
+   (------- Mid-Level --------)
+   chain    Run all ready tasks for multiple pipeline steps.
+   cleanup  Reset tasks from "running" back to "ready".
+   (------- Low-Level --------)
    tasks    Get all possible tasks for a given type and states.
    check    Check the status of tasks.
    dryrun   Return the equivalent command line entrypoint for tasks.
    script   Generate a shell or slurm script.
    run      Generate a script and run it.
-   chain    Run all ready tasks for multiple pipeline steps.
-   env      Print current production location.
-   update   Update an existing production.
    getready Auto-Update of prod DB.
    sync     Synchronize DB state based on the filesystem.
-   cleanup  Reset tasks from "running" back to "ready".
-   status   Overview of production.
-   top      Live display of production database.
+   env      Print current production location.
+
 """)
         parser.add_argument("command", help="Subcommand to run")
         # parse_args defaults to [1:] for args, but you need to
@@ -371,6 +378,18 @@ Where supported commands are:
         return
 
 
+    def _check_nersc_host(self, args):
+        """Modify the --nersc argument based on the environment.
+        """
+        if args.nersc is None:
+            if "NERSC_HOST" in os.environ:
+                if os.environ["NERSC_HOST"] == "cori":
+                    args.nersc = "cori-haswell"
+                else:
+                    args.nersc = os.environ["NERSC_HOST"]
+        return
+
+
     def _parse_run_opts(self, parser):
         """Internal function to parse options for running.
 
@@ -380,7 +399,7 @@ Where supported commands are:
         """
         parser.add_argument("--nersc", required=False, default=None,
             help="write a script for this NERSC system (edison | cori-haswell "
-            "| cori-knl)")
+            "| cori-knl).  Default uses $NERSC_HOST")
 
         parser.add_argument("--nersc_queue", required=False, default="regular",
             help="write a script for this NERSC queue (debug | regular)")
@@ -444,6 +463,8 @@ Where supported commands are:
 
         args = parser.parse_args(sys.argv[2:])
 
+        self._check_nersc_host(args)
+
         tasks = pipe.prod.task_read(args.taskfile)
 
         control.dryrun(
@@ -484,6 +505,8 @@ Where supported commands are:
             "user for read-only access")
 
         args = parser.parse_args(sys.argv[2:])
+
+        self._check_nersc_host(args)
 
         scripts = control.script(
             args.taskfile,
@@ -530,6 +553,8 @@ Where supported commands are:
             action="store_true", help="Do not use the production database.")
 
         args = parser.parse_args(sys.argv[2:])
+
+        self._check_nersc_host(args)
 
         deps = None
         if args.depjobs is not None:
@@ -597,6 +622,8 @@ Where supported commands are:
 
         args = parser.parse_args(sys.argv[2:])
 
+        self._check_nersc_host(args)
+
         expid = None
         if args.expid >= 0:
             expid = args.expid
@@ -635,6 +662,79 @@ Where supported commands are:
 
         if len(jobids) > 0:
             print(",".join(jobids))
+
+        return
+
+
+    def go(self):
+        parser = argparse.ArgumentParser(description="Run a full production "
+            "from start to finish.  This will pack steps into 3 jobs per night"
+            " and then run redshift fitting after all nights are done.  Note "
+            "that if you are running multiple nights you should use the "
+            "regular queue.",
+            usage="desi_pipe go [options] (use --help for details)")
+
+        parser.add_argument("--nights", required=False, default=None,
+            help="comma separated (YYYYMMDD) or regex pattern- only nights "
+            "matching these patterns will be generated.")
+
+        parser = self._parse_run_opts(parser)
+
+        args = parser.parse_args(sys.argv[2:])
+
+        self._check_nersc_host(args)
+
+        allnights = io.get_nights(strip_path=True)
+        nights = pipe.prod.select_nights(allnights, args.nights)
+
+        log = get_logger()
+
+        blocks = [
+            ["preproc", "psf", "psfnight"],
+            ["traceshift", "extract"],
+            ["fiberflat", "fiberflatnight", "sky", "starfit", "fluxcalib",
+             "cframe"],
+        ]
+
+        nightlast = list()
+
+        for nt in nights:
+            previous = None
+            log.info("Submitting processing chains for night {}".format(nt))
+            for blk in blocks:
+                jobids = control.chain(
+                    blk,
+                    nightstr="{}".format(nt),
+                    pack=True,
+                    depjobs=previous,
+                    nersc=args.nersc,
+                    nersc_queue=args.nersc_queue,
+                    nersc_maxtime=args.nersc_maxtime,
+                    nersc_maxnodes=args.nersc_maxnodes,
+                    nersc_shifter=args.nersc_shifter,
+                    mpi_procs=args.mpi_procs,
+                    mpi_run=args.mpi_run,
+                    procs_per_node=args.procs_per_node,
+                    out=args.outdir,
+                    debug=args.debug)
+                previous = [ jobids[-1] ]
+            nightlast.append(previous[-1])
+
+        # Submit redshifts
+        jobids = control.chain(
+            ["spectra", "redshift"],
+            pack=True,
+            depjobs=nightlast,
+            nersc=args.nersc,
+            nersc_queue=args.nersc_queue,
+            nersc_maxtime=args.nersc_maxtime,
+            nersc_maxnodes=args.nersc_maxnodes,
+            nersc_shifter=args.nersc_shifter,
+            mpi_procs=args.mpi_procs,
+            mpi_run=args.mpi_run,
+            procs_per_node=args.procs_per_node,
+            out=args.outdir,
+            debug=args.debug)
 
         return
 
