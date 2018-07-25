@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import sys
 import re
+import time
 
 from collections import OrderedDict
 
@@ -702,7 +703,10 @@ def run_scripts(scripts, deps=None, slurm=False):
         for scr in scripts:
             scom = "sbatch {} {}".format(depstr, scr)
             #print("RUN SCRIPTS: {}".format(scom))
+            log.debug(time.asctime())
+            log.debug(scom)
             sout = sp.check_output(scom, shell=True, universal_newlines=True)
+            log.debug(sout)
             p = sout.split()
             jid = re.sub(r'[^\d]', '', p[3])
             jobids.append(jid)

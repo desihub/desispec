@@ -118,7 +118,7 @@ def all_tasks(night, nside, expid=None):
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
 
-        log.info("read {}".format(fibermap))
+        log.debug("read {}".format(fibermap))
 
         fmdata = io.read_fibermap(fibermap)
         header = fmdata.meta
