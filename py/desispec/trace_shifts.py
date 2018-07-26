@@ -39,13 +39,16 @@ def write_traces_in_psf(input_psf_filename,output_psf_filename,xcoef,ycoef,wavem
     log = get_logger()
 
     psf_fits=pyfits.open(input_psf_filename)
-
-    psftype=psf_fits[0].header["PSFTYPE"]
-
+    
+    if "PSFTYPE" in psf_fits[0].header :
+        psftype=psf_fits[0].header["PSFTYPE"]
+    else :
+        psftype=None
+    
     modified_x=False
     modified_y=False
 
-    if psftype=="GAUSS-HERMITE" :
+    if psftype is not None and psftype=="GAUSS-HERMITE" :
 
         if "X" in psf_fits["PSF"].data["PARAM"] :
             i=np.where(psf_fits["PSF"].data["PARAM"]=="X")[0][0]
@@ -220,8 +223,9 @@ def compute_dy_from_spectral_cross_correlation(flux,wave,refflux,ivar=None,hw=3.
         kernel=np.exp(-x**2/2)
         f1=fftconvolve(flux,kernel,mode='same')
         f2=fftconvolve(refflux,kernel,mode='same')
-        scale=f1/f2
-        refflux *= scale
+        if np.all(f2>0) :
+            scale=f1/f2
+            refflux *= scale
 
 
 
@@ -701,8 +705,9 @@ def shift_ycoef_using_external_spectrum(psf,xytraceset,image,fibers,spectrum_fil
     kernel=np.exp(-x**2/2)
     f1=fftconvolve(mflux,kernel,mode='same')
     f2=fftconvolve(ref_spectrum,kernel,mode='same')
-    scale=f1/f2
-    ref_spectrum *= scale
+    if np.all(f2>0) :
+        scale=f1/f2
+        ref_spectrum *= scale
 
     log.info("fit shifts on wavelength bins")
     # define bins

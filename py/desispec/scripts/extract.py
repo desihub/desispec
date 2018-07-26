@@ -58,6 +58,8 @@ def parse(options=None):
     parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
     parser.add_argument("--psferr", type=float, default=None, required=False,
                         help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
+    parser.add_argument("--fibermap-index", type=int, default=None, required=False,
+                        help="start at this index in the fibermap table instead of using the spectro id from the camera")
 
     args = None
     if options is None:
@@ -92,11 +94,14 @@ def main(args):
     if nspec is None:
         nspec = psf.nspec
     specmax = specmin + nspec
-
-    camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
-    spectrograph = int(camera[1])
-    fibermin = spectrograph * psf.nspec + specmin
-
+    
+    if args.fibermap_index is not None :
+        fibermin = args.fibermap_index
+    else :
+        camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
+        spectrograph = int(camera[1])
+        fibermin = spectrograph * psf.nspec + specmin
+    
     print('Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
 
@@ -234,11 +239,14 @@ def main_mpi(args, comm=None, timing=None):
     if nspec is None:
         nspec = psf.nspec
     specmax = specmin + nspec
-
-    camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
-    spectrograph = int(camera[1])
-    fibermin = spectrograph * psf.nspec + specmin
-
+    
+    if args.fibermap_index is not None :
+        fibermin = args.fibermap_index
+    else :
+        camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
+        spectrograph = int(camera[1])
+        fibermin = spectrograph * psf.nspec + specmin
+    
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
         fibermap = fibermap[fibermin:fibermin+nspec]
