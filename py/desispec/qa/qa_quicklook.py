@@ -821,6 +821,7 @@ class Calc_XWSigma(MonitoringAlg):
             peak_wave.append(peak_lower)
             peak_wave.append(peak_upper)
         npeaks=len(peaks)
+        peak_wave = np.array(peak_wave)
 
         if flavor == 'arcs':
             import desispec.psf
