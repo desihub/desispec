@@ -8,10 +8,12 @@ desispec Change Log
 * Adds qproc algorithms and QFrame class (PR `#664`_).
 * Adds `desi_pipe go` for production running (PR `#666`_).
 * Increase job maxtime for edison realtime queue (PR `#667`_).
+* Fix QL for list vs. array change in specter/master (PR `#670`_).
 
 .. _`#664`: https://github.com/desihub/desispec/pull/664
 .. _`#666`: https://github.com/desihub/desispec/pull/666
 .. _`#667`: https://github.com/desihub/desispec/pull/667
+.. _`#670`: https://github.com/desihub/desispec/pull/670
 
 0.22.1 (2018-07-18)
 -------------------
