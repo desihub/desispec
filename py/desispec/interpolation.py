@@ -221,4 +221,8 @@ def _unweighted_resample(output_x,input_x,input_flux_density, extrapolate=False)
     trapeze_centers=(tx[1:]+tx[:-1])/2.
     binsize = bins[1:]-bins[:-1]
 
+    if np.any(binsize<=0)  :
+        raise ValueError("Zero or negative bin size")
+    
     return np.histogram(trapeze_centers, bins=bins, weights=trapeze_integrals)[0] / binsize
+

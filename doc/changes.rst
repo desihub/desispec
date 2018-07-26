@@ -2,12 +2,14 @@
 desispec Change Log
 ===================
 
-0.22.2 (unreleased)
+0.23.0 (unreleased)
 -------------------
 
+* Adds qproc algorithms and QFrame class (PR `#664`_).
 * Adds `desi_pipe go` for production running (PR `#666`_).
 * Increase job maxtime for edison realtime queue (PR `#667`_).
 
+.. _`#664`: https://github.com/desihub/desispec/pull/664
 .. _`#666`: https://github.com/desihub/desispec/pull/666
 .. _`#667`: https://github.com/desihub/desispec/pull/667
 

@@ -174,6 +174,15 @@ class TestQL(unittest.TestCase):
             psffile = '{}/psf-{}.fits'.format(calibDir, camera)
             example_psf = resource_filename('desispec', 'test/data/ql/psf-{}.fits'.format(camera))
             shutil.copy(example_psf, psffile)
+            
+        #- Copy test calibration-data.yaml file 
+        input_yaml_file = resource_filename('desispec', 'test/data/ql/ccd_calibration.yaml')
+        output_yaml_file = os.path.join(calibDir,'ccd_calibration.yaml')
+        shutil.copy(input_yaml_file,output_yaml_file)
+        
+        #- Set calibration environment variable
+        os.environ['DESI_CCD_CALIBRATION_DATA'] = calibDir
+    
 
    #- Clean up test files and directories if they exist
     @classmethod

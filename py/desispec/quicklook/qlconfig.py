@@ -1,7 +1,10 @@
 import numpy as np
 import json
 import yaml
+import astropy.io.fits as pyfits
+from desiutil.log import get_logger
 from desispec.io import findfile
+from desispec.preproc import read_ccd_calibration
 import os,sys
 from desispec.quicklook import qlexceptions,qllogger
 
@@ -75,6 +78,7 @@ class Config(object):
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
         self.qamodule = self._palist.qamodule
+        
         algokeys = self.algorithms.keys()
 
         # Extract mapping of scalar/refence key names for each QA
@@ -90,10 +94,12 @@ class Config(object):
                         qaRefKeys[k] = scalar
 
         # Special additional parameters to read in.  
-        if "BoxcarExtract" in self.algorithms.keys():
-            if "wavelength" in self.algorithms["BoxcarExtract"].keys():
-                self.wavelength = self.algorithms["BoxcarExtract"]["wavelength"][self.camera[0]]
-        else: self.wavelength = None
+        self.wavelength = None
+        for key in ["BoxcarExtract","Extract_QP"] :
+            if key in self.algorithms.keys():
+                if "wavelength" in self.algorithms[key].keys():
+                    self.wavelength = self.algorithms[key]["wavelength"][self.camera[0]]
+        
         self._qlf=qlf
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
@@ -152,6 +158,10 @@ class Config(object):
             framefile=self.dump_pa("BoxcarExtract")
             fframefile=self.dump_pa("ApplyFiberFlat_QL")
             sframefile=self.dump_pa("SkySub_QL")
+            framefile=self.dump_pa("Extract_QP")
+            fframefile=self.dump_pa("ApplyFiberFlat_QP")
+            sframefile=self.dump_pa("SkySub_QP")
+            
         else:
             framefile=None
             fframefile=None
@@ -159,7 +169,7 @@ class Config(object):
 
         if self.flexure:
             preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
-            inputpsf=self.psf
+            inputpsf=self.psf_filename
             outputpsf=findfile('psf',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
         else:
             preproc_file=None
@@ -168,7 +178,9 @@ class Config(object):
 
         paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': inputpsf, 'outputPSFFile': outputpsf}
 
-        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf,'usesigma': self.usesigma, 'dumpfile': framefile}
+        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
+        
+        paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
 
         paopt_comflat={'outputFile': self.fiberflat}
 
@@ -179,6 +191,7 @@ class Config(object):
         else:
             outskyfile=None       
         paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile, 'Apply_resolution': self.usesigma}
+        paopt_skysub_qp={'dumpfile': sframefile, 'Apply_resolution': False}
 
         paopts={}
         defList={
@@ -186,9 +199,12 @@ class Config(object):
             'Preproc':paopt_preproc,
             'Flexure':paopt_flexure,
             'BoxcarExtract':paopt_extract,
+            'Extract_QP':paopt_extract_qp,
             'ComputeFiberflat_QL':paopt_comflat,
             'ApplyFiberFlat_QL':paopt_apfflat,
-            'SkySub_QL':paopt_skysub
+            'ApplyFiberFlat_QP':paopt_apfflat,
+            'SkySub_QL':paopt_skysub,
+            'SkySub_QP':paopt_skysub_qp
         }
 
         def getPAConfigFromFile(PA,algs):
@@ -219,7 +235,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'SkySub_QL': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -279,7 +295,7 @@ class Config(object):
                 pa_yaml = PA.upper()
                 params=self._qaparams(qa)
                 qaopts[qa]={'night' : self.night, 'expid' : self.expid,
-                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf,
+                            'camera': self.camera, 'paname': PA, 'PSFFile': self.psf_filename,
                             'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
                             'qafig': qaplot, 'FiberMap': self.fibermap,
                             'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
@@ -403,17 +419,29 @@ class Config(object):
         self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
- 
-#        self.psf=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'psf-{}.fits'.format(self.camera))
-#
-#        self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'fiberflat-{}.fits'.format(self.camera))
-        if self.psfid is None:
-            self.psf=os.path.join(os.environ['QL_CALIB_DIR'],'psf-{}.fits'.format(self.camera))
-        else:
-            self.psf=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        
 
+
+        if "DESI_CCD_CALIBRATION_DATA" not in os.environ :
+            log = get_logger()
+            log.error("please set the DESI_CCD_CALIBRATION_DATA environment variable")
+            raise RuntimeError("Please set the DESI_CCD_CALIBRATION_DATA environment variable")
+        
+        hdulist=pyfits.open(self.rawfile)
+        primary_header=hdulist[0].header
+        camera_header =hdulist[self.camera].header
+        hdulist.close()
+        calibration_data = read_ccd_calibration(camera_header,primary_header)
+        
+        if self.psfid is None:
+            self.psf_filename=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["PSF"])
+            #self.psf_filename=os.path.join(os.environ['QL_CALIB_DIR'],'psf-{}.fits'.format(self.camera))
+        else:
+            self.psf_filename=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        
         if self.flatid is None:
-            self.fiberflat=os.path.join(os.environ['QL_CALIB_DIR'],'fiberflat-{}.fits'.format(self.camera))
+            self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["FIBERFLAT"])
+            #self.fiberflat=os.path.join(os.environ['QL_CALIB_DIR'],'fiberflat-{}.fits'.format(self.camera))
         else:
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.flatid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
@@ -468,7 +496,7 @@ class Config(object):
         outconfig['OutputFile'] = self.outputfile
         outconfig['singleqa'] = self.singqa
         outconfig['Timeout'] = self.timeout
-        outconfig['PSFFile'] = self.psf
+        outconfig['PSFFile'] = self.psf_filename
         outconfig['FiberFlatFile'] = self.fiberflat
 
         #- Check if all the files exist for this QL configuraion

@@ -17,6 +17,9 @@ import desispec.image as image
 import desispec.frame as frame
 import desispec.io.frame as frIO
 import desispec.io.image as imIO
+from desispec.qproc.qframe import QFrame
+from desispec.qproc.io import write_qframe
+
 
 import os,sys
 import yaml
@@ -160,6 +163,13 @@ def ql_main(args=None):
             finalname="frame-{}-{:08d}.fits".format(camera,expid)
             log.critical("No final outputname given. Writing to a frame file {}".format(finalname))
         frIO.write_frame(finalname,res,header=None)
+    elif isinstance(res,QFrame):
+        if configdict["OutputFile"]: 
+            finalname=configdict["OutputFile"]
+        else:
+            finalname="qframe-{}-{:08d}.fits".format(camera,expid)
+            log.critical("No final outputname given. Writing to a frame file {}".format(finalname))
+        write_qframe(finalname,res,header=None,units="electron/Angstrom")
     elif configdict["Flavor"] == 'arcs':
         if configdict["OutputFile"]:
             finalname=configdict["OutputFile"]

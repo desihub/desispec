@@ -91,7 +91,7 @@ class TestExtract(unittest.TestCase):
         self.assertEqual(frame2.meta['BUNIT'], 'electron/Angstrom')
 
     def test_boxcar(self):
-        from desispec.boxcar import do_boxcar
+        from desispec.quicklook.qlboxcar import do_boxcar
         psf = load_psf(self.psffile)
 
         pix = np.random.normal(0, 3.0, size=(psf.npix_y, psf.npix_x))

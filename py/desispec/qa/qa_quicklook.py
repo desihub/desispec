@@ -22,6 +22,7 @@ from desispec.image import Image as im
 from desispec.frame import Frame as fr
 from desispec.preproc import _parse_sec_keyword
 from desispec.util import runcmd
+from desispec.qproc.qframe import QFrame
 
 
 qlog=qllogger.QLLogger("QuickLook",0)
@@ -1181,6 +1182,9 @@ class CountSpectralBins(MonitoringAlg):
 
     def run_qa(self,fibermap,frame,paname=None,psf=None,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
 
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+
         #- qa dictionary 
         retval={}
         retval["PANAME"] = paname
@@ -1320,6 +1324,9 @@ class Sky_Continuum(MonitoringAlg):
                paname=None,qafile=None,qafig=None,param=None,qlf=False,
                refmetrics=None):
 
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+
         #- qa dictionary 
         retval={}
         retval["PANAME" ]= paname
@@ -1435,6 +1442,9 @@ class Sky_Rband(MonitoringAlg):
         return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
 
         #- qa dictionary 
         retval={}
@@ -1604,6 +1614,10 @@ class Sky_Peaks(MonitoringAlg):
 
     def run_qa(self,fibermap,frame,paname=None,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         from desispec.qa.qalib import sky_peaks
+        
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
@@ -1725,6 +1739,9 @@ class Sky_Residual(MonitoringAlg):
     def run_qa(self,fibermap,frame,paname=None,skymodel=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
         from desispec.sky import qa_skysub
 
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+            
         if skymodel is None:
             raise IOError("Must have skymodel to find residual. It can't be None")
         #- return values
@@ -1833,6 +1850,10 @@ class Integrate_Spec(MonitoringAlg):
         return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
+
         retval={}
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
@@ -1866,7 +1887,8 @@ class Integrate_Spec(MonitoringAlg):
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
         #- RS: Convert integrated counts to magnitudes using flux calibration constant (to be updated!!)
-        fibermags=22.5-2.5*np.log10(1e-3*integrals/frame.meta["EXPTIME"])
+        fibermags=99.*np.ones(integrals.shape)
+        fibermags[integrals>0]=22.5-2.5*np.log10(1e-3*integrals[integrals>0]/frame.meta["EXPTIME"])
         #- Calculate delta_mag (remove sky fibers first)
         objects=frame.fibermap['OBJTYPE']
         skyfibers=np.where(objects=="SKY")[0]
@@ -1878,7 +1900,6 @@ class Integrate_Spec(MonitoringAlg):
             for skyfibindex in range(len(skyfibers)):
                 skyfibers[skyfibindex]-=1
         delta_mag=np.array(fibmags_nosky)-np.array(immags_nosky)
-
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
         mag_avg_tgt=[]
@@ -2004,6 +2025,9 @@ class Calculate_SNR(MonitoringAlg):
         return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
 
     def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None):
+
+        if isinstance(frame,QFrame):
+            frame = frame.asframe()
 
         #- return values
         retval={}
