@@ -550,7 +550,7 @@ def compute_polynomial_times_sky(frame, nsig_clipping=4.,max_iterations=30,model
         
         log.info("iter #%d chi2=%g ndf=%d chi2pdf=%f delta=%f nout=%d"%(iteration,sum_chi2,ndf,chi2pdf,abs(sum_chi2-previous_chi2),nout_iter))
 
-        if nout_iter == 0 and abs(sum_chi2-previous_chi2)<0.00001 :
+        if nout_iter == 0 and abs(sum_chi2-previous_chi2)<0.2 :
             break
         previous_chi2 = sum_chi2+0.
         
