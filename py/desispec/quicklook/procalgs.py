@@ -114,12 +114,26 @@ class Preproc(pas.PipelineAlg):
             header["FLAVOR"] = 'science'        
 
         img = desispec.preproc.preproc(rawimage,header,primary_header,bias=bias,pixflat=pixflat,mask=mask)
+        
+        from desispec.maskbits import ccdmask
+        
+        from desispec.cosmics import reject_cosmic_rays_ala_sdss
+        rejected = reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=True)
+        
+        
+        
+        if img.mask is not None :
+            img.pix *= (img.mask==0)
+        
+        
         if dumpfile is not None:
             night = img.meta['NIGHT']
             expid = img.meta['EXPID']
             io.write_image(dumpfile, img)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
-
+        
+        
+        
         return img
 
 
@@ -319,7 +333,7 @@ class BoxcarExtract(pas.PipelineAlg):
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
 
         return frame
-  
+    
     def get_default_config(self):
         return {("BoxWidth",2.5,"Boxcar halfwidth"),
                 ("PSFFile","%%PSFFile","PSFFile to use"),
