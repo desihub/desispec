@@ -58,7 +58,7 @@ def parse(options=None):
     parser.add_argument("--no-scores", action="store_true", help="Do not compute scores")
     parser.add_argument("--psferr", type=float, default=None, required=False,
                         help="fractional PSF model error used to compute chi2 and mask pixels (default = value saved in psf file)")
-    parser.add_argument("--no_cache", action="store_true", default=None, help="will revert to the original slower version where legval values are not pre-computed, option exists for testing purposes")
+    parser.add_argument("--no_cache", action="store_true", help="will revert to the original slower version where legval values are not pre-computed, option exists for testing purposes")
 
     args = None
     if options is None:
