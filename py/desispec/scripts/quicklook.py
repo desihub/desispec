@@ -5,7 +5,7 @@ Command line wrapper for running a QL pipeline
 
 QuickLook team @Southern Methodist University (SMU) 
 First version Spring 2016
-Latest revision February 2018 
+Latest revision July 2018 
 
 """
 
@@ -50,7 +50,7 @@ def parse():
     parser.add_argument("--qlf",type=str,required=False,help="setup for QLF run", default=False)
     parser.add_argument("--singleQA",type=str,required=False,help="choose one QA to run",default=None,dest="singqa")
     parser.add_argument("--loglvl",default=20,type=int,help="log level for quicklook (0=verbose, 50=Critical)")
-
+    parser.add_argument("--plots",action='store_true', help="option for generating static plots")
     args=parser.parse_args()
     return args
 
@@ -107,7 +107,7 @@ def ql_main(args=None):
         log.debug("Running Quicklook using configuration file {}".format(args.config))
         if os.path.exists(args.config):
             if "yaml" in args.config:
-                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir,psfid=psfid,flatid=flatid,templateid=templateid,templatenight=templatenight)
+                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir,psfid=psfid,flatid=flatid,templateid=templateid,templatenight=templatenight,plots=args.plots)
                 configdict=config.expand_config()
             else:
                 log.critical("Can't open config file {}".format(args.config))

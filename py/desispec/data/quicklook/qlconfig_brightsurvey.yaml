@@ -4,13 +4,8 @@ Program: bright
 Flavor: science
 #- Writeout intermediate files
 WritePreprocfile: True
-WriteSkyModelfile: False
-WriteIntermediatefiles: False
-WriteStaticPlots: True
 #-Debuglevel 
 Debuglevel: 20
-#- Apply x or w resolution to frame file
-UseResolution: False
 #- Generate modified PSF file
 Flexure: False
 #- Heartbeat Period in seconds

@@ -114,13 +114,7 @@ class Preproc(pas.PipelineAlg):
             header["FLAVOR"] = 'science'        
 
         img = desispec.preproc.preproc(rawimage,header,primary_header,bias=bias,pixflat=pixflat,mask=mask)
-        
-        from desispec.maskbits import ccdmask
-        
-        from desispec.cosmics import reject_cosmic_rays_ala_sdss
-        rejected = reject_cosmic_rays_ala_sdss(img,nsig=6.,cfudge=3.,c2fudge=0.8,niter=6,dilate=True)
-        
-        
+                
         
         if img.mask is not None :
             img.pix *= (img.mask==0)
@@ -132,8 +126,7 @@ class Preproc(pas.PipelineAlg):
             io.write_image(dumpfile, img)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
-        
-        
+
         return img
 
 
