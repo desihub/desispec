@@ -124,7 +124,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
     #- convert to per angstrom first and then resample to desired wave length grid.
 
     for spec in range(nspec):
-        ww=psf.wavelength(spec)[0]
+        ww=psf.wavelength(spec)
         dwave=np.gradient(ww)
         flux[:,spec]/=dwave
         ivar[:,spec]*=dwave**2
