@@ -149,7 +149,7 @@ class TestQL_QA(unittest.TestCase):
         
         #- read psf, should use specter.PSF.load_psf instead of desispec.PSF(), otherwise need to create a psfboot somewhere.
 
-        psf = self.psf = load_psf(self.psffile)
+        self.psf = load_psf(self.psffile)
 
         #- make the test pixfile, fibermap file
         img_pix = rawimg
@@ -322,7 +322,6 @@ class TestQL_QA(unittest.TestCase):
         xw_hdr['PROGRAM'] = 'dark'
         xw_hdr['FLAVOR'] = 'science'
 
-        psf = self.psf
         xw_ny = 2000
         xw_nx = 2000
         xw_rawimage = np.zeros((2*xw_ny,2*xw_nx))
@@ -343,7 +342,7 @@ class TestQL_QA(unittest.TestCase):
         zpeaks = np.array([8401.5,8432.4,8467.5,9479.4])
         fibers = np.arange(30)
         for i in range(len(zpeaks)):
-            pix = np.rint(psf.xy(fibers,zpeaks[i]))
+            pix = np.rint(self.psf.xy(fibers,zpeaks[i]))
             for j in range(len(fibers)):
                 for k in range(len(peak_counts)):
                     ypix = int(pix[0][j]-3+k)
@@ -362,7 +361,7 @@ class TestQL_QA(unittest.TestCase):
         inp=xwimage
         qargs={}
         qargs["Flavor"]='science'
-        qargs["PSFFile"]=self.psf
+        qargs["PSFFile"]=self.psffile
         qargs["FiberMap"]=self.fibermap
         qargs["camera"]=self.camera
         qargs["expid"]=self.expid
