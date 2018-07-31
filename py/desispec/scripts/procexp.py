@@ -34,7 +34,7 @@ def parse(options=None):
                         help = 'n sigma rejection for cosmics in 1D (default, no rejection)')
     parser.add_argument('--sky-throughput-correction', action='store_true',
                         help = 'apply a throughput correction when subtraction the sky')
-   
+
     args = None
     if options is None:
         args = parser.parse_args()
@@ -56,11 +56,11 @@ def main(args):
     #- Raw scores already added in extraction, but just in case they weren't
     #- it is harmless to rerun to make sure we have them.
     compute_and_append_frame_scores(frame,suffix="RAW")
-    
+
     if args.cosmics_nsig>0 and args.sky==None : # Reject cosmics (otherwise do it after sky subtraction)
         log.info("cosmics ray 1D rejection")
         reject_cosmic_rays_1d(frame,args.cosmics_nsig)
-    
+
     if args.fiberflat!=None :
         log.info("apply fiberflat")
         # read fiberflat
@@ -71,29 +71,29 @@ def main(args):
         compute_and_append_frame_scores(frame,suffix="FFLAT")
 
     if args.sky!=None :
-        
+
         # read sky
         skymodel=read_sky(args.sky)
-        
+
         if args.cosmics_nsig>0 :
-        
+
             # first subtract sky without throughput correction
             subtract_sky(frame, skymodel, throughput_correction = False)
-            
+
             # then find cosmics
             log.info("cosmics ray 1D rejection after sky subtraction")
             reject_cosmic_rays_1d(frame,args.cosmics_nsig)
-            
+
             if args.sky_throughput_correction :
                 # and (re-)subtract sky, but just the correction term
                 subtract_sky(frame, skymodel, throughput_correction = True, default_throughput_correction = 0.)
-        
+
         else :
             # subtract sky
             subtract_sky(frame, skymodel, throughput_correction = args.sky_throughput_correction )
-        
+
         compute_and_append_frame_scores(frame,suffix="SKYSUB")
-    
+
 
     if args.calib!=None :
         log.info("calibrate")
@@ -102,9 +102,9 @@ def main(args):
         # apply calibration
         apply_flux_calibration(frame, fluxcalib)
         compute_and_append_frame_scores(frame,suffix="CALIB")
-        
-    
+
+
     # save output
-    write_frame(args.outfile, frame, units='1e-17 erg/(s cm2 Angstrom)')
+    write_frame(args.outfile, frame, units='10**-17 erg/(s cm2 Angstrom)')
 
     log.info("successfully wrote %s"%args.outfile)

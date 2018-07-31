@@ -6,6 +6,9 @@ desispec Change Log
 -------------------
 
 * Integrates QL S/N QA into offline QA Frame object
+* Ensure that FITS files specify FITS-standard-compliant units (PR `#666`_).
+
+.. _`#666`: https://github.com/desihub/desispec/pull/666
 
 0.23.1 (2018-08-09)
 -------------------

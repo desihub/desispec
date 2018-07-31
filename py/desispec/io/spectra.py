@@ -93,7 +93,7 @@ def write_spectra(outfile, spec, units=None):
 
         hdu = fits.ImageHDU(name="{}_FLUX".format(band.upper()))
         if units is None:
-            hdu.header["BUNIT"] = "1e-17 erg/(s cm2 Angstrom)"
+            hdu.header["BUNIT"] = "10**-17 erg/(s cm2 Angstrom)"
         else:
             hdu.header["BUNIT"] = units
         hdu.data = spec.flux[band].astype("f4")
