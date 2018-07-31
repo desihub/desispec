@@ -34,8 +34,8 @@ class XYTraceSet(object):
         self.x_vs_wave_traceset = TraceSet(xcoef,[wavemin,wavemax])
         self.y_vs_wave_traceset = TraceSet(ycoef,[wavemin,wavemax])
         
-        self.xsig_vs_wave_traceset = None
-        self.ysig_vs_wave_traceset = None
+        self.xsig_vs_wave_traceset = TraceSet(xcoef,[wavemin,wavemax])
+        self.ysig_vs_wave_traceset = TraceSet(ycoef,[wavemin,wavemax])
         
         if xsigcoef is not None :
             self.xsig_vs_wave_traceset = TraceSet(xsigcoef,[wavemin,wavemax])
