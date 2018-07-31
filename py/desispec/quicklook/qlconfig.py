@@ -391,7 +391,8 @@ class Config(object):
                  'Sky_Residual': 'skyresid',
                  'Integrate_Spec': 'integ',
                  'Calculate_SNR': 'snr',
-                 'Check_Resolution': 'checkres'
+                 'Check_Resolution': 'checkres',
+                 'Check_FiberFlat': 'checkfibflat'
                  }
 
         if qaname in filemap:
@@ -590,7 +591,7 @@ class Palist(object):
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels']
                 QAs_extract=['CountSpectralBins']
-                QAs_computeflat=[]
+                QAs_computeflat=['Check_FiberFlat']
             elif self.flavor == 'bias' or self.flavor == 'dark':
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels']
@@ -601,7 +602,7 @@ class Palist(object):
                 QAs_apfiberflat=['Sky_Continuum','Sky_Peaks']
                 #QAs_SkySub=['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']
                 QAs_SkySub=['Sky_Rband','Integrate_Spec','Calculate_SNR']
-                
+
             qalist={}
             for PA in self.palist:
                 if PA == 'Initialize':

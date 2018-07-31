@@ -528,7 +528,11 @@ class ComputeFiberflat_QL(pas.PipelineAlg):
         #fiberflat=compute_fiberflat(input_frame)
         ffIO.write_fiberflat(outputfile,fibflat,header=frame.meta)
         log.info("Wrote fiberflat file {}".format(outputfile))
- 
+
+        fflatfile = ffIO.read_fiberflat(outputfile)
+
+        return fflatfile
+
 class ApplyFiberFlat(pas.PipelineAlg):
     """
        PA to Apply the fiberflat field to the given frame

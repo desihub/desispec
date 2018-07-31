@@ -2195,3 +2195,93 @@ class Check_Resolution(MonitoringAlg):
 
         def get_default_config(self):
             return {}
+
+class Check_FiberFlat(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="FIBERFLAT"
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        key=kwargs['refKey'] if 'refKey' in kwargs else "FFLMEAN"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "FIBERFLAT_STATUS"
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
+
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
+
+        if "FFLMEAN_WARN_RANGE" in parms and "FFLMEAN_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["FFLMEAN_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["FFLMEAN_NORMAL_RANGE"]),QASeverity.NORMAL)]
+
+        MonitoringAlg.__init__(self,name,fr,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
+        if kwargs["singleqa"] == 'Check_FiberFlat':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+        else:
+            fibflat=args[0]
+
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
+        else: refmetrics=None
+
+        if "qlf" in kwargs:
+            qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+
+        return self.run_qa(fibflat,param=param,paname=paname,qafile=qafile,qafig=qafig,qlf=qlf,refmetrics=refmetrics)
+
+    def run_qa(self,fibflat,param=None,paname=None,qafile=None,qafig=None, qlf=False, refmetrics=None):
+        retval={}
+        retval['PANAME'] = paname
+        retval['CAMERA'] = fibflat.header["CAMERA"]
+        kwargs=self.config['kwargs']
+
+        # Mean of wavelength will be test value
+        wavelengths = fibflat.wave
+
+        FFLMEANtest = np.mean(wavelengths)
+        retval["METRICS"]={"FFLMEAN": FFLMEANtest}
+
+        if param is None:
+            log.debug("Param is None. Using default param instead")
+            param = {
+                    "FFLMEAN_NORMAL_RANGE":[-10, 10],
+                    "FFLMEAN_WARN_RANGE:":[-20, 20]}
+        retval["PARAMS"] = param
+
+        # http post
+        if qlf:
+            qlf_post(retval)
+        if qafile is not None:
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        #if qafig is not None:
+            #plot.plot_lpolyhist(retval,qafig)
+            #log.debug("Output QA fig {}".format(qafig))
+        return retval
+
+    def get_default_config(self):
+        return {}
