@@ -831,7 +831,7 @@ class ResolutionFit(pas.PipelineAlg):
         newpsf=PSF(outfile)
         input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=usesigma)
  
-        return input_frame
+        return (newpsf,input_frame)
 
 
 # =======================

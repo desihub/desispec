@@ -390,7 +390,8 @@ class Config(object):
                  'Sky_Peaks': 'skypeak',
                  'Sky_Residual': 'skyresid',
                  'Integrate_Spec': 'integ',
-                 'Calculate_SNR': 'snr'
+                 'Calculate_SNR': 'snr',
+                 'Check_Resolution': 'checkres'
                  }
 
         if qaname in filemap:
@@ -584,7 +585,7 @@ class Palist(object):
                 QAs_preproc=['Get_RMS','Count_Pixels']
                 QAs_bootcalib=['Calc_XWSigma']
                 QAs_extract=['CountSpectralBins']
-                QAs_resfit=[]
+                QAs_resfit=['Check_Resolution']
             elif self.flavor =="flat":
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels']
