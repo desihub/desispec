@@ -167,6 +167,17 @@ class Config(object):
             fframefile=None
             sframefile=None
 
+        if self.flavor == 'arcs':
+            arcimg=findfile('preproc',night=self.night,expid=self.expid,camera=self.camera,specprod_dir=self.specprod_dir)
+            flatimg=self.fiberflat
+            bootfile=findfile('psfboot',expid=self.expid,night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
+            psffile=findfile('psf',expid=self.expid,night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
+        else:
+            arcimg=None
+            flatimg=None
+            bootfile=None
+            psffile=None
+
         if self.flexure:
             preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
             inputpsf=self.psf_filename
@@ -181,6 +192,8 @@ class Config(object):
         paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
         
         paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
+
+        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
 
         paopt_comflat={'outputFile': self.fiberflat}
 
@@ -199,6 +212,7 @@ class Config(object):
             'Preproc':paopt_preproc,
             'Flexure':paopt_flexure,
             'BoxcarExtract':paopt_extract,
+            'ResolutionFit':paopt_resfit,
             'Extract_QP':paopt_extract_qp,
             'ComputeFiberflat_QL':paopt_comflat,
             'ApplyFiberFlat_QL':paopt_apfflat,
@@ -235,7 +249,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame', 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame','ResolutionFit': None, 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -360,7 +374,8 @@ class Config(object):
                  'BoxcarExtract': 'boxextract',
                  'ComputeFiberflat_QL': 'computeflat',
                  'ApplyFiberFlat_QL': 'fiberflat',
-                 'SkySub_QL': 'skysub'
+                 'SkySub_QL': 'skysub',
+                 'ResolutionFit': 'resfit'
                  }
 
         if paname in filemap:
