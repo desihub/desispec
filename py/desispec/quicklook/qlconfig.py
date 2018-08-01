@@ -170,12 +170,10 @@ class Config(object):
         if self.flavor == 'arcs':
             arcimg=findfile('preproc',night=self.night,expid=self.expid,camera=self.camera,specprod_dir=self.specprod_dir)
             flatimg=self.fiberflat
-            bootfile=findfile('psfboot',expid=self.expid,night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
             psffile=findfile('psf',expid=self.expid,night=self.night,camera=self.camera,specprod_dir=self.specprod_dir)
         else:
             arcimg=None
             flatimg=None
-            bootfile=None
             psffile=None
 
         if self.flexure:
@@ -193,7 +191,7 @@ class Config(object):
         
         paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
 
-        paopt_resfit={'PSFbootfile':bootfile, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
+        paopt_resfit={'PSFinputfile': self.psf_filename, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
 
         paopt_comflat={'outputFile': self.fiberflat}
 

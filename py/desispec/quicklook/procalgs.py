@@ -787,22 +787,20 @@ class ResolutionFit(pas.PipelineAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
-        if not kwargs["PSFbootfile"]:
-             raise qlexceptions.ParameterException("Missing psfbootfile in the arguments")
 
         if "PSFoutfile" not in kwargs:
              raise qlexceptions.ParameterException("Missing psfoutfile in the arguments")
 
         psfoutfile=kwargs["PSFoutfile"]
-        psfbootfile=kwargs["PSFbootfile"] 
+        psfinfile=kwargs["PSFinputfile"] 
 
         if "usesigma" in kwargs:
              usesigma=kwargs["usesigma"]
         else: usesigma = False
 
         from desispec.quicklook.qlpsf import PSF
-        psfboot=PSF(psfbootfile)
-        domain=(psfboot.wmin,psfboot.wmax)
+        psfinput=PSF(psfinfile)
+        domain=(psfinput.wmin,psfinput.wmax)
 
         input_frame=args[0]
 
@@ -817,9 +815,9 @@ class ResolutionFit(pas.PipelineAlg):
         if "NBINS" in kwargs:
             nbins=kwargs["NBINS"]
 
-        return self.run_pa(input_frame,psfbootfile,psfoutfile,usesigma,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
+        return self.run_pa(input_frame,psfinfile,psfoutfile,usesigma,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
     
-    def run_pa(self,input_frame,psfbootfile,outfile,usesigma,linelist=None,npoly=2,nbins=2,domain=None):
+    def run_pa(self,input_frame,psfinfile,outfile,usesigma,linelist=None,npoly=2,nbins=2,domain=None):
         from desispec.quicklook.arcprocess import process_arc,write_psffile
         from desispec.quicklook.palib import get_resolution
         from desispec.quicklook.qlpsf import PSF
@@ -828,7 +826,7 @@ class ResolutionFit(pas.PipelineAlg):
 
         #- write out the psf outfile
         wstep=input_frame.meta["WAVESTEP"]
-        write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=wstep)
+        write_psffile(psfinfile,wcoeffs,outfile,wavestepsize=wstep)
         log.debug("Wrote psf file {}".format(outfile))
 
         #- update the arc frame resolution from new coeffs
