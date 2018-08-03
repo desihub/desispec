@@ -183,7 +183,7 @@ class Check_HDUs(MonitoringAlg):
         ad,fl = args.config.split("qlconfig_")
         flvr = fl.split(".yaml")[0]
         if flvr in ['darksurvey','graysurvey','brightsurvey']: flvr = 'science'
-        if (header["FLAVOR"] == flvr and flvr == 'test'): 
+        if (header["FLAVOR"] == flvr or flvr == 'test'): 
                     log.info("The correct configuration file is being used!")
         else: 
                     log.critical("Wrong configuration file is being used!")
