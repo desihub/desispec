@@ -40,6 +40,8 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
     skyfibers = np.where(fibermap['OBJTYPE'] == 'SKY')[0]
     skyfluxes=fframe.flux[skyfibers]
     skyivars=fframe.ivar[skyfibers]
+    
+   
     nfibers=len(skyfibers)
 
     if apply_resolution:

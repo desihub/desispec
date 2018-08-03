@@ -176,6 +176,19 @@ class Check_HDUs(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["FLAVOR"] = header["FLAVOR"]
+        #SE: quicklook to crash when a mismatched config file with the one in fits header
+        from desispec.scripts import quicklook
+          
+        args=quicklook.parse()       
+        ad,fl = args.config.split("qlconfig_")
+        flvr = fl.split(".yaml")[0]
+        if flvr in ['darksurvey','graysurvey','brightsurvey']: flvr = 'science'
+        if (header["FLAVOR"] == flvr and flvr == 'test'): 
+                    log.info("The correct configuration file is being used!")
+        else: 
+                    log.critical("Wrong configuration file is being used!")
+                    sys.exit("Wrong configuration file! use the one for "+str(header["FLAVOR"]))
+        
         if retval["FLAVOR"] == 'arc':
             pass
         else:
