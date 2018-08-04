@@ -4,15 +4,9 @@ Program: dark
 Flavor: flat
 #- Writeout intermediate files
 WritePreprocfile: True
-WriteSkyModelfile: False
-WriteIntermediatefiles: False
-WriteStaticPlots: True
 #-Debuglevel 
 Debuglevel: 20
-#- Must use resolution in extraction to generate fiberflat
-UseResolution: True
 #- Generate modified PSF file
-Flexure: False
 #- Heartbeat Period in seconds
 Period: 5.0
 #- Time out in seconds

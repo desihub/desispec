@@ -105,10 +105,9 @@ class PSF(object):
             y=np.arange(0,self.npix_y)
         else :
             y = np.atleast_1d(y)
+
         if ispec is None:
             ispec = np.arange(self.traceset.nspec)
-        else :
-            ispec = np.atleast_1d(ispec)
 
         if np.size(ispec)==1 :
             return self.traceset.wave_vs_y(ispec,y)
