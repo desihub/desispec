@@ -5,7 +5,9 @@ desispec Change Log
 0.23.1 (unreleased)
 -------------------
 
-* No changes yet.
+* Support STD/STD_FSTAR/STD_FAINT bit names (PR `#673`_).
+
+.. _`#673`: https://github.com/desihub/desispec/pull/673
 
 0.23.0 (2018-07-26)
 -------------------

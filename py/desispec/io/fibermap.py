@@ -175,8 +175,16 @@ def fibermap_new2old(fibermap):
     fm['OBJTYPE'][isMWS] = 'MWS_STAR'
     isBGS = (fm['DESI_TARGET'] & desi_mask.BGS_ANY) != 0
     fm['OBJTYPE'][isBGS] = 'BGS'
-    isSTD = (fm['DESI_TARGET'] & desi_mask.mask('STD_FSTAR|STD_WD|STD_BRIGHT')) != 0
+
+    stdmask = 0
+    for name in ['STD', 'STD_FSTAR', 'STD_WD',
+            'STD_FAINT', 'STD_FAINT_BEST', 'STD_BRIGHT', 'STD_BRIGHT_BEST']:
+        if name in desi_mask.names():
+            stdmask |= desi_mask[name]
+
+    isSTD = (fm['DESI_TARGET'] & stdmask) != 0
     fm['OBJTYPE'][isSTD] = 'STD'
+
     isELG = (fm['DESI_TARGET'] & desi_mask.ELG) != 0
     fm['OBJTYPE'][isELG] = 'ELG'
     isLRG = (fm['DESI_TARGET'] & desi_mask.LRG) != 0
