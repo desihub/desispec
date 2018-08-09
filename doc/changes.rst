@@ -2,7 +2,12 @@
 desispec Change Log
 ===================
 
-0.23.1 (unreleased)
+0.23.2 (unreleased)
+-------------------
+
+* No changes yet.
+
+0.23.1 (2018-08-09)
 -------------------
 
 * Support STD/STD_FSTAR/STD_FAINT bit names (PR `#673`_).
