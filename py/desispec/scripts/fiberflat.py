@@ -24,9 +24,9 @@ import argparse
 
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Compute the fiber flat field correction from a DESI continuum lamp frame")
-    parser.add_argument('--infile', type = str, default = None, required=True,
+    parser.add_argument('-i','--infile', type = str, default = None, required=True,
                         help = 'path of DESI frame fits file corresponding to a continuum lamp exposure')
-    parser.add_argument('--outfile', type = str, default = None, required=True,
+    parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
     parser.add_argument('--qafile', type=str, default=None, required=False,
                         help='path of QA file')

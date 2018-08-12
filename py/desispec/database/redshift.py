@@ -364,7 +364,7 @@ class FiberAssign(SchemaMixin, Base):
 
 
 def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
-              q3c=False, chunksize=50000, maxrows=0):
+              rowfilter=None, q3c=False, chunksize=50000, maxrows=0):
     """Load a data file into the database, assuming that column names map
     to database column names with no surprises.
 
@@ -383,6 +383,9 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
         supplied function.
     index : :class:`str`, optional
         If set, add a column that just counts the number of rows.
+    rowfilter : callable, optional
+        If set, apply this filter to the rows to be loaded.  The function
+        should return :class:`bool`, with ``True`` meaning a good row.
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     chunksize : :class:`int`, optional
@@ -415,8 +418,13 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
                 log.warning("%d rows of bad data detected in column " +
                             "%s of %s.", nbad, col, filepath)
     log.info("Integrity check complete on %s.", tn)
-    data_list = [data[col][0:maxrows].tolist() for col in colnames]
+    if rowfilter is None:
+        good_rows = np.ones((maxrows,), dtype=np.bool)
+    else:
+        good_rows = rowfilter(data[0:maxrows])
+    data_list = [data[col][0:maxrows][good_rows].tolist() for col in colnames]
     data_names = [col.lower() for col in colnames]
+    finalrows = len(data_list[0])
     log.info("Initial column conversion complete on %s.", tn)
     if expand is not None:
         for col in expand:
@@ -447,26 +455,26 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
             data_list[i] = [convert[col](x) for x in data_list[i]]
     log.info("Column conversion complete on %s.", tn)
     if index is not None:
-        data_list.insert(0, list(range(1, maxrows+1)))
+        data_list.insert(0, list(range(1, finalrows+1)))
         data_names.insert(0, index)
         log.info("Added index column '%s'.", index)
     data_rows = list(zip(*data_list))
     del data_list
     log.info("Converted columns into rows on %s.", tn)
-    for k in range(maxrows//chunksize + 1):
+    for k in range(finalrows//chunksize + 1):
         data_chunk = [dict(zip(data_names, row))
                       for row in data_rows[k*chunksize:(k+1)*chunksize]]
         if len(data_chunk) > 0:
             engine.execute(tcls.__table__.insert(), data_chunk)
             log.info("Inserted %d rows in %s.",
-                     min((k+1)*chunksize, maxrows), tn)
-    # for k in range(maxrows//chunksize + 1):
+                     min((k+1)*chunksize, finalrows), tn)
+    # for k in range(finalrows//chunksize + 1):
     #     data_insert = [dict([(col, data_list[i].pop(0))
     #                          for i, col in enumerate(data_names)])
     #                    for j in range(chunksize)]
     #     session.bulk_insert_mappings(tcls, data_insert)
     #     log.info("Inserted %d rows in %s..",
-    #              min((k+1)*chunksize, maxrows), tn)
+    #              min((k+1)*chunksize, finalrows), tn)
     # session.commit()
     # dbSession.commit()
     if q3c:
@@ -474,7 +482,7 @@ def load_file(filepath, tcls, hdu=1, expand=None, convert=None, index=None,
     return
 
 
-def load_zcat(datapath=None, q3c=False):
+def load_zbest(datapath=None, hdu='ZBEST', q3c=False):
     """Load zbest files into the zcat table.
 
     This function is deprecated since there should now be a single
@@ -484,6 +492,8 @@ def load_zcat(datapath=None, q3c=False):
     ----------
     datapath : :class:`str`
         Full path to the directory containing zbest files.
+    hdu : :class:`int` or :class:`str`, optional
+        Read a data table from this HDU (default 'ZBEST').
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     """
@@ -502,9 +512,9 @@ def load_zcat(datapath=None, q3c=False):
     for f in zbest_files:
         brickname = os.path.basename(os.path.dirname(f))
         with fits.open(f) as hdulist:
-            data = hdulist['ZBEST'].data
+            data = hdulist[hdu].data
         log.info("Read data from %s.", f)
-        good_targetids = data['TARGETID'] != 0
+        good_targetids = ((data['TARGETID'] != 0) & (data['TARGETID'] != -1))
         #
         # If there are too many targetids, the in_ clause will blow up.
         # Disabling this test, and crossing fingers.
@@ -516,9 +526,30 @@ def load_zcat(datapath=None, q3c=False):
         #         log.warning("Duplicate TARGETID = %d.", z.targetid)
         #         good_targetids = good_targetids & (data['TARGETID'] != z.targetid)
         data_list = [data[col][good_targetids].tolist()
-                     for col in data.names if col != 'COEFF']
-        data_names = [col.lower() for col in data.names if col != 'COEFF']
+                     for col in data.names]
+        data_names = [col.lower() for col in data.names]
         log.info("Initial column conversion complete on brick = %s.", brickname)
+        #
+        # Expand COEFF
+        #
+        col = 'COEFF'
+        expand = ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
+                  'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)
+        i = data_names.index(col.lower())
+        del data_names[i]
+        del data_list[i]
+        for j, n in enumerate(expand):
+            log.debug("Expanding column %d of %s (at index %d) to %s.", j, col, i, n)
+            data_names.insert(i + j, n)
+            data_list.insert(i + j, data[col][:, j].tolist())
+        log.debug(data_names)
+        #
+        # zbest files don't contain the same columns as zcatalog.
+        #
+        for col in ZCat.__table__.columns:
+            if col.name not in data_names:
+                data_names.append(col.name)
+                data_list.append([0]*len(data_list[0]))
         data_rows = list(zip(*data_list))
         log.info("Converted columns into rows on brick = %s.", brickname)
         try:
@@ -537,7 +568,8 @@ def load_zcat(datapath=None, q3c=False):
     return
 
 
-def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
+def load_fiberassign(datapath, maxpass=4, hdu='FIBERASSIGN', q3c=False,
+                     latest_epoch=False):
     """Load fiber assignment files into the fiberassign table.
 
     Tile files can appear in multiple epochs, so for a given tileid, load
@@ -552,6 +584,8 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
         Full path to the directory containing tile files.
     maxpass : :class:`int`, optional
         Search for pass numbers up to this value (default 4).
+    hdu : :class:`int` or :class:`str`, optional
+        Read a data table from this HDU (default 'FIBERASSIGN').
     q3c : :class:`bool`, optional
         If set, create q3c index on the table.
     latest_epoch : :class:`bool`, optional
@@ -592,7 +626,7 @@ def load_fiberassign(datapath, maxpass=4, q3c=False, latest_epoch=False):
     for tileid in latest_tiles:
         epoch, f = latest_tiles[tileid]
         with fits.open(f) as hdulist:
-            data = hdulist['FIBER_ASSIGNMENTS'].data
+            data = hdulist[hdu].data
         log.info("Read data from %s.", f)
         for col in ('RA', 'DEC', 'XFOCAL_DESIGN', 'YFOCAL_DESIGN'):
             data[col][np.isnan(data[col])] = -9999.0
@@ -777,6 +811,8 @@ def get_options(*args):
                       help="If specified, connect to a PostgreSQL database with USERNAME.")
     prsr.add_argument('-v', '--verbose', action='store_true', dest='verbose',
                       help='Print extra information.')
+    prsr.add_argument('-z', '--zbest', action='store_true', dest='zbest',
+                      help='Force loading of the zcat table from zbest files.')
     prsr.add_argument('datapath', metavar='DIR', help='Load the data in DIR.')
     if len(args) > 0:
         options = prsr.parse_args(args)
@@ -846,6 +882,7 @@ def main():
                'expand': {'COEFF': ('coeff_0', 'coeff_1', 'coeff_2', 'coeff_3', 'coeff_4',
                                     'coeff_5', 'coeff_6', 'coeff_7', 'coeff_8', 'coeff_9',)},
                'convert': None,
+               'rowfilter': lambda x: ((x['TARGETID'] != 0) & (x['TARGETID'] != -1)),
                'q3c': postgresql,
                'chunksize': options.chunksize,
                'maxrows': options.maxrows}]
@@ -859,21 +896,15 @@ def main():
         #
         q = dbSession.query(l['tcls']).first()
         if q is None:
-            log.info("Loading %s from %s.", tn, l['filepath'])
-            load_file(**l)
+            if options.zbest and tn == 'zcat':
+                log.info("Loading %s from zbest files in %s.", tn, options.datapath)
+                load_zbest(datapath=options.datapath, q3c=postgresql)
+            else:
+                log.info("Loading %s from %s.", tn, l['filepath'])
+                load_file(**l)
             log.info("Finished loading %s.", tn)
         else:
             log.info("%s table already loaded.", tn.title())
-    #
-    # Load zbest files.
-    #
-    # q = dbSession.query(ZCat).first()
-    # if q is None:
-    #     log.info("Loading ZCat from %s.", options.datapath)
-    #     load_zcat(options.datapath, run1d='mini')
-    #     log.info("Finished loading ZCat.")
-    # else:
-    #     log.info("ZCat table already loaded.")
     #
     # Load fiber assignment files.
     #

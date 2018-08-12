@@ -144,4 +144,108 @@ def read_fibermap(filename) :
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
     
-    return Table.read(filename, 'FIBERMAP')
+    fibermap = Table.read(filename, 'FIBERMAP')
+    if 'FLUX_G' in fibermap.colnames:
+        fibermap = fibermap_new2old(fibermap)
+
+    return fibermap
+
+def fibermap_new2old(fibermap):
+    '''Converts new format fibermap into old format fibermap
+
+    Args:
+        fibermap: new-format fibermap table (e.g. with FLUX_G column)
+
+    Returns:
+        old format fibermap (e.g. with MAG column)
+
+    Note: this is a transitional convenience function to allow us to
+    simulate new format fibermaps while still running code that expects
+    the old format.  After all code has been converted to use the new
+    format, this will be removed.
+    '''
+    from desiutil.brick import Bricks
+    from desitarget.targetmask import desi_mask
+
+    brickmap = Bricks()
+    fm = fibermap.copy()
+    n = len(fm)
+
+    isMWS = (fm['DESI_TARGET'] & desi_mask.MWS_ANY) != 0
+    fm['OBJTYPE'][isMWS] = 'MWS_STAR'
+    isBGS = (fm['DESI_TARGET'] & desi_mask.BGS_ANY) != 0
+    fm['OBJTYPE'][isBGS] = 'BGS'
+
+    stdmask = 0
+    for name in ['STD', 'STD_FSTAR', 'STD_WD',
+            'STD_FAINT', 'STD_FAINT_BEST', 'STD_BRIGHT', 'STD_BRIGHT_BEST']:
+        if name in desi_mask.names():
+            stdmask |= desi_mask[name]
+
+    isSTD = (fm['DESI_TARGET'] & stdmask) != 0
+    fm['OBJTYPE'][isSTD] = 'STD'
+
+    isELG = (fm['DESI_TARGET'] & desi_mask.ELG) != 0
+    fm['OBJTYPE'][isELG] = 'ELG'
+    isLRG = (fm['DESI_TARGET'] & desi_mask.LRG) != 0
+    fm['OBJTYPE'][isLRG] = 'LRG'
+    isQSO = (fm['DESI_TARGET'] & desi_mask.QSO) != 0
+    fm['OBJTYPE'][isQSO] = 'QSO'
+    
+    if ('FLAVOR' in fm.meta):
+        if fm.meta['FLAVOR'] == 'arc':
+            fm['OBJTYPE'] = 'ARC'
+        elif fm.meta['FLAVOR'] == 'flat':
+            fm['OBJTYPE'] = 'FLAT'
+
+    fm.rename_column('TARGET_RA', 'RA_TARGET')
+    fm.rename_column('TARGET_DEC', 'DEC_TARGET')
+
+    fm['BRICKNAME'] = brickmap.brickname(fm['RA_TARGET'], fm['DEC_TARGET'])
+    fm['TARGETCAT'] = np.full(n, 'UNKNOWN', dtype=(str, 20))
+
+    fm['MAG'] = np.zeros((n,5), dtype='f4')
+    fm['MAG'][:,0] = 22.5 - 2.5*np.log10(fm['FLUX_G'])
+    fm['MAG'][:,1] = 22.5 - 2.5*np.log10(fm['FLUX_R'])
+    fm['MAG'][:,2] = 22.5 - 2.5*np.log10(fm['FLUX_Z'])
+    fm['MAG'][:,3] = 22.5 - 2.5*np.log10(fm['FLUX_W1'])
+    fm['MAG'][:,4] = 22.5 - 2.5*np.log10(fm['FLUX_W2'])
+
+    fm['FILTER'] = np.zeros((n,5), dtype=(str, 10))
+    fm['FILTER'][:,0] = 'DECAM_G'
+    fm['FILTER'][:,1] = 'DECAM_R'
+    fm['FILTER'][:,2] = 'DECAM_Z'
+    fm['FILTER'][:,3] = 'WISE_W1'
+    fm['FILTER'][:,4] = 'WISE_W2'
+
+    fm['POSITIONER'] = fm['LOCATION'].astype('i8')
+    fm.rename_column('LAMBDA_REF', 'LAMBDAREF')
+
+    fm.rename_column('FIBER_RA', 'RA_OBS')
+    fm.rename_column('FIBER_DEC', 'DEC_OBS')
+
+    fm.rename_column('DESIGN_X', 'X_TARGET')
+    fm.rename_column('DESIGN_Y', 'Y_TARGET')
+    fm['X_FVCOBS'] = fm['X_TARGET']
+    fm['Y_FVCOBS'] = fm['Y_TARGET']
+    fm['X_FVCERR'] = np.full(n, 1e-3, dtype='f4')
+    fm['Y_FVCERR'] = np.full(n, 1e-3, dtype='f4')
+
+    for colname in [
+        'BRICKID', 'BRICK_OBJID', 'COMM_TARGET',
+        'DELTA_XFPA', 'DELTA_XFPA_IVAR', 'DELTA_YFPA', 'DELTA_YFPA_IVAR',
+        'DESIGN_Q', 'DESIGN_S',
+        'FIBERFLUX_G', 'FIBERFLUX_R', 'FIBERFLUX_Z',
+        'FIBERSTATUS',
+        'FIBERTOTFLUX_G', 'FIBERTOTFLUX_R', 'FIBERTOTFLUX_Z', 'FIBER_DEC_IVAR', 'FIBER_RA_IVAR',
+        'FLUX_IVAR_G', 'FLUX_IVAR_R', 'FLUX_IVAR_W1', 'FLUX_IVAR_W2', 'FLUX_IVAR_Z',
+        'FLUX_G', 'FLUX_R', 'FLUX_W1', 'FLUX_W2', 'FLUX_Z',
+        'MORPHTYPE', 'NUMTARGET', 'NUM_ITER',
+        'PMDEC', 'PMDEC_IVAR', 'PMRA', 'PMRA_IVAR',
+        'PRIORITY', 'REF_ID', 'SECONDARY_TARGET', 'SUBPRIORITY',
+        'SV1_BGS_TARGET', 'SV1_DESI_TARGET', 'SV1_MWS_TARGET',
+        'TARGET_DEC_IVAR', 'TARGET_RA_IVAR',
+        ]:
+        fm.remove_column(colname)
+
+    return fm

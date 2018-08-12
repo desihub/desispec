@@ -11,7 +11,7 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
 
     Args:
         image  : desispec.image object
-        psf: desispec.psf.PSF like object
+        psf: desispec.quicklook.qlpsf.PSF like object
             Or do we just parse the traces here and write a separate wrapper to handle this? Leaving psf in the input argument now.
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels

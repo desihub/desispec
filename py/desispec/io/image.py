@@ -15,12 +15,12 @@ from desiutil.depend import add_dependencies
 
 def write_image(outfile, image, meta=None):
     """Writes image object to outfile
-    
+
     Args:
         outfile : output file string
         image : desispec.image.Image object
             (or any object with 2D array attributes image, ivar, mask)
-    
+
     Optional:
         meta : dict-like object with metadata key/values (e.g. FITS header)
     """
@@ -50,7 +50,7 @@ def write_image(outfile, image, meta=None):
     if not np.isscalar(image.readnoise):
         hx.append(fits.ImageHDU(image.readnoise.astype(np.float32), name='READNOISE'))
 
-    hx.writeto(outfile+'.tmp', clobber=True, checksum=True)
+    hx.writeto(outfile+'.tmp', overwrite=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
     return outfile

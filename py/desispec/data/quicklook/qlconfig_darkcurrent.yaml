@@ -2,21 +2,11 @@
 name: DESI Quicklook Dark Calibration
 Program: dark
 Flavor: dark
-#- Calibration files: Assuming the same night for psf and fiberflat
-#- PSFExpid used as expid for arc exposures
-PSFExpid: 0
-PSFType: psf
-#- FiberflatExpid used as expid for flat exposures
-FiberflatExpid: 1
 #- Writeout intermediate files
 WritePreprocfile: False
 WriteSkyModelfile: False
 WriteIntermediatefiles: False
 WriteStaticPlots: False
-#- Exposure ID for Reference Template
-TemplateExpid: 0
-#- Night for Reference Template
-TemplateNight: 20191001
 #-Debuglevel 
 Debuglevel: 20
 #- Apply x or w resolution to frame file
@@ -31,10 +21,10 @@ Algorithms:
     Initialize:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], BIAS_NORMAL_RANGE: [-1.0, 1.0], BIAS_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], BIAS_AMP_NORMAL_RANGE: [-1.0, 1.0], BIAS_AMP_WARN_RANGE: [-2.0, 2.0]}
     Preproc:
         QA: 
             Get_RMS:
-                PARAMS: {NOISE_NORMAL_RANGE: [-1.0, 1.0], NOISE_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0]}
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}

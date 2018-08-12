@@ -57,8 +57,8 @@ def nersc_machine(name, queue):
             props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --partition=regular")
         elif queue == "realtime":
-            props["maxnodes"] = 10
-            props["maxtime"] = 120
+            props["maxnodes"] = 25
+            props["maxtime"] = 240
             props["submitlimit"] = 5000
             props["sbatch"].append("#SBATCH --exclusive")
             props["sbatch"].append("#SBATCH --partition=realtime")
@@ -320,15 +320,20 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
     if maxtime <= 0:
         maxtime = hostprops["maxtime"]
+        log.debug('Using default {} {} maxtime={}'.format(
+            machine, queue, maxtime))
     if maxtime > hostprops["maxtime"]:
         raise RuntimeError("requested max time '{}' is too long for {} "
             "queue '{}'".format(maxtime, machine, queue))
 
     if maxnodes <= 0:
         maxnodes = hostprops["maxnodes"]
+        log.debug('Using default {} {} maxnodes={}'.format(
+            machine, queue, maxnodes))
     if maxnodes > hostprops["maxnodes"]:
         raise RuntimeError("requested max nodes '{}' is larger than {} "
-            "queue '{}'".format(maxtime, machine, queue))
+            "queue '{}' with {} nodes".format(
+                maxnodes, machine, queue, hostprops["maxnodes"]))
 
     if nodeprocs is None:
         # Estimate the required processes per node based on memory use.
@@ -345,7 +350,7 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
         raise RuntimeError("requested procs per node '{}' is more than the "
             "the number of cores per node on {}".format(nodeprocs, machine))
 
-    #log.debug("maxtime = {}, maxnodes = {}, nodeprocs = {}".format(maxtime, maxnodes, nodeprocs))
+    log.debug("maxtime = {}, maxnodes = {}, nodeprocs = {}".format(maxtime, maxnodes, nodeprocs))
 
     # Max number of procs to use per task.
     taskproc = task_classes[tasktype].run_max_procs(nodeprocs)
@@ -359,8 +364,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
 
     mintasktime = tasktimes[-1][1]
     maxtasktime = tasktimes[0][1]
-    #log.debug("taskproc = {}".format(taskproc))
-    #log.debug("tasktimes range = {} ... {}".format(mintasktime, maxtasktime))
+    log.debug("taskproc = {}".format(taskproc))
+    log.debug("tasktimes range = {} ... {}".format(mintasktime, maxtasktime))
 
     if maxtasktime > maxtime:
         raise RuntimeError("The longest task ({} minutes) exceeds the "
@@ -373,8 +378,8 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
     nworker = maxworkers
     if nworker > len(tasklist):
         nworker = len(tasklist)
-    #log.debug("maxworkers = {}".format(maxworkers))
-    #log.debug("nworker = {}".format(nworker))
+    log.debug("maxworkers = {}".format(maxworkers))
+    log.debug("nworker = {}".format(nworker))
 
     totalnodes = (nworker * taskproc) // nodeprocs
     if totalnodes * nodeprocs < nworker * taskproc:
@@ -427,14 +432,14 @@ def nersc_job_size(tasktype, tasklist, machine, queue, maxtime, maxnodes,
             totalnodes = (nworker * taskproc) // nodeprocs
             if totalnodes * nodeprocs < nworker * taskproc:
                 totalnodes += 1
-            #log.debug("shrinking final job size to {} nodes".format(totalnodes))
+            log.debug("shrinking final job size to {} nodes".format(totalnodes))
 
         outtasks = list()
         for w in workertasks:
             outtasks.extend(w)
 
         ret.append( (totalnodes, nodeprocs, runtime, outtasks) )
-        #log.debug("job will run on {} nodes for {} minutes on {} tasks".format(totalnodes, runtime, len(outtasks)))
+        log.debug("job will run on {} nodes for {} minutes on {} tasks".format(totalnodes, runtime, len(outtasks)))
 
         if len(tasktimes) == 0:
             alldone = True
@@ -547,6 +552,11 @@ def batch_nersc(tasks_by_type, outroot, logroot, jobname, machine, queue,
         # is already too large to fit within queue constraints, then this
         # makes no sense.
         if (len(joblist[t]) > 1) and (npacked > 1):
+            log = get_logger()
+            log.info('{} {} queue, maxtime={}, maxnodes={}'.format(
+                machine, queue, maxtime, maxnodes))
+            log.info('{} {} tasks -> {} jobs'.format(
+                len(tasklist), t, len(joblist)))
             raise RuntimeError("Cannot batch multiple pipeline steps, "
                                "each with multiple jobs")
 

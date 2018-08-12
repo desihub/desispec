@@ -10,7 +10,7 @@ def sigmas_from_arc(wave,flux,ivar,linelist,n=2):
     Gaussian fitting of listed arc lines and return corresponding sigmas in pixel units
     Args:
     linelist: list of lines (A) for which fit is to be done
-    n: fit region half width (in bin units): n=2 bins => (2*n+1)=5 bins fitting window. 
+    n: fit region half width (in bin units): n=2 bins => (2*n+1)=5 bins fitting window.
     """
 
     nwave=wave.shape
@@ -38,7 +38,7 @@ def sigmas_from_arc(wave,flux,ivar,linelist,n=2):
         emeanwaves[jj]=pcov[0,0]**0.5
         sigmas[jj]=popt[1]
         esigmas[jj]=(pcov[1,1]**0.5)
- 
+
     k=np.logical_and(~np.isnan(esigmas),esigmas!=np.inf)
     sigmas=sigmas[k]
     meanwaves=meanwaves[k]
@@ -61,12 +61,12 @@ def _gauss_pix(x,mean,sigma):
 
 def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
     """
-    frame: desispec.frame.Frame object, preumably resolution not evaluated. 
+    frame: desispec.frame.Frame object, preumably resolution not evaluated.
     linelist: line list to fit
     npoly: polynomial order for sigma expansion
     nbins: no of bins for the half of the fitting window
     return: coefficients of the polynomial expansion
-    
+
     """
     nspec=frame.flux.shape[0]
     if linelist is None:
@@ -76,8 +76,8 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
         llist=load_arcline_list(camera)
         dlamb,gd_lines=load_gdarc_lines(camera,llist)
         linelist=gd_lines
-        #linelist=[5854.1101,6404.018,7034.352,7440.9469] #- not final 
-        log.info("No line list configured. Fitting for lines {}".format(linelist))  
+        #linelist=[5854.1101,6404.018,7034.352,7440.9469] #- not final
+        log.info("No line list configured. Fitting for lines {}".format(linelist))
     coeffs=np.zeros((nspec,npoly+1)) #- coeffs array
 
     #- amend line list to only include lines in given wavelength range
@@ -100,13 +100,13 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
 
         thislegfit=fit_wsigmas(meanwaves,sigmas,esigmas,domain=domain,npoly=npoly)
         coeffs[spec]=thislegfit.coef
-    
+
     return coeffs
 
 def write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=None):
-    """ 
-    extract psfbootfile, add wcoeffs, and make a new psf file preserving the traces etc. 
-    psf module will load this 
+    """
+    extract psfbootfile, add wcoeffs, and make a new psf file preserving the traces etc.
+    psf module will load this
     """
     from astropy.io import fits
     psf=fits.open(psfbootfile)
@@ -114,11 +114,11 @@ def write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=None):
     xcoeff.header["PSFTYPE"]='psf'
     ycoeff=psf[1]
     xsigma=psf[2]
-    
+
     wsigma=fits.ImageHDU(wcoeffs,name='WSIGMA')
     wsigma.header["PSFTYPE"]='boxcar'
     if wavestepsize is None:
         wavestepsize = 'NATIVE CCD GRID'
     wsigma.header["WAVESTEP"]=(wavestepsize,'Wavelength step size [Angstroms]')
     hdulist=fits.HDUList([xcoeff,ycoeff,xsigma,wsigma])
-    hdulist.writeto(outfile,clobber=True)
+    hdulist.writeto(outfile,overwrite=True)

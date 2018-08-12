@@ -180,29 +180,29 @@ def _unweighted_resample(output_x,input_x,input_flux_density, extrapolate=False)
     # make a temporary node array including input nodes and output bin bounds
     # first the boundaries of output bins
     tx=bins.copy()
-    ty=np.interp(tx,ix,iy) # this sets values left and right of input range to first and/or last input values
+
+    # if we do not extrapolate,
+    # because the input is a considered a piece-wise linear function, i.e. the sum of triangles f_i(x),
+    # we add two points at ixmin = ix[0]-(ix[1]-ix[0]) and  ixmax = ix[-1]+(ix[-1]-ix[-2])
+    # with zero flux densities, corresponding to the edges of the first and last triangles.
+    # this solves naturally the edge problem.
+    if not extrapolate :
+        # note we have to keep the array sorted here because we are going to use it for interpolation
+        ix = np.append( 2*ix[0]-ix[1] , ix)
+        iy = np.append(0.,iy)
+        ix = np.append(ix, 2*ix[-1]-ix[-2])
+        iy = np.append(iy, 0.)
+
+    # this sets values left and right of input range to first and/or last input values
+    # first and last values are=0 if we are not extrapolating
+    ty=np.interp(tx,ix,iy)
     
     #  add input nodes which are inside the node array
     k=np.where((ix>=tx[0])&(ix<=tx[-1]))[0]
     if k.size :
         tx=np.append(tx,ix[k])
         ty=np.append(ty,iy[k])
-    
-    # add the edges of the first and last input bins
-    # to the temporary node array if inside array
-    ixmin=1.5*ix[0]-0.5*ix[1]  # = ix[0]-(ix[1]-ix[0])/2
-    if ixmin>np.min(tx) :
-        y_ixmin=1.5*iy[0]-0.5*iy[1] # extrapolation using slope (and not constant) for this point to preserve integral in first input bin
-        tx=np.append(tx,ixmin)
-        ty=np.append(ty,y_ixmin)
         
-    ixmax=1.5*ix[-1]-0.5*ix[-2]
-    if ixmax<np.max(tx) :
-        y_ixmax=1.5*iy[-1]-0.5*iy[-2] # extrapolation using slope (and not constant) for this point to preserve integral in last input bin
-        tx=np.append(tx,ixmax)
-        ty=np.append(ty,y_ixmax)
-    
-    
     # sort this node array
     p = tx.argsort()
     tx=tx[p]
@@ -220,11 +220,9 @@ def _unweighted_resample(output_x,input_x,input_flux_density, extrapolate=False)
 
     trapeze_centers=(tx[1:]+tx[:-1])/2.
     binsize = bins[1:]-bins[:-1]
+
+    if np.any(binsize<=0)  :
+        raise ValueError("Zero or negative bin size")
     
-    if extrapolate :
-        of = np.histogram(trapeze_centers, bins=bins, weights=trapeze_integrals)[0] / binsize
-    else : # only keep trapezes inside input array (including assumed input bin edges) to preserve flux and ivar       
-        ii=(tx[1:]<=ixmax)&(tx[:-1]>=ixmin)
-        of = np.histogram(trapeze_centers[ii], bins=bins, weights=trapeze_integrals[ii])[0] / binsize
-    
-    return of
+    return np.histogram(trapeze_centers, bins=bins, weights=trapeze_integrals)[0] / binsize
+

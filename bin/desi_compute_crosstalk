@@ -30,7 +30,7 @@ log = get_logger()
 
 coeffs={}
 
-for filename in args.image : 
+for filename in args.image :
     log.info("analysing %s"%filename)
     image_file  = pyfits.open(filename)
     flux = image_file[0].data
@@ -42,9 +42,8 @@ for filename in args.image :
     nflux = np.zeros(flux.shape)
     nflux[1:-1] = flux[1:-1]-(flux[2:]+flux[:-2])/2.
     flux = nflux
-    #pyfits.writeto("grad.fits",flux,clobber=True); print("wrote grad.fits")
     
-    
+
     header = image_file[0].header
 
     amplifiers=["A","B","C","D"]
@@ -160,7 +159,7 @@ for filename in args.image :
 
             pair = "%s%s"%(amp1,amp2)
             log.info("%s = %f +- %f sig=%f"%(pair,cross_talk,cross_err,np.abs(cross_talk/cross_err)))
-            
+
             if not pair in coeffs :
                 coeffs[pair]=[]
             coeffs[pair].append(cross_talk)

@@ -2,10 +2,86 @@
 desispec Change Log
 ===================
 
-0.22.0 (unreleased)
+0.23.2 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.23.1 (2018-08-09)
+-------------------
+
+* Support STD/STD_FSTAR/STD_FAINT bit names (PR `#673`_).
+
+.. _`#673`: https://github.com/desihub/desispec/pull/673
+
+0.23.0 (2018-07-26)
+-------------------
+
+* Adds qproc algorithms and QFrame class (PR `#664`_).
+* Adds `desi_pipe go` for production running (PR `#666`_).
+* Increase job maxtime for edison realtime queue (PR `#667`_).
+* Updates for running desispec on BOSS data (PR `#669`_).
+* Fix QL for list vs. array change in specter/master (PR `#670`_).
+
+.. _`#664`: https://github.com/desihub/desispec/pull/664
+.. _`#666`: https://github.com/desihub/desispec/pull/666
+.. _`#667`: https://github.com/desihub/desispec/pull/667
+.. _`#669`: https://github.com/desihub/desispec/pull/669
+.. _`#670`: https://github.com/desihub/desispec/pull/670
+
+0.22.1 (2018-07-18)
+-------------------
+
+* Update processing of QL metrics (PR `#659`_).
+* Refactor pipeline and integration test (PR `#660`_).
+* Update redshift database to handle changes to fiberassign data model
+  (PR `#662`_).
+* Allow rows to be filtered when loading the redshift database (PR `#663`_).
+
+.. _`#659`: https://github.com/desihub/desispec/pull/659
+.. _`#660`: https://github.com/desihub/desispec/pull/660
+.. _`#662`: https://github.com/desihub/desispec/pull/662
+.. _`#663`: https://github.com/desihub/desispec/pull/663
+
+0.22.0 (2018-06-30)
+-------------------
+
+This is the version used for mock observing in June 2018.  It includes an
+update to the directory substructure where raw data are found, grouping each
+exposure into a separate directory `$DESI_SPECTRO_DATA/{YEARMMDD}/{EXPID}/`.
+
+* Faster traceshift code; requires numba (PR `#634`_).
+* Fixed integration tests (PR `#635`_).
+* Give empty HDUs am ``EXTNAME`` (PR `#636`_).
+* Update redshift database loading in integration test (PR `#638`_).
+* Integration test DB loading (PR `#640`_).
+* Move ccd_calibration.yaml to SVN repo (PR `#641`_).
+* Logging QA metric status for QLF (PR `#642`_).
+* Supporting both new and old fibermap via io.read_fibermap (PP `#643`_).
+* Faster lower memory preproc using numba (PR `#644`_)
+* ivar bugfix in resample_flux interpolation (PR `#646`_).
+* Many QL updates from mock observing (PR `#648`_).
+* Raw data in NIGHT/EXPID/*.* instead of NIGHT/*.* (PR `#648`_).
+* Fix cosmics masking near masked saturated pixels (PR `#649`_).
+* Update edison realtime queue config to 25 nodes (PR `#650`_).
+* trace_shift code supports PSF formats without "PSF" HDU (PR `#654`_).
+* Change keyword ``clobber`` to ``overwrite`` in functions from ``astropy.io.fits`` (PR `#658`_).
+
+.. _`#634`: https://github.com/desihub/desispec/pull/634
+.. _`#635`: https://github.com/desihub/desispec/pull/635
+.. _`#636`: https://github.com/desihub/desispec/pull/636
+.. _`#638`: https://github.com/desihub/desispec/pull/638
+.. _`#640`: https://github.com/desihub/desispec/pull/640
+.. _`#641`: https://github.com/desihub/desispec/pull/641
+.. _`#642`: https://github.com/desihub/desispec/pull/642
+.. _`#643`: https://github.com/desihub/desispec/pull/643
+.. _`#644`: https://github.com/desihub/desispec/pull/644
+.. _`#646`: https://github.com/desihub/desispec/pull/646
+.. _`#648`: https://github.com/desihub/desispec/pull/648
+.. _`#649`: https://github.com/desihub/desispec/pull/649
+.. _`#650`: https://github.com/desihub/desispec/pull/650
+.. _`#654`: https://github.com/desihub/desispec/pull/654
+.. _`#658`: https://github.com/desihub/desispec/pull/658
 
 0.21.0 (2018-05-25)
 -------------------

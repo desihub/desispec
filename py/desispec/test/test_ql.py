@@ -15,6 +15,8 @@ from desispec.io import empty_fibermap
 from desispec.io.fibermap import write_fibermap
 import datetime
 import pytz
+from pkg_resources import resource_filename
+
 class TestQL(unittest.TestCase):
     @classmethod
     def setUp(cls):
@@ -29,7 +31,7 @@ class TestQL(unittest.TestCase):
         cls.nspec = nspec = 5
         cls.exptime = exptime = 100
 
-        #- Seup environment and override default environment variables
+        #- Setup environment and override default environment variables
 
         #- python 2.7 location:
         cls.topDir = os.path.dirname( # top-level
@@ -66,16 +68,24 @@ class TestQL(unittest.TestCase):
         cls.framefile = 'frame-'+id+'.fits'
 
         cls.testDir = testDir = os.path.join(os.environ['HOME'],'ql_test_io')
-        dataDir = os.path.join(testDir,night)
+        datanightDir = os.path.join(testDir,night)
+        dataDir = os.path.join(datanightDir,'{:08d}'.format(expid))
         expDir = os.path.join(testDir,'exposures')
-        nightDir = os.path.join(expDir,night)
-        reduxDir = os.path.join(nightDir,'{:08d}'.format(expid))
+        expnightDir = os.path.join(expDir,night)
+        reduxDir = os.path.join(expnightDir,'{:08d}'.format(expid))
+        calibDir = os.path.join(testDir, 'ql_calib')
+        configDir = os.path.join(testDir, 'ql_config')
+        os.environ['QL_CALIB_DIR'] = calibDir
+        os.environ['QL_CONFIG_DIR'] = configDir
         if not os.path.exists(testDir):
             os.makedirs(testDir)
+            os.makedirs(datanightDir)
             os.makedirs(dataDir)
             os.makedirs(expDir)
-            os.makedirs(nightDir)
+            os.makedirs(expnightDir)
             os.makedirs(reduxDir)
+            os.makedirs(calibDir)
+            os.makedirs(configDir)
 
         #- Write dummy configuration and input files to test merging
         configdict = {'name': 'Test Configuration',
@@ -99,9 +109,9 @@ class TestQL(unittest.TestCase):
                                          'QA':{'Check_HDUs':{'PARAMS':{}}
                                              }},
                                      'Preproc':{
-                                         'QA':{'Bias_From_Overscan':{'PARAMS':{'DIFF_WARN_RANGE':[-1.0,1.0],'DIFF_ALARM_RANGE':[-2.0,2.0]}},
-                                             'Get_RMS':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'RMS_WARN_RANGE':[-1.0,1.0],'RMS_ALARM_RANGE':[-2.0,2.0]}},
-                                             'Count_Pixels':{'PARAMS':{'CUTPIX':500,'LITFRAC_NORMAL_RANGE':[200.0,500.0],'LITFRAC_WARN_RANGE':[50.0,650.0]}}}}}
+                                         'QA':{'Bias_From_Overscan':{'PARAMS':{'BIAS_AMP_NORMAL_RANGE':[-100.0,100.0],'BIAS_AMP_WARN_RANGE':[-200.0,200.0]}},
+                                             'Get_RMS':{'PARAMS':{'PERCENTILES':[68.2,95.4,99.7],'NOISE_AMP_NORMAL_RANGE':[-1.0,1.0],'NOISE_AMP_WARN_RANGE':[-2.0,2.0]}},
+                                             'Count_Pixels':{'PARAMS':{'CUTPIX':500,'LITFRAC_NORMAL_RANGE':[-0.1,0.1],'LITFRAC_WARN_RANGE':[-0.2,0.2]}}}}}
                       }
         with open('{}/test_config.yaml'.format(testDir),'w') as config:
             yaml.dump(configdict,config)
@@ -153,6 +163,26 @@ class TestQL(unittest.TestCase):
         fibermapfile = os.path.join(dataDir,'fibermap-00000314.fits')
         fibermap = empty_fibermap(nspec)
         write_fibermap(fibermapfile,fibermap)
+
+        #- Generate calib data
+        for camera in ['b0', 'r0', 'z0']:
+            #- Fiberflat has to exist but can be a dummpy file
+            filename = '{}/fiberflat-{}.fits'.format(calibDir, camera)
+            fx = open(filename, 'w'); fx.write('fiberflat file'); fx.close()
+
+            #- PSF has to be real file
+            psffile = '{}/psf-{}.fits'.format(calibDir, camera)
+            example_psf = resource_filename('desispec', 'test/data/ql/psf-{}.fits'.format(camera))
+            shutil.copy(example_psf, psffile)
+            
+        #- Copy test calibration-data.yaml file 
+        input_yaml_file = resource_filename('desispec', 'test/data/ql/ccd_calibration.yaml')
+        output_yaml_file = os.path.join(calibDir,'ccd_calibration.yaml')
+        shutil.copy(input_yaml_file,output_yaml_file)
+        
+        #- Set calibration environment variable
+        os.environ['DESI_CCD_CALIBRATION_DATA'] = calibDir
+    
 
    #- Clean up test files and directories if they exist
     @classmethod

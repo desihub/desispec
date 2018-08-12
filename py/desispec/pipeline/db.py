@@ -40,6 +40,9 @@ def all_task_types():
     from .tasks.base import default_task_chain
     ttypes = ["fibermap", "rawdata"]
     ttypes.extend(tasks.base.default_task_chain)
+    # Insert qadata after cframe
+    idx = ttypes.index('cframe')
+    ttypes.insert(idx+1, 'qadata')
     return ttypes
 
 
@@ -92,7 +95,6 @@ def all_tasks(night, nside, expid=None):
     """
     import desimodel.footprint
 
-
     log = get_logger()
 
     log.debug("io.get_exposures night={}".format(night))
@@ -116,12 +118,12 @@ def all_tasks(night, nside, expid=None):
         # get the fibermap for this exposure
         fibermap = io.get_raw_files("fibermap", night, ex)
 
-        log.info("read {}".format(fibermap))
+        log.debug("read {}".format(fibermap))
 
-        #fmdata = io.read_fibermap(fibermap)
-        #flavor = fmdata.meta["FLAVOR"]
+        fmdata = io.read_fibermap(fibermap)
+        header = fmdata.meta
 
-        fmdata,header = fitsio.read(fibermap,header=True)
+        # fmdata, header = fitsio.read(fibermap, 'FIBERMAP', header=True)
         flavor = header["FLAVOR"].strip().lower()
         if flavor not in ["arc","flat","science"] :
             log.error("Do not know what do to with fibermap flavor '{}' for file '{}".format(flavor,fibermap))
@@ -279,6 +281,8 @@ def all_tasks(night, nside, expid=None):
                     full["fluxcalib"].append(props)
                     # Add cframe
                     full["cframe"].append(props)
+                    # Add QA
+                    full["qadata"].append(props)
 
                     # Add starfit if does not exist
                     exists=False
@@ -595,7 +599,7 @@ class DataBase:
 
         log = get_logger()
 
-        alltasks , healpix_frames = all_tasks(night, nside, expid=expid)
+        alltasks, healpix_frames = all_tasks(night, nside, expid=expid)
 
         with self.cursor() as cur:
             # insert or ignore all healpix_frames

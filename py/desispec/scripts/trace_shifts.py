@@ -9,9 +9,13 @@ import astropy.io.fits as pyfits
 from numpy.polynomial.legendre import legval,legfit
 from pkg_resources import resource_exists, resource_filename
 
+import specter.psf
+
+from desispec.xytraceset import XYTraceSet
+from desispec.io.xytraceset import read_xytraceset
 from desispec.io import read_image
 from desiutil.log import get_logger
-from desispec.trace_shifts import read_psf_and_traces,write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
+from desispec.trace_shifts import write_traces_in_psf,compute_dx_from_cross_dispersion_profiles,compute_dy_from_spectral_cross_correlation,monomials,polynomial_fit,compute_dy_using_boxcar_extraction,compute_dx_dy_using_psf,shift_ycoef_using_external_spectrum,recompute_legendre_coefficients
 
 
 
@@ -59,6 +63,8 @@ Two methods are implemented.
                         help = "max statistical error threshold to automatically lower polynomial degree")
     parser.add_argument('--width', type = int, default = 7 , required=False,
                         help = "width of cross-dispersion profile")
+    parser.add_argument('--ccd-rows-rebin', type = int, default = 4 , required=False,
+                        help = "rebinning of CCD rows to run faster")
     args = None
     if options is None:
         args = parser.parse_args()
@@ -66,6 +72,22 @@ Two methods are implemented.
         args = parser.parse_args(options)
     return args
 
+
+def read_specter_psf(filename) :
+    hdulist = pyfits.open(filename)
+    head=hdulist[0].header
+    if "PSFTYPE" not in head :
+        raise KeyError("No PSFTYPE in PSF header, cannot load this PSF in specter")
+    psftype=head["PSFTYPE"]
+    hdulist.close()
+        
+    if psftype=="GAUSS-HERMITE" : 
+        psf = specter.psf.GaussHermitePSF(filename)
+    elif psftype=="SPOTGRID" :
+        psf = specter.psf.SpotGridPSF(filename)
+    else :
+        raise ValueError("Unknown PSFTYPE='{}'".format(psftype))
+    return psf
 
 def main(args) :
 
@@ -82,18 +104,18 @@ def main(args) :
     if image.mask is not None :
         image.ivar *= (image.mask==0)
 
-    xcoef=None
-    ycoef=None
-    psf=None
-    wavemin=None
-    wavemax=None
-    nfibers=None
-    lines=None
-
-    psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.psf)
+    
+    
+    xytraceset = read_xytraceset(args.psf)
+    wavemin = xytraceset.wavemin
+    wavemax = xytraceset.wavemax
+    xcoef   = xytraceset.x_vs_wave_traceset._coeff 
+    ycoef   = xytraceset.y_vs_wave_traceset._coeff 
+    
     nfibers=xcoef.shape[0]
     log.info("read PSF trace with xcoef.shape = {} , ycoef.shape = {} , and wavelength range {}:{}".format(xcoef.shape,ycoef.shape,int(wavemin),int(wavemax)))
     
+    lines=None
     if args.lines is not None :
         log.info("We will fit the image using the psf model and lines")
         
@@ -153,6 +175,9 @@ def main(args) :
         # it's in principle more accurate
         # but gives systematic residuals for complex spectra like the sky
         
+        
+        psf = read_specter_psf(args.psf)
+        
         x,y,dx,ex,dy,ey,fiber_xy,wave_xy=compute_dx_dy_using_psf(psf,image,fibers,lines)
         x_for_dx=x
         y_for_dx=y
@@ -169,10 +194,10 @@ def main(args) :
         # nor a prior set of lines. this method is much faster
         
         # measure x shifts
-        x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy)
+        x_for_dx,y_for_dx,dx,ex,fiber_for_dx,wave_for_dx = compute_dx_from_cross_dispersion_profiles(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width, deg=args.degxy,image_rebin=args.ccd_rows_rebin)
         if internal_wavelength_calib :
             # measure y shifts
-            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xcoef,ycoef,wavemin,wavemax, image=image, fibers=fibers, width=args.width)
+            x_for_dy,y_for_dy,dy,ey,fiber_for_dy,wave_for_dy = compute_dy_using_boxcar_extraction(xytraceset, image=image, fibers=fibers, width=args.width)
             mdy = np.median(dy)
             log.info("Subtract median(dy)={}".format(mdy))
             dy -= mdy # remove median, because this is an internal calibration
@@ -267,29 +292,76 @@ def main(args) :
         
     # for each fiber, apply offsets and recompute legendre polynomial
     log.info("for each fiber, apply offsets and recompute legendre polynomial")
-    log.info("BEFORE: ycoef[:,0]={}".format(ycoef[:,0]))
+    
+    
+    # compute x y to record max deviations
+    u  = np.linspace(-1,1,5)
+    x0 = np.zeros((xcoef.shape[0],u.size))
+    y0 = np.zeros((ycoef.shape[0],u.size))
+    for f in range(xcoef.shape[0]) :
+        x0[f]=legval(u,xcoef[f])
+        y0[f]=legval(u,ycoef[f])
+    
+
+
     xcoef,ycoef = recompute_legendre_coefficients(xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,degxx=degxx,degxy=degxy,degyx=degyx,degyy=degyy,dx_coeff=dx_coeff,dy_coeff=dy_coeff)
-    log.info("AFTER: ycoef[:,0]={}".format(ycoef[:,0]))
     
     # use an input spectrum as an external calibration of wavelength
     if spectrum_filename  :
-        
-        
+                
         log.info("write and reread PSF to be sure predetermined shifts were propagated")
         write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
-        psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.outpsf)
-                
-        log.info("BEFORE: ycoef[:,0]={}".format(ycoef[:,0]))
-        ycoef=shift_ycoef_using_external_spectrum(psf=psf,xcoef=xcoef,ycoef=ycoef,wavemin=wavemin,wavemax=wavemax,
+        #psf,xcoef,ycoef,wavemin,wavemax = read_psf_and_traces(args.outpsf)
+        
+        xytraceset = read_xytraceset(args.outpsf)
+        wavemin = xytraceset.wavemin
+        wavemax = xytraceset.wavemax
+        xcoef   = xytraceset.x_vs_wave_traceset._coeff 
+        ycoef   = xytraceset.y_vs_wave_traceset._coeff 
+        
+        psf = read_specter_psf(args.outpsf)
+
+        ycoef=shift_ycoef_using_external_spectrum(psf=psf,xytraceset=xytraceset,
                                                   image=image,fibers=fibers,spectrum_filename=spectrum_filename,degyy=args.degyy,width=7)
         
-        log.info("AFTER: ycoef[:,0]={}".format(ycoef[:,0]))
-        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+
+        x = np.zeros((xcoef.shape[0],u.size))
+        y = np.zeros((ycoef.shape[0],u.size))
+        for f in range(xcoef.shape[0]) :
+            x[f]=legval(u,xcoef[f])
+            y[f]=legval(u,ycoef[f])
+        dx = x-x0
+        dy = y-y0
+        
+        header_keywords = {}
+        header_keywords["MEANDX"]=np.mean(dx)
+        header_keywords["MINDX"]=np.min(dx)
+        header_keywords["MAXDX"]=np.max(dx)
+        header_keywords["MEANDY"]=np.mean(dy)
+        header_keywords["MINDY"]=np.min(dy)
+        header_keywords["MAXDY"]=np.max(dy)
+        
+        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax,header_keywords=header_keywords)
         log.info("wrote modified PSF in %s"%args.outpsf)
         
     else :
+        x = np.zeros((xcoef.shape[0],u.size))
+        y = np.zeros((ycoef.shape[0],u.size))
+        for f in range(xcoef.shape[0]) :
+            x[f]=legval(u,xcoef[f])
+            y[f]=legval(u,ycoef[f])
+        dx = x-x0
+        dy = y-y0
         
-        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax)
+        header_keywords = {}
+        header_keywords["MEANDX"]=np.mean(dx)
+        header_keywords["MINDX"]=np.min(dx)
+        header_keywords["MAXDX"]=np.max(dx)
+        header_keywords["MEANDY"]=np.mean(dy)
+        header_keywords["MINDY"]=np.min(dy)
+        header_keywords["MAXDY"]=np.max(dy)
+        
+        write_traces_in_psf(args.psf,args.outpsf,xcoef,ycoef,wavemin,wavemax,header_keywords=header_keywords)
         log.info("wrote modified PSF in %s"%args.outpsf)
         
     

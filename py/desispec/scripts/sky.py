@@ -18,11 +18,11 @@ import numpy as np
 def parse(options=None):
     parser = argparse.ArgumentParser(description="Compute the sky model.")
 
-    parser.add_argument('--infile', type = str, default = None, required=True,
+    parser.add_argument('-i','--infile', type = str, default = None, required=True,
                         help = 'path of DESI exposure frame fits file')
     parser.add_argument('--fiberflat', type = str, default = None, required=True,
                         help = 'path of DESI fiberflat fits file')
-    parser.add_argument('--outfile', type = str, default = None, required=True,
+    parser.add_argument('-o','--outfile', type = str, default = None, required=True,
                         help = 'path of DESI sky fits file')
     parser.add_argument('--qafile', type = str, default = None, required=False,
                         help = 'path of QA file. Will calculate for Sky Subtraction')

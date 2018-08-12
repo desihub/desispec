@@ -26,7 +26,8 @@ from .meta import (findfile, get_exposures, get_files, get_raw_files,
                    get_nights, get_pipe_nightdir, find_exposure_night)
 from .params import read_params
 from .qa import (read_qa_frame, read_qa_data, write_qa_frame, write_qa_brick,
-                 load_qa_frame, write_qa_exposure, write_qa_multiexp, load_qa_multiexp)
+                 load_qa_frame, write_qa_exposure, write_qa_multiexp, load_qa_multiexp,
+                 qafile_from_framefile)
 from .raw import read_raw, write_raw
 from .sky import read_sky, write_sky
 from .util import (header2wave, fitsheader, native_endian, makepath,

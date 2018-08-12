@@ -61,7 +61,7 @@ def modify_tasks(myDict):
     myDict = transferKEY(myDict, "PARAMS", "FLEXURE", "BOXCAREXTRACT", keyList)    
 
     ################    
-    keyList = ["PEAKCOUNT", "PEAKCOUNT_MED_SKY", "PEAKCOUNT_NOISE", "PEAKCOUNT_STATUS", "SKYCONT", "SKYCONT_FIBER", "SKYCONT_STATUS", "Sky_Rband", "Sky_Rflux_diff", "Sky_fib_Rband"]
+    keyList = ["PEAKCOUNT", "PEAKCOUNT_FIB", "PEAKCOUNT_NOISE", "PEAKCOUNT_STATUS", "SKYCONT", "SKYCONT_FIBER", "SKYCONT_STATUS", "SKYRBAND", "SKY_RFLUX_DIFF", "SKY_FIB_RBAND"]
     myDict = transferKEY(myDict, "METRICS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
 
     ################      
@@ -237,7 +237,7 @@ def EditDic(Camera):
              delKey(Camera, "BIAS")
              delKey(Camera, "NOISE")
              delKey(Camera, "XWSHIFT_AMP")
-             delKey(Camera, "XWSHIFT_SHIFT") 
+             delKey(Camera, "XWSIGMA_SHIFT") 
              delKey(Camera, "NREJ")
              delKey(Camera, "MED_SKY")
              delKey(Camera, "NBAD_PCHI")
@@ -312,18 +312,11 @@ class QL_QAMerger:
         self.__stepsArr.append(stepDict)
         return self.QL_Step(stepName,paramsDict,metricsDict)
 
-    #def getYaml(self):
-        #yres=yamlify(self.__schema)
-        #reOrderDict(yres)
-        #return yaml.dump(yres)
-    #def getJson(self):
-        #import json
-        #return json.dumps(yamlify(self.__schema))
-    #def writeToFile(self,fileName):
-        #with open(fileName,'w') as f:
-            #f.write(self.getYaml())
+            
+            
     def writeTojsonFile(self,fileName):
-        g=open(fileName.split('.yaml')[0]+'.json',"w")
+        g=open(fileName,'w')
+        
         myDict = yamlify(self.__schema)
         #reOrderDict(myDict)
         

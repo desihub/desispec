@@ -233,14 +233,23 @@ def _background(image,header,patch_width=200,stitch_width=10,stitch=False) :
     log.info("done")
     return bkg
 
-def read_ccd_calibration(header, primary_header, filename) :
+def read_ccd_calibration(header, primary_header, filename=None) :
     """Please provide documentation for this function!
     """
     log=get_logger()
 
+    if filename is None :
+        if not "DESI_CCD_CALIBRATION_DATA" in os.environ :
+            log.warning("Need environment variable DESI_CCD_CALIBRATION_DATA to access to the CCD calibration data, returning empty dict")
+            return dict()
+            
+        filename = os.path.join(os.environ["DESI_CCD_CALIBRATION_DATA"],"ccd_calibration.yaml")
+        
     if not os.path.isfile(filename) :
         log.error("Cannot find calibration data file '%s'"%filename)
         raise IOError("Cannot find calibration data file '%s'"%filename)
+
+    log.info("Reading CCD calibration data in {}".format(filename))
 
     stream = open(filename, 'r')
     data   = yaml.load(stream)
@@ -403,15 +412,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     log=get_logger()
 
     calibration_data = None
-
-    if ccd_calibration_filename is None :
-        srch_file = "data/ccd/ccd_calibration.yaml"
-        if not resource_exists('desispec', srch_file):
-            log.error("Cannot find CCD calibration file {:s}".format(srch_file))
-        else :
-            ccd_calibration_filename=resource_filename('desispec', srch_file)
-
-    if ccd_calibration_filename is not None and  ccd_calibration_filename is not False :
+    
+    if ccd_calibration_filename is not False :
         calibration_data = read_ccd_calibration(header, primary_header, ccd_calibration_filename)
 
     #- Get path to calibration data

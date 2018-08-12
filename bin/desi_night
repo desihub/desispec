@@ -8,7 +8,9 @@
 Automate the nightly processing.
 """
 
+import sys
 from desispec.scripts.night import Nightly
 
 if __name__ == '__main__':
     n = Nightly()
+    sys.stdout.flush()

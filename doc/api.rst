@@ -10,7 +10,7 @@ Full desispec API Reference
 .. automodule:: desispec.bootcalib
     :members:
 
-.. automodule:: desispec.boxcar
+.. automodule:: desispec.quicklook.qlboxcar
     :members:
 
 .. automodule:: desispec.coaddition
@@ -121,7 +121,7 @@ Full desispec API Reference
 .. automodule:: desispec.preproc
     :members:
 
-.. automodule:: desispec.psf
+.. automodule:: desispec.quicklook.qlpsf
     :members:
 
 .. automodule:: desispec.qa

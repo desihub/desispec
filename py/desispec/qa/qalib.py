@@ -393,8 +393,10 @@ def sky_resid(param, frame, skymodel, quick_look=False):
         qadict["MED_RESID_WAVE"]=np.median(res,axis=0)
         qadict["MED_RESID_FIBER"]=np.median(res,axis=1)
         #- Weighted average for each bin on all fibers
-        qadict["WAVG_RES_WAVE"]= np.sum(res*res_ivar,0) / np.sum(res_ivar,0)
-
+        qadict["WAVG_RES_WAVE"]=np.zeros(res.shape[1])
+        sw=np.sum(res_ivar,axis=0)
+        qadict["WAVG_RES_WAVE"][sw>0] = np.sum(res*res_ivar,axis=0)[sw>0] / sw[sw>0]
+        
     #- Histograms for residual/sigma #- inherited from qa_plots.frame_skyres()
     if quick_look:
         binsz = param['BIN_SZ']
@@ -702,6 +704,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             fitcoeff.append(vs)
             fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
+            
         except scipy.optimize.OptimizeWarning:
             log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
             vs=out[0]
