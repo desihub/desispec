@@ -572,6 +572,11 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
          "DEC" : ndarray (nfiber)
          "OBJLIST" : list
             Save a copy to make sense of the list order later
+         "EXPTIME" : float
+         "FIT_FILTER" : str
+         "FILTERS" : list
+         "r2" : float
+            Fitting parameter
     """
 
     #- Get imaging magnitudes and calculate SNR
@@ -582,6 +587,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     filters=frame.fibermap['FILTER']
     mediansnr=SN_ratio(frame.flux,frame.ivar)
     qadict={"MEDIAN_SNR":mediansnr}
+    qadict["FILTERS"] = filters[0,:]
     exptime=frame.meta["EXPTIME"]
 
     if camera[0] == 'b':
@@ -592,13 +598,15 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         thisfilter='DECAM_Z'
     if "Filter" in params:
         thisfilter=params["Filter"]
+    qadict["FIT_FILTER"] = thisfilter
+    qadict["EXPTIME"] = exptime
 
     mag_filters=[]
     for mag in range(magnitudes.shape[0]):
         mag_filters.append([magnitudes[mag][0],magnitudes[mag][1],magnitudes[mag][2]])
     qadict["MAGNITUDES"]=mag_filters
 
-    qadict["OBJLIST"]=objlist
+    qadict["OBJLIST"]=list(objlist)
 
     #- Set up fit of SNR vs. Magnitude
     #- Using astronomical SNR equation, fitting 'a'(throughput) and 'B'(sky background)
@@ -623,6 +631,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 
     fitfunc=funcMap["astro"]
     initialParams=[0.1,0.1]
+    qadict["r2"]=r2
 
     neg_snr_tot=[]
     #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 
