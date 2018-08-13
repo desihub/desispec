@@ -432,7 +432,6 @@ def SN_ratio(flux,ivar):
     Returns:
         medsnr (array): 1d [nspec]
     """
-
     #- we calculate median and total S/N assuming no correlation bin by bin
     snr = flux * np.sqrt(ivar)
     medsnr = np.median(snr, axis=1)
