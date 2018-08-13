@@ -407,8 +407,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
         nbin = i1-i0
         hist, edges = np.histogram(devs, range=rng, bins=nbin)
 
-
-        #SE: commented this because didn't seem to be needed to be saved in the dictionary 
+        #SE: commented this because didn't seem to be needed to be saved in the dictionary
         #qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
         #qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
 
