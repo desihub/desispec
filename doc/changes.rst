@@ -5,7 +5,7 @@ desispec Change Log
 0.23.2 (unreleased)
 -------------------
 
-* No changes yet.
+* Integrates QL S/N QA into offline QA Frame object
 
 0.23.1 (2018-08-09)
 -------------------

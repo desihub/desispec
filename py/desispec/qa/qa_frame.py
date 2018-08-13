@@ -330,7 +330,6 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         if 'SKY' in objlist:
             objlist.remove('SKY')
         qaframe.run_qa('S2N', (frame, objlist), clobber=clobber)
-        import pdb; pdb.set_trace()
 
     # FluxCalib QA
     if qatype == 'qa_data':
