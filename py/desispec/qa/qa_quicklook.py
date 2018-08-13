@@ -2063,7 +2063,7 @@ class Calculate_SNR(MonitoringAlg):
         if param is None:
             log.debug("Param is None. Using default param instead")
             desi_params = read_params()
-            param = desi_params['qa']['skysub']['PARAMS'].copy()
+            param = desi_params['qa']['s2n']['PARAMS'].copy()
             #param = {
             #    "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc.
             #    "FIDSNR_NORMAL_RANGE":[6.5, 7.5],
