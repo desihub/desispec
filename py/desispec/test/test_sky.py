@@ -99,7 +99,7 @@ class TestSky(unittest.TestCase):
         subtract_sky(spectra, sky)
         
         #- allow some slop in the sky subtraction
-        self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-3, atol=1e-3)) # this is not exact, it's an iterative fit
+        self.assertTrue(np.allclose(spectra.flux, 0, rtol=1e-3, atol=1.)) # this is not exact, it's an iterative fit
         
     
     def test_subtract_sky_with_gradient_using_compute_non_uniform_sky(self):

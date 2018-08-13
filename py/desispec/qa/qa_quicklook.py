@@ -10,6 +10,7 @@ import yaml
 import re
 import astropy.io.fits as fits
 import desispec.qa.qa_plots_ql as plot
+import desispec.quicklook.qlpsf
 from desispec.quicklook.qas import MonitoringAlg, QASeverity
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
@@ -175,6 +176,19 @@ class Check_HDUs(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["FLAVOR"] = header["FLAVOR"]
+        #SE: quicklook to crash when a mismatched config file with the one in fits header
+        from desispec.scripts import quicklook
+          
+        args=quicklook.parse()       
+        ad,fl = args.config.split("qlconfig_")
+        flvr = fl.split(".yaml")[0]
+        if flvr in ['darksurvey','graysurvey','brightsurvey']: flvr = 'science'
+        if (header["FLAVOR"] == flvr or flvr == 'test'): 
+                    log.info("The correct configuration file is being used!")
+        else: 
+                    log.critical("Wrong configuration file is being used!")
+                    sys.exit("Wrong configuration file! use the one for "+str(header["FLAVOR"]))
+        
         if retval["FLAVOR"] == 'arc':
             pass
         else:
@@ -750,6 +764,7 @@ class Calc_XWSigma(MonitoringAlg):
         psf = None
         if "PSFFile" in kwargs:
             psf=kwargs["PSFFile"]
+            psf=desispec.quicklook.qlpsf.PSF(psf)
  
         fibermap = None
         if "FiberMap" in kwargs:
@@ -823,10 +838,6 @@ class Calc_XWSigma(MonitoringAlg):
         npeaks=len(peaks)
         peak_wave = np.array(peak_wave)
 
-        if flavor == 'arcs':
-            import desispec.psf
-            psf=desispec.psf.PSF(psf)
-
         xfails=[]
         wfails=[]
         xsigma=[]
@@ -845,12 +856,12 @@ class Calc_XWSigma(MonitoringAlg):
             xsig=[]
             wsig=[]
             #- Use psf information to convert wavelength to pixel values
-            xpix=psf.x(ispec=i,wavelength=peak_wave)
-            ypix=psf.y(ispec=i,wavelength=peak_wave)
+            xpix=desispec.quicklook.qlpsf.PSF.x(psf,ispec=i,wavelength=peak_wave)[0]
+            ypix=desispec.quicklook.qlpsf.PSF.y(psf,ispec=i,wavelength=peak_wave)[0]
             for peak in range(len(peaks)):
                 #- Find x and y pixel values around sky lines
-                xpix_peak=np.arange(int(round(xpix[2*peak]))-dp,int(round(xpix[2*peak+1]))+dp+1,1)
-                ypix_peak=np.arange(int(round(ypix[2*peak])),int(round(ypix[2*peak+1])),1)
+                xpix_peak=np.arange(int(np.rint(xpix[2*peak]))-dp,int(np.rint(xpix[2*peak+1]))+dp+1,1)
+                ypix_peak=np.arange(int(np.rint(ypix[2*peak])),int(np.rint(ypix[2*peak+1])),1)
                 #- Fit gaussian to counts in pixels around sky line
                 #- If any values fail, store x/w, wavelength, and fiber
                 try:

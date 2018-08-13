@@ -1,13 +1,10 @@
-# Default Configurations for a Quicklook Pipeline setup for a bright science exposure
-name: DESI Quicklook Bright Survey
-Program: bright
+# Default Configurations for a Quicklook Pipeline setup for a dark science exposure
+name: DESI Quicklook Dark,Grey,Bright Survey
 Flavor: science
 #- Writeout intermediate files
 WritePreprocfile: True
-#-Debuglevel 
+#- Debuglevel 
 Debuglevel: 20
-#- Generate modified PSF file
-Flexure: False
 #- Heartbeat Period in seconds
 Period: 5.0
 #- Time out in seconds
@@ -24,7 +21,7 @@ Algorithms:
             Bias_From_Overscan:
                 PARAMS: {BIAS_AMP_NORMAL_RANGE: [-100.0, 100.0], BIAS_AMP_WARN_RANGE: [-200.0, 200.0]}
             Get_RMS:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7],NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0]}
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
             Calc_XWSigma:
@@ -46,9 +43,9 @@ Algorithms:
         QuickResolution: True
         QA: 
             CountSpectralBins:
-                PARAMS: {CUTBINS: 5,N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
+                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
     ApplyFiberFlat_QL:
-        QA: 
+        QA:
             Sky_Continuum:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
                          R_CONT: ["5950, 6200", "6990, 7230"],
@@ -67,12 +64,12 @@ Algorithms:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
                          R_CONT: ["5950, 6200", "6990, 7230"],
                          Z_CONT: ["8120, 8270", "9110, 9280"],
-                         SKYRBAND_NORMAL_RANGE: [-100.0, 100.0],
-                         SKYRBAND_WARN_RANGE: [-200.0, 200.0]}
+                         SKYRBAND_NORMAL_RANGE: [-1.0, 1.0],
+                         SKYRBAND_WARN_RANGE: [-2.0, 2.0]}
             Sky_Residual:
                 PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, MED_RESID_NORMAL_RANGE: [-5.0, 5.0], MED_RESID_WARN_RANGE: [-10.0, 10.0]}
             Integrate_Spec:
-                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-2., 2.], DELTAMAG_TGT_WARN_RANGE: [-4.0, 4.0]}
+                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-2., 2.0], DELTAMAG_TGT_WARN_RANGE: [-4., 4.]}
             Calculate_SNR:
                 #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
                 PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-11., 11.], FIDSNR_TGT_WARN_RANGE: [-12., 12.], FIDMAG: 22.}

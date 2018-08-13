@@ -14,7 +14,7 @@ class Config(object):
     expand_config will expand out to full format as needed by quicklook.setup
     """
 
-    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None):
+    def __init__(self, configfile, night, camera, expid, singqa, amps=True,rawdata_dir=None,specprod_dir=None, outdir=None,qlf=False,psfid=None,flatid=None,templateid=None,templatenight=None,plots=None):
         """
         configfile: a configuration file for QL eg: desispec/data/quicklook/qlconfig_dark.yaml
         night: night for the data to process, eg.'20191015'
@@ -61,16 +61,34 @@ class Config(object):
         self.rawdata_dir = rawdata_dir 
         self.specprod_dir = specprod_dir
         self.outdir = outdir
+        self.plots = plots
         self.flavor = self.conf["Flavor"]
-        self.dumpintermediates = self.conf["WriteIntermediatefiles"]
+        
+        #SE: removed this key from the configuration files 
+        #self.dumpintermediates = self.conf["WriteIntermediatefiles"] 
+        self.dumpintermediates = False
+        
         self.writepreprocfile = self.conf["WritePreprocfile"]
-        self.writeskymodelfile = self.conf["WriteSkyModelfile"]
-        self.writestaticplots = self.conf["WriteStaticPlots"]
-        self.usesigma = self.conf["UseResolution"]
-        try:
-            self.flexure = self.conf["Flexure"]    
-        except:
-            self.flexure = False
+        
+        #SE: removed this key from the configuration files
+        #self.writeskymodelfile = self.conf["WriteSkyModelfile"] 
+        self.writeskymodelfile = False
+        
+        #SE: plotting is now an execution option: add --plots at the end of the command
+        #self.writestaticplots = self.conf["WriteStaticPlots"]
+        
+        #SE: removed this key from the configuration files 
+        #self.usesigma = self.conf["UseResolution"]
+        self.usesigma = True
+        
+        #try:
+        #    self.flexure = self.conf["Flexure"]    
+        #except:
+            #self.flexure = False
+        # SE Flexure runs by default
+        self.flexure = True
+        
+        
         self.pipeline = self.conf["Pipeline"]
         if not self.flexure and "Flexure" in self.pipeline:
             self.pipeline.remove("Flexure")
@@ -299,7 +317,7 @@ class Config(object):
 
         for PA in self.palist:
             for qa in self.qalist[PA]: #- individual QA for that PA
-                if self.writestaticplots:
+                if self.plots:
                     qaplot = self.dump_qa()[0][1][qa]
                 else:
                     qaplot = None
@@ -311,7 +329,9 @@ class Config(object):
                             'amps': self.amps, 'qafile': self.dump_qa()[0][0][qa],
                             'qafig': qaplot, 'FiberMap': self.fibermap,
                             'param': params, 'qlf': self.qlf, 'refKey':self._qaRefKeys[qa],
-                            'singleqa' : self.singqa}
+                            'singleqa' : self.singqa,
+                            'plots' : self.plots
+                            }
                 if qa == 'Calc_XWSigma':
                     qaopts[qa]['Flavor']=self.flavor
                 if self.singqa is not None:
