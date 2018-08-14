@@ -11,12 +11,13 @@ from desiutil.log import get_logger
 from desispec.io import read_params
 from desispec import io as desiio
 from desispec.qa.qa_frame import qaframe_from_frame
+from desispec.io.qa import qafile_from_framefile
 
 # log=get_logger()
 
 
 class QA_Exposure(object):
-    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None, **kwargs):
+    def __init__(self, expid, night, flavor, specprod_dir=None, in_data=None, no_load=False, **kwargs):
         """
         Class to organize and execute QA for a DESI Exposure
 
@@ -31,6 +32,7 @@ class QA_Exposure(object):
                 is None, then the value of :func:`specprod_root` is used instead.
             in_data: dict, optional -- Input data
               Mainly for reading from disk
+            no_load: bool, optional -- Do not load QA data (rare)
 
         Notes:
 
@@ -49,10 +51,14 @@ class QA_Exposure(object):
         self.specprod_dir = specprod_dir
         self.flavor = flavor
         self.meta = {}
+        self.data = dict(flavor=self.flavor, expid=self.expid,
+                         night=self.night, frames={})
+
+        # Load?
+        if no_load:
+            return
 
         if in_data is None:
-            self.data = dict(flavor=self.flavor, expid=self.expid,
-                             night=self.night, frames={})
             self.load_qa_data(**kwargs)
         else:
             assert isinstance(in_data,dict)
@@ -137,16 +143,14 @@ class QA_Exposure(object):
                                    expid=self.expid,
                                    specprod_dir=self.specprod_dir)
         # Load into frames
-        for camera,frame_file in frame_files.items():
+        for camera, frame_file in frame_files.items():
             if rebuild:
-                #import pdb; pdb.set_trace()
-                os.remove(frame_file)
+                qafile, qatype = qafile_from_framefile(frame_file)
+                os.remove(qafile)
             # Generate qaframe (and figures?)
-            try:
-                _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False)
-            except OSError:  # frame does not exist
-                pass
-            import pdb; pdb.set_trace()
+            _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False)
+        # Reload
+        self.load_qa_data()
 
     def __repr__(self):
         """ Print formatting

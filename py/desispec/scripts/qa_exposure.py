@@ -29,7 +29,7 @@ def parse(options=None):
 def main(args) :
 
     from desispec.io import meta
-    from desispec.qa.qa_plots import exposure_fiberflat
+    from desispec.qa.qa_plots import exposure_fiberflat, exposure_s2n
     from desispec.qa.qa_exposure import QA_Exposure
     from desispec.io.meta import find_exposure_night
 
@@ -55,9 +55,13 @@ def main(args) :
         # Find night
         night = find_exposure_night(args.expid)
         # Instantiate
-        qa_exp = QA_Exposure(args.expid, night, 'science', specprod_dir=specprod_dir)
+        qa_exp = QA_Exposure(args.expid, night, 'science', specprod_dir=specprod_dir, no_load=~args.rebuild)
         # Rebuild?
-        qa_exp.build_qa_data(rebuild=args.rebuild)
+        if args.rebuild:
+            qa_exp.build_qa_data(rebuild=True)
+        # Figure time
+        exposure_s2n(qa_exp, 'resid')
+        import pdb; pdb.set_trace()
 
 
 
