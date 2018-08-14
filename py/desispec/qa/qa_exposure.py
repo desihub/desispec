@@ -9,6 +9,7 @@ import os
 
 from desiutil.log import get_logger
 from desispec.io import read_params
+from desispec import io as desiio
 
 # log=get_logger()
 
@@ -106,8 +107,6 @@ class QA_Exposure(object):
             remove: bool, optional
               Remove QA frame files
         """
-
-        from desispec import io as desiio
         qafiles = desiio.get_files(filetype='qa_'+self.type, night=self.night,
                                   expid=self.expid,
                                   specprod_dir=self.specprod_dir)
@@ -123,6 +122,25 @@ class QA_Exposure(object):
                 assert getattr(qa_frame,key) == getattr(self, key)
             # Save
             self.data['frames'][camera] = qa_frame.qa_data
+
+    def build_qa_data(self, rebuild=False):
+        """
+        Build or re-build QA data
+
+        Args:
+            rebuild: bool, optional
+
+        :return:
+        """
+        qafiles = desiio.get_files(filetype='frame', night=self.night,
+                                   expid=self.expid,
+                                   specprod_dir=self.specprod_dir)
+        # Load into frames
+        for camera,qadata_path in qafiles.items():
+            qa_frame = desiio.load_qa_frame(qadata_path)
+        # Generate qaframe (and figures?)
+        _ = qaframe_from_frame(args.frame_file, specprod_dir=specprod_dir, make_plots=args.make_plots,
+                           output_dir=args.output_dir)
 
     def __repr__(self):
         """ Print formatting
