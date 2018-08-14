@@ -559,6 +559,23 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     see http://arXiv.org/abs/0706.1062v2 for proper fitting of power-law distributions
     it is not implemented here!
 
+    qadict has the following data model
+      "MAGNITUDES" : ndarray - Depends on camera (DECAM_G, DECAM_R, DECAM_Z)
+      "MEDIAN_SNR" : ndarray (nfiber)
+      "NUM_NEGATIVE_SNR" : int
+      "SNR_MAG_TGT"
+      "FITCOEFF_TGT" : list
+      "FITCOVAR_TGT" : list
+      "SNR_RESID" : list
+      "FIDSNR_TGT"
+      "RA" : ndarray (nfiber)
+      "DEC" : ndarray (nfiber)
+      "OBJLIST" : list - Save a copy to make sense of the list order later
+      "EXPTIME" : float
+      "FIT_FILTER" : str
+      "FILTERS" : list
+      "r2" : float - Fitting parameter
+
     Args:
         frame: desispec.Frame object
         night :
@@ -573,25 +590,9 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 
         fidboundary : list of slices indicating where to select in fiber
             and wavelength directions for each amp (output of slice_fidboundary function)
+
     Returns:
         qadict : dict
-        {
-          "MAGNITUDES" : ndarray - Depends on camera (DECAM_G, DECAM_R, DECAM_Z)
-          "MEDIAN_SNR" : ndarray (nfiber)
-          "NUM_NEGATIVE_SNR" : int
-          "SNR_MAG_TGT"
-          "FITCOEFF_TGT" : list
-          "FITCOVAR_TGT" : list
-          "SNR_RESID" : list
-          "FIDSNR_TGT"
-          "RA" : ndarray (nfiber)
-          "DEC" : ndarray (nfiber)
-          "OBJLIST" : list - Save a copy to make sense of the list order later
-          "EXPTIME" : float
-          "FIT_FILTER" : str
-          "FILTERS" : list
-          "r2" : float - Fitting parameter
-        }
     """
 
     #- Get imaging magnitudes and calculate SNR
