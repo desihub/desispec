@@ -604,7 +604,8 @@ def exposure_fiberflat(channel, expid, metric, outfile=None):
                  outfile=outfile)
 
 
-def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None):
+def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
+                 ax=None, fig=None, psz=9.):
     """ Generic method used to generated Exposure level QA
     One channel at a time
 
@@ -617,22 +618,25 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None):
         title: str, optional
     """
     # Tile plot(s)
-    fig = plt.figure(figsize=(8, 5.0))
-    gs = gridspec.GridSpec(1,1)
+    if ax is None:
+        fig = plt.figure(figsize=(8, 5.0))
+        gs = gridspec.GridSpec(1,1)
+        ax = plt.subplot(gs[0])
+    #
     jet = cm = plt.get_cmap('jet')
     if mlbl is None:
         mlbl = 'Metric'
 
     # Mean Flatfield flux in each fiber
-    ax = plt.subplot(gs[0])
     ax.set_aspect('equal', 'datalim')
     if title is not None:
         ax.set_title(title)
 
-    mplt = ax.scatter(x,y,marker='o', s=9., c=metric.reshape(x.shape), cmap=jet)
+    mplt = ax.scatter(x,y,marker='o', s=psz, c=metric.reshape(x.shape), cmap=jet)
     #mplt.set_clim(vmin=med_mean-2*rms_mean, vmax=med_mean+2*rms_mean)
-    cb = fig.colorbar(mplt)
-    cb.set_label('Mean Flux')
+    if fig is not None:
+        cb = fig.colorbar(mplt)
+        cb.set_label(mlbl)
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
@@ -640,10 +644,10 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None):
         _ = makepath(outfile)
         plt.savefig(outfile)
         print('Wrote QA SkyRes file: {:s}'.format(outfile))
-    plt.close()
+        plt.close()
 
 
-def exposure_s2n(qa_exp, metric, outfile=None):
+def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png'):
     """ Generate an Exposure level plot of a S/N metric
     Args:
         qa_exp: QA_Exposure
@@ -658,19 +662,25 @@ def exposure_s2n(qa_exp, metric, outfile=None):
     from desispec.qa.qalib import s2n_funcs
     log = get_logger()
 
+    cclrs = get_channel_clrs()
+
     # Find exposure
     night = find_exposure_night(qa_exp.expid)
 
 
     # Plot
     fig = plt.figure(figsize=(8, 5.0))
-    gs = gridspec.GridSpec(2,2)
+    gs = gridspec.GridSpec(6,2)
 
     # Load up all the frames
-    x,y,metrics = [],[],[]
     for ss,channel in enumerate(['b','r','z']):
-        ax = plt.subplot(gs[ss])
+        # ax
+        if channel != 'z':
+            ax = plt.subplot(gs[0:3, ss])
+        else:
+            ax = plt.subplot(gs[-3:, 1])
 
+        x,y,metrics,sv_s2n,sv_mags = [],[],[], [],[]
         for wedge in range(10):
             # Load
             camera=channel+'{:d}'.format(wedge)
@@ -681,37 +691,56 @@ def exposure_s2n(qa_exp, metric, outfile=None):
                 continue
             fibermap = frame.fibermap
             # X,Y
-            x.append([fibermap['X_TARGET']])
-            y.append([fibermap['Y_TARGET']])
+            x += [fibermap['X_TARGET'].flatten()]
+            y += [fibermap['Y_TARGET'].flatten()]
             # Metric
             if metric == 'resid':
                 # Setup
-                s2n_dict = qa_exp.data[camera]['S2N']
+                s2n_dict = qa_exp.data['frames'][camera]['S2N']
                 funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME'],
                                     r2=s2n_dict['METRICS']['r2'])
                 fitfunc = funcMap['astro']
                 sci_idx = s2n_dict['METRICS']['OBJLIST'].index('SCIENCE')
-                coeff = s2n_dict['METRICS']['FITCOEFF_TGT']
+                coeff = s2n_dict['METRICS']['FITCOEFF_TGT'][sci_idx]
                 all_mags = np.resize(np.array(s2n_dict['METRICS']['MAGNITUDES']), (500, 3))
                 fidx = np.where(np.array(s2n_dict['METRICS']['FILTERS']) == s2n_dict['METRICS']['FIT_FILTER'])[0]
                 mags = all_mags[:, fidx].flatten()
                 gd_mag = np.isfinite(mags)
 
                 # Residuals
-                x = 10 ** (-0.4 * (mags[gd_mag] - 22.5))
-                fit_snr = fitfunc(x, *coeff)
+                flux = 10 ** (-0.4 * (mags[gd_mag] - 22.5))
+                fit_snr = fitfunc(flux, *coeff)
                 resid = (np.array(s2n_dict['METRICS']['MEDIAN_SNR'])[gd_mag] - fit_snr) / fit_snr
 
-                import pdb; pdb.set_trace()
-                mean_norm = np.mean(fiberflat.fiberflat*gdp,axis=1) / (area / mean_area)
-                metrics.append([mean_norm])
-    #
-    import pdb; pdb.set_trace()
-    if outfile is None:
-        outfile='qa_{:08d}_{:s}_fiberflat.png'.format(expid, channel)
-    exposure_map(x,y,metrics, mlbl='Mean Flux',
-                 title='Mean Flux for Exposure {:08d}, Channel {:s}'.format(expid, channel),
-                 outfile=outfile)
+                all_resid = np.zeros_like(mags)
+                all_resid[gd_mag] = resid
+
+                # Save
+                metrics += [all_resid]
+                sv_mags += [mags[gd_mag]]
+                sv_s2n += [np.array(s2n_dict['METRICS']['MEDIAN_SNR'])[gd_mag]]
+        # Cocatenate
+        x = np.concatenate(x)
+        y = np.concatenate(y)
+        metrics = np.concatenate(metrics)
+
+        # Exposure
+        exposure_map(x,y,metrics, mlbl='S/N '+metric, ax=ax, fig=fig,
+                 title=None, outfile=None, psz=1.)
+        # Label
+        ax.text(0.05, 0.9, channel, color=cclrs[channel], transform=ax.transAxes, ha='left')
+
+        # Scatter + fit
+        ax_summ = plt.subplot(gs[-3+ss,0])
+        ax_summ.scatter(np.concatenate(sv_mags), np.concatenate(sv_s2n), color=cclrs[channel])
+        if ss < 2:
+            ax_summ.get_xaxis().set_ticks([])
+
+    # Finish
+    plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
+    _ = makepath(outfile)
+    plt.savefig(outfile)
+    plt.close()
 
 
 

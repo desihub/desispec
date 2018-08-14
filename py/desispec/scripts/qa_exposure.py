@@ -55,13 +55,12 @@ def main(args) :
         # Find night
         night = find_exposure_night(args.expid)
         # Instantiate
-        qa_exp = QA_Exposure(args.expid, night, 'science', specprod_dir=specprod_dir, no_load=~args.rebuild)
+        qa_exp = QA_Exposure(args.expid, night, 'science', specprod_dir=specprod_dir, no_load=args.rebuild)
         # Rebuild?
         if args.rebuild:
             qa_exp.build_qa_data(rebuild=True)
         # Figure time
         exposure_s2n(qa_exp, 'resid')
-        import pdb; pdb.set_trace()
 
 
 
