@@ -557,6 +557,8 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             and wavelength directions for each amp (output of slice_fidboundary function)
     Returns:
         qadict : dict
+
+    qadict has the following data model
         {
           "MAGNITUDES" : ndarray - Depends on camera (DECAM_G, DECAM_R, DECAM_Z)
           "MEDIAN_SNR" : ndarray (nfiber)
