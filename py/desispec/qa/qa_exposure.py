@@ -10,6 +10,7 @@ import os
 from desiutil.log import get_logger
 from desispec.io import read_params
 from desispec import io as desiio
+from desispec.qa.qa_frame import qaframe_from_frame
 
 # log=get_logger()
 
@@ -132,15 +133,20 @@ class QA_Exposure(object):
 
         :return:
         """
-        qafiles = desiio.get_files(filetype='frame', night=self.night,
+        frame_files = desiio.get_files(filetype='frame', night=self.night,
                                    expid=self.expid,
                                    specprod_dir=self.specprod_dir)
         # Load into frames
-        for camera,qadata_path in qafiles.items():
-            qa_frame = desiio.load_qa_frame(qadata_path)
-        # Generate qaframe (and figures?)
-        _ = qaframe_from_frame(args.frame_file, specprod_dir=specprod_dir, make_plots=args.make_plots,
-                           output_dir=args.output_dir)
+        for camera,frame_file in frame_files.items():
+            if rebuild:
+                #import pdb; pdb.set_trace()
+                os.remove(frame_file)
+            # Generate qaframe (and figures?)
+            try:
+                _ = qaframe_from_frame(frame_file, specprod_dir=self.specprod_dir, make_plots=False)
+            except OSError:  # frame does not exist
+                pass
+            import pdb; pdb.set_trace()
 
     def __repr__(self):
         """ Print formatting

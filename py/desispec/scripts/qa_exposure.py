@@ -14,6 +14,8 @@ def parse(options=None):
     parser.add_argument('--channels', type=str, help="List of channels to include. Default = b,r,z]")
     parser.add_argument('--reduxdir', type = str, default = None, metavar = 'PATH',
                         help = 'Override default path ($DESI_SPECTRO_REDUX/$SPECPROD) to processed data.')
+    parser.add_argument('--rebuild', default=False, action="store_true",
+                        help = 'Regenerate the QA files for this exposure?')
 
 
     args = None
@@ -54,7 +56,8 @@ def main(args) :
         night = find_exposure_night(args.expid)
         # Instantiate
         qa_exp = QA_Exposure(args.expid, night, 'science', specprod_dir=specprod_dir)
-        #
+        # Rebuild?
+        qa_exp.build_qa_data(rebuild=args.rebuild)
 
 
 
