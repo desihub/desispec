@@ -323,13 +323,17 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
                                       specprod_dir=specprod_dir, outdir=output_dir)
                 qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
                 #qa_plots.frame_skychi(qafig2, frame, skymodel, qaframe)
-    # S/N QA
+
+    # S/N QA on cframe
     if qatype == 'qa_data':
         # Obj list
         objlist = set(frame.fibermap["OBJTYPE"])
         if 'SKY' in objlist:
             objlist.remove('SKY')
-        qaframe.run_qa('S2N', (frame, objlist), clobber=clobber)
+        # cframe
+        cframe_file = frame_file.replace('frame-', 'cframe-')
+        cframe = read_frame(cframe_file)
+        qaframe.run_qa('S2N', (cframe, objlist), clobber=clobber)
 
     # FluxCalib QA
     if qatype == 'qa_data':
