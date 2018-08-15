@@ -707,6 +707,9 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png'):
                 mags = all_mags[:, fidx].flatten()
                 gd_mag = np.isfinite(mags)
 
+                # Need to restrict to Science
+                import pdb; pdb.set_trace()
+
                 # Residuals
                 flux = 10 ** (-0.4 * (mags[gd_mag] - 22.5))
                 fit_snr = fitfunc(flux, *coeff)
@@ -732,7 +735,7 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png'):
 
         # Scatter + fit
         ax_summ = plt.subplot(gs[-3+ss,0])
-        ax_summ.scatter(np.concatenate(sv_mags), np.concatenate(sv_s2n), color=cclrs[channel])
+        ax_summ.scatter(np.concatenate(sv_mags), np.concatenate(sv_s2n), color=cclrs[channel], s=1.)
         if ss < 2:
             ax_summ.get_xaxis().set_ticks([])
 
