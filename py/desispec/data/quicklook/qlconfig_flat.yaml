@@ -40,4 +40,6 @@ Algorithms:
             CountSpectralBins:
                 PARAMS: {CUTBINS: 5,N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
     ComputeFiberflat_QL:
-        QA: {}
+        QA:
+            Check_FiberFlat:
+                PARAMS: {FFLMEAN_NORMAL_RANGE:[-1, 1], FFLMEAN_WARN_RANGE:[-1, 1]}

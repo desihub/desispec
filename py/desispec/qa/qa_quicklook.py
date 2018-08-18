@@ -2105,4 +2105,201 @@ class Calculate_SNR(MonitoringAlg):
     def get_default_config(self):
         return {}
 
+class Check_Resolution(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="RESOLUTION"
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        key=kwargs['refKey'] if 'refKey' in kwargs else "NBADCOEFFS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "RESOLUTION_STATUS"
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
 
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
+
+        if "NBADCOEFFS_WARN_RANGE" in parms and "NBADCOEFFS_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["NBADCOEFFS_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["NBADCOEFFS_NORMAL_RANGE"]),QASeverity.NORMAL)]
+
+        MonitoringAlg.__init__(self,name,fr,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
+        if kwargs["singleqa"] == 'Check_Resolution':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+            #- Finding psf file for QA
+            #file_psf = get_psf('psf',night,expid,camera,kwargs["specdir"])
+        else:
+            file_psf = args[0]
+
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
+        else: refmetrics=None
+
+        if "qlf" in kwargs:
+            qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+
+        return self.run_qa(file_psf,param=param,paname=paname,qafile=qafile,qafig=qafig,qlf=qlf,refmetrics=refmetrics)
+
+    def run_qa(self,file_psf,param=None,paname=None,qafile=None,qafig=None, qlf=False, refmetrics=None):
+        retval={}
+        retval['PANAME'] = paname
+        kwargs=self.config['kwargs']
+
+        # file_psf.ycoeff is not the wsigma_array.
+        # FIX later.TEST QA with file_psf.ycoeff
+        wsigma_array = file_psf.ycoeff
+        p0 = wsigma_array[0:, 0:1]
+        p1 = wsigma_array[0:, 1:2]
+        p2 = wsigma_array[0:, 2:3]
+
+        # Medians of Legendre Coeffs to be used as 'Model'
+        medlegpolcoef = np.median(wsigma_array,axis = 0)
+
+        wsigma_rms = np.sqrt(np.mean((wsigma_array - medlegpolcoef)**2,axis = 0))
+
+        # Check how many of each parameter are outside of +- 2 RMS of the median.
+        toperror = np.array([medlegpolcoef[val] + 2*wsigma_rms[val] for val in [0,1,2]])
+        bottomerror = np.array([medlegpolcoef[val] - 2*wsigma_rms[val] for val in [0,1,2]])
+
+        badparamrnum0 = list(np.where(np.logical_or(p0>toperror[0], p0<bottomerror[0]))[0])
+        badparamrnum1 = list(np.where(np.logical_or(p1>toperror[1], p1<bottomerror[1]))[0])
+        badparamrnum2 = list(np.where(np.logical_or(p2>toperror[2], p2<bottomerror[2]))[0])
+        nbadparam = np.array([len(badparamrnum0), len(badparamrnum1), len(badparamrnum2)])
+
+        retval["METRICS"]={"Medians":medlegpolcoef, "RMS":wsigma_rms, "NBADCOEFFS":nbadparam}
+        retval["DATA"]={"LPolyCoef0":p0, "LPolyCoef1":p1, "LPolyCoef2":p2}
+
+        if param is None:
+            log.debug("Param is None. Using default param instead")
+            param = {
+                    "NBADCOEFFS_NORMAL_RANGE":[-1, 1],
+                    "NBADCOEFFS_WARN_RANGE:":[-2, 2]}
+        retval["PARAMS"] = param
+
+        # http post
+        if qlf:
+            qlf_post(retval)
+        if qafile is not None:
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        if qafig is not None:
+            plot.plot_lpolyhist(retval,qafig)
+            log.debug("Output QA fig {}".format(qafig))
+        return retval
+
+    def get_default_config(self):
+        return {}
+
+class Check_FiberFlat(MonitoringAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="FIBERFLAT"
+        kwargs=config['kwargs']
+        parms=kwargs['param']
+        key=kwargs['refKey'] if 'refKey' in kwargs else "FFLMEAN"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "FIBERFLAT_STATUS"
+        kwargs["RESULTKEY"]=key
+        kwargs["QASTATUSKEY"]=status
+
+        if "ReferenceMetrics" in kwargs:
+            r=kwargs["ReferenceMetrics"]
+            if key in r:
+                kwargs["REFERENCE"]=r[key]
+
+        if "FFLMEAN_WARN_RANGE" in parms and "FFLMEAN_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["FFLMEAN_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["FFLMEAN_NORMAL_RANGE"]),QASeverity.NORMAL)]
+
+        MonitoringAlg.__init__(self,name,fr,config,logger)
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
+        if kwargs["singleqa"] == 'Check_FiberFlat':
+            night = kwargs['night']
+            expid = '{:08d}'.format(kwargs['expid'])
+            camera = kwargs['camera']
+        else:
+            fibflat=args[0]
+
+        if "paname" not in kwargs:
+            paname=None
+        else:
+            paname=kwargs["paname"]
+
+        if "param" in kwargs: param=kwargs["param"]
+        else: param=None
+
+        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
+        else: refmetrics=None
+
+        if "qlf" in kwargs:
+            qlf=kwargs["qlf"]
+        else: qlf=False
+
+        if "qafile" in kwargs: qafile = kwargs["qafile"]
+        else: qafile = None
+
+        if "qafig" in kwargs: qafig=kwargs["qafig"]
+        else: qafig = None
+
+        return self.run_qa(fibflat,param=param,paname=paname,qafile=qafile,qafig=qafig,qlf=qlf,refmetrics=refmetrics)
+
+    def run_qa(self,fibflat,param=None,paname=None,qafile=None,qafig=None, qlf=False, refmetrics=None):
+        retval={}
+        retval['PANAME'] = paname
+        retval['CAMERA'] = fibflat.header["CAMERA"]
+        kwargs=self.config['kwargs']
+
+        # Mean of wavelength will be test value
+        wavelengths = fibflat.wave
+
+        FFLMEANtest = np.mean(wavelengths)
+        retval["METRICS"]={"FFLMEAN": FFLMEANtest}
+
+        if param is None:
+            log.debug("Param is None. Using default param instead")
+            param = {
+                    "FFLMEAN_NORMAL_RANGE":[-10, 10],
+                    "FFLMEAN_WARN_RANGE:":[-20, 20]}
+        retval["PARAMS"] = param
+
+        # http post
+        if qlf:
+            qlf_post(retval)
+        if qafile is not None:
+            outfile = qa.write_qa_ql(qafile,retval)
+            log.debug("Output QA data is in {}".format(outfile))
+        #if qafig is not None:
+            #plot.plot_lpolyhist(retval,qafig)
+            #log.debug("Output QA fig {}".format(qafig))
+        return retval
+
+    def get_default_config(self):
+        return {}

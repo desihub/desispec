@@ -8,6 +8,7 @@ https://desi.lbl.gov/trac/wiki/Pipeline/QuickLook/QuicklookQAOutputs/Science
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
+from matplotlib.ticker import FormatStrFormatter
 from desispec.qa import qalib
 
 def plot_countspectralbins(qa_dict,outfile):
@@ -641,5 +642,48 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         ax.tick_params(axis='y',labelsize=6)
         ax.semilogy(obj_mag,snr2,'b.',markersize=1)
         ax.semilogy(plot_mag,plot_fit,'y',markersize=0.5)
-    
+
+    fig.savefig(outfile)
+
+def plot_lpolyhist(qa_dict,outfile):
+    """
+    Plot histogram for each legendre polynomial coefficient in WSIGMA array.
+
+    Args:
+        qa_dict: Dictionary of qa outputs from running qa_quicklook.Check_Resolution
+        outfile: Name of figure.
+    """
+    paname = qa_dict["PANAME"]
+    p0 = qa_dict["DATA"]["LPolyCoef0"]
+    p1 = qa_dict["DATA"]["LPolyCoef1"]
+    p2 = qa_dict["DATA"]["LPolyCoef2"]
+
+    fig = plt.figure()
+    plt.suptitle("{} QA Legendre Polynomial Coefficient Histograms".format(paname))
+
+    # Creating subplots
+    ax1 = fig.add_subplot(311)
+    n1, bins1, patches1 = ax1.hist(p0, bins=20, ec='black')
+    ax1.set_xticks(bins1[::3])
+    ax1.xaxis.set_major_formatter(FormatStrFormatter('%0.3f'))
+    ax1.set_xlabel('Zeroth Legendre Polynomial Coefficient (p0)')
+    ax1.set_ylabel('Frequency')
+
+    ax2 = fig.add_subplot(312)
+    n2, bins2, patches2 = ax2.hist(p1, bins=20, ec='black')
+    ax2.set_xticks(bins2[::3])
+    ax2.xaxis.set_major_formatter(FormatStrFormatter('%0.3f'))
+    ax2.set_xlabel('First Legendre Polynomial Coefficient (p1)')
+    ax2.set_ylabel('Frequency')
+
+    ax3 = fig.add_subplot(313)
+    n3, bins3, patches3 = ax3.hist(p2, bins=20, ec='black')
+    ax3.set_xticks(bins3[::3])
+    ax3.xaxis.set_major_formatter(FormatStrFormatter('%0.3f'))
+    ax3.set_xlabel('Second Legendre Polynomial Coefficient (p2)')
+    ax3.set_ylabel('Frequency')
+
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.92)
+
     fig.savefig(outfile)
