@@ -520,7 +520,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
             procs_per_node=args.procs_per_node,
             nodb=args.nodb,
             out=args.outdir,
-            user=args.db_postgres_user)
+            db_postgres_user=args.db_postgres_user)
 
         if len(scripts) > 0:
             print(",".join(scripts))

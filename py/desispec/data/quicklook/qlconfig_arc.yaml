@@ -13,7 +13,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract]
+Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ResolutionFit]
 Algorithms:
 
     Initialize:
@@ -41,3 +41,8 @@ Algorithms:
         QA:
             CountSpectralBins:
                 PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
+    ResolutionFit:
+        NBINS: 5
+        QA:
+            Check_Resolution:
+                PARAMS: {NBADCOEFFS_NORMAL_RANGE: [-1,1], NBADCOEFFS_WARN_RANGE: [-2,2]}
