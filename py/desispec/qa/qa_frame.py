@@ -141,6 +141,21 @@ class QA_Frame(object):
         # Init
         self.init_qatype('SKYSUB', sky_dict, re_init=re_init)
 
+    def init_s2n(self, re_init=False):
+        """Initialize parameters for SkySub QA
+        QA method is desispec.sky.qa_skysub
+
+        Parameters:
+        ------------
+        re_init: bool, (optional)
+          Re-initialize SKYSUB parameter dict
+        """
+        assert self.flavor == 'science'
+        # Parameters
+        s2n_dict = desi_params['qa']['skysub']['PARAMS'].copy()
+        # Init
+        self.init_qatype('S2N', s2n_dict, re_init=re_init)
+
     def run_qa(self, qatype, inputs, clobber=True):
         """Run QA tests of a given type
         Over-writes previous QA of this type, unless otherwise specified
@@ -155,6 +170,7 @@ class QA_Frame(object):
         from desispec.sky import qa_skysub
         from desispec.fiberflat import qa_fiberflat
         from desispec.fluxcalibration import qa_fluxcalib
+        from desispec.qa.qalib import SNRFit
 
         # Check for previous QA if clobber==False
         if (not clobber) and (qatype in self.qa_data.keys()):
@@ -184,6 +200,17 @@ class QA_Frame(object):
             self.init_fluxcalib()
             # Run
             qadict = qa_fluxcalib(self.qa_data[qatype]['PARAMS'], inputs[0], inputs[1])
+        elif qatype == 'S2N':
+            # Expecting frame, objlist
+            assert len(inputs) == 2
+            # Init parameters (as necessary)
+            self.init_s2n()
+            # Run
+            qadict,badfibs,fitsnr = SNRFit(inputs[0], self.night, self.camera, self.expid,
+                                           inputs[1], self.qa_data[qatype]['PARAMS'], fidboundary=None)
+            # Remove undesired
+            for key in ['RA', 'DEC', 'SNR_RESID']:
+                qadict.pop(key)
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
         # Update
@@ -194,6 +221,7 @@ class QA_Frame(object):
         """
         return ('{:s}: night={:s}, expid={:d}, camera={:s}, flavor={:s}'.format(
                 self.__class__.__name__, self.night, self.expid, self.camera, self.flavor))
+
 
 def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_dir=None,
                        output_dir=None, clobber=True):
@@ -295,6 +323,18 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
                                       specprod_dir=specprod_dir, outdir=output_dir)
                 qa_plots.frame_skyres(qafig, frame, skymodel, qaframe)
                 #qa_plots.frame_skychi(qafig2, frame, skymodel, qaframe)
+
+    # S/N QA on cframe
+    if qatype == 'qa_data':
+        # Obj list
+        objlist = set(frame.fibermap["OBJTYPE"])
+        if 'SKY' in objlist:
+            objlist.remove('SKY')
+        # cframe
+        cframe_file = frame_file.replace('frame-', 'cframe-')
+        cframe = read_frame(cframe_file)
+        qaframe.run_qa('S2N', (cframe, objlist), clobber=clobber)
+
     # FluxCalib QA
     if qatype == 'qa_data':
         # Standard stars

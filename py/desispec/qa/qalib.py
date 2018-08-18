@@ -407,8 +407,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
         nbin = i1-i0
         hist, edges = np.histogram(devs, range=rng, bins=nbin)
 
-
-        #SE: commented this because didn't seem to be needed to be saved in the dictionary 
+        #SE: commented this because didn't seem to be needed to be saved in the dictionary
         #qadict['DEVS_1D'] = hist.tolist() #- histograms for deviates
         #qadict['DEVS_EDGES'] = edges.tolist() #- Bin edges
 
@@ -417,6 +416,7 @@ def sky_resid(param, frame, skymodel, quick_look=False):
         qadict["WAVELENGTH"]=frame.wave
     # Return
     return qadict
+
 
 def SN_ratio(flux,ivar):
     """
@@ -427,16 +427,15 @@ def SN_ratio(flux,ivar):
         flux (array): 2d [nspec,nwave] the signal (typically for spectra,
             this comes from frame object
         ivar (array): 2d [nspec,nwave] corresponding inverse variance
-    """
 
+    Returns:
+        medsnr (array): 1d [nspec]
+    """
     #- we calculate median and total S/N assuming no correlation bin by bin
-    medsnr=np.zeros(flux.shape[0])
-    #totsnr=np.zeros(flux.shape[0])
-    for ii in range(flux.shape[0]):
-        snr=flux[ii]*np.sqrt(ivar[ii])
-        medsnr[ii]=np.median(snr)
-        # totsnr[ii]=np.sqrt(np.sum(snr**2))
+    snr = flux * np.sqrt(ivar)
+    medsnr = np.median(snr, axis=1)
     return medsnr #, totsnr
+
 
 def SignalVsNoise(frame,params,fidboundary=None):
     """
@@ -542,8 +541,28 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     see http://arXiv.org/abs/0706.1062v2 for proper fitting of power-law distributions
     it is not implemented here!
 
+    qadict has the following data model
+      "MAGNITUDES" : ndarray - Depends on camera (DECAM_G, DECAM_R, DECAM_Z)
+      "MEDIAN_SNR" : ndarray (nfiber)
+      "NUM_NEGATIVE_SNR" : int
+      "SNR_MAG_TGT"
+      "FITCOEFF_TGT" : list
+      "FITCOVAR_TGT" : list
+      "SNR_RESID" : list
+      "FIDSNR_TGT"
+      "RA" : ndarray (nfiber)
+      "DEC" : ndarray (nfiber)
+      "OBJLIST" : list - Save a copy to make sense of the list order later
+      "EXPTIME" : float
+      "FIT_FILTER" : str
+      "FILTERS" : list
+      "r2" : float - Fitting parameter
+
     Args:
         frame: desispec.Frame object
+        night :
+        camera :
+        expid : int
         params: parameters dictionary
         {
           "Func": "linear", # Fit function type one of ["linear","poly"]
@@ -553,7 +572,9 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 
         fidboundary : list of slices indicating where to select in fiber
             and wavelength directions for each amp (output of slice_fidboundary function)
-    Returns a dictionary similar to SignalVsNoise
+
+    Returns:
+        qadict : dict
     """
 
     #- Get imaging magnitudes and calculate SNR
@@ -564,6 +585,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     filters=frame.fibermap['FILTER']
     mediansnr=SN_ratio(frame.flux,frame.ivar)
     qadict={"MEDIAN_SNR":mediansnr}
+    qadict["FILTERS"] = filters[0,:]
     exptime=frame.meta["EXPTIME"]
 
     if camera[0] == 'b':
@@ -574,11 +596,15 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         thisfilter='DECAM_Z'
     if "Filter" in params:
         thisfilter=params["Filter"]
+    qadict["FIT_FILTER"] = thisfilter
+    qadict["EXPTIME"] = exptime
 
     mag_filters=[]
     for mag in range(magnitudes.shape[0]):
         mag_filters.append([magnitudes[mag][0],magnitudes[mag][1],magnitudes[mag][2]])
     qadict["MAGNITUDES"]=mag_filters
+
+    qadict["OBJLIST"]=list(objlist)
 
     #- Set up fit of SNR vs. Magnitude
     #- Using astronomical SNR equation, fitting 'a'(throughput) and 'B'(sky background)
@@ -603,6 +629,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 
     fitfunc=funcMap["astro"]
     initialParams=[0.1,0.1]
+    qadict["r2"]=r2
 
     neg_snr_tot=[]
     #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 
@@ -611,8 +638,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     #- purposes.
 
     #- Loop over each target type, and associate SNR and image magnitudes for each type.
-    ra=[]
-    dec=[]
     resid_snr=[]
     fidsnr_tgt=[]
     fitcoeff=[]
@@ -698,19 +723,21 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
 
-        qadict["%s_FIBERID"%T]=fibers.tolist()
+        qadict["{:s}_FIBERID".format(T)]=fibers.tolist()
         snr_mag=[medsnr,mags]
         snrmag.append(snr_mag)
 
         #- Calculate residual SNR for focal plane plots
-        fit_snr=[]
-        for mm in range(len(x)):
-            snr = fitfunc(x[mm],*vs)
-            fit_snr.append(snr)
-        for rr in range(len(fit_snr)):
-            resid = (med_snr[rr] - fit_snr[rr]) / fit_snr[rr]
-            resid_snr.append(resid)
-        fitsnr.append(fit_snr)
+        #for mm in range(len(x)):
+        #    snr = fitfunc(x[mm],*vs)
+        #    fit_snr.append(snr)
+        fit_snr = fitfunc(x, *vs)
+        fitsnr += fit_snr.tolist()
+        #for rr in range(len(fit_snr)):
+        #    resid = (med_snr[rr] - fit_snr[rr]) / fit_snr[rr]
+        #    resid_snr.append(resid)
+        resid = (med_snr-fit_snr)/fit_snr
+        resid_snr += resid.tolist()
 
     qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
     qadict["SNR_MAG_TGT"]=snrmag
