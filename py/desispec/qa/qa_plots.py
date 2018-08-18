@@ -605,7 +605,7 @@ def exposure_fiberflat(channel, expid, metric, outfile=None):
 
 
 def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
-                 ax=None, fig=None, psz=9.):
+                 ax=None, fig=None, psz=9., cmap=None, vmnx=None):
     """ Generic method used to generated Exposure level QA
     One channel at a time
 
@@ -623,7 +623,8 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
         gs = gridspec.GridSpec(1,1)
         ax = plt.subplot(gs[0])
     #
-    jet = cm = plt.get_cmap('jet')
+    if cmap is None:
+        cmap = plt.get_cmap('jet')
     if mlbl is None:
         mlbl = 'Metric'
 
@@ -632,11 +633,14 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
     if title is not None:
         ax.set_title(title)
 
-    mplt = ax.scatter(x,y,marker='o', s=psz, c=metric.reshape(x.shape), cmap=jet)
+    mplt = ax.scatter(x,y,marker='o', s=psz, c=metric.reshape(x.shape), cmap=cmap)
     #mplt.set_clim(vmin=med_mean-2*rms_mean, vmax=med_mean+2*rms_mean)
     if fig is not None:
         cb = fig.colorbar(mplt)
         cb.set_label(mlbl)
+        #
+        if vmnx is not None:
+            mplt.set_clim(vmin=vmnx[0], vmax=vmnx[1])
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
@@ -647,7 +651,7 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
         plt.close()
 
 
-def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png'):
+def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True):
     """ Generate an Exposure level plot of a S/N metric
     Args:
         qa_exp: QA_Exposure
@@ -671,6 +675,7 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png'):
     # Plot
     fig = plt.figure(figsize=(8, 5.0))
     gs = gridspec.GridSpec(6,2)
+    cmap = plt.get_cmap('RdBu')
 
     # Load up all the frames
     for ss,channel in enumerate(['b','r','z']):
@@ -708,7 +713,7 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png'):
                 gd_mag = np.isfinite(mags)
 
                 # Need to restrict to Science
-                import pdb; pdb.set_trace()
+                #import pdb; pdb.set_trace()
 
                 # Residuals
                 flux = 10 ** (-0.4 * (mags[gd_mag] - 22.5))
@@ -722,14 +727,15 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png'):
                 metrics += [all_resid]
                 sv_mags += [mags[gd_mag]]
                 sv_s2n += [np.array(s2n_dict['METRICS']['MEDIAN_SNR'])[gd_mag]]
-        # Cocatenate
+        # Concatenate
         x = np.concatenate(x)
         y = np.concatenate(y)
         metrics = np.concatenate(metrics)
 
         # Exposure
         exposure_map(x,y,metrics, mlbl='S/N '+metric, ax=ax, fig=fig,
-                 title=None, outfile=None, psz=1.)
+                 title=None, outfile=None, psz=1., cmap=cmap,
+                     vmnx=[-1.,1.])
         # Label
         ax.text(0.05, 0.9, channel, color=cclrs[channel], transform=ax.transAxes, ha='left')
 
@@ -738,11 +744,17 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png'):
         ax_summ.scatter(np.concatenate(sv_mags), np.concatenate(sv_s2n), color=cclrs[channel], s=1.)
         if ss < 2:
             ax_summ.get_xaxis().set_ticks([])
+        # Axes
+        ax_summ.set_yscale('log', nonposy='clip')
+        if ss == 1:
+            ax_summ.set_ylabel('S/N')
 
     # Finish
     plt.tight_layout(pad=0.1,h_pad=0.0,w_pad=0.0)
     _ = makepath(outfile)
     plt.savefig(outfile)
+    if verbose:
+        print("Wrote: {:s}".format(outfile))
     plt.close()
 
 
