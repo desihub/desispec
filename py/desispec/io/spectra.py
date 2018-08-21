@@ -15,6 +15,7 @@ import warnings
 import time
 
 import numpy as np
+import astropy.units as u
 import astropy.io.fits as fits
 from astropy.table import Table
 
@@ -100,6 +101,10 @@ def write_spectra(outfile, spec, units=None):
         all_hdus.append(hdu)
 
         hdu = fits.ImageHDU(name="{}_IVAR".format(band.upper()))
+        if units is None:
+            hdu.header["BUNIT"] = '10**+34 (s2 cm4 Angstrom2) / erg2'
+        else:
+            hdu.header["BUNIT"] = ((u.Unit(units, format='fits'))**-2).to_string('fits')
         hdu.data = spec.ivar[band].astype("f4")
         all_hdus.append(hdu)
 
