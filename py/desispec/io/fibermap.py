@@ -246,6 +246,7 @@ def fibermap_new2old(fibermap):
         'SV1_BGS_TARGET', 'SV1_DESI_TARGET', 'SV1_MWS_TARGET',
         'TARGET_DEC_IVAR', 'TARGET_RA_IVAR',
         ]:
-        fm.remove_column(colname)
+        if colname in fm.colnames:
+            fm.remove_column(colname)
 
     return fm
