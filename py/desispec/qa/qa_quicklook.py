@@ -2171,7 +2171,8 @@ class Check_Resolution(MonitoringAlg):
 
         # file_psf.ycoeff is not the wsigma_array.
         # FIX later.TEST QA with file_psf.ycoeff
-        wsigma_array = file_psf.ycoeff
+        
+        wsigma_array = file_psf.ysig_vs_wave_traceset._coeff
         p0 = wsigma_array[0:, 0:1]
         p1 = wsigma_array[0:, 1:2]
         p2 = wsigma_array[0:, 2:3]
