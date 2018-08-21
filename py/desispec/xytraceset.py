@@ -57,7 +57,7 @@ class XYTraceSet(object):
         return self.xsig_vs_wave_traceset.eval(fiber,wavelength)
     
     def ysig_vs_wave(self,fiber,wavelength) :
-        if self.xsig_vs_wave_traceset is None :
+        if self.ysig_vs_wave_traceset is None :
             raise RuntimeError("no ysig coefficents were read in the PSF")
             
         return self.ysig_vs_wave_traceset.eval(fiber,wavelength)
