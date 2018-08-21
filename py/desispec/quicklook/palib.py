@@ -106,18 +106,16 @@ def resample_spec(wave,flux,outwave,ivar=None):
         return newflux, newivar
 
 
-def get_resolution(wave,nspec,psf,usesigma=False):
+def get_resolution(wave,nspec,tset,usesigma=False):
     """
     Calculates approximate resolution values at given wavelengths in the format that can directly
     feed resolution data of desispec.frame.Frame object. 
 
     wave: wavelength array
     nsepc: no of spectra (int)
-    psf: desispec.quicklook.qlpsf.PSF like object
+    tset: desispec.xytraceset like object
     usesigma: allows to use sigma from psf file for resolution computation. 
-    If psf file is psfboot, uses per fiber xsigma. 
-    If psf file is from QL arcs processing, uses wsigma 
-
+    
     returns : resolution data (nspec,nband,nwave); nband = 1 for usesigma = False, otherwise nband=21
     """
     #from desispec.resolution import Resolution
@@ -131,7 +129,7 @@ def get_resolution(wave,nspec,psf,usesigma=False):
     
     if usesigma: #- use sigmas for resolution based on psffile type
         for ispec in range(nspec):
-            thissigma=psf.ysigma(ispec,wave) #- in pixel units
+            thissigma=tset.ysig_vs_wave(ispec,wave) #- in pixel units
             Rsig=QuickResolution(sigma=thissigma,ndiag=nband)
             resolution_data[ispec]=Rsig.data
             
