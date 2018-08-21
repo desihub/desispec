@@ -13,6 +13,7 @@ from astropy.io import fits
 from ..xytraceset import XYTraceSet
 from desiutil.log import get_logger
 from specter.util.traceset import TraceSet,fit_traces
+from .util import makepath
 
 def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
     log=get_logger()
@@ -169,6 +170,39 @@ def read_xytraceset(filename) :
         ysigcoef = tset._coeff
         
     return XYTraceSet(xcoef,ycoef,wavemin,wavemax,npix_y,xsigcoef=xsigcoef,ysigcoef=ysigcoef)
+
+   
+   
+def write_xytraceset(outfile,xytraceset) :
+    """
+    Write a traceset fits file and returns path to file written.
+    
+    Args:
+        outfile: full path to output file
+        xytraceset:  desispec.xytraceset.XYTraceSet object
+    
+    Returns:
+         full filepath of output file that was written    
+    """
+
+    log=get_logger()
+    outfile = makepath(outfile, 'frame')
+    hdus = fits.HDUList()
+    x = fits.PrimaryHDU(xytraceset.x_vs_wave_traceset._coeff.astype('f4'))
+    x.header['EXTNAME'] = "XTRACE"
+    hdus.append(x)
+    hdus.append( fits.ImageHDU(xytraceset.y_vs_wave_traceset._coeff.astype('f4'), name="YTRACE") )
+    if xytraceset.xsig_vs_wave_traceset is not None : hdus.append( fits.ImageHDU(xytraceset.xsig_vs_wave_traceset._coeff.astype('f4'), name='XSIG') )
+    if xytraceset.ysig_vs_wave_traceset is not None : hdus.append( fits.ImageHDU(xytraceset.ysig_vs_wave_traceset._coeff.astype('f4'), name='YSIG') )
+    for hdu in ["XTRACE","YTRACE","XSIG","YSIG"] :
+        if hdu in hdus :
+            hdus[hdu].header["WAVEMIN"] = xytraceset.wavemin
+            hdus[hdu].header["WAVEMAX"] = xytraceset.wavemax
+            hdus[hdu].header["NPIX_Y"]  = xytraceset.npix_y
+    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
+    os.rename(outfile+'.tmp', outfile)
+    log.info("wrote a xytraceset in {}".format(outfile))
+    return outfile
 
    
    
