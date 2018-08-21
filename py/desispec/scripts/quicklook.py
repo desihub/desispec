@@ -1,11 +1,11 @@
 """
 desispec.scripts.quicklook
 ===========================
-Command line wrapper for running a QL pipeline 
+Command line wrapper for running a QL pipeline
 
-QuickLook team @Southern Methodist University (SMU) 
+QuickLook team @Southern Methodist University (SMU)
 First version Spring 2016
-Latest revision July 2018 
+Latest revision July 2018
 
 """
 
@@ -55,7 +55,7 @@ def parse():
     return args
 
 def ql_main(args=None):
-    
+
     from desispec.util import set_backend
     _matplotlib_backend = None
     set_backend()
@@ -70,7 +70,7 @@ def ql_main(args=None):
 
     qlog=qllogger.QLLogger(name="QuickLook",loglevel=args.loglvl)
     log=qlog.getlog()
-    
+
     # quiet down DESI logs. We don't want DESI_LOGGER to print messages unless they are important
     # initalize singleton with WARNING level
     quietDesiLogger(args.loglvl+10)
@@ -113,8 +113,8 @@ def ql_main(args=None):
                 log.critical("Can't open config file {}".format(args.config))
                 sys.exit("Can't open config file")
         else:
-            sys.exit("File does not exist: {}".format(args.config)) 
-    
+            sys.exit("File does not exist: {}".format(args.config))
+
     elif args.fullconfig is not None: #- This is mostly for development/debugging purpose
        log.debug("Running Quicklook using full configuration file {}".format(args.fullconfig))
        if os.path.exists(args.fullconfig):
@@ -133,7 +133,7 @@ def ql_main(args=None):
         if "yaml" in args.save:
             f=open(args.save,"w")
             yaml.dump(configdict,f)
-            
+
             log.info("Output saved for this configuration to {}".format(args.save))
             f.close()
         else:
@@ -150,26 +150,26 @@ def ql_main(args=None):
         log.warning("Output filename is None and has a object of {}. SKIPPING FINAL OUTPUT".format(type(res)))
         return
     if isinstance(res,image.Image):
-        if configdict["OutputFile"]: 
+        if configdict["OutputFile"]:
             finalname=configdict["OutputFile"]
         else:
             finalname="image-{}-{:08d}.fits".format(camera,expid)
             log.critical("No final outputname given. Writing to a image file {}".format(finalname))
         imIO.write_image(finalname,res,meta=None)
     elif isinstance(res,frame.Frame):
-        if configdict["OutputFile"]: 
+        if configdict["OutputFile"]:
             finalname=configdict["OutputFile"]
         else:
             finalname="frame-{}-{:08d}.fits".format(camera,expid)
             log.critical("No final outputname given. Writing to a frame file {}".format(finalname))
         frIO.write_frame(finalname,res,header=None)
     elif isinstance(res,QFrame):
-        if configdict["OutputFile"]: 
+        if configdict["OutputFile"]:
             finalname=configdict["OutputFile"]
         else:
             finalname="qframe-{}-{:08d}.fits".format(camera,expid)
             log.critical("No final outputname given. Writing to a frame file {}".format(finalname))
-        write_qframe(finalname,res,header=None,units="electron/Angstrom")
+        write_qframe(finalname,res,header=None,units="count/Angstrom")
     elif configdict["Flavor"] == 'arcs':
         if configdict["OutputFile"]:
             finalname=configdict["OutputFile"]
@@ -189,4 +189,4 @@ def ql_main(args=None):
     log.info("Pipeline completed. Final result is in {}".format(finalname))
 
 if __name__=='__main__':
-    ql_main()    
+    ql_main()
