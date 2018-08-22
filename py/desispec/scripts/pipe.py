@@ -207,7 +207,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
             "particular type for one or more nights",
             usage="desi_pipe tasks [options] (use --help for details)")
 
-        parser.add_argument("--tasktypes", required=True, default=None,
+        parser.add_argument("--tasktypes", required=False, default=availtypes,
             help="comma separated list of task types ({})".format(availtypes))
 
         parser.add_argument("--nights", required=False, default=None,
