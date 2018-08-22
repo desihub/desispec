@@ -11,9 +11,6 @@ from desispec.quicklook import qlexceptions,qllogger
 from desispec.image import Image as im
 from desispec.frame import Frame as fr
 
-# this is deprecated, need to remove this dependency
-from desispec.quicklook.qlpsf import PSF
-
 from desispec.io.xytraceset import read_xytraceset
 from desispec.maskbits import ccdmask
 
@@ -226,7 +223,8 @@ class BoxcarExtract(pas.PipelineAlg):
         flavor=kwargs["Flavor"]
 
         psf_filename=kwargs["PSFFile"]
-        psf = PSF(psf_filename)
+        #psf = PSF(psf_filename)
+        tset = read_xytraceset(psf_filename)
         boxwidth=kwargs["BoxWidth"]
         nspec=kwargs["Nspec"]
         quickRes=kwargs["QuickResolution"] if "QuickResolution" in kwargs else False
@@ -235,16 +233,16 @@ class BoxcarExtract(pas.PipelineAlg):
         else: usesigma = False
         
         if "Wavelength" not in kwargs:
-            wstart = np.ceil(psf.wmin)
-            wstop = np.floor(psf.wmax)
+            wstart = np.ceil(tset.wavemin)
+            wstop = np.floor(tset.wavemax)
             dw = 0.5
         else: 
             wavelength=kwargs["Wavelength"]
             if kwargs["Wavelength"] is not None: #- should be in wstart,wstop,dw format                
                 wstart, wstop, dw = [float(w) for w in wavelength]
             else: 
-                wstart = np.ceil(psf.wmin)
-                wstop = np.floor(psf.wmax)
+                wstart = np.ceil(tset.wavemin)
+                wstop = np.floor(tset.wavemax)
                 dw = 0.5            
         wave = np.arange(wstart, wstop+dw/2.0, dw)
         if "Specmin" not in kwargs:
@@ -255,11 +253,11 @@ class BoxcarExtract(pas.PipelineAlg):
                specmin=0
 
         if "Nspec" not in kwargs:
-            nspec = psf.nspec
+            nspec = tset.nspec
         else:
             nspec=kwargs["Nspec"]
             if nspec is None:
-                nspec=psf.nspec
+                nspec=tset.nspec
 
         specmax = specmin + nspec
 
@@ -287,16 +285,16 @@ class BoxcarExtract(pas.PipelineAlg):
         input_image.meta['WAVEMAX'] = (wstop, 'Last wavelength [Angstroms]')
         input_image.meta['WAVESTEP']= (dw, 'Wavelength step size [Angstroms]')
 
-        return self.run_pa(input_image,flavor,psf,wave,boxwidth,nspec,
+        return self.run_pa(input_image,flavor,tset,wave,boxwidth,nspec,
                            fibers=fibers,fibermap=fibermap,dumpfile=dumpfile,
                            maskFile=maskFile,usesigma=usesigma,quick_resolution=quickRes)
 
-    def run_pa(self,input_image,flavor,psf,outwave,boxwidth,nspec,
+    def run_pa(self,input_image,flavor,tset,outwave,boxwidth,nspec,
                fibers=None,fibermap=None,dumpfile=None,
                maskFile=None,usesigma=False,quick_resolution=False):
         from desispec.quicklook.qlboxcar import do_boxcar
-        #import desispec.psf
-        flux,ivar,Rdata=do_boxcar(input_image, psf, outwave, boxwidth=boxwidth, 
+        #import desispec.tset
+        flux,ivar,Rdata=do_boxcar(input_image, tset, outwave, boxwidth=boxwidth, 
                                   nspec=nspec,maskFile=maskFile,usesigma=usesigma,
                                   quick_resolution=quick_resolution)
 
@@ -304,20 +302,18 @@ class BoxcarExtract(pas.PipelineAlg):
         qndiag=21
         wsigma=None
         if quick_resolution:
-            if hasattr(psf,'wcoeff'):
-                wsigma=np.empty(flux.shape)
-                if isinstance(nspec,(tuple,list,np.ndarray)):
-                    for i,s in enumerate(nspec):
-                        #- GD: Need confirmation, but this appears to be missing.
-                        wsigma[i]=psf.ysigma(s,outwave)
-                else:
-                    for i in range(nspec):
-                        wsigma[i]=psf.ysigma(i,outwave)
-            elif hasattr(psf,'xsigma_boot'):
-                wsigma=np.tile(psf.xsigma_boot,(outwave.shape[0],1))
+            log.warning("deprecated, please use QFrame format to store sigma values")
+            wsigma=np.zeros(flux.shape)
+            if tset.ysig_vs_wave_traceset is not None :
+                dw = np.gradient(outwave)
+                for i in range(nspec):
+                    ysig = tset.ysig_vs_wave(i,outwave)
+                    y    = tset.y_vs_wave(i,outwave)
+                    dydw = np.gradient(y)/dw
+                    wsigma[i] = ysig/dydw # in A
         frame = fr(outwave, flux, ivar, resolution_data=Rdata,fibers=fibers, 
                    meta=input_image.meta, fibermap=fibermap,
-                   wsigma=wsigma, ndiag=qndiag)
+                   wsigma=wsigma,ndiag=qndiag)
 
         if dumpfile is not None:
             night = frame.meta['NIGHT']
@@ -782,7 +778,7 @@ class ResolutionFit(pas.PipelineAlg):
 
     """
     Fitting of Arc lines on extracted arc spectra, polynomial expansion of the fitted sigmas, and updating
-    the coefficients to the new PSF file
+    the coefficients to the new traceset file
     """ 
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -805,9 +801,8 @@ class ResolutionFit(pas.PipelineAlg):
              usesigma=kwargs["usesigma"]
         else: usesigma = False
 
-        from desispec.quicklook.qlpsf import PSF
-        psfinput=PSF(psfinfile)
-        domain=(psfinput.wmin,psfinput.wmax)
+        tset = read_xytraceset(psfinfile)
+        domain=(tset.wavemin,tset.wavemax)
 
         input_frame=args[0]
 
@@ -827,20 +822,16 @@ class ResolutionFit(pas.PipelineAlg):
     def run_pa(self,input_frame,psfinfile,outfile,usesigma,linelist=None,npoly=2,nbins=2,domain=None):
         from desispec.quicklook.arcprocess import process_arc,write_psffile
         from desispec.quicklook.palib import get_resolution
-        from desispec.quicklook.qlpsf import PSF
-
-        wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
-
-        #- write out the psf outfile
-        wstep=input_frame.meta["WAVESTEP"]
-        write_psffile(psfinfile,wcoeffs,outfile,wavestepsize=wstep)
-        log.debug("Wrote psf file {}".format(outfile))
-
+        
+        wcoeffs,wavemin,wavemax =process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
+        write_psffile(psfinfile,wcoeffs,wavemin,wavemax,outfile)
+        log.debug("Wrote xytraceset file {}".format(outfile))
+        
         #- update the arc frame resolution from new coeffs
-        newpsf=PSF(outfile)
-        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,newpsf,usesigma=usesigma)
+        tset = read_xytraceset(outfile)
+        input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,tset,usesigma=usesigma)
  
-        return (newpsf,input_frame)
+        return (tset,input_frame)
 
 
 # =======================

@@ -5,14 +5,18 @@ desispec Change Log
 0.23.2 (unreleased)
 -------------------
 
-* Integrates QL S/N QA into offline QA Frame object
+* Integrates QL S/N QA into offline QA Frame object (PR `#675`_).
+* Ensure that FITS files specify FITS-standard-compliant units (PR `#673`_).
+
+.. _`#673`: https://github.com/desihub/desispec/pull/673
+.. _`#675`: https://github.com/desihub/desispec/pull/675
 
 0.23.1 (2018-08-09)
 -------------------
 
-* Support STD/STD_FSTAR/STD_FAINT bit names (PR `#673`_).
+* Support STD/STD_FSTAR/STD_FAINT bit names (PR `#674`_).
 
-.. _`#673`: https://github.com/desihub/desispec/pull/673
+.. _`#674`: https://github.com/desihub/desispec/pull/674
 
 0.23.0 (2018-07-26)
 -------------------

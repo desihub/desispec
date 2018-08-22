@@ -5,14 +5,13 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from desispec.quicklook.palib import resample_spec,get_resolution
 
-def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=False,
+def do_boxcar(image,tset,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=False,
               quick_resolution=False):
     """Extracts spectra row by row, given the centroids
 
     Args:
         image  : desispec.image object
-        psf: desispec.quicklook.qlpsf.PSF like object
-            Or do we just parse the traces here and write a separate wrapper to handle this? Leaving psf in the input argument now.
+        tset: desispec.xytraceset like object
         outwave: wavelength array for the final spectra output
         boxwidth: HW box size in pixels
         usesigma: if True, use sigma from psfboot file(xsigma) or psf file (wsigma) to calculate resolution data. 
@@ -23,12 +22,12 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
     from desispec.frame import Frame
 
     #wavelength=psf.wavelength() # (nspec,npix_y)
-    def calcMask(psf):
-        wmin=psf.wmin
-        wmax=psf.wmax
+    def calcMask(tset):
+        wmin=tset.wavemin
+        wmax=tset.wavemax
         waves=np.arange(wmin,wmax,0.25)
-        xs=psf.x(None,waves) #- xtraces # doing the full image here.
-        ys=psf.y(None,waves) #- ytraces
+        xs=tset.x_vs_wave(np.arange(tset.nspec),waves) #- xtraces # doing the full image here.
+        ys=tset.y_vs_wave(np.arange(tset.nspec),waves) #- ytraces
 
         camera=image.camera
         spectrograph=int(camera[1:]) #- first char is "r", "b", or "z"
@@ -91,14 +90,14 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
 
         else:
             print("Mask file is given but doesn't exist. Generating mask and saving to file %s"%maskFile)
-            mask,ranges=calcMask(psf)
+            mask,ranges=calcMask(tset)
             try:
                 f=open(maskFile,'wb')
                 np.savez(f,mask=mask,ranges=ranges)
             except:
                 pass
     else:
-        mask,ranges=calcMask(psf)
+        mask,ranges=calcMask(tset)
     Tmask=mask.T
     maskedimg=(image.pix*Tmask)
     maskedvar=(Tmask/image.ivar.clip(0))
@@ -113,10 +112,10 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
         ivar[r]=1/vrow
 
     wtarget=outwave
-    #- limit nspec to psf.nspec max
-    if nspec > psf.nspec:
-        nspec=psf.nspec
-        print("Warning! Extracting only {} spectra".format(psf.nspec))
+    #- limit nspec to tset.nspec max
+    if nspec > tset.nspec:
+        nspec=tset.nspec
+        print("Warning! Extracting only {} spectra".format(tset.nspec))
 
     fflux=np.zeros((nspec,len(wtarget)))
     iivar=np.zeros((nspec,len(wtarget)))
@@ -124,15 +123,15 @@ def do_boxcar(image,psf,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=Fa
     #- convert to per angstrom first and then resample to desired wave length grid.
 
     for spec in range(nspec):
-        ww=psf.wavelength(spec)
+        ww=tset.wave_vs_y(spec,np.arange(0,tset.npix_y))
         dwave=np.gradient(ww)
         flux[:,spec]/=dwave
         ivar[:,spec]*=dwave**2
         fflux[spec,:],iivar[spec,:]=resample_spec(ww,flux[:,spec],wtarget,ivar[:,spec])
 
     #- Get resolution from the psf  
-    if quick_resolution and  (hasattr(psf,"wcoeff") or hasattr(psf,'xsigma_boot')):
-        return fflux,iivar,None
-    resolution=get_resolution(wtarget,nspec,psf,usesigma=usesigma)
+    #if quick_resolution and  (hasattr(psf,"wcoeff") or hasattr(psf,'xsigma_boot')): ###?
+    #    return fflux,iivar,None
+    resolution=get_resolution(wtarget,nspec,tset,usesigma=usesigma)
 
     return fflux,iivar,resolution
