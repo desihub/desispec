@@ -549,6 +549,10 @@ def gen_scripts(tasks_by_type, nersc=None, nersc_queue="regular",
 
     """
     ttypes = list(tasks_by_type.keys())
+
+    if len(ttypes)==0 :
+        return None
+
     jobname = ttypes[0]
     if len(ttypes) > 1:
         jobname = "{}-{}".format(ttypes[0], ttypes[-1])
@@ -692,7 +696,7 @@ def run_scripts(scripts, deps=None, slurm=False):
     log = get_logger()
 
     depstr = ""
-    if deps is not None:
+    if deps is not None and len(deps)>0 :
         depstr = "-d afterok"
         for d in deps:
             depstr = "{}:{}".format(depstr, d)
@@ -813,7 +817,7 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
     pack=False, nosubmitted=False, depjobs=None, nersc=None,
     nersc_queue="regular", nersc_maxtime=0, nersc_maxnodes=0,
     nersc_shifter=None, mpi_procs=1, mpi_run="", procs_per_node=0, nodb=False,
-    out=None, debug=False):
+    out=None, debug=False, dryrun=False):
     """Run a chain of jobs for multiple pipeline steps.
 
     For the list of task types, get all ready tasks meeting the selection
@@ -853,11 +857,15 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
             the production 'scripts' directory.  Default puts task directory
             in the main scripts directory.
         debug (bool): if True, enable DEBUG log level in generated scripts.
+        dryrun (bool): if True, do not submit the jobs.
 
     Returns:
         list: the job IDs from the final step in the chain.
 
     """
+    
+    log = get_logger()
+
     machprops = None
     if nersc is not None:
         machprops = scriptgen.nersc_machine(nersc, nersc_queue)
@@ -933,6 +941,8 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
             nodb=nodb,
             out=out,
             debug=debug)
+        if scripts is not None and len(scripts)>0 : 
+            log.info("wrote scripts",scripts)
     else:
         # Generate individual scripts
         tscripts = dict()
@@ -952,23 +962,32 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
                 nodb=nodb,
                 out=out,
                 debug=debug)
+            if tscripts[tt] is not None :
+                log.info("wrote script",tscripts[tt])
+
+    if dryrun :
+        log.warning("dry run: do not submit the jobs")
+        return None
 
     # Run the jobs
     if slurm:
         for tt in ttypes:
             if (tt != "spectra") and (tt != "redshift"):
-                db.set_submitted_type(tt, tasks_by_type[tt])
+                if tt in tasks_by_type.keys() :
+                    db.set_submitted_type(tt, tasks_by_type[tt])
 
     outdeps = None
     if pack:
         # Submit one job
-        outdeps = run_scripts(scripts, deps=indeps, slurm=slurm)
+        if scripts is not None and len(scripts)>0 :
+            outdeps = run_scripts(scripts, deps=indeps, slurm=slurm)
     else:
         # Loop over task types submitting jobs and tracking dependencies.
         for tt in ttypes:
-            outdeps = run_scripts(tscripts[tt], deps=indeps,
-                slurm=slurm)
-            if len(outdeps) > 0:
+            if tscripts[tt] is not None :
+                outdeps = run_scripts(tscripts[tt], deps=indeps,
+                                      slurm=slurm)
+            if outdeps is not None and len(outdeps) > 0:
                 indeps = outdeps
             else:
                 indeps = None
