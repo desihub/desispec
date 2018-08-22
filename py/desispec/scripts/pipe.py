@@ -693,11 +693,23 @@ Where supported commands are (use desi_pipe <command> --help for details):
         parser.add_argument("--states", required=False, default=None,
             help="comma separated list of states. This argument is "
             "passed to chain (see desi_pipe chain --help for more info).")
+        parser.add_argument("--resume", action = 'store_true',
+            help="same as --states waiting,ready")
+
+        parser.add_argument("--dryrun", action="store_true",
+            help="do not submit the jobs.")
 
         parser = self._parse_run_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
 
+        if args.resume :
+            if args.states is not None :
+                print("Ambiguous arguments: cannot specify --states along with --resume option which would overwrite the list of states.")
+                return
+            else :
+                args.states="waiting,ready"
+        
         self._check_nersc_host(args)
 
         allnights = io.get_nights(strip_path=True)
@@ -737,9 +749,12 @@ Where supported commands are (use desi_pipe <command> --help for details):
                     procs_per_node=args.procs_per_node,
                     out=args.outdir,
                     states=states,
-                    debug=args.debug)
-                previous = [ jobids[-1] ]
-            nightlast.append(previous[-1])
+                    debug=args.debug,
+                    dryrun=args.dryrun)
+                if jobids is not None and len(jobids)>0 :
+                    previous = [ jobids[-1] ]
+            if previous is not None and len(previous)>0 :
+                nightlast.append(previous[-1])
 
         # Submit redshifts
         jobids = control.chain(
@@ -755,7 +770,9 @@ Where supported commands are (use desi_pipe <command> --help for details):
             mpi_run=args.mpi_run,
             procs_per_node=args.procs_per_node,
             out=args.outdir,
-            debug=args.debug)
+            states=states,
+            debug=args.debug,
+            dryrun=args.dryrun)
 
         return
 
