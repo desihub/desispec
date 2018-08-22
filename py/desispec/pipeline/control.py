@@ -433,7 +433,7 @@ def cleanup(db, tasktypes, failed=False, submitted=False, expid=None):
 
     """
     exid = None
-    if expid >= 0:
+    if expid is not None and expid >= 0:
         exid = expid
 
     db.cleanup(tasktypes=tasktypes, expid=exid, cleanfailed=failed,
