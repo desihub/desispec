@@ -92,9 +92,11 @@ class TestExtract(unittest.TestCase):
 
     def test_boxcar(self):
         from desispec.quicklook.qlboxcar import do_boxcar
-        psf = load_psf(self.psffile)
-
-        pix = np.random.normal(0, 3.0, size=(psf.npix_y, psf.npix_x))
+        from desispec.io import read_xytraceset
+        
+        #psf = load_psf(self.psffile)
+        tset = read_xytraceset(self.psffile)
+        pix = np.random.normal(0, 3.0, size=(tset.npix_y, tset.npix_y))
         ivar = np.ones_like(pix) / 3.0**2
         mask = np.zeros(pix.shape, dtype=np.uint32)
         img = desispec.image.Image(pix, ivar, mask, camera='z0')
@@ -102,7 +104,7 @@ class TestExtract(unittest.TestCase):
         outwave = np.arange(7500, 7600)
         nwave = len(outwave)
         nspec = 5
-        flux, ivar, resolution = do_boxcar(img, psf, outwave, boxwidth=2.5, nspec=nspec)
+        flux, ivar, resolution = do_boxcar(img, tset, outwave, boxwidth=2.5, nspec=nspec)
 
         self.assertEqual(flux.shape, (nspec, nwave))
         self.assertEqual(ivar.shape, (nspec, nwave))
