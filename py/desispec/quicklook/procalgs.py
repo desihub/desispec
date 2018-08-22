@@ -823,13 +823,10 @@ class ResolutionFit(pas.PipelineAlg):
         from desispec.quicklook.arcprocess import process_arc,write_psffile
         from desispec.quicklook.palib import get_resolution
         
-        wcoeffs=process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
-
-        #- write out the psf outfile
-        wstep=input_frame.meta["WAVESTEP"]
-        write_psffile(psfinfile,wcoeffs,outfile,wavestepsize=wstep)
-        log.debug("Wrote psf file {}".format(outfile))
-
+        wcoeffs,wavemin,wavemax =process_arc(input_frame,linelist=linelist,npoly=npoly,nbins=nbins,domain=domain)
+        write_psffile(psfinfile,wcoeffs,wavemin,wavemax,outfile)
+        log.debug("Wrote xytraceset file {}".format(outfile))
+        
         #- update the arc frame resolution from new coeffs
         tset = read_xytraceset(outfile)
         input_frame.resolution_data=get_resolution(input_frame.wave,input_frame.nspec,tset,usesigma=usesigma)
