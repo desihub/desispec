@@ -942,7 +942,7 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
             out=out,
             debug=debug)
         if scripts is not None and len(scripts)>0 : 
-            log.info("wrote scripts",scripts)
+            log.info("wrote scripts {}".format(scripts))
     else:
         # Generate individual scripts
         tscripts = dict()
@@ -963,7 +963,7 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
                 out=out,
                 debug=debug)
             if tscripts[tt] is not None :
-                log.info("wrote script",tscripts[tt])
+                log.info("wrote script {}".format(tscripts[tt]))
 
     if dryrun :
         log.warning("dry run: do not submit the jobs")
