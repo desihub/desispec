@@ -921,7 +921,7 @@ def chain(tasktypes, nightstr=None, states=None, expid=None, spec=None,
             import warnings
             warnings.warn("Input task list for '{}' is empty".format(tt),
                           RuntimeWarning)
-            break
+            continue # might be tasks to do in other ttype
         tasks_by_type[tt] = tasks
 
     scripts = None
