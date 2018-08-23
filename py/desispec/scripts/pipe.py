@@ -280,7 +280,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="w")
 
-        control.getready(db, nightstr=nights)
+        control.getready(db, nightstr=args.nights)
 
         return
 
