@@ -766,6 +766,7 @@ def run(taskfile, nosubmitted=False, depjobs=None, nersc=None,
         list: the job IDs returned by the scheduler.
 
     """
+    log = get_logger()
     tasks = pipeprod.task_read(taskfile)
 
     jobids = list()
@@ -788,6 +789,8 @@ def run(taskfile, nosubmitted=False, depjobs=None, nersc=None,
             out=out,
             debug=debug)
 
+        log.info("wrote scripts {}".format(scripts))
+        
         deps = None
         slurm = False
         if nersc is not None:
