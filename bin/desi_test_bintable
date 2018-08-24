@@ -4,32 +4,35 @@
 # https://docs.scipy.org/doc/numpy/reference/generated/numpy.memmap.html
 #
 import os
+import sys
+
 import numpy as np
 
-filenames = ('/global/project/projectdirs/desi/users/bweaver/testfile.dat',
-             os.path.join(os.environ['SCRATCH'], 'testfile.dat'))
+from desiutil.log import log
+import desispec.io
 
-for filename in filenames:
-    if os.path.exists(filename):
-        os.remove(filename)
+def main():
+    """Entry-point for command-line script.
+    """
+    testdirs = (os.path.join(os.environ['DESI_ROOT'], 'users', os.environ['USER']),  # /global/project
+                os.path.join(os.environ['DESI_ROOT'], 'datachallenge'),  # /global/projecta
+                os.environ['HOME'],
+                os.environ['SCRATCH'])
+    filenames = [os.path.join(d, 'empty_fibermap.fits') for d in testdirs]
 
-    data = np.arange(12, dtype=np.float32)
-    data.resize((3, 4))
+    for filename in filenames:
+        fm = desispec.io.empty_fibermap(500)
+        try:
+            desispec.io.write_fibermap(filename, fm)
+        except OSError as e:
+            assert e.errno == 38
+            assert e.strerror == 'Function not implemented'
+            log.error("OSError detected for %s.", filename)
+            continue
+        except Exception as ee:
+            log.error("Some other exception was raised for %s: %s.", filename, str(ee))
+        else:
+            log.info("No error detected for %s.", filename)
+    return 0
 
-    try:
-        fp = np.memmap(filename, dtype=np.float32, mode='w+', shape=(3, 4))
-    except OSError as e:
-        assert e.errno == 38
-        assert e.strerror == 'Function not implemented'
-        print("OSError detected for {0}.".format(filename))
-        continue
-
-    fp[:] = data[:]
-
-    del fp
-
-    fpr = np.memmap(filename, dtype=np.float32, mode='r', shape=(3, 4))
-
-    assert np.allclose(fpr, data)
-
-    print("No errors detected for {0}".format(filename))
+sys.exit(main())
