@@ -100,16 +100,17 @@ def empty_fibermap(nspec, specmin=0):
     fibermap['LAMBDAREF'][:]  = 5400.0
 
     assert set(fibermap.keys()) == set([x[0] for x in fibermap_columns])
-        
+
     return fibermap
 
-def write_fibermap(outfile, fibermap, header=None):
+def write_fibermap(outfile, fibermap, header=None, clobber=True):
     """Write fibermap binary table to outfile.
 
     Args:
         outfile (str): output filename
         fibermap: astropy Table of fibermap data
         header: header data to include in same HDU as fibermap
+        clobber (bool, optional): overwrite outfile if it exists
 
     Returns:
         write_fibermap (str): full path to filename of fibermap file written.
@@ -125,25 +126,25 @@ def write_fibermap(outfile, fibermap, header=None):
         hdr = fitsheader(fibermap.meta)
 
     add_dependencies(hdr)
-    
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
-            extname="FIBERMAP", clobber=True)
+            extname="FIBERMAP", clobber=clobber)
 
     return outfile
 
 
 def read_fibermap(filename) :
     """Reads a fibermap file and returns its data as an astropy Table
-    
+
     Args:
         filename : input file name
     """
     #- Implementation note: wrapping Table.read() with this function allows us
     #- to update the underlying format, extension name, etc. without having
     #- to change every place that reads a fibermap.
-    
+
     fibermap = Table.read(filename, 'FIBERMAP')
     if 'FLUX_G' in fibermap.colnames:
         fibermap = fibermap_new2old(fibermap)
@@ -191,7 +192,7 @@ def fibermap_new2old(fibermap):
     fm['OBJTYPE'][isLRG] = 'LRG'
     isQSO = (fm['DESI_TARGET'] & desi_mask.QSO) != 0
     fm['OBJTYPE'][isQSO] = 'QSO'
-    
+
     if ('FLAVOR' in fm.meta):
         if fm.meta['FLAVOR'] == 'arc':
             fm['OBJTYPE'] = 'ARC'

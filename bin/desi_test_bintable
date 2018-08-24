@@ -21,20 +21,26 @@ def main():
                 os.environ['HOME'],
                 os.environ['SCRATCH'])
     filenames = [os.path.join(d, 'empty_fibermap.fits') for d in testdirs]
-
-    for filename in filenames:
-        fm = desispec.io.empty_fibermap(500)
-        try:
-            desispec.io.write_fibermap(filename, fm)
-        except OSError as e:
-            assert e.errno == 38
-            assert e.strerror == 'Function not implemented'
-            log.error("OSError detected for %s.", filename)
-            continue
-        except Exception as ee:
-            log.error("Some other exception was raised for %s: %s.", filename, str(ee))
-        else:
-            log.info("No error detected for %s.", filename)
+    #
+    # Blank slate
+    #
+    for f in filenames:
+        if os.path.exists(f)
+        os.remove(f)
+    for clobber in (True, False, True):
+        for filename in filenames:
+            fm = desispec.io.empty_fibermap(500)
+            try:
+                desispec.io.write_fibermap(filename, fm, clobber=clobber)
+            except OSError as e:
+                assert e.errno == 38
+                assert e.strerror == 'Function not implemented'
+                log.error("OSError detected for %s.", filename)
+                continue
+            except Exception as ee:
+                log.error("Some other exception was raised for %s: %s.", filename, str(ee))
+            else:
+                log.info("No error detected for %s.", filename)
     return 0
 
 sys.exit(main())
