@@ -213,7 +213,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
                 hdulist.writeto(filename, overwrite=True, checksum=True)
             else :
                 #- append file
-                log.debug("Adding new HDU to %s." filename
+                log.debug("Adding new HDU to %s.", filename)
                 astropy.io.fits.append(filename, hdu.data, hdu.header, checksum=True)
         else :
             #- we need to open the file and only overwrite the extension
