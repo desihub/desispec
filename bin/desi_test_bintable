@@ -25,8 +25,8 @@ def main():
     # Blank slate
     #
     for f in filenames:
-        if os.path.exists(f)
-        os.remove(f)
+        if os.path.exists(f):
+            os.remove(f)
     for clobber in (True, False, True):
         for filename in filenames:
             fm = desispec.io.empty_fibermap(500)
