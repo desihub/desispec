@@ -8,12 +8,14 @@ import sys
 
 import numpy as np
 
-from desiutil.log import log
+from desiutil.log import get_logger
 import desispec.io
 
 def main():
     """Entry-point for command-line script.
     """
+    os.environ['DESI_LOGLEVEL'] = 'DEBUG'
+    log = get_logger()
     testdirs = (os.path.join(os.environ['DESI_ROOT'], 'users', os.environ['USER']),  # /global/project
                 os.path.join(os.environ['DESI_ROOT'], 'datachallenge'),  # /global/projecta
                 os.environ['HOME'],
