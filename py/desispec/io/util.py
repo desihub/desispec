@@ -177,8 +177,26 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
         else:
             hdu.header.update(header)
 
-    #- Write the data and header
+    #- Allow comments and units to be None
+    if comments is None:
+        comments = dict()
+    if units is None:
+        units = dict()
+    #
+    # Add comments and units to the *columns* of the table.
+    #
+    for i in range(1, 999):
+        key = 'TTYPE'+str(i)
+        if key not in hdu.header:
+            break
+        else:
+            value = hdu.header[key]
+            if value in comments:
+                hdu.header[key] = (value, comments[value])
+            if value in units:
+                hdu.header['TUNIT'+str(i)] = (units[value], value+' units')
 
+    #- Write the data and header
 
     if os.path.isfile(filename) :
         if extname is None :
@@ -217,35 +235,6 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
         hdulist = astropy.io.fits.HDUList([hdu0, hdu])
         hdulist.writeto(filename, checksum=True)
 
-
-    #- TODO:
-    #- The following could probably be implemented for efficiently by updating
-    #- the outdata Table metadata directly before writing it out.
-    #- The following was originally implemented when outdata was a numpy array.
-
-    #- Allow comments and units to be None
-    if comments is None:
-        comments = dict()
-    if units is None:
-        units = dict()
-
-    #- Reopen the file to add the comments and units
-    fx = astropy.io.fits.open(filename, mode='update')
-    hdu = fx[extname]
-    for i in range(1,999):
-        key = 'TTYPE'+str(i)
-        if key not in hdu.header:
-            break
-        else:
-            value = hdu.header[key]
-            if value in comments:
-                hdu.header[key] = (value, comments[value])
-            if value in units:
-                hdu.header['TUNIT'+str(i)] = (units[value], value+' units')
-
-    #- Write updated header and close file
-    fx.flush()
-    fx.close()
 
 def _dict2ndarray(data, columns=None):
     """
