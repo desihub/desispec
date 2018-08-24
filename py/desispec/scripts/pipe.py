@@ -630,6 +630,9 @@ Where supported commands are (use desi_pipe <command> --help for details):
             help="comma separated list of slurm job IDs to specify as "
             "dependencies of this current job.")
 
+        parser.add_argument("--dryrun", action="store_true",
+                            help="do not submit the jobs.")
+
         parser = self._parse_run_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
@@ -670,9 +673,10 @@ Where supported commands are (use desi_pipe <command> --help for details):
             mpi_run=args.mpi_run,
             procs_per_node=args.procs_per_node,
             out=args.outdir,
-            debug=args.debug)
+            debug=args.debug,
+            dryrun=args.dryrun)
 
-        if len(jobids) > 0:
+        if jobids is not None and len(jobids) > 0:
             print(",".join(jobids))
 
         return
