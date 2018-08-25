@@ -33,8 +33,11 @@ def main():
             try:
                 desispec.io.write_fibermap(filename, fm, clobber=clobber)
             except OSError as e:
-                assert e.errno == 38
-                assert e.strerror == 'Function not implemented'
+                try:
+                    assert e.errno == 38
+                    assert e.strerror == 'Function not implemented'
+                except AssertionError:
+                    assert str(e) == '[Errno 38] Function not implemented'
                 log.error("OSError detected for %s.", filename)
                 continue
             except Exception as ee:
