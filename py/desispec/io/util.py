@@ -167,6 +167,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     if extname is not None:
         hdu.header['EXTNAME'] = extname
     else:
+        log.warning("Table does not have EXTNAME set!")
         extname = 1
 
     if header is not None:
@@ -195,41 +196,43 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
                 hdu.header[key] = (value, comments[value])
             if value in units:
                 hdu.header['TUNIT'+str(i)] = (units[value], value+' units')
+    #
+    # Add checksum cards.
+    #
+    hdu.add_checksum()
 
     #- Write the data and header
-    deferred_overwrite = False
-    if os.path.isfile(filename) :
-        if extname is None :
-            #
-            # In DESI, we should *always* be setting the extname, so this
-            # might never be called.
-            #
-            if clobber :
-                #- overwrite file
-                deferred_overwrite = True
-            else :
-                #- append file
+
+    if os.path.isfile(filename):
+        if not(extname is None and clobber):
+            try:
+                hdulist = astropy.io.fits.open(filename, mode='update')
+            except OSError:
+                log.warning("OSError detected, attempting to open %s with memmap=False.", filename)
+                hdulist = astropy.io.fits.open(filename, mode='update', memmap=False)
+            if extname is None:
+                #
+                # In DESI, we should *always* be setting the extname, so this
+                # might never be called.
+                #
                 log.debug("Adding new HDU to %s.", filename)
-                astropy.io.fits.append(filename, hdu.data, hdu.header, checksum=True)
-                return
-        else :
-            #- we need to open the file and only overwrite the extension
-            with astropy.io.fits.open(filename, mode='update') as fx:
-                if extname in fx :
-                    if not clobber :
+                hdulist.append(hdu)
+            else:
+                if extname in hdulist:
+                    if clobber:
+                        log.debug("Replacing HDU with EXTNAME = '%s' in %s.", extname, filename)
+                        hdulist[extname] = hdu
+                    else:
                         log.warning("Do not modify %s because EXTNAME = '%s' exists.", filename, extname)
-                        return
-                    #- need replace here
-                    log.debug("Replacing HDU %s in %s.", extname, filename)
-                    fx[extname]=hdu
-                else :
-                    log.debug("Adding HDU %s to %s.", extname, filename)
-                    fx.append(hdu)
+                else:
+                    log.debug("Adding new HDU with EXTNAME = '%s' to %s.", extname, filename)
+                    hdulist.append(hdu)
+            hdulist.close()
             return
     #
     # If we reach this point, we're writing a new file.
     #
-    if deferred_overwrite:
+    if os.path.isfile(filename):
         log.debug("Overwriting %s.", filename)
     else:
         log.debug("Writing new file %s.", filename)
