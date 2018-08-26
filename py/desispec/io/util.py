@@ -197,7 +197,7 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
                 hdu.header['TUNIT'+str(i)] = (units[value], value+' units')
 
     #- Write the data and header
-
+    deferred_overwrite = False
     if os.path.isfile(filename) :
         if extname is None :
             #
@@ -206,21 +206,18 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
             #
             if clobber :
                 #- overwrite file
-                log.debug("Overwriting %s.", filename)
-                hdu0 = astropy.io.fits.PrimaryHDU()
-                hdu0.header['EXTNAME'] = primary_extname
-                hdulist = astropy.io.fits.HDUList([hdu0, hdu])
-                hdulist.writeto(filename, overwrite=True, checksum=True)
+                deferred_overwrite = True
             else :
                 #- append file
                 log.debug("Adding new HDU to %s.", filename)
                 astropy.io.fits.append(filename, hdu.data, hdu.header, checksum=True)
+                return
         else :
             #- we need to open the file and only overwrite the extension
             with astropy.io.fits.open(filename, mode='update') as fx:
                 if extname in fx :
                     if not clobber :
-                        log.warning("Do not modify %s because extname %s exists.", filename, extname)
+                        log.warning("Do not modify %s because EXTNAME = '%s' exists.", filename, extname)
                         return
                     #- need replace here
                     log.debug("Replacing HDU %s in %s.", extname, filename)
@@ -228,12 +225,19 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
                 else :
                     log.debug("Adding HDU %s to %s.", extname, filename)
                     fx.append(hdu)
-    else :
+            return
+    #
+    # If we reach this point, we're writing a new file.
+    #
+    if deferred_overwrite:
+        log.debug("Overwriting %s.", filename)
+    else:
         log.debug("Writing new file %s.", filename)
-        hdu0 = astropy.io.fits.PrimaryHDU()
-        hdu0.header['EXTNAME'] = primary_extname
-        hdulist = astropy.io.fits.HDUList([hdu0, hdu])
-        hdulist.writeto(filename, checksum=True)
+    hdu0 = astropy.io.fits.PrimaryHDU()
+    hdu0.header['EXTNAME'] = primary_extname
+    hdulist = astropy.io.fits.HDUList([hdu0, hdu])
+    hdulist.writeto(filename, overwrite=clobber, checksum=True)
+    return
 
 
 def _dict2ndarray(data, columns=None):

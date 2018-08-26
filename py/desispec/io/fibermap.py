@@ -103,7 +103,7 @@ def empty_fibermap(nspec, specmin=0):
 
     return fibermap
 
-def write_fibermap(outfile, fibermap, header=None, clobber=True):
+def write_fibermap(outfile, fibermap, header=None, clobber=True, extname='FIBERMAP'):
     """Write fibermap binary table to outfile.
 
     Args:
@@ -111,6 +111,7 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True):
         fibermap: astropy Table of fibermap data
         header: header data to include in same HDU as fibermap
         clobber (bool, optional): overwrite outfile if it exists
+        extname (str, optional): set the extension name.
 
     Returns:
         write_fibermap (str): full path to filename of fibermap file written.
@@ -130,7 +131,7 @@ def write_fibermap(outfile, fibermap, header=None, clobber=True):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         write_bintable(outfile, fibermap, hdr, comments=fibermap_comments,
-            extname="FIBERMAP", clobber=clobber)
+                       extname=extname, clobber=clobber)
 
     return outfile
 
