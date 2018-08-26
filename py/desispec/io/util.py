@@ -168,7 +168,6 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
         hdu.header['EXTNAME'] = extname
     else:
         log.warning("Table does not have EXTNAME set!")
-        extname = 1
 
     if header is not None:
         if isinstance(header, astropy.io.fits.header.Header):
