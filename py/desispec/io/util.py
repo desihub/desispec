@@ -204,29 +204,27 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     if os.path.isfile(filename):
         if not(extname is None and clobber):
-            try:
-                hdulist = astropy.io.fits.open(filename, mode='update')
-            except OSError:
-                log.warning("OSError detected, attempting to open %s with memmap=False.", filename)
-                hdulist = astropy.io.fits.open(filename, mode='update', memmap=False)
-            if extname is None:
-                #
-                # In DESI, we should *always* be setting the extname, so this
-                # might never be called.
-                #
-                log.debug("Adding new HDU to %s.", filename)
-                hdulist.append(hdu)
-            else:
-                if extname in hdulist:
-                    if clobber:
-                        log.debug("Replacing HDU with EXTNAME = '%s' in %s.", extname, filename)
-                        hdulist[extname] = hdu
-                    else:
-                        log.warning("Do not modify %s because EXTNAME = '%s' exists.", filename, extname)
-                else:
-                    log.debug("Adding new HDU with EXTNAME = '%s' to %s.", extname, filename)
+            memmap = _supports_memmap(filename)
+            if not memmap:
+                log.warning("Filesystem does not support memory-mapping!")
+            with astropy.io.fits.open(filename, mode='update', memmap=memmap) as hdulist:
+                if extname is None:
+                    #
+                    # In DESI, we should *always* be setting the extname, so this
+                    # might never be called.
+                    #
+                    log.debug("Adding new HDU to %s.", filename)
                     hdulist.append(hdu)
-            hdulist.close()
+                else:
+                    if extname in hdulist:
+                        if clobber:
+                            log.debug("Replacing HDU with EXTNAME = '%s' in %s.", extname, filename)
+                            hdulist[extname] = hdu
+                        else:
+                            log.warning("Do not modify %s because EXTNAME = '%s' exists.", filename, extname)
+                    else:
+                        log.debug("Adding new HDU with EXTNAME = '%s' to %s.", extname, filename)
+                        hdulist.append(hdu)
             return
     #
     # If we reach this point, we're writing a new file.
@@ -240,6 +238,22 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
     hdulist = astropy.io.fits.HDUList([hdu0, hdu])
     hdulist.writeto(filename, overwrite=clobber, checksum=True)
     return
+
+
+def _supports_memmap(filename):
+    """Returns ``True`` if the filesystem containing `filename` supports
+    opening memory-mapped files in update mode.
+    """
+    m = True
+    testfile = os.path.join(os.path.dirname(os.path.realpath(filename)),
+                            'foo.dat')
+    try:
+        f = np.memmap(testfile, dtype='f4', mode='w+', shape=(3, 4))
+    except OSError:
+        m = False
+    finally:
+        os.remove(testfile)
+    return m
 
 
 def _dict2ndarray(data, columns=None):
