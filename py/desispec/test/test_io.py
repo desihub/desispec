@@ -4,7 +4,8 @@
 """
 from __future__ import absolute_import, division
 # The line above will help with 2to3 support.
-import unittest, os, sys
+import unittest
+import os
 import tempfile
 from datetime import datetime, timedelta
 from shutil import rmtree
@@ -14,7 +15,12 @@ from astropy.io import fits
 from astropy.table import Table
 from ..frame import Frame
 
-PY3 = sys.version_info.major > 2
+skipMock = False
+try:
+    from unittest.mock import patch
+except ImportError:
+    # Python 2
+    skipMock = True
 
 class TestIO(unittest.TestCase):
     """Test desispec.io.
@@ -71,35 +77,170 @@ class TestIO(unittest.TestCase):
             rmtree(cls.testDir)
 
     def test_write_bintable(self):
-        '''test write_bintable'''
+        """Test writing binary tables to FITS.
+        """
         from ..io.util import write_bintable, fitsheader
+        #
+        # Input: Table
+        #
         hdr = fitsheader(dict(A=1, B=2))
         hdr['C'] = ('BLAT', 'FOO')
         data = Table()
-        data['X'] = [1,2,3]
-        data['Y'] = [3,4,5]
+        data['X'] = [1, 2, 3]
+        data['Y'] = [3, 4, 5]
         write_bintable(self.testfile, data, header=hdr)
-
+        #
+        # Standard suite of table tests.
+        #
         result, newhdr = fits.getdata(self.testfile, header=True)
         self.assertEqual(result.dtype.names, data.dtype.names)
         for colname in data.dtype.names:
             self.assertTrue(np.all(result[colname] == data[colname]), '{} data mismatch'.format(colname))
-
         self.assertEqual(newhdr.comments['C'], 'FOO')
         for key in hdr.keys():
             self.assertIn(key, newhdr)
-
-        #- repeat with other data types
+        self.assertIn('DATASUM', newhdr)
+        self.assertIn('CHECKSUM', newhdr)
         os.remove(self.testfile)
+        #
+        # Input: ndarray
+        #
         hdr = dict(A=1, B=2)
         data = data.as_array()
         write_bintable(self.testfile, data, header=hdr)
+        #
+        # Standard suite of table tests.
+        #
         result, newhdr = fits.getdata(self.testfile, header=True)
         self.assertEqual(result.dtype.names, data.dtype.names)
         for colname in data.dtype.names:
             self.assertTrue(np.all(result[colname] == data[colname]), '{} data mismatch'.format(colname))
+        # self.assertEqual(newhdr.comments['C'], 'FOO')
         for key in hdr.keys():
             self.assertIn(key, newhdr)
+        self.assertIn('DATASUM', newhdr)
+        self.assertIn('CHECKSUM', newhdr)
+        os.remove(self.testfile)
+        #
+        # Input: dictionary
+        #
+        hdr = dict(A=1, B=2)
+        d = dict(X=np.array([1, 2, 3]), Y=np.array([3, 4, 5]))
+        write_bintable(self.testfile, d, header=hdr)
+        #
+        # Standard suite of table tests.
+        #
+        result, newhdr = fits.getdata(self.testfile, header=True)
+        self.assertEqual(result.dtype.names, data.dtype.names)
+        for colname in data.dtype.names:
+            self.assertTrue(np.all(result[colname] == data[colname]), '{} data mismatch'.format(colname))
+        # self.assertEqual(newhdr.comments['C'], 'FOO')
+        for key in hdr.keys():
+            self.assertIn(key, newhdr)
+        self.assertIn('DATASUM', newhdr)
+        self.assertIn('CHECKSUM', newhdr)
+        os.remove(self.testfile)
+        #
+        # Input: Table with column comments.
+        #
+        hdr = fitsheader(dict(A=1, B=2))
+        hdr['C'] = ('BLAT', 'FOO')
+        data = Table()
+        data['X'] = [1, 2, 3]
+        data['Y'] = [3, 4, 5]
+        write_bintable(self.testfile, data, header=hdr,
+                       comments={'X': 'This is X', 'Y': 'This is Y'},
+                       units={'X': 'mm', 'Y': 'mm'})
+        #
+        # Standard suite of table tests.
+        #
+        result, newhdr = fits.getdata(self.testfile, header=True)
+        self.assertEqual(result.dtype.names, data.dtype.names)
+        for colname in data.dtype.names:
+            self.assertTrue(np.all(result[colname] == data[colname]), '{} data mismatch'.format(colname))
+        # self.assertEqual(newhdr.comments['C'], 'FOO')
+        for key in hdr.keys():
+            self.assertIn(key, newhdr)
+        self.assertIn('DATASUM', newhdr)
+        self.assertIn('CHECKSUM', newhdr)
+        self.assertEqual(newhdr['TTYPE1'], 'X')
+        self.assertEqual(newhdr.comments['TTYPE1'], 'This is X')
+        self.assertEqual(newhdr['TTYPE2'], 'Y')
+        self.assertEqual(newhdr.comments['TTYPE2'], 'This is Y')
+        self.assertEqual(newhdr['TUNIT1'], 'mm')
+        self.assertEqual(newhdr.comments['TUNIT1'], 'X units')
+        self.assertEqual(newhdr['TUNIT2'], 'mm')
+        self.assertEqual(newhdr.comments['TUNIT2'], 'Y units')
+        #
+        # Input: Table with no EXTNAME, existing file
+        #
+        write_bintable(self.testfile, data, header=hdr)
+        #
+        # Input: Table with EXTNAME, existing file
+        #
+        write_bintable(self.testfile, data, header=hdr, extname='FOOBAR')
+        #
+        # Standard suite of table tests.
+        #
+        result, newhdr = fits.getdata(self.testfile, header=True, extname='FOOBAR')
+        self.assertEqual(result.dtype.names, data.dtype.names)
+        for colname in data.dtype.names:
+            self.assertTrue(np.all(result[colname] == data[colname]), '{} data mismatch'.format(colname))
+        # self.assertEqual(newhdr.comments['C'], 'FOO')
+        for key in hdr.keys():
+            self.assertIn(key, newhdr)
+        self.assertIn('DATASUM', newhdr)
+        self.assertIn('CHECKSUM', newhdr)
+        #
+        # Input: Table with existing EXTNAME, existing file
+        #
+        write_bintable(self.testfile, data, header=hdr, extname='FOOBAR')
+        #
+        # Input: Table with EXTNAME, existing file, overwrite
+        #
+        write_bintable(self.testfile, data, header=hdr, extname='FOOBAR', clobber=True)
+
+
+    @unittest.skipIf(skipMock, "Skipping test that requires unittest.mock.")
+    def test_supports_memmap(self):
+        """Test utility to detect when memory-mapping is not possible.
+        """
+        from ..io.util import _supports_memmap
+        foofile = os.path.join(os.path.dirname(self.testfile), 'foo.dat')
+        with patch('os.remove') as rm:
+            with patch('numpy.memmap') as mm:
+                mm.return_value = True
+                foo = _supports_memmap(self.testfile)
+                self.assertTrue(foo)
+                mm.assert_called_with(foofile, dtype='f4', mode='w+', shape=(3, 4))
+            rm.assert_called_with(foofile)
+        with patch('os.remove') as rm:
+            with patch('numpy.memmap') as mm:
+                mm.side_effect = OSError(38, 'Function not implemented')
+                foo = _supports_memmap(self.testfile)
+                self.assertFalse(foo)
+                mm.assert_called_with(foofile, dtype='f4', mode='w+', shape=(3, 4))
+            rm.assert_called_with(foofile)
+
+    def test_dict2ndarray(self):
+        """Test conversion of dictionaries into structured arrays.
+        """
+        from ..io.util import _dict2ndarray
+        x = np.arange(10)
+        y = np.arange(10)*2
+        z = np.arange(20).reshape((10, 2))
+        self.assertEqual(z.shape, (10, 2))
+        d = dict(x=x, y=y, z=z)
+        nddata = _dict2ndarray(d)
+        self.assertTrue((nddata['x'] == x).all())
+        self.assertTrue((nddata['y'] == y).all())
+        self.assertTrue((nddata['z'] == z).all())
+        nddata = _dict2ndarray(d, columns=['x', 'y'])
+        self.assertTrue((nddata['x'] == x).all())
+        self.assertTrue((nddata['y'] == y).all())
+        with self.assertRaises(ValueError) as ex:
+            (nddata['z'] == z).all()
+            self.assertEqual(ex.exception.args[0], 'no field of name z')
 
     def test_fitsheader(self):
         """Test desispec.io.util.fitsheader.

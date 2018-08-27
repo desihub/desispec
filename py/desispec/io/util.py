@@ -204,9 +204,17 @@ def write_bintable(filename, data, header=None, comments=None, units=None,
 
     if os.path.isfile(filename):
         if not(extname is None and clobber):
-            memmap = _supports_memmap(filename)
-            if not memmap:
-                log.warning("Filesystem does not support memory-mapping!")
+            #
+            # Always open update mode with memmap=False, but keep the
+            # formal check commented out in case we need it in the future.
+            #
+            memmap = False
+            #
+            # Check to see if filesystem supports memory-mapping on update.
+            #
+            # memmap = _supports_memmap(filename)
+            # if not memmap:
+            #     log.warning("Filesystem does not support memory-mapping!")
             with astropy.io.fits.open(filename, mode='update', memmap=memmap) as hdulist:
                 if extname is None:
                     #
