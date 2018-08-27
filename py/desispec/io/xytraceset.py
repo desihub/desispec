@@ -12,6 +12,8 @@ from astropy.io import fits
 
 from ..xytraceset import XYTraceSet
 from desiutil.log import get_logger
+from specter.util.traceset import TraceSet,fit_traces
+from .util import makepath
 
 def _traceset_from_image(wavemin,wavemax,hdu,label=None) :
     log=get_logger()
@@ -87,9 +89,11 @@ def read_xytraceset(filename) :
     ycoef=None
     xsigcoef=None
     ysigcoef=None
+    wsigmacoef=None
     wavemin=None
     wavemax=None
      
+    log.info("reading traces in '%s'"%filename)
     
     fits_file = fits.open(filename)
     
@@ -129,7 +133,9 @@ def read_xytraceset(filename) :
         for k in ["YSIG"] :
             if k in fits_file :
                 ysigcoef,wavemin,wavemax =_traceset_from_image(wavemin,wavemax,fits_file[k],"ysigcoef")
-    
+        if "WSIGMA" in fits_file :
+            wsigmacoef = fits_file["WSIGMA"].data
+                
     if psftype == "GAUSS-HERMITE" : # older version where XTRACE and YTRACE are not saved in separate HDUs
         hdu=fits_file["PSF"]
         if xcoef is None    : xcoef,wavemin,wavemax =_traceset_from_table(wavemin,wavemax,hdu,"X")
@@ -147,7 +153,56 @@ def read_xytraceset(filename) :
     
     fits_file.close()
     
+    if wsigmacoef is not None :
+        log.warning("Converting deprecated WSIGMA coefficents (in Ang.) into YSIG (in CCD pixels)")
+        nfiber    = wsigmacoef.shape[0]
+        ncoef     = wsigmacoef.shape[1]
+        nw = 100 # to get accurate dydw
+        wave      = np.linspace(wavemin,wavemax,nw)
+        wsig_set  = TraceSet(wsigmacoef,[wavemin,wavemax])
+        y_set  = TraceSet(ycoef,[wavemin,wavemax])
+        wsig_vals = np.zeros((nfiber,nw))
+        for f in range(nfiber) :
+            y_vals = y_set.eval(f,wave)
+            dydw   = np.gradient(y_vals)/np.gradient(wave)
+            wsig_vals[f]=wsig_set.eval(f,wave)*dydw
+        tset = fit_traces(wave, wsig_vals, deg=ncoef-1, domain=(wavemin,wavemax))
+        ysigcoef = tset._coeff
+        
     return XYTraceSet(xcoef,ycoef,wavemin,wavemax,npix_y,xsigcoef=xsigcoef,ysigcoef=ysigcoef)
+
+   
+   
+def write_xytraceset(outfile,xytraceset) :
+    """
+    Write a traceset fits file and returns path to file written.
+    
+    Args:
+        outfile: full path to output file
+        xytraceset:  desispec.xytraceset.XYTraceSet object
+    
+    Returns:
+         full filepath of output file that was written    
+    """
+
+    log=get_logger()
+    outfile = makepath(outfile, 'frame')
+    hdus = fits.HDUList()
+    x = fits.PrimaryHDU(xytraceset.x_vs_wave_traceset._coeff.astype('f4'))
+    x.header['EXTNAME'] = "XTRACE"
+    hdus.append(x)
+    hdus.append( fits.ImageHDU(xytraceset.y_vs_wave_traceset._coeff.astype('f4'), name="YTRACE") )
+    if xytraceset.xsig_vs_wave_traceset is not None : hdus.append( fits.ImageHDU(xytraceset.xsig_vs_wave_traceset._coeff.astype('f4'), name='XSIG') )
+    if xytraceset.ysig_vs_wave_traceset is not None : hdus.append( fits.ImageHDU(xytraceset.ysig_vs_wave_traceset._coeff.astype('f4'), name='YSIG') )
+    for hdu in ["XTRACE","YTRACE","XSIG","YSIG"] :
+        if hdu in hdus :
+            hdus[hdu].header["WAVEMIN"] = xytraceset.wavemin
+            hdus[hdu].header["WAVEMAX"] = xytraceset.wavemax
+            hdus[hdu].header["NPIX_Y"]  = xytraceset.npix_y
+    hdus.writeto(outfile+'.tmp', overwrite=True, checksum=True)
+    os.rename(outfile+'.tmp', outfile)
+    log.info("wrote a xytraceset in {}".format(outfile))
+    return outfile
 
    
    

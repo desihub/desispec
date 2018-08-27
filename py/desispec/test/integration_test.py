@@ -38,7 +38,7 @@ def check_env():
         log.warning('missing $DESI_BASIS_TEMPLATES directory')
         log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/templates/basis_templates/v2.2')
         missing_env = True
-    
+
     if 'DESI_CCD_CALIBRATION_DATA' not in os.environ:
         log.warning('missing $DESI_CCD_CALIBRATION_DATA needed for preprocessing images and PSF starting point')
         missing_env = True
@@ -46,7 +46,7 @@ def check_env():
         log.warning('missing $DESI_CCD_CALIBRATION_DATA directory')
         log.warning('e.g. see NERSC:/project/projectdirs/desi/spectro/ccd_calibration_data/trunk')
         missing_env = True
-    
+
     for name in (
         'DESI_SPECTRO_SIM', 'DESI_SPECTRO_REDUX', 'PIXPROD', 'SPECPROD', 'DESIMODEL'):
         if name not in os.environ:
@@ -121,7 +121,7 @@ def run_pipeline_step(tasktype):
     nready = task_count['ready']
     if nready > 0:
         log.info('{:16s}: {}'.format(tasktype, count_string))
-        com = "desi_pipe tasks --tasktypes {tasktype} | grep -v DEBUG | desi_pipe script".format(tasktype=tasktype)
+        com = "desi_pipe tasks --tasktypes {tasktype} | grep -v DEBUG | desi_pipe script --shell".format(tasktype=tasktype)
         log.info('Running {}'.format(com))
         script = sp.check_output(com, shell=True)
         log.info('Running {}'.format(script))

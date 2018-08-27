@@ -138,8 +138,8 @@ def main(args, comm=None):
             if rank == 0:
                 warnings.warn("No tasks were ready or done", RuntimeWarning)
             sys.exit(1)
-        if failed == ready:
-            # all tasks failed
+        if (failed == ready) and (failed > 1) :
+            # all tasks failed (and there are more than one)
             if rank == 0:
                 warnings.warn("All tasks that were run failed", RuntimeWarning)
             sys.exit(1)

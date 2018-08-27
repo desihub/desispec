@@ -94,14 +94,14 @@ def main(args):
     if nspec is None:
         nspec = psf.nspec
     specmax = specmin + nspec
-    
+
     if args.fibermap_index is not None :
         fibermin = args.fibermap_index
     else :
         camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
         spectrograph = int(camera[1])
         fibermin = spectrograph * psf.nspec + specmin
-    
+
     print('Starting {} spectra {}:{} at {}'.format(os.path.basename(input_file),
         specmin, specmin+nspec, time.asctime()))
 
@@ -181,7 +181,7 @@ regularize: {regularize}
     #   In specter.extract.ex2d one has flux /= dwave
     #   to convert the measured total number of electrons per
     #   wavelength node to an electron 'density'
-    frame.meta['BUNIT'] = 'electron/Angstrom'
+    frame.meta['BUNIT'] = 'count/Angstrom'
 
     #- Add scores to frame
     if not args.no_scores :
@@ -239,14 +239,14 @@ def main_mpi(args, comm=None, timing=None):
     if nspec is None:
         nspec = psf.nspec
     specmax = specmin + nspec
-    
+
     if args.fibermap_index is not None :
         fibermin = args.fibermap_index
     else :
         camera = img.meta['CAMERA'].lower()     #- b0, r1, .. z9
         spectrograph = int(camera[1])
         fibermin = spectrograph * psf.nspec + specmin
-    
+
     if args.fibermap is not None:
         fibermap = io.read_fibermap(args.fibermap)
         fibermap = fibermap[fibermin:fibermin+nspec]
@@ -398,7 +398,7 @@ def main_mpi(args, comm=None, timing=None):
             #   In specter.extract.ex2d one has flux /= dwave
             #   to convert the measured total number of electrons per
             #   wavelength node to an electron 'density'
-            frame.meta['BUNIT'] = 'electron/Angstrom'
+            frame.meta['BUNIT'] = 'count/Angstrom'
 
             #- Add scores to frame
             compute_and_append_frame_scores(frame,suffix="RAW")

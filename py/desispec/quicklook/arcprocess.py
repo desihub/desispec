@@ -2,6 +2,9 @@ import numpy as np
 import scipy.optimize
 from numpy.polynomial.legendre import Legendre, legval, legfit
 from desispec.quicklook import qlexceptions,qllogger
+from desispec.io import read_xytraceset, write_xytraceset
+from specter.util.traceset import TraceSet,fit_traces
+
 qlog=qllogger.QLLogger("QuickLook",20)
 log=qlog.getlog()
 
@@ -68,6 +71,10 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
     return: coefficients of the polynomial expansion
 
     """
+    
+    if domain is None :
+        raise ValueError("domain must be given in process_arc")
+    
     nspec=frame.flux.shape[0]
     if linelist is None:
         camera=frame.meta["CAMERA"]
@@ -101,24 +108,31 @@ def process_arc(frame,linelist=None,npoly=2,nbins=2,domain=None):
         thislegfit=fit_wsigmas(meanwaves,sigmas,esigmas,domain=domain,npoly=npoly)
         coeffs[spec]=thislegfit.coef
 
-    return coeffs
+    # need to return the wavemin and wavemax of the fit
+    return coeffs,domain[0],domain[1]
 
-def write_psffile(psfbootfile,wcoeffs,outfile,wavestepsize=None):
+def write_psffile(infile,wcoeffs,wcoeffs_wavemin,wcoeffs_wavemax,outfile,wavestepsize=None):
     """
     extract psfbootfile, add wcoeffs, and make a new psf file preserving the traces etc.
     psf module will load this
     """
-    from astropy.io import fits
-    psf=fits.open(psfbootfile)
-    xcoeff=psf[0]
-    xcoeff.header["PSFTYPE"]='psf'
-    ycoeff=psf[1]
-    xsigma=psf[2]
 
-    wsigma=fits.ImageHDU(wcoeffs,name='WSIGMA')
-    wsigma.header["PSFTYPE"]='boxcar'
-    if wavestepsize is None:
-        wavestepsize = 'NATIVE CCD GRID'
-    wsigma.header["WAVESTEP"]=(wavestepsize,'Wavelength step size [Angstroms]')
-    hdulist=fits.HDUList([xcoeff,ycoeff,xsigma,wsigma])
-    hdulist.writeto(outfile,overwrite=True)
+    tset = read_xytraceset(infile)
+    
+    # convert wsigma to ysig ...
+    nfiber    = wcoeffs.shape[0]
+    ncoef     = wcoeffs.shape[1]
+    nw        = 100 # need a larger number than ncoef to get an accurate dydw from the gradients
+    
+    # wcoeffs and tset do not necessarily have the same wavelength range
+    wave      = np.linspace(tset.wavemin,tset.wavemax,nw)
+    wsig_set  = TraceSet(wcoeffs,[wcoeffs_wavemin,wcoeffs_wavemax]) 
+    wsig_vals = np.zeros((nfiber,nw))
+    for f in range(nfiber) :
+        y_vals = tset.y_vs_wave(f,wave)
+        dydw   = np.gradient(y_vals)/np.gradient(wave)
+        wsig_vals[f]=wsig_set.eval(f,wave)*dydw
+    tset.ysig_vs_wave_traceset = fit_traces(wave, wsig_vals, deg=ncoef-1, domain=(tset.wavemin,tset.wavemax))
+        
+    write_xytraceset(outfile,tset)
+    

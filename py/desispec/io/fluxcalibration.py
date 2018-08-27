@@ -26,12 +26,12 @@ def write_stdstar_models(norm_modelfile,normalizedFlux,wave,fibers,data,header=N
     hdr = fitsheader(header)
     add_dependencies(hdr)
 
-    hdr['EXTNAME'] = ('FLUX', '[1e-17 erg/(s cm2 Angstrom)]')
-    hdr['BUNIT'] = ('1e-17 erg/(s cm2 Angstrom)', 'Flux units')
+    hdr['EXTNAME'] = ('FLUX', '[10**-17 erg/(s cm2 Angstrom)]')
+    hdr['BUNIT'] = ('10**-17 erg/(s cm2 Angstrom)', 'Flux units')
     hdu1=fits.PrimaryHDU(normalizedFlux.astype('f4'), header=hdr)
 
     hdu2 = fits.ImageHDU(wave.astype('f4'))
-    hdu2.header['EXTNAME'] = ('WAVELENGTH', '[Angstroms]')
+    hdu2.header['EXTNAME'] = ('WAVELENGTH', '[Angstrom]')
     hdu2.header['BUNIT'] = ('Angstrom', 'Wavelength units')
 
     hdu3 = fits.ImageHDU(fibers, name='FIBERS')
@@ -90,7 +90,7 @@ def write_flux_calibration(outfile, fluxcalib, header=None):
     add_dependencies(hdr)
 
     hdr['EXTNAME'] = 'FLUXCALIB'
-    hdr['BUNIT'] = ('1e+17 cm2 electron s / erg', 'i.e. (electron/Angstrom) / (1e-17 erg/s/cm2/Angstrom)')
+    hdr['BUNIT'] = ('10**+17 cm2 count s / erg', 'i.e. (electron/Angstrom) / (1e-17 erg/s/cm2/Angstrom)')
     hx.append( fits.PrimaryHDU(fluxcalib.calib.astype('f4'), header=hdr) )
     hx.append( fits.ImageHDU(fluxcalib.ivar.astype('f4'), name='IVAR') )
     hx.append( fits.CompImageHDU(fluxcalib.mask, name='MASK') )
