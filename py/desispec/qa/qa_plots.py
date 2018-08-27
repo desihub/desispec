@@ -733,8 +733,6 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
 
                 all_resid = np.zeros_like(mags)
                 all_resid[gd_resid] = resid
-                if channel == 'r':
-                    import pdb; pdb.set_trace()
 
                 # Save
                 metrics += [all_resid]
