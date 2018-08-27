@@ -9,6 +9,8 @@ import warnings
 from desiutil.log import get_logger
 
 from desispec.io import read_params
+from desispec.qa import qa_plots_ql
+
 desi_params = read_params()
 
 # log=get_logger()
@@ -334,6 +336,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         cframe_file = frame_file.replace('frame-', 'cframe-')
         cframe = read_frame(cframe_file)
         qaframe.run_qa('S2N', (cframe, objlist), clobber=clobber)
+        # Figure?
 
     # FluxCalib QA
     if qatype == 'qa_data':

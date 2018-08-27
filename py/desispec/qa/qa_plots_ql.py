@@ -514,8 +514,9 @@ def plot_residuals(frame,qa_dict,outfile):
 #    #plt.tight_layout()
 
     fig.savefig(outfile)
-    
-def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
+
+
+def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
     """
     Plot SNR
 
@@ -554,6 +555,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         else:
             fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
         #- Remove invalid values for plotting
+        #  JXP -- This is not a good way to code this in Python
         badobj = badfibs[oid]
         if len(badobj) > 0:
             fibers = np.array(fibers)

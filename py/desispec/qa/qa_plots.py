@@ -651,11 +651,13 @@ def exposure_map(x,y,metric,mlbl=None, outfile=None, title=None,
         plt.close()
 
 
-def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True):
+def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True,
+                 mag_mnx=[18.,22.]):
     """ Generate an Exposure level plot of a S/N metric
     Args:
         qa_exp: QA_Exposure
         metric: str,  allowed entires are: ['resid']
+        mag_mnx: Range of magnitudes used for residual plot
 
     Returns:
 
@@ -702,6 +704,7 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True):
             if metric == 'resid':
                 # Setup
                 s2n_dict = qa_exp.data['frames'][camera]['S2N']
+                med_snr = np.array(s2n_dict['METRICS']['MEDIAN_SNR'])
                 funcMap = s2n_funcs(exptime=s2n_dict['METRICS']['EXPTIME'],
                                     r2=s2n_dict['METRICS']['r2'])
                 fitfunc = funcMap['astro']
@@ -713,20 +716,30 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True):
                 gd_mag = np.isfinite(mags)
 
                 # Need to restrict to Science
-                #import pdb; pdb.set_trace()
+                science_ids = np.array(s2n_dict['METRICS']['SCIENCE_FIBERID'])
+                gd_type = np.zeros_like(gd_mag, dtype=bool)
+                gd_type[science_ids] = True
+
+                # Second mag cut
+                gd_mag2 = (mags > mag_mnx[0]) & (mags < mag_mnx[1])
+
+                # Synthesize
+                gd_resid = gd_mag & gd_type & gd_mag2
 
                 # Residuals
-                flux = 10 ** (-0.4 * (mags[gd_mag] - 22.5))
+                flux = 10 ** (-0.4 * (mags[gd_resid] - 22.5))
                 fit_snr = fitfunc(flux, *coeff)
-                resid = (np.array(s2n_dict['METRICS']['MEDIAN_SNR'])[gd_mag] - fit_snr) / fit_snr
+                resid = (med_snr[gd_resid] - fit_snr) / fit_snr
 
                 all_resid = np.zeros_like(mags)
-                all_resid[gd_mag] = resid
+                all_resid[gd_resid] = resid
+                if channel == 'r':
+                    import pdb; pdb.set_trace()
 
                 # Save
                 metrics += [all_resid]
                 sv_mags += [mags[gd_mag]]
-                sv_s2n += [np.array(s2n_dict['METRICS']['MEDIAN_SNR'])[gd_mag]]
+                sv_s2n += [med_snr[gd_mag]]
         # Concatenate
         x = np.concatenate(x)
         y = np.concatenate(y)
@@ -734,8 +747,7 @@ def exposure_s2n(qa_exp, metric, outfile='exposure_s2n.png', verbose=True):
 
         # Exposure
         exposure_map(x,y,metrics, mlbl='S/N '+metric, ax=ax, fig=fig,
-                 title=None, outfile=None, psz=1., cmap=cmap,
-                     vmnx=[-1.,1.])
+                 title=None, outfile=None, psz=1., cmap=cmap, vmnx=[-0.9,0.9])
         # Label
         ax.text(0.05, 0.9, channel, color=cclrs[channel], transform=ax.transAxes, ha='left')
 
