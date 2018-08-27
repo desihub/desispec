@@ -143,6 +143,10 @@ def main():
         help="Run on this NERSC system (edison | cori-haswell "
         "| cori-knl).  Default uses $NERSC_HOST")
 
+    parser.add_argument("--shell", required=False, default=False,
+        action="store_true",
+        help="generate normal bash scripts, even if run on a NERSC system")
+
     parser.add_argument("--nersc_queue", required=False, default="regular",
         help="Run the test in this queue")
 
@@ -152,12 +156,16 @@ def main():
 
     args = parser.parse_args()
 
-    if args.nersc is None:
-        if "NERSC_HOST" in os.environ:
-            if os.environ["NERSC_HOST"] == "cori":
-                args.nersc = "cori-haswell"
-            else:
-                args.nersc = os.environ["NERSC_HOST"]
+    if args.shell:
+        # We are forcibly generating shell scripts.
+        args.nersc = None
+    else:
+        if args.nersc is None:
+            if "NERSC_HOST" in os.environ:
+                if os.environ["NERSC_HOST"] == "cori":
+                    args.nersc = "cori-haswell"
+                else:
+                    args.nersc = os.environ["NERSC_HOST"]
 
     createopt = create_args(args)
     runopt = run_args(args)
