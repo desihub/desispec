@@ -421,7 +421,6 @@ class Config(object):
                  'Sky_Continuum': 'skycont',
                  'Sky_Rband': 'skyRband',
                  'Sky_Peaks': 'skypeak',
-                 'Sky_Residual': 'skyresid',
                  'Integrate_Spec': 'integ',
                  'Calculate_SNR': 'snr',
                  'Check_Resolution': 'checkres',

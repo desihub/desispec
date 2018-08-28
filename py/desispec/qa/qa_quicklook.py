@@ -1650,7 +1650,7 @@ class Sky_Peaks(MonitoringAlg):
         
         #SE: it is deactivated now but remember that the order of targets in tgt array here is: tgtlist = ['STD','QSO','ELG','LRG','BGS','MWS_STAR']
         #nspec_counts, sky_counts, tgt_counts, tgt_counts_rms = sky_peaks(param, frame)
-        nspec_counts, sky_counts= sky_peaks(param, frame)
+        nspec_counts, sky_counts, skyfibers, nskyfib= sky_peaks(param, frame)
         rms_nspec = np.std(nspec_counts)#qalib.getrms(nspec_counts)
         rms_skyspec = np.std(sky_counts)#qalib.getrms(sky_counts)  
         
@@ -1659,7 +1659,7 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["PARAMS"] = param
 
-        retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
+        retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts,"SKYFIBERID":skyfibers, "NSKY_FIB":nskyfib}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
 
 
         if qlf:
@@ -1957,7 +1957,7 @@ class Integrate_Spec(MonitoringAlg):
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
 
 
-        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg)}
+        retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
         if qlf:
             qlf_post(retval) 

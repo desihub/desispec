@@ -256,6 +256,7 @@ def sky_peaks(param, frame, dw=2, amps=False):
 
     nspec_counts=[]
     sky_counts=[]
+    skyfibers = []
     nspec_counts_rms=[]
     amp1=[]
     amp2=[]
@@ -279,6 +280,8 @@ def sky_peaks(param, frame, dw=2, amps=False):
 
         # Sky?
         if frame.fibermap['OBJTYPE'][i]=='SKY':
+            
+            skyfibers.append(i)
             sky_counts.append(sum_counts)
             '''
             if amps:
@@ -323,11 +326,11 @@ def sky_peaks(param, frame, dw=2, amps=False):
                     rmsamp2.append(rmsamp2_flux)
                     rmsamp4.append(rmsamp4_flux)
             '''
-
+    nskyfib=len(skyfibers)
     nspec_counts = np.array(nspec_counts)
     sky_counts = np.array(sky_counts)
     # Return
-    return nspec_counts, sky_counts
+    return nspec_counts, sky_counts, skyfibers, nskyfib
 
 
 def sky_resid(param, frame, skymodel, quick_look=False):
