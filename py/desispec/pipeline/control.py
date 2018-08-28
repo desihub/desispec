@@ -402,7 +402,7 @@ def check_tasks(tasks, db=None):
     return tskstate
 
 
-def sync(db, nightstr=None):
+def sync(db, nightstr=None, specdone=False):
     """Synchronize DB state based on the filesystem.
 
     This scans the filesystem for all tasks for the specified nights,
@@ -411,13 +411,13 @@ def sync(db, nightstr=None):
     Args:
         db (DataBase): the production DB.
         nightstr (list): comma separated (YYYYMMDD) or regex pattern.
-
+        specdone: If true, set spectra to done if files exist.
     """
     allnights = io.get_nights(strip_path=True)
     nights = pipeprod.select_nights(allnights, nightstr)
 
     for nt in nights:
-        db.sync(nt)
+        db.sync(nt,specdone=specdone)
     return
 
 
