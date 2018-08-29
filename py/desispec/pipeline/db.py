@@ -673,7 +673,6 @@ class DataBase:
         # sync to correctly reconstruct the database state.
 
         pixrows = self.select_healpix_frame({"night" : night})
-        print("pixrows=",pixrows)
         # First check the existence of the files touched by this night
         spec_exists = dict()
         red_exists = dict()
@@ -685,9 +684,6 @@ class DataBase:
 
             # Check spectra outputs
             outfiles = task_classes["spectra"].paths(spec_name)
-
-            print(spec_name,outfiles)
-
             spec_exists[row["pixel"]] = True
             for out in outfiles:
                 if not os.path.isfile(out):
@@ -750,7 +746,7 @@ class DataBase:
 
                 spec_name = task_classes["spectra"].name_join(row)
                 red_name = task_classes["redshift"].name_join(row)
-                
+
                 if (not cfdone) and (not specdone) :
                     # The cframes do not exist, so reset the state of the
                     # spectra and redshift tasks.
