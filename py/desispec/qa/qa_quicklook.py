@@ -196,9 +196,6 @@ class Check_HDUs(MonitoringAlg):
         retval["NIGHT"] = header["NIGHT"]
         kwargs=self.config['kwargs']
         
-        #SE: why this was repeated here again? 
-        #rawimage=raw[camera.upper()].data
-        #header=raw[camera.upper()].header
 
         HDUstat = "NORMAL" 
         EXPNUMstat = "NORMAL"    
@@ -246,7 +243,7 @@ class Trace_Shifts(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "TRACE_REF"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "TRACE_REF"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "TRACE_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -312,11 +309,15 @@ class Trace_Shifts(MonitoringAlg):
     def run_qa(self,fibermap,image,paname=None,amps=False,psf=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {
-                "TRACE_NORMAL_RANGE":[-1.0, 1.0],
-                "TRACE_WARN_RANGE":[-2.0, 2.0]
-                }
+                log.critical("No parameter is found for this QA")
+                sys.exit("Update the configuration file for the parameters")
+                
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters 
+            #log.debug("Param is None. Using default param instead")
+            #param = {
+                #"TRACE_NORMAL_RANGE":[-1.0, 1.0],
+                #"TRACE_WARN_RANGE":[-2.0, 2.0]
+                #}
 
         #- RS: Return empty dictionaries until flexure metrics are decided
         dx=[]
@@ -378,8 +379,7 @@ class Bias_From_Overscan(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
-            import sys
-            sys.exit()
+
         else:
             image=args[0]
             
@@ -437,7 +437,7 @@ class Bias_From_Overscan(MonitoringAlg):
         param['PROC_DESISPEC_VERSION']= desispec.__version__
         param['PROC_QuickLook_VERSION']= quicklook.__qlversion__
                   
-        #header = image.meta
+        
         if 'INHERIT' in image.meta and image.meta['INHERIT']:
 
             h0 = image.meta
@@ -451,11 +451,16 @@ class Bias_From_Overscan(MonitoringAlg):
         bias = np.mean(bias_overscan)
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {                
-                "BIAS_NORMAL_RANGE":[-1.0, 1.0],
-                "BIAS_WARN_RANGE:":[-2.0, 2.0]
-                }
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+                
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters 
+
+            #log.debug("Param is None. Using default param instead")
+            #param = {                
+                #"BIAS_NORMAL_RANGE":[-1.0, 1.0],
+                #"BIAS_WARN_RANGE:":[-2.0, 2.0]
+                #}
         retval["PARAMS"] = param
 
         if amps:
@@ -562,12 +567,16 @@ class Get_RMS(MonitoringAlg):
         #rmsccd = np.mean([image.meta['RDNOISE1'],image.meta['RDNOISE2'],image.meta['RDNOISE3'],image.meta['RDNOISE4']]) #--> "NOISE":rmsccd
         
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {
-                "PERCENTILES":[68.2,95.4,99.7],
-                "NOISE_NORMAL_RANGE":[-1.0, 1.0],
-                "NOISE_WARN_RANGE":[-2.0, 2.0]
-                }
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")            
+            
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #param = {
+                #"PERCENTILES":[68.2,95.4,99.7],
+                #"NOISE_NORMAL_RANGE":[-1.0, 1.0],
+                #"NOISE_WARN_RANGE":[-2.0, 2.0]
+                #}
 
         retval["PARAMS"] = param
 
@@ -795,27 +804,29 @@ class Calc_XWSigma(MonitoringAlg):
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        #ra = fibermap["RA_TARGET"]
-        #dec = fibermap["DEC_TARGET"]
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            if image.meta["FLAVOR"] == 'arc':
-                param = {
-                    "B_PEAKS":[4047.7, 4359.6, 5087.2],
-                    "R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
-                    "Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
-                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0], #- Assumes both sigma and shift in same range. Change if needed
-                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
-                    }
-            else:
-                param = {
-                    "B_PEAKS":[3914.4, 5199.3, 5578.9],
-                    "R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                    "Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                    "XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0],
-                    "XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
-                    }
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #if image.meta["FLAVOR"] == 'arc':
+                #param = {
+                    #"B_PEAKS":[4047.7, 4359.6, 5087.2],
+                    #"R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
+                    #"Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
+                    #"XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0], #- Assumes both sigma and shift in same range. Change if needed
+                    #"XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
+                    #}
+            #else:
+                #param = {
+                    #"B_PEAKS":[3914.4, 5199.3, 5578.9],
+                    #"R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                    #"Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
+                    #"XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0],
+                    #"XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
+                    #}
 
         #- Ensure that the QA will run even if 500 spectra aren't present
         if fibermap['FIBER'].shape[0] >= 500:
@@ -1084,12 +1095,16 @@ class Count_Pixels(MonitoringAlg):
         kwargs=self.config['kwargs']
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {
-                 "CUTPIX":5,   # low threshold for number of counts in sigmas
-                 "LITFRAC_NORMAL_RANGE":[-0.1, 0.1],
-                 "LITFRAC_WARN_RANGE":[-0.2, 0.2]
-                 }
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #param = {
+                 #"CUTPIX":5,   # low threshold for number of counts in sigmas
+                 #"LITFRAC_NORMAL_RANGE":[-0.1, 0.1],
+                 #"LITFRAC_WARN_RANGE":[-0.2, 0.2]
+                 #}
 
         retval["PARAMS"] = param
 
@@ -1208,21 +1223,22 @@ class CountSpectralBins(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        #ra = fibermap["RA_TARGET"]
-        #dec = fibermap["DEC_TARGET"]
-
         grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
             log.debug("grid_size is NOT UNIFORM")
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {
-                 "CUTBINS":5,   #- threshold for number of counts in units of readnoise(scaled to bins)
-                 "NGOODFIB_NORMAL_RANGE":[490, 500],
-                 "NGOODFIB_WARN_RANGE":[480, 500],
-                 "N_KNOWN_BROKEN_FIBERS": 0
-                 }
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #param = {
+                 #"CUTBINS":5,   #- threshold for number of counts in units of readnoise(scaled to bins)
+                 #"NGOODFIB_NORMAL_RANGE":[490, 500],
+                 #"NGOODFIB_WARN_RANGE":[480, 500],
+                 #"N_KNOWN_BROKEN_FIBERS": 0
+                 #}
 
         retval["PARAMS"] = param
         #- get the effective readnoise for the fibers 
@@ -1239,8 +1255,8 @@ class CountSpectralBins(MonitoringAlg):
         
         passfibers=np.where(frame.flux.sum(axis=1)>threshold)[0] 
         ngoodfibers=passfibers.shape[0] - param["N_KNOWN_BROKEN_FIBERS"]
-        good_fiber=np.array([0]*frame.nspec)
-        good_fiber[passfibers]=1 #- assign 1 for good fiber
+        good_fibers=np.array([0]*frame.nspec)
+        good_fibers[passfibers]=1 #- assign 1 for good fiber
 
         #- leaving the amps granularity needed for caching as defunct. If needed in future, this needs to be propagated through.
         amps=False
@@ -1256,7 +1272,7 @@ class CountSpectralBins(MonitoringAlg):
             retval["BOTTOM_MAX_WAVE_INDEX"]=int(bottommax)
             retval["TOP_MIN_WAVE_INDEX"]=int(topmin)
 
-        retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBER": good_fiber}
+        retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBERS": good_fibers}
 
         #- http post if needed
         if qlf:
@@ -1350,21 +1366,22 @@ class Sky_Continuum(MonitoringAlg):
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
 
-        #ra = fibermap["RA_TARGET"]
-        #dec = fibermap["DEC_TARGET"]
-        
         camera=frame.meta["CAMERA"]
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            desi_params = read_params()
-            param = {"B_CONT": ["4000, 4500", "5250, 5550"],
-                         "R_CONT": ["5950, 6200", "6990, 7230"],
-                         "Z_CONT": ["8120, 8270", "9110, 9280"],
-                         "SKYCONT_NORMAL_RANGE": [100.0, 400.0],
-                         "SKYCONT_WARN_RANGE": [50.0, 600.0]}
-            for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_ALARM_RANGE', 'SKYCONT_WARN_RANGE']: #- needs updating alarm/warn - normal/warn in desi_params.
-                param[key] = desi_params['qa']['skysub']['PARAMS'][key]
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+ 
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #desi_params = read_params()
+            #param = {"B_CONT": ["4000, 4500", "5250, 5550"],
+                         #"R_CONT": ["5950, 6200", "6990, 7230"],
+                         #"Z_CONT": ["8120, 8270", "9110, 9280"],
+                         #"SKYCONT_NORMAL_RANGE": [100.0, 400.0],
+                         #"SKYCONT_WARN_RANGE": [50.0, 600.0]}
+            #for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_ALARM_RANGE', 'SKYCONT_WARN_RANGE']: #- needs updating alarm/warn - normal/warn in desi_params.
+                #param[key] = desi_params['qa']['skysub']['PARAMS'][key]
 
         wrange1=param["{}_CONT".format(camera[0].upper())][0]
         wrange2=param["{}_CONT".format(camera[0].upper())][1]
@@ -1472,14 +1489,18 @@ class Sky_Rband(MonitoringAlg):
         camera=frame.meta["CAMERA"]
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            desi_params = read_params()
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
             
-            param = {"B_CONT": ["4000, 4500", "5250, 5550"],
-                         "R_CONT": ["5950, 6200", "6990, 7230"],
-                         "Z_CONT": ["8120, 8270", "9110, 9280"],
-                         "SKYRBAND_NORMAL_RANGE": [-100.0, 100.0],
-                         "SKYRBAND_WARN_RANGE": [-200.0, 200.0]}
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #desi_params = read_params()
+            
+            #param = {"B_CONT": ["4000, 4500", "5250, 5550"],
+                         #"R_CONT": ["5950, 6200", "6990, 7230"],
+                         #"Z_CONT": ["8120, 8270", "9110, 9280"],
+                         #"SKYRBAND_NORMAL_RANGE": [-100.0, 100.0],
+                         #"SKYRBAND_WARN_RANGE": [-200.0, 200.0]}
             
             for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYRBAND_ALARM_RANGE', 'SKYRBAND_WARN_RANGE']: 
                 param[key] = desi_params['qa']['skysub']['PARAMS'][key]
@@ -1642,13 +1663,14 @@ class Sky_Peaks(MonitoringAlg):
 
         # Parameters
         if param is None:
-            log.info("Param is None. Using default param instead")
-            desi_params = read_params()
-            param = desi_params['qa']['skypeaks']['PARAMS']
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.info("Param is None. Using default param instead")
+            #desi_params = read_params()
+            #param = desi_params['qa']['skypeaks']['PARAMS']
 
-        # Run
-        
-        #SE: it is deactivated now but remember that the order of targets in tgt array here is: tgtlist = ['STD','QSO','ELG','LRG','BGS','MWS_STAR']
         #nspec_counts, sky_counts, tgt_counts, tgt_counts_rms = sky_peaks(param, frame)
         nspec_counts, sky_counts, skyfibers, nskyfib= sky_peaks(param, frame)
         rms_nspec = np.std(nspec_counts)#qalib.getrms(nspec_counts)
@@ -1769,14 +1791,18 @@ class Sky_Residual(MonitoringAlg):
 
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {
-                "BIN_SZ":0.1, #- Bin size for histograms
-                "PCHI_RESID":0.05, # P(Chi^2) limit for bad skyfiber model residuals
-                "PER_RESID":95.,   # Percentile for residual distribution
-                "RESID_NORMAL_RANGE":[-5.0, 5.0],
-                "RESID_WARN_RANGE":[-10.0, 10.0]
-                }
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+             # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #param = {
+                #"BIN_SZ":0.1, #- Bin size for histograms
+                #"PCHI_RESID":0.05, # P(Chi^2) limit for bad skyfiber model residuals
+                #"PER_RESID":95.,   # Percentile for residual distribution
+                #"RESID_NORMAL_RANGE":[-5.0, 5.0],
+                #"RESID_WARN_RANGE":[-10.0, 10.0]
+                #}
 
         qadict=qalib.sky_resid(param,frame,skymodel,quick_look=True)
 
@@ -1946,11 +1972,15 @@ class Integrate_Spec(MonitoringAlg):
             magdiff_avg.append(magdiff)
             
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {
-                "DELTAMAG_NORMAL_RANGE":[-0.5, 0.5],
-                "DELTAMAG_WARN_RANGE":[-1.0, 1.0]
-                }
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+             # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #param = {
+                #"DELTAMAG_NORMAL_RANGE":[-0.5, 0.5],
+                #"DELTAMAG_WARN_RANGE":[-1.0, 1.0]
+                #}
 
         retval["PARAMS"] = param
 
@@ -2061,9 +2091,13 @@ class Calculate_SNR(MonitoringAlg):
 
         #- select band for mag, using DECAM_R if present
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            desi_params = read_params()
-            param = desi_params['qa']['s2n']['PARAMS'].copy()
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #desi_params = read_params()
+            #param = desi_params['qa']['s2n']['PARAMS'].copy()
             #param = {
             #    "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc.
             #    "FIDSNR_NORMAL_RANGE":[6.5, 7.5],
@@ -2195,10 +2229,14 @@ class Check_Resolution(MonitoringAlg):
         retval["DATA"]={"LPolyCoef0":p0, "LPolyCoef1":p1, "LPolyCoef2":p2}
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {
-                    "NBADCOEFFS_NORMAL_RANGE":[-1, 1],
-                    "NBADCOEFFS_WARN_RANGE:":[-2, 2]}
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #param = {
+                    #"NBADCOEFFS_NORMAL_RANGE":[-1, 1],
+                    #"NBADCOEFFS_WARN_RANGE:":[-2, 2]}
         retval["PARAMS"] = param
 
         # http post
@@ -2285,10 +2323,14 @@ class Check_FiberFlat(MonitoringAlg):
         retval["METRICS"]={"FFLMEAN": FFLMEANtest}
 
         if param is None:
-            log.debug("Param is None. Using default param instead")
-            param = {
-                    "FFLMEAN_NORMAL_RANGE":[-10, 10],
-                    "FFLMEAN_WARN_RANGE:":[-20, 20]}
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
+            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
+            #log.debug("Param is None. Using default param instead")
+            #param = {
+                    #"FFLMEAN_NORMAL_RANGE":[-10, 10],
+                    #"FFLMEAN_WARN_RANGE:":[-20, 20]}
         retval["PARAMS"] = param
 
         # http post
