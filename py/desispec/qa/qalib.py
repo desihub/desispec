@@ -583,7 +583,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         expid : int
         params: parameters dictionary
         {
-          "Func": "linear", # Fit function type one of ["linear","poly"]
+          "Func": "linear", # Fit function type one of ["linear","poly","astro"]
           "FIDMAG": 22.0, # magnitude to evaluate the fit
           "Filter":"DECAM_R", #filter name
         }
