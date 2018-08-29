@@ -6,6 +6,9 @@ from __future__ import print_function, absolute_import, division
 
 import warnings
 
+import numpy as np
+import copy
+
 from desiutil.log import get_logger
 
 from desispec.io import read_params
@@ -211,7 +214,7 @@ class QA_Frame(object):
             qadict,badfibs,fitsnr = SNRFit(inputs[0], self.night, self.camera, self.expid,
                                            inputs[1], self.qa_data[qatype]['PARAMS'], fidboundary=None)
             # Remove undesired
-            for key in ['RA', 'DEC', 'SNR_RESID']:
+            for key in ['RA', 'DEC']:
                 qadict.pop(key)
         else:
             raise ValueError('Not ready to perform {:s} QA'.format(qatype))
@@ -337,6 +340,21 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
         cframe = read_frame(cframe_file)
         qaframe.run_qa('S2N', (cframe, objlist), clobber=clobber)
         # Figure?
+        if make_plots:
+            s2n_dict = copy.deepcopy(qaframe.qa_data['S2N'])
+            qafig = meta.findfile('qa_s2n_fig', night=night, camera=camera, expid=expid,
+                              specprod_dir=specprod_dir, outdir=output_dir)
+            #badfibs = np.where(np.isnan(s2n_dict['METRICS']['MEDIAN_SNR']))[0].tolist()
+            #sci_idx = s2n_dict['METRICS']['OBJLIST'].index('SCIENCE')
+            coeff = s2n_dict['METRICS']['FITCOEFF_TGT']#[sci_idx]
+            # Add an item or two for the QL method
+            s2n_dict['CAMERA'] = camera
+            s2n_dict['EXPID'] = expid
+            s2n_dict['PANAME'] = 'SNRFit'
+            s2n_dict['METRICS']['RA'] = frame.fibermap['RA_OBS']
+            s2n_dict['METRICS']['DEC'] = frame.fibermap['DEC_OBS']
+            #import pdb; pdb.set_trace()
+            qa_plots_ql.plot_SNR(s2n_dict, qafig, objlist, [[]]*len(objlist), coeff)
 
     # FluxCalib QA
     if qatype == 'qa_data':
