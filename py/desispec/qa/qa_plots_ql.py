@@ -653,10 +653,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
         ax.tick_params(axis='x',labelsize=6)
         ax.tick_params(axis='y',labelsize=6)
         ax.semilogy(obj_mag,snr2,'b.',markersize=1)
-        try:
-            ax.semilogy(plot_mag,plot_fit,'y',markersize=0.5)
-        except:
-            import pdb; pdb.set_trace()
+        ax.semilogy(plot_mag,plot_fit,'y',markersize=0.5)
 
 
     fig.savefig(outfile)
