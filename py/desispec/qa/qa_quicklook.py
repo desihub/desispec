@@ -834,27 +834,15 @@ class Calc_XWSigma(MonitoringAlg):
         else:
             fibers = fibermap['FIBER'].shape[0]
 
-        #- dw and dp are wavelength/pixel ranges used as region to calculate Gaussian over peaks
-        #- hardcoded until a better method is found, perhaps configurable (R.S.)
-        dw=2.
-        dp=3
+        #- Define number of pixels to be fit
+        dp=param['PIXEL_RANGE']/2
         #- Get wavelength ranges around peaks
-        peak_wave=[]
         peaks=param['{}_PEAKS'.format(camera[0].upper())]
-        for p in range(len(peaks)):
-            peak_lower = peaks[p] - dw
-            peak_upper = peaks[p] + dw
-            peak_wave.append(peak_lower)
-            peak_wave.append(peak_upper)
-        npeaks=len(peaks)
-        peak_wave = np.array(peak_wave)
 
         xfails=[]
         wfails=[]
         xsigma=[]
         wsigma=[]
-        xsigma_sky=[]
-        wsigma_sky=[]
         xsigma_amp1=[]
         wsigma_amp1=[]
         xsigma_amp2=[]
@@ -863,129 +851,65 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_amp3=[]
         xsigma_amp4=[]
         wsigma_amp4=[]
-        for i in range(fibers):
+        for fiber in range(fibers):
             xsig=[]
             wsig=[]
-            #- Use psf information to convert wavelength to pixel values
-            xpix=desispec.quicklook.qlpsf.PSF.x(psf,ispec=i,wavelength=peak_wave)[0]
-            ypix=desispec.quicklook.qlpsf.PSF.y(psf,ispec=i,wavelength=peak_wave)[0]
             for peak in range(len(peaks)):
+                #- Use psf information to convert wavelength to pixel values
+                xpixel=desispec.quicklook.qlpsf.PSF.x(psf,ispec=fiber,wavelength=peaks[peak])[0][0]
+                ypixel=desispec.quicklook.qlpsf.PSF.y(psf,ispec=fiber,wavelength=peaks[peak])[0][0]
                 #- Find x and y pixel values around sky lines
-                xpix_peak=np.arange(int(np.rint(xpix[2*peak]))-dp,int(np.rint(xpix[2*peak+1]))+dp+1,1)
-                ypix_peak=np.arange(int(np.rint(ypix[2*peak])),int(np.rint(ypix[2*peak+1])),1)
+                xpix_peak=np.arange(int(xpixel-dp),int(xpixel+dp),1)
+                ypix_peak=np.arange(int(ypixel-dp),int(ypixel+dp),1)
                 #- Fit gaussian to counts in pixels around sky line
                 #- If any values fail, store x/w, wavelength, and fiber
                 try:
-                    xpopt,xpcov=curve_fit(qalib.gauss,np.arange(len(xpix_peak)),image.pix[int(np.mean(ypix_peak)),xpix_peak])
+                    xpopt,xpcov=curve_fit(qalib.gauss,np.arange(len(xpix_peak)),image.pix[int(ypixel),xpix_peak])
+                    xs=np.abs(xpopt[2])
                 except:
-                    xfail=[i,peaks[peak]]
+                    xfail=[fiber,peaks[peak]]
                     xfails.append(xfail)
                     pass
                 try:
-                    wpopt,wpcov=curve_fit(qalib.gauss,np.arange(len(ypix_peak)),image.pix[ypix_peak,int(np.mean(xpix_peak))])
+                    wpopt,wpcov=curve_fit(qalib.gauss,np.arange(len(ypix_peak)),image.pix[ypix_peak,int(xpixel)])
+                    ws=np.abs(wpopt[2])
                 except:
-                    wfail=[i,peaks[peak]]
+                    wfail=[fiber,peaks[peak]]
                     wfails.append(wfail)
                     pass
 
-                #- Save sigmas from fits
-                xs=np.abs(xpopt[2])
-                ws=np.abs(wpopt[2])
-                xsig.append(xs)
-                wsig.append(ws)
+                #- Excluding fibers 240-260 in case some fibers overlap amps
+                #- Excluding peaks in the center of image in case peak overlaps two amps
+                #- This shouldn't cause a significant loss of information 
+                if amps:
+                    if fibermap['FIBER'][fiber]<240:
+                        if ypixel < 2000.:
+                            xsigma_amp1.append(xs)
+                            wsigma_amp1.append(ws)
+                        if ypixel > 2100.:
+                            xsigma_amp3.append(xs)
+                            wsigma_amp3.append(ws)
 
-                if len(xsig) == npeaks:
-                    xsigma_avg=np.mean(xsig)
-                    xsigma.append(xsigma_avg)
-                if len(wsig) == npeaks:
-                    wsigma_avg=np.mean(wsig)
-                    wsigma.append(wsigma_avg)
- 
-            if fibermap['OBJTYPE'][i]=='SKY':
-                xsigma_sky=xsigma
-                wsigma_sky=wsigma
+                    if fibermap['FIBER'][fiber]>260:
+                        if ypixel < 2000.:
+                            xsigma_amp2.append(xs)
+                            wsigma_amp2.append(ws)
+                        if ypixel > 2100.:
+                            xsigma_amp4.append(xs)
+                            wsigma_amp4.append(ws)
 
-            #- Excluding fibers 240-260 in case some fibers overlap amps
-            #- This shouldn't cause a significant loss of information 
-            if amps:
-                if fibermap['FIBER'][i]<240:
-                    if camera[0]=="b":
-                        xsig_amp1=np.array([xsig[0]])
-                        xsig_amp3=np.array([xsig[1],xsig[2]])
-                        wsig_amp1=np.array([wsig[0]])
-                        wsig_amp3=np.array([wsig[1],wsig[2]])
-                    if camera[0]=="r":
-                        xsig_amp1=np.array([xsig[0],xsig[1]])
-                        xsig_amp3=np.array([xsig[2],xsig[3],xsig[4]])
-                        wsig_amp1=np.array([wsig[0],wsig[1]])
-                        wsig_amp3=np.array([wsig[2],wsig[3],wsig[4]])
-                    if camera[0]=="z":
-                        xsig_amp1=np.array([xsig[0],xsig[1],xsig[2]])
-                        xsig_amp3=np.array([xsig[3]])
-                        wsig_amp1=np.array([wsig[0],wsig[1],wsig[2]])
-                        wsig_amp3=np.array([wsig[3]])
-    
-                    xsigma_amp1.append(xsig_amp1)
-                    wsigma_amp1.append(wsig_amp1)
-                    xsigma_amp3.append(xsig_amp3)
-                    wsigma_amp3.append(wsig_amp3)
-
-                if fibermap['FIBER'][i]>260:
-                    if camera[0]=="b":
-                        xsig_amp2=np.array([xsig[0]])
-                        xsig_amp4=np.array([xsig[1],xsig[2]])
-                        wsig_amp2=np.array([wsig[0]])
-                        wsig_amp4=np.array([wsig[1],wsig[2]])
-                    if camera[0]=="r":
-                        xsig_amp2=np.array([xsig[0],xsig[1]])
-                        xsig_amp4=np.array([xsig[2],xsig[3],xsig[4]])
-                        wsig_amp2=np.array([wsig[0],wsig[1]])
-                        wsig_amp4=np.array([wsig[2],wsig[3],wsig[4]])
-                    if camera[0]=="z":
-                        xsig_amp2=np.array([xsig[0],xsig[1],xsig[2]])
-                        xsig_amp4=np.array([xsig[3]])
-                        wsig_amp2=np.array([wsig[0],wsig[1],wsig[2]])
-                        wsig_amp4=np.array([wsig[3]])
-    
-                    xsigma_amp2.append(xsig_amp2)
-                    wsigma_amp2.append(wsig_amp2)
-                    xsigma_amp4.append(xsig_amp4)
-                    wsigma_amp4.append(wsig_amp4)
-  
-                if fibermap['FIBER'].shape[0]<260:
-                    xsigma_amp2=np.zeros(len(xsigma))
-                    xsigma_amp4=np.zeros(len(xsigma))
-                    wsigma_amp2=np.zeros(len(wsigma))
-                    wsigma_amp4=np.zeros(len(wsigma))
+        if fibermap['FIBER'].shape[0]<260:
+            xsigma_amp2=[]
+            xsigma_amp4=[]
+            wsigma_amp2=[]
+            wsigma_amp4=[]
 
         #- Calculate desired output metrics 
-        xsigma=np.array(xsigma)
-        wsigma=np.array(wsigma)
-        xsigma_med=np.median(xsigma)
-        wsigma_med=np.median(wsigma)
-        xsigma_med_sky=np.median(xsigma_sky)
-        wsigma_med_sky=np.median(wsigma_sky)
-        #xwsigma=np.array([xsigma_med_sky,wsigma_med_sky])
-        xamp1_med=np.median(xsigma_amp1)
-        xamp2_med=np.median(xsigma_amp2)
-        xamp3_med=np.median(xsigma_amp3)
-        xamp4_med=np.median(xsigma_amp4)
-        wamp1_med=np.median(wsigma_amp1)
-        wamp2_med=np.median(wsigma_amp2)
-        wamp3_med=np.median(wsigma_amp3)
-        wamp4_med=np.median(wsigma_amp4)
-        xsigma_amp=np.array([xamp1_med,xamp2_med,xamp3_med,xamp4_med])
-        wsigma_amp=np.array([wamp1_med,wamp2_med,wamp3_med,wamp4_med])
-
-        #xshift_med=0.0
-        #wshift_med=0.0
-        #xshift_fib=[]
-        #wshift_fib=[]
-        #xshift_amp=[]
-        #wshift_amp=[]
-        #shift_warn=[]
-
-        xwfails=[xfails,wfails]
+        xsigma_med=np.median(np.array(xsigma))
+        wsigma_med=np.median(np.array(wsigma))
+        xsigma_amp=np.array([np.median(xsigma_amp1),np.median(xsigma_amp2),np.median(xsigma_amp3),np.median(xsigma_amp4)])
+        wsigma_amp=np.array([np.median(wsigma_amp1),np.median(wsigma_amp2),np.median(wsigma_amp3),np.median(wsigma_amp4)])
+        xwfails=np.array([xfails,wfails])
 
         retval["PARAMS"] = param
 
@@ -993,11 +917,6 @@ class Calc_XWSigma(MonitoringAlg):
         xwsigma_fib=np.array((xsigma,wsigma)) #- (2,nfib)
         xwsigma_med=np.array((xsigma_med,wsigma_med)) #- (2)
         xwsigma_amp=np.array((xsigma_amp,wsigma_amp))
-       
-        #xwshift=np.zeros((2,500)) #- 500 should change to nfib (read from top)
-        #xwshift_med=np.array((xshift_med,wshift_med))
-        #xwshift_amp=np.array((xshift_amp, wshift_amp))
-        #xwsigma_shift=np.array(((xsigma_med,wsigma_med),(xshift_med,wshift_med)))
 
         if amps:
             retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib,"XWSIGMA_AMP":xwsigma_amp}#,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}

@@ -30,9 +30,10 @@ Algorithms:
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
             Calc_XWSigma:
-                PARAMS: {B_PEAKS: [3914.4, 5199.3, 5578.9],
-                         R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4],
+                PARAMS: {B_PEAKS: [5578.9],
+                         R_PEAKS: [6301.9],
+                         Z_PEAKS: [9378.5],
+                         PIXEL_RANGE: 7,
                          XWSIGMA_NORMAL_RANGE: [-2.0, 2.0],
                          XWSIGMA_WARN_RANGE: [-4.0, 4.0]}
     Flexure:
