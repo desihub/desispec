@@ -364,7 +364,7 @@ class TestQL_QA(unittest.TestCase):
         qargs["amps"]=False
         qargs["paname"]="abc"
         qargs["singleqa"]=None
-        qargs["param"]={'B_PEAKS': [3914.4, 5199.3, 5578.9],'R_PEAKS': [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],'Z_PEAKS': [8401.5, 8432.4, 8467.5, 9479.4],'XWSIGMA_NORMAL_RANGE': [-2.0, 2.0],'XWSIGMA_WARN_RANGE': [-4.0, 4.0]}
+        qargs["param"]={'B_PEAKS': [3914.4, 5199.3, 5578.9],'R_PEAKS': [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],'Z_PEAKS': [8401.5, 8432.4, 8467.5, 9479.4],'PIXEL_RANGE': 7,'XWSIGMA_NORMAL_RANGE': [-2.0, 2.0],'XWSIGMA_WARN_RANGE': [-4.0, 4.0]}
         resl=qa(inp,**qargs)
         self.assertTrue(len(resl["METRICS"]["XWSIGMA"].ravel())==2)
 

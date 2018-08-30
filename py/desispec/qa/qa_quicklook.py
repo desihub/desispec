@@ -866,6 +866,7 @@ class Calc_XWSigma(MonitoringAlg):
                 try:
                     xpopt,xpcov=curve_fit(qalib.gauss,np.arange(len(xpix_peak)),image.pix[int(ypixel),xpix_peak])
                     xs=np.abs(xpopt[2])
+                    xsig.append(xs)
                 except:
                     xfail=[fiber,peaks[peak]]
                     xfails.append(xfail)
@@ -873,6 +874,7 @@ class Calc_XWSigma(MonitoringAlg):
                 try:
                     wpopt,wpcov=curve_fit(qalib.gauss,np.arange(len(ypix_peak)),image.pix[ypix_peak,int(xpixel)])
                     ws=np.abs(wpopt[2])
+                    wsig.append(ws)
                 except:
                     wfail=[fiber,peaks[peak]]
                     wfails.append(wfail)
@@ -897,6 +899,9 @@ class Calc_XWSigma(MonitoringAlg):
                         if ypixel > 2100.:
                             xsigma_amp4.append(xs)
                             wsigma_amp4.append(ws)
+
+            xsigma.append(np.mean(xsig))
+            wsigma.append(np.mean(wsig))
 
         if fibermap['FIBER'].shape[0]<260:
             xsigma_amp2=[]
