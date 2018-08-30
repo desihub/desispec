@@ -68,8 +68,6 @@ Algorithms:
                          Z_CONT: ["8120, 8270", "9110, 9280"],
                          SKYRBAND_NORMAL_RANGE: [-100.0, 100.0],
                          SKYRBAND_WARN_RANGE: [-200.0, 200.0]}
-            Sky_Residual:
-                PARAMS: {BIN_SZ: 0.1, PCHI_RESID: 0.05, PER_RESID: 95.0, MED_RESID_NORMAL_RANGE: [-5.0, 5.0], MED_RESID_WARN_RANGE: [-10.0, 10.0]}
             Integrate_Spec:
                 PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-2.0, 2.0], DELTAMAG_TGT_WARN_RANGE: [-4.0, 4.0]}
             Calculate_SNR:
