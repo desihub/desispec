@@ -447,30 +447,31 @@ class TestQL_QA(unittest.TestCase):
         qargs["param"]={'DELTAMAG_TGT_NORMAL_RANGE': [-2., 2.0], 'DELTAMAG_TGT_WARN_RANGE': [-4., 4.]}
         resl=qa(inp,**qargs)
         self.assertTrue(len(resl["METRICS"]["STD_FIBERID"])>0)
-        
-    def testSkyResidual(self):
-        qa=QA.Sky_Residual('skyresid',self.config)
-        inp=self.frame
-        sky=self.skymodel
-        qargs={}
-        qargs["PSFFile"]=self.psf
-        qargs["FiberMap"]=self.fibermap
-        qargs["camera"]=self.camera
-        qargs["expid"]=self.expid
-        qargs["paname"]="abc"
-        qargs["dict_countbins"]=self.map2pix
-        qargs["singleqa"]=None
-        qargs["param"]={"BIN_SZ":0.2, "PCHI_RESID":0.05, "PER_RESID":95., "SKYRESID_NORMAL_RANGE":[-5.0, 5.0], "SKYRESID_WARN_RANGE":[-10.0, 10.0]}
 
-        resl=qa(inp,sky,**qargs)
-        
-        #self.assertTrue(resl["METRICS"]["NREJ"]==self.skymodel.nrej)
-        #self.assertTrue(len(resl["METRICS"]["MED_RESID_WAVE"]) == self.nwave)
-        #self.assertTrue(len(resl["METRICS"]["MED_RESID_FIBER"]) == 5) #- 5 sky fibers in the input
-        #self.assertTrue(resl["PARAMS"]["BIN_SZ"] == 0.1)
-        ##- test with different parameter set:
-        #resl2=qa(inp,sky,**qargs)
-        #self.assertTrue(len(resl["METRICS"]["DEVS_1D"])>len(resl2["METRICS"]["DEVS_1D"])) #- larger histogram bin size than default 0.1
+# RS: We are not using this QA anymore, so we don't need this test        
+#    def testSkyResidual(self):
+#        qa=QA.Sky_Residual('skyresid',self.config)
+#        inp=self.frame
+#        sky=self.skymodel
+#        qargs={}
+#        qargs["PSFFile"]=self.psf
+#        qargs["FiberMap"]=self.fibermap
+#        qargs["camera"]=self.camera
+#        qargs["expid"]=self.expid
+#        qargs["paname"]="abc"
+#        qargs["dict_countbins"]=self.map2pix
+#        qargs["singleqa"]=None
+#        qargs["param"]={"BIN_SZ":0.2, "PCHI_RESID":0.05, "PER_RESID":95., "SKYRESID_NORMAL_RANGE":[-5.0, 5.0], "SKYRESID_WARN_RANGE":[-10.0, 10.0]}
+#
+#        resl=qa(inp,sky,**qargs)
+#        
+#        #self.assertTrue(resl["METRICS"]["NREJ"]==self.skymodel.nrej)
+#        #self.assertTrue(len(resl["METRICS"]["MED_RESID_WAVE"]) == self.nwave)
+#        #self.assertTrue(len(resl["METRICS"]["MED_RESID_FIBER"]) == 5) #- 5 sky fibers in the input
+#        #self.assertTrue(resl["PARAMS"]["BIN_SZ"] == 0.1)
+#        ##- test with different parameter set:
+#        #resl2=qa(inp,sky,**qargs)
+#        #self.assertTrue(len(resl["METRICS"]["DEVS_1D"])>len(resl2["METRICS"]["DEVS_1D"])) #- larger histogram bin size than default 0.1
 
     def testCalculateSNR(self):
         qa=QA.Calculate_SNR('snr',self.config)
