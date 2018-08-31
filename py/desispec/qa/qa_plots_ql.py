@@ -28,7 +28,7 @@ def plot_countspectralbins(qa_dict,outfile):
 
     fig=plt.figure()
     plt.suptitle("Fiber level check for flux after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    goodfib=qa_dict["METRICS"]["GOOD_FIBER"]
+    goodfib=qa_dict["METRICS"]["GOOD_FIBERS"]
     ngoodfib=qa_dict["METRICS"]["NGOODFIB"]
     plt.plot(goodfib)
     plt.ylim(-0.1,1.1)

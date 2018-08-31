@@ -62,6 +62,72 @@ def qlf_post(qadict):
     else:   
         log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
+def get_inputs(*args,**kwargs):
+    '''
+    Get inputs required for each QA
+    '''
+    inputs={}
+
+    inputs["camera"]=kwargs["camera"]
+
+    if "paname" not in kwargs:
+        inputs["paname"]=None
+    else:
+        inputs["paname"]=kwargs["paname"]
+
+    if "ReferenceMetrics" in kwargs: inputs["refmetrics"]=kwargs["ReferenceMetrics"]
+    else: inputs["refmetrics"]=None
+
+    inputs["amps"]=False
+    if "amps" in kwargs:
+        inputs["amps"]=kwargs["amps"]
+
+    if "param" in kwargs: inputs["param"]=kwargs["param"]
+    else: inputs["param"]=None
+
+    inputs["psf"] = None
+    if "PSFFile" in kwargs:
+        inputs["psf"]=kwargs["PSFFile"]
+
+    inputs["fibermap"] = None
+    if "FiberMap" in kwargs:
+        inputs["fibermap"]=kwargs["FiberMap"]
+
+    if "qlf" in kwargs:
+         inputs["qlf"]=kwargs["qlf"]
+    else: inputs["qlf"]=False
+
+    if "qafile" in kwargs: inputs["qafile"] = kwargs["qafile"]
+    else: inputs["qafile"] = None
+
+    if "qafig" in kwargs: inputs["qafig"]=kwargs["qafig"]
+    else: inputs["qafig"] = None
+
+    return inputs
+
+def get_outputs(qafile,qafig,retval,plot_func):
+    """
+    Setup QA file and QA fig, http post if needed
+    """
+   # RS: qlf_post is a deprecated function, not needed
+   # if qlf:
+   #     qlf_post(retval)
+    if qafile is not None:
+        outfile = qa.write_qa_ql(qafile,retval)
+        log.debug("Output QA data is in {}".format(outfile))
+    if qafig is not None:
+        import desispec.qa.qa_plots_ql as fig
+        if 'snr' in qafig:
+            plot=getattr(fig,plot_func[0])
+            plot(retval,qafig,plot_func[1])
+        elif plot_func=='plot_skyRband': pass
+        else:
+            plot=getattr(fig,plot_func)
+            plot(retval,qafig)
+        log.debug("Output QA fig {}".format(qafig))
+
+    return
+
 def get_image(filetype,night,expid,camera,specdir):
     '''
     Make image object from file if in development mode
@@ -127,45 +193,25 @@ class Check_HDUs(MonitoringAlg):
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
-        
+
         if kwargs["singleqa"] == 'Check_HDUs':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             rawfile = findfile('raw',int(night),int(expid),camera,rawdata_dir=kwargs["rawdir"])
             raw = fits.open(rawfile)
-        else:
-            raw=args[0]
+        else: raw=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        camera=kwargs["camera"]
+        return self.run_qa(raw,inputs)
 
-        paname=None
-        if "paname" in kwargs:
-            paname=kwargs["paname"]
-
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig=None
-
-        return self.run_qa(raw,camera,paname=paname,amps=amps, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
-
-    def run_qa(self,raw,camera,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,raw,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         rawimage=raw[camera.upper()].data
         header=raw[camera.upper()].header
@@ -258,55 +304,25 @@ class Trace_Shifts(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Trace_Shifts':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
-            
-        else:
-            image=args[0]
+        else: image=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        fibermap=kwargs['FiberMap']
+        return self.run_qa(image,inputs)
 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
-
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        psf = None
-        if "PSFFile" in kwargs:
-            psf=kwargs["PSFFile"]
-
-        fibermap = None
-        if "FiberMap" in kwargs:
-            fibermap=kwargs["FiberMap"]
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
-
-        return self.run_qa(fibermap,image,paname=paname,amps=amps,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,fibermap,image,paname=None,amps=False,psf=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+    def run_qa(self,image,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         if param is None:
                 log.critical("No parameter is found for this QA")
@@ -327,18 +343,7 @@ class Trace_Shifts(MonitoringAlg):
         retval["METRICS"]={"XYSHIFT":xyshift}
         retval["PARAMS"]=param
 
-        #- http post if needed
-        if qlf:
-            qlf_post(retval)
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-#        if qafig is not None:
-#            plot.plot_TraceShifts(retval,qafig)
-
-            log.debug("Output QA fig {}".format(qafig))
-
+#        get_outputs(qafile,qafig,retval,'plot_traceshifts')
         return retval
 
     def get_default_config(self):
@@ -379,44 +384,25 @@ class Bias_From_Overscan(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
+        else: image=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        else:
-            image=args[0]
-            
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
+        return self.run_qa(image,inputs)
 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
+    def run_qa(self,image,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig=None
-
-        return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
-
-    def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
-    
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
-        retval["CAMERA"] = image.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
@@ -470,23 +456,11 @@ class Bias_From_Overscan(MonitoringAlg):
             #retval["METRICS"]={'BIAS':bias,"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DIFF3SIG":diff3sig,"DATA5SIG":data5sig,"BIAS_ROW":mean_row}
             retval["METRICS"]={}
 
-        #- http post if needed
-        if qlf:
-            qlf_post(retval)    
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            plot.plot_bias_overscan(retval,qafig)
-            
-            log.debug("Output QA fig {}".format(qafig))
-        
+        get_outputs(qafile,qafig,retval,'plot_bias_overscan')
         return retval
 
     def get_default_config(self):
         return {}
-
 
 
 class Get_RMS(MonitoringAlg):
@@ -514,49 +488,32 @@ class Get_RMS(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Get_RMS':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
-        else:
-            image=args[0]
+        else: image=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
+        return self.run_qa(image,inputs)
 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
+    def run_qa(self,image,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig = kwargs["qafig"]
-        else: qafig = None
-
-        return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
-
-    def run_qa(self,image,paname=None,amps=False,qafile=None, qafig=None,param=None,qlf=False, refmetrics=None):
         retval={}
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
-        retval["CAMERA"] = image.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
@@ -702,21 +659,11 @@ class Get_RMS(MonitoringAlg):
         else:
             retval["METRICS"]={"DIFF1SIG":diff1sig,"DIFF2SIG":diff2sig,"DATA5SIG":data5sig, "BIAS_PATNOISE":bias_patnoise} # Dropping "NOISE_OVER":rmsover,"NOISE_ROW":noise_row,"EXPNUM_WARN":expnum
 
-        if qlf:
-            qlf_post(retval)  
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            plot.plot_RMS(retval,qafig)            
-            log.debug("Output QA fig {}".format(qafig))
-
+        get_outputs(qafile,qafig,retval,'plot_RMS')
         return retval    
 
     def get_default_config(self):
         return {}
-
 
 
 class Calc_XWSigma(MonitoringAlg):
@@ -742,63 +689,37 @@ class Calc_XWSigma(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image got {}".format(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Calc_XWSigma':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
-        else:
-            image=args[0]
+        else: image=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        flavor=kwargs['Flavor']
-        fibermap=kwargs['FiberMap'] 
- 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
- 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
+        return self.run_qa(image,inputs)
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
- 
-        psf = None
-        if "PSFFile" in kwargs:
-            psf=kwargs["PSFFile"]
-            psf=desispec.quicklook.qlpsf.PSF(psf)
- 
-        fibermap = None
-        if "FiberMap" in kwargs:
-            fibermap=kwargs["FiberMap"]
- 
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
- 
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
- 
-        return self.run_qa(fibermap,flavor,image,paname=paname,amps=amps,psf=psf, qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
- 
-    def run_qa(self,fibermap,flavor,image,paname=None,amps=False,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,image,inputs):
+        import desispec.quicklook.qlpsf
         from scipy.optimize import curve_fit
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        psffile=inputs["psf"]
+        psf=desispec.quicklook.qlpsf.PSF(psffile)
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat() 
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
-        retval["CAMERA"] = camera = image.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
@@ -928,18 +849,7 @@ class Calc_XWSigma(MonitoringAlg):
         else:
             retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib}#,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
 
-        #- http post if needed
-        if qlf:
-            qlf_post(retval)    
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            plot.plot_XWSigma(retval,qafig)
-
-            log.debug("Output QA fig {}".format(qafig))
-
+        get_outputs(qafile,qafig,retval,'plot_XWSigma')
         return retval
  
     def get_default_config(self):
@@ -977,42 +887,25 @@ class Count_Pixels(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             image = get_image('preproc',night,expid,camera,kwargs["specdir"])
-        else:
-            image=args[0]
+        else: image=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
+        return self.run_qa(image,inputs)
 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
+    def run_qa(self,image,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
-
-        return self.run_qa(image,paname=paname,amps=amps,qafile=qafile,qafig=qafig, param=param, qlf=qlf, refmetrics=refmetrics)
-
-    def run_qa(self,image,paname=None,amps=False,qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
         retval={}
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
-        retval["CAMERA"] = image.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
@@ -1049,18 +942,7 @@ class Count_Pixels(MonitoringAlg):
 	#        retval["METRICS"]={"NPIX_AMP",npix_amps,'LITFRAC_AMP': litfrac_amps}
         retval["METRICS"]={"LITFRAC_AMP": litfrac_amps}	
 
-        if qlf:
-            qlf_post(retval)
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            from desispec.qa.qa_plots_ql import plot_countpix
-            plot_countpix(retval,qafig)
-
-            log.debug("Output QA fig {}".format(qafig))
-
+        get_outputs(qafile,qafig,retval,'plot_countpix')
         return retval
 
     def get_default_config(self):
@@ -1068,7 +950,6 @@ class Count_Pixels(MonitoringAlg):
 
 
 class CountSpectralBins(MonitoringAlg):
-
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="COUNTBINS"
@@ -1100,38 +981,21 @@ class CountSpectralBins(MonitoringAlg):
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
             frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
-        else:
-            frame=args[0]
+        else: frame=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        fibermap=kwargs['FiberMap']
+        return self.run_qa(frame,inputs)
 
-        paname=None
-        if "paname" in kwargs:
-            paname=kwargs["paname"]
-
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        psf = None
-        if "PSFFile" in kwargs: 
-            psf=kwargs["PSFFile"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig=None
-
-        return self.run_qa(fibermap,frame,paname=paname,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,fibermap,frame,paname=None,psf=None,qafile=None,qafig=None,param=None, qlf=False, refmetrics=None):
+    def run_qa(self,frame,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        psf=inputs["psf"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1141,7 +1005,7 @@ class CountSpectralBins(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
-        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -1198,18 +1062,7 @@ class CountSpectralBins(MonitoringAlg):
 
         retval["METRICS"]={"NGOODFIB": ngoodfibers, "GOOD_FIBERS": good_fibers}
 
-        #- http post if needed
-        if qlf:
-            qlf_post(retval)    
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            plot.plot_countspectralbins(retval,qafig)
-            
-            log.debug("Output QA fig {}".format(qafig))
-        
+        get_outputs(qafile,qafig,retval,'plot_countspectralbins')
         return retval
 
     def get_default_config(self):
@@ -1239,42 +1092,27 @@ class Sky_Continuum(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Continuum':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
-        else:
-            frame=args[0]
+            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+        else: frame=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        fibermap=kwargs['FiberMap']
-        
-        if "paname" in kwargs:
-            paname=kwargs["paname"]
+        return self.run_qa(frame,inputs)
 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig=None
-
-        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,fibermap,frame,
-               paname=None,qafile=None,qafig=None,param=None,qlf=False,
-               refmetrics=None):
+    def run_qa(self,frame,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1284,7 +1122,7 @@ class Sky_Continuum(MonitoringAlg):
         retval["PANAME" ]= paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
-        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -1319,23 +1157,11 @@ class Sky_Continuum(MonitoringAlg):
         retval["METRICS"]={"SKYFIBERID": skyfiber.tolist(), "SKYCONT":skycont, "SKYCONT_FIBER":meancontfiber}
              
 
-        if qlf:
-            qlf_post(retval)    
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-
-        if qafig is not None:
-            plot.plot_sky_continuum(retval,qafig)
-            
-            log.debug("Output QA fig {}".format(qafig))
-        
+        get_outputs(qafile,qafig,retval,'plot_sky_continuum')        
         return retval
 
     def get_default_config(self):
         return {}
-
 
 
 class Sky_Rband(MonitoringAlg):
@@ -1361,40 +1187,27 @@ class Sky_Rband(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Rband':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
-        else:
-            frame=args[0]
+            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+        else: frame=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        fibermap=kwargs['FiberMap']
-        
-        if "paname" in kwargs:
-            paname=kwargs["paname"]
+        return self.run_qa(frame,inputs)
 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig=None
-
-        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+    def run_qa(self,frame,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1404,7 +1217,7 @@ class Sky_Rband(MonitoringAlg):
         retval["PANAME" ]= paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
-        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -1488,18 +1301,7 @@ class Sky_Rband(MonitoringAlg):
 
         retval["METRICS"]={"SKYRBAND":sky_r,"SKY_FIB_RBAND":skyfib_Rflux, "SKY_RFLUX_DIFF":diff}
 
-        if qlf:
-            qlf_post(retval)    
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-
-        #if qafig is not None:
-            #plot.plot_sky_continuum(retval,qafig)
-            
-            #log.debug("Output QA fig {}".format(qafig))
-        
+        get_outputs(qafile,qafig,retval,'plot_skyRband')
         return retval
 
     def get_default_config(self):
@@ -1529,48 +1331,28 @@ class Sky_Peaks(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible parameter type. Was expecting desispec.image.Image, got {}".format(type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Peaks':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
-        else:
-            frame=args[0]
+            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+        else: frame=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        fibermap=kwargs['FiberMap']
+        return self.run_qa(frame,inputs)
 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
-
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        psf = None
-        if "PSFFile" in kwargs:
-            psf=kwargs["PSFFile"]
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs:
-            qafig=kwargs["qafig"]
-        else: qafig = None
-
-        return self.run_qa(fibermap,frame,paname=paname,psf=psf,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,fibermap,frame,paname=None,psf=None, qafile=None,qafig=None, param=None, qlf=False, refmetrics=None):
+    def run_qa(self,frame,inputs):
         from desispec.qa.qalib import sky_peaks
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
         
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1579,7 +1361,7 @@ class Sky_Peaks(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
-        retval["CAMERA"] = camera = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -1607,18 +1389,7 @@ class Sky_Peaks(MonitoringAlg):
 
         retval["METRICS"]={"PEAKCOUNT":sumcount_med_sky,"PEAKCOUNT_NOISE":rms_skyspec,"PEAKCOUNT_FIB":nspec_counts,"SKYFIBERID":skyfibers, "NSKY_FIB":nskyfib}#,"PEAKCOUNT_TGT":tgt_counts,"PEAKCOUNT_TGT_NOISE":tgt_counts_rms}
 
-
-        if qlf:
-            qlf_post(retval)
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            plot.plot_sky_peaks(retval,qafig)
-
-            log.debug("Output QA fig {}".format(qafig))
-
+        get_outputs(qafile,qafig,retval,'plot_sky_peaks')
         return retval
 
     def get_default_config(self):
@@ -1659,43 +1430,22 @@ class Sky_Residual(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-        else:
-            frame=args[0]
+            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+        else: frame=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        fibermap=kwargs['FiberMap']
-        skymodel=args[1] #- should be skymodel evaluated
-        if "SkyFile" in kwargs:
-            skyfile=kwargs["SkyFile"]    #- Read sky model file itself from an argument
-            log.debug("Using given sky file {} for subtraction".format(skyfile))
+        return self.run_qa(frame,inputs)
 
-            skymodel=read_sky(skyfile)
-
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-        
-        paname=None
-        if "paname" in kwargs:
-            paname=kwargs["paname"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
-        
-        return self.run_qa(fibermap,frame,paname=paname,skymodel=skymodel,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
-
-
-    def run_qa(self,fibermap,frame,paname=None,skymodel=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+    def run_qa(self,frame,inputs):
         from desispec.sky import qa_skysub
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1707,7 +1457,7 @@ class Sky_Residual(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
-        retval["CAMERA"] = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -1734,19 +1484,7 @@ class Sky_Residual(MonitoringAlg):
         for key in qadict.keys():
             retval["METRICS"][key] = qadict[key]
 
-        if qlf:
-            qlf_post(retval)    
-
-        retval["PARAMS"] = param
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            plot.plot_residuals(frame,retval,qafig)
-            
-            log.debug("Output QA fig {}".format(qafig))
-
+        get_outputs(qafile,qafig,retval,'plot_residuals')
         return retval
 
     def get_default_config(self):
@@ -1776,42 +1514,27 @@ class Integrate_Spec(MonitoringAlg):
         if len(args) == 0 :
             raise qlexceptions.ParameterException("Missing input parameter")
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {}, got {}".format(type(self.__inpType__),type(args[0])))
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Integrate_Spec':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-        else:
-            frame=args[0]
+            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+        else: frame=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        fibermap=kwargs['FiberMap']
+        return self.run_qa(frame,inputs)
 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
-
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
-
-        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,fibermap,frame,paname=None,qafile=None,qafig=None,param=None,qlf=False,refmetrics=None):
+    def run_qa(self,frame,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -1820,7 +1543,7 @@ class Integrate_Spec(MonitoringAlg):
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
-        retval["CAMERA"] = camera = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
@@ -1913,17 +1636,7 @@ class Integrate_Spec(MonitoringAlg):
 
         retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
-        if qlf:
-            qlf_post(retval) 
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            plot.plot_integral(retval,qafig)
-            
-            log.debug("Output QA fig {}".format(qafig))
-
+        get_outputs(qafile,qafig,retval,'plot_integral')
         return retval    
 
     def get_default_config(self):
@@ -1958,39 +1671,21 @@ class Calculate_SNR(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
-        else:
-            frame=args[0]
+            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+        else: frame=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        fibermap=kwargs['FiberMap']
+        return self.run_qa(frame,inputs)
 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        amps=False
-        if "amps" in kwargs:
-            amps=kwargs["amps"]
-
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
-
-        paname=None
-        if "paname" in kwargs:
-            paname=kwargs["paname"]
-
-        if "qlf" in kwargs:
-             qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
-
-        return self.run_qa(fibermap,frame,paname=paname,qafile=qafile,qafig=qafig,param=param,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,fibermap,frame,paname=None,amps=False,qafile=None,qafig=None,qlf=False,param=None,refmetrics=None):
+    def run_qa(self,frame,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
         if isinstance(frame,QFrame):
             frame = frame.asframe()
@@ -2000,7 +1695,7 @@ class Calculate_SNR(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = expid = '{0:08d}'.format(frame.meta["EXPID"])
-        retval["CAMERA"] = camera = frame.meta["CAMERA"]
+        retval["CAMERA"] = camera
         retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = night = frame.meta["NIGHT"]
@@ -2045,19 +1740,7 @@ class Calculate_SNR(MonitoringAlg):
         retval["METRICS"] = qadict
         retval["PARAMS"] = param
 
-        #- http post if valid
-        if qlf:
-            qlf_post(retval)            
-
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            rescut=param["RESIDUAL_CUT"]
-            sigmacut=param["SIGMA_CUT"]
-            plot.plot_SNR(retval,qafig,objlist,badfibs,fitsnr,rescut,sigmacut)
-            log.debug("Output QA fig {}".format(qafig))
-
+        get_outputs(qafile,qafig,retval,'plot_SNR')
         return retval
 
     def get_default_config(self):
@@ -2096,33 +1779,21 @@ class Check_Resolution(MonitoringAlg):
             camera = kwargs['camera']
             #- Finding psf file for QA
             #file_psf = get_psf('psf',night,expid,camera,kwargs["specdir"])
-        else:
-            file_psf = args[0]
+        else: file_psf = args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
+        return self.run_qa(frame,inputs)
 
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
+    def run_qa(self,frame,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        if "qlf" in kwargs:
-            qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
-
-        return self.run_qa(file_psf,param=param,paname=paname,qafile=qafile,qafig=qafig,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,file_psf,param=None,paname=None,qafile=None,qafig=None, qlf=False, refmetrics=None):
         retval={}
         retval['PANAME'] = paname
         kwargs=self.config['kwargs']
@@ -2163,15 +1834,7 @@ class Check_Resolution(MonitoringAlg):
                     #"NBADCOEFFS_WARN_RANGE:":[-2, 2]}
         retval["PARAMS"] = param
 
-        # http post
-        if qlf:
-            qlf_post(retval)
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        if qafig is not None:
-            plot.plot_lpolyhist(retval,qafig)
-            log.debug("Output QA fig {}".format(qafig))
+        get_outputs(qafile,qafig,retval,'plot_lpolyhist')
         return retval
 
     def get_default_config(self):
@@ -2208,33 +1871,21 @@ class Check_FiberFlat(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-        else:
-            fibflat=args[0]
+        else: fibflat=args[0]
+        inputs=get_inputs(*args,**kwargs)
 
-        if "paname" not in kwargs:
-            paname=None
-        else:
-            paname=kwargs["paname"]
+        return self.run_qa(frame,inputs)
 
-        if "param" in kwargs: param=kwargs["param"]
-        else: param=None
+    def run_qa(self,frame,inputs):
+        camera=inputs["camera"]
+        paname=inputs["paname"]
+        fibermap=inputs["fibermap"]
+        amps=inputs["amps"]
+        qafile=inputs["qafile"]
+        qafig=inputs["qafig"]
+        param=inputs["param"]
+        refmetrics=inputs["refmetrics"]
 
-        if "ReferenceMetrics" in kwargs: refmetrics=kwargs["ReferenceMetrics"]
-        else: refmetrics=None
-
-        if "qlf" in kwargs:
-            qlf=kwargs["qlf"]
-        else: qlf=False
-
-        if "qafile" in kwargs: qafile = kwargs["qafile"]
-        else: qafile = None
-
-        if "qafig" in kwargs: qafig=kwargs["qafig"]
-        else: qafig = None
-
-        return self.run_qa(fibflat,param=param,paname=paname,qafile=qafile,qafig=qafig,qlf=qlf,refmetrics=refmetrics)
-
-    def run_qa(self,fibflat,param=None,paname=None,qafile=None,qafig=None, qlf=False, refmetrics=None):
         retval={}
         retval['PANAME'] = paname
         retval['CAMERA'] = fibflat.header["CAMERA"]
@@ -2257,15 +1908,7 @@ class Check_FiberFlat(MonitoringAlg):
                     #"FFLMEAN_WARN_RANGE:":[-20, 20]}
         retval["PARAMS"] = param
 
-        # http post
-        if qlf:
-            qlf_post(retval)
-        if qafile is not None:
-            outfile = qa.write_qa_ql(qafile,retval)
-            log.debug("Output QA data is in {}".format(outfile))
-        #if qafig is not None:
-            #plot.plot_lpolyhist(retval,qafig)
-            #log.debug("Output QA fig {}".format(qafig))
+#        get_outputs(qafile,qafig,retval,'plot_fiberflat')
         return retval
 
     def get_default_config(self):
