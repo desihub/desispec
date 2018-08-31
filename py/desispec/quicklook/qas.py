@@ -22,10 +22,11 @@ class MonitoringAlg:
         self.__deviation=None
         self.m_log.debug("initializing Monitoring alg {}".format(name))
     def __call__(self,*args,**kwargs):
+        
         res=self.run(*args,**kwargs)
         cargs=self.config['kwargs']
         params=cargs['param']
-
+        
         metrics=res["METRICS"] if 'METRICS' in res else None
         if metrics is None:
             metrics={}
@@ -33,6 +34,13 @@ class MonitoringAlg:
         deviation=None
         reskey="RESULT"
         QARESULTKEY="QA_STATUS"
+        REFNAME = cargs["RESULTKEY"]+'_REF' # SE: get the REF name from cargs
+        
+        NORM_range = cargs["RESULTKEY"]+'_NORMAL_RANGE'
+        WARN_range = cargs["RESULTKEY"]+'_WARN_RANGE'
+        norm_range_val = [0,0]
+        warn_range_val = [0,0]
+        
         if "QASTATUSKEY" in cargs:
             QARESULTKEY=cargs["QASTATUSKEY"]
         if "RESULTKEY" in cargs:
@@ -40,21 +48,27 @@ class MonitoringAlg:
 
         if reskey in metrics:
             current=metrics[reskey]
-            if "REFERENCE" in cargs:
-                refval=cargs["REFERENCE"]
-    
-#                print(refval,"MA inside if")
+             
+            #if "REFERENCE" in cargs:
+            if REFNAME in params:  #SE: check the REF in params
+                
+                #refval=cargs["REFERENCE"]
+                refval=params[REFNAME]   #SE: get the REF value/ranges from params
+                norm_range_val=params[NORM_range]
+                warn_range_val=params[WARN_range]
  
             else: #- For absolute value checks
                 self.m_log.warning("No reference given. STATUS will be assigned for the Absolute Value. Confirm your ranges.")
                 #- check the data type
-                if isinstance(current,float) or isinstance(current,np.float32) or isinstance(current,int):
-                    refval=0
-                else:
-                    refval=np.zeros(len(current)) #- 1D list or array
+                #SE: the if-else statement below is commented now to facilitate the use of QA_REF keys in the configuration files
+                #----------------------------------------------------------------------------------------------------------
+                #if isinstance(current,float) or isinstance(current,np.float32) or isinstance(current,int):
+                    #refval=0
+                #else:
+                    #refval=np.zeros(len(current)) #- 1D list or array
             #- Update PARAMS ref key
-            res["PARAMS"][reskey+'_REF']=refval
-
+            #res["PARAMS"][reskey+'_REF']=refval
+                #----------------------------------------------------------------------------------------------------------
             currlist=isinstance(current,(np.ndarray,collections.Sequence))
             reflist=isinstance(refval,(np.ndarray,collections.Sequence))
             if currlist != reflist: # different types
@@ -66,7 +80,6 @@ class MonitoringAlg:
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,len(refval),len(current)))
             else: # both are scalars
                 self.__deviation=current-refval
-
         # check RANGES given in config and set QA_STATUS keyword
         # it should be a sorted overlapping list of range tuples in the form [ ((interval),QASeverity),((-1.0,1.0),QASeverity.NORMAL),(-2.0,2.0),QAStatus.WARNING)]
         # for multiple results, thresholds should be a list of lists as given above (one range list per result)
@@ -78,42 +91,70 @@ class MonitoringAlg:
         def findThr(d,t):
             val=QASeverity.ALARM
             for l in t:
+                print(d,l,t)
                 if d>=l[0][0] and d<l[0][1]:
                     val=l[1]
             return val
 
-        metrics[QARESULTKEY]='NORMAL'
-        if self.__deviation is not None and "RANGES" in cargs:
-            self.m_log.info("QL Reference checking for QA {}".format(self.name))
-            thr=cargs["RANGES"]
-            metrics[QARESULTKEY]="ERROR"
+        metrics[QARESULTKEY]='UNKNOWN' #SE: changed this to UNKNOWN from previously NORMAL to check the algorithm -- commented all the chunk below
+       
+        #if self.__deviation is not None and "RANGES" in cargs:
+            #self.m_log.info("QL Reference checking for QA {}".format(self.name))
+            #thr=cargs["RANGES"]
+            #print(thr)
+            #metrics[QARESULTKEY]="ERROR"
 
-            thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
-            devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
-            #if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
-            #    self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
-            #    return res
-            #else: #they are of the same type
-
-            if devlist: # if results are a list
-                if len(thr)==2: # check all results against same thresholds
+            #thrlist=isinstance(thr[0][0][0],(np.ndarray,collections.Sequence))  #multiple threshols for multiple results
+            #devlist=isinstance(self.__deviation,(np.ndarray,collections.Sequence))
+            ##if devlist!=thrlist and len(thr)!=1:  #different types and thresholds are a list
+            ##    self.m_log.critical("QL {} : dimension of RANGES({}) and RESULTS({}) are incompatible! Check configuration RANGES={}, RESULTS={}".format(self.name,len(thr),len(self.__deviation), thr,current))
+            ##    return res
+            ##else: #they are of the same type
+        
+        #if devlist: # if results are a list
+        #SE: testing ....
+        devlist = self.__deviation
+        thr = norm_range_val
+        wthr = warn_range_val
+        print(devlist)
+        if len(thr)==2 and len(wthr)==2: # check all results against same thresholds  #SE: pushed this chunk out 
                     #- maximum deviation
-                    kk=np.argmax(np.abs(self.__deviation).flatten()) #- flatten for > 1D array
-                    metrics[QARESULTKEY]=findThr(np.array(self.__deviation).flatten()[kk],thr)
+                    #kk=np.argmax(np.abs(self.__deviation).flatten()) #- flatten for > 1D array
+                    #metrics[QARESULTKEY]=findThr(np.array(self.__deviation).flatten()[kk],thr)
+                    
+                    stats = []  # SE starting a test here 
+                    for val in devlist:
+                      if thr[0] <= val <= thr[1]:
+                        stats.append('NORMAL')
+                      elif wthr[0] <= val <= wthr[1]:
+                          stats.append('WARNING')
+                      else:
+                          stats.append('ALARM')
+                              
+                    if  np.isin(stats,'NORMAL').all():
+                        metrics[QARESULTKEY]='NORMAL'
+                    elif np.isin(stats,'WARNING').any() and np.isin(stats,'ALARM').any():
+                        metrics[QARESULTKEY] = 'ALARM'
+                    elif np.isin(stats,'ALARM').any():
+                        metrics[QARESULTKEY] = 'ALARM'
+                    elif np.isin(stats,'WARNING').any():  
+                        metrics[QARESULTKEY] = 'WARNING'
+                    
+                        
                     #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation]
                 #else: # each result has its own thresholds
                 #    metrics[QARESULTKEY]=[str(findThr(d,t)) for d,t in zip(self.__deviation,thr)]
 
-            else: #result is a scalar
+        else: #result is a scalar
                 metrics[QARESULTKEY]=findThr(self.__deviation,thr)
-            if metrics[QARESULTKEY]==QASeverity.NORMAL:
-                metrics[QARESULTKEY]='NORMAL'
-            elif metrics[QARESULTKEY]==QASeverity.WARNING:
-                metrics[QARESULTKEY]='WARNING'
-            else:
-                metrics[QARESULTKEY]='ALARM'
-        else:
-            self.m_log.warning("No Reference checking for QA {}".format(self.name))
+                if metrics[QARESULTKEY]==QASeverity.NORMAL:
+                   metrics[QARESULTKEY]='NORMAL'
+                elif metrics[QARESULTKEY]==QASeverity.WARNING:
+                   metrics[QARESULTKEY]='WARNING'
+                else:
+                   metrics[QARESULTKEY]='ALARM'
+        #else:
+            #self.m_log.warning("Something is WRONG with the ranges in the config, No Reference checking for QA {}".format(self.name))
             
         self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
         return res
