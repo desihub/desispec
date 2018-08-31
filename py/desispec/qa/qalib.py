@@ -735,7 +735,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         #    snr = fitfunc(x[mm],*vs)
         #    fit_snr.append(snr)
         fit_snr = fitfunc(x, *vs)
-        fitsnr += fit_snr.tolist()
+        fitsnr.append(fit_snr)
         #for rr in range(len(fit_snr)):
         #    resid = (med_snr[rr] - fit_snr[rr]) / fit_snr[rr]
         #    resid_snr.append(resid)
