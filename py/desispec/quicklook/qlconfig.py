@@ -104,7 +104,7 @@ class Config(object):
         for i in algokeys: 
             for k in self.algorithms[i]["QA"].keys():
                 if k == "Check_HDUs":
-                    qaRefKeys[k] = "HDUs_OK"
+                    qaRefKeys[k] = "CHECKHDUS"
                 qaparams=self.algorithms[i]["QA"][k]["PARAMS"]
                 for par in qaparams.keys():
                     if "NORMAL_RANGE" in par:
@@ -122,7 +122,7 @@ class Config(object):
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
         self._qaRefKeys = qaRefKeys
-        #self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        #self._qaRefKeys={"Check_HDUs":"CHECKHDUS","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
 
     @property
     def mode(self):

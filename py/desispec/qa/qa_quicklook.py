@@ -24,7 +24,7 @@ from desispec.frame import Frame as fr
 from desispec.preproc import _parse_sec_keyword
 from desispec.util import runcmd
 from desispec.qproc.qframe import QFrame
-
+import astropy
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -170,8 +170,8 @@ class Check_HDUs(MonitoringAlg):
         rawtype=astropy.io.fits.hdu.hdulist.HDUList
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else ""
-        status=kwargs['statKey'] if 'statKey' in kwargs else "HDU_STATUS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "CHECKHDUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "CHECKHDUS_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
 
@@ -253,10 +253,10 @@ class Check_HDUs(MonitoringAlg):
         
         if header["FLAVOR"] != "science" :
             
-           retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
+           retval["METRICS"] = {"CHECKHDUS_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
 
         else :
-           retval["METRICS"] = {"HDU_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
+           retval["METRICS"] = {"CHECKHDUS_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
            param['SEEING'] = header["SEEING"]
            param['AIRMASS'] = header["AIRMASS"]
            
@@ -347,12 +347,11 @@ class Bias_From_Overscan(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
             name="BIAS_OVERSCAN"
-        #import astropy
-        #rawtype=astropy.io.fits.hdu.hdulist.HDUList
+
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "BIAS_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "BIAS_AMP_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
 
@@ -857,7 +856,7 @@ class Count_Pixels(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "LITFRAC_AMP"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "LITFRAC_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "LITFRAC_AMP_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -865,9 +864,9 @@ class Count_Pixels(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
                 
-        if "LITFRAC_WARN_RANGE" in parms and "LITFRAC_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["LITFRAC_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["LITFRAC_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        if "LITFRAC_AMP_WARN_RANGE" in parms and "LITFRAC_AMP_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["LITFRAC_AMP_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["LITFRAC_AMP_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :

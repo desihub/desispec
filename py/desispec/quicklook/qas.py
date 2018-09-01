@@ -36,16 +36,31 @@ class MonitoringAlg:
         QARESULTKEY="QA_STATUS"
         REFNAME = cargs["RESULTKEY"]+'_REF' # SE: get the REF name from cargs
         
+        if cargs["RESULTKEY"] == 'CHECKHDUS':
+           
+            stats=list([metrics['CHECKHDUS_STATUS'],metrics['EXPNUM_STATUS']])
+            
+            if np.isin(stats,'NORMAL').all():
+                
+                metrics[QARESULTKEY]='NORMAL'
+            elif np.isin(stats,'ALARM').any():
+                metrics[QARESULTKEY]='ALARM'
+            
+            print(metrics[QARESULTKEY])
+            self.m_log.info("{}: {}".format(cargs["RESULTKEY"]+'_STATUS',metrics[QARESULTKEY]))
+        else:
+            pass
+            
         NORM_range = cargs["RESULTKEY"]+'_NORMAL_RANGE'
         WARN_range = cargs["RESULTKEY"]+'_WARN_RANGE'
         norm_range_val = [0,0]
         warn_range_val = [0,0]
         
-        if "QASTATUSKEY" in cargs:
+        if "QASTATUSKEY" in cargs: 
             QARESULTKEY=cargs["QASTATUSKEY"]
         if "RESULTKEY" in cargs:
             reskey=cargs["RESULTKEY"]
-
+        
         if reskey in metrics:
             current=metrics[reskey]
              
@@ -79,7 +94,8 @@ class MonitoringAlg:
                 else:
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,len(refval),len(current)))
             else: # both are scalars
-                self.__deviation=current-refval
+                #SE "sorted" lists eliminate the chance of randomly shuffling items in the list that wee observed in the past
+                self.__deviation=sorted(current)-sorted(refval)
         # check RANGES given in config and set QA_STATUS keyword
         # it should be a sorted overlapping list of range tuples in the form [ ((interval),QASeverity),((-1.0,1.0),QASeverity.NORMAL),(-2.0,2.0),QAStatus.WARNING)]
         # for multiple results, thresholds should be a list of lists as given above (one range list per result)
@@ -89,12 +105,13 @@ class MonitoringAlg:
         # if no interval contains the deviation, it will be set to QASeverity.ALARM
         # if RANGES or REFERENCE are not given in config, QA_STATUS will be set to UNKNOWN 
         def findThr(d,t):
-            val=QASeverity.ALARM
-            for l in t:
-                print(d,l,t)
-                if d>=l[0][0] and d<l[0][1]:
+            if d != None:
+               val=QASeverity.ALARM
+               for l in list(t):
+                 print(d,l,t)
+                 if d>=l[0][0] and d<l[0][1]:
                     val=l[1]
-            return val
+               return val
 
         metrics[QARESULTKEY]='UNKNOWN' #SE: changed this to UNKNOWN from previously NORMAL to check the algorithm -- commented all the chunk below
        
@@ -116,8 +133,8 @@ class MonitoringAlg:
         devlist = self.__deviation
         thr = norm_range_val
         wthr = warn_range_val
-        print(devlist)
-        if len(thr)==2 and len(wthr)==2: # check all results against same thresholds  #SE: pushed this chunk out 
+        
+        if devlist!=None  and len(thr)==2 and len(wthr)==2: # check all results against same thresholds  #SE: pushed this chunk out 
                     #- maximum deviation
                     #kk=np.argmax(np.abs(self.__deviation).flatten()) #- flatten for > 1D array
                     #metrics[QARESULTKEY]=findThr(np.array(self.__deviation).flatten()[kk],thr)
@@ -139,7 +156,7 @@ class MonitoringAlg:
                         metrics[QARESULTKEY] = 'ALARM'
                     elif np.isin(stats,'WARNING').any():  
                         metrics[QARESULTKEY] = 'WARNING'
-                    
+                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
                         
                     #metrics[QARESULTKEY]=[findThr(d,thr) for d in self.__deviation]
                 #else: # each result has its own thresholds
@@ -153,10 +170,11 @@ class MonitoringAlg:
                    metrics[QARESULTKEY]='WARNING'
                 else:
                    metrics[QARESULTKEY]='ALARM'
+                self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
         #else:
             #self.m_log.warning("Something is WRONG with the ranges in the config, No Reference checking for QA {}".format(self.name))
             
-        self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
+        
         return res
     def run(self,*argv,**kwargs):
         pass
