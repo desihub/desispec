@@ -112,7 +112,7 @@ def get_outputs(qafile,qafig,retval,plot_func):
         import desispec.qa.qa_plots_ql as fig
         if 'snr' in qafig:
             plot=getattr(fig,plot_func[0])
-            plot(retval,qafig,plot_func[1])
+            plot(retval,qafig,plot_func[1],plot_func[2],plot_func[3],plot_func[4],plot_func[5])
         elif plot_func=='plot_skyRband': pass
         else:
             plot=getattr(fig,plot_func)
@@ -1090,7 +1090,7 @@ class Sky_Continuum(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1185,7 +1185,7 @@ class Sky_Rband(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1329,7 +1329,7 @@ class Sky_Peaks(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('fframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1422,7 +1422,7 @@ class Sky_Residual(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1512,7 +1512,7 @@ class Integrate_Spec(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1663,7 +1663,7 @@ class Calculate_SNR(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('frame',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1732,7 +1732,9 @@ class Calculate_SNR(MonitoringAlg):
         retval["METRICS"] = qadict
         retval["PARAMS"] = param
 
-        get_outputs(qafile,qafig,retval,'plot_SNR')
+        rescut=param["RESIDUAL_CUT"]
+        sigmacut=param["SIGMA_CUT"]
+        get_outputs(qafile,qafig,retval,['plot_SNR',objlist,badfibs,fitsnr,rescut,sigmacut])
         return retval
 
     def get_default_config(self):

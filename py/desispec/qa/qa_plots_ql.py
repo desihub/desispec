@@ -625,8 +625,8 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
     for i in range(len(o)):
         ax=fig.add_subplot('24{}'.format(i+5))
 
-        objtype=list(objlist)[i]
-        objid=np.where(np.array(list(objlist))==objtype)[0][0]
+        objtype=objlist[i]
+        objid=np.where(np.array(objlist)==objtype)[0][0]
         obj_mag=mags[objid]
         obj_snr=snrs[objid]
         plot_mag=sorted(obj_mag)
