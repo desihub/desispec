@@ -165,7 +165,7 @@ def get_frame(filetype,night,expid,camera,specdir):
 class Check_HDUs(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="CheckHDUs"
+            name="CHECKHDUS"
         import astropy
         rawtype=astropy.io.fits.hdu.hdulist.HDUList
         kwargs=config['kwargs']
@@ -278,20 +278,20 @@ class Check_HDUs(MonitoringAlg):
 class Trace_Shifts(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="TRACE"
+            name="XYSHIFTS"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "TRACE_REF"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "TRACE_STATUS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "XYSHIFTS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "XYSHIFTS_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
             r=kwargs["ReferenceMetrics"]
             if key in r:
                 kwargs["REFERENCE"]=r[key]
-        if "TRACE_WARN_RANGE" in parms and "TRACE_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["TRACE_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["TRACE_NORMAL_RANGE"]),QASeverity.NORMAL)]
+        if "XYSHIFTS_WARN_RANGE" in parms and "XYSHIFTS_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["XYSHIFTS_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["XYSHIFTS_NORMAL_RANGE"]),QASeverity.NORMAL)]
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
@@ -333,7 +333,7 @@ class Trace_Shifts(MonitoringAlg):
         dy=[]
         xyshift=np.array(dx,dy)
         retval={}
-        retval["METRICS"]={"XYSHIFT":xyshift}
+        retval["METRICS"]={"XYSHIFTS":xyshift}
         retval["PARAMS"]=param
 
 #        get_outputs(qafile,qafig,retval,'plot_traceshifts')
@@ -462,7 +462,7 @@ class Get_RMS(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "NOISE_AMP" 
-        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_STATUS" 
+        status=kwargs['statKey'] if 'statKey' in kwargs else "NOISE_AMP_STATUS" 
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
         
@@ -1275,7 +1275,7 @@ class Sky_Rband(MonitoringAlg):
             
         #SE: assuming there is a key in the header of the raw exposure header [OR somewhere else] where the sky R-band flux from the sky monitor is stored 
         #    the units would be counts/sec/arcsec^2  1000 is just a dummy number as a placeholder
-        sky_r=  100   # SE: to come from ETC in count/sec/arcsec^2 
+        sky_r=  100.   # SE: to come from ETC in count/sec/arcsec^2 
         
         if (sky_r != "" and len(skyfib_Rflux) >0):
             
@@ -1640,7 +1640,7 @@ class Calculate_SNR(MonitoringAlg):
             name="SNR"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "ELG_FIDSNR"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "FIDSNR"
         status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
