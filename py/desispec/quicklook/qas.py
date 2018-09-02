@@ -34,9 +34,13 @@ class MonitoringAlg:
         
         reskey="RESULT"
         QARESULTKEY="QA_STATUS"
+        if np.size(cargs["RESULTKEY"]) >0 :
+            
+            REFNAME = cargs["RESULTKEY"]+'_REF' # SE: get the REF name from cargs
         
-        REFNAME = cargs["RESULTKEY"]+'_REF' # SE: get the REF name from cargs
-        
+        else:
+            REFNAME = ''
+            
         NORM_range = cargs["RESULTKEY"]+'_NORMAL_RANGE'
         WARN_range = cargs["RESULTKEY"]+'_WARN_RANGE'
         norm_range_val = [0,0]
