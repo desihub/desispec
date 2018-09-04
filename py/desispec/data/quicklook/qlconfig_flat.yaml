@@ -21,15 +21,15 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-1.0, 1.0], BIAS_AMP_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-20.0, 20.0], BIAS_AMP_WARN_RANGE: [-50.0, 50.0], BIAS_AMP_REF:[176.0,179.0,114.0,174.0]}
             Get_RMS:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_REF:[2.1,2.2,2.1,2.0]}
             Count_Pixels:
-                PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
+                PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2],LITFRAC_AMP_REF:[0.3,0.3,0.4,0.4]}
     Flexure:
         QA:
             Trace_Shifts:
-                PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0]}
+                PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0],XYSHIFTS_REF:[0.,0.]}
     BoxcarExtract:
         wavelength: {
             b: [3570,5730,0.8],
@@ -38,8 +38,8 @@ Algorithms:
             }
         QA:
             CountSpectralBins:
-                PARAMS: {CUTBINS: 5,N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
+                PARAMS: {CUTBINS: 5,N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2],NGOODFIB_REF:[500]}
     ComputeFiberflat_QL:
         QA:
             Check_FiberFlat:
-                PARAMS: {FFLMEAN_NORMAL_RANGE:[-1, 1], FFLMEAN_WARN_RANGE:[-1, 1]}
+                PARAMS: {FLATCHECK_NORMAL_RANGE:[-1, 1], FLATCHECK_WARN_RANGE:[-1, 1],FLATCHECK_REF:[]}
