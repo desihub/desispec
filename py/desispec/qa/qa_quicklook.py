@@ -183,7 +183,9 @@ class Check_HDUs(MonitoringAlg):
         MonitoringAlg.__init__(self,name,rawtype,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -242,11 +244,15 @@ class Check_HDUs(MonitoringAlg):
         param['EXPTIME'] = header["EXPTIME"]
 
         if camera != header["CAMERA"]:
-                raise qlexceptions.ParameterException("Missing camera "+camera)
+                log.critical("The raw FITS file is missing camera "+camera)
+                sys.exit("QuickLook Abort: CHECK THE RAW FITS FILE :"+rawfile)
+                #raise qlexceptions.ParameterException("Missing camera "+camera)
                 HDUstat = 'ALARM'
         
         if header["EXPID"] != kwargs['expid'] : 
-                raise qlexceptions.ParameterException("EXPOSURE NUMBER DOES NOT MATCH THE ONE IN THE HEADER")
+                log.critical("The raw FITS file is missing camera "+camera)
+                sys.exit("QuickLook Abort: EXPOSURE NUMBER DOES NOT MATCH THE ONE IN THE HEADER")            
+                #raise qlexceptions.ParameterException("EXPOSURE NUMBER DOES NOT MATCH THE ONE IN THE HEADER")
                 EXPNUMstat = "ALARM"
         
         
@@ -321,12 +327,6 @@ class Trace_Shifts(MonitoringAlg):
                 log.critical("No parameter is found for this QA")
                 sys.exit("Update the configuration file for the parameters")
                 
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters 
-            #log.debug("Param is None. Using default param instead")
-            #param = {
-                #"TRACE_NORMAL_RANGE":[-1.0, 1.0],
-                #"TRACE_WARN_RANGE":[-2.0, 2.0]
-                #}
 
         #- RS: Return empty dictionaries until flexure metrics are decided
         dx=[]
@@ -367,7 +367,10 @@ class Bias_From_Overscan(MonitoringAlg):
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -432,13 +435,7 @@ class Bias_From_Overscan(MonitoringAlg):
             log.critical("No parameter is found for this QA")
             sys.exit("Update the configuration file for the parameters")
                 
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters 
 
-            #log.debug("Param is None. Using default param instead")
-            #param = {                
-                #"BIAS_NORMAL_RANGE":[-1.0, 1.0],
-                #"BIAS_WARN_RANGE:":[-2.0, 2.0]
-                #}
         retval["PARAMS"] = param
 
         if amps:
@@ -478,7 +475,9 @@ class Get_RMS(MonitoringAlg):
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+                
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -519,13 +518,7 @@ class Get_RMS(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")            
             
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #param = {
-                #"PERCENTILES":[68.2,95.4,99.7],
-                #"NOISE_NORMAL_RANGE":[-1.0, 1.0],
-                #"NOISE_WARN_RANGE":[-2.0, 2.0]
-                #}
+
 
         retval["PARAMS"] = param
 
@@ -679,7 +672,9 @@ class Calc_XWSigma(MonitoringAlg):
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+                
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -722,24 +717,6 @@ class Calc_XWSigma(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #if image.meta["FLAVOR"] == 'arc':
-                #param = {
-                    #"B_PEAKS":[4047.7, 4359.6, 5087.2],
-                    #"R_PEAKS":[6144.8, 6508.3, 6600.8, 6718.9, 6931.4, 7034.4,],
-                    #"Z_PEAKS":[8379.9, 8497.7, 8656.8, 8783.0],
-                    #"XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0], #- Assumes both sigma and shift in same range. Change if needed
-                    #"XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
-                    #}
-            #else:
-                #param = {
-                    #"B_PEAKS":[3914.4, 5199.3, 5578.9],
-                    #"R_PEAKS":[6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
-                    #"Z_PEAKS":[8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                    #"XWSIGMA_SHIFT_NORMAL_RANGE":[-2.0, 2.0],
-                    #"XWSIGMA_SHIFT_WARN_RANGE":[-4.0, 4.0]
-                    #}
 
         #- Ensure that the QA will run even if 500 spectra aren't present
         if fibermap['FIBER'].shape[0] >= 500:
@@ -870,7 +847,9 @@ class Count_Pixels(MonitoringAlg):
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+                
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -907,13 +886,7 @@ class Count_Pixels(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #param = {
-                 #"CUTPIX":5,   # low threshold for number of counts in sigmas
-                 #"LITFRAC_NORMAL_RANGE":[-0.1, 0.1],
-                 #"LITFRAC_WARN_RANGE":[-0.2, 0.2]
-                 #}
+
 
         retval["PARAMS"] = param
 
@@ -964,7 +937,9 @@ class CountSpectralBins(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1011,14 +986,6 @@ class CountSpectralBins(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #param = {
-                 #"CUTBINS":5,   #- threshold for number of counts in units of readnoise(scaled to bins)
-                 #"NGOODFIB_NORMAL_RANGE":[490, 500],
-                 #"NGOODFIB_WARN_RANGE":[480, 500],
-                 #"N_KNOWN_BROKEN_FIBERS": 0
-                 #}
 
         retval["PARAMS"] = param
         #- get the effective readnoise for the fibers 
@@ -1082,7 +1049,9 @@ class Sky_Continuum(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1126,16 +1095,6 @@ class Sky_Continuum(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
  
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #desi_params = read_params()
-            #param = {"B_CONT": ["4000, 4500", "5250, 5550"],
-                         #"R_CONT": ["5950, 6200", "6990, 7230"],
-                         #"Z_CONT": ["8120, 8270", "9110, 9280"],
-                         #"SKYCONT_NORMAL_RANGE": [100.0, 400.0],
-                         #"SKYCONT_WARN_RANGE": [50.0, 600.0]}
-            #for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYCONT_ALARM_RANGE', 'SKYCONT_WARN_RANGE']: #- needs updating alarm/warn - normal/warn in desi_params.
-                #param[key] = desi_params['qa']['skysub']['PARAMS'][key]
 
         wrange1=param["{}_CONT".format(camera[0].upper())][0]
         wrange2=param["{}_CONT".format(camera[0].upper())][1]
@@ -1177,7 +1136,9 @@ class Sky_Rband(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1220,16 +1181,7 @@ class Sky_Rband(MonitoringAlg):
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
-            
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #desi_params = read_params()
-            
-            #param = {"B_CONT": ["4000, 4500", "5250, 5550"],
-                         #"R_CONT": ["5950, 6200", "6990, 7230"],
-                         #"Z_CONT": ["8120, 8270", "9110, 9280"],
-                         #"SKYRBAND_NORMAL_RANGE": [-100.0, 100.0],
-                         #"SKYRBAND_WARN_RANGE": [-200.0, 200.0]}
+
             
             for key in ['B_CONT','R_CONT', 'Z_CONT', 'SKYRBAND_ALARM_RANGE', 'SKYRBAND_WARN_RANGE']: 
                 param[key] = desi_params['qa']['skysub']['PARAMS'][key]
@@ -1321,7 +1273,9 @@ class Sky_Peaks(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1364,10 +1318,7 @@ class Sky_Peaks(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.info("Param is None. Using default param instead")
-            #desi_params = read_params()
-            #param = desi_params['qa']['skypeaks']['PARAMS']
+
 
         #nspec_counts, sky_counts, tgt_counts, tgt_counts_rms = sky_peaks(param, frame)
         nspec_counts, sky_counts, skyfibers, nskyfib= sky_peaks(param, frame)
@@ -1414,7 +1365,9 @@ class Sky_Residual(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1460,15 +1413,6 @@ class Sky_Residual(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-             # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #param = {
-                #"BIN_SZ":0.1, #- Bin size for histograms
-                #"PCHI_RESID":0.05, # P(Chi^2) limit for bad skyfiber model residuals
-                #"PER_RESID":95.,   # Percentile for residual distribution
-                #"RESID_NORMAL_RANGE":[-5.0, 5.0],
-                #"RESID_WARN_RANGE":[-10.0, 10.0]
-                #}
 
         qadict=qalib.sky_resid(param,frame,skymodel,quick_look=True)
 
@@ -1504,7 +1448,9 @@ class Integrate_Spec(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1614,12 +1560,6 @@ class Integrate_Spec(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-             # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #param = {
-                #"DELTAMAG_NORMAL_RANGE":[-0.5, 0.5],
-                #"DELTAMAG_WARN_RANGE":[-1.0, 1.0]
-                #}
 
         retval["PARAMS"] = param
 
@@ -1655,7 +1595,9 @@ class Calculate_SNR(MonitoringAlg):
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1705,16 +1647,6 @@ class Calculate_SNR(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #desi_params = read_params()
-            #param = desi_params['qa']['s2n']['PARAMS'].copy()
-            #param = {
-            #    "SNR_FLUXTHRESH":0.0, # Minimum value of flux to go into SNR calc.
-            #    "FIDSNR_NORMAL_RANGE":[6.5, 7.5],
-            #    "FIDSNR_WARN_RANGE":[6.0, 8.0],
-            #    "FIDMAG":22.
-            #    }
 
         fidboundary=None
 
@@ -1743,11 +1675,11 @@ class Calculate_SNR(MonitoringAlg):
 class Check_Resolution(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="RESOLUTION"
+            name="CHECKARC"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "NBADCOEFFS"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "RESOLUTION_STATUS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "CHECKARC"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "CHECKARC_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
 
@@ -1756,14 +1688,16 @@ class Check_Resolution(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
-        if "NBADCOEFFS_WARN_RANGE" in parms and "NBADCOEFFS_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["NBADCOEFFS_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["NBADCOEFFS_NORMAL_RANGE"]),QASeverity.NORMAL)]
+        if "CHECKARC_WARN_RANGE" in parms and "CHECKARC_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["CHECKARC_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["CHECKARC_NORMAL_RANGE"]),QASeverity.NORMAL)]
 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1814,18 +1748,13 @@ class Check_Resolution(MonitoringAlg):
         badparamrnum2 = list(np.where(np.logical_or(p2>toperror[2], p2<bottomerror[2]))[0])
         nbadparam = np.array([len(badparamrnum0), len(badparamrnum1), len(badparamrnum2)])
 
-        retval["METRICS"]={"Medians":medlegpolcoef, "RMS":wsigma_rms, "NBADCOEFFS":nbadparam}
+        retval["METRICS"]={"Medians":medlegpolcoef, "RMS":wsigma_rms, "CHECKARC":nbadparam}
         retval["DATA"]={"LPolyCoef0":p0, "LPolyCoef1":p1, "LPolyCoef2":p2}
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #param = {
-                    #"NBADCOEFFS_NORMAL_RANGE":[-1, 1],
-                    #"NBADCOEFFS_WARN_RANGE:":[-2, 2]}
         retval["PARAMS"] = param
 
         get_outputs(qafile,qafig,retval,'plot_lpolyhist')
@@ -1837,11 +1766,11 @@ class Check_Resolution(MonitoringAlg):
 class Check_FiberFlat(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="FIBERFLAT"
+            name="CHECKFLAT"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "FFLMEAN"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "FIBERFLAT_STATUS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "CHECKFLAT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "CHECKFLAT_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
 
@@ -1850,14 +1779,16 @@ class Check_FiberFlat(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
-        if "FFLMEAN_WARN_RANGE" in parms and "FFLMEAN_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["FFLMEAN_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["FFLMEAN_NORMAL_RANGE"]),QASeverity.NORMAL)]
+        if "CHECKFLAT_WARN_RANGE" in parms and "CHECKFLAT_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["CHECKFLAT_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["CHECKFLAT_NORMAL_RANGE"]),QASeverity.NORMAL)]
 
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is given for this QA! ")
+            sys.exit("Check the configuration file")
+            
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -1888,18 +1819,14 @@ class Check_FiberFlat(MonitoringAlg):
         # Mean of wavelength will be test value
         wavelengths = fibflat.wave
 
-        FFLMEANtest = np.mean(wavelengths)
-        retval["METRICS"]={"FFLMEAN": FFLMEANtest}
+        CHECKFLATtest = np.mean(wavelengths)
+        retval["METRICS"]={"CHECKFLAT": CHECKFLATtest}
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-            # SE: the policy is now to only take parameters from the config files and abort quicklook process in case the parameters are missing in the config files in order to prevent the use of obsolete parameters
-            #log.debug("Param is None. Using default param instead")
-            #param = {
-                    #"FFLMEAN_NORMAL_RANGE":[-10, 10],
-                    #"FFLMEAN_WARN_RANGE:":[-20, 20]}
+
         retval["PARAMS"] = param
 
 #        get_outputs(qafile,qafig,retval,'plot_fiberflat')

@@ -20,7 +20,7 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-20.0, 20.0], BIAS_AMP_WARN_RANGE: [-50.0, 50.0], BIAS_AMP_REF:[176.0,179.0,114.0,174.0]}
+                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-20.0, 20.0], BIAS_AMP_WARN_RANGE: [-50.0, 50.0], BIAS_AMP_REF:[130.,160.0,130.0,180.0]}
             Get_RMS:
                 PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_REF:[2.1,2.2,2.1,2.0]}
             Count_Pixels:
@@ -45,7 +45,7 @@ Algorithms:
         QuickResolution: True
         QA: 
             CountSpectralBins:
-                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1., 1.], NGOODFIB_WARN_RANGE: [-2., 2.],NGOODFIB_REF:[500]}
+                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2],NGOODFIB_REF:[500]}
     ApplyFiberFlat_QL:
         QA:
             Sky_Continuum:
@@ -69,7 +69,7 @@ Algorithms:
                          SKYRBAND_NORMAL_RANGE: [-1.0, 1.0],
                          SKYRBAND_WARN_RANGE: [-2.0, 2.0], SKYRBAND_REF:[100.]}
             Integrate_Spec:
-                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-2., 2.0], DELTAMAG_TGT_WARN_RANGE: [-4., 4.],DELTAMAG_TGT_REF:[4.0,4.0,3.0,3.0]}
+                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-2., 2.0], DELTAMAG_TGT_WARN_RANGE: [-4., 4.],DELTAMAG_TGT_REF:[4.0,3.0,3.0]}
             Calculate_SNR:
                 #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
                 PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-11., 11.], FIDSNR_TGT_WARN_RANGE: [-12., 12.], FIDSNR_TGT_REF:[4.,5.,6.], FIDMAG: 22.}
