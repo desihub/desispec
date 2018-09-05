@@ -1710,9 +1710,9 @@ class Check_Resolution(MonitoringAlg):
         else: file_psf = args[0]
         inputs=get_inputs(*args,**kwargs)
 
-        return self.run_qa(frame,inputs)
+        return self.run_qa(file_psf,inputs)
 
-    def run_qa(self,frame,inputs):
+    def run_qa(self,file_psf,inputs):
         camera=inputs["camera"]
         paname=inputs["paname"]
         fibermap=inputs["fibermap"]
@@ -1799,9 +1799,9 @@ class Check_FiberFlat(MonitoringAlg):
         else: fibflat=args[0]
         inputs=get_inputs(*args,**kwargs)
 
-        return self.run_qa(frame,inputs)
+        return self.run_qa(fibflat,inputs)
 
-    def run_qa(self,frame,inputs):
+    def run_qa(self,fibflat,inputs):
         camera=inputs["camera"]
         paname=inputs["paname"]
         fibermap=inputs["fibermap"]

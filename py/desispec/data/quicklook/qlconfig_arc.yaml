@@ -45,4 +45,4 @@ Algorithms:
         NBINS: 5
         QA:
             Check_Resolution:
-                PARAMS: {CHECKARC_NORMAL_RANGE: [-10,10], CHECKARC_WARN_RANGE: [-20,20],CHECKARC_REF:[5,5,5]}
+                PARAMS: {CHECKARC_NORMAL_RANGE: [-50,50], CHECKARC_WARN_RANGE: [-100,100],CHECKARC_REF:[5,5,5]}
