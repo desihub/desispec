@@ -166,7 +166,7 @@ class MonitoringAlg:
             if REFNAME in params:  #SE: get the REF value/ranges from params
                 
                 refval=params[REFNAME]
-                print(current,refval)
+                
                 if len(refval) ==1:
                     refval = refval[0]
                   
@@ -189,7 +189,7 @@ class MonitoringAlg:
                     
                     self.__deviation=[c-r for c,r in zip(np.sort(current),np.sort(refval))]
                 elif refval.size == current.size and current.size and current.size == 1:
-                    self.__deviation =  current- refval
+                    self.__deviation =  (current- refval)/current
                 elif np.size(current) == 0 or np.size(refval) == 0:
                     self.m_log.warning("No measurement is done or no reference is available for this QA!- check the configuration file for references!")
                     metrics[QARESULTKEY]='ALARM'
@@ -199,7 +199,7 @@ class MonitoringAlg:
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,refval.size,current.size))
             else: 
                 #SE "sorting" eliminate the chance of randomly shuffling items in the list that we observed in the past
-                self.__deviation=np.sort(current)-np.sort(refval)
+                self.__deviation=(np.sort(current)-np.sort(refval))/np.sort(current)
                 
         def findThr(d,t):
             if d != None and len(list(t)) >1:
@@ -228,6 +228,7 @@ class MonitoringAlg:
                         devlist = d
                     stats = []   
                     for val in devlist:
+                      print(cargs["RESULTKEY"],current,thr[0],val,thr[1])
                       if thr[0] <= val <= thr[1]:
                         stats.append('NORMAL')
                       elif wthr[0] <= val <= wthr[1]:
@@ -245,31 +246,19 @@ class MonitoringAlg:
                         metrics[QARESULTKEY] = 'WARNING'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
 
-        elif cargs["RESULTKEY"] != 'CHECKHDUS' and ["RESULTKEY"] != 'CHECKFLAT': 
-            
-                    self.__deviation = np.asarray([current])[0]- np.asarray([refval])[0]
-                    print(self.__deviation,type(self.__deviation))
-                    metrics[QARESULTKEY]=findThr(self.__deviation,thr)
-                    if metrics[QARESULTKEY]==QASeverity.NORMAL:
-                       metrics[QARESULTKEY]='NORMAL'
-                    elif metrics[QARESULTKEY]==QASeverity.WARNING:
-                       metrics[QARESULTKEY]='WARNING'
-                    else:
-                       metrics[QARESULTKEY]='ALARM'
-                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
+
+        #elif cargs["RESULTKEY"]=='CHECKFLAT': 
                     
-        elif cargs["RESULTKEY"] == 'CHECKFLAT': 
-            
-                    self.__deviation = (np.asarray([current])[0]- np.asarray([refval])[0])/np.asarray([current])[0]
-                    print(self.__deviation,type(self.__deviation))
-                    metrics[QARESULTKEY]=findThr(self.__deviation,thr)
-                    if metrics[QARESULTKEY]==QASeverity.NORMAL:
-                       metrics[QARESULTKEY]='NORMAL'
-                    elif metrics[QARESULTKEY]==QASeverity.WARNING:
-                       metrics[QARESULTKEY]='WARNING'
-                    else:
-                       metrics[QARESULTKEY]='ALARM'
-                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
+                    #self.__deviation = (np.asarray([current])[0]- np.asarray([refval])[0])/np.asarray([current])[0]
+                    
+                    #metrics[QARESULTKEY]=findThr(self.__deviation,thr)
+                    #if metrics[QARESULTKEY]==QASeverity.NORMAL:
+                       #metrics[QARESULTKEY]='NORMAL'
+                    #elif metrics[QARESULTKEY]==QASeverity.WARNING:
+                       #metrics[QARESULTKEY]='WARNING'
+                    #else:
+                       #metrics[QARESULTKEY]='ALARM'
+                    #self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
 
         return res
     

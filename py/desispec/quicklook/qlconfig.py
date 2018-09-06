@@ -389,7 +389,6 @@ class Config(object):
                  'Preproc': 'preproc',
                  'Flexure': 'flexure',
                  'BoxcarExtract': 'boxextract',
-                 'BoxcarExtract': 'boxextract',
                  'ComputeFiberflat_QL': 'computeflat',
                  'ApplyFiberFlat_QL': 'fiberflat',
                  'SkySub_QL': 'skysub',

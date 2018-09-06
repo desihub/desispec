@@ -1255,7 +1255,7 @@ class Sky_Rband(MonitoringAlg):
 class Sky_Peaks(MonitoringAlg):
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
-            name="SKYPEAK"
+            name="PEAKCOUNT"
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "PEAKCOUNT"

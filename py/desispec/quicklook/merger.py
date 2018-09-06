@@ -57,7 +57,7 @@ def modify_tasks(myDict):
     myDict = transferKEY(myDict, "METRICS", "FLEXURE", "BOXCAREXTRACT", keyList)
 
     ################  
-    keyList = ["TRACE_NORMAL_RANGE", "TRACE_WARN_RANGE"]
+    keyList = ["XYSHIFTS_NORMAL_RANGE", "XYSHIFTS_WARN_RANGE", "XYSHIFTS_WARN_RANGE"]
     myDict = transferKEY(myDict, "PARAMS", "FLEXURE", "BOXCAREXTRACT", keyList)    
 
     ################    
@@ -75,8 +75,8 @@ def modify_tasks(myDict):
     myDict = rename_task(myDict, "SKYSUB_QL", "CHECK_SPECTRA")
     
     ### Removing empty (or unused Pipeline steps
-    myDict = remove_task(myDict, "FLEXURE")
-    myDict = remove_task(myDict, "APPLYFIBERFLAT_QL")
+    #myDict = remove_task(myDict, "FLEXURE")
+    #myDict = remove_task(myDict, "APPLYFIBERFLAT_QL")
     
 
     return myDict
@@ -161,10 +161,8 @@ def reOrderDict(mergeDict):
              delKey(Camera, "RESID_STATUS")               
              delKey(Camera, "BIAS")
              delKey(Camera, "NOISE")
-             delKey(Camera, "XWSHIFT_AMP")
-             delKey(Camera, "XWSHIFT_SHIFT") 
+ 
              
-                          
              #if sky_fiberid is None:
              #    sky_fiberid = skyfiberid
              

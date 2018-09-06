@@ -20,18 +20,18 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-20.0, 20.0], BIAS_AMP_WARN_RANGE: [-50.0, 50.0], BIAS_AMP_REF:[130.,160.0,130.0,180.0]}
+                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-50.0, 50.0], BIAS_AMP_WARN_RANGE: [-70.0, 70.0], BIAS_AMP_REF:[130.,160.0,130.0,180.0]}
             Get_RMS:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_REF:[2.1,2.2,2.1,2.0]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-0.5, 0.5], NOISE_AMP_WARN_RANGE: [-0.9, 0.9],NOISE_AMP_REF:[2.1,2.2,2.1,2.0]}
             Count_Pixels:
-                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_AMP_WARN_RANGE: [-0.2, 0.2],LITFRAC_AMP_REF:[0.3,0.3,0.4,0.4]}
+                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-1.0, 1.0], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_REF:[0.3,0.3,0.4,0.4]}
             Calc_XWSigma:
                 PARAMS: {B_PEAKS: [5578.9],
                          R_PEAKS: [6301.9],
                          Z_PEAKS: [9378.5],
                          PIXEL_RANGE: 7,
-                         XWSIGMA_NORMAL_RANGE: [-2.0, 2.0],
-                         XWSIGMA_WARN_RANGE: [-4.0, 4.0],XWSIGMA_REF:[1.1,1.8]}
+                         XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
+                         XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_REF:[1.1,1.8]}
     Flexure:
         QA:
             Trace_Shifts:
@@ -59,7 +59,7 @@ Algorithms:
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                          Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
                          PEAKCOUNT_NORMAL_RANGE: [-1.0, 1.0],
-                         PEAKCOUNT_WARN_RANGE: [-2.0, 2.0],PEAKCOUNT_REF:[4.0]}
+                         PEAKCOUNT_WARN_RANGE: [-2.0, 2.0],PEAKCOUNT_REF:[10.0]}
     SkySub_QL:
         QA: 
             Sky_Rband:
@@ -69,7 +69,7 @@ Algorithms:
                          SKYRBAND_NORMAL_RANGE: [-1.0, 1.0],
                          SKYRBAND_WARN_RANGE: [-2.0, 2.0], SKYRBAND_REF:[100.]}
             Integrate_Spec:
-                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-2., 2.0], DELTAMAG_TGT_WARN_RANGE: [-4., 4.],DELTAMAG_TGT_REF:[4.0,3.0,3.0]}
+                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-1., 1.0], DELTAMAG_TGT_WARN_RANGE: [-2., 2.],DELTAMAG_TGT_REF:[4.0,3.0,3.0]}
             Calculate_SNR:
                 #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
-                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-11., 11.], FIDSNR_TGT_WARN_RANGE: [-12., 12.], FIDSNR_TGT_REF:[4.,5.,6.], FIDMAG: 22.}
+                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-4., 4.], FIDSNR_TGT_WARN_RANGE: [-8., 8.], FIDSNR_TGT_REF:[4.,5.,6.], FIDMAG: 22.}
