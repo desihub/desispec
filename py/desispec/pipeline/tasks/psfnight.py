@@ -96,7 +96,7 @@ class TaskPSFNight(BaseTask):
                                   camera=camera,
                                   band=props["band"],
                                   spectrograph=props["spec"])
-        template_input = template_input.replace("{:08d}".format(dummy_expid),"*")
+        template_input = template_input.replace("{:08d}".format(dummy_expid),"????????")
         options["input"]  = glob.glob(template_input)
         return options
 

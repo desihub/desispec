@@ -207,7 +207,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
             "particular type for one or more nights",
             usage="desi_pipe tasks [options] (use --help for details)")
 
-        parser.add_argument("--tasktypes", required=True, default=None,
+        parser.add_argument("--tasktypes", required=False, default=availtypes,
             help="comma separated list of task types ({})".format(availtypes))
 
         parser.add_argument("--nights", required=False, default=None,
@@ -280,7 +280,7 @@ Where supported commands are (use desi_pipe <command> --help for details):
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="w")
 
-        control.getready(db, nightstr=nights)
+        control.getready(db, nightstr=args.nights)
 
         return
 
@@ -630,6 +630,9 @@ Where supported commands are (use desi_pipe <command> --help for details):
             help="comma separated list of slurm job IDs to specify as "
             "dependencies of this current job.")
 
+        parser.add_argument("--dryrun", action="store_true",
+                            help="do not submit the jobs.")
+
         parser = self._parse_run_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
@@ -670,9 +673,10 @@ Where supported commands are (use desi_pipe <command> --help for details):
             mpi_run=args.mpi_run,
             procs_per_node=args.procs_per_node,
             out=args.outdir,
-            debug=args.debug)
+            debug=args.debug,
+            dryrun=args.dryrun)
 
-        if len(jobids) > 0:
+        if jobids is not None and len(jobids) > 0:
             print(",".join(jobids))
 
         return
@@ -689,11 +693,27 @@ Where supported commands are (use desi_pipe <command> --help for details):
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
             "matching these patterns will be generated.")
+        
+        parser.add_argument("--states", required=False, default=None,
+            help="comma separated list of states. This argument is "
+            "passed to chain (see desi_pipe chain --help for more info).")
+        parser.add_argument("--resume", action = 'store_true',
+            help="same as --states waiting,ready")
+
+        parser.add_argument("--dryrun", action="store_true",
+            help="do not submit the jobs.")
 
         parser = self._parse_run_opts(parser)
 
         args = parser.parse_args(sys.argv[2:])
 
+        if args.resume :
+            if args.states is not None :
+                print("Ambiguous arguments: cannot specify --states along with --resume option which would overwrite the list of states.")
+                return
+            else :
+                args.states="waiting,ready"
+        
         self._check_nersc_host(args)
 
         allnights = io.get_nights(strip_path=True)
@@ -710,6 +730,10 @@ Where supported commands are (use desi_pipe <command> --help for details):
 
         nightlast = list()
 
+        states = args.states
+        if states is not None :
+            states = states.split(",")
+        
         for nt in nights:
             previous = None
             log.info("Submitting processing chains for night {}".format(nt))
@@ -728,9 +752,13 @@ Where supported commands are (use desi_pipe <command> --help for details):
                     mpi_run=args.mpi_run,
                     procs_per_node=args.procs_per_node,
                     out=args.outdir,
-                    debug=args.debug)
-                previous = [ jobids[-1] ]
-            nightlast.append(previous[-1])
+                    states=states,
+                    debug=args.debug,
+                    dryrun=args.dryrun)
+                if jobids is not None and len(jobids)>0 :
+                    previous = [ jobids[-1] ]
+            if previous is not None and len(previous)>0 :
+                nightlast.append(previous[-1])
 
         # Submit redshifts
         jobids = control.chain(
@@ -746,7 +774,9 @@ Where supported commands are (use desi_pipe <command> --help for details):
             mpi_run=args.mpi_run,
             procs_per_node=args.procs_per_node,
             out=args.outdir,
-            debug=args.debug)
+            states=states,
+            debug=args.debug,
+            dryrun=args.dryrun)
 
         return
 
