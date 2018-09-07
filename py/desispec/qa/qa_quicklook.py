@@ -1598,8 +1598,8 @@ class Calculate_SNR(MonitoringAlg):
             name="SNR"
         kwargs=config['kwargs']
         parms=kwargs['param']
-        key=kwargs['refKey'] if 'refKey' in kwargs else "FIDSNR"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_STATUS"
+        key=kwargs['refKey'] if 'refKey' in kwargs else "FIDSNR_TGT"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "FIDSNR_TGT_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:
@@ -1607,9 +1607,9 @@ class Calculate_SNR(MonitoringAlg):
             if key in r:
                 kwargs["REFERENCE"]=r[key]
 
-        if "FIDSNR_WARN_RANGE" in parms and "FIDSNR_NORMAL_RANGE" in parms:
-            kwargs["RANGES"]=[(np.asarray(parms["FIDSNR_WARN_RANGE"]),QASeverity.WARNING),
-                              (np.asarray(parms["FIDSNR_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
+        if "FIDSNR_TGT_WARN_RANGE" in parms and "FIDSNR_TGT_NORMAL_RANGE" in parms:
+            kwargs["RANGES"]=[(np.asarray(parms["FIDSNR_TGT_WARN_RANGE"]),QASeverity.WARNING),
+                              (np.asarray(parms["FIDSNR_TGT_NORMAL_RANGE"]),QASeverity.NORMAL)]# sorted by most severe to least severe
         MonitoringAlg.__init__(self,name,fr,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
