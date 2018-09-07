@@ -228,7 +228,7 @@ class MonitoringAlg:
                         devlist = d
                     stats = []   
                     for val in devlist:
-                      print(cargs["RESULTKEY"],current,thr[0],val,thr[1])
+                      #print(cargs["RESULTKEY"],current,thr[0],val,thr[1])
                       if thr[0] <= val <= thr[1]:
                         stats.append('NORMAL')
                       elif wthr[0] <= val <= wthr[1]:

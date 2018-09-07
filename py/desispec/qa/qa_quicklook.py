@@ -301,7 +301,9 @@ class Trace_Shifts(MonitoringAlg):
         MonitoringAlg.__init__(self,name,im,config,logger)
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("No parameter is found for this QA")
+            sys.exit("Update the configuration file for the parameters")
+
         if not self.is_compatible(type(args[0])):
             raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
@@ -323,6 +325,20 @@ class Trace_Shifts(MonitoringAlg):
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
 
+        #- qa dictionary 
+        retval={}
+        retval["PANAME" ]= paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
+        retval["CAMERA"] = camera
+        retval["PROGRAM"] = image.meta["PROGRAM"]
+        retval["FLAVOR"] = image.meta["FLAVOR"]
+        retval["NIGHT"] = image.meta["NIGHT"]
+        kwargs=self.config['kwargs']
+
+        camera=image.meta["CAMERA"]
+
+
         if param is None:
                 log.critical("No parameter is found for this QA")
                 sys.exit("Update the configuration file for the parameters")
@@ -332,11 +348,13 @@ class Trace_Shifts(MonitoringAlg):
         dx=[]
         dy=[]
         xyshift=np.array(dx,dy)
-        retval={}
         retval["METRICS"]={"XYSHIFTS":xyshift}
         retval["PARAMS"]=param
 
-#        get_outputs(qafile,qafig,retval,'plot_traceshifts')
+        #get_outputs(qafile,qafig,retval,'plot_traceshifts')
+        #SE: until the plot content is decided --- not sure if we have to have a plot for this one though 
+        outfile = qa.write_qa_ql(qafile,retval)
+        log.debug("Output QA data is in {}".format(outfile))
         return retval
 
     def get_default_config(self):
@@ -1725,6 +1743,13 @@ class Check_Resolution(MonitoringAlg):
         retval={}
         retval['PANAME'] = paname
         kwargs=self.config['kwargs']
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["EXPID"] = '{:08d}'.format(kwargs['expid'])
+        retval["CAMERA"] = camera
+        retval["PROGRAM"] = 'ARC'
+        retval["FLAVOR"] = 'arc'
+        retval["NIGHT"] = kwargs['night']
+ 
 
         # file_psf.ycoeff is not the wsigma_array.
         # FIX later.TEST QA with file_psf.ycoeff
@@ -1810,11 +1835,16 @@ class Check_FiberFlat(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
-
+        
+        kwargs=self.config['kwargs']
         retval={}
         retval['PANAME'] = paname
+        retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["PROGRAM"] = 'FLAT'
+        retval["FLAVOR"] = 'flat'
+        retval["NIGHT"] = kwargs['night']
         retval['CAMERA'] = fibflat.header["CAMERA"]
-        kwargs=self.config['kwargs']
+        retval["EXPID"] = '{:08d}'.format(kwargs['expid'])
 
         # Mean of wavelength will be test value
         wavelengths = fibflat.wave
@@ -1825,7 +1855,6 @@ class Check_FiberFlat(MonitoringAlg):
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
-            
 
         retval["PARAMS"] = param
 
