@@ -45,13 +45,13 @@ class Config(object):
 
             #lock = NullContextManager()
             
-        from filelock import FileLock
-        lock = FileLock("{}.lock".format(configfile))
+        #from filelock import FileLock
+        #lock = FileLock("{}.lock".format(configfile))
         
-        with lock:
-            with open(configfile, 'r') as f:
-                self.conf = yaml.load(f)
-                f.close()
+        #with lock:
+        with open(configfile, 'r') as f:
+            self.conf = yaml.load(f)
+            f.close()
         self.night = night
         self.expid = expid
         self.psfid = psfid

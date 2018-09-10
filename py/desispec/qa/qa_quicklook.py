@@ -329,25 +329,40 @@ class Trace_Shifts(MonitoringAlg):
         retval={}
         retval["PANAME" ]= paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
-        retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
+        retval["EXPID"] = expid = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
-        retval["NIGHT"] = image.meta["NIGHT"]
+        retval["NIGHT"] = night = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
-
-        camera=image.meta["CAMERA"]
-
 
         if param is None:
                 log.critical("No parameter is found for this QA")
                 sys.exit("Update the configuration file for the parameters")
-                
 
-        #- RS: Return empty dictionaries until flexure metrics are decided
-        dx=[]
-        dy=[]
-        xyshift=np.array(dx,dy)
+        # create xytraceset object
+        from desispec.xytraceset import XYTraceSet
+        psffile=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'psf-{}.fits'.format(camera))
+        psf=fits.open(psffile)
+        xcoef=psf['XTRACE'].data
+        ycoef=psf['YTRACE'].data
+        wavemin=psf["XTRACE"].header["WAVEMIN"]
+        wavemax=psf["XTRACE"].header["WAVEMAX"]
+        npix_y=image.meta['NAXIS2']
+        psftrace=XYTraceSet(xcoef,ycoef,wavemin,wavemax,npix_y=npix_y)
+
+        # compute dx and dy
+        from desispec.trace_shifts import compute_dx_from_cross_dispersion_profiles as compute_dx
+        from desispec.trace_shifts import compute_dy_using_boxcar_extraction as compute_dy
+        fibers=np.arange(500) #RS: setting nfibers to 500 for now
+        ox,oy,odx,oex,of,ol=compute_dx(xcoef,ycoef,wavemin,wavemax,image,fibers=fibers)
+        x_for_dy,y_for_dy,ody,ey,fiber_for_dy,wave_for_dy=compute_dy(psftrace,image,fibers)
+
+        # return average shifts in x and y
+        dx=np.mean(odx)
+        dy=np.mean(ody)
+        xyshift=np.array([dx,dy])
+
         retval["METRICS"]={"XYSHIFTS":xyshift}
         retval["PARAMS"]=param
 
