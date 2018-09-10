@@ -31,20 +31,23 @@ class Config(object):
         #    cfile.close()
 
         #- Use filelock if available; needed at KPNO with docker+NFS
-        try:
-            from filelock import FileLock
-            lock = FileLock("{}.lock".format(configfile))
-        except ImportError:
-            class NullContextManager(object):
-                def __init__(self):
-                    pass
-                def __enter__(self):
-                    pass
-                def __exit__(self, *args):
-                    pass
+        #try:
+            #from filelock import FileLock
+            #lock = FileLock("{}.lock".format(configfile))
+        #except ImportError:
+            #class NullContextManager(object):
+                #def __init__(self):
+                    #pass
+                #def __enter__(self):
+                    #pass
+                #def __exit__(self, *args):
+                    #pass
 
-            lock = NullContextManager()
-
+            #lock = NullContextManager()
+            
+        from filelock import FileLock
+        lock = FileLock("{}.lock".format(configfile))
+        
         with lock:
             with open(configfile, 'r') as f:
                 self.conf = yaml.load(f)
