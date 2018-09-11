@@ -341,8 +341,18 @@ class Trace_Shifts(MonitoringAlg):
                 sys.exit("Update the configuration file for the parameters")
 
         # create xytraceset object
+        
+        from desispec.preproc import read_ccd_calibration
         from desispec.xytraceset import XYTraceSet
-        psffile=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'SIM','psf-{}.fits'.format(camera))
+        #SE: all till the dashed line should happen just so that we get the psf name without hardcoding any address -> there must be a better way
+        rawfile = findfile('raw',int(night),int(expid),camera,rawdata_dir=os.environ["QL_SPEC_DATA"])
+        hdulist=fits.open(rawfile)
+        primary_header=hdulist[0].header
+        camera_header =hdulist[camera].header
+        hdulist.close()
+        calibration_data = read_ccd_calibration(camera_header,primary_header)
+        #--------------------------------------------------------
+        psffile=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["PSF"])
         psf=fits.open(psffile)
         xcoef=psf['XTRACE'].data
         ycoef=psf['YTRACE'].data
