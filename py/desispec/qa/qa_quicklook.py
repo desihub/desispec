@@ -342,7 +342,7 @@ class Trace_Shifts(MonitoringAlg):
 
         # create xytraceset object
         from desispec.xytraceset import XYTraceSet
-        psffile=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'psf-{}.fits'.format(camera))
+        psffile=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],'SIM','psf-{}.fits'.format(camera))
         psf=fits.open(psffile)
         xcoef=psf['XTRACE'].data
         ycoef=psf['YTRACE'].data
