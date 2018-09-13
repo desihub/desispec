@@ -6,6 +6,67 @@ from desiutil.log import get_logger
 from desispec.qproc.qframe import QFrame
 
 def qproc_sky_subtraction(qframe,return_skymodel=False) :
+    """
+    Fast sky subtraction directly applied to the input qframe.
+    
+     Args:
+        qframe : DESI QFrame object
+     Optional: 
+        return_skymodel returns the skymodel as an array of same shape as qframe.flux
+    """
+
+
+    """
+The algorithm is an iterative subtraction of the mean spectrum
+of the sky fibers. It involves 2 resampling at each step, 
+- from the fiber wavelength array to the model wavelength array 
+- from the model wavelength array back to the fiber wavelength array
+
+Here all spectra have the same size. It is the number of CCD rows 
+(maybe trimed), but the wavelength array of each fiber is different. 
+
+Let's call R_ki the resampling matrix of the spectrum F_i of a fiber
+with wavelength array (i) on the wavelength array (k).
+
+The sky model defined on the wavelength array (k)
+after the first iteration is the mean of the resampled sky fiber spectra F_j :
+F^(1)_k = 1/n sum_j R_kj F_j
+
+The model resampled back to a fiber (i) is :
+F^(1)_i = R_ik F^(1)_k = (sum_j 1/n R_ik R_kj) F_j
+
+We call A^(1) this matrix that gives a model F^(1)_i = A^(1)_ij F_j 
+from the measurements.
+Omitting the indices, the residuals are R^(1) = (1-A^(1)) F.
+
+Let's call A^(n) this matrix that gives a model F^(n) = A^(n) F
+after n iterations. The residuals are R^(n) = (1-A^(n)) F.
+
+If one applies at iteration (n+1) the algorithm on those residuals, 
+one gets an increment to the model A^(1) R^(n) = A^(1) (1-A^(n)) F ,
+so that the total model F^(n+1) =  ( A^(n) + A^(1) (1-A^(n)) ) F  
+and so, A^(n+1) = A^(n) + A^(1) (1-A^(n))
+
+For our fast algorithm A^(n+1) != A^(n); there is a gain at each
+iteration.
+
+This is different from a standard chi2 fit of a linear model.
+In the standard chi2 fit, if H_pi is the derivative of the model
+for the data point 'i' with respect to a parameter 'p', 
+ignoring the weights ,
+the best fit parameters are X = ( H H^t )^{-1} H D , so that
+the value of the model for the data points
+is  H^t X = H^t ( H H^t )^{-1} H D .
+such that we have the matrix A = H^t  ( H H^t )^{-1} H 
+
+It's trivial to see that A is a projector, A^2 = A,
+so applying a second time the algorithm on the residuals 
+give the model parameter increment dX = A (1-A) D = (A-A^2) D = 0,
+i.e. not improvement after the first fit.
+
+    """
+
+    
     log=get_logger()
     t0=time.time()
     log.info("Starting...")
