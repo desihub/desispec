@@ -630,7 +630,7 @@ class DataBase:
         return
 
 
-    def sync(self, night):
+    def sync(self, night, specdone=False):
         """Update states of tasks based on filesystem.
 
         Go through all tasks in the DB for the given night and determine their
@@ -638,7 +638,7 @@ class DataBase:
 
         Args:
             night (str): The night to scan for updates.
-
+            specdone: If true, set spectra to done if files exist.
         """
         from .tasks.base import task_classes
         log = get_logger()
@@ -673,7 +673,6 @@ class DataBase:
         # sync to correctly reconstruct the database state.
 
         pixrows = self.select_healpix_frame({"night" : night})
-
         # First check the existence of the files touched by this night
         spec_exists = dict()
         red_exists = dict()
@@ -748,7 +747,7 @@ class DataBase:
                 spec_name = task_classes["spectra"].name_join(row)
                 red_name = task_classes["redshift"].name_join(row)
 
-                if not cfdone:
+                if (not cfdone) and (not specdone) :
                     # The cframes do not exist, so reset the state of the
                     # spectra and redshift tasks.
                     set_hpx_frame_0(row, spec_name, red_name, cur)
