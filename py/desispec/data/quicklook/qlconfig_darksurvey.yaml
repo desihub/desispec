@@ -62,6 +62,7 @@ Algorithms:
                          PEAKCOUNT_WARN_RANGE: [-4.0, 4.0],PEAKCOUNT_REF:[10.0]}
     SkySub_QL:
         QA: 
+
             Sky_Rband:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
                          R_CONT: ["5950, 6200", "6990, 7230"],

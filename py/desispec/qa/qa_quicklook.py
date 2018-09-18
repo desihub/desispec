@@ -1554,16 +1554,25 @@ class Integrate_Spec(MonitoringAlg):
         else:
             log.warning("Camera not in b, r, or z channels...")
         magnitudes=np.zeros(frame.nspec)
+
         for obj in range(frame.nspec):
-            magnitudes[obj]=frame.fibermap['MAG'][obj][filterindex]
+            #SE: identify the associated fibers and get rid of the inf values in the mag array from fibermaps 
+            if frame.fibermap['MAG'][obj][filterindex] != np.inf:
+               magnitudes[obj]=frame.fibermap['MAG'][obj][filterindex]
+            else:
+                log.info('Fiber number {} in this camera has invalid[inf] magnitude in the fibermap'.format(obj))
         #- Calculate integrals for all fibers
         integrals=np.zeros(flux.shape[0])
         #log.info(len(integrals))
+       
         for ii in range(len(integrals)):
             integrals[ii]=qalib.integrate_spec(wave,flux[ii])
+            
+
         #- RS: Convert integrated counts to magnitudes using flux calibration constant (to be updated!!)
         fibermags=99.*np.ones(integrals.shape)
         fibermags[integrals>0]=22.5-2.5*np.log10(1e-3*integrals[integrals>0]/frame.meta["EXPTIME"])
+
         #- Calculate delta_mag (remove sky fibers first)
         objects=frame.fibermap['OBJTYPE']
         skyfibers=np.where(objects=="SKY")[0]
@@ -1574,7 +1583,10 @@ class Integrate_Spec(MonitoringAlg):
             fibmags_nosky.remove(fibmags_nosky[skyfibers[skyfib]])
             for skyfibindex in range(len(skyfibers)):
                 skyfibers[skyfibindex]-=1
+       
         delta_mag=np.array(fibmags_nosky)-np.array(immags_nosky)
+        delm = np.nan_to_num(delta_mag)
+        
         #- average integrals over fibers of each object type and get imaging magnitudes
         integ_avg_tgt=[]
         mag_avg_tgt=[]
@@ -1585,11 +1597,11 @@ class Integrate_Spec(MonitoringAlg):
         starfibers=None
         for T in objtypes:
             fibers=np.where(objects==T)[0]
-
             objmags=magnitudes[fibers]
             mag_avg=np.mean(objmags)
             mag_avg_tgt.append(mag_avg)
             integ=integrals[fibers]
+            integ= integ[np.where(integ< max(integ))]
             integ_avg=np.mean(integ)
             integ_avg_tgt.append(integ_avg)
                 
@@ -1602,10 +1614,7 @@ class Integrate_Spec(MonitoringAlg):
         magdiff_avg=[]
         for i in range(len(mag_avg_tgt)):
             mag_fib=-2.5*np.log10(1e-3*integ_avg_tgt[i]/frame.meta["EXPTIME"])+22.5
-            if mag_avg_tgt[i] != np.nan:
-                magdiff=mag_fib-mag_avg_tgt[i]
-            else:
-                magdiff=np.nan
+            magdiff=mag_fib-mag_avg_tgt[i]
             magdiff_avg.append(magdiff)
             
         if param is None:
@@ -1617,7 +1626,7 @@ class Integrate_Spec(MonitoringAlg):
 
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
 
-
+        #SE: should not have ny nan or inf at this point nut let's keep it for saftety measures here 
         retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
         get_outputs(qafile,qafig,retval,'plot_integral')
