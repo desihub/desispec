@@ -72,11 +72,11 @@ env:
         # These packages will always be installed.
         - CONDA_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
-        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml healpy numba numpy"
+        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml numba numpy"
         # These packages will always be installed.
         - PIP_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
-        - PIP_ALL_DEPENDENCIES="speclite==${SPECLITE_VERSION} coveralls fitsio"
+        - PIP_ALL_DEPENDENCIES="speclite==${SPECLITE_VERSION} coveralls fitsio healpy"
         # These pip packages need to be installed in a certain order, so we
         # do that separately from the astropy/ci-helpers scripts.
         - DESIHUB_PIP_DEPENDENCIES="desiutil=${DESIUTIL_VERSION} specter=${SPECTER_VERSION} desimodel=${DESIMODEL_VERSION} redrock=${REDROCK_VERSION}"
