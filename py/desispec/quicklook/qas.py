@@ -176,7 +176,7 @@ class MonitoringAlg:
                 warn_range_val=params[WARN_range]
  
             else: 
-                self.m_log.warning("No reference given. STATUS will be assigned for the Absolute Value. Confirm your ranges.")
+                self.m_log.warning("No reference given. Update the configuration file to include reference value for QA: {}".format(self.name))
             
             currlist=isinstance(current,(np.ndarray,collections.Sequence))
             reflist=isinstance(refval,(np.ndarray,collections.Sequence))

@@ -81,10 +81,10 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
             A_pos_def = A_pos_def[:,w]
             skyflux = B*0
             try:
-                skyflux[w]=cholesky_solve(A_pos_def,B[w])
+                skyflux[w]=cholesky_solve(A_pos_def,B[w],rcond=None)
             except:
                 print("cholesky failed, trying svd in iteration {}".format(iteration))
-                skyflux[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
+                skyflux[w]=np.linalg.lstsq(A_pos_def,B[w],rcond=None)[0]
 
             print("iter %d compute chi2"%iteration)
 
@@ -131,7 +131,7 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
         print("nout tot=%d"%nout_tot)
         # solve once again to get deconvolved sky variance
         #skyflux,skycovar=cholesky_solve_and_invert(A.todense(),B)
-        skyflux = np.linalg.lstsq(A.todense(),B)[0]
+        skyflux = np.linalg.lstsq(A.todense(),B,rcond=None)[0]
         skycovar = np.linalg.pinv(A.todense())
         #- sky inverse variance, but incomplete and not needed anyway
         # skyvar=np.diagonal(skycovar)
@@ -202,7 +202,7 @@ def subtract_sky(fframe,skymodel):
     #frame is modified. Just modify input frame directly instead!
 
     fframe.flux= fframe.flux-skymodel.flux
-    fframe.ivar = util.combine_ivar(fframe.ivar.clip(0), skymodel.ivar.clip(0))
+    fframe.ivar = util.combine_ivar(fframe.ivar.clip(1e-8), skymodel.ivar.clip(1e-8))
     fframe.mask = fframe.mask | skymodel.mask
     #- create a frame object now
     #sframe=fr.Frame(fframe.wave,sflux,sivar,smask,fframe.resolution_data,meta=fframe.meta,fibermap=fframe.fibermap)
