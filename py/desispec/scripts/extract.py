@@ -269,8 +269,8 @@ def main_mpi(args, comm=None, timing=None):
 
     #- Confirm that this PSF covers these wavelengths for these spectra
 
-    psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=0))
-    psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-1))
+    psf_wavemin = np.max(psf.wavelength(list(range(specmin, specmax)), y=-0.5))
+    psf_wavemax = np.min(psf.wavelength(list(range(specmin, specmax)), y=psf.npix_y-0.5))
     if psf_wavemin > wstart:
         raise ValueError('Start wavelength {:.2f} < min wavelength {:.2f} for these fibers'.format(wstart, psf_wavemin))
     if psf_wavemax < wstop:

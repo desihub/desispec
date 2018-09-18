@@ -329,13 +329,15 @@ Where supported commands are (use desi_pipe <command> --help for details):
         parser.add_argument("--nights", required=False, default=None,
             help="comma separated (YYYYMMDD) or regex pattern- only nights "
             "matching these patterns will be examined.")
-
+        parser.add_argument("--force-spec-done", action="store_true",
+            help="force setting spectra file to state done if file exists independently of state of parent cframes.")
+        
         args = parser.parse_args(sys.argv[2:])
 
         dbpath = io.get_pipe_database()
         db = pipe.load_db(dbpath, mode="w")
 
-        control.sync(db, nightstr=args.nights)
+        control.sync(db, nightstr=args.nights,specdone=args.force_spec_done)
 
         return
 
