@@ -224,6 +224,10 @@ def integration_test(night=None, nspec=5, clobber=False):
     simdir = os.path.dirname(fmfile)
     simspec = '{}/simspec-{:08d}.fits'.format(simdir, expid)
     siminfo = fits.getdata(simspec, 'TRUTH')
+    try:
+        elginfo = fits.getdata(simspec, 'TRUTH_ELG')
+    except:
+        elginfo = None
 
     from desimodel.footprint import radec2pix
     nside=64
@@ -258,7 +262,11 @@ def integration_test(night=None, nspec=5, clobber=False):
 
             j = np.where(fibermap['TARGETID'] == zbest['TARGETID'][i])[0][0]
             truetype = siminfo['OBJTYPE'][j]
-            oiiflux = siminfo['OIIFLUX'][j]
+            oiiflux = 0.0
+            if truetype == 'ELG':
+                k = np.where(elginfo['TARGETID'] == zbest['TARGETID'][i])[0][0]
+                oiiflux = elginfo['OIIFLUX'][k]
+
             truez = siminfo['REDSHIFT'][j]
             dv = 3e5*(z-truez)/(1+truez)
             status = None
