@@ -636,12 +636,12 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
 
         if i == 0:
             ax.set_ylabel('Median S/N**2',fontsize=8)
-        ax.set_xlabel('{} Mag ({})\na={:4f}, B={:4f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
+        ax.set_xlabel('{} Mag ({})\na={:.2f}, B={:.2f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
         ax.set_xlim(16,24)
         ax.tick_params(axis='x',labelsize=6)
         ax.tick_params(axis='y',labelsize=6)
         ax.semilogy(obj_mag,snr2,'b.',markersize=1)
-        ax.semilogy(plot_mag,plot_fit,'y',markersize=0.5)
+        ax.semilogy(plot_mag,plot_fit,'y',linewidth=1)
 
     fig.savefig(outfile)
 

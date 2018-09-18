@@ -550,7 +550,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
       "NUM_NEGATIVE_SNR" : int
       "SNR_MAG_TGT"
       "FITCOEFF_TGT" : list
-      "FITCOVAR_TGT" : list
+      "FITCOVAR_TGT" : list RS: removing this metric (no longer using scipy for fit)
       "SNR_RESID" : list
       "FIDSNR_TGT"
       "RA" : ndarray (nfiber)
@@ -590,6 +590,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     qadict={"MEDIAN_SNR":mediansnr}
     qadict["FILTERS"] = filters[0,:]
     exptime=frame.meta["EXPTIME"]
+    ivar=frame.ivar
 
     if camera[0] == 'b':
         thisfilter='DECAM_G' #- should probably come from param. Hard coding for now
@@ -612,27 +613,34 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     #- Set up fit of SNR vs. Magnitude
     #- Using astronomical SNR equation, fitting 'a'(throughput) and 'B'(sky background)
     #- If read noise is not available, fit 'a' and 'B+R**2'
-    r2=0.
-    funcMap={"linear":lambda x,a,b:a+b*x,
-             "poly":lambda x,a,b,c:a+b*x+c*x**2,
-             "astro":lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b)+r2)
-            }
+#    r2=0.
+#    funcMap={"linear":lambda x,a,b:a+b*x,
+#             "poly":lambda x,a,b,c:a+b*x+c*x**2,
+#             "astro":lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b)+r2)
+#            }
+#
+#    try:
+#        #- Get read noise from Get_RMS TODO: use header information for this
+#        rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
+#        with open(rfile) as rf:
+#            rmsfile=yaml.load(rf)
+#        rmsval=rmsfile["METRICS"]["NOISE"]
+#        #- The factor of 1e-3 is a very basic (and temporary!!) flux calibration
+#        #- used to convert read noise to proper flux units
+#        r2=1e-3*rmsval**2
+#    except:
+#        log.info("Was not able to obtain read noise from prior knowledge, fitting B+R**2...")
 
-    try:
-        #- Get read noise from Get_RMS TODO: use header information for this
-        rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
-        with open(rfile) as rf:
-            rmsfile=yaml.load(rf)
-        rmsval=rmsfile["METRICS"]["NOISE"]
-        #- The factor of 1e-3 is a very basic (and temporary!!) flux calibration
-        #- used to convert read noise to proper flux units
-        r2=1e-3*rmsval**2
-    except:
-        log.info("Was not able to obtain read noise from prior knowledge, fitting B+R**2...")
+    # Use astronomically motivated function for SNR fit
+    fit=lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b))
 
-    fitfunc=funcMap["astro"]
-    initialParams=[0.1,0.1]
-    qadict["r2"]=r2
+    # Use median inverse variance of each fiber for chi2 minimization
+    var=[]
+    for i in range(len(ivar)):
+        var.append(1/np.median(ivar[i]))
+
+#    initialParams=[0.1,0.1]
+#    qadict["r2"]=r2
 
     neg_snr_tot=[]
     #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 
@@ -650,6 +658,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     fitsnr=[]
     for T in objlist:
         fibers=np.where(frame.fibermap['OBJTYPE']==T)[0]
+        objvar=np.array(var)[fibers]
         medsnr=mediansnr[fibers]
         mags=np.zeros(medsnr.shape)
         if T=="STD":# this should be fixed "STAR" or "STD" should be used consistently everywhere!
@@ -660,7 +669,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
                 mags[ii]=None
             else:
                 mags[ii]=magnitudes[fib][filters[fib]==thisfilter]
-
+        
         try:
 	    #- Determine invalid SNR and mag values and remove
             m=mags
@@ -680,14 +689,17 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             if len(cut) > 0:
                 m=list(m)
                 s=list(s)
+                objvar=list(objvar)
                 makecut=sorted(list(set(cut)))
                 for nn in range(len(makecut)):
                     m.remove(m[makecut[nn]])
                     s.remove(s[makecut[nn]])
+                    objvar.remove(objvar[makecut[nn]])
                     for ni in range(len(makecut)):
                         makecut[ni]-=1
                 m=np.array(m)
                 s=np.array(s)
+                objvar=np.array(objvar)
                 log.warning("In fit of {}, had to remove NANs from data for fitting!".format(T))
             badfibs.append(fibers[sorted(list(set(cut)))])
             xs=m.argsort()
@@ -695,36 +707,51 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             x=10**(-0.4*(m[xs]-22.5))
             med_snr=s[xs]
             y=med_snr
-	    #- Fit SNR vs. Magnitude, evaluate at fiducial magnitude, 
-            #- and store results in METRICS
-            out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
-            vs=list(out[0])
-            cov=list(out[1])
-            fitcoeff.append(vs)
-            fitcovar.append(cov)
-            fidsnr_tgt.append(fitfunc(fmag,*out[0]))
+            #- Fit SNR vs. Magnitude using chi squared minimization,
+            #- evaluate at fiducial magnitude, and store results in METRICS
+#            out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
+            #- Set high minimum initally chi2 value to be overwritten when fitting
+            minchi2=1e10
+            for a in range(100):
+                for b in range(100):
+                    guess=[0.01*a,0.1*b]
+                    fitdata=fit(x,guess[0],guess[1])
+                    totchi2=[]
+                    for k in range(len(x)):
+                        singlechi2=((y[k]-fitdata[k])/objvar[k])**2
+                        totchi2.append(singlechi2)
+                    chi2=np.sum(totchi2)
+                    if chi2<=minchi2:
+                        minchi2=chi2
+                        fita=guess[0]
+                        fitb=guess[1]
+#            vs=list(out[0])
+#            cov=list(out[1])
+            fitcoeff.append([fita,fitb])
+#            fitcovar.append(cov)
+            fidsnr_tgt.append(fit(fmag,fita,fitb))
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
             vs=np.array(initialParams)
-            vs.fill(np.nan)
-            cov=np.empty((len(initialParams),len(initialParams)))
-            cov.fill(np.nan)
-            vs=list(vs)
-            cov=list(cov)
-            fitcoeff.append(vs)
-            fitcovar.append(cov)
+#            vs.fill(np.nan)
+#            cov=np.empty((len(initialParams),len(initialParams)))
+#            cov.fill(np.nan)
+#            vs=list(vs)
+#            cov=list(cov)
+            fitcoeff.append(np.nan)
+#            fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
             
-        except scipy.optimize.OptimizeWarning:
-            log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
-            vs=out[0]
-            cov=np.empty((len(initialParams),len(initialParams)))
-            cov.fill(np.nan)
-            vs=list(vs)
-            cov=list(cov)
-            fitcoeff.append(vs)
-            fitcovar.append(cov)
-            fidsnr_tgt.append(np.nan)
+#        except scipy.optimize.OptimizeWarning:
+#            log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
+#            vs=out[0]
+#            cov=np.empty((len(initialParams),len(initialParams)))
+#            cov.fill(np.nan)
+#            vs=list(vs)
+#            cov=list(cov)
+#            fitcoeff.append(vs)
+#            fitcovar.append(cov)
+#            fidsnr_tgt.append(np.nan)
 
         qadict["{:s}_FIBERID".format(T)]=fibers.tolist()
         snr_mag=[medsnr,mags]
@@ -734,7 +761,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         #for mm in range(len(x)):
         #    snr = fitfunc(x[mm],*vs)
         #    fit_snr.append(snr)
-        fit_snr = fitfunc(x, *vs)
+        fit_snr = fit(x,fita,fitb)
         fitsnr.append(fit_snr)
         #for rr in range(len(fit_snr)):
         #    resid = (med_snr[rr] - fit_snr[rr]) / fit_snr[rr]
@@ -745,7 +772,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
     qadict["SNR_MAG_TGT"]=snrmag
     qadict["FITCOEFF_TGT"]=fitcoeff
-    qadict["FITCOVAR_TGT"]=fitcovar
+#    qadict["FITCOVAR_TGT"]=fitcovar
     qadict["SNR_RESID"]=resid_snr
     qadict["FIDSNR_TGT"]=fidsnr_tgt
     qadict["RA"]=frame.fibermap['RA_TARGET']
