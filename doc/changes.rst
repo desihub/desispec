@@ -5,12 +5,15 @@ desispec Change Log
 0.23.2 (unreleased)
 -------------------
 
+* Work-around bug that forbids opening memory-mapped files in update mode
+  on some NERSC filesystems (PR `#689`_).
 * Integrates QL S/N QA into offline QA Frame object (PR `#675`_).
 * Ensure that FITS files specify FITS-standard-compliant units (PR `#673`_).
 * Additional offline S/N QA plots
 
 .. _`#673`: https://github.com/desihub/desispec/pull/673
 .. _`#675`: https://github.com/desihub/desispec/pull/675
+.. _`#689`: https://github.com/desihub/desispec/pull/689
 
 0.23.1 (2018-08-09)
 -------------------
