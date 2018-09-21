@@ -530,6 +530,24 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     return qadict
 
+def s2n_funcs(exptime=None, r2=0.):
+    """
+    Functions for fitting S/N
+
+    Args:
+        exptime: float, optional
+        r2: float, optional  -- RN^2
+
+    Returns:
+        funcMap: dict
+
+    """
+    funcMap={"linear":lambda x,a,b:a+b*x,
+             "poly":lambda x,a,b,c:a+b*x+c*x**2,
+             "astro":lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b)+r2)
+             }
+    return funcMap
+
 def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     """
     Signal vs. Noise With fitting
@@ -565,7 +583,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         expid : int
         params: parameters dictionary
         {
-          "Func": "linear", # Fit function type one of ["linear","poly"]
+          "Func": "linear", # Fit function type one of ["linear","poly","astro"]
           "FIDMAG": 22.0, # magnitude to evaluate the fit
           "Filter":"DECAM_R", #filter name
         }
@@ -607,14 +625,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     qadict["OBJLIST"]=list(objlist)
 
     #- Set up fit of SNR vs. Magnitude
-    #- Using astronomical SNR equation, fitting 'a'(throughput) and 'B'(sky background)
-    #- If read noise is not available, fit 'a' and 'B+R**2'
-    r2=0.
-    funcMap={"linear":lambda x,a,b:a+b*x,
-             "poly":lambda x,a,b,c:a+b*x+c*x**2,
-             "astro":lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b)+r2)
-            }
-
     try:
         #- Get read noise from Get_RMS TODO: use header information for this
         rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
@@ -625,7 +635,12 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
         #- used to convert read noise to proper flux units
         r2=1e-3*rmsval**2
     except:
+        r2 = 0.
         log.info("Was not able to obtain read noise from prior knowledge, fitting B+R**2...")
+
+    #- Using astronomical SNR equation, fitting 'a'(throughput) and 'B'(sky background)
+    #- If read noise is not available, fit 'a' and 'B+R**2'
+    funcMap = s2n_funcs(exptime=exptime, r2=r2)
 
     fitfunc=funcMap["astro"]
     initialParams=[0.1,0.1]

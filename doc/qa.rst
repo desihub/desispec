@@ -12,6 +12,14 @@ routines that monitor the quality of the pipeline products
 and may be used to inspect outputs across exposures, nights,
 or a full production.
 
+Expose QA
+=========
+
+Here is the magic to expose a set of QA products
+made at NERSC to the world:
+
+1. cp -rp QA into www area :: /project/projectdirs/desi/www
+2. fix_permissions.sh -a QA
 
 Scripts
 =======

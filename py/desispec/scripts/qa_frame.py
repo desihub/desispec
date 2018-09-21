@@ -39,7 +39,7 @@ def main(args) :
         specprod_dir = args.specprod_dir
 
     # Generate qaframe (and figures?)
-    _ = qaframe_from_frame(args.frame_file, specprod_dir=specprod_dir, make_plots=args.make_plots,
+    qaframe = qaframe_from_frame(args.frame_file, specprod_dir=specprod_dir, make_plots=args.make_plots,
                            output_dir=args.output_dir)
 
 
