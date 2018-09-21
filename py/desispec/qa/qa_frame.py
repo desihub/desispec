@@ -12,7 +12,6 @@ import copy
 from desiutil.log import get_logger
 
 from desispec.io import read_params
-from desispec.qa import qa_plots_ql
 
 desi_params = read_params()
 
@@ -257,6 +256,7 @@ def qaframe_from_frame(frame_file, specprod_dir=None, make_plots=False, qaprod_d
     from desispec.qa import qa_plots
     from desispec.io.sky import read_sky
     from desispec.io.fluxcalibration import read_flux_calibration
+    from desispec.qa import qa_plots_ql
 
     if '/' in frame_file:  # If present, assume full path is used here
         pass
