@@ -9,7 +9,9 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import FormatStrFormatter
+
 from desispec.qa import qalib
+from desispec.qa.qalib import s2n_funcs
 
 def plot_countspectralbins(qa_dict,outfile):
     """
@@ -514,17 +516,18 @@ def plot_residuals(frame,qa_dict,outfile):
 #    #plt.tight_layout()
 
     fig.savefig(outfile)
-    
-def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
+
+
+def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
     """
     Plot SNR
 
     Args:
         qa_dict: dictionary of qa outputs from running qa_quicklook.Calculate_SNR
         outfile: output png file
-        objlist: list of targets for log(snr**2) vs. mag plots
+        objlist: list of objtype for log(snr**2) vs. mag plots
         badfibs: list of fibers with infs or nans to remove for plotting
-        fitsnr: snr vs. mag fitting coefficients
+        fitsnr: list of snr vs. mag fitting coefficients # JXP -- THIS IS NOT TRUE!!
         rescut: only plot residuals (+/-) less than rescut (default 0.2)
         sigmacut: only plot residuals (+/-) less than sigma cut (default 2.0)
         NOTE: rescut taken as default cut parameter
@@ -554,6 +557,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         else:
             fibers = qa_dict['METRICS']['%s_FIBERID'%otype]
         #- Remove invalid values for plotting
+        #  JXP -- This is not a good way to code this in Python
         badobj = badfibs[oid]
         if len(badobj) > 0:
             fibers = np.array(fibers)
@@ -630,10 +634,18 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         obj_mag=mags[objid]
         obj_snr=snrs[objid]
         plot_mag=sorted(obj_mag)
-        plot_fit=np.array(fitsnr[objid])**2
+        #plot_fit=np.array(fitsnr[objid])**2
         snr2=np.array(obj_snr)**2
         fitval=qa_dict["METRICS"]["FITCOEFF_TGT"][objid]
 
+        # Calculate the model
+        flux = 10 ** (-0.4 * (np.array(plot_mag) - 22.5))
+        funcMap = s2n_funcs(exptime=qa_dict['METRICS']['EXPTIME'],
+                            r2=qa_dict['METRICS']['r2'])
+        fitfunc = funcMap['astro']
+        plot_fit = fitfunc(flux, *fitval)
+
+        # Plot
         if i == 0:
             ax.set_ylabel('Median S/N**2',fontsize=8)
         ax.set_xlabel('{} Mag ({})\na={:.2f}, B={:.2f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
@@ -642,6 +654,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut,sigmacut):
         ax.tick_params(axis='y',labelsize=6)
         ax.semilogy(obj_mag,snr2,'b.',markersize=1)
         ax.semilogy(plot_mag,plot_fit,'y',linewidth=1)
+
 
     fig.savefig(outfile)
 
