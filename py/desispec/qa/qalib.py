@@ -533,7 +533,7 @@ def SignalVsNoise(frame,params,fidboundary=None):
 
     return qadict
 
-def s2n_funcs(exptime=None, r2=0.):
+def s2n_funcs(exptime=None):
     """
     Functions for fitting S/N
 
@@ -547,7 +547,7 @@ def s2n_funcs(exptime=None, r2=0.):
     """
     funcMap={"linear":lambda x,a,b:a+b*x,
              "poly":lambda x,a,b,c:a+b*x+c*x**2,
-             "astro":lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b)+r2)
+             "astro":lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b))
              }
     return funcMap
 
@@ -630,14 +630,7 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 
     #- Set up fit of SNR vs. Magnitude
 
-    #- Using astronomical SNR equation, fitting 'a'(throughput) and 'B'(sky background)
-    #- If read noise is not available, fit 'a' and 'B+R**2'
-#    r2=0.
-#    funcMap={"linear":lambda x,a,b:a+b*x,
-#             "poly":lambda x,a,b,c:a+b*x+c*x**2,
-#             "astro":lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b)+r2)
-#            }
-#
+# RS: commenting this until we have flux calibration
 #    try:
 #        #- Get read noise from Get_RMS TODO: use header information for this
 #        rfile=findfile('ql_getrms_file',int(night),int(expid),camera,specprod_dir=os.environ['QL_SPEC_REDUX'])
@@ -651,7 +644,8 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 #        log.info("Was not able to obtain read noise from prior knowledge, fitting B+R**2...")
 
     # Use astronomically motivated function for SNR fit
-    fit=lambda x,a,b:(exptime*a*x)/np.sqrt(exptime*(a*x+b))
+    funcMap = s2n_funcs(exptime=exptime)
+    fit = funcMap['astro']
 
     # Use median inverse variance of each fiber for chi2 minimization
     var=[]
@@ -660,7 +654,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
 
 #    initialParams=[0.1,0.1]
 #    qadict["r2"]=r2
-
 
     neg_snr_tot=[]
     #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 

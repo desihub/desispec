@@ -1486,7 +1486,7 @@ class Integrate_Spec(MonitoringAlg):
         kwargs=config['kwargs']
         parms=kwargs['param']
         key=kwargs['refKey'] if 'refKey' in kwargs else "DELTAMAG_TGT"
-        status=kwargs['statKey'] if 'statKey' in kwargs else "DELTAMAG_STATUS"
+        status=kwargs['statKey'] if 'statKey' in kwargs else "DELTAMAG_TGT_STATUS"
         kwargs["RESULTKEY"]=key
         kwargs["QASTATUSKEY"]=status
         if "ReferenceMetrics" in kwargs:

@@ -640,8 +640,7 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
 
         # Calculate the model
         flux = 10 ** (-0.4 * (np.array(plot_mag) - 22.5))
-        funcMap = s2n_funcs(exptime=qa_dict['METRICS']['EXPTIME'],
-                            r2=qa_dict['METRICS']['r2'])
+        funcMap = s2n_funcs(exptime=qa_dict['METRICS']['EXPTIME'])
         fitfunc = funcMap['astro']
         plot_fit = fitfunc(flux, *fitval)
 
