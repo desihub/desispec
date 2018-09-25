@@ -40,7 +40,8 @@ def write_sky(outfile, skymodel, header=None):
     hdr['EXTNAME'] = ('SKY', 'no dimension')
     hx.append( fits.PrimaryHDU(skymodel.flux.astype('f4'), header=hdr) )
     hx.append( fits.ImageHDU(skymodel.ivar.astype('f4'), name='IVAR') )
-    hx.append( fits.CompImageHDU(skymodel.mask, name='MASK') )
+    # hx.append( fits.CompImageHDU(skymodel.mask, name='MASK') )
+    hx.append( fits.ImageHDU(skymodel.mask, name='MASK') )
     hx.append( fits.ImageHDU(skymodel.wave.astype('f4'), name='WAVELENGTH') )
     if skymodel.stat_ivar is not None :
        hx.append( fits.ImageHDU(skymodel.stat_ivar.astype('f4'), name='STATIVAR') )
