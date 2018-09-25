@@ -64,7 +64,8 @@ def write_frame(outfile, frame, header=None, fibermap=None, units=None):
     hdus.append(x)
 
     hdus.append( fits.ImageHDU(frame.ivar.astype('f4'), name='IVAR') )
-    hdus.append( fits.CompImageHDU(frame.mask, name='MASK') )
+    # hdus.append( fits.CompImageHDU(frame.mask, name='MASK') )
+    hdus.append( fits.ImageHDU(frame.mask, name='MASK') )
     hdus.append( fits.ImageHDU(frame.wave.astype('f8'), name='WAVELENGTH') )
     hdus[-1].header['BUNIT'] = 'Angstrom'
     if frame.resolution_data is not None:

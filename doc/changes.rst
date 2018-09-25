@@ -2,9 +2,10 @@
 desispec Change Log
 ===================
 
-0.23.2 (unreleased)
+0.24.0 (unreleased)
 -------------------
 
+* Do not compress image masks (PR `#696`_).
 * Work-around bug that forbids opening memory-mapped files in update mode
   on some NERSC filesystems (PR `#689`_).
 * Integrates QL S/N QA into offline QA Frame object (PR `#675`_).
@@ -14,6 +15,7 @@ desispec Change Log
 .. _`#673`: https://github.com/desihub/desispec/pull/673
 .. _`#675`: https://github.com/desihub/desispec/pull/675
 .. _`#689`: https://github.com/desihub/desispec/pull/689
+.. _`#696`: https://github.com/desihub/desispec/pull/696
 
 0.23.1 (2018-08-09)
 -------------------

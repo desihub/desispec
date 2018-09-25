@@ -131,7 +131,7 @@ class TestIO(unittest.TestCase):
         # Standard suite of table tests.
         #
         result, newhdr = fits.getdata(self.testfile, header=True)
-        self.assertEqual(result.dtype.names, data.dtype.names)
+        self.assertEqual(set(result.dtype.names), set(data.dtype.names))
         for colname in data.dtype.names:
             self.assertTrue(np.all(result[colname] == data[colname]), '{} data mismatch'.format(colname))
         # self.assertEqual(newhdr.comments['C'], 'FOO')
