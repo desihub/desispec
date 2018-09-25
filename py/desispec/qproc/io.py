@@ -60,14 +60,15 @@ def write_qframe(outfile, qframe, header=None, fibermap=None, units=None):
     hdus.append(x)
 
     hdus.append( fits.ImageHDU(qframe.ivar.astype('f4'), name='IVAR') )
-    if qframe.mask is None : 
+    if qframe.mask is None :
         qframe.mask=np.zeros(qframe.flux.shape,dtype=np.uint32)
-    hdus.append( fits.CompImageHDU(qframe.mask, name='MASK') )
-    
-    if qframe.sigma is None : 
+    # hdus.append( fits.CompImageHDU(qframe.mask, name='MASK') )
+    hdus.append( fits.ImageHDU(qframe.mask, name='MASK') )
+
+    if qframe.sigma is None :
         qframe.sigma=np.zeros(qframe.flux.shape,dtype=np.float)
     hdus.append( fits.ImageHDU(qframe.sigma.astype('f4'), name='SIGMA') )
-    
+
     hdus.append( fits.ImageHDU(qframe.wave.astype('f8'), name='WAVELENGTH') )
     hdus[-1].header['BUNIT'] = 'Angstrom'
     if fibermap is not None:
@@ -82,7 +83,7 @@ def write_qframe(outfile, qframe, header=None, fibermap=None, units=None):
         x.header['FIBERMIN'] = 500*qframe.spectrograph  # Hard-coded (as in desispec.qproc.qframe)
     else:
         log.error("You are likely writing a qframe without sufficient fiber info")
-    
+
     hdus.writeto(outfile+'.tmp', clobber=True, checksum=True)
     os.rename(outfile+'.tmp', outfile)
 
@@ -100,7 +101,7 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
         desispec.Frame object with attributes wave, flux, ivar, etc.
     """
     log = get_logger()
-    
+
     if not os.path.isfile(filename) :
         raise IOError("cannot open"+filename)
 
@@ -113,28 +114,28 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
     if wave.shape != flux.shape :
         log.error("{} is not a valid QFrame file because wave.shape != flux.shape".format(filename))
         return None
-    
+
 
     if 'MASK' in fx:
         mask = native_endian(fx['MASK'].data)
     else:
         mask = None   #- let the Frame object create the default mask
-        
+
     if 'SIGMA' in fx:
         sigma = native_endian(fx['SIGMA'].data.astype('f8'))
     else:
-        sgma = None  
-        
-    
+        sgma = None
+
+
     if 'FIBERMAP' in fx:
         fibermap = fx['FIBERMAP'].data
         fibers   = fibermap['FIBER']
     else:
         fibermap = None
         fibers = None
-        
+
     fx.close()
-    
+
     if nspec is not None:
         flux = flux[0:nspec]
         ivar = ivar[0:nspec]
@@ -144,10 +145,9 @@ def read_qframe(filename, nspec=None, skip_resolution=False):
             fibermap = fibermap[:][0:nspec]
         if fibers is not None:
             fibers = fibers[:][0:nspec]
-    
+
     # return flux,ivar,wave,resolution_data, hdr
     qframe = QFrame(wave, flux, ivar, mask=mask, sigma=sigma, meta=hdr, fibermap=fibermap, fibers=fibers)
-    
+
     # Return
     return qframe
-
