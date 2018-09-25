@@ -2,7 +2,7 @@
 desispec Change Log
 ===================
 
-0.23.2 (unreleased)
+0.24.0 (unreleased)
 -------------------
 
 * Do not compress image masks (PR `#696`_).
