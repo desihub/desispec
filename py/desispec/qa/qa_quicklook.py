@@ -842,8 +842,10 @@ class Calc_XWSigma(MonitoringAlg):
                             xsigma_amp4.append(xs)
                             wsigma_amp4.append(ws)
 
-            xsigma.append(np.mean(xsig))
-            wsigma.append(np.mean(wsig))
+            if len(xsig)!=0:
+                xsigma.append(np.mean(xsig))
+            if len(wsig)!=0:
+                wsigma.append(np.mean(wsig))
 
         if fibermap['FIBER'].shape[0]<260:
             xsigma_amp2=[]
