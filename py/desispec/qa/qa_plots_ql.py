@@ -194,8 +194,8 @@ def plot_XWSigma(qa_dict,outfile):
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
-    xsigma=qa_dict["METRICS"]["XWSIGMA_FIB"][0]
-    wsigma=qa_dict["METRICS"]["XWSIGMA_FIB"][1]
+    xsigma=np.array(qa_dict["METRICS"]["XWSIGMA_FIB"][0])
+    wsigma=np.array(qa_dict["METRICS"]["XWSIGMA_FIB"][1])
     xsigma_med=qa_dict["METRICS"]["XWSIGMA"][0]
     wsigma_med=qa_dict["METRICS"]["XWSIGMA"][1]
     xfiber=np.arange(xsigma.shape[0])
