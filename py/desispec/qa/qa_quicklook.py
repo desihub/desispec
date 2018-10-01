@@ -1013,7 +1013,7 @@ class CountSpectralBins(MonitoringAlg):
         amps=inputs["amps"]
         psf=inputs["psf"]
         qafile=inputs["qafile"]
-        qafig=inputs["qafig"]
+        qafig=None #inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
 

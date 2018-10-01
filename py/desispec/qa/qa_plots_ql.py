@@ -21,7 +21,7 @@ def plot_countspectralbins(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
         outfile: Name of figure.
     """
-
+    #SE: this has become a useless plot for showing a constant number now---> prevented creating it for now until there is an actual plan for what to plot 
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
@@ -35,8 +35,7 @@ def plot_countspectralbins(qa_dict,outfile):
     plt.plot(goodfib)
     plt.ylim(-0.1,1.1)
     plt.xlabel('Fiber #',fontsize=10)
-    plt.text(-0.5,1,r"NGOODFIB=%i"%(ngoodfib),ha='left',
- va='top',fontsize=10,alpha=2)
+    plt.text(-0.5,1,r"NGOODFIB=%i"%(ngoodfib),ha='left',va='top',fontsize=10,alpha=2)
     """
     gs=GridSpec(7,6)
     ax1=fig.add_subplot(gs[:,:2])

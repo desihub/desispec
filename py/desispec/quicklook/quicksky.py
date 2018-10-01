@@ -81,10 +81,10 @@ def compute_sky(fframe,fibermap=None,nsig_clipping=4., apply_resolution=False):
             A_pos_def = A_pos_def[:,w]
             skyflux = B*0
             try:
-                skyflux[w]=cholesky_solve(A_pos_def,B[w])
+                skyflux[w]=cholesky_solve(A_pos_def,B[w],rcond=None)
             except:
                 print("cholesky failed, trying svd in iteration {}".format(iteration))
-                skyflux[w]=np.linalg.lstsq(A_pos_def,B[w])[0]
+                skyflux[w]=np.linalg.lstsq(A_pos_def,B[w],rcond=None)[0]
 
             print("iter %d compute chi2"%iteration)
 

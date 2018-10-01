@@ -175,16 +175,17 @@ class MonitoringAlg:
                 norm_range_val=params[NORM_range]
                 warn_range_val=params[WARN_range]
                 
-                #SE just in case any nan value sneaks in the array of the scalar metrics
+                
+                #SE: just in case any nan value sneaks in the array of the scalar metrics
                 ind = np.argwhere(np.isnan(current))
                 
                 if (ind.shape[0] > 0 and refval.shape[0] == current.shape[0]):
+                   self.m_log.critical("QL {} : elements({}) of the result are returned as NaN! STATUS is determined for the real values".format(self.name,str(ind)))
                    
                    ind = list(np.hstack(ind))
                    for index in sorted(ind, reverse=True):
                        del current[index]
                        del refval[index]
-                
 
  
             else: 
