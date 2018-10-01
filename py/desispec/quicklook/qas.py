@@ -62,9 +62,8 @@ class MonitoringAlg:
              #   pass
         #print(metrics[QARESULTKEY])
         if reskey in metrics:
-            current=metrics[reskey]
-           
-            
+            current = metrics[reskey]
+                
  #SE: Replacing this chunk (between the dashed lines) with an alternative that accomodates receiving the REF keys from the configuration  -----------------------------------------------------------------------------------------------------------------            
             #if "REFERENCE" in cargs:
                             
@@ -162,18 +161,31 @@ class MonitoringAlg:
         #Field 2 can be used for QLF to dynamically setup the display"""
         #return None
     #----------------------------------------------------------------------------------------------------------
-                 
+            
             if REFNAME in params:  #SE: get the REF value/ranges from params
                 
                 refval=params[REFNAME]
                 
                 if len(refval) ==1:
                     refval = refval[0]
-                  
+                
+
                 refval = np.asarray(refval)
                 current = np.asarray(current)
                 norm_range_val=params[NORM_range]
                 warn_range_val=params[WARN_range]
+                
+                #SE just in case any nan value sneaks in the array of the scalar metrics
+                ind = np.argwhere(np.isnan(current))
+                
+                if (ind.shape[0] > 0 and refval.shape[0] == current.shape[0]):
+                   
+                   ind = list(np.hstack(ind))
+                   for index in sorted(ind, reverse=True):
+                       del current[index]
+                       del refval[index]
+                
+
  
             else: 
                 self.m_log.warning("No reference given. Update the configuration file to include reference value for QA: {}".format(self.name))
@@ -246,19 +258,6 @@ class MonitoringAlg:
                         metrics[QARESULTKEY] = 'WARNING'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
 
-
-        #elif cargs["RESULTKEY"]=='CHECKFLAT': 
-                    
-                    #self.__deviation = (np.asarray([current])[0]- np.asarray([refval])[0])/np.asarray([current])[0]
-                    
-                    #metrics[QARESULTKEY]=findThr(self.__deviation,thr)
-                    #if metrics[QARESULTKEY]==QASeverity.NORMAL:
-                       #metrics[QARESULTKEY]='NORMAL'
-                    #elif metrics[QARESULTKEY]==QASeverity.WARNING:
-                       #metrics[QARESULTKEY]='WARNING'
-                    #else:
-                       #metrics[QARESULTKEY]='ALARM'
-                    #self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
 
         return res
     

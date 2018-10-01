@@ -219,7 +219,6 @@ class Check_HDUs(MonitoringAlg):
         retval["FLAVOR"] = header["FLAVOR"]
         #SE: quicklook to crash when a mismatched config file with the one in fits header
         from desispec.scripts import quicklook
-        print(header["FLAVOR"],header["PROGRAM"])
  
         args=quicklook.parse()       
         ad,fl = args.config.split("qlconfig_")
@@ -228,13 +227,13 @@ class Check_HDUs(MonitoringAlg):
         if header["FLAVOR"] == 'science':   
            flvr = flvr.split("survey")[0]
            if (header["PROGRAM"] == flvr or flvr == 'test'):
-                    log.info("The correct configuration fi)e is being used!")
+                    log.info("The correct configuration file is being used!")
            else:
                     log.critical("Wrong configuration file is being used!")
                     sys.exit("Wrong configuration file! use the one for "+str(header["PROGRAM"]))
 
         elif (header["FLAVOR"] == flvr or flvr == 'test'): 
-                    log.info("The correct configuration fi)e is being used!")
+                    log.info("The correct configuration file is being used!")
         else: 
                     log.critical("Wrong configuration file is being used!")
                     sys.exit("Wrong configuration file! use the one for "+str(header["FLAVOR"]))
