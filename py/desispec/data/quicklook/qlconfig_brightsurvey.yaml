@@ -20,9 +20,9 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-50.0, 50.0], BIAS_AMP_WARN_RANGE: [-70.0, 70.0], BIAS_AMP_REF:[130.,160.0,130.0,180.0]}
+                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-80.0, 80.0], BIAS_AMP_WARN_RANGE: [-100.0, 100.0], BIAS_AMP_REF:[130.,160.0,130.0,180.0]}
             Get_RMS:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-0.5, 0.5], NOISE_AMP_WARN_RANGE: [-0.9, 0.9],NOISE_AMP_REF:[3.0,3.0,2.5,2.7]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_REF:[3.0,3.0,2.5,2.7]}
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-1.0, 1.0], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_REF:[0.3,0.3,0.4,0.4]}
             Calc_XWSigma:
@@ -31,7 +31,7 @@ Algorithms:
                          Z_PEAKS: [9378.5],
                          PIXEL_RANGE: 7,
                          XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
-                         XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_REF:[1.1,1.8]}
+                         XWSIGMA_WARN_RANGE: [-2.0, 2.0], XWSIGMA_REF:[1.1,1.8]}
     Flexure:
         QA:
             Trace_Shifts:
