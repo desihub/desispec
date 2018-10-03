@@ -861,6 +861,11 @@ class Calc_XWSigma(MonitoringAlg):
 
         retval["PARAMS"] = param
 
+        if len(xsigma)==0:
+            xsigma=[1.1]
+        if len(wsigma)==0:
+            wsigma=[1.8]
+
         #- Combine metrics for x and w
         xwsigma_fib=np.array((xsigma,wsigma)) #- (2,nfib)
         xwsigma_med=np.array((xsigma_med,wsigma_med)) #- (2)
