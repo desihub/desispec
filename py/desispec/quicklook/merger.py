@@ -46,11 +46,11 @@ def modify_tasks(myDict):
     ################
     ### Moving all keys in keyList under Metrics (from PREPROC to BOXCAREXTRACT)
     keyList = ["XWSIGMA", "XWSIGMA_AMP", "XWSIGMA_STATUS"]
-    myDict = transferKEY(myDict, "METRICS", "PREPROC", "BOXCAREXTRACT", keyList)
+    myDict = transferKEY(myDict, "METRICS", "BOXCAREXTRACT", "PREPROC", keyList)
 
     ################   
     keyList = ["XWSIGMA_NORMAL_RANGE", "XWSIGMA_REF", "XWSIGMA_WARN_RANGE"]
-    myDict = transferKEY(myDict, "PARAMS", "PREPROC", "BOXCAREXTRACT", keyList)    
+    myDict = transferKEY(myDict, "PARAMS", "BOXCAREXTRACT","PREPROC",keyList)    
 
     ################
     keyList = ["CHECKHDUS","EXPNUM","CHECKHDUS_STATUS","EXPNUM_STATUS"]
