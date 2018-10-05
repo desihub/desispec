@@ -100,7 +100,7 @@ def do_boxcar(image,tset,outwave,boxwidth=2.5,nspec=500,maskFile=None,usesigma=F
         mask,ranges=calcMask(tset)
     Tmask=mask.T
     maskedimg=(image.pix*Tmask)
-    maskedvar=(Tmask/image.ivar.clip(0))
+    maskedvar=(Tmask/image.ivar.clip(1e-8))
 
     flux=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))
     ivar=np.zeros((maskedimg.shape[0],ranges.shape[1]-1))

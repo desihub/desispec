@@ -272,7 +272,7 @@ def runpipeline(pl,convdict,conf):
     log=qlog.getlog()
     passqadict=None #- pass this dict to QAs downstream
     schemaMerger=QL_QAMerger(conf['Night'],conf['Expid'],conf['Flavor'],conf['Camera'], conf['Program'])
-    QAresults=[] #- merged QA list for the whole pipeline. This will be reorganized for databasing after the pipeline executes
+    QAresults=[] 
     if singqa is None:
         for s,step in enumerate(pl):
             log.info("Starting to run step {}".format(paconf[s]["StepName"]))
@@ -301,7 +301,7 @@ def runpipeline(pl,convdict,conf):
                         else:
                             res=qa(inp,**qargs)
     
-                    if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         #TODO -must run this QA for now. change this later.
+                    if qa.name=="COUNTBINS" or qa.name=="CountSpectralBins":         
                         passqadict=res
                     if "qafile" in qargs:
                         qawriter.write_qa_ql(qargs["qafile"],res)
@@ -323,7 +323,13 @@ def runpipeline(pl,convdict,conf):
     else:
         import numpy as np
         qa=None
-        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']]
+        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Integrate_Spec','Calculate_SNR']]
+
+        #qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']]
+
+        #qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']]
+
+
 #        qas=['Check_HDUs',['Bias_From_Overscan','Get_RMS','Count_Pixels','Calc_XWSigma'],'Trace_Shifts','CountSpectralBins',['Sky_Continuum','Sky_Peaks'],['Sky_Rband','Sky_Residual','Integrate_Spec','Calculate_SNR']]
         singleqaperpa=['Bias_From_Overscan','Check_HDUs','Trace_Shifts','CountSpectralBins']
         for palg in range(len(qas)):
@@ -370,6 +376,7 @@ def runpipeline(pl,convdict,conf):
 
     #- merge QAs for this pipeline execution
     #- RS: don't write merged file if running single QA
+   
     if singqa is None:
         log.debug("Dumping mergedQAs")
         from desispec.io import findfile

@@ -45,19 +45,24 @@ def modify_tasks(myDict):
     
     ################
     ### Moving all keys in keyList under Metrics (from PREPROC to BOXCAREXTRACT)
-    keyList = ["XWSHIFT", "XWSHIFT_AMP", "XWSIGMA", "XWSIGMA_AMP", "XWSIGMA_SHIFT", "XWSIGMA_STATUS"]
-    myDict = transferKEY(myDict, "METRICS", "PREPROC", "BOXCAREXTRACT", keyList)
+    keyList = ["XWSIGMA", "XWSIGMA_AMP", "XWSIGMA_STATUS"]
+    myDict = transferKEY(myDict, "METRICS", "BOXCAREXTRACT", "PREPROC", keyList)
 
     ################   
     keyList = ["XWSIGMA_NORMAL_RANGE", "XWSIGMA_REF", "XWSIGMA_WARN_RANGE"]
-    myDict = transferKEY(myDict, "PARAMS", "PREPROC", "BOXCAREXTRACT", keyList)    
+    myDict = transferKEY(myDict, "PARAMS", "BOXCAREXTRACT","PREPROC",keyList)    
 
     ################
-    keyList = ["TRACE_SHIFTS"]
+    keyList = ["CHECKHDUS","EXPNUM","CHECKHDUS_STATUS","EXPNUM_STATUS"]
+    myDict = transferKEY(myDict, "METRICS", "INITIALIZE", "PREPROC", keyList)    
+
+    ################
+
+    keyList = ["XYSHIFTS","XYSHIFTS_STATUS"]
     myDict = transferKEY(myDict, "METRICS", "FLEXURE", "BOXCAREXTRACT", keyList)
 
     ################  
-    keyList = ["TRACE_NORMAL_RANGE", "TRACE_WARN_RANGE"]
+    keyList = ["XYSHIFTS_NORMAL_RANGE", "XYSHIFTS_WARN_RANGE", "XYSHIFTS_REF"]
     myDict = transferKEY(myDict, "PARAMS", "FLEXURE", "BOXCAREXTRACT", keyList)    
 
     ################    
@@ -69,15 +74,15 @@ def modify_tasks(myDict):
     myDict = transferKEY(myDict, "PARAMS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
     
     ### Changing Task Names
-    myDict = rename_task(myDict, "INITIALIZE", "CHECK_HDUs")
     myDict = rename_task(myDict, "PREPROC", "CHECK_CCDs")
     myDict = rename_task(myDict, "BOXCAREXTRACT", "CHECK_FIBERS")
     myDict = rename_task(myDict, "SKYSUB_QL", "CHECK_SPECTRA")
-    
+    myDict = rename_task(myDict, "RESOLUTIONFIT", "CHECK_ARC")
+    myDict = rename_task(myDict, "COMPUTEFIBERFLAT_QL", "CHECK_FIBERFLAT")
     ### Removing empty (or unused Pipeline steps
     myDict = remove_task(myDict, "FLEXURE")
     myDict = remove_task(myDict, "APPLYFIBERFLAT_QL")
-    
+    myDict = remove_task(myDict, "INITIALIZE")
 
     return myDict
     
@@ -103,7 +108,7 @@ def taskMaker(myDict):
 
 
 ###################################
-# SE: added this to facilitate the GENERAL_INFO section
+# GENERAL_INFO section
 def delKey(d, k, val=None, remove=True):
     
     if isinstance(d, dict):
@@ -131,7 +136,7 @@ def delKey(d, k, val=None, remove=True):
     return val
 
 ###################################
-# SE: added this to facilitate the GENERAL_INFO section
+# facilitate the GENERAL_INFO section
 
 def reOrderDict(mergeDict):
     
@@ -141,15 +146,15 @@ def reOrderDict(mergeDict):
 
              ra  = delKey(Camera, "RA")
              dec = delKey(Camera, "DEC")
-             sky_fiberid = delKey(Camera, "SKY_FIBERID")
-             skyfiberid = delKey(Camera, "SKYFIBERID")
              airmass = delKey(Camera, "AIRMASS")
              seeing = delKey(Camera, "SEEING")
              exptime = delKey(Camera, "EXPTIME")
              desispec_run_ver = delKey(Camera, "PROC_DESISPEC_VERSION") # desispec version in the raw FITS header 
              desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
              quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quivklook development state
-             imaging_mag = delKey(Camera,'MAGNITUDES') # imaging mags: for each target a triplet in this order: [DECAM_G,DECAM_R,DECAM_Z]
+             imaging_mag = delKey(Camera,"MAGNITUDES") # imaging mags: for each target a triplet in this order: [DECAM_G,DECAM_R,DECAM_Z]
+             skyfib_id = delKey(Camera,"SKYFIBERID")
+             nskyfib = delKey(Camera,"NSKY_FIB")
              
              delKey(Camera, "SKYSUB_QL")
              delKey(Camera, "MED_RESID")
@@ -161,12 +166,7 @@ def reOrderDict(mergeDict):
              delKey(Camera, "RESID_STATUS")               
              delKey(Camera, "BIAS")
              delKey(Camera, "NOISE")
-             delKey(Camera, "XWSHIFT_AMP")
-             delKey(Camera, "XWSHIFT_SHIFT")             
-                          
-             if sky_fiberid is None:
-                 sky_fiberid = skyfiberid
-             
+              
              elg_fiberid = delKey(Camera, "ELG_FIBERID")
              lrg_fiberid = delKey(Camera, "LRG_FIBERID") 
              qso_fiberid = delKey(Camera, "QSO_FIBERID") 
@@ -198,16 +198,14 @@ def reOrderDict(mergeDict):
              datetime.datetime.now(tz=pytz.utc)
              
              
-             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag}   
+             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":skyfib_id, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag,"NSKY_FIB":nskyfib}   
 
 ###################################
-# SE: added this to facilitate the GENERAL_INFO section
+
 def EditDic(Camera):
             
              ra  = delKey(Camera, "RA")
              dec = delKey(Camera, "DEC")
-             sky_fiberid = delKey(Camera, "SKY_FIBERID")
-             skyfiberid = delKey(Camera, "SKYFIBERID")
              airmass = delKey(Camera, "AIRMASS")
              seeing = delKey(Camera, "SEEING")
              exptime = delKey(Camera, "EXPTIME")
@@ -215,9 +213,8 @@ def EditDic(Camera):
              desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
              quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quivklook development state
              imaging_mag = delKey(Camera,'MAGNITUDES') # imaging mags: for each target a triplet in this order: [DECAM_G,DECAM_R,DECAM_Z]
-             
-             if sky_fiberid is None:
-                 sky_fiberid = skyfiberid
+             skyfib_id = delKey(Camera,"SKYFIBERID")
+             nskyfib = delKey(Camera,"NSKY_FIB")
              
              elg_fiberid = delKey(Camera, "ELG_FIBERID")
              lrg_fiberid = delKey(Camera, "LRG_FIBERID") 
@@ -241,6 +238,7 @@ def EditDic(Camera):
              delKey(Camera, "NREJ")
              delKey(Camera, "MED_SKY")
              delKey(Camera, "NBAD_PCHI")
+
              
              if star_fiberid is None:
                  star_fiberid = std_fiberid
@@ -264,7 +262,7 @@ def EditDic(Camera):
 
              datetime.datetime.now(datetime.timezone.utc)
              datetime.datetime.now(tz=pytz.utc)
-             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":sky_fiberid, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag}   
+             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":skyfib_id, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag,"NSKY_FIB":nskyfib}   
              
              
              all_Steps  = delKey(Camera, "PIPELINE_STEPS")   # returns a list of dictionaries, each holding one step

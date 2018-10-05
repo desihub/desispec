@@ -31,24 +31,27 @@ class Config(object):
         #    cfile.close()
 
         #- Use filelock if available; needed at KPNO with docker+NFS
-        try:
-            from filelock import FileLock
-            lock = FileLock("{}.lock".format(configfile))
-        except ImportError:
-            class NullContextManager(object):
-                def __init__(self):
-                    pass
-                def __enter__(self):
-                    pass
-                def __exit__(self, *args):
-                    pass
+        #try:
+            #from filelock import FileLock
+            #lock = FileLock("{}.lock".format(configfile))
+        #except ImportError:
+            #class NullContextManager(object):
+                #def __init__(self):
+                    #pass
+                #def __enter__(self):
+                    #pass
+                #def __exit__(self, *args):
+                    #pass
 
-            lock = NullContextManager()
-
-        with lock:
-            with open(configfile, 'r') as f:
-                self.conf = yaml.load(f)
-                f.close()
+            #lock = NullContextManager()
+            
+        #from filelock import FileLock
+        #lock = FileLock("{}.lock".format(configfile))
+        
+        #with lock:
+        with open(configfile, 'r') as f:
+            self.conf = yaml.load(f)
+            f.close()
         self.night = night
         self.expid = expid
         self.psfid = psfid
@@ -104,7 +107,7 @@ class Config(object):
         for i in algokeys: 
             for k in self.algorithms[i]["QA"].keys():
                 if k == "Check_HDUs":
-                    qaRefKeys[k] = "HDUs_OK"
+                    qaRefKeys[k] = "CHECKHDUS"
                 qaparams=self.algorithms[i]["QA"][k]["PARAMS"]
                 for par in qaparams.keys():
                     if "NORMAL_RANGE" in par:
@@ -122,7 +125,7 @@ class Config(object):
         qlog=qllogger.QLLogger(name="QLConfig")
         self.log=qlog.getlog()
         self._qaRefKeys = qaRefKeys
-        #self._qaRefKeys={"Check_HDUs":"HDUs_OK","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
+        #self._qaRefKeys={"Check_HDUs":"CHECKHDUS","Trace_Shifts":"TRACE_REF","Bias_From_Overscan":"BIAS_AMP", "Get_RMS":"NOISE_AMP", "Count_Pixels":"LITFRAC_AMP", "Calc_XWSigma":"XWSIGMA", "CountSpectralBins":"NGOODFIB", "Sky_Peaks":"PEAKCOUNT", "Sky_Continuum":"SKYCONT", "Integrate_Spec":"DELTAMAG_TGT", "Sky_Residual":"MED_RESID", "Calculate_SNR":"FIDSNR_TGT"}
 
     @property
     def mode(self):
@@ -389,7 +392,6 @@ class Config(object):
                  'Preproc': 'preproc',
                  'Flexure': 'flexure',
                  'BoxcarExtract': 'boxextract',
-                 'BoxcarExtract': 'boxextract',
                  'ComputeFiberflat_QL': 'computeflat',
                  'ApplyFiberFlat_QL': 'fiberflat',
                  'SkySub_QL': 'skysub',
@@ -421,7 +423,6 @@ class Config(object):
                  'Sky_Continuum': 'skycont',
                  'Sky_Rband': 'skyRband',
                  'Sky_Peaks': 'skypeak',
-                 'Sky_Residual': 'skyresid',
                  'Integrate_Spec': 'integ',
                  'Calculate_SNR': 'snr',
                  'Check_Resolution': 'checkres',

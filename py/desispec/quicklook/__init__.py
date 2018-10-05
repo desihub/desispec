@@ -5,8 +5,8 @@ desispec.quicklook
 # help with 2to3 support.
 from __future__ import absolute_import, division, print_function
 
-#SE: needed to main quicklook specifi version 
-__qlversion__ = "07.18.0"
+#SE: needed to maintain quicklook-specific version 
+__qlversion__ = "09.18.0"
 #from . import rawimage
 #import MAs
 #from desispec.qa import MonAlgs

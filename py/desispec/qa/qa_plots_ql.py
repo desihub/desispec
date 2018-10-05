@@ -21,7 +21,7 @@ def plot_countspectralbins(qa_dict,outfile):
         qa_dict: dictionary of qa outputs from running qa_quicklook.CountSpectralBins
         outfile: Name of figure.
     """
-
+    #SE: this has become a useless plot for showing a constant number now---> prevented creating it for now until there is an actual plan for what to plot 
     camera = qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     paname=qa_dict["PANAME"]
@@ -30,13 +30,12 @@ def plot_countspectralbins(qa_dict,outfile):
 
     fig=plt.figure()
     plt.suptitle("Fiber level check for flux after {}, Camera: {}, ExpID: {}".format(paname,camera,expid),fontsize=10,y=0.99)
-    goodfib=qa_dict["METRICS"]["GOOD_FIBER"]
+    goodfib=qa_dict["METRICS"]["GOOD_FIBERS"]
     ngoodfib=qa_dict["METRICS"]["NGOODFIB"]
     plt.plot(goodfib)
     plt.ylim(-0.1,1.1)
     plt.xlabel('Fiber #',fontsize=10)
-    plt.text(-0.5,1,r"NGOODFIB=%i"%(ngoodfib),ha='left',
- va='top',fontsize=10,alpha=2)
+    plt.text(-0.5,1,r"NGOODFIB=%i"%(ngoodfib),ha='left',va='top',fontsize=10,alpha=2)
     """
     gs=GridSpec(7,6)
     ax1=fig.add_subplot(gs[:,:2])
@@ -194,8 +193,8 @@ def plot_XWSigma(qa_dict,outfile):
     camera=qa_dict["CAMERA"]
     expid=qa_dict["EXPID"]
     pa=qa_dict["PANAME"]
-    xsigma=qa_dict["METRICS"]["XWSIGMA_FIB"][0]
-    wsigma=qa_dict["METRICS"]["XWSIGMA_FIB"][1]
+    xsigma=np.array(qa_dict["METRICS"]["XWSIGMA_FIB"][0])
+    wsigma=np.array(qa_dict["METRICS"]["XWSIGMA_FIB"][1])
     xsigma_med=qa_dict["METRICS"]["XWSIGMA"][0]
     wsigma_med=qa_dict["METRICS"]["XWSIGMA"][1]
     xfiber=np.arange(xsigma.shape[0])
@@ -629,8 +628,8 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
     for i in range(len(o)):
         ax=fig.add_subplot('24{}'.format(i+5))
 
-        objtype=list(objlist)[i]
-        objid=np.where(np.array(list(objlist))==objtype)[0][0]
+        objtype=objlist[i]
+        objid=np.where(np.array(objlist)==objtype)[0][0]
         obj_mag=mags[objid]
         obj_snr=snrs[objid]
         plot_mag=sorted(obj_mag)
@@ -640,20 +639,19 @@ def plot_SNR(qa_dict,outfile,objlist,badfibs,fitsnr,rescut=0.2,sigmacut=2.):
 
         # Calculate the model
         flux = 10 ** (-0.4 * (np.array(plot_mag) - 22.5))
-        funcMap = s2n_funcs(exptime=qa_dict['METRICS']['EXPTIME'],
-                            r2=qa_dict['METRICS']['r2'])
+        funcMap = s2n_funcs(exptime=qa_dict['METRICS']['EXPTIME'])
         fitfunc = funcMap['astro']
         plot_fit = fitfunc(flux, *fitval)
 
         # Plot
         if i == 0:
             ax.set_ylabel('Median S/N**2',fontsize=8)
-        ax.set_xlabel('{} Mag ({})\na={:4f}, B={:4f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
+        ax.set_xlabel('{} Mag ({})\na={:.2f}, B={:.2f}'.format(objtype,thisfilter,fitval[0],fitval[1]),fontsize=6)
         ax.set_xlim(16,24)
         ax.tick_params(axis='x',labelsize=6)
         ax.tick_params(axis='y',labelsize=6)
         ax.semilogy(obj_mag,snr2,'b.',markersize=1)
-        ax.semilogy(plot_mag,plot_fit**2,'y',markersize=0.5)
+        ax.semilogy(plot_mag,plot_fit**2,'y',linewidth=1)
 
 
     fig.savefig(outfile)
