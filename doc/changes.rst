@@ -2,19 +2,50 @@
 desispec Change Log
 ===================
 
-0.24.0 (unreleased)
+0.25.0 (unreleased)
 -------------------
 
-* Do not compress image masks (PR `#696`_).
-* Work-around bug that forbids opening memory-mapped files in update mode
-  on some NERSC filesystems (PR `#689`_).
-* Integrates QL S/N QA into offline QA Frame object (PR `#675`_).
-* Ensure that FITS files specify FITS-standard-compliant units (PR `#673`_).
-* Additional offline S/N QA plots
+* No changes yet.
+
+0.24.0 (2018-01-05)
+-------------------
+
+* Quicklook updates (including non-backwards compatible changes)
+
+  * New QL calibration QA metrics (PR `#677`_).
+  * Update QL to use xytraceset instead of custom PSF (PR `#682`_).
+  * Cleanup for robustness and maintainability (PR `#693`_). 
+
+* Offline QA updates
+
+  * Integrates QL S/N QA into offline QA Frame object (PR `#675`_).
+  * Additional offline QA plots on S/N (PR `#691`_).
+
+* Spectroscopic pipeline updates
+
+  * Option to generate bash scripts instead of slurm scripts (PR `#686`_).
+  * new `desi_pipe go --resume` option (PR `#687`_).
+  * `desi_pipe sync --force-spec-done` option (PR `#692`_)
+
+* Miscellaneous
+
+  * Work-around bug that forbids opening memory-mapped files in update mode
+    on some NERSC filesystems (PR `#689`_).
+  * Do not compress image masks (PR `#696`_).
+  * Ensure that FITS files specify FITS-standard-compliant units (PR `#673`_).
+  * Integration test fixes (PR `#695`_).
 
 .. _`#673`: https://github.com/desihub/desispec/pull/673
 .. _`#675`: https://github.com/desihub/desispec/pull/675
+.. _`#677`: https://github.com/desihub/desispec/pull/677
+.. _`#682`: https://github.com/desihub/desispec/pull/682
+.. _`#686`: https://github.com/desihub/desispec/pull/686
+.. _`#687`: https://github.com/desihub/desispec/pull/687
 .. _`#689`: https://github.com/desihub/desispec/pull/689
+.. _`#691`: https://github.com/desihub/desispec/pull/691
+.. _`#692`: https://github.com/desihub/desispec/pull/692
+.. _`#693`: https://github.com/desihub/desispec/pull/693
+.. _`#695`: https://github.com/desihub/desispec/pull/695
 .. _`#696`: https://github.com/desihub/desispec/pull/696
 
 0.23.1 (2018-08-09)
@@ -104,10 +135,12 @@ and pipeline updates for semi-realtime nightly processing.
 * Better sync of pixel tasks and DB sync bugfixes (PR `#590`_).
 * Improved handling of errors in case of full job failure (PR `#592`_).
 * QA speedups and improvements (PR `#593`_)
+
   * Add ability to load Frame without reading Resolution matrix
   * Refactor offline QA to use qaprod_dir more sensibly
   * Include hooks in QA to previous fiberflat file location (calib2d)
   * Inhibit scatter plot in skyredidual QA
+
 * Pass MAG into output zbest file (PR `#595`_)
 * Allow running multiple task types in a single job (PR `#601`_).
 * Pipeline hooks for processing a single exposure (PR `#604`_).
