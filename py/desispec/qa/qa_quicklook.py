@@ -337,7 +337,7 @@ class Trace_Shifts(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = expid = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = image.meta["PROGRAM"]
+        #retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = night = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -446,7 +446,7 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = image.meta["PROGRAM"]
+        #retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["NIGHT"] = image.meta["NIGHT"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["EXPTIME"] = image.meta["EXPTIME"]
@@ -455,7 +455,8 @@ class Bias_From_Overscan(MonitoringAlg):
         if retval["FLAVOR"] == 'arc':
             pass
         else:
-            retval["PROGRAM"] = image.meta["PROGRAM"]
+            #retval["PROGRAM"] = image.meta["PROGRAM"]
+            retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
         
@@ -553,7 +554,7 @@ class Get_RMS(MonitoringAlg):
         retval["PANAME"] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = image.meta["PROGRAM"]
+        #retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -755,7 +756,7 @@ class Calc_XWSigma(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat() 
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = image.meta["PROGRAM"]
+        #retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -938,7 +939,7 @@ class Count_Pixels(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = image.meta["PROGRAM"]
+        #retval["PROGRAM"] = image.meta["PROGRAM"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
         retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -1034,7 +1035,7 @@ class CountSpectralBins(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        #retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -1145,7 +1146,7 @@ class Sky_Continuum(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        #retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -1232,7 +1233,7 @@ class Sky_Rband(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        #retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -1369,7 +1370,7 @@ class Sky_Peaks(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        #retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -1464,7 +1465,7 @@ class Sky_Residual(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        #retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -1543,7 +1544,7 @@ class Integrate_Spec(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        #retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
@@ -1700,7 +1701,7 @@ class Calculate_SNR(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["EXPID"] = expid = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
-        retval["PROGRAM"] = frame.meta["PROGRAM"]
+        #retval["PROGRAM"] = frame.meta["PROGRAM"]
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         retval["NIGHT"] = night = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
