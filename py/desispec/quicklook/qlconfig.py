@@ -593,7 +593,7 @@ class Palist(object):
         if self.thislist is not None:
             pa_list=self.thislist
         else: #- construct palist
-            if self.flavor == 'arcs':
+            if self.flavor == 'arc':
                 pa_list=['Initialize','Preproc','BootCalibration','BoxcarExtract','ResolutionFit'] #- class names for respective PAs (see desispec.quicklook.procalgs)
             elif self.flavor == "flat":
                 pa_list=['Initialize','Preproc','BoxcarExtract','ComputeFiberflat_QL']
@@ -615,7 +615,7 @@ class Palist(object):
             for PA in self.thislist:
                 qalist[PA]=self.algorithms[PA]['QA'].keys()
         else:
-            if self.flavor == 'arcs':
+            if self.flavor == 'arc':
                 QAs_initial=['Bias_From_Overscan']
                 QAs_preproc=['Get_RMS','Count_Pixels']
                 QAs_bootcalib=['Calc_XWSigma']
