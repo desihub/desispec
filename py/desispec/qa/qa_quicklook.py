@@ -226,7 +226,7 @@ class Check_HDUs(MonitoringAlg):
         #if flvr in ['darksurvey','graysurvey','brightsurvey']: flvr = 'science'
         if header["FLAVOR"] == 'science':   
            flvr = flvr.split("survey")[0]
-           if (header["PROGRAM"] == flvr or flvr == 'test'):
+           if (header["PROGRAM"] == flvr or header["PROGRAM"] == format(flvr.upper()) or flvr == 'test'):
                     log.info("The correct configuration file is being used!")
            else:
                     log.critical("Wrong configuration file is being used!")
@@ -254,13 +254,11 @@ class Check_HDUs(MonitoringAlg):
         if camera != header["CAMERA"]:
                 log.critical("The raw FITS file is missing camera "+camera)
                 sys.exit("QuickLook Abort: CHECK THE RAW FITS FILE :"+rawfile)
-                #raise qlexceptions.ParameterException("Missing camera "+camera)
                 HDUstat = 'ALARM'
         
         if header["EXPID"] != kwargs['expid'] : 
                 log.critical("The raw FITS file is missing camera "+camera)
                 sys.exit("QuickLook Abort: EXPOSURE NUMBER DOES NOT MATCH THE ONE IN THE HEADER")            
-                #raise qlexceptions.ParameterException("EXPOSURE NUMBER DOES NOT MATCH THE ONE IN THE HEADER")
                 EXPNUMstat = "ALARM"
         
         
@@ -352,7 +350,7 @@ class Trace_Shifts(MonitoringAlg):
         
         from desispec.preproc import read_ccd_calibration
         from desispec.xytraceset import XYTraceSet
-        #SE: all till the dashed line should happen just so that we get the psf name without hardcoding any address -> there must be a better way
+        #SE: all next lines till the dashed line exist just so that we get the psf name without hardcoding any address -> there must be a better way
         rawfile = findfile('raw',int(night),int(expid),camera,rawdata_dir=os.environ["QL_SPEC_DATA"])
         hdulist=fits.open(rawfile)
         primary_header=hdulist[0].header
@@ -385,7 +383,6 @@ class Trace_Shifts(MonitoringAlg):
         retval["PARAMS"]=param
 
         #get_outputs(qafile,qafig,retval,'plot_traceshifts')
-        #SE: until the plot content is decided --- not sure if we have to have a plot for this one though 
         outfile = qa.write_qa_ql(qafile,retval)
         log.debug("Output QA data is in {}".format(outfile))
         return retval
