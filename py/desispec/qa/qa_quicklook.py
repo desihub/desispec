@@ -789,7 +789,10 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_amp3=[]
         xsigma_amp4=[]
         wsigma_amp4=[]
+        
         for fiber in range(fibers):
+            xs = -1
+            ws = -1
             xsig=[]
             wsig=[]
             for peak in range(len(peaks)):
@@ -821,7 +824,9 @@ class Calc_XWSigma(MonitoringAlg):
                 #- Excluding fibers 240-260 in case some fibers overlap amps
                 #- Excluding peaks in the center of image in case peak overlaps two amps
                 #- This shouldn't cause a significant loss of information 
+                
                 if amps:
+
                     if fibermap['FIBER'][fiber]<240:
                         if ypixel < 2000.:
                             xsigma_amp1.append(xs)
