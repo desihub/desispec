@@ -791,7 +791,8 @@ class Calc_XWSigma(MonitoringAlg):
         wsigma_amp4=[]
         
         for fiber in range(fibers):
-            xs = -1
+            
+            xs = -1 # SE: this prevents crash in "XWSIGMA_AMP" for when xs or ws is empty list -> try b9 of 20200515/00000001  
             ws = -1
             xsig=[]
             wsig=[]
