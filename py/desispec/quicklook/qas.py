@@ -205,11 +205,14 @@ class MonitoringAlg:
                     self.__deviation =  (current- refval)/current
                 elif np.size(current) == 0 or np.size(refval) == 0:
                     self.m_log.warning("No measurement is done or no reference is available for this QA!- check the configuration file for references!")
-                    metrics[QARESULTKEY]='ALARM'
+                    metrics[QARESULTKEY]='UNKNOWN'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY])) 
 
                 else:
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,refval.size,current.size))
+                    metrics[QARESULTKEY]='UNKNOWN'
+                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
+
             else: 
                 #SE "sorting" eliminate the chance of randomly shuffling items in the list that we observed in the past
                 self.__deviation=(np.sort(current)-np.sort(refval))/np.sort(current)
