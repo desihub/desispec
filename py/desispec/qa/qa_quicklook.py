@@ -1552,12 +1552,15 @@ class Integrate_Spec(MonitoringAlg):
         else:
             log.warning("Camera not in b, r, or z channels...")
         magnitudes=np.zeros(frame.nspec)
+        
+        from desitarget.targetmask import desi_mask
 
         for obj in range(frame.nspec):
-            #SE: identify the associated fibers and get rid of the inf values in the mag array from fibermaps 
-            if frame.fibermap['MAG'][obj][filterindex] != np.inf:
-               magnitudes[obj]=frame.fibermap['MAG'][obj][filterindex]
-            else:
+            #SE: identify the associated fibers and get rid of the inf values in the mag array from fibermaps for non-sky objects
+            if (fibermap['DESI_TARGET'][obj] & desi_mask.mask('SKY') == 0):
+               if frame.fibermap['MAG'][obj][filterindex] != np.inf:
+                 magnitudes[obj]=frame.fibermap['MAG'][obj][filterindex]
+               else:
                 log.info('Fiber number {} in this camera has invalid[inf] magnitude in the fibermap'.format(obj))
         #- Calculate integrals for all fibers
         integrals=np.zeros(flux.shape[0])
