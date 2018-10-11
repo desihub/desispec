@@ -445,8 +445,10 @@ class Config(object):
         """
 
         self.log.debug("Building Full Configuration")
-
-        self.program = self.conf["Program"]
+        if self.conf["Program"] == '': 
+            conf["Program"] = self.conf["Flavor"]
+        else:   
+            self.program = self.conf["Program"]
         self.debuglevel = self.conf["Debuglevel"]
         self.period = self.conf["Period"]
         self.timeout = self.conf["Timeout"]
@@ -466,6 +468,7 @@ class Config(object):
         hdulist=pyfits.open(self.rawfile)
         primary_header=hdulist[0].header
         camera_header =hdulist[self.camera].header
+        
         hdulist.close()
         calibration_data = read_ccd_calibration(camera_header,primary_header)
         
@@ -481,30 +484,31 @@ class Config(object):
         else:
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.flatid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
+        #SE: QL no longer get references from a template or merged json 
         #- Get reference metrics from template json file
-        if self.templateid is None:
-            template=os.path.join(os.environ['QL_CONFIG_DIR'],'templates','ql-mergedQA-{}-{}.json'.format(self.camera,self.program))
-        else:
-            template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
+        #if self.templateid is None:
+            #template=os.path.join(os.environ['QL_CONFIG_DIR'],'templates','ql-mergedQA-{}-{}.json'.format(self.camera,self.program))
+        #else:
+            #template=findfile('ql_mergedQA_file',night=self.templatenight,expid=self.templateid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         self.reference=None
-        if os.path.isfile(template):
-            try:
-                with open(template) as reference:
-                    self.log.info("Reading template file {}".format(template))
-                    refdict=json.load(reference)
-                    tasks=refdict["TASKS"]
-                    tasklist=[]
-                    for task in tasks.keys():
-                        tasklist.append(task)
-                    ref_met=[]
-                    for ttask in tasklist:
-                        ref_met.append(tasks[ttask]['METRICS'])
-                    self.reference=ref_met
-            except:
-                self.log.warning("WARNING, template file is malformed %s"%template)
-        else:
-            self.log.warning("WARNING, can't open template file %s"%template)
+        #if os.path.isfile(template):
+            #try:
+                #with open(template) as reference:
+                    #self.log.info("Reading template file {}".format(template))
+                    #refdict=json.load(reference)
+                    #tasks=refdict["TASKS"]
+                    #tasklist=[]
+                    #for task in tasks.keys():
+                        #tasklist.append(task)
+                    #ref_met=[]
+                    #for ttask in tasklist:
+                        #ref_met.append(tasks[ttask]['METRICS'])
+                    #self.reference=ref_met
+            #except:
+                #self.log.warning("WARNING, template file is malformed %s"%template)
+        #else:
+            #self.log.warning("WARNING, can't open template file %s"%template)
 
         outconfig={}
         outconfig['Night'] = self.night

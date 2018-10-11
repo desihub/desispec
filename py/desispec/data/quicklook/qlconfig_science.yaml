@@ -1,5 +1,6 @@
 # Default Configurations for a Quicklook Pipeline setup for a dark science exposure
 name: DESI Quicklook Dark,Grey,Bright Survey
+Program: dark,gray,bright
 Flavor: science
 #- Writeout intermediate files
 WritePreprocfile: True

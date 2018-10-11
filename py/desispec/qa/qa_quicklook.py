@@ -226,11 +226,11 @@ class Check_HDUs(MonitoringAlg):
         #if flvr in ['darksurvey','graysurvey','brightsurvey']: flvr = 'science'
         if header["FLAVOR"] == 'science':   
            flvr = flvr.split("survey")[0]
-           if (header["PROGRAM"] == flvr or header["PROGRAM"] == format(flvr.upper()) or flvr == 'test'):
+           if (header["FLAVOR"] == flvr or header["FLAVOR"] == format(flvr.upper()) or flvr == 'test'):
                     log.info("The correct configuration file is being used!")
            else:
                     log.critical("Wrong configuration file is being used!")
-                    sys.exit("Wrong configuration file! use the one for "+str(header["PROGRAM"]))
+                    sys.exit("Wrong configuration file! use the one for "+str(header["FLAVOR"]))
 
         elif (header["FLAVOR"] == flvr or flvr == 'test'): 
                     log.info("The correct configuration file is being used!")
@@ -861,9 +861,9 @@ class Calc_XWSigma(MonitoringAlg):
 
         #SE: this does not seem necessary but uncomment if you foubd a case where it was. mention the example here
         #if len(xsigma)==0:
-            #xsigma=param['XWSIGMA_REF'][0]
+            #xsigma=[param['XWSIGMA_REF'][0]]
         #if len(wsigma)==0:
-            #wsigma=param['XWSIGMA_REF'][1]
+            #wsigma=[param['XWSIGMA_REF'][1]]
 
         #- Combine metrics for x and w
         xwsigma_fib=np.array((xsigma,wsigma)) #- (2,nfib)
