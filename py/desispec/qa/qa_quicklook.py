@@ -761,7 +761,7 @@ class Calc_XWSigma(MonitoringAlg):
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
             
-
+        retval["PARAMS"] = param
         #- Ensure that the QA will run even if 500 spectra aren't present
         if fibermap['FIBER'].shape[0] >= 500:
             fibers = 500
@@ -1727,6 +1727,8 @@ class Calculate_SNR(MonitoringAlg):
 
         rescut=param["RESIDUAL_CUT"]
         sigmacut=param["SIGMA_CUT"]
+        
+        print(retval)
         get_outputs(qafile,qafig,retval,['plot_SNR',objlist,badfibs,fitsnr,rescut,sigmacut])
         return retval
 
