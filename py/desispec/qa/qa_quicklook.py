@@ -25,6 +25,7 @@ from desispec.preproc import _parse_sec_keyword
 from desispec.util import runcmd
 from desispec.qproc.qframe import QFrame
 import astropy
+from astropy.io import fits
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
@@ -271,6 +272,7 @@ class Check_HDUs(MonitoringAlg):
            retval["METRICS"] = {"CHECKHDUS_STATUS":HDUstat,"EXPNUM_STATUS":EXPNUMstat}
            param['SEEING'] = header["SEEING"]
            param['AIRMASS'] = header["AIRMASS"]
+           param['PROGRAM'] = header["PROGRAM"]
            
           
         retval["PARAMS"] = param   
@@ -330,7 +332,7 @@ class Trace_Shifts(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
-
+        
         #- qa dictionary 
         retval={}
         retval["PANAME" ]= paname
@@ -338,8 +340,15 @@ class Trace_Shifts(MonitoringAlg):
         retval["EXPID"] = expid = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = image.meta["FLAVOR"]
-        retval["NIGHT"] = night = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if image.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+            
+        
+        retval["NIGHT"] = night = image.meta["NIGHT"]
+        
 
         if param is None:
                 log.critical("No parameter is found for this QA")
@@ -447,8 +456,14 @@ class Bias_From_Overscan(MonitoringAlg):
         retval["CAMERA"] = camera
         retval["NIGHT"] = image.meta["NIGHT"]
         retval["FLAVOR"] = image.meta["FLAVOR"]
-        retval["EXPTIME"] = image.meta["EXPTIME"]
         kwargs=self.config['kwargs']
+        
+        if image.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        retval["EXPTIME"] = image.meta["EXPTIME"]
+        
 
         if retval["FLAVOR"] == 'arc':
             pass
@@ -552,8 +567,14 @@ class Get_RMS(MonitoringAlg):
         retval["QATIME"] = datetime.datetime.now().isoformat()
         retval["CAMERA"] = camera
         retval["FLAVOR"] = image.meta["FLAVOR"]
-        retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if image.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        retval["NIGHT"] = image.meta["NIGHT"]
+        
 
         # return rms values in rms/sqrt(exptime)
         #rmsccd=qalib.getrms(image.pix/np.sqrt(image.meta["EXPTIME"])) #- should we add dark current and/or readnoise to this as well?
@@ -753,8 +774,14 @@ class Calc_XWSigma(MonitoringAlg):
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = image.meta["FLAVOR"]
-        retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if image.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        
+        retval["NIGHT"] = image.meta["NIGHT"]
 
 
         if param is None:
@@ -935,13 +962,19 @@ class Count_Pixels(MonitoringAlg):
         retval["EXPID"] = '{0:08d}'.format(image.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = image.meta["FLAVOR"]
-        retval["NIGHT"] = image.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if image.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        
+        retval["NIGHT"] = image.meta["NIGHT"]
+        
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
-            
 
 
         retval["PARAMS"] = param
@@ -1030,8 +1063,13 @@ class CountSpectralBins(MonitoringAlg):
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if frame.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         grid=np.gradient(frame.wave)
         if not np.all(grid[0]==grid[1:]): 
@@ -1140,8 +1178,13 @@ class Sky_Continuum(MonitoringAlg):
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if frame.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         camera=frame.meta["CAMERA"]
 
@@ -1226,8 +1269,14 @@ class Sky_Rband(MonitoringAlg):
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if frame.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        
+        retval["NIGHT"] = frame.meta["NIGHT"]
         
         camera=frame.meta["CAMERA"]
 
@@ -1362,8 +1411,13 @@ class Sky_Peaks(MonitoringAlg):
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if frame.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         # Parameters
         if param is None:
@@ -1371,12 +1425,10 @@ class Sky_Peaks(MonitoringAlg):
             sys.exit("Check the configuration file")
             
 
-
         #nspec_counts, sky_counts, tgt_counts, tgt_counts_rms = sky_peaks(param, frame)
         nspec_counts, sky_counts, skyfibers, nskyfib= sky_peaks(param, frame)
         rms_nspec = np.std(nspec_counts)#qalib.getrms(nspec_counts)
         rms_skyspec = np.std(sky_counts)#qalib.getrms(sky_counts)  
-        
         
         sumcount_med_sky=np.median(sky_counts)
 
@@ -1456,10 +1508,14 @@ class Sky_Residual(MonitoringAlg):
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
-
-
+        
+        if frame.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+       
+        retval["NIGHT"] = frame.meta["NIGHT"]
+        
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
@@ -1534,8 +1590,13 @@ class Integrate_Spec(MonitoringAlg):
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if frame.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+
+        retval["NIGHT"] = frame.meta["NIGHT"]
 
         ra = frame.fibermap["RA_TARGET"]
         dec = frame.fibermap["DEC_TARGET"]
@@ -1693,8 +1754,13 @@ class Calculate_SNR(MonitoringAlg):
         retval["EXPID"] = expid = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
-        retval["NIGHT"] = night = frame.meta["NIGHT"]
         kwargs=self.config['kwargs']
+        
+        if frame.meta["FLAVOR"] == 'science':
+            fibmap =fits.open(kwargs['FiberMap'])
+            retval["PROGRAM"]=fibmap[1].header['PROGRAM']
+        
+        retval["NIGHT"] = night = frame.meta["NIGHT"]
 
         ra = fibermap["RA_TARGET"]
         dec = fibermap["DEC_TARGET"]

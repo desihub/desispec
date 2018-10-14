@@ -3,6 +3,8 @@ from desispec.quicklook import qlexceptions
 import collections
 import numpy as np
 from enum import Enum
+from astropy.io import fits
+
 
 class QASeverity(Enum):
     ALARM=30
@@ -27,6 +29,7 @@ class MonitoringAlg:
         cargs=self.config['kwargs']
         params=cargs['param']
         
+        
         metrics=res["METRICS"] if 'METRICS' in res else None
         if metrics is None:
             metrics={}
@@ -34,9 +37,11 @@ class MonitoringAlg:
         
         reskey="RESULT"
         QARESULTKEY="QA_STATUS"
-            
-        REFNAME = cargs["RESULTKEY"]+'_REF' # SE: get the REF name from cargs
-            
+        if res['FLAVOR'] == 'science':
+           REFNAME = cargs["RESULTKEY"]+'_'+res['PROGRAM']+'_REF' # SE: get the REF name from cargs
+        else:
+           REFNAME = cargs["RESULTKEY"]+'_REF'
+           
         NORM_range = cargs["RESULTKEY"]+'_NORMAL_RANGE'
         WARN_range = cargs["RESULTKEY"]+'_WARN_RANGE'
         norm_range_val = [0,0]
