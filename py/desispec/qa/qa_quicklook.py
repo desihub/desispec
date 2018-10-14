@@ -1728,7 +1728,6 @@ class Calculate_SNR(MonitoringAlg):
         rescut=param["RESIDUAL_CUT"]
         sigmacut=param["SIGMA_CUT"]
         
-        print(retval)
         get_outputs(qafile,qafig,retval,['plot_SNR',objlist,badfibs,fitsnr,rescut,sigmacut])
         return retval
 

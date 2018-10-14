@@ -568,7 +568,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
       "NUM_NEGATIVE_SNR" : int
       "SNR_MAG_TGT"
       "FITCOEFF_TGT" : list
-      "FITCOVAR_TGT" : list RS: removing this metric (no longer using scipy for fit)
       "SNR_RESID" : list
       "FIDSNR_TGT"
       "RA" : ndarray (nfiber)
@@ -576,7 +575,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
       "OBJLIST" : list - Save a copy to make sense of the list order later
       "EXPTIME" : float
       "FIT_FILTER" : str
-      "FILTERS" : list
       "r2" : float - Fitting parameter
 
     Args:
@@ -606,7 +604,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     filters=frame.fibermap['FILTER']
     mediansnr=SN_ratio(frame.flux,frame.ivar)
     qadict={"MEDIAN_SNR":mediansnr}
-    qadict["FILTERS"] = filters[0,:]
     exptime=frame.meta["EXPTIME"]
     ivar=frame.ivar
 
@@ -651,9 +648,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
     var=[]
     for i in range(len(ivar)):
         var.append(1/np.median(ivar[i]))
-
-#    initialParams=[0.1,0.1]
-#    qadict["r2"]=r2
 
     neg_snr_tot=[]
     #- neg_snr_tot counts the number of times a fiber has a negative median SNR.  This should 
@@ -722,7 +716,6 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
             y=med_snr
             #- Fit SNR vs. Magnitude using chi squared minimization,
             #- evaluate at fiducial magnitude, and store results in METRICS
-#            out=optimize.curve_fit(fitfunc,x,y,p0=initialParams)
             #- Set high minimum initally chi2 value to be overwritten when fitting
             minchi2=1e10
             for a in range(100):
@@ -738,54 +731,27 @@ def SNRFit(frame,night,camera,expid,objlist,params,fidboundary=None):
                         minchi2=chi2
                         fita=guess[0]
                         fitb=guess[1]
-#            vs=list(out[0])
-#            cov=list(out[1])
             fitcoeff.append([fita,fitb])
-#            fitcovar.append(cov)
             fidsnr_tgt.append(fit(10**(-0.4*(fmag-22.5)),fita,fitb))
         except RuntimeError:
             log.warning("In fit of {}, Fit minimization failed!".format(T))
             vs=np.array(initialParams)
-#            vs.fill(np.nan)
-#            cov=np.empty((len(initialParams),len(initialParams)))
-#            cov.fill(np.nan)
-#            vs=list(vs)
-#            cov=list(cov)
             fitcoeff.append(np.nan)
-#            fitcovar.append(cov)
             fidsnr_tgt.append(np.nan)
-            
-#        except scipy.optimize.OptimizeWarning:
-#            log.warning("WARNING!!! {} Covariance estimation failed!".format(T))
-#            vs=out[0]
-#            cov=np.empty((len(initialParams),len(initialParams)))
-#            cov.fill(np.nan)
-#            vs=list(vs)
-#            cov=list(cov)
-#            fitcoeff.append(vs)
-#            fitcovar.append(cov)
-#            fidsnr_tgt.append(np.nan)
 
         qadict["{:s}_FIBERID".format(T)]=fibers.tolist()
         snr_mag=[medsnr,mags]
         snrmag.append(snr_mag)
 
         #- Calculate residual SNR for focal plane plots
-        #for mm in range(len(x)):
-        #    snr = fitfunc(x[mm],*vs)
-        #    fit_snr.append(snr)
         fit_snr = fit(x,fita,fitb)
         fitsnr.append(fit_snr)
-        #for rr in range(len(fit_snr)):
-        #    resid = (med_snr[rr] - fit_snr[rr]) / fit_snr[rr]
-        #    resid_snr.append(resid)
         resid = (med_snr-fit_snr)/fit_snr
         resid_snr += resid.tolist()
 
     qadict["NUM_NEGATIVE_SNR"]=sum(neg_snr_tot)
     qadict["SNR_MAG_TGT"]=snrmag
     qadict["FITCOEFF_TGT"]=fitcoeff
-#    qadict["FITCOVAR_TGT"]=fitcovar
     qadict["SNR_RESID"]=resid_snr
     qadict["FIDSNR_TGT"]=fidsnr_tgt
     qadict["RA"]=frame.fibermap['RA_TARGET']
