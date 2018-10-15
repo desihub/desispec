@@ -585,7 +585,7 @@ class ApplyFiberFlat_QL(pas.PipelineAlg):
         
         input_frame=args[0]
 
-        dumpfile=None
+        #dumpfile=None
         if "dumpfile" in kwargs:
             dumpfile=kwargs["dumpfile"]
 
@@ -730,7 +730,7 @@ class SkySub_QL(pas.PipelineAlg):
 
         input_frame=args[0] #- this must be flat field applied before sky subtraction in the pipeline
 
-        dumpfile=None
+        #dumpfile=None
         if "dumpfile" in kwargs:
             dumpfile=kwargs["dumpfile"]
 
@@ -863,7 +863,7 @@ class Extract_QP(pas.PipelineAlg):
 
         input_image=args[0]
 
-        dumpfile=None
+        #dumpfile=None
         if "dumpfile" in kwargs:
             dumpfile=kwargs["dumpfile"]
         
@@ -974,7 +974,7 @@ class ApplyFiberFlat_QP(pas.PipelineAlg):
         
         input_qframe=args[0]
 
-        dumpfile=None
+        #dumpfile=None
         if "dumpfile" in kwargs:
             dumpfile=kwargs["dumpfile"]
 
@@ -1013,7 +1013,7 @@ class SkySub_QP(pas.PipelineAlg):
 
         input_qframe=args[0] #- this must be flat field applied before sky subtraction in the pipeline
 
-        dumpfile=None
+        #dumpfile=None
         if "dumpfile" in kwargs:
             dumpfile=kwargs["dumpfile"]
 

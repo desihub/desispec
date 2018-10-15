@@ -239,10 +239,11 @@ class Check_HDUs(MonitoringAlg):
                     log.critical("Wrong configuration file is being used!")
                     sys.exit("Wrong configuration file! use the one for "+str(header["FLAVOR"]))
         
-        if retval["FLAVOR"] == 'arc':
-            pass
-        else:
+
+        if retval["FLAVOR"] == 'science':
             retval["PROGRAM"] = header["PROGRAM"]
+        else:
+            pass
         retval["NIGHT"] = header["NIGHT"]
         kwargs=self.config['kwargs']
         
@@ -1958,9 +1959,23 @@ class Check_FiberFlat(MonitoringAlg):
 
         # Mean of wavelength will be test value
         wavelengths = fibflat.wave
-
         CHECKFLATtest = np.mean(wavelengths)
-        retval["METRICS"]={"CHECKFLAT": CHECKFLATtest}
+        
+        #meanscale = fibflat.meanspec/np.mean(fibflat.meanspec)
+        A= fibflat.fiberflat        
+        scaleRMS_fib=[]
+        scale_fib=[]
+        
+        for i in range(fibflat.nspec):
+            
+            scaleRMS_fib.append(np.nanstd(A[i,:]))
+            scale_fib.append(np.nanmean(A[i,:]))
+            
+        
+        diff= scale_fib - np.mean(scale_fib)
+        print(np.shape(np.where(diff >2* np.nanstd(scale_fib)))[1])
+
+        retval["METRICS"]={"CHECKFLAT": CHECKFLATtest,"FLATRMS":np.mean(scaleRMS_fib),"FLATRMS_FIB":scaleRMS_fib, "FLAT_FIB":scale_fib }
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
