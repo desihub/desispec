@@ -1973,9 +1973,18 @@ class Check_FiberFlat(MonitoringAlg):
             
         
         diff= scale_fib - np.mean(scale_fib)
-        print(np.shape(np.where(diff >2* np.nanstd(scale_fib)))[1])
-
-        retval["METRICS"]={"CHECKFLAT": CHECKFLATtest,"FLATRMS":np.mean(scaleRMS_fib),"FLATRMS_FIB":scaleRMS_fib, "FLAT_FIB":scale_fib }
+        
+        #SE: scalar metric:       CHECKFLAT: a 2-member list of number of fibers with difference from the average["diff"] outside 1 and 2 RMS 
+        #    Drill down metrics :
+        #              CHECKFLAT_FIB([array(N1),array(N2)]):    list of two arrays of fiber ids with "diff" 
+        #              FLATRMS(1 value):                        mean of the RMS of the scale value (i.e., fiber flux from continuum lamp) of all the 500 fibers    
+        #              FLATRMS_FIB(list of 500 values):         RMS per fiber
+        #              FLAT_FIB (list of 500 values):           list of meean fiber flux value per fiber
+        
+        CHECKFLAT = [np.shape(np.where(diff > np.nanstd(scale_fib)))[1],np.shape(np.where(diff > 2*np.nanstd(scale_fib)))[1]]
+        CHECKFLAT_FIB = [np.where(diff > np.nanstd(scale_fib))[0], np.where(diff > np.nanstd(scale_fib))[0]]
+        
+        retval["METRICS"]={"CHECKFLAT": CHECKFLAT,"CHECKFLAT_FIB": CHECKFLAT_FIB,"FLATRMS":np.mean(scaleRMS_fib),"FLATRMS_FIB":scaleRMS_fib, "FLAT_FIB":scale_fib }
 
         if param is None:
             log.critical("No parameter is given for this QA! ")
