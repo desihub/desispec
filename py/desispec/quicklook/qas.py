@@ -38,7 +38,7 @@ class MonitoringAlg:
         reskey="RESULT"
         QARESULTKEY="QA_STATUS"
         if res['FLAVOR'] == 'science':
-           REFNAME = cargs["RESULTKEY"]+'_'+res['PROGRAM']+'_REF' # SE: get the REF name from cargs
+           REFNAME = cargs["RESULTKEY"]+'_'+format(res['PROGRAM']).upper()+'_REF' # SE: get the REF name from cargs
         else:
            REFNAME = cargs["RESULTKEY"]+'_REF'
            
@@ -63,10 +63,9 @@ class MonitoringAlg:
                     metrics[QARESULTKEY] = 'ALARM'
                     
              self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
-             #else:
-             #   pass
-        #print(metrics[QARESULTKEY])
+        
         if reskey in metrics:
+            
             current = metrics[reskey]
                 
  #SE: Replacing this chunk (between the dashed lines) with an alternative that accomodates receiving the REF keys from the configuration  -----------------------------------------------------------------------------------------------------------------            
