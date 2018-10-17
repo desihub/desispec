@@ -35,14 +35,16 @@ $(function() {
                 //
                 night = startNight(nights, n)
                 rows = ["<h2>Night " + n + "</h2>",
-                        "<ul>"];
+                        "<p id=\"show" + n + "\" style=\"display:block;\"><a href=\"#\" onclick=\"$('#ul" + n + "').css('display', 'block');\">Show</a></p>",
+                        "<p id=\"hide" + n + "\" style=\"display:block;\"><a href=\"#\" onclick=\"$('#ul" + n + "').css('display', 'none');\">Hide</a></p>",
+                        "<ul id=\"ul" + n + "\" style=\"display:none;\">"];
             }
             //
             // Add to existing night
             //
             var p = padExpid(status[k][1])
             var c = status[k][2] ? "success" : "failure";
-            var l = status[k][3].length > 0 ? "Last " + status[k][3] + " exposure." : "";
+            var l = status[k][3].length > 0 ? " Last " + status[k][3] + " exposure." : "";
             var r = "<li class=\"" + c + "\" id=\"" +
                     n + "/" + p + "\">" +
                     p + l + "</li>";
