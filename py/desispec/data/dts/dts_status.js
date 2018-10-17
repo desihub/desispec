@@ -12,13 +12,20 @@ $(function() {
             night.appendTo("#container");
         }
     };
+    var padExpid = function(expid) {
+        var e = "" + expid;
+        var z = [];
+        for (var k = 0; k < 8 - e.length; k++) { z.push("0"); }
+        return z.join("") + e;
+    }
     var display = function() {
         $("#container").empty();
         var nights = [];
         var rows = [];
         var night;
         for (var k = 0; k < status.length; k++) {
-            if (nights.indexOf(status[k][0]) == -1) {
+            var n = status[k][0]
+            if (nights.indexOf(n) == -1) {
                 //
                 // Finish previous night
                 //
@@ -26,17 +33,20 @@ $(function() {
                 //
                 // Start a new night
                 //
-                night = startNight(nights, status[k][0])
-                rows = ["<h2>Night " + status[k][0] + "</h2>",
+                night = startNight(nights, n)
+                rows = ["<h2>Night " + n + "</h2>",
                         "<ul>"];
             }
             //
             // Add to existing night
             //
-            var r = "<li class=\"" + status[k][2] + "\" id=\"" +
-                    status[k][0] + "/" + status[k][1] + "\">" +
-                    status[k][1] + status[k][3] + "</li>";
-            console.log(r);
+            var p = padExpid(status[k][1])
+            var c = status[k][2] ? "success" : "failure";
+            var l = status[k][3].length > 0 ? "Last " + status[k][3] + " exposure." : "";
+            var r = "<li class=\"" + c + "\" id=\"" +
+                    n + "/" + p + "\">" +
+                    p + l + "</li>";
+            // console.log(r);
             rows.push(r);
         }
         //

@@ -49,8 +49,7 @@ def main():
                 shutil.copyfile(src, os.path.join(options.directory, 'index.html'))
             else:
                 shutil.copy(src, options.directory)
-    success = 'failure' if options.failure else 'success'
-    row = [options.night, options.expid, success, options.last]
+    row = [options.night, options.expid, not options.failure, options.last]
     with open(json_file) as j:
         s = json.load(j)
     s.append(row)
