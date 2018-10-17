@@ -36,7 +36,7 @@ $(function() {
                 night = startNight(nights, n)
                 rows = ["<h2>Night " + n + "</h2>",
                         "<p id=\"show" + n + "\" style=\"display:block;\"><a href=\"#\" onclick=\"$('#ul" + n + "').css('display', 'block');$('#hide" + n + "').css('display', 'block');$('#show" + n + "').css('display', 'none');\">Show</a></p>",
-                        "<p id=\"hide" + n + "\" style=\"display:block;\"><a href=\"#\" onclick=\"$('#ul" + n + "').css('display', 'none');$('#show" + n + "').css('display', 'block');$('#hide" + n + "').css('display', 'none');\">Hide</a></p>",
+                        "<p id=\"hide" + n + "\" style=\"display:none;\"><a href=\"#\" onclick=\"$('#ul" + n + "').css('display', 'none');$('#show" + n + "').css('display', 'block');$('#hide" + n + "').css('display', 'none');\">Hide</a></p>",
                         "<ul id=\"ul" + n + "\" style=\"display:none;\">"];
             }
             //
