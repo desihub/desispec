@@ -1,0 +1,22 @@
+import json
+import sys
+
+
+def main():
+    """Main
+    """
+    row = [int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]]
+    try:
+        row.append(sys.argv[4])
+    except IndexError:
+        row.append('')
+    with open('dts_status.json') as j:
+        s = json.load(j)
+    s.append(row)
+    with open('dts_status.json', 'w') as j:
+        json.dump(s, j, indent=0, separators=(',', ':'))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

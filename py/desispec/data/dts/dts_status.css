@@ -1,0 +1,8 @@
+/*
+ * Always show a scroll bar.
+ */
+html { overflow-y: scroll; }
+#top { width: 800px; margin: 0 auto; }
+#container { width: 800px; margin: 0 auto; }
+.success { background-color: lime; }
+.failure { background-color: red; }
