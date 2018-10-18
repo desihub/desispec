@@ -43,7 +43,7 @@ def main():
     options = prsr.parse_args()
     json_file = os.path.join(options.directory, 'dts_status.json')
     if options.install:
-        for ext in ('css', 'html', 'js'):
+        for ext in ('html', 'js'):
             src = resource_filename('desispec', 'data/dts/dts_status.' + ext)
             if ext == 'html':
                 shutil.copyfile(src, os.path.join(options.directory, 'index.html'))
