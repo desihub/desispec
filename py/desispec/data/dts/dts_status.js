@@ -31,7 +31,7 @@ $(function() {
             return "<button type=\"button\" class=\"btn " + color +
                 " btn-sm\" id=\"hide" + n +
                 "\" style=\"display:none;\" onclick=\"$('#ul" + n +
-                "').css('display', 'block');$('#show" + n +
+                "').css('display', 'none');$('#show" + n +
                 "').css('display', 'block');$('#hide" + n +
                 "').css('display', 'none');\">Hide</button>";
         }
