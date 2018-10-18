@@ -9,7 +9,7 @@ $(function() {
         if (rows.length > 0) {
             rows.push("</ul>");
             night.append(rows.join(""));
-            night.appendTo("#container");
+            night.appendTo("#content");
         }
     };
     var padExpid = function(expid) {
@@ -17,9 +17,20 @@ $(function() {
         var z = [];
         for (var k = 0; k < 8 - e.length; k++) { z.push("0"); }
         return z.join("") + e;
-    }
+    };
+    var nightButton = function(n, role, success) {
+        var color = success ? "btn-success" : "btn-danger";
+        var up = role == "show" ? "Show" : "Hide":
+        var alt = role == "show" ? "hide" : "show";
+        return "<button type=\"button\" class=\"btn " + color +
+            " btn-block\" id=\"" + role + n +
+            "\" style=\"display:block;\" onclick=\"$('#ul" + n +
+            "').css('display', 'block');$('#" + alt + n +
+            "').css('display', 'block');$('#" + role + n +
+            "').css('display', 'none');\">" + up + "</button>";
+    };
     var display = function() {
-        $("#container").empty();
+        $("#content").empty();
         var nights = [];
         var rows = [];
         var night;
@@ -35,15 +46,19 @@ $(function() {
                 //
                 night = startNight(nights, n)
                 rows = ["<h2>Night " + n + "</h2>",
-                        "<p id=\"show" + n + "\" style=\"display:block;\"><a href=\"#\" onclick=\"$('#ul" + n + "').css('display', 'block');$('#hide" + n + "').css('display', 'block');$('#show" + n + "').css('display', 'none');\">Show</a></p>",
-                        "<p id=\"hide" + n + "\" style=\"display:none;\"><a href=\"#\" onclick=\"$('#ul" + n + "').css('display', 'none');$('#show" + n + "').css('display', 'block');$('#hide" + n + "').css('display', 'none');\">Hide</a></p>",
+                        nightButton(n, "show", true),
+                        nightButton(n, "hide", true),
                         "<ul id=\"ul" + n + "\" style=\"display:none;\">"];
             }
             //
             // Add to existing night
             //
-            var p = padExpid(status[k][1])
-            var c = status[k][2] ? "success" : "failure";
+            var p = padExpid(status[k][1]);
+            var c = status[k][2] ? "bg-success" : "bg-danger";
+            if (!status[k][2]) {
+                rows[1] = nightButton(n, "show", false);
+                rows[2] = nightButton(n, "show", false);
+            }
             var l = status[k][3].length > 0 ? " Last " + status[k][3] + " exposure." : "";
             var r = "<li class=\"" + c + "\" id=\"" +
                     n + "/" + p + "\">" +
