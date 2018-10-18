@@ -20,14 +20,21 @@ $(function() {
     };
     var nightButton = function(n, role, success) {
         var color = success ? "btn-success" : "btn-danger";
-        var up = role == "show" ? "Show" : "Hide";
-        var alt = role == "show" ? "hide" : "show";
-        return "<button type=\"button\" class=\"btn " + color +
-            " btn-block\" id=\"" + role + n +
-            "\" style=\"display:block;\" onclick=\"$('#ul" + n +
-            "').css('display', 'block');$('#" + alt + n +
-            "').css('display', 'block');$('#" + role + n +
-            "').css('display', 'none');\">" + up + "</button>";
+        if (role == "show") {
+            return "<button type=\"button\" class=\"btn " + color +
+                " btn-block\" id=\"show" + n +
+                "\" style=\"display:block;\" onclick=\"$('#ul" + n +
+                "').css('display', 'block');$('#hide" + n +
+                "').css('display', 'block');$('#show" + n +
+                "').css('display', 'none');\">Show</button>";
+        } else {
+            return "<button type=\"button\" class=\"btn " + color +
+                " btn-block\" id=\"hide" + n +
+                "\" style=\"display:block;\" onclick=\"$('#ul" + n +
+                "').css('display', 'block');$('#show" + n +
+                "').css('display', 'block');$('#hide" + n +
+                "').css('display', 'none');\">Hide</button>";
+        }
     };
     var display = function() {
         $("#content").empty();
