@@ -211,8 +211,8 @@ class MonitoringAlg:
                     self.m_log.warning("No measurement is done or no reference is available for this QA!- check the configuration file for references!")
                     metrics[QARESULTKEY]='UNKNOWN'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY])) 
-
-                else:
+                #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else----------- line below should only be  "else:"
+                elif (cargs["RESULTKEY"] != 'FIDSNR_TGT' and cargs["RESULTKEY"] != 'DELTAMAG_TGT'):
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,refval.size,current.size))
                     metrics[QARESULTKEY]='UNKNOWN'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
@@ -238,9 +238,26 @@ class MonitoringAlg:
         thr = norm_range_val
         wthr = warn_range_val
         
+        #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else-----------
+        if (cargs["RESULTKEY"] == 'FIDSNR_TGT' or cargs["RESULTKEY"] == 'DELTAMAG_TGT'):
+             devlist = current
+             stats = []   
+             for val in devlist:
+               if thr[0] <= val <= thr[1]:
+                  stats.append('NORMAL')
+               elif wthr[0] <= val <= wthr[1]:
+                  stats.append('WARNING')
+               else:
+                  stats.append('ALARM')
+                  
+                  
+        #--------------------------------------------------------------------------------------------
+        
+        
         if devlist is None:
             pass
-        elif len(thr)==2 and len(wthr)==2:
+        #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else----------- line below should only be "elif len(thr)==2 and len(wthr)==2:"
+        elif  (len(thr)==2 and len(wthr)==2):
                     
                     if np.size(devlist)== 1:
                         d=[]
