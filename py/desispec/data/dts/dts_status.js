@@ -13,10 +13,9 @@ $(function() {
         }
     };
     var padExpid = function(expid) {
-        var e = "" + expid;
-        var z = [];
-        for (var k = 0; k < 8 - e.length; k++) { z.push("0"); }
-        return z.join("") + e;
+        var e = ("" + expid).split("");
+        while (e.length < 8) e.unshift("0");
+        return e.join("");
     };
     var nightButton = function(n, role, success) {
         var color = success ? "btn-success" : "btn-danger";
@@ -42,7 +41,7 @@ $(function() {
         var rows = [];
         var night;
         for (var k = 0; k < status.length; k++) {
-            var n = status[k][0]
+            var n = status[k][0];
             if (nights.indexOf(n) == -1) {
                 //
                 // Finish previous night
@@ -51,7 +50,7 @@ $(function() {
                 //
                 // Start a new night
                 //
-                night = startNight(nights, n)
+                night = startNight(nights, n);
                 rows = ["<h2>Night " + n + "</h2>",
                         "<p>",
                         nightButton(n, "show", true),
