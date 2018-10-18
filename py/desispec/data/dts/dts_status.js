@@ -20,7 +20,7 @@ $(function() {
     };
     var nightButton = function(n, role, success) {
         var color = success ? "btn-success" : "btn-danger";
-        var up = role == "show" ? "Show" : "Hide":
+        var up = role == "show" ? "Show" : "Hide";
         var alt = role == "show" ? "hide" : "show";
         return "<button type=\"button\" class=\"btn " + color +
             " btn-block\" id=\"" + role + n +
@@ -57,7 +57,7 @@ $(function() {
             var c = status[k][2] ? "bg-success" : "bg-danger";
             if (!status[k][2]) {
                 rows[1] = nightButton(n, "show", false);
-                rows[2] = nightButton(n, "show", false);
+                rows[2] = nightButton(n, "hide", false);
             }
             var l = status[k][3].length > 0 ? " Last " + status[k][3] + " exposure." : "";
             var r = "<li class=\"" + c + "\" id=\"" +
