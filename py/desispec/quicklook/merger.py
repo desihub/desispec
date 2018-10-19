@@ -70,7 +70,7 @@ def modify_tasks(myDict):
     myDict = transferKEY(myDict, "METRICS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
 
     ################      
-    keyList = ["B_CONT", "R_CONT", "Z_CONT", "PEAKCOUNT_NORMAL_RANGE", "PEAKCOUNT_REF", "PEAKCOUNT_WARN_RANGE", "SKYCONT_NORMAL_RANGE", "SKYCONT_REF", "SKYCONT_WARN_RANGE"]
+    keyList = ["B_CONT", "R_CONT", "Z_CONT", "PEAKCOUNT_NORMAL_RANGE","PEAKCOUNT_BRIGHT_REF","PEAKCOUNT_DARK_REF","PEAKCOUNT_GRAY_REF", "PEAKCOUNT_WARN_RANGE", "SKYCONT_NORMAL_RANGE", "SKYCONT_REF", "SKYCONT_WARN_RANGE","SKYCONT_BRIGHT_REF","SKYCONT_DARK_REF","SKYCONT_GRAY_REF"]
     myDict = transferKEY(myDict, "PARAMS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
     
     ### Changing Task Names
@@ -240,13 +240,13 @@ def EditDic(Camera):
              exptime = delKey(Camera, "EXPTIME")
              program = delKey(Camera, "PROGRAM")
              sciprog = ["DARK","GRAY","BRIGHT"]
-             sciprog.remove(program.upper())
-             QAlist=["BIAS_AMP","LITFRAC_AMP","NOISE_AMP","XWSIGMA","XYSHIFTS","NGOODFIB","DELTAMAG_TGT","FIDSNR_TGT","PEAKCOUNT","SKYRBAND","SKYCONT"]    
-            
-             for prog in sciprog:
+             QAlist=["BIAS_AMP","LITFRAC_AMP","NOISE_AMP","XWSIGMA","XYSHIFTS","NGOODFIB","DELTAMAG_TGT","FIDSNR_TGT","SKYRBAND","PEAKCOUNT", "SKYCONT"]    
+
+             if program.upper() in sciprog:
+                sciprog.remove(program.upper())
+                for prog in sciprog:
                  for qa in QAlist:
-                     
-                     delKey(Camera,qa+'_'+prog+"_REF",val=None ,include=True)
+                     delKey(Camera,qa+'_'+prog+"_REF",include=True)
                  
              desispec_run_ver = delKey(Camera, "PROC_DESISPEC_VERSION") # desispec version in the raw FITS header 
              desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
