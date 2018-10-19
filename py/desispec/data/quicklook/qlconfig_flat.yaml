@@ -42,4 +42,4 @@ Algorithms:
     ComputeFiberflat_QL:
         QA:
             Check_FiberFlat:
-                PARAMS: {CHECKFLAT_NORMAL_RANGE:[-5,5], CHECKFLAT_WARN_RANGE:[-10,10],CHECKFLAT_REF:[100,0]}
+                PARAMS: {CHECKFLAT_NORMAL_RANGE:[-0.5,0.5], CHECKFLAT_WARN_RANGE:[-1.0,1.0],CHECKFLAT_REF:[6690.0]}
