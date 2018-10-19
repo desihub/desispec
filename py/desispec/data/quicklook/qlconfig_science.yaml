@@ -1,6 +1,5 @@
 # Default Configurations for a Quicklook Pipeline setup for a dark science exposure
 name: DESI Quicklook Dark,Grey,Bright Survey
-Program: dark,gray,bright
 Flavor: science
 #- Writeout intermediate files
 WritePreprocfile: True
@@ -20,22 +19,21 @@ Algorithms:
     Preproc:
         QA: 
             Bias_From_Overscan:
-                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-80.0, 80.0], BIAS_AMP_WARN_RANGE: [-100.0, 100.0], BIAS_AMP_BRIGHT_REF:[176.0,179.0,114.0,174.0],BIAS_AMP_DARK_REF:[176.0,179.0,114.0,174.0],BIAS_AMP_GRAY_REF:[176.0,179.0,114.0,174.0]}
+                PARAMS: {BIAS_AMP_NORMAL_RANGE: [-100.0, 100.0], BIAS_AMP_WARN_RANGE: [-200.0, 200.0]}
             Get_RMS:
-                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0,1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0],NOISE_AMP_BRIGHT_REF:[3.0,3.0,2.5,2.7],NOISE_AMP_DARK_REF:[3.0,3.0,2.5,2.7],NOISE_AMP_GRAY_REF:[3.0,3.0,2.5,2.7]}
+                PARAMS: {PERCENTILES: [68.2,95.4,99.7], NOISE_AMP_NORMAL_RANGE: [-1.0, 1.0], NOISE_AMP_WARN_RANGE: [-2.0, 2.0]}
             Count_Pixels:
-                PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-1.0, 1.0], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_BRIGHT_REF:[0.3,0.3,0.4,0.4],LITFRAC_AMP_DARK_REF:[0.3,0.3,0.4,0.4],LITFRAC_AMP_GRAY_REF:[0.3,0.3,0.4,0.4]}
+                PARAMS: {CUTPIX: 5, LITFRAC_NORMAL_RANGE: [-0.1, 0.1], LITFRAC_WARN_RANGE: [-0.2, 0.2]}
             Calc_XWSigma:
-                PARAMS: {B_PEAKS: [5578.9],
-                         R_PEAKS: [6301.9],
-                         Z_PEAKS: [9378.5],
-                         PIXEL_RANGE: 7,
-                         XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
-                         XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_BRIGHT_REF:[1.1,1.8],XWSIGMA_DARK_REF:[1.1,1.8],XWSIGMA_GRAY_REF:[1.1,1.8]}
+                PARAMS: {B_PEAKS: [3914.4, 5199.3, 5578.9],
+                         R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
+                         Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4],
+                         XWSIGMA_NORMAL_RANGE: [-2.0, 2.0],
+                         XWSIGMA_WARN_RANGE: [-4.0, 4.0]}
     Flexure:
         QA:
             Trace_Shifts:
-                PARAMS: {XYSHIFTS_NORMAL_RANGE: [-1.0,1.0], XYSHIFTS_WARN_RANGE: [-2.0,2.0],XYSHIFTS_BRIGHT_REF:[0.,0.],XYSHIFTS_DARK_REF:[0.,0.],XYSHIFTS_GRAY_REF:[0.,0.]}
+                PARAMS: {TRACE_NORMAL_RANGE: [-1.0,1.0], TRACE_WARN_RANGE: [-2.0,2.0]}
     BoxcarExtract:
         wavelength: {
             b: [3570,5730,0.8],
@@ -45,32 +43,31 @@ Algorithms:
         QuickResolution: True
         QA: 
             CountSpectralBins:
-                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1., 1.], NGOODFIB_WARN_RANGE: [-2., 2.],NGOODFIB_BRIGHT_REF:[500],NGOODFIB_DARK_REF:[500],NGOODFIB_GRAY_REF:[500]}
+                PARAMS: {CUTBINS: 5, N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2]}
     ApplyFiberFlat_QL:
         QA:
             Sky_Continuum:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
                          R_CONT: ["5950, 6200", "6990, 7230"],
                          Z_CONT: ["8120, 8270", "9110, 9280"],
-                         SKYCONT_NORMAL_RANGE: [-10.0, 10.0],
-                         SKYCONT_WARN_RANGE: [-20.0, 20.0],SKYCONT_BRIGHT_REF:[160],SKYCONT_DARK_REF:[160],SKYCONT_GRAY_REF:[160]}
+                         SKYCONT_NORMAL_RANGE: [-1.0, 1.0],
+                         SKYCONT_WARN_RANGE: [-2.0, 2.0]}
             Sky_Peaks:
                 PARAMS: {B_PEAKS: [3914.4, 5199.3, 5201.8],
                          R_PEAKS: [6301.9, 6365.4, 7318.2, 7342.8, 7371.3],
                          Z_PEAKS: [8401.5, 8432.4, 8467.5, 9479.4, 9505.6, 9521.8],
-                         PEAKCOUNT_NORMAL_RANGE: [-2.0, 2.0],
-                         PEAKCOUNT_WARN_RANGE: [-4.0, 4.0],PEAKCOUNT_BRIGHT_REF:[10.0],PEAKCOUNT_DARK_REF:[10.0],PEAKCOUNT_GRAY_REF:[10.0]}
+                         PEAKCOUNT_NORMAL_RANGE: [-1.0, 1.0],
+                         PEAKCOUNT_WARN_RANGE: [-2.0, 2.0]}
     SkySub_QL:
         QA: 
-
             Sky_Rband:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
                          R_CONT: ["5950, 6200", "6990, 7230"],
                          Z_CONT: ["8120, 8270", "9110, 9280"],
                          SKYRBAND_NORMAL_RANGE: [-1.0, 1.0],
-                         SKYRBAND_WARN_RANGE: [-2.0, 2.0], SKYRBAND_BRIGHT_REF:[100.], SKYRBAND_DARK_REF:[100.], SKYRBAND_GRAY_REF:[100.]}
+                         SKYRBAND_WARN_RANGE: [-2.0, 2.0]}
             Integrate_Spec:
-                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-6.0, 6.0], DELTAMAG_TGT_WARN_RANGE: [-10., 10.],DELTAMAG_TGT_BRIGHT_REF:[4.0,4.0],DELTAMAG_TGT_DARK_REF:[4.0,4.0],DELTAMAG_TGT_GRAY_REF:[4.0,4.0]}
+                PARAMS: {DELTAMAG_TGT_NORMAL_RANGE: [-2., 2.0], DELTAMAG_TGT_WARN_RANGE: [-4., 4.]}
             Calculate_SNR:
                 #- First two entries set boundaries for SNR residual values via absolute vales or sigmas
-                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-10, 10.], FIDSNR_TGT_WARN_RANGE: [-15., 15.], FIDSNR_TGT_BRIGHT_REF:[1.,2.], FIDSNR_TGT_DARK_REF:[1.,2.], FIDSNR_TGT_GRAY_REF:[1.,2.], FIDMAG: 22.}
+                PARAMS: {RESIDUAL_CUT: 0.2, SIGMA_CUT: 2.0, FIDSNR_TGT_NORMAL_RANGE: [-11., 11.], FIDSNR_TGT_WARN_RANGE: [-12., 12.], FIDMAG: 22.}

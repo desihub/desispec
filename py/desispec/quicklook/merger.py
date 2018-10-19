@@ -70,7 +70,7 @@ def modify_tasks(myDict):
     myDict = transferKEY(myDict, "METRICS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
 
     ################      
-    keyList = ["B_CONT", "R_CONT", "Z_CONT", "PEAKCOUNT_NORMAL_RANGE","PEAKCOUNT_BRIGHT_REF","PEAKCOUNT_DARK_REF","PEAKCOUNT_GRAY_REF", "PEAKCOUNT_WARN_RANGE", "SKYCONT_NORMAL_RANGE", "SKYCONT_REF", "SKYCONT_WARN_RANGE","SKYCONT_BRIGHT_REF","SKYCONT_DARK_REF","SKYCONT_GRAY_REF"]
+    keyList = ["B_CONT", "R_CONT", "Z_CONT", "PEAKCOUNT_NORMAL_RANGE", "PEAKCOUNT_REF", "PEAKCOUNT_WARN_RANGE", "SKYCONT_NORMAL_RANGE", "SKYCONT_REF", "SKYCONT_WARN_RANGE"]
     myDict = transferKEY(myDict, "PARAMS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
     
     ### Changing Task Names
@@ -109,40 +109,12 @@ def taskMaker(myDict):
 
 ###################################
 # GENERAL_INFO section
-#def delKey(d, k, val=None, remove=True):
-    
-    #if isinstance(d, dict):
-        #key_list = [] 
-        #for key, value in  d.items(): 
-           #if key==k:
-            
-              #val = value
-              #key_list.append(key)
-           #val = delKey(value, k, val=val, remove=remove)
-        #if remove:
-            #for key in key_list:
-                #del d[key]
-   
-    #elif isinstance(d, list): 
- 
-        #try: 
-          #for i in range(len(d)): 
-             #val = delKey(d[i], k, val=val, remove=remove)
-        #except:
-            #return val
-    
-    #else: return val
-    
-    #return val
- 
- 
- 
-def delKey(d, k, val=None, remove=True, include=False):
+def delKey(d, k, val=None, remove=True):
     
     if isinstance(d, dict):
         key_list = [] 
         for key, value in  d.items(): 
-           if (key==k and not include) or (k in key and include):
+           if key==k:
             
               val = value
               key_list.append(key)
@@ -162,6 +134,7 @@ def delKey(d, k, val=None, remove=True, include=False):
     else: return val
     
     return val
+
 ###################################
 # facilitate the GENERAL_INFO section
 
@@ -173,8 +146,6 @@ def reOrderDict(mergeDict):
 
              ra  = delKey(Camera, "RA")
              dec = delKey(Camera, "DEC")
-             program = delKey(Camera, "PROGRAM")
-             
              airmass = delKey(Camera, "AIRMASS")
              seeing = delKey(Camera, "SEEING")
              exptime = delKey(Camera, "EXPTIME")
@@ -227,7 +198,7 @@ def reOrderDict(mergeDict):
              datetime.datetime.now(tz=pytz.utc)
              
              
-             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime,"PROGRAM":format(program).upper() ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":skyfib_id, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag,"NSKY_FIB":nskyfib}   
+             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":skyfib_id, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag,"NSKY_FIB":nskyfib}   
 
 ###################################
 
@@ -238,16 +209,6 @@ def EditDic(Camera):
              airmass = delKey(Camera, "AIRMASS")
              seeing = delKey(Camera, "SEEING")
              exptime = delKey(Camera, "EXPTIME")
-             program = delKey(Camera, "PROGRAM")
-             sciprog = ["DARK","GRAY","BRIGHT"]
-             QAlist=["BIAS_AMP","LITFRAC_AMP","NOISE_AMP","XWSIGMA","XYSHIFTS","NGOODFIB","DELTAMAG_TGT","FIDSNR_TGT","SKYRBAND","PEAKCOUNT", "SKYCONT"]    
-
-             if program.upper() in sciprog:
-                sciprog.remove(program.upper())
-                for prog in sciprog:
-                 for qa in QAlist:
-                     delKey(Camera,qa+'_'+prog+"_REF",include=True)
-                 
              desispec_run_ver = delKey(Camera, "PROC_DESISPEC_VERSION") # desispec version in the raw FITS header 
              desispec_fits_ver = delKey(Camera, "FITS_DESISPEC_VERSION") # desispec version of the software release
              quicklook_run_ver = delKey(Camera, "PROC_QuickLook_VERSION") # version of the quivklook development state
@@ -293,7 +254,7 @@ def EditDic(Camera):
              except: dec=None
             
              
-             #SE: Date/time of the merger i.e., QL run - time is in UTC = Mayall local time + 7h
+             # Date/time of the merger i.e., QL run - time is in UTC = Mayall local time + 7h
              def utcnow():
                return datetime.datetime.now(tz=pytz.utc)
              
@@ -301,7 +262,7 @@ def EditDic(Camera):
 
              datetime.datetime.now(datetime.timezone.utc)
              datetime.datetime.now(tz=pytz.utc)
-             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"PROGRAM":program.upper(),"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":skyfib_id, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag,"NSKY_FIB":nskyfib}   
+             Camera["GENERAL_INFO"]={"QLrun_datime_UTC":QLrun_datime ,"SEEING":seeing,"AIRMASS":airmass,"EXPTIME":exptime,"FITS_DESISPEC_VERSION":desispec_fits_ver,"PROC_DESISPEC_VERSION":desispec_run_ver,"PROC_QuickLook_VERSION":quicklook_run_ver, "RA":ra, "DEC":dec, "SKY_FIBERID":skyfib_id, "ELG_FIBERID":elg_fiberid ,"LRG_FIBERID":lrg_fiberid, "QSO_FIBERID":qso_fiberid ,"STAR_FIBERID":star_fiberid ,"B_PEAKS":b_peaks ,"R_PEAKS":r_peaks ,"Z_PEAKS":z_peaks,"IMAGING_MAGS": imaging_mag,"NSKY_FIB":nskyfib}   
              
              
              all_Steps  = delKey(Camera, "PIPELINE_STEPS")   # returns a list of dictionaries, each holding one step
@@ -353,7 +314,6 @@ class QL_QAMerger:
             
     def writeTojsonFile(self,fileName):
         g=open(fileName,'w')
-        
         
         myDict = yamlify(self.__schema)
         #reOrderDict(myDict)
