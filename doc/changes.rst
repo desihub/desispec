@@ -2,10 +2,21 @@
 desispec Change Log
 ===================
 
-0.25.0 (unreleased)
+0.25.1 (unreleased)
 -------------------
 
 * No changes yet.
+
+0.25.0 (2018-10-24)
+-------------------
+
+* QL algorithm, config, and format updates (PRs `#699`_, `#701`_, `#702`_).
+  (Includes non-backwards compatible changes).
+
+.. _`#699`: https://github.com/desihub/desispec/pull/699
+.. _`#701`: https://github.com/desihub/desispec/pull/701
+.. _`#702`: https://github.com/desihub/desispec/pull/702
+
 
 0.24.0 (2018-01-05)
 -------------------
