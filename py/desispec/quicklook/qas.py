@@ -3,6 +3,8 @@ from desispec.quicklook import qlexceptions
 import collections
 import numpy as np
 from enum import Enum
+from astropy.io import fits
+
 
 class QASeverity(Enum):
     ALARM=30
@@ -27,6 +29,7 @@ class MonitoringAlg:
         cargs=self.config['kwargs']
         params=cargs['param']
         
+        
         metrics=res["METRICS"] if 'METRICS' in res else None
         if metrics is None:
             metrics={}
@@ -34,9 +37,11 @@ class MonitoringAlg:
         
         reskey="RESULT"
         QARESULTKEY="QA_STATUS"
-            
-        REFNAME = cargs["RESULTKEY"]+'_REF' # SE: get the REF name from cargs
-            
+        if res['FLAVOR'] == 'science':
+           REFNAME = cargs["RESULTKEY"]+'_'+format(res['PROGRAM']).upper()+'_REF' # SE: get the REF name from cargs
+        else:
+           REFNAME = cargs["RESULTKEY"]+'_REF'
+           
         NORM_range = cargs["RESULTKEY"]+'_NORMAL_RANGE'
         WARN_range = cargs["RESULTKEY"]+'_WARN_RANGE'
         norm_range_val = [0,0]
@@ -58,10 +63,9 @@ class MonitoringAlg:
                     metrics[QARESULTKEY] = 'ALARM'
                     
              self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
-             #else:
-             #   pass
-        #print(metrics[QARESULTKEY])
+        
         if reskey in metrics:
+            
             current = metrics[reskey]
                 
  #SE: Replacing this chunk (between the dashed lines) with an alternative that accomodates receiving the REF keys from the configuration  -----------------------------------------------------------------------------------------------------------------            
@@ -205,11 +209,14 @@ class MonitoringAlg:
                     self.__deviation =  (current- refval)/current
                 elif np.size(current) == 0 or np.size(refval) == 0:
                     self.m_log.warning("No measurement is done or no reference is available for this QA!- check the configuration file for references!")
-                    metrics[QARESULTKEY]='ALARM'
+                    metrics[QARESULTKEY]='UNKNOWN'
                     self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY])) 
-
-                else:
+                #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else----------- line below should only be  "else:"
+                elif (cargs["RESULTKEY"] != 'FIDSNR_TGT' and cargs["RESULTKEY"] != 'DELTAMAG_TGT'):
                     self.m_log.critical("QL {} : REFERENCE({}) and RESULT({}) are of different length!".format(self.name,refval.size,current.size))
+                    metrics[QARESULTKEY]='UNKNOWN'
+                    self.m_log.info("{}: {}".format(QARESULTKEY,metrics[QARESULTKEY]))   
+
             else: 
                 #SE "sorting" eliminate the chance of randomly shuffling items in the list that we observed in the past
                 self.__deviation=(np.sort(current)-np.sort(refval))/np.sort(current)
@@ -231,9 +238,26 @@ class MonitoringAlg:
         thr = norm_range_val
         wthr = warn_range_val
         
+        #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else-----------
+        if (cargs["RESULTKEY"] == 'FIDSNR_TGT' or cargs["RESULTKEY"] == 'DELTAMAG_TGT'):
+             devlist = current
+             stats = []   
+             for val in devlist:
+               if thr[0] <= val <= thr[1]:
+                  stats.append('NORMAL')
+               elif wthr[0] <= val <= wthr[1]:
+                  stats.append('WARNING')
+               else:
+                  stats.append('ALARM')
+                  
+                  
+        #--------------------------------------------------------------------------------------------
+        
+        
         if devlist is None:
             pass
-        elif len(thr)==2 and len(wthr)==2:
+        #SE: temporarily here until we know OBJLIST is ['SCIENCE', 'STD'] or anything else----------- line below should only be "elif len(thr)==2 and len(wthr)==2:"
+        elif  (len(thr)==2 and len(wthr)==2):
                     
                     if np.size(devlist)== 1:
                         d=[]
