@@ -867,6 +867,7 @@ class Calc_XWSigma(MonitoringAlg):
                         if ypixel > 2100.:
                             xsigma_amp4.append(xs)
                             wsigma_amp4.append(ws)
+                    
 
             if len(xsig)!=0:
                 xsigma.append(np.mean(xsig))
@@ -887,11 +888,12 @@ class Calc_XWSigma(MonitoringAlg):
         xwfails=np.array([xfails,wfails])
 
 
-        #SE: this does not seem necessary but uncomment if you foubd a case where it was. mention the example here
-        #if len(xsigma)==0:
-            #xsigma=[param['XWSIGMA_REF'][0]]
-        #if len(wsigma)==0:
-            #wsigma=[param['XWSIGMA_REF'][1]]
+        #SE: mention the example here when the next lines are ineffective and when they are effective in removing the NaN from XWSIGMA_AMP--> XWSIGMA itself no longer includes any NaN value. As we both know, this is not the way to properly deal with NaNs -->let's see if switching to non-scipy fuction would bring about a better solution
+        if len(xsigma)==0:
+            xsigma = [param['XWSIGMA_REF'][0]]
+
+        if len(wsigma)==0:
+            wsigma=[param['XWSIGMA_REF'][1]]
 
         #- Combine metrics for x and w
         xwsigma_fib=np.array((xsigma,wsigma)) #- (2,nfib)
@@ -899,6 +901,24 @@ class Calc_XWSigma(MonitoringAlg):
         xwsigma_amp=np.array((xsigma_amp,wsigma_amp))
 
         if amps:
+            #if len(xsigma_amp1)==0 :
+                #xsigma_amp1 = [param['XWSIGMA_REF'][0]]
+            #if len(xsigma_amp2)==0 :
+                #xsigma_amp2 = [param['XWSIGMA_REF'][0]]
+            #if len(xsigma_amp3)==0 :
+                #xsigma_amp3 = [param['XWSIGMA_REF'][0]]
+            #if len(xsigma_amp4)==0 :
+                #xsigma_amp4 = [param['XWSIGMA_REF'][0]]
+
+            #if len(wsigma_amp1)==0 :
+                #wsigma_amp1 = [param['XWSIGMA_REF'][1]]
+            #if len(wsigma_amp2)==0 :
+                #wsigma_amp2 = [param['XWSIGMA_REF'][1]]
+            #if len(wsigma_amp3)==0 :
+                #wsigma_amp3 = [param['XWSIGMA_REF'][1]]
+            #if len(wsigma_amp4)==0 :
+                #wsigma_amp4 = [param['XWSIGMA_REF'][1]]
+
             retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib,"XWSIGMA_AMP":xwsigma_amp}#,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
         else:
             retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib}#,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
@@ -1689,7 +1709,7 @@ class Integrate_Spec(MonitoringAlg):
 
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
 
-        #SE: should not have ny nan or inf at this point nut let's keep it for saftety measures here 
+        #SE: should not have any nan or inf at this point nut let's keep it for saftety measures here 
         retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
         get_outputs(qafile,qafig,retval,'plot_integral')
