@@ -68,13 +68,13 @@ class XYTraceSet(object):
         return self.wave_vs_y_traceset.eval(fiber,y)
     
     def x_vs_y(self,fiber,y) :
-        return self.x_vs_wave(self.wave_vs_y(fiber,y))
+        return self.x_vs_wave(fiber,self.wave_vs_y(fiber,y))
 
     def xsig_vs_y(self,fiber,y) :
-        return self.xsig_vs_wave(self.wave_vs_y(fiber,y))
+        return self.xsig_vs_wave(fiber,self.wave_vs_y(fiber,y))
     
     def ysig_vs_y(self,fiber,y) :
-        return self.ysig_vs_wave(self.wave_vs_y(fiber,y))
+        return self.ysig_vs_wave(fiber,self.wave_vs_y(fiber,y))
     
     """
         if self.x_vs_y_traceset is None :
