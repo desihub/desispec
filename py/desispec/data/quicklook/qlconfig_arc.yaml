@@ -29,9 +29,9 @@ Algorithms:
             Count_Pixels:
                 PARAMS: {CUTPIX: 5, LITFRAC_AMP_NORMAL_RANGE: [-1.0, 1.0], LITFRAC_AMP_WARN_RANGE: [-0.4, 0.4],LITFRAC_AMP_REF:[0.3,0.3,0.4,0.4]}
             Calc_XWSigma:
-                PARAMS: {B_PEAKS: [5578.9],
-                         R_PEAKS: [6301.9],
-                         Z_PEAKS: [9378.5],
+                PARAMS: {B_PEAKS: [4047.7],
+                         R_PEAKS: [6508.3],
+                         Z_PEAKS: [8497.7],
                          PIXEL_RANGE: 7,
                          XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
                          XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_REF:[1.5,2.0]}
