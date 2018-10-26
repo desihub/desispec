@@ -30,39 +30,6 @@ from astropy.io import fits
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
 
-# RS: this function is not needed anymore
-#def qlf_post(qadict):
-#    """
-#    A general function to HTTP post the QA output dictionary, intended for QLF
-#    requires environmental variables: QLF_API_URL, QLF_USER, QLF_PASSWD
-#    
-#    Args: 
-#        qadict: returned dictionary from a QA
-#    """
-#    #- Check for environment variables and set them here
-#    if "QLF_API_URL" in os.environ:
-#        qlf_url=os.environ.get("QLF_API_URL")
-#        if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-#            log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-#        else: 
-#            qlf_user=os.environ.get("QLF_USER")
-#            qlf_passwd=os.environ.get("QLF_PASSWD")
-#            log.debug("Environment variables are set for QLF. Now trying HTTP post.")
-#            #- All set. Now try to HTTP post
-#            try: 
-#                import requests
-#                response=requests.get(qlf_url)
-#                #- Check if the api has json
-#                api=response.json()
-#                #- proceed with post
-#                job={"name":"QL","status":0,"dictionary":qadict} #- QLF should disintegrate dictionary
-#                response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-#            except:
-#                log.error("Skipping HTTP post... Exception",exc_info=true)
-#
-#    else:   
-#        log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
-
 def get_inputs(*args,**kwargs):
     '''
     Get inputs required for each QA
@@ -88,8 +55,6 @@ def get_inputs(*args,**kwargs):
     inputs["fibermap"]=None
     if "FiberMap" in kwargs: inputs["fibermap"]=kwargs["FiberMap"]
 
-#    if "qlf" in kwargs: inputs["qlf"]=kwargs["qlf"]
-#    else: inputs["qlf"]=False
 
     if "qafile" in kwargs: inputs["qafile"] = kwargs["qafile"]
     else: inputs["qafile"]=None
@@ -101,11 +66,8 @@ def get_inputs(*args,**kwargs):
 
 def get_outputs(qafile,qafig,retval,plot_func):
     """
-    Setup QA file and QA fig, http post if needed
+    Setup QA file and QA fig
     """
-   # RS: qlf_post is a deprecated function, not needed
-   # if qlf:
-   #     qlf_post(retval)
     if qafile is not None:
         outfile = qa.write_qa_ql(qafile,retval)
         log.debug("Output QA data is in {}".format(outfile))
