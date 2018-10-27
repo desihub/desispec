@@ -150,7 +150,10 @@ class Check_HDUs(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
 
         if kwargs["singleqa"] == 'Check_HDUs':
             night = kwargs['night']
@@ -276,7 +279,9 @@ class Trace_Shifts(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Trace_Shifts':
             night = kwargs['night']
@@ -391,7 +396,9 @@ class Bias_From_Overscan(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Bias_From_Overscan':
             night = kwargs['night']
@@ -503,7 +510,9 @@ class Get_RMS(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
                 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Get_RMS':
             night = kwargs['night']
@@ -705,7 +714,9 @@ class Calc_XWSigma(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
                 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Calc_XWSigma':
             night = kwargs['night']
@@ -918,7 +929,9 @@ class Count_Pixels(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
                 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Count_Pixels':
             night = kwargs['night']
@@ -1013,7 +1026,9 @@ class CountSpectralBins(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'CountSpectralBins':
             night = kwargs['night']
@@ -1129,7 +1144,9 @@ class Sky_Continuum(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Continuum':
             night = kwargs['night']
@@ -1220,7 +1237,9 @@ class Sky_Rband(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Rband':
             night = kwargs['night']
@@ -1362,7 +1381,9 @@ class Sky_Peaks(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Peaks':
             night = kwargs['night']
@@ -1456,7 +1477,9 @@ class Sky_Residual(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Residual':
             night = kwargs['night']
@@ -1542,7 +1565,9 @@ class Integrate_Spec(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Integrate_Spec':
             night = kwargs['night']
@@ -1705,7 +1730,9 @@ class Calculate_SNR(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Calculate_SNR':
             night = kwargs['night']
@@ -1810,7 +1837,9 @@ class Check_Resolution(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Check_Resolution':
             night = kwargs['night']
@@ -1908,7 +1937,9 @@ class Check_FiberFlat(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Check_FiberFlat':
             night = kwargs['night']
