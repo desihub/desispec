@@ -11,7 +11,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ApplyFiberFlat_QL, SkySub_QL]
+Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ApplyFiberFlat_QL, SkySub_QL, FluxCalibration]
 Algorithms:
     Initialize:
         QA: 
@@ -61,8 +61,9 @@ Algorithms:
                          PEAKCOUNT_NORMAL_RANGE: [-2.0, 2.0],
                          PEAKCOUNT_WARN_RANGE: [-4.0, 4.0],PEAKCOUNT_BRIGHT_REF:[10.0],PEAKCOUNT_DARK_REF:[10.0],PEAKCOUNT_GRAY_REF:[10.0]}
     SkySub_QL:
-        QA: 
-
+        QA: {}
+    FluxCalibration:
+        QA:
             Sky_Rband:
                 PARAMS: {B_CONT: ["4000, 4500", "5250, 5550"],
                          R_CONT: ["5950, 6200", "6990, 7230"],

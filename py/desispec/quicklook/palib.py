@@ -105,6 +105,38 @@ def resample_spec(wave,flux,outwave,ivar=None):
         newivar*=(np.gradient(outwave))**2.0
         return newflux, newivar
 
+def flux_calibration(frame,fluxcalib):
+    """Return flux calibrated cframe object
+    """
+    nwave=frame.nwave
+    nfibers=frame.nspec
+
+    # change this
+    fluxcalib.wave=frame.wave
+    fluxcalib.calib=[]
+    fluxcalib.ivar=[]
+    for i in range(nfibers):
+        fluxcalib.calib.append(np.ones(nwave))
+        fluxcalib.ivar.append(np.ones(nwave))
+    fluxcalib.calib=np.array(fluxcalib.calib)
+    fluxcalib.ivar=np.array(fluxcalib.calib)
+
+    # check same wavelength, die if not the case
+    mval=np.max(np.abs(frame.wave-fluxcalib.wave))
+    #if mval > 0.00001 :
+    if mval > 0.001 :
+        log.error("not same wavelength (should raise an error instead)")
+        sys.exit(12)
+
+    C = fluxcalib.calib
+    frame.flux = frame.flux * (C>0) / (C+(C==0))
+    frame.ivar *= (fluxcalib.ivar>0) * (C>0)
+    for i in range(nfibers) :
+        ok=np.where(frame.ivar[i]>0)[0]
+        if ok.size>0 :
+            frame.ivar[i,ok] = 1./( 1./(frame.ivar[i,ok]*C[i,ok]**2)+frame.flux[i,ok]**2/(fluxcalib.ivar[i,ok]*C[i,ok]**4)  )
+
+    return frame
 
 def get_resolution(wave,nspec,tset,usesigma=False):
     """

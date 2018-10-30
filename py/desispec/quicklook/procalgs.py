@@ -891,6 +891,68 @@ class SkySub_QL(pas.PipelineAlg):
 
         return (sframe,skymodel)
 
+class FluxCalibration(pas.PipelineAlg):
+    """
+       PA to Apply the fiberflat field (QL) to the given frame
+    """
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="Flux Calibration"
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            #raise qlexceptions.ParameterException("Missing input parameter")
+            log.critical("Missing input parameter!")
+            sys.exit()
+
+        if not self.is_compatible(type(args[0])):
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+
+        input_frame=args[0][0]
+
+        if "CalibFile" in kwargs:
+            calibfile=kwargs["CalibFile"]
+        else:
+            log.critical("Must provide a calibration file.")
+            sys.exit()
+
+        dumpfile=None
+        if "dumpfile" in kwargs:
+            dumpfile=kwargs["dumpfile"]
+
+        return self.run_pa(input_frame,calibfile,dumpfile=dumpfile)
+
+    def run_pa(self,frame,calibfile,dumpfile=None):
+        from desispec.io.fluxcalibration import read_flux_calibration
+        from desispec.fluxcalibration import apply_flux_calibration
+
+        fluxcalib=read_flux_calibration(calibfile)
+        ########################
+        # placeholder to get output, will change once calib information is available
+        nwave=frame.nwave
+        nfibers=frame.nspec
+        fluxcalib.wave=frame.wave
+        fluxcalib.calib=[]
+        fluxcalib.ivar=[]
+        for i in range(nfibers):
+            fluxcalib.calib.append(np.ones(nwave))
+            fluxcalib.ivar.append(np.ones(nwave))
+        fluxcalib.calib=np.array(fluxcalib.calib)
+        fluxcalib.ivar=np.array(fluxcalib.calib)
+        #########################
+        apply_flux_calibration(frame,fluxcalib)
+
+        if dumpfile is not None:
+            night = frame.meta['NIGHT']
+            expid = frame.meta['EXPID']
+            io.write_frame(dumpfile, frame)
+            log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
+
+        return frame
+
 class ResolutionFit(pas.PipelineAlg):
 
     """

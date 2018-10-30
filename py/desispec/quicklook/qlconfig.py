@@ -182,11 +182,13 @@ class Config(object):
             framefile=self.dump_pa("Extract_QP")
             fframefile=self.dump_pa("ApplyFiberFlat_QP")
             sframefile=self.dump_pa("SkySub_QP")
-            
+            cframefile=self.dump_pa("FluxCalibration")
+
         else:
             framefile=None
             fframefile=None
             sframefile=None
+            cframefile=None
 
         if self.flavor == 'arcs':
             arcimg=findfile('preproc',night=self.night,expid=self.expid,camera=self.camera,specprod_dir=self.specprod_dir)
@@ -218,6 +220,9 @@ class Config(object):
 
         paopt_apfflat={'FiberFlatFile': self.fiberflat, 'dumpfile': fframefile}
 
+        calibfile=findfile('calib',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
+        paopt_fluxcal={'CalibFile': calibfile, 'dumpfile': cframefile}
+
         if self.writeskymodelfile:
             outskyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
         else:
@@ -237,7 +242,8 @@ class Config(object):
             'ApplyFiberFlat_QL':paopt_apfflat,
             'ApplyFiberFlat_QP':paopt_apfflat,
             'SkySub_QL':paopt_skysub,
-            'SkySub_QP':paopt_skysub_qp
+            'SkySub_QP':paopt_skysub_qp,
+            'FluxCalibration':paopt_fluxcal
         }
 
         def getPAConfigFromFile(PA,algs):
@@ -268,7 +274,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame','ResolutionFit': None, 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame','ResolutionFit': None, 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe', 'FluxCalibration': 'cframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -395,7 +401,8 @@ class Config(object):
                  'ComputeFiberflat_QL': 'computeflat',
                  'ApplyFiberFlat_QL': 'fiberflat',
                  'SkySub_QL': 'skysub',
-                 'ResolutionFit': 'resfit'
+                 'ResolutionFit': 'resfit',
+                 'FluxCalibration': 'fluxcalib'
                  }
 
         if paname in filemap:
