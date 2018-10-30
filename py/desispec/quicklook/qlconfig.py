@@ -80,8 +80,7 @@ class Config(object):
         #SE: plotting is now an execution option: add --plots at the end of the command
         #self.writestaticplots = self.conf["WriteStaticPlots"]
         
-        #SE: removed this key from the configuration files 
-        #self.usesigma = self.conf["UseResolution"]
+        # RS: use --resolution to store full resolution informtion
         if store_res:
             self.usesigma = True
         else:
@@ -211,9 +210,9 @@ class Config(object):
 
         paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': inputpsf, 'outputPSFFile': outputpsf}
 
-        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
+        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': outputpsf,'usesigma': self.usesigma, 'dumpfile': framefile}
         
-        paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
+        paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': outputpsf,'usesigma': self.usesigma, 'dumpfile': framefile}
 
         paopt_resfit={'PSFinputfile': self.psf_filename, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
 
@@ -543,7 +542,6 @@ class Config(object):
         outconfig['OutputFile'] = self.outputfile
         outconfig['singleqa'] = self.singqa
         outconfig['Timeout'] = self.timeout
-        outconfig['PSFFile'] = self.psf_filename
         outconfig['FiberFlatFile'] = self.fiberflat
 
         #- Check if all the files exist for this QL configuraion
@@ -561,7 +559,7 @@ def check_config(outconfig,singqa):
         log.info("Checking if all the necessary files exist.")
 
         if outconfig["Flavor"]=='science':
-            files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"], outconfig["PSFFile"]]
+            files = [outconfig["RawImage"], outconfig["FiberMap"], outconfig["FiberFlatFile"]]
             for thisfile in files:
                 if not os.path.exists(thisfile):
                     sys.exit("File does not exist: {}".format(thisfile))
