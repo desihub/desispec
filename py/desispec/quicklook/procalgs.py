@@ -938,7 +938,7 @@ class FluxCalibration(pas.PipelineAlg):
         fluxcalib.calib=[]
         fluxcalib.ivar=[]
         for i in range(nfibers):
-            fluxcalib.calib.append(np.ones(nwave))
+            fluxcalib.calib.append(2*np.ones(nwave))
             fluxcalib.ivar.append(np.ones(nwave))
         fluxcalib.calib=np.array(fluxcalib.calib)
         fluxcalib.ivar=np.array(fluxcalib.calib)
