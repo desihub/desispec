@@ -892,8 +892,7 @@ class SkySub_QL(pas.PipelineAlg):
         return (sframe,skymodel)
 
 class FluxCalibration(pas.PipelineAlg):
-    """
-       PA to Apply the fiberflat field (QL) to the given frame
+    """PA to apply flux calibration to the given sframe
     """
     def __init__(self,name,config,logger=None):
         if name is None or name.strip() == "":
@@ -902,14 +901,12 @@ class FluxCalibration(pas.PipelineAlg):
 
     def run(self,*args,**kwargs):
         if len(args) == 0 :
-            #raise qlexceptions.ParameterException("Missing input parameter")
             log.critical("Missing input parameter!")
             sys.exit()
 
-        if not self.is_compatible(type(args[0])):
-            #raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        if not self.is_compatible(type(args[0][0])):
             log.critical("Incompatible input!")
-            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+            sys.exit("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0][0])))
 
         input_frame=args[0][0]
 
@@ -930,19 +927,6 @@ class FluxCalibration(pas.PipelineAlg):
         from desispec.fluxcalibration import apply_flux_calibration
 
         fluxcalib=read_flux_calibration(calibfile)
-        ########################
-        # placeholder to get output, will change once calib information is available
-        nwave=frame.nwave
-        nfibers=frame.nspec
-        fluxcalib.wave=frame.wave
-        fluxcalib.calib=[]
-        fluxcalib.ivar=[]
-        for i in range(nfibers):
-            fluxcalib.calib.append(2*np.ones(nwave))
-            fluxcalib.ivar.append(np.ones(nwave))
-        fluxcalib.calib=np.array(fluxcalib.calib)
-        fluxcalib.ivar=np.array(fluxcalib.calib)
-        #########################
         apply_flux_calibration(frame,fluxcalib)
 
         if dumpfile is not None:
