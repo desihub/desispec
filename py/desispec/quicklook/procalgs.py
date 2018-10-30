@@ -941,7 +941,7 @@ class Extract_QP(pas.PipelineAlg):
         qframe = qproc_boxcar_extraction(traceset,input_image,fibers=fibers, width=width, fibermap=fibermap)
         
         if dumpfile is not None:
-            io.write_qframe(dumpfile, qframe, fibermap=fibermap)
+            write_qframe(dumpfile, qframe, fibermap=fibermap)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         return qframe
@@ -990,7 +990,7 @@ class ApplyFiberFlat_QP(pas.PipelineAlg):
         if dumpfile is not None:
             night = qframe.meta['NIGHT']
             expid = qframe.meta['EXPID']
-            io.write_qframe(dumpfile, qframe)
+            write_qframe(dumpfile, qframe)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         return qframe
