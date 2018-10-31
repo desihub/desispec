@@ -22,7 +22,7 @@ $(function() {
         if (role == "show") {
             return "<button type=\"button\" class=\"btn " + color +
                 " btn-sm\" id=\"show" + n +
-                "\" style=\"display:block;\" onclick=\"$('#ul" + n +
+                "\" style=\"display:inline;\" onclick=\"$('#ul" + n +
                 "').css('display', 'block');$('#hide" + n +
                 "').css('display', 'inline');$('#show" + n +
                 "').css('display', 'none');\">Show</button>";
