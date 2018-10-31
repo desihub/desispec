@@ -3,12 +3,15 @@ $(function() {
     var onDataReceived = function(data) { return status = data; };
     var startNight = function(nights, night) {
         nights.push(night);
-        return $("<div/>", {"id": ""+night});
+        return $("<div/>", {"id": ""+night, "class": "row"});
     };
-    var finishNight = function(night, rows) {
-        if (rows.length > 0) {
-            rows.push("</ul>");
-            night.append(rows.join(""));
+    var finishNight = function(night, buttons, b_rows, ul, ul_rows) {
+        if (b_rows.length > 0) {
+            ul_rows.push("</ul>");
+            buttons.append(b_rows.join(""));
+            ul.append(ul_rows.join(""));
+            night.append(buttons);
+            night.append(ul);
             night.appendTo("#content");
         }
     };
@@ -38,24 +41,27 @@ $(function() {
     var display = function() {
         $("#content").empty();
         var nights = [];
-        var rows = [];
-        var night;
+        var b_rows = [];
+        var ul_rows = [];
+        var night, buttons, ul;
         for (var k = 0; k < status.length; k++) {
             var n = status[k][0];
             if (nights.indexOf(n) == -1) {
                 //
                 // Finish previous night
                 //
-                finishNight(night, rows);
+                finishNight(night, buttons, b_rows, ul, ul_rows);
                 //
                 // Start a new night
                 //
                 night = startNight(nights, n);
-                rows = ["<p>Night " + n,
-                        nightButton(n, "show", true),
-                        nightButton(n, "hide", true),
-                        "</p>",
-                        "<ul id=\"ul" + n + "\" style=\"display:none;\">"];
+                buttons = $("<div/>", {"class": "col-4"});
+                ul = $("<div/>", {"class": "col-8"});
+                b_rows = ["<p id=\"p" + n + "\"">Night " + n + "&nbsp;",
+                          nightButton(n, "show", true),
+                          nightButton(n, "hide", true),
+                          "</p>"];
+                ul_rows = ["<ul id=\"ul" + n + "\" style=\"display:none;\">"];
             }
             //
             // Add to existing night
@@ -63,20 +69,20 @@ $(function() {
             var p = padExpid(status[k][1]);
             var c = status[k][2] ? "bg-success" : "bg-danger";
             if (!status[k][2]) {
-                rows[1] = nightButton(n, "show", false);
-                rows[2] = nightButton(n, "hide", false);
+                b_rows[1] = nightButton(n, "show", false);
+                b_rows[2] = nightButton(n, "hide", false);
             }
             var l = status[k][3].length > 0 ? " Last " + status[k][3] + " exposure." : "";
             var r = "<li class=\"" + c + "\" id=\"" +
                     n + "/" + p + "\">" +
                     p + l + "</li>";
             // console.log(r);
-            rows.push(r);
+            ul_rows.push(r);
         }
         //
         // Finish the final night
         //
-        finishNight(night, rows);
+        finishNight(night, buttons, b_rows, ul, ul_rows);
     };
     $.getJSON("dts_status.json", {}, onDataReceived).always(display);
     return true;
