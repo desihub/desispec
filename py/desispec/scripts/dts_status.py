@@ -52,7 +52,9 @@ def main():
     row = [options.night, options.expid, not options.failure, options.last]
     with open(json_file) as j:
         s = json.load(j)
-    s.append(row)
+    s.insert(0, row)
+    k = lambda x: x[0]*10000000 + x[1]
+    s = sorted(s, key=k, reverse=True)
     with open(json_file, 'w') as j:
         json.dump(s, j, indent=None, separators=(',', ':'))
     return 0

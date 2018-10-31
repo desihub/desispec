@@ -51,8 +51,7 @@ $(function() {
                 // Start a new night
                 //
                 night = startNight(nights, n);
-                rows = ["<h2>Night " + n + "</h2>",
-                        "<p>",
+                rows = ["<p>Night " + n,
                         nightButton(n, "show", true),
                         nightButton(n, "hide", true),
                         "</p>",
