@@ -24,14 +24,14 @@ $(function() {
                 " btn-sm\" id=\"show" + n +
                 "\" style=\"display:block;\" onclick=\"$('#ul" + n +
                 "').css('display', 'block');$('#hide" + n +
-                "').css('display', 'block');$('#show" + n +
+                "').css('display', 'inline');$('#show" + n +
                 "').css('display', 'none');\">Show</button>";
         } else {
             return "<button type=\"button\" class=\"btn " + color +
                 " btn-sm\" id=\"hide" + n +
                 "\" style=\"display:none;\" onclick=\"$('#ul" + n +
                 "').css('display', 'none');$('#show" + n +
-                "').css('display', 'block');$('#hide" + n +
+                "').css('display', 'inline');$('#hide" + n +
                 "').css('display', 'none');\">Hide</button>";
         }
     };
