@@ -205,7 +205,7 @@ class Config(object):
         if self.writeskymodelfile:
             outskyfile = findfile('sky',night=self.night,expid=self.expid, camera=self.camera, rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir,outdir=self.outdir)
         else:
-            outskyfile=None       
+            outskyfile=None
         paopt_skysub={'Outskyfile': outskyfile, 'dumpfile': sframefile, 'Apply_resolution': self.usesigma}
         paopt_skysub_qp={'dumpfile': sframefile, 'Apply_resolution': False}
 
@@ -379,7 +379,10 @@ class Config(object):
                  'ComputeFiberflat_QL': 'computeflat',
                  'ApplyFiberFlat_QL': 'fiberflat',
                  'SkySub_QL': 'skysub',
-                 'ResolutionFit': 'resfit'
+                 'ResolutionFit': 'resfit',
+                 'Extract_QP': 'extractqp',
+                 'ApplyFiberFlat_QP': 'fiberflatqp',
+                 'SkySub_QP': 'skysubqp'
                  }
 
         if paname in filemap:
