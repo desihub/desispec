@@ -218,6 +218,7 @@ class Config(object):
             'ResolutionFit':paopt_resfit,
             'Extract_QP':paopt_extract_qp,
             'ComputeFiberflat_QL':paopt_comflat,
+            'ComputeFiberflat_QP':paopt_comflat,
             'ApplyFiberFlat_QL':paopt_apfflat,
             'ApplyFiberFlat_QP':paopt_apfflat,
             'SkySub_QL':paopt_skysub,
@@ -252,7 +253,7 @@ class Config(object):
         """
         dump the PA outputs to respective files. This has to be updated for fframe and sframe files as QL anticipates for dumpintermediate case.
         """
-        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame','ResolutionFit': None, 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe'}
+        pafilemap={'Preproc': 'preproc', 'Flexure': None, 'BoxcarExtract': 'frame','ResolutionFit': None, 'Extract_QP': 'qframe', 'ComputeFiberflat_QL': 'fiberflat', 'ComputeFiberflat_QP': 'fiberflat', 'ApplyFiberFlat_QL': 'fframe', 'ApplyFiberFlat_QP': 'fframe', 'SkySub_QL': 'sframe', 'SkySub_QP': 'sframe'}
         
         if paname in pafilemap:
             filetype=pafilemap[paname]
@@ -377,6 +378,7 @@ class Config(object):
                  'Flexure': 'flexure',
                  'BoxcarExtract': 'boxextract',
                  'ComputeFiberflat_QL': 'computeflat',
+                 'ComputeFiberflat_QP': 'computeflatqp',
                  'ApplyFiberFlat_QL': 'fiberflat',
                  'SkySub_QL': 'skysub',
                  'ResolutionFit': 'resfit',

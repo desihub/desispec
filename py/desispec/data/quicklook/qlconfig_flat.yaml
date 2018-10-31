@@ -12,7 +12,7 @@ Period: 5.0
 #- Time out in seconds
 Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
-Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ComputeFiberflat_QL]
+Pipeline: [Initialize, Preproc, Flexure, Extract_QP, ComputeFiberflat_QP]
 Algorithms:
     Initialize:
         QA: 
@@ -30,7 +30,7 @@ Algorithms:
         QA:
             Trace_Shifts:
                 PARAMS: {XYSHIFTS_NORMAL_RANGE: [-1.0,1.0], XYSHIFTS_WARN_RANGE: [-2.0,2.0],XYSHIFTS_REF:[0.,0.]}
-    BoxcarExtract:
+    Extract_QP:
         wavelength: {
             b: [3570,5730,0.8],
             r: [5630,7740,0.8],
@@ -39,7 +39,7 @@ Algorithms:
         QA:
             CountSpectralBins:
                 PARAMS: {CUTBINS: 5,N_KNOWN_BROKEN_FIBERS: 0, NGOODFIB_NORMAL_RANGE: [-1, 1], NGOODFIB_WARN_RANGE: [-2, 2],NGOODFIB_REF:[500]}
-    ComputeFiberflat_QL:
+    ComputeFiberflat_QP:
         QA:
             Check_FiberFlat:
                 PARAMS: {CHECKFLAT_NORMAL_RANGE:[-5,5], CHECKFLAT_WARN_RANGE:[-10,10],CHECKFLAT_REF:[100,0]}
