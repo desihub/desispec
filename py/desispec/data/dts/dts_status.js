@@ -57,7 +57,7 @@ $(function() {
                 night = startNight(nights, n);
                 buttons = $("<div/>", {"class": "col-4"});
                 ul = $("<div/>", {"class": "col-8"});
-                b_rows = ["<p id=\"p" + n + "\"">Night " + n + "&nbsp;",
+                b_rows = ["<p id=\"p" + n + "\">Night " + n + "&nbsp;",
                           nightButton(n, "show", true),
                           nightButton(n, "hide", true),
                           "</p>"];
