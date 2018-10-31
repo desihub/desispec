@@ -85,18 +85,8 @@ class Config(object):
             self.usesigma = True
         else:
             self.usesigma = False
-        
-        #try:
-        #    self.flexure = self.conf["Flexure"]    
-        #except:
-            #self.flexure = False
-        # SE Flexure runs by default
-        self.flexure = True
-        
-        
+
         self.pipeline = self.conf["Pipeline"]
-        if not self.flexure and "Flexure" in self.pipeline:
-            self.pipeline.remove("Flexure")
         self.algorithms = self.conf["Algorithms"]
         self._palist = Palist(self.pipeline,self.algorithms)
         self.pamodule = self._palist.pamodule
@@ -199,20 +189,12 @@ class Config(object):
             flatimg=None
             psffile=None
 
-        if self.flexure:
-            preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
-            inputpsf=self.psf_filename
-            outputpsf=findfile('psf',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
-        else:
-            preproc_file=None
-            inputpsf=None
-            outputpsf=None
+        preproc_file=findfile('preproc',self.night,self.expid,self.camera,specprod_dir=self.specprod_dir)
+        paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': self.calibpsf, 'outputPSFFile': self.psf_filename}
 
-        paopt_flexure={'preprocFile':preproc_file, 'inputPSFFile': inputpsf, 'outputPSFFile': outputpsf}
-
-        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': outputpsf,'usesigma': self.usesigma, 'dumpfile': framefile}
+        paopt_extract={'Flavor': self.flavor, 'BoxWidth': 2.5, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.calibpsf,'usesigma': self.usesigma, 'dumpfile': framefile}
         
-        paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': outputpsf,'usesigma': self.usesigma, 'dumpfile': framefile}
+        paopt_extract_qp={'Flavor': self.flavor, 'FullWidth': 7, 'FiberMap': self.fibermap, 'Wavelength': self.wavelength, 'Nspec': 500, 'PSFFile': self.psf_filename,'usesigma': self.usesigma, 'dumpfile': framefile}
 
         paopt_resfit={'PSFinputfile': self.psf_filename, 'PSFoutfile': psffile, 'usesigma': self.usesigma}
 
@@ -459,8 +441,6 @@ class Config(object):
         self.rawfile=findfile("raw",night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
         self.fibermap=findfile("fibermap", night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-        
-
 
         if "DESI_CCD_CALIBRATION_DATA" not in os.environ :
             log = get_logger()
@@ -472,21 +452,18 @@ class Config(object):
         camera_header =hdulist[self.camera].header
         
         hdulist.close()
-        calibration_data = read_ccd_calibration(camera_header,primary_header)
+        calibration_data=read_ccd_calibration(camera_header,primary_header)
+        self.calibpsf=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["PSF"])
         
         if self.psfid is None:
-            self.psf_filename=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["PSF"])
-            #self.psf_filename=os.path.join(os.environ['QL_CALIB_DIR'],'psf-{}.fits'.format(self.camera))
+            self.psf_filename=findfile('psf',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         else:
             self.psf_filename=findfile('psf',night=self.night,expid=self.psfid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
         
         if self.flatid is None and self.flavor != 'flat':
             self.fiberflat=os.path.join(os.environ['DESI_CCD_CALIBRATION_DATA'],calibration_data["FIBERFLAT"])
-            #self.fiberflat=os.path.join(os.environ['QL_CALIB_DIR'],'fiberflat-{}.fits'.format(self.camera))
         elif self.flavor == 'flat':
-
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.expid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
-
         else:
             self.fiberflat=findfile('fiberflat',night=self.night,expid=self.flatid,camera=self.camera,rawdata_dir=self.rawdata_dir,specprod_dir=self.specprod_dir)
 
