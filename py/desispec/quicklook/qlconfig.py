@@ -322,6 +322,7 @@ class Config(object):
                             }
                 if qa == 'Calc_XWSigma':
                     qaopts[qa]['Flavor']=self.flavor
+                    qaopts[qa]['PSFFile']=self.calibpsf
                 if self.singqa is not None:
                     qaopts[qa]['rawdir']=self.rawdata_dir
                     qaopts[qa]['specdir']=self.specprod_dir
