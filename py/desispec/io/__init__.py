@@ -9,6 +9,11 @@ Tools for data and metadata I/O.
 from __future__ import absolute_import
 # The line above will help with 2to3 support.
 
+import warnings
+warnings.filterwarnings('ignore', message="'.*nanomaggies.* did not parse as fits unit.*")
+warnings.filterwarnings('ignore', message=".*'10\*\*6 arcsec.* did not parse as fits unit.*")
+warnings.filterwarnings('error', message=".*Card is too long.*")
+
 from .download import download, filepath2url
 from .fiberflat import read_fiberflat, write_fiberflat
 from .fibermap import read_fibermap, write_fibermap, empty_fibermap
