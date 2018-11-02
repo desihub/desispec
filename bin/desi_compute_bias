@@ -88,12 +88,22 @@ for filename in args.image :
 
     fitsfile.close()
 
-log.info("compute median image ...")
 images=np.array(images)
 print(images.shape)
-medimage=np.median(images,axis=0).reshape(shape)
+
+# compute a mask
+log.info("compute median image ...")
+medimage=np.median(images,axis=0) #.reshape(shape)
+log.info("compute mask ...")
+ares=np.abs(images-medimage)
+nsig=4.
+mask=(ares<nsig*1.4826*np.median(ares,axis=0))
+# average (not median)
+log.info("compute average ...")
+meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
+meanimage=meanimage.reshape(shape)
 
 log.info("write result in %s ..."%args.outfile)
-pyfits.writeto(args.outfile,medimage,overwrite="True")
+pyfits.writeto(args.outfile,meanimage,overwrite="True")
 
 log.info("done")
