@@ -15,7 +15,6 @@ Timeout: 120.0
 # Pipeline algorithm: PAs and QAs for each PA
 Pipeline: [Initialize, Preproc, Flexure, BoxcarExtract, ResolutionFit]
 Algorithms:
-
     Initialize:
         QA: 
             Check_HDUs:
@@ -33,9 +32,8 @@ Algorithms:
                          R_PEAKS: [6301.9],
                          Z_PEAKS: [9378.5],
                          PIXEL_RANGE: 7,
-                         XWSIGMA_NORMAL_RANGE: [-1.0, 1.0],
-                         XWSIGMA_WARN_RANGE: [-2.0, 2.0],XWSIGMA_REF:[1.5,2.0]}
-
+                         XWSIGMA_NORMAL_RANGE: [-2.0, 2.0],
+                         XWSIGMA_WARN_RANGE: [-4.0, 4.0],XWSIGMA_REF:[1.5,2.0]}
     Flexure:
         QA:
             Trace_Shifts:
