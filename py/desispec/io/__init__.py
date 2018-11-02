@@ -12,7 +12,6 @@ from __future__ import absolute_import
 import warnings
 warnings.filterwarnings('ignore', message="'.*nanomaggies.* did not parse as fits unit.*")
 warnings.filterwarnings('ignore', message=".*'10\*\*6 arcsec.* did not parse as fits unit.*")
-warnings.filterwarnings('error', message=".*Card is too long.*")
 
 from .download import download, filepath2url
 from .fiberflat import read_fiberflat, write_fiberflat
