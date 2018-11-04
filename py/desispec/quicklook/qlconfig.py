@@ -67,19 +67,11 @@ class Config(object):
         self.plots = plots
         self.flavor = self.conf["Flavor"]
         
-        #SE: removed this key from the configuration files 
-        #self.dumpintermediates = self.conf["WriteIntermediatefiles"] 
+        #- Options to write out frame, fframe, preproc, and sky model files
         self.dumpintermediates = False
-        
         self.writepreprocfile = self.conf["WritePreprocfile"]
-        
-        #SE: removed this key from the configuration files
-        #self.writeskymodelfile = self.conf["WriteSkyModelfile"] 
         self.writeskymodelfile = False
-        
-        #SE: plotting is now an execution option: add --plots at the end of the command
-        #self.writestaticplots = self.conf["WriteStaticPlots"]
-        
+
         # RS: use --resolution to store full resolution informtion
         if store_res:
             self.usesigma = True
