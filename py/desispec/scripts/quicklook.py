@@ -51,6 +51,7 @@ def parse():
     parser.add_argument("--singleQA",type=str,required=False,help="choose one QA to run",default=None,dest="singqa")
     parser.add_argument("--loglvl",default=20,type=int,help="log level for quicklook (0=verbose, 50=Critical)")
     parser.add_argument("--plots",action='store_true', help="option for generating static plots")
+    parser.add_argument("--resolution",action='store_true', help="store full resolution information")
     args=parser.parse_args()
     return args
 
@@ -107,7 +108,7 @@ def ql_main(args=None):
         log.debug("Running Quicklook using configuration file {}".format(args.config))
         if os.path.exists(args.config):
             if "yaml" in args.config:
-                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir,psfid=psfid,flatid=flatid,templateid=templateid,templatenight=templatenight,plots=args.plots)
+                config=qlconfig.Config(args.config, args.night,args.camera, args.expid, args.singqa, rawdata_dir=rawdata_dir, specprod_dir=specprod_dir,psfid=psfid,flatid=flatid,templateid=templateid,templatenight=templatenight,plots=args.plots,store_res=args.resolution)
                 configdict=config.expand_config()
             else:
                 log.critical("Can't open config file {}".format(args.config))

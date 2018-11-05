@@ -941,7 +941,7 @@ class Extract_QP(pas.PipelineAlg):
         qframe = qproc_boxcar_extraction(traceset,input_image,fibers=fibers, width=width, fibermap=fibermap)
         
         if dumpfile is not None:
-            io.write_qframe(dumpfile, qframe, fibermap=fibermap)
+            write_qframe(dumpfile, qframe, fibermap=fibermap)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         return qframe
@@ -954,6 +954,36 @@ class Extract_QP(pas.PipelineAlg):
                 ("Nspec",500,"number of spectra to extract")
                 }
 
+class ComputeFiberflat_QP(pas.PipelineAlg):
+    def __init__(self,name,config,logger=None):
+        if name is None or name.strip() == "":
+            name="ComputeFiberflat"
+        pas.PipelineAlg.__init__(self,name,fr,fr,config,logger)
+
+    def run(self,*args,**kwargs):
+        if len(args) == 0 :
+            raise qlexceptions.ParameterException("Missing input parameter")
+        if not self.is_compatible(type(args[0])):
+            raise qlexceptions.ParameterException("Incompatible input. Was expecting %s got %s"%(type(self.__inpType__),type(args[0])))
+        input_frame=args[0] #- frame object to calculate fiberflat from
+        if "outputFile" not in kwargs:
+            raise qlexceptions.ParameterException("Need output file name to write fiberflat File")
+        outputfile=kwargs["outputFile"]
+
+        return self.run_pa(input_frame,outputfile)
+
+    def run_pa(self,qframe,outputfile):
+        from desispec.qproc.qfiberflat import qproc_compute_fiberflat
+        import desispec.io.fiberflat as ffIO
+
+        fibflat=qproc_compute_fiberflat(qframe)
+
+        ffIO.write_fiberflat(outputfile,fibflat,header=qframe.meta)
+        log.info("Wrote fiberflat file {}".format(outputfile))
+
+        fflatfile = ffIO.read_fiberflat(outputfile)
+
+        return fflatfile
 
 class ApplyFiberFlat_QP(pas.PipelineAlg):
     """
@@ -990,7 +1020,7 @@ class ApplyFiberFlat_QP(pas.PipelineAlg):
         if dumpfile is not None:
             night = qframe.meta['NIGHT']
             expid = qframe.meta['EXPID']
-            io.write_qframe(dumpfile, qframe)
+            write_qframe(dumpfile, qframe)
             log.debug("Wrote intermediate file %s after %s"%(dumpfile,self.name))
         
         return qframe
