@@ -46,11 +46,17 @@ def modify_tasks(myDict):
     ################
     ### Moving all keys in keyList under Metrics (from PREPROC to BOXCAREXTRACT)
     keyList = ["XWSIGMA", "XWSIGMA_AMP", "XWSIGMA_STATUS"]
-    myDict = transferKEY(myDict, "METRICS", "BOXCAREXTRACT", "PREPROC", keyList)
+    if "EXTRACT_QP" in myDict:
+        myDict = transferKEY(myDict, "METRICS", "EXTRACT_QP", "PREPROC", keyList)
+    elif "BOXCAREXTRACT" in myDict:
+        myDict = transferKEY(myDict, "METRICS", "BOXCAREXTRACT", "PREPROC", keyList)
 
     ################   
     keyList = ["XWSIGMA_NORMAL_RANGE", "XWSIGMA_REF", "XWSIGMA_WARN_RANGE"]
-    myDict = transferKEY(myDict, "PARAMS", "BOXCAREXTRACT","PREPROC",keyList)    
+    if "EXTRACT_QP" in myDict:
+        myDict = transferKEY(myDict, "PARAMS", "EXTRACT_QP", "PREPROC",keyList)
+    elif "BOXCAREXTRACT" in myDict:
+        myDict = transferKEY(myDict, "PARAMS", "BOXCAREXTRACT", "PREPROC",keyList)    
 
     ################
     keyList = ["CHECKHDUS","EXPNUM","CHECKHDUS_STATUS","EXPNUM_STATUS"]
@@ -59,29 +65,45 @@ def modify_tasks(myDict):
     ################
 
     keyList = ["XYSHIFTS","XYSHIFTS_STATUS"]
-    myDict = transferKEY(myDict, "METRICS", "FLEXURE", "BOXCAREXTRACT", keyList)
+    if "EXTRACT_QP" in myDict:
+        myDict = transferKEY(myDict, "METRICS", "FLEXURE", "EXTRACT_QP", keyList)
+    elif "BOXCAREXTRACT" in myDict:
+        myDict = transferKEY(myDict, "METRICS", "FLEXURE", "BOXCAREXTRACT", keyList)
 
     ################  
     keyList = ["XYSHIFTS_NORMAL_RANGE", "XYSHIFTS_WARN_RANGE", "XYSHIFTS_DARK_REF", "XYSHIFTS_GRAY_REF","XYSHIFTS_BRIGHT_REF"]
-    myDict = transferKEY(myDict, "PARAMS", "FLEXURE", "BOXCAREXTRACT", keyList)    
+    if "EXTRACT_QP" in myDict:
+        myDict = transferKEY(myDict, "PARAMS", "FLEXURE", "EXTRACT_QP", keyList)
+    elif "BOXCAREXTRACT" in myDict:
+        myDict = transferKEY(myDict, "PARAMS", "FLEXURE", "BOXCAREXTRACT", keyList)    
 
     ################    
     keyList = ["PEAKCOUNT", "PEAKCOUNT_FIB", "PEAKCOUNT_NOISE", "PEAKCOUNT_STATUS", "SKYCONT", "SKYCONT_FIBER", "SKYCONT_STATUS", "SKYRBAND", "SKY_RFLUX_DIFF", "SKY_FIB_RBAND"]
-    myDict = transferKEY(myDict, "METRICS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
+    if "APPLYFIBERFLAT_QP" in myDict:
+        myDict = transferKEY(myDict, "METRICS", "APPLYFIBERFLAT_QP", "SKYSUB_QP", keyList)  
+    elif "APPLYFIBERFLAT_QL" in myDict:
+        myDict = transferKEY(myDict, "METRICS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
 
     ################      
     keyList = ["B_CONT", "R_CONT", "Z_CONT", "PEAKCOUNT_NORMAL_RANGE","PEAKCOUNT_BRIGHT_REF","PEAKCOUNT_DARK_REF","PEAKCOUNT_GRAY_REF", "PEAKCOUNT_WARN_RANGE", "SKYCONT_NORMAL_RANGE", "SKYCONT_REF", "SKYCONT_WARN_RANGE","SKYCONT_BRIGHT_REF","SKYCONT_DARK_REF","SKYCONT_GRAY_REF"]
-    myDict = transferKEY(myDict, "PARAMS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
+    if "APPLYFIBERFLAT_QP" in myDict:
+        myDict = transferKEY(myDict, "PARAMS", "APPLYFIBERFLAT_QP", "SKYSUB_QP", keyList)
+    elif "APPLYFIBERFLAT_QL" in myDict:
+        myDict = transferKEY(myDict, "PARAMS", "APPLYFIBERFLAT_QL", "SKYSUB_QL", keyList)    
     
     ### Changing Task Names
     myDict = rename_task(myDict, "PREPROC", "CHECK_CCDs")
     myDict = rename_task(myDict, "BOXCAREXTRACT", "CHECK_FIBERS")
+    myDict = rename_task(myDict, "EXTRACT_QP", "CHECK_FIBERS")
     myDict = rename_task(myDict, "SKYSUB_QL", "CHECK_SPECTRA")
+    myDict = rename_task(myDict, "SKYSUB_QP", "CHECK_SPECTRA")
     myDict = rename_task(myDict, "RESOLUTIONFIT", "CHECK_ARC")
     myDict = rename_task(myDict, "COMPUTEFIBERFLAT_QL", "CHECK_FIBERFLAT")
+    myDict = rename_task(myDict, "COMPUTEFIBERFLAT_QP", "CHECK_FIBERFLAT")
     ### Removing empty (or unused Pipeline steps
     myDict = remove_task(myDict, "FLEXURE")
     myDict = remove_task(myDict, "APPLYFIBERFLAT_QL")
+    myDict = remove_task(myDict, "APPLYFIBERFLAT_QP")
     myDict = remove_task(myDict, "INITIALIZE")
 
     return myDict

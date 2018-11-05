@@ -95,24 +95,30 @@ while /bin/true; do
                     #
                     # if (flat|arc) done, run flat|arc update.
                     #
-                    [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]] && \
+                    if [[ -f ${dest}/${night}/${exposure}/flats-${night}-${exposure}.done ]]; then
                         sprun ${ssh} desi_night flats \
                             --night ${night} \
                             --nersc ${pipeline_host} --nersc_queue realtime \
                             --nersc_maxnodes 25
-                    [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]] && \
+                        sprun desi_dts_status --last flats ${night} ${exposure}
+                    elif [[ -f ${dest}/${night}/${exposure}/arcs-${night}-${exposure}.done ]]; then
                         sprun ${ssh} desi_night arcs \
                             --night ${night} \
                             --nersc ${pipeline_host} --nersc_queue realtime \
                             --nersc_maxnodes 25
+                        sprun desi_dts_status --last arcs ${night} ${exposure}
                     #
                     # if night done run redshifts
                     #
-                    [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]] && \
+                    elif [[ -f ${dest}/${night}/${exposure}/science-${night}-${exposure}.done ]]; then
                         sprun ${ssh} desi_night redshifts \
                             --night ${night} \
                             --nersc ${pipeline_host} --nersc_queue realtime \
                             --nersc_maxnodes 25
+                        sprun desi_dts_status --last science ${night} ${exposure}
+                    else
+                        sprun desi_dts_status ${night} ${exposure}
+                    fi
                 else
                     echo "INFO: ${night}/${exposure} appears to be test data.  Skipping pipeline activation." >> ${log}
                 fi
@@ -123,6 +129,7 @@ while /bin/true; do
                 :
             else
                 echo "ERROR: rsync problem detected!" >> ${log}
+                sprun desi_dts_status --failure ${night} ${exposure}
             fi
         done
     else
