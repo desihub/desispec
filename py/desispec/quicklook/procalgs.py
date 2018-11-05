@@ -926,7 +926,45 @@ class FluxCalibration(pas.PipelineAlg):
         from desispec.io.fluxcalibration import read_flux_calibration
         from desispec.fluxcalibration import apply_flux_calibration
 
+        #- Read in calibration file
         fluxcalib=read_flux_calibration(calibfile)
+
+        #- Calculate average calibration vector
+        nonzerocalib=[]
+        for i in range(fluxcalib.calib.shape[0]):
+            if np.mean(fluxcalib.calib[i]) != 0.0:
+                nonzerocalib.append(fluxcalib.calib[i])
+        avgcalibvector=np.zeros(fluxcalib.calib.shape[1])
+        for j in range(fluxcalib.calib.shape[1]):
+            vals=[]
+            for k in range(len(nonzerocalib)):
+                vals.append(nonzerocalib[k][j])
+            avgcalibvector[j]=np.mean(vals)
+
+        #- Check if frame and fluxcalib are on same wavelength grid
+        samegrid=False
+        if len(frame.wave) == len(fluxcalib.wave):
+            mval=np.max(np.abs(frame.wave-fluxcalib.wave))
+            if mval < 0.001:
+                samegrid=True
+
+        #- Convert fluxcalib.calib to average vector
+        if samegrid:
+            for k in range(fluxcalib.calib.shape[0]):
+                fluxcalib.calib[k]=avgcalibvector
+        #- If frame/calib wavelength ranges are different, resample calib vector
+        else:
+            from desispec.fluxcalibration import FluxCalib
+            from desispec.quicklook.palib import resample_spec
+            newcalib=[]
+            newivar=[]
+            for l in range(frame.flux.shape[0]):
+                cal,iv=resample_spec(fluxcalib.wave,avgcalibvector,frame.wave,ivar=fluxcalib.ivar[0]) #RS: using single ivar array, this can be updated if we need to be more meticulous here
+                newcalib.append(cal)
+                newivar.append(iv)
+            newcalib=np.array(newcalib)
+            newivar=np.array(newivar)
+            fluxcalib=FluxCalib(frame.wave,newcalib,newivar,frame.mask)
         apply_flux_calibration(frame,fluxcalib)
 
         if dumpfile is not None:

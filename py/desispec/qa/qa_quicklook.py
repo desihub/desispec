@@ -14,6 +14,7 @@ import desispec.quicklook.qlpsf
 from desispec.quicklook.qas import MonitoringAlg, QASeverity
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
+from desispec.quicklook.palib import resample_spec
 from astropy.time import Time
 from desispec.qa import qalib
 from desispec.io import qa, read_params
@@ -1245,7 +1246,7 @@ class Sky_Rband(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('cframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1573,7 +1574,7 @@ class Integrate_Spec(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('cframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1588,42 +1589,47 @@ class Integrate_Spec(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
-
         if isinstance(frame,QFrame):
             frame = frame.asframe()
+        ra=frame.fibermap["RA_TARGET"]
+        dec=frame.fibermap["DEC_TARGET"]
+        flux=frame.flux
+        ivar=frame.ivar
+        wave=frame.wave
 
         retval={}
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["NIGHT"] = frame.meta["NIGHT"]
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         kwargs=self.config['kwargs']
-        
         if frame.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
             retval["PROGRAM"]=fibmap[1].header['PROGRAM']
 
-        retval["NIGHT"] = frame.meta["NIGHT"]
-
-        ra = frame.fibermap["RA_TARGET"]
-        dec = frame.fibermap["DEC_TARGET"]
-
-        flux=frame.flux
-        wave=frame.wave
-        #- Grab magnitudes for appropriate filter
+        #- Get filter index, file, and zero point
+        #- Zero point values from perture photometry of C26202 from 20121102
         if camera[0].lower() == 'b':
             filterindex=0 #- DECAM_G
+            responsefilter='decam2014-g'
+            zeropoint=25.296
         elif camera[0].lower() == 'r':
             filterindex=1 #- DECAM_R
+            responsefilter='decam2014-r'
+            zeropoint=25.374
         elif camera[0].lower() == 'z':
             filterindex=2 #- DECAM_Z
+            responsefilter='decam2014-z'
+            zeropoint=25.064
         else:
             log.warning("Camera not in b, r, or z channels...")
         magnitudes=np.zeros(frame.nspec)
         
         from desitarget.targetmask import desi_mask
 
+        #- Grab magnitudes for appropriate filter
         for obj in range(frame.nspec):
             #SE: identify the associated fibers and get rid of the inf values in the mag array from fibermaps for non-sky objects
             if (fibermap['DESI_TARGET'][obj] & desi_mask.mask('SKY') == 0):
@@ -1631,17 +1637,45 @@ class Integrate_Spec(MonitoringAlg):
                  magnitudes[obj]=frame.fibermap['MAG'][obj][filterindex]
                else:
                 log.info('Fiber number {} in this camera has invalid[inf] magnitude in the fibermap'.format(obj))
-        #- Calculate integrals for all fibers
-        integrals=np.zeros(flux.shape[0])
-        #log.info(len(integrals))
-       
-        for ii in range(len(integrals)):
-            integrals[ii]=qalib.integrate_spec(wave,flux[ii])
             
+        #- Get filter response information from speclite
+        if os.path.exists(os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite')):
+            responsefile=os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite','speclite','data','filters','{}.ecsv'.format(responsefilter))
+        else:
+            os.log.critical("Must have speclite package to compute fiber magnitudes.")
 
-        #- RS: Convert integrated counts to magnitudes using flux calibration constant (to be updated!!)
-        fibermags=99.*np.ones(integrals.shape)
-        fibermags[integrals>0]=22.5-2.5*np.log10(1e-3*integrals[integrals>0]/frame.meta["EXPTIME"])
+        #- Grab wavelength and response information from file
+        rfile=np.genfromtxt(responsefile)
+        rfile=rfile[1:] # remove wavelength/response labels
+        rwave=np.zeros(rfile.shape[0])
+        response=np.zeros(rfile.shape[0])
+        for i in range(rfile.shape[0]):
+            rwave[i]=10.*rfile[i][0] # convert to angstroms
+            response[i]=rfile[i][1]
+
+        #- Put 
+        res=np.zeros(frame.wave.shape)
+        for w in range(response.shape[0]):
+            if w >= 1 and w<= response.shape[0]-2:
+                ind=np.abs(frame.wave-rwave[w]).argmin()
+                lo=(rwave[w]-rwave[w-1])/2
+                wlo=rwave[w]-lo
+                indlo=np.abs(frame.wave-wlo).argmin()
+                hi=(rwave[w+1]-rwave[w])/2
+                whi=rwave[w]+hi
+                indhi=np.abs(frame.wave-whi).argmin()
+                res[indlo:indhi]=response[w]
+        rflux=res*flux
+
+        #- Calculate integrals for all fibers
+        integrals=[]
+        for ii in range(len(rflux)):
+            integrals.append(qalib.integrate_spec(frame.wave,rflux[ii]))
+        integrals=np.array(integrals)
+
+        #- Convert calibrated flux to fiber magnitude
+        fibermags=np.zeros(integrals.shape)
+        fibermags[integrals>0]=zeropoint-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
 
         #- Calculate delta_mag (remove sky fibers first)
         objects=frame.fibermap['OBJTYPE']
@@ -1674,7 +1708,7 @@ class Integrate_Spec(MonitoringAlg):
             integ= integ[np.where(integ< max(integ))]
             integ_avg=np.mean(integ)
             integ_avg_tgt.append(integ_avg)
-                
+
             if T == "STD":
                    starfibers=fibers
                    int_stars=integ
@@ -1683,14 +1717,13 @@ class Integrate_Spec(MonitoringAlg):
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
         for i in range(len(mag_avg_tgt)):
-            mag_fib=-2.5*np.log10(1e-3*integ_avg_tgt[i]/frame.meta["EXPTIME"])+22.5
+            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+zeropoint
             magdiff=mag_fib-mag_avg_tgt[i]
             magdiff_avg.append(magdiff)
             
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
-            
 
         retval["PARAMS"] = param
 
@@ -1738,7 +1771,7 @@ class Calculate_SNR(MonitoringAlg):
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('cframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
