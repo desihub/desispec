@@ -73,7 +73,7 @@ env:
         # These packages will always be installed.
         - CONDA_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
-        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml healpy numba numpy"
+        - CONDA_ALL_DEPENDENCIES="scipy matplotlib sqlalchemy coverage pyyaml numba numpy"
         # These packages will always be installed.
         - PIP_DEPENDENCIES=""
         # These packages will only be installed if we really need them.
@@ -181,6 +181,7 @@ install:
     # packages are installed, thus desiutil is not installed in that script.
     - for p in $DESIHUB_PIP_DEPENDENCIES; do r=$(echo $p | cut -d= -f1); v=$(echo $p | cut -d= -f2); pip install git+https://github.com/desihub/${r}.git@${v}#egg=${r}; done
     # - source etc/travis_install_specex.sh
+    - "if [[ $SETUP_CMD == test* ]]; then pip install --no-binary :all: healpy; fi"
     - export DESIMODEL=${HOME}/desimodel/${DESIMODEL_VERSION}
     - mkdir -p ${DESIMODEL}
     - if [[ $SETUP_CMD == test* ]]; then svn export https://desi.lbl.gov/svn/code/desimodel/${DESIMODEL_DATA}/data ${DESIMODEL}/data ; fi
