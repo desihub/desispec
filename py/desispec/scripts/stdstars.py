@@ -7,6 +7,7 @@ Get the normalized best template to do flux calibration.
 #- TODO: refactor algorithmic code into a separate module/function
 
 import argparse
+import sys
 
 import numpy as np
 from astropy.io import fits
@@ -37,11 +38,16 @@ def parse(options=None):
     parser.add_argument('--z-res', type = float, default = 0.00002, required = False, help = 'dz grid resolution')
     parser.add_argument('--template-error', type = float, default = 0.1, required = False, help = 'fractional template error used in chi2 computation (about 0.1 for BOSS b1)')
     
+    log = get_logger()
     args = None
     if options is None:
         args = parser.parse_args()
+        cmd = ' '.join(sys.argv)
     else:
         args = parser.parse_args(options)
+        cmd = 'desi_fit_stdstars ' + ' '.join(options)
+
+    log.info('RUNNING {}'.format(cmd))
 
     return args
 
