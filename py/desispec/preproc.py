@@ -411,6 +411,8 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
     '''
     log=get_logger()
 
+    header = header.copy()
+
     calibration_data = None
     
     if ccd_calibration_filename is not False :
@@ -565,9 +567,16 @@ def preproc(rawimage, header, primary_header, bias=True, dark=True, pixflat=True
         for j in range(nrows) :
             readnoise[kk][j] = rdnoise[j]
 
-        header['OVERSCN'+amp] = median_overscan
-        header['OBSRDN'+amp] = median_rdnoise
-
+        header['OVERSCN'+amp] = (median_overscan,'ADUs (gain not applied)')
+        if gain != 1 :
+            rdnoise_message = 'electrons (gain is applied)'
+            gain_message    = 'e/ADU (gain applied to image)'
+        else :
+            rdnoise_message = 'ADUs (gain not applied)'
+            gain_message    = 'gain not applied to image'
+        header['OBSRDN'+amp] = (median_rdnoise,rdnoise_message)
+        header['GAIN'+amp] = (gain,gain_message)
+        
         #- Warn/error if measured readnoise is very different from expected if exists
         if 'RDNOISE'+amp in header:
             expected_readnoise = header['RDNOISE'+amp]
