@@ -26,7 +26,7 @@ def project(x1,x2):
     e1[-1]=1.5*x1[-1]-0.5*x1[-2]
     e1lo = e1[:-1]  # make upper and lower bounds arrays vs. index
     e1hi = e1[1:]
-  
+
     e2=np.zeros(len(x2)+1)
     e2[1:-1]=(x2[:-1]+x2[1:])/2.0  # bin edges for resampled grid
     e2[0]=1.5*x2[0]-0.5*x2[1]
@@ -52,10 +52,14 @@ def project(x1,x2):
                Pr[ii,k[0]+1] = 1.0  # middle bin fully contained in e2
                q = k[0]+2
             else : q = k[0]+1  # point to bin partially contained in current e2 bin
-            emin = e1lo[q]
-            emax = e2[ii+1]
-            dx = (emax-emin)/(e1hi[q]-e1lo[q])
-            Pr[ii,q] = dx
+
+            try:
+                emin = e1lo[q]
+                emax = e2[ii+1]
+                dx = (emax-emin)/(e1hi[q]-e1lo[q])
+                Pr[ii,q] = dx
+            except:
+                pass
 
     #- edge: 
     if x2[-1]==x1[-1]:
@@ -104,7 +108,6 @@ def resample_spec(wave,flux,outwave,ivar=None):
         #- convert to per angstrom
         newivar*=(np.gradient(outwave))**2.0
         return newflux, newivar
-
 
 def get_resolution(wave,nspec,tset,usesigma=False):
     """

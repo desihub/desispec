@@ -14,6 +14,7 @@ import desispec.quicklook.qlpsf
 from desispec.quicklook.qas import MonitoringAlg, QASeverity
 from desispec.quicklook import qlexceptions
 from desispec.quicklook import qllogger
+from desispec.quicklook.palib import resample_spec
 from astropy.time import Time
 from desispec.qa import qalib
 from desispec.io import qa, read_params
@@ -30,39 +31,6 @@ from astropy.io import fits
 
 qlog=qllogger.QLLogger("QuickLook",0)
 log=qlog.getlog()
-
-# RS: this function is not needed anymore
-#def qlf_post(qadict):
-#    """
-#    A general function to HTTP post the QA output dictionary, intended for QLF
-#    requires environmental variables: QLF_API_URL, QLF_USER, QLF_PASSWD
-#    
-#    Args: 
-#        qadict: returned dictionary from a QA
-#    """
-#    #- Check for environment variables and set them here
-#    if "QLF_API_URL" in os.environ:
-#        qlf_url=os.environ.get("QLF_API_URL")
-#        if "QLF_USER" not in os.environ or "QLF_PASSWD" not in os.environ: 
-#            log.warning("Environment variables are not set for QLF. Set QLF_USER and QLF_PASSWD.")
-#        else: 
-#            qlf_user=os.environ.get("QLF_USER")
-#            qlf_passwd=os.environ.get("QLF_PASSWD")
-#            log.debug("Environment variables are set for QLF. Now trying HTTP post.")
-#            #- All set. Now try to HTTP post
-#            try: 
-#                import requests
-#                response=requests.get(qlf_url)
-#                #- Check if the api has json
-#                api=response.json()
-#                #- proceed with post
-#                job={"name":"QL","status":0,"dictionary":qadict} #- QLF should disintegrate dictionary
-#                response=requests.post(api['job'],json=job,auth=(qlf_user,qlf_passwd))
-#            except:
-#                log.error("Skipping HTTP post... Exception",exc_info=true)
-#
-#    else:   
-#        log.warning("Skipping QLF. QLF_API_URL must be set as environment variable")
 
 def get_inputs(*args,**kwargs):
     '''
@@ -89,8 +57,6 @@ def get_inputs(*args,**kwargs):
     inputs["fibermap"]=None
     if "FiberMap" in kwargs: inputs["fibermap"]=kwargs["FiberMap"]
 
-#    if "qlf" in kwargs: inputs["qlf"]=kwargs["qlf"]
-#    else: inputs["qlf"]=False
 
     if "qafile" in kwargs: inputs["qafile"] = kwargs["qafile"]
     else: inputs["qafile"]=None
@@ -102,11 +68,8 @@ def get_inputs(*args,**kwargs):
 
 def get_outputs(qafile,qafig,retval,plot_func):
     """
-    Setup QA file and QA fig, http post if needed
+    Setup QA file and QA fig
     """
-   # RS: qlf_post is a deprecated function, not needed
-   # if qlf:
-   #     qlf_post(retval)
     if qafile is not None:
         outfile = qa.write_qa_ql(qafile,retval)
         log.debug("Output QA data is in {}".format(outfile))
@@ -189,7 +152,10 @@ class Check_HDUs(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+
 
         if kwargs["singleqa"] == 'Check_HDUs':
             night = kwargs['night']
@@ -315,7 +281,9 @@ class Trace_Shifts(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Trace_Shifts':
             night = kwargs['night']
@@ -430,7 +398,9 @@ class Bias_From_Overscan(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Bias_From_Overscan':
             night = kwargs['night']
@@ -542,7 +512,9 @@ class Get_RMS(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
                 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Get_RMS':
             night = kwargs['night']
@@ -744,7 +716,9 @@ class Calc_XWSigma(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
                 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Calc_XWSigma':
             night = kwargs['night']
@@ -868,6 +842,7 @@ class Calc_XWSigma(MonitoringAlg):
                         if ypixel > 2100.:
                             xsigma_amp4.append(xs)
                             wsigma_amp4.append(ws)
+                    
 
             if len(xsig)!=0:
                 xsigma.append(np.mean(xsig))
@@ -888,11 +863,12 @@ class Calc_XWSigma(MonitoringAlg):
         xwfails=np.array([xfails,wfails])
 
 
-        #SE: this does not seem necessary but uncomment if you foubd a case where it was. mention the example here
-        #if len(xsigma)==0:
-            #xsigma=[param['XWSIGMA_REF'][0]]
-        #if len(wsigma)==0:
-            #wsigma=[param['XWSIGMA_REF'][1]]
+        #SE: mention the example here when the next lines are ineffective and when they are effective in removing the NaN from XWSIGMA_AMP--> XWSIGMA itself no longer includes any NaN value. As we both know, this is not the way to properly deal with NaNs -->let's see if switching to non-scipy fuction would bring about a better solution
+        if len(xsigma)==0:
+            xsigma = [param['XWSIGMA_REF'][0]]
+
+        if len(wsigma)==0:
+            wsigma=[param['XWSIGMA_REF'][1]]
 
         #- Combine metrics for x and w
         xwsigma_fib=np.array((xsigma,wsigma)) #- (2,nfib)
@@ -900,6 +876,24 @@ class Calc_XWSigma(MonitoringAlg):
         xwsigma_amp=np.array((xsigma_amp,wsigma_amp))
 
         if amps:
+            #if len(xsigma_amp1)==0 :
+                #xsigma_amp1 = [param['XWSIGMA_REF'][0]]
+            #if len(xsigma_amp2)==0 :
+                #xsigma_amp2 = [param['XWSIGMA_REF'][0]]
+            #if len(xsigma_amp3)==0 :
+                #xsigma_amp3 = [param['XWSIGMA_REF'][0]]
+            #if len(xsigma_amp4)==0 :
+                #xsigma_amp4 = [param['XWSIGMA_REF'][0]]
+
+            #if len(wsigma_amp1)==0 :
+                #wsigma_amp1 = [param['XWSIGMA_REF'][1]]
+            #if len(wsigma_amp2)==0 :
+                #wsigma_amp2 = [param['XWSIGMA_REF'][1]]
+            #if len(wsigma_amp3)==0 :
+                #wsigma_amp3 = [param['XWSIGMA_REF'][1]]
+            #if len(wsigma_amp4)==0 :
+                #wsigma_amp4 = [param['XWSIGMA_REF'][1]]
+
             retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib,"XWSIGMA_AMP":xwsigma_amp}#,"XWSHIFT":xwshift,"XWSHIFT_AMP":xwshift_amp,"XWSIGMA_SHIFT": xwsigma_shift}
         else:
             retval["METRICS"]={"XWSIGMA":xwsigma_med,"XWSIGMA_FIB":xwsigma_fib}#,"XWSHIFT":xwshift,"XWSIGMA_SHIFT": xwsigma_shift}
@@ -937,7 +931,9 @@ class Count_Pixels(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
                 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Count_Pixels':
             night = kwargs['night']
@@ -1032,7 +1028,9 @@ class CountSpectralBins(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'CountSpectralBins':
             night = kwargs['night']
@@ -1148,7 +1146,9 @@ class Sky_Continuum(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Continuum':
             night = kwargs['night']
@@ -1239,13 +1239,15 @@ class Sky_Rband(MonitoringAlg):
             sys.exit("Update the configuration file for the parameters")
 
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Rband':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('cframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1380,7 +1382,9 @@ class Sky_Peaks(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Peaks':
             night = kwargs['night']
@@ -1474,7 +1478,9 @@ class Sky_Residual(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Sky_Residual':
             night = kwargs['night']
@@ -1560,13 +1566,15 @@ class Integrate_Spec(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Integrate_Spec':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('cframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1581,18 +1589,22 @@ class Integrate_Spec(MonitoringAlg):
         qafig=inputs["qafig"]
         param=inputs["param"]
         refmetrics=inputs["refmetrics"]
-
         if isinstance(frame,QFrame):
             frame = frame.asframe()
+        ra=frame.fibermap["RA_TARGET"]
+        dec=frame.fibermap["DEC_TARGET"]
+        flux=frame.flux
+        ivar=frame.ivar
+        wave=frame.wave
 
         retval={}
         retval["PANAME" ] = paname
         retval["QATIME"] = datetime.datetime.now().isoformat()
+        retval["NIGHT"] = frame.meta["NIGHT"]
         retval["EXPID"] = '{0:08d}'.format(frame.meta["EXPID"])
         retval["CAMERA"] = camera
         retval["FLAVOR"] = frame.meta["FLAVOR"]
         kwargs=self.config['kwargs']
-        
         if frame.meta["FLAVOR"] == 'science':
             fibmap =fits.open(kwargs['FiberMap'])
             retval["PROGRAM"]=fibmap[1].header['PROGRAM']
@@ -1607,10 +1619,16 @@ class Integrate_Spec(MonitoringAlg):
         #- Grab magnitudes for appropriate filter
         if camera[0].lower() == 'b':
             band = 'G'
+            responsefilter='decam2014-g'
+            zeropoint=25.296
         elif camera[0].lower() == 'r':
             band = 'R'
+            responsefilter='decam2014-r'
+            zeropoint=25.374
         elif camera[0].lower() == 'z':
             band = 'Z'
+            responsefilter='decam2014-z'
+            zeropoint=25.064
         else:
             raise ValueError("Camera {} not in b, r, or z channels...".format(camera))
 
@@ -1618,18 +1636,45 @@ class Integrate_Spec(MonitoringAlg):
         key = 'FLUX_'+band
         ii = frame.fibermap[key] > 0
         magnitudes[ii] = 22.5 - 2.5*np.log10(frame.fibermap[key][ii])
+            
+        #- Get filter response information from speclite
+        if os.path.exists(os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite')):
+            responsefile=os.path.join(os.environ['DESI_PRODUCT_ROOT'],'speclite','speclite','data','filters','{}.ecsv'.format(responsefilter))
+        else:
+            os.log.critical("Must have speclite package to compute fiber magnitudes.")
+
+        #- Grab wavelength and response information from file
+        rfile=np.genfromtxt(responsefile)
+        rfile=rfile[1:] # remove wavelength/response labels
+        rwave=np.zeros(rfile.shape[0])
+        response=np.zeros(rfile.shape[0])
+        for i in range(rfile.shape[0]):
+            rwave[i]=10.*rfile[i][0] # convert to angstroms
+            response[i]=rfile[i][1]
+
+        #- Put 
+        res=np.zeros(frame.wave.shape)
+        for w in range(response.shape[0]):
+            if w >= 1 and w<= response.shape[0]-2:
+                ind=np.abs(frame.wave-rwave[w]).argmin()
+                lo=(rwave[w]-rwave[w-1])/2
+                wlo=rwave[w]-lo
+                indlo=np.abs(frame.wave-wlo).argmin()
+                hi=(rwave[w+1]-rwave[w])/2
+                whi=rwave[w]+hi
+                indhi=np.abs(frame.wave-whi).argmin()
+                res[indlo:indhi]=response[w]
+        rflux=res*flux
 
         #- Calculate integrals for all fibers
-        integrals=np.zeros(flux.shape[0])
-        #log.info(len(integrals))
-       
-        for ii in range(len(integrals)):
-            integrals[ii]=qalib.integrate_spec(wave,flux[ii])
-            
+        integrals=[]
+        for ii in range(len(rflux)):
+            integrals.append(qalib.integrate_spec(frame.wave,rflux[ii]))
+        integrals=np.array(integrals)
 
-        #- RS: Convert integrated counts to magnitudes using flux calibration constant (to be updated!!)
-        fibermags=99.*np.ones(integrals.shape)
-        fibermags[integrals>0]=22.5-2.5*np.log10(1e-3*integrals[integrals>0]/frame.meta["EXPTIME"])
+        #- Convert calibrated flux to fiber magnitude
+        fibermags=np.zeros(integrals.shape)
+        fibermags[integrals>0]=zeropoint-2.5*np.log10(integrals[integrals>0]/frame.meta["EXPTIME"])
 
         #- Calculate delta_mag (remove sky fibers first)
         objects=frame.fibermap['OBJTYPE']
@@ -1662,7 +1707,7 @@ class Integrate_Spec(MonitoringAlg):
             integ= integ[np.where(integ< max(integ))]
             integ_avg=np.mean(integ)
             integ_avg_tgt.append(integ_avg)
-                
+
             if T == "STD":
                 int_stars=integ
                 int_average=integ_avg
@@ -1670,20 +1715,19 @@ class Integrate_Spec(MonitoringAlg):
         # simple, temporary magdiff calculation (to be corrected...)
         magdiff_avg=[]
         for i in range(len(mag_avg_tgt)):
-            mag_fib=-2.5*np.log10(1e-3*integ_avg_tgt[i]/frame.meta["EXPTIME"])+22.5
+            mag_fib=-2.5*np.log10(integ_avg_tgt[i]/frame.meta["EXPTIME"])+zeropoint
             magdiff=mag_fib-mag_avg_tgt[i]
             magdiff_avg.append(magdiff)
             
         if param is None:
             log.critical("No parameter is given for this QA! ")
             sys.exit("Check the configuration file")
-            
 
         retval["PARAMS"] = param
 
         fib_mag=np.zeros(frame.nspec) #- placeholder, calculate and replace this for all fibers
 
-        #SE: should not have ny nan or inf at this point nut let's keep it for saftety measures here 
+        #SE: should not have any nan or inf at this point nut let's keep it for saftety measures here 
         retval["METRICS"]={"RA":ra,"DEC":dec, "FIBER_MAG":fibermags, "DELTAMAG":np.nan_to_num(delta_mag), "STD_FIBERID":starfibers, "DELTAMAG_TGT":np.nan_to_num(magdiff_avg),"WAVELENGTH":frame.wave}
 
         get_outputs(qafile,qafig,retval,'plot_integral')
@@ -1717,13 +1761,15 @@ class Calculate_SNR(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Calculate_SNR':
             night = kwargs['night']
             expid = '{:08d}'.format(kwargs['expid'])
             camera = kwargs['camera']
-            frame = get_frame('sframe',night,expid,camera,kwargs["specdir"])
+            frame = get_frame('cframe',night,expid,camera,kwargs["specdir"])
         else: frame=args[0]
         inputs=get_inputs(*args,**kwargs)
 
@@ -1822,7 +1868,9 @@ class Check_Resolution(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Check_Resolution':
             night = kwargs['night']
@@ -1920,7 +1968,9 @@ class Check_FiberFlat(MonitoringAlg):
             sys.exit("Check the configuration file")
             
         if not self.is_compatible(type(args[0])):
-            raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            #raise qlexceptions.ParameterException("Incompatible input. Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
+            log.critical("Incompatible input!")
+            sys.exit("Was expecting {} got {}".format(type(self.__inpType__),type(args[0])))
 
         if kwargs["singleqa"] == 'Check_FiberFlat':
             night = kwargs['night']

@@ -100,10 +100,20 @@ if args.scale :
     log.info("recompute median image after scaling ...")
     medimage=masked_median(images,masks)
 
-medimage=medimage.reshape(shape)
+if True :
+    log.info("compute mask ...")
+    ares=np.abs(images-medimage)
+    nsig=4.
+    mask=(ares<nsig*1.4826*np.median(ares,axis=0))
+    # average (not median)
+    log.info("compute average ...")
+    meanimage=np.sum(images*mask,axis=0)/np.sum(mask,axis=0)
+    meanimage=meanimage.reshape(shape)
+else :
+    meanimage=medimage.reshape(shape)
 
 log.info("write result in %s ..."%args.outfile)
-hdulist=pyfits.HDUList([pyfits.PrimaryHDU(medimage)])
+hdulist=pyfits.HDUList([pyfits.PrimaryHDU(meanimage)])
 i=0
 for filename in args.image :
     hdulist[0].header["INPUT%03d"%i]=filename
